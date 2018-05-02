@@ -11,6 +11,7 @@ import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 import warnings as _warnings
+import collections as _collections
 
 from . import jamiolkowski as _jam
 from . import matrixtools as _mt
@@ -19,6 +20,8 @@ from . import compattools as _compat
 from . import basistools as _bt
 from ..baseobjs import Basis as _Basis
 from ..baseobjs.basis import basis_matrices as _basis_matrices
+
+IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
 def _mut(i,j,N):
     mx = _np.zeros( (N,N), 'd'); mx[i,j] = 1.0
@@ -1644,6 +1647,213 @@ def lindblad_errgen_projections(errgen, ham_basis,
         return hamProjs, otherProjs, hamGens, otherGens
     else:
         return hamProjs, otherProjs
+
+def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
+                                  other_diagonal_only=False):
+    """ TODO: docstring """
+
+    # Make None => length-0 arrays so iteration code works below (when basis is None)
+    if hamProjs is None: hamProjs = _np.empty(0,'d') 
+    if otherProjs is None:
+        otherProjs = _np.empty(0,'d') if other_diagonal_only \
+                     else _np.empty((0,0),'d')
+
+
+    # Construct a pair of dictionaries describing all of the
+    # Lindblad-terms:
+    #   Ltermdict keys= ('H',basisLbl), ('S',basisLbl), or ('S',bLbl1,bLbl2)
+    #             vals= coefficients of these terms (projections from errgen)
+    #   basisdict keys= basis labels (just has to match Ltermdict keys)
+    #             vals= basis matrices - can be either sparse or dense
+    Ltermdict = _collections.OrderedDict()
+    basisdict = _collections.OrderedDict()
+    nextLbl = 0
+    def get_basislbl(bmx):
+        """ Retrieves or creates a basis-element "label" (just an integer) from `basisdict` """
+        for l,b in basisdict.items():
+            if _mt.safenorm(b-bmx): return l
+        blbl = nextLbl
+        basisdict[blbl] = bmx
+        nextLbl += 1
+        return blbl
+
+    #Add Hamiltonian error elements
+    ham_mxs = ham_basis.get_composite_matrices() #can be sparse
+    assert(len(ham_mxs[1:]) == len(hamProjs))
+    for coeff, bmx in zip(hamProjs,ham_mxs[1:]): # skip identity
+        Ltermdict[('H',nextLbl)] = coeff
+        basisdict[nextLbl] = bmx # no need to call get_basislbl yet
+        nextLbl += 1
+
+    #Add "other" error elements
+    other_mxs = other_basis.get_composite_matrices() #can be sparse
+    if other_diagonal_only:
+        assert(len(other_mxs[1:]) == len(otherProjs))
+        for coeff, bmx in zip(otherProjs,other_mxs[1:]): # skip identity
+            blbl = get_basislbl(bmx)
+            Ltermdict[('S',blbl)] = coeff
+    else:
+        assert((len(other_mxs[1:]),len(other_mxs[1:])) == otherProjs.shape)
+        for i, bmx1 in enumerate(other_mxs[1:]): # skip identity
+            blbl1 = get_basislbl(bmx1)
+            for j, bmx2 in enumerate(other_mxs[1:]): # skip identity
+                blbl2 = get_basislbl(bmx2)
+                Ltermdict[('S',blbl1,blbl2)] = otherProjs[i,j]
+
+    #DEBUG: print("DB: Ltermdict = ",Ltermdict)
+    #DEBUG: print("DB: basisdict = ")
+    #DEBUG: for k,v in basisdict.items():
+    #DEBUG:     print(k,":")
+    #DEBUG:     print(v)
+    return Ltermdict, basisdict
+
+def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal_only=False):
+    """ TODO: docstring - note: basisdim is required for case thwn basisdict is empty """
+
+    d = basisdim
+    
+    #Separately enumerate the (distinct) basis elements used for Hamiltonian
+    # and Stochasitic error terms
+    hamBasisLabels = _collections.OrderedDict()  # holds index of each basis element
+    otherBasisLabels = _collections.OrderedDict() # in coefficient/projection arrays
+    for termLbl,coeff in Ltermdict.items():
+        termType = termLbl[0]
+        if termType == "H": # Hamiltonian
+            assert(len(termLbl) == 2),"Hamiltonian term labels should have form ('H',<basis element label>)"
+            if termLbl[1] not in hamBasisLabels:
+                hamBasisLabels[ termLbl[1] ] = len(hamBasisLabels)
+                
+        elif termType == "S": # Stochastic                
+            if other_diagonal_only:
+                assert(len(termLbl) == 2),"Stochastic term labels should have form ('S',<basis element label>)"
+                if termLbl[1] not in otherBasisLabels:
+                    otherBasisLabels[ termLbl[1] ] = len(otherBasisLabels)
+            else:
+                assert(len(termLbl) == 3),"Stochastic term labels should have form ('S',<bel1>, <bel2>)"
+                if termLbl[1] not in otherBasisLabels:
+                    otherBasisLabels[ termLbl[1] ] = len(otherBasisLabels)
+                if termLbl[2] not in otherBasisLabels:
+                    otherBasisLabels[ termLbl[2] ] = len(otherBasisLabels)
+
+    #Construct bases
+    ham_basis_mxs = [ basisdict[bl] for bl in hamBasisLabels ] # requires OrderedDict
+    other_basis_mxs = [ basisdict[bl] for bl in otherBasisLabels ] # requires OrderedDict
+
+    if len(ham_basis_mxs) > 0: sparse = _sps.issparse(ham_basis_mxs[0])
+    elif len(other_basis_mxs) > 0: sparse = _sps.issparse(other_basis_mxs[0])
+    else: sparse = False
+
+    # Note: these lists of basis matrices shouldn't contain the identity, since
+    # the terms above shouldn't contain identity terms - so add identity els
+    # to non-empty bases (empty bases stay empty!) to be consistent with the
+    # rest of the framework (bases *have* Ids)
+    # TODO: could assert this?
+    Id = _sps.identity(d,'complex','csr')/_np.sqrt(d) if sparse \
+         else _np.identity(d,'complex')/_np.sqrt(d)
+    if len(ham_basis_mxs) > 0: ham_basis_mxs = [Id] + ham_basis_mxs
+    if len(other_basis_mxs) > 0: other_basis_mxs = [Id] + other_basis_mxs
+    ham_basis = _Basis(matrices=ham_basis_mxs,dim=d,sparse=sparse)
+    other_basis = _Basis(matrices=other_basis_mxs,dim=d,sparse=sparse)
+    bsH, bsO = len(ham_basis), len(other_basis)
+
+    #Create projection (term coefficient) arrays - or return None if
+    # the corresponding basis is empty (as per our convention)
+    hamProjs = _np.zeros(bsH-1, 'complex') if bsH > 0 else None
+    if bsO > 0:
+        if other_diagonal_only:  # OK if this runs for 'auto' too since then len(otherBasisLabels) == 0
+            otherProjs = _np.zeros(bsO-1,'complex')
+        else:
+            otherProjs = _np.zeros((bsO-1,bsO-1),'complex')
+    else: otherProjs = None
+
+    #Fill arrays
+    for termLbl,coeff in Ltermdict.items():
+        termType = termLbl[0]
+        if termType == "H": # Hamiltonian
+            k = hamBasisLabels[termLbl[1]] #index of coefficient in array
+            hamProjs[k] = coeff
+        elif termType == "S": # Stochastic
+            if other_diagonal_only:
+                k = otherBasisLabels[termLbl[1]] #index of coefficient in array
+                otherProjs[k] = coeff
+            else:
+                k = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
+                j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
+                otherProjs[k,j] = coeff
+                
+    return hamProjs, otherProjs, ham_basis, other_basis
+
+
+def lindblad_projections_to_paramvals(hamProjs, otherProjs, cptp=True,
+                                      other_diagonal_only=False, truncate=True):
+    """ TODO: docstring """
+    if hamProjs is not None:
+        assert(_np.isclose(_np.linalg.norm(hamProjs.imag),0)), \
+            "Hamiltoian projections (coefficients) are not all real!"
+        hamParams = hamProjs.real
+    else:
+        hamParams = _np.empty(0,'d')
+        
+    if otherProjs is not None:
+        if other_diagonal_only:
+            assert(_np.isclose(_np.linalg.norm(_np.imag(otherProjs)),0)), \
+                "Diagonal stochastic projections (coefficients) are not all real!"
+
+            if cptp: #otherParams is a 1D vector of the sqrts of diagonal els
+                assert(truncate or all([v >= -1e-12 for v in otherProjs])), \
+                    "Lindblad coefficients are not CPTP (truncate == False)!"
+                otherProjs = otherProjs.clip(1e-16,1e100)
+                otherParams = _np.sqrt(otherProjs.real) # shape (bsO-1,)
+            else: #otherParams is a 1D vector of the real diagonal els of otherProjs
+                otherParams = otherProjs.real # shape (bsO-1,)
+        else:
+            assert(_np.isclose(_np.linalg.norm(otherProjs-otherProjs.T.conjugate())
+                               ,0)), "Other projection/coefficient mx is not Hermitian!"
+
+            bsO = otherProjs.shape[0]+1 # +1 to keep convention that this is the basis (w/Identity) size
+            otherParams = _np.empty((bsO-1,bsO-1),'d')
+
+            if cptp: #otherParams mx stores Cholesky decomp
+
+                #push any slightly negative evals of otherProjs positive so that
+                # the Cholesky decomp will work.
+                evals,U = _np.linalg.eig(otherProjs)
+                Ui = _np.linalg.inv(U)
+
+                assert(truncate or all([ev >= -1e-12 for ev in evals])), \
+                    "Lindblad coefficients are not CPTP (truncate == False)!"
+
+                pos_evals = evals.clip(1e-16,1e100)
+                otherProjs = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
+                try:
+                    Lmx = _np.linalg.cholesky(otherProjs)
+
+                # if Lmx not postitive definite, try again with 1e-12 (same lines as above)
+                except _np.linalg.LinAlgError:                         # pragma: no cover
+                    pos_evals = evals.clip(1e-12,1e100)                # pragma: no cover
+                    otherProjs = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))# pragma: no cover
+                    Lmx = _np.linalg.cholesky(otherProjs)                  # pragma: no cover
+
+                for i in range(bsO-1):
+                    assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
+                    otherParams[i,i] = Lmx[i,i].real
+                    for j in range(i):
+                        otherParams[i,j] = Lmx[i,j].real
+                        otherParams[j,i] = Lmx[i,j].imag
+
+            else: #otherParams mx stores otherProjs (hermitian) directly
+                for i in range(bsO-1):
+                    assert(_np.linalg.norm(_np.imag(otherProjs[i,i])) < IMAG_TOL)
+                    otherParams[i,i] = otherProjs[i,i].real
+                    for j in range(i):
+                        otherParams[i,j] = otherProjs[i,j].real
+                        otherParams[j,i] = otherProjs[i,j].imag
+    else:
+        otherParams = _np.empty(0,'d')
+
+    return _np.concatenate( (hamParams, otherParams.flat) )
+
+
 
 #TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
 # calls to this one and unitary_to_processmx

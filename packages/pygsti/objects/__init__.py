@@ -18,7 +18,6 @@ from .mapevaltree import MapEvalTree
 from .termevaltree import TermEvalTree
 from .gate import Gate
 from .gate import GateMatrix
-from .gate import GateMap
 from .gate import LinearlyParameterizedGate
 from .gate import FullyParameterizedGate
 from .gate import TPParameterizedGate
@@ -32,8 +31,6 @@ from .gate import EmbeddedGate
 from .gate import ComposedGateMap
 from .gate import ComposedGate
 from .gate import CliffordGate
-from .gate import EmbeddedCliffordGate
-from .gate import LindbladTermGate
 from .spamvec import SPAMVec
 from .spamvec import DenseSPAMVec
 from .spamvec import FullyParameterizedSPAMVec

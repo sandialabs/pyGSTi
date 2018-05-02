@@ -119,8 +119,13 @@ class Basis(object):
         if longname is None:
             longname = get_info('longname', default=self.name)
 
-        blockDims = [int(math.sqrt(len(group))) for group in self._blockMatrices]
-
+        blockDims = [ (group[0].shape[0] if len(group)>0 else 0)
+                      for group in self._blockMatrices]
+        if dim is not None: #then check blockDims against given dim
+            if isinstance(dim,_numbers.Integral): dims = [dim]*len(blockDims) # for len=0 case
+            elif isinstance(dim,Dim): dims = dim.blockDims
+            else: dims = dim # assume dim is a list of ints
+            assert(dims == blockDims),"Dimension mismatch in basis construction: %s != %s" % (str(dims),str(blockDims))
 
         if labels is None:
             try:
@@ -598,6 +603,7 @@ def basis_matrices(nameOrBasis, dim, sparse=False):
     '''
     if isinstance(nameOrBasis, Basis):
         basis = nameOrBasis
+        if len(basis) == 0: return [] # special case of empty basis - don't check dim in this case
         assert(basis.dim.dmDim == dim), "Basis object has wrong dimension ({}) for requested basis matrices ({})".format(
             basis.dim.dmDim, dim)
         return basis.get_composite_matrices()

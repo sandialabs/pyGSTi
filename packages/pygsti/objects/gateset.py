@@ -138,12 +138,10 @@ class GateSet(object):
         if self.stateSpaceLabels is None:
             raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
 
-        mode = "superop" if (self._sim_type.startswith("dm") or self._sim_type.startswith("termorder")
-                             or self._sim_type.startswith("ctermorder")) else "unitary"
         if self._sim_type in ("svmatrix","dmmatrix"):
-            return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal, mode=mode)
+            return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
         elif self._sim_type in ("svmap","dmmap","termorder","ctermorder"):
-            return _gate.EmbeddedGateMap(self.stateSpaceLabels, gateTargetLabels, gateVal, mode=mode)
+            return _gate.EmbeddedGateMap(self.stateSpaceLabels, gateTargetLabels, gateVal)
         elif self._sim_type in ("clifford",):
             return _gate.EmbeddedCliffordGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
 

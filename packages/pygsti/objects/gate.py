@@ -31,6 +31,7 @@ from . import gatesetmember as _gatesetmember
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Dim as _Dim
+from ..baseobjs.basis import basis_matrices as _basis_matrices
 
 from . import term as _term
 from .polynomial import Polynomial as _Polynomial
@@ -244,9 +245,9 @@ def convert(gate, toType, basis, extra=None):
            and beq(basis,gate.matrix_basis):
             return gate #no conversion necessary
         else:
-            return LindbladParameterizedGate(
+            return LindbladParameterizedGate.from_gate_matrix(
                 gate, unitary_post, ham_basis, nonham_basis, cptp,
-                nonham_diagonal_only, truncate, basis)
+                nonham_diagonal_only, truncate, basis, gate._evotype)
         
 
     elif toType == "static":
@@ -416,37 +417,67 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
 class Gate(_gatesetmember.GateSetMember):
     """ Base class for all gate representations """
     
-    def __init__(self, dim):
+    def __init__(self, dim, evotype):
         """ Initialize a new Gate """
-        super(Gate, self).__init__(dim)
-        
+        super(Gate, self).__init__(dim, evotype)
+
+    @property
+    def size(self):
+        """
+        Return the number of independent elements in this gate (when viewed as a dense array)
+        """
+        return (self.dim)**2
+
+    def set_value(self, M):
+        """
+        Attempts to modify gate parameters so that the specified raw
+        gate matrix becomes mx.  Will raise ValueError if this operation
+        is not possible.
+
+        Parameters
+        ----------
+        M : array_like or Gate
+            An array of shape (dim, dim) or Gate representing the gate action.
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot set the value of a %s directly!" % self.__class__.__name__)
+
+    def todense(self):
+        """
+        Return this gate as a dense matrix.
+        """
+        raise NotImplementedError("todense(...) not implemented for %s objects!" % self.__class__.__name__)
+
+    def tosparse(self):
+        """
+        Return this gate as a sparse matrix.
+        """
+        raise NotImplementedError("tosparse(...) not implemented for %s objects!" % self.__class__.__name__)
+
     def acton(self, state):
-        """ Act this gate map on an input state """
-        raise NotImplementedError("acton(...) not implemented!")
+        """ Act this gate matrix on an input state (left-multiply w/matrix) """
+        return _np.dot(self.todense(), state)
 
     def adjoint_acton(self, state):
-        """ Act the adjoint of this gate map on an input state """
-        raise NotImplementedError("acton(...) not implemented!")
+        """ Act the adjoint of this gate matrix on an input state """
+        return _np.dot(self.todense().conjugate().T, state)
 
-    def transform(self, S):
-        """ Update gate G with inv(S) * G * S."""
-        raise NotImplementedError("This gate cannot be transform()'d")
-
-    def depolarize(self, amount):
-        """ Depolarize gate by the given amount. """
-        raise NotImplementedError("This gate cannot be depolarize()'d")
-
-    def rotate(self, amount, mxBasis="gm"):
-        """ Rotate gate by the given amount. """
-        raise NotImplementedError("This gate cannot be rotate()'d")
 
     def frobeniusdist2(self, otherGate, transform=None, inv_transform=None):
         """ 
-        Return the squared frobenius distance between this gate
-        and `otherGate`, optionally transforming this gate first
-        using `transform` and `inv_transform`.
+        Return the squared frobenius difference between this gate and
+        `otherGate`, optionally transforming this gate first using matrices
+        `transform` and `inv_transform`.
         """
-        raise NotImplementedError("frobeniusdist2(...) not implemented!")
+        if transform is None and inv_transform is None:
+            return _gt.frobeniusdist2(self.todense(),otherGate.todense())
+        else:
+            return _gt.frobeniusdist2(_np.dot(
+                    inv_transform,_np.dot(self.todense(),transform)),
+                                      otherGate.todense())
 
     def frobeniusdist(self, otherGate, transform=None, inv_transform=None):
         """ 
@@ -456,72 +487,6 @@ class Gate(_gatesetmember.GateSetMember):
         """
         return _np.sqrt(self.frobeniusdist2(otherGate, transform, inv_transform))
 
-    def jtracedist(self, otherGate, transform=None, inv_transform=None):
-        """ 
-        Return the Jamiolkowski trace distance between this gate
-        and `otherGate`, optionally transforming this gate first
-        using `transform` and `inv_transform`.
-        """
-        raise NotImplementedError("jtracedist(...) not implemented!")
-
-    def diamonddist(self, otherGate, transform=None, inv_transform=None):
-        """ 
-        Return the diamon distance between this gate
-        and `otherGate`, optionally transforming this gate first
-        using `transform` and `inv_transform`.
-        """
-        raise NotImplementedError("diamonddist(...) not implemented!")
-
-    #Pickle plumbing
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-
-
-class GateMap(Gate):
-    def __init__(self, dim):
-        """ Initialize a new Gate """
-        super(GateMap, self).__init__(dim)
-
-    @property
-    def size(self):
-        return (self.dim)**2
-
-    #Maybe add an as_sparse_mx function and compute
-    # metrics using this?
-    #And perhaps a finite-difference deriv_wrt_params?
-
-    
-class GateMatrix(Gate):
-    """
-    Excapulates a parameterization of a gate matrix.  This class is the
-    common base class for all specific parameterizations of a gate.
-    """
-
-    def __init__(self, mx=None):
-        """ Initialize a new Gate """
-        self.base = mx
-        super(GateMatrix, self).__init__(self.base.shape[0])
-        
-    def acton(self, state):
-        """ Act this gate matrix on an input state (left-multiply w/matrix) """
-        return _np.dot(self.base, state) #TODO: return a SPAMVec?
-
-    def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
-        return _np.dot(self.base.conjugate().T, state) #TODO: return a SPAMVec?
-
-    def frobeniusdist2(self, otherGate, transform=None, inv_transform=None):
-        """ 
-        Return the squared frobenius difference between this gate and
-        `otherGate`, optionally transforming this gate first using matrices
-        `transform` and `inv_transform`.
-        """
-        if transform is None and inv_transform is None:
-            return _gt.frobeniusdist2(self.base,otherGate)
-        else:
-            return _gt.frobeniusdist2(_np.dot(
-                    inv_transform,_np.dot(self.base,transform)),
-                    otherGate)
 
     def residuals(self, otherGate, transform=None, inv_transform=None):
         """
@@ -544,11 +509,11 @@ class GateMatrix(Gate):
             A 1D-array of size equal to that of the flattened gate matrix.
         """
         if transform is None and inv_transform is None:
-            return _gt.residuals(self.base,otherGate)
+            return _gt.residuals(self.todense(),otherGate.todense())
         else:
             return _gt.residuals(_np.dot(
-                    inv_transform,_np.dot(self.base,transform)),
-                    otherGate)
+                    inv_transform,_np.dot(self.todense(),transform)),
+                                 otherGate.todense())
 
     def jtracedist(self, otherGate, transform=None, inv_transform=None):
         """ 
@@ -557,11 +522,11 @@ class GateMatrix(Gate):
         using `transform` and `inv_transform`.
         """
         if transform is None and inv_transform is None:
-            return _gt.jtracedist(self.base,otherGate)
+            return _gt.jtracedist(self.todense(),otherGate.todense())
         else:
             return _gt.jtracedist(_np.dot(
-                    inv_transform,_np.dot(self.base,transform)),
-                    otherGate)
+                    inv_transform,_np.dot(self.todense(),transform)),
+                                  otherGate.todense())
 
     def diamonddist(self, otherGate, transform=None, inv_transform=None):
         """ 
@@ -570,12 +535,119 @@ class GateMatrix(Gate):
         using `transform` and `inv_transform`.
         """
         if transform is None and inv_transform is None:
-            return _gt.diamonddist(self.base,otherGate)
+            return _gt.diamonddist(self.todense(),otherGate.todense())
         else:
             return _gt.diamonddist(_np.dot(
-                    inv_transform,_np.dot(self.base,transform)),
-                    otherGate)
+                    inv_transform,_np.dot(self.todense(),transform)),
+                                   otherGate.todense())
 
+    def transform(self, S):
+        """
+        Update gate matrix G with inv(S) * G * S,
+
+        Generally, the transform function updates the *parameters* of 
+        the gate such that the resulting gate matrix is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        In this particular case *any* transform of the appropriate
+        dimension is possible, since all gate matrix elements are parameters.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+        """
+        Smx = S.get_transform_matrix()
+        Si  = S.get_transform_matrix_inverse()
+        self.set_value(_np.dot(Si,_np.dot(self.todense(), Smx)))
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this gate by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the gate such that the resulting gate matrix is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. In standard
+            bases, depolarization corresponds to multiplying the gate matrix
+            by a diagonal matrix whose first diagonal element (corresponding
+            to the identity) equals 1.0 and whose subsequent elements 
+            (corresponding to non-identity basis elements) equal
+            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
+            float).
+
+        Returns
+        -------
+        None
+        """
+        if isinstance(amount,float):
+            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        else:
+            assert(len(amount) == self.dim-1)
+            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
+        self.set_value(_np.dot(D,self.todense()))
+
+
+    def rotate(self, amount, mxBasis="gm"):
+        """
+        Rotate this gate by the given `amount`.
+
+        Generally, the rotate function updates the *parameters* of 
+        the gate such that the resulting gate matrix is rotated.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : tuple of floats, optional
+            Specifies the rotation "coefficients" along each of the non-identity
+            Pauli-product axes.  The gate's matrix `G` is composed with a
+            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
+            unitary superoperator corresponding to the unitary operator 
+            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
+            ranges over all of the non-identity un-normalized Pauli operators.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        Returns
+        -------
+        None
+        """
+        rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
+        self.set_value(_np.dot(rotnMx,self.todense()))
+
+        
+    def compose(self, otherGate):
+        """
+        Create and return a new gate that is the composition of this gate
+        followed by otherGate of the same type.  (For more general compositions
+        between different types of gates, use the module-level compose function.
+        )  The returned gate's matrix is equal to dot(this, otherGate).
+
+        Parameters
+        ----------
+        otherGate : GateMatrix
+            The gate to compose to the right of this one.
+
+        Returns
+        -------
+        GateMatrix
+        """
+        return self.copy().set_value( _np.dot( self.todense(), otherGate.base) )
+
+    
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized
@@ -589,7 +661,16 @@ class GateMatrix(Gate):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        raise NotImplementedError("deriv_wrt_params(...) is not implemented")
+        assert(self.num_params() == 0), \
+            "Default deriv_wrt_params is only for 0-parameter (default) case"
+
+        dtype = complex if self._evotype == 'statevec' else 'd'
+        derivMx = _np.zeros((self.size,0),dtype)
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
+
 
     def has_nonzero_hessian(self):
         """ 
@@ -601,8 +682,10 @@ class GateMatrix(Gate):
         -------
         bool
         """
-        return True #conservative
+        #Default: assume Hessian can be nonzero if there are any parameters
+        return self.num_params() > 0
 
+    
     def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
         """
         Construct the Hessian of this gate with respect to its parameters.
@@ -623,14 +706,88 @@ class GateMatrix(Gate):
         numpy array
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
-        raise NotImplementedError("hessian_wrt_params(...) is not implemented")
+        if not self.has_nonzero_hessian():
+            return _np.zeros(self.size, self.num_params(), self.num_params())
+
+        # FUTURE: create a finite differencing hessian method?
+        raise NotImplementedError("hessian_wrt_params(...) is not implemented for %s objects" % self.__class__.__name__)
 
 
-    #Handled by derived classes
-    #def __str__(self):
-    #    s = "Gate with shape %s\n" % str(self.base.shape)
-    #    s += _mt.mx_to_string(self.base, width=4, prec=2)
-    #    return s
+    #Pickle plumbing
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+    #Note: no __str__ fn
+
+        
+#class GateMap(Gate):
+#    def __init__(self, dim, evotype):
+#        """ Initialize a new Gate """
+#        super(GateMap, self).__init__(dim, evotype)
+#
+#    #Maybe add an as_sparse_mx function and compute
+#    # metrics using this?
+#    #And perhaps a sparse-mode finite-difference deriv_wrt_params?
+
+    
+class GateMatrix(Gate):
+    """
+    Excapulates a parameterization of a gate matrix.  This class is the
+    common base class for all specific parameterizations of a gate.
+    """
+
+    def __init__(self, mx, evotype):
+        """ Initialize a new Gate """
+        self.base = mx
+        super(GateMatrix, self).__init__(self.base.shape[0], evotype)
+        
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the vectorized
+        derivatives of the flattened gate matrix with respect to a
+        single gate parameter.  Thus, each column is of length
+        gate_dim^2 and there is one column per gate parameter. An
+        empty 2D array in the StaticGate case (num_params == 0).
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives with shape (dimension^2, num_params)
+        """
+        return finite_difference_deriv_wrt_params(self, eps=1e-7)
+
+    def todense(self):
+        """
+        Return this gate as a dense matrix.
+        """
+        return self.base
+
+    def __copy__(self):
+        # We need to implement __copy__ because we defer all non-existing
+        # attributes to self.base (a numpy array) which *has* a __copy__
+        # implementation that we don't want to use, as it results in just a
+        # copy of the numpy array.
+        cls = self.__class__
+        cpy = cls.__new__(cls)
+        cpy.__dict__.update(self.__dict__)
+        return cpy
+
+    def __deepcopy__(self, memo):
+        # We need to implement __deepcopy__ because we defer all non-existing
+        # attributes to self.base (a numpy array) which *has* a __deepcopy__
+        # implementation that we don't want to use, as it results in just a
+        # copy of the numpy array.
+        cls = self.__class__
+        cpy = cls.__new__(cls)
+        memo[id(self)] = cpy
+        for k, v in self.__dict__.items():
+            setattr(cpy, k, _copy.deepcopy(v, memo))
+        return cpy
+    
+    def __str__(self):
+        s = "%s with shape %s\n" % (self.__class__.__name__, str(self.base.shape))
+        s += _mt.mx_to_string(self.base, width=4, prec=2)
+        return s
 
     #Access to underlying ndarray
     def __getitem__( self, key ):
@@ -650,24 +807,6 @@ class GateMatrix(Gate):
         ret = getattr(self.__dict__['base'],attr)
         self.dirty = True
         return ret
-
-    def set_value(self, M):
-        """
-        Attempts to modify gate parameters so that the specified raw
-        gate matrix becomes mx.  Will raise ValueError if this operation
-        is not possible.
-
-        Parameters
-        ----------
-        M : array_like or Gate
-            An array of shape (dim, dim) or Gate representing the gate action.
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Cannot set the value of this GateMatrix directly!")
-
 
     #Mimic array behavior
     def __pos__(self):         return self.base
@@ -690,7 +829,6 @@ class GateMatrix(Gate):
     def __long__(self):        return int(self.base)
     def __float__(self):       return float(self.base)
     def __complex__(self):     return complex(self.base)
-
 
 
     @staticmethod
@@ -744,7 +882,7 @@ class StaticGate(GateMatrix):
       that is contains no parameters.
     """
 
-    def __init__(self, M):
+    def __init__(self, M, evotype="auto"):
         """
         Initialize a StaticGate object.
 
@@ -754,236 +892,19 @@ class StaticGate(GateMatrix):
             a square 2D array-like or Gate object representing the gate action.
             The shape of M sets the dimension of the gate.
         """
-        GateMatrix.__init__(self, GateMatrix.convert_to_matrix(M))
+        M = GateMatrix.convert_to_matrix(M)
+        if evotype == "auto":
+            evotype = "statevec" if _np.iscomplexobj(M) else "densitymx"
+        assert(evotype in ("statevec","densitymx")), \
+            "Invalid evolution type '%s' for %s" % (evotype,self.__class__.__name__)
+        GateMatrix.__init__(self, M, evotype)
+        #(default GateMatrix/Gate methods implement an object with no parameters)
 
-
-    def set_value(self, M):
-        """
-        Attempts to modify gate parameters so that the specified raw
-        gate matrix becomes mx.  Will raise ValueError if this operation
-        is not possible.
-
-        Parameters
-        ----------
-        M : array_like or Gate
-            An array of shape (dim, dim) or Gate representing the gate action.
-
-        Returns
-        -------
-        None
-        """
-        mx = GateMatrix.convert_to_matrix(M)
-        if(mx.shape != (self.dim, self.dim)):
-            raise ValueError("Argument must be a (%d,%d) matrix!"
-                             % (self.dim,self.dim))
-        self.base[:,:] = _np.array(mx)
-        self.dirty = True
-
-
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this gate.  Zero
-        in the case of a StaticGate.
-
-        Returns
-        -------
-        int
-           the number of independent parameters.
-        """
-        return 0 # no parameters
-
-
-    def to_vector(self):
-        """
-        Get the gate parameters as an array of values.  An empty array in the
-        case of StaticGate.
-
-        Returns
-        -------
-        numpy array
-            The gate parameters as a 1D array with length num_params().
-        """
-        return _np.array([], 'd') # no parameters
-
-
-    def from_vector(self, v):
-        """
-        Initialize the gate using a vector of parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params()
-
-        Returns
-        -------
-        None
-        """
-        assert(len(v) == 0) #should be no parameters, and nothing to do
-
-
-    def deriv_wrt_params(self, wrtFilter=None):
-        """
-        Construct a matrix whose columns are the vectorized
-        derivatives of the flattened gate matrix with respect to a
-        single gate parameter.  Thus, each column is of length
-        gate_dim^2 and there is one column per gate parameter. An
-        empty 2D array in the StaticGate case (num_params == 0).
-
-        Returns
-        -------
-        numpy array
-            Array of derivatives with shape (dimension^2, num_params)
-        """
-        derivMx = _np.zeros((self.dim**2,0),self.base.dtype)
-        if wrtFilter is None:
-            return derivMx
-        else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
+        #if self._evotype == "svterm": # then we need to extract unitary
+        #    gate_std = _bt.change_basis(gate, basis, 'std')
+        #    U = _gt.process_mx_to_unitary(self)
 
         
-    def has_nonzero_hessian(self):
-        """ 
-        Returns whether this gate has a non-zero Hessian with
-        respect to its parameters, i.e. whether it only depends
-        linearly on its parameters or not.
-
-        Returns
-        -------
-        bool
-        """
-        return False
-
-
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        return self._copy_gpindices( StaticGate(self.base), parent)
-
-
-    def transform(self, S):
-        """
-        Update gate matrix G with inv(S) * G * S.
-
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting gate matrix is altered as 
-        described above.  If such an update cannot be done (because
-        the gate parameters do not allow for it), ValueError is raised.
-
-        In this particular case *no* transforms are possible since a
-        StaticGate has no parameters to modify.  Thus, this function
-        *always* raises a ValueError.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.
-        """
-        raise ValueError("Cannot transform a StaticGate - it has no parameters!")
-        #self.set_value(_np.dot(Si,_np.dot(self.base, S)))
-
-    def depolarize(self, amount):
-        """
-        Depolarize this gate by the given `amount`.
-
-        Generally, the depolarize function updates the *parameters* of 
-        the gate such that the resulting gate matrix is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        In this particular case *no* alterations are possible since a
-        StaticGate has no parameters to modify.  Thus, this function
-        *always* raises a ValueError.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. In standard
-            bases, depolarization corresponds to multiplying the gate matrix
-            by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
-            (corresponding to non-identity basis elements) equal
-            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
-            float).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Cannot depolarize a StaticGate - it has no parameters!")
-
-
-    def rotate(self, amount, mxBasis="gm"):
-        """
-        Rotate this gate by the given `amount`.
-
-        Generally, the rotate function updates the *parameters* of 
-        the gate such that the resulting gate matrix is rotated.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        In this particular case *no* alterations are possible since a
-        StaticGate has no parameters to modify.  Thus, this function
-        *always* raises a ValueError.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Cannot rotate a StaticGate - it has no parameters!")
-
-
-    def compose(self, otherGate):
-        """
-        Create and return a new gate that is the composition of this gate
-        followed by otherGate, which *must be another StaticGate*.  (For more
-        general compositions between different types of gates, use the module-
-        level compose function.)  The returned gate's matrix is equal to
-        dot(this, otherGate).
-
-        Parameters
-        ----------
-        otherGate : StaticGate
-            The gate to compose to the right of this one.
-
-        Returns
-        -------
-        StaticGate
-        """
-        assert( isinstance(otherGate, StaticGate) )
-        return StaticGate( _np.dot( self.base, otherGate.base ) )
-
-
-    def __str__(self):
-        s = "Static gate with shape %s\n" % str(self.base.shape)
-        s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s
-
-
 
 class FullyParameterizedGate(GateMatrix):
     """
@@ -991,7 +912,7 @@ class FullyParameterizedGate(GateMatrix):
       each element of the gate matrix is an independent parameter.
     """
 
-    def __init__(self, M):
+    def __init__(self, M, evotype="auto"):
         """
         Initialize a FullyParameterizedGate object.
 
@@ -1001,9 +922,14 @@ class FullyParameterizedGate(GateMatrix):
             a square 2D array-like or Gate object representing the gate action.
             The shape of M sets the dimension of the gate.
         """
-        M2 = GateMatrix.convert_to_matrix(M)
-        GateMatrix.__init__(self,M2)
+        M = GateMatrix.convert_to_matrix(M)
+        if evotype == "auto":
+            evotype = "statevec" if _np.iscomplexobj(M) else "densitymx"
+        assert(evotype in ("statevec","densitymx")), \
+            "Invalid evolution type '%s' for %s" % (evotype,self.__class__.__name__)
+        GateMatrix.__init__(self,M,evotype)
 
+        
     def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
@@ -1036,8 +962,7 @@ class FullyParameterizedGate(GateMatrix):
         int
            the number of independent parameters.
         """
-        return 2*self.dim**2 if _np.iscomplexobj(self.base) \
-               else self.dim**2
+        return 2*self.size if self._evotype == "statevec" else self.size
 
 
     def to_vector(self):
@@ -1049,7 +974,7 @@ class FullyParameterizedGate(GateMatrix):
         numpy array
             The gate parameters as a 1D array with length num_params().
         """
-        if _np.iscomplexobj(self.base):
+        if self._evotype == "statevec":
             return _np.concatenate( (self.base.real.flatten(), self.base.imag.flatten()), axis=0)
         else:
             return self.base.flatten()
@@ -1070,7 +995,7 @@ class FullyParameterizedGate(GateMatrix):
         None
         """
         assert(self.base.shape == (self.dim, self.dim))
-        if _np.iscomplexobj(self.base):
+        if self._evotype == "statevec":
             self.base[:,:] = v[0:self.dim**2].reshape( (self.dim,self.dim) ) + \
                              1j*v[self.dim**2:].reshape( (self.dim,self.dim) )
         else:
@@ -1090,7 +1015,7 @@ class FullyParameterizedGate(GateMatrix):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        if _np.iscomplexobj(self.base):
+        if self._evotype == "statevec":
             derivMx = _np.concatenate( (_np.identity( self.dim**2, 'complex' ),
                                         1j*_np.identity( self.dim**2,'complex')),
                                         axis=1 )
@@ -1116,133 +1041,6 @@ class FullyParameterizedGate(GateMatrix):
         return False
 
 
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        return self._copy_gpindices( FullyParameterizedGate(self.base), parent )
-
-
-    def transform(self, S):
-        """
-        Update gate matrix G with inv(S) * G * S,
-
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting gate matrix is altered as 
-        described above.  If such an update cannot be done (because
-        the gate parameters do not allow for it), ValueError is raised.
-
-        In this particular case *any* transform of the appropriate
-        dimension is possible, since all gate matrix elements are parameters.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.
-        """
-        Smx = S.get_transform_matrix()
-        Si  = S.get_transform_matrix_inverse()
-        self.set_value(_np.dot(Si,_np.dot(self.base, Smx)))
-
-
-    def depolarize(self, amount):
-        """
-        Depolarize this gate by the given `amount`.
-
-        Generally, the depolarize function updates the *parameters* of 
-        the gate such that the resulting gate matrix is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. In standard
-            bases, depolarization corresponds to multiplying the gate matrix
-            by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
-            (corresponding to non-identity basis elements) equal
-            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
-            float).
-
-        Returns
-        -------
-        None
-        """
-        if isinstance(amount,float):
-            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
-        else:
-            assert(len(amount) == self.dim-1)
-            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        self.set_value(_np.dot(D,self))
-
-
-    def rotate(self, amount, mxBasis="gm"):
-        """
-        Rotate this gate by the given `amount`.
-
-        Generally, the rotate function updates the *parameters* of 
-        the gate such that the resulting gate matrix is rotated.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
-        """
-        rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
-        self.set_value(_np.dot(rotnMx,self))
-
-
-    def __str__(self):
-        s = "Fully Parameterized gate with shape %s\n" % str(self.base.shape)
-        s += _mt.mx_to_string(self, width=4, prec=2)
-        return s
-
-
-    def compose(self, otherGate):
-        """
-        Create and return a new gate that is the composition of this gate
-        followed by otherGate, which *must be another FullyParameterizedGate*.
-        (For more general compositions between different types of gates, use
-        the module-level compose function.)  The returned gate's matrix is
-        equal to dot(this, otherGate).
-
-        Parameters
-        ----------
-        otherGate : FullyParameterizedGate
-            The gate to compose to the right of this one.
-
-        Returns
-        -------
-        FullyParameterizedGate
-        """
-        assert( isinstance(otherGate, FullyParameterizedGate) )
-        return FullyParameterizedGate( _np.dot( self.base, otherGate.base) )
-    
-
 class TPParameterizedGate(GateMatrix):
     """
     Encapsulates a gate matrix that is fully parameterized except for
@@ -1263,12 +1061,14 @@ class TPParameterizedGate(GateMatrix):
         """
         #Gate.__init__(self, Gate.convert_to_matrix(M))
         mx = GateMatrix.convert_to_matrix(M)
+        assert(_np.isrealobj(mx)),"TPParameterizedGate must have *real* values!"
         if not (_np.isclose(mx[0,0], 1.0) and \
                 _np.allclose(mx[0,1:], 0.0)):
             raise ValueError("Cannot create TPParameterizedGate: " +
                              "invalid form for 1st row!")
-        GateMatrix.__init__(self, _ProtectedArray(mx,
-                       indicesToProtect=(0, slice(None,None,None))))
+        GateMatrix.__init__(self, _ProtectedArray(
+            mx, indicesToProtect=(0, slice(None,None,None))), "densitymx")
+                
 
 
     def set_value(self, M):
@@ -1374,135 +1174,7 @@ class TPParameterizedGate(GateMatrix):
         """
         return False
 
-
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        return self._copy_gpindices( TPParameterizedGate(self.base), parent )
-
-
-    def transform(self, S):
-        """
-        Update gate matrix G with inv(S) * G * S,
-
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting gate matrix is altered as 
-        described above.  If such an update cannot be done (because
-        the gate parameters do not allow for it), ValueError is raised.
-
-        In this particular case any TP gauge transformation is possible,
-        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
-        corresponds to a TP-like transform matrix.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.
-        """
-        Smx = S.get_transform_matrix()
-        Si  = S.get_transform_matrix_inverse()
-        self.set_value(_np.dot(Si,_np.dot(self.base, Smx)))
-
-
-    def depolarize(self, amount):
-        """
-        Depolarize this gate by the given `amount`.
-
-        Generally, the depolarize function updates the *parameters* of 
-        the gate such that the resulting gate matrix is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. In standard
-            bases, depolarization corresponds to multiplying the gate matrix
-            by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
-            (corresponding to non-identity basis elements) equal
-            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
-            float).
-
-        Returns
-        -------
-        None
-        """
-        if isinstance(amount,float):
-            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
-        else:
-            assert(len(amount) == self.dim-1)
-            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        self.set_value(_np.dot(D,self))
-
-
-    def rotate(self, amount, mxBasis="gm"):
-        """
-        Rotate this gate by the given `amount`.
-
-        Generally, the rotate function updates the *parameters* of 
-        the gate such that the resulting gate matrix is rotated.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
-        """
-        rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
-        self.set_value(_np.dot(rotnMx,self))
-
-
-    def compose(self, otherGate):
-        """
-        Create and return a new gate that is the composition of this gate
-        followed by otherGate, which *must be another TPParameterizedGate*.
-        (For more general compositions between different types of gates, use
-        the module-level compose function.)  The returned gate's matrix is
-        equal to dot(this, otherGate).
-
-        Parameters
-        ----------
-        otherGate : TPParameterizedGate
-            The gate to compose to the right of this one.
-
-        Returns
-        -------
-        TPParameterizedGate
-        """
-        assert( isinstance(otherGate, TPParameterizedGate) )
-        return TPParameterizedGate( _np.dot( self.base, otherGate ) )
-
-
-    def __str__(self):
-        """ Return string representation """
-        s = "TP Parameterized gate with shape %s\n" % str(self.base.shape)
-        s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s
-
+    
 
 class LinearlyParameterizedElementTerm(object):
     """
@@ -1536,7 +1208,7 @@ class LinearlyParameterizedGate(GateMatrix):
     """
 
     def __init__(self, baseMatrix, parameterArray, parameterToBaseIndicesMap,
-                 leftTransform=None, rightTransform=None, real=False):
+                 leftTransform=None, rightTransform=None, real=False, evotype="auto"):
         """
         Initialize a LinearlyParameterizedGate object.
 
@@ -1591,6 +1263,7 @@ class LinearlyParameterizedGate(GateMatrix):
         self.parameterArray = parameterArray
         self.numParams = len(parameterArray)
         self.elementExpressions = elementExpressions
+        assert(_np.isrealobj(self.parameterArray)), "Parameter array must be real-valued!"
 
         I = _np.identity(self.baseMatrix.shape[0],'d') # LinearlyParameterizedGates are currently assumed to be real
         self.leftTrans = leftTransform if (leftTransform is not None) else I
@@ -1598,10 +1271,14 @@ class LinearlyParameterizedGate(GateMatrix):
         self.enforceReal = real
         mx.flags.writeable = False # only _construct_matrix can change array
 
-        GateMatrix.__init__(self, mx)
+        if evotype == "auto": evotype = "densitymx" if real else "statevec"
+        assert(evotype in ("densitymx","statevec")), \
+            "Invalid evolution type '%s' for %s" % (evotype,self.__class__.__name__)
+
+        GateMatrix.__init__(self, mx, evotype)
         self._construct_matrix() # construct base from the parameters
 
-
+        
     def _construct_matrix(self):
         """
         Build the internal gate matrix using the current parameters.
@@ -1622,29 +1299,6 @@ class LinearlyParameterizedGate(GateMatrix):
         assert(matrix.shape == (self.dim,self.dim))
         self.base = matrix
         self.base.flags.writeable = False
-
-
-    def set_value(self, M):
-        """
-        Attempts to modify gate parameters so that the specified raw
-        gate matrix becomes mx.  Will raise ValueError if this operation
-        is not possible.
-
-        Parameters
-        ----------
-        M : numpy array or Gate
-            A numpy array of shape (dim, dim) or Gate representing the gate action.
-
-        Returns
-        -------
-        None
-        """
-        mx = GateMatrix.convert_to_matrix(M)
-        if(mx.shape != (self.dim, self.dim)):
-            raise ValueError("Argument must be a (%d,%d) matrix!" % (self.dim,self.dim))
-        raise ValueError("Currently, directly setting the matrix of a" +
-                         " LinearlyParameterizedGate object is not" +
-                         " supported.  Please use the from_vector method.")
 
 
     def num_params(self):
@@ -1668,7 +1322,7 @@ class LinearlyParameterizedGate(GateMatrix):
         numpy array
             a 1D numpy array with length == num_params().
         """
-        return self.parameterArray #.real in case of complex matrices
+        return self.parameterArray
 
 
     def from_vector(self, v):
@@ -1685,7 +1339,7 @@ class LinearlyParameterizedGate(GateMatrix):
         -------
         None
         """
-        self.parameterArray = v
+        self.parameterArray[:] = v
         self._construct_matrix()
         self.dirty = True
 
@@ -1735,109 +1389,6 @@ class LinearlyParameterizedGate(GateMatrix):
         bool
         """
         return False
-
-
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        #Construct new gate with no intial elementExpressions
-        newGate = LinearlyParameterizedGate(self.baseMatrix, self.parameterArray.copy(),
-                                            {}, self.leftTrans.copy(), self.rightTrans.copy(),
-                                            self.enforceReal)
-
-        #Deep copy elementExpressions into new gate
-        for tup, termList in list(self.elementExpressions.items()):
-            newGate.elementExpressions[tup] = [ term.copy() for term in termList ]
-        newGate._construct_matrix()
-
-        return self._copy_gpindices( newGate, parent )
-
-
-    def transform(self, S):
-        """
-        Update gate matrix G with inv(S) * G * S,
-
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting gate matrix is altered as 
-        described above.  If such an update cannot be done (because
-        the gate parameters do not allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.
-        """
-        #Currently just raise error - in general there is no *unique* 
-        # parameter alteration that would affect a similarity transform,
-        # and even if one exists it may be difficult to find efficiently.
-        raise ValueError("Invalid transform for this LinearlyParameterizedGate")
-    
-
-    def depolarize(self, amount):
-        """
-        Depolarize this gate by the given `amount`.
-
-        Generally, the depolarize function updates the *parameters* of 
-        the gate such that the resulting gate matrix is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. In standard
-            bases, depolarization corresponds to multiplying the gate matrix
-            by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
-            (corresponding to non-identity basis elements) equal
-            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
-            float).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Cannot depolarize a LinearlyParameterizedGate (no general procedure)!")
-
-
-    def rotate(self, amount, mxBasis="gm"):
-        """
-        Rotate this gate by the given `amount`.
-
-        Generally, the rotate function updates the *parameters* of 
-        the gate such that the resulting gate matrix is rotated.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Cannot rotate a LinearlyParameterizedGate (no general procedure)!")
-
 
 
     def compose(self, otherGate):
@@ -1890,7 +1441,8 @@ class LinearlyParameterizedGate(GateMatrix):
         paramArray = _np.concatenate( (self.parameterArray, otherGate.parameterArray), axis=0)
         composedGate = LinearlyParameterizedGate(baseMx, paramArray, {},
                                                  self.leftTrans, otherGate.rightTrans,
-                                                 self.enforceReal and otherGate.enforceReal)
+                                                 self.enforceReal and otherGate.enforceReal,
+                                                 self._evotype)
 
         # Precompute what we can before the compute loop
         aW = _np.dot(self.baseMatrix, W)
@@ -1941,7 +1493,7 @@ class LinearlyParameterizedGate(GateMatrix):
         return s
 
 
-#Or CommutantParameterizedGate(Gate): ?
+
 class EigenvalueParameterizedGate(GateMatrix):
     """
     Encapsulates a real gate matrix that is parameterized only by its
@@ -1953,7 +1505,7 @@ class EigenvalueParameterizedGate(GateMatrix):
     def __init__(self, matrix, includeOffDiagsInDegen2Blocks=False,
                  TPconstrainedAndUnital=False):
         """
-        Initialize a LinearlyParameterizedGate object.
+        Initialize an EigenvalueParameterizedGate object.
 
         Parameters
         ----------
@@ -2182,7 +1734,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         #Finish Gate construction
         mx = _np.empty( matrix.shape, "d" )
         mx.flags.writeable = False # only _construct_matrix can change array
-        GateMatrix.__init__(self, mx)
+        GateMatrix.__init__(self, mx, "densitymx")
         self._construct_matrix() # construct base from the parameters
 
 
@@ -2200,27 +1752,6 @@ class EigenvalueParameterizedGate(GateMatrix):
         self.base = matrix.real
         self.base.flags.writeable = False
 
-    def set_value(self, M):
-        """
-        Attempts to modify gate parameters so that the specified raw
-        gate matrix becomes mx.  Will raise ValueError if this operation
-        is not possible.
-
-        Parameters
-        ----------
-        M : numpy array or Gate
-            A numpy array of shape (dim, dim) or Gate representing the gate action.
-
-        Returns
-        -------
-        None
-        """
-        mx = GateMatrix.convert_to_matrix(M)
-        if(mx.shape != (self.dim, self.dim)):
-            raise ValueError("Argument must be a (%d,%d) matrix!" % (self.dim,self.dim))
-        raise ValueError("Currently, directly setting the matrix of an" +
-                         " EigenvalueParameterizedGate object is not" +
-                         " supported.  Please use the from_vector method.")
 
     def num_params(self):
         """
@@ -2315,467 +1846,411 @@ class EigenvalueParameterizedGate(GateMatrix):
         bool
         """
         return False
+    
 
+class LindbladParameterizedGateMap(Gate):
 
-    def copy(self, parent=None):
+    @classmethod
+    def from_gate_matrix(cls, gateMatrix, unitaryPostfactor=None,
+                         ham_basis="pp", nonham_basis="pp", cptp=True,
+                         nonham_diagonal_only=False, truncate=True, mxBasis="pp",
+                         evotype="densitymx"):
+        """ TODO: docstring - creates a Lindblad-parameterized gate from a matrix
+            and a basis which specifies how to decompose (project) the gate's
+            error generator.
         """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        #Construct new gate with dummy identity mx
-        newGate = EigenvalueParameterizedGate(_np.identity(self.dim,'d'))
         
-        #Deep copy data
-        newGate.evals = self.evals.copy()
-        newGate.B = self.B.copy()
-        newGate.Bi = self.Bi.copy()
-        newGate.params = self.params[:] #copies tuple elements
-        newGate.paramvals = self.paramvals.copy()
-        newGate.options = self.options.copy()
-        newGate._construct_matrix()
+        #Compute a (errgen, unitaryPostfactor) pair from the given
+        # (gateMatrix, unitaryPostfactor) pair.  Works with both
+        # dense and sparse matrices.
+        
+        if gateMatrix is None:
+            assert(unitaryPostfactor is not None), "arguments cannot both be None"
+            gateMatrix = unitaryPostfactor
+            
+        if unitaryPostfactor is None:
+            if _sps.issparse(gateMatrix):
+                upost = _sps.identity(gateMatrix.shape[0],'d','csr')
+            else: upost = _np.identity(gateMatrix.shape[0],'d')
+            unitaryPostfactor = gateMatrix.shape[0] # just set as dimension (see __init__)
+        else: upost = unitaryPostfactor
 
-        return self._copy_gpindices( newGate, parent )
+        #Init base from error generator: sets basis members and ultimately
+        # the parameters in self.paramvals
+        if _sps.issparse(gateMatrix):
+            #Instead of making error_generator compatible with sparse matrices
+            # we require sparse matrices to have trivial initial error generators
+            # or we convert to dense:
+            if(_mt.safenorm(gateMatrix-upost) < 1e-8):
+                errgen = _sps.csr_matrix( gateMatrix.shape, dtype='d' ) # all zeros
+            else:
+                errgen = _sps.csr_matrix(
+                    _gt.error_generator(gateMatrix.toarray(), upost.toarray(),
+                                        mxBasis, "logGTi"), dtype='d')
+        else:
+            errgen = _gt.error_generator(gateMatrix, upost, mxBasis, "logGTi")
 
+        return cls.from_error_generator(unitaryPostfactor, errgen, ham_basis,
+                                        nonham_basis, cptp, nonham_diagonal_only,
+                                        truncate, mxBasis, evotype)
 
-    def transform(self, S):
+    
+    @classmethod
+    def from_error_generator(cls, unitaryPostfactor, errgen,
+                             ham_basis="pp", nonham_basis="pp",
+                             cptp=True, nonham_diagonal_only=False,
+                             truncate=True, mxBasis="pp", evotype="densitymx"):
         """
-        Update gate matrix G with inv(S) * G * S,
-
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting gate matrix is altered as 
-        described above.  If such an update cannot be done (because
-        the gate parameters do not allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.
+        TODO: docstring - creates a Lindblad-parameterized gate from an error
+            generator and a basis which specifies how to decompose (project) the
+            error generator.
         """
-        #Currently just raise error, as a general similarity transformation
-        # *will* affect the eigenvalues.  In the future, perhaps we could allow
-        # *unitary* type similarity transformations.
-        raise ValueError("Invalid transform for this EigenvalueParameterizedGate")
-
-
-    def depolarize(self, amount):
-        """
-        Depolarize this gate by the given `amount`.
-
-        Generally, the depolarize function updates the *parameters* of 
-        the gate such that the resulting gate matrix is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. In standard
-            bases, depolarization corresponds to multiplying the gate matrix
-            by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
-            (corresponding to non-identity basis elements) equal
-            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
-            float).
-
-        Returns
-        -------
-        None
-        """
-        #TODO: maybe could do this if we wanted to get clever: if one eigenvector is the
-        # identity we could reduce all the eigenvalues corresponding to *other* evecs.
-        raise ValueError("Cannot depolarize a EigenvalueParameterizedGate")
-
-
-    def rotate(self, amount, mxBasis="gm"):
-        """
-        Rotate this gate by the given `amount`.
-
-        Generally, the rotate function updates the *parameters* of 
-        the gate such that the resulting gate matrix is rotated.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Cannot rotate an EigenvalueParameterizedGate!")
-
-
-    def compose(self, otherGate):
-        """
-        Create and return a new gate that is the composition of this gate
-        followed by otherGate, which *must be another 
-        EigenvalueParameterizedGate*.  (For more general compositions between
-        different types of gates, use the module-level compose function.)  The
-        returned gate's matrix is equal to dot(this, otherGate).
-
-        Parameters
-        ----------
-        otherGate : EigenvalueParameterizedGate
-            The gate to compose to the right of this one.
-
-        Returns
-        -------
-        EigenvalueParameterizedGate
-        """
-        assert( isinstance(otherGate, EigenvalueParameterizedGate) )
-
-        composed_mx = _np.dot(self, otherGate)
-        return EigenvalueParameterizedGate(composed_mx,
-                                           self.options['includeOffDiags'],
-                                           self.options['TPandUnital'])
-
-    def __str__(self):
-        s = "Eigenvalue Parameterized gate with shape %s, num params = %d\n" % \
-            (str(self.base.shape), self.num_params())
-        s += _mt.mx_to_string(self.base, width=5, prec=1)
-        return s
-
-
-
-#TODO: add "sparse" flag to LindbladParameterizedGate
-#  -- maybe add "sparse" basis (where mxs are sparse) to facilitate this
-#  -- use scipy.sparse.linalg.expm_multiply to perform sparse multiplies
-
-class LindbladBase(object):
-    """ Base class for Lindblad-parameterized gates """
-
-    def __init__(self, errgen, ham_basis="pp", nonham_basis="pp", cptp=True,
-                 nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
-        """
-        Initialize a LindbladBase object.  Parameters are explained in 
-        derived-class doc strings.
-        """
-        self.cptp = cptp
-        self.nonham_diagonal_only = nonham_diagonal_only
 
         d2 = errgen.shape[0]
         d = int(round(_np.sqrt(d2)))
         assert(d*d == d2), "Gate dim must be a perfect square"
-
-        #Determine whether we're using sparse bases or not
-        self.sparse = None
-        if ham_basis is not None:
-            if isinstance(ham_basis, _Basis): self.sparse = ham_basis.sparse
-            elif _compat.isstr(ham_basis): self.sparse = _sps.issparse(errgen)
-            elif len(ham_basis) > 0: self.sparse = _sps.issparse(ham_basis[0])
-        if self.sparse is None and nonham_basis is not None:
-            if isinstance(nonham_basis, _Basis): self.sparse = nonham_basis.sparse
-            elif _compat.isstr(nonham_basis): self.sparse = _sps.issparse(errgen)
-            elif len(nonham_basis) > 0: self.sparse = _sps.issparse(nonham_basis[0])
-        if self.sparse is None: self.sparse = False #the default
-
-        self.dim = d2 #also set by GateMatrix and GateMap (but consistent, so OK)
-        if isinstance(ham_basis, _Basis) or _compat.isstr(ham_basis):
-            self.ham_basis = _Basis(ham_basis,d,sparse=self.sparse)
-        else: # ham_basis is a list of matrices
-            self.ham_basis = _Basis(matrices=ham_basis,dim=d,sparse=self.sparse)
-
-        if isinstance(nonham_basis, _Basis) or _compat.isstr(nonham_basis):
-            self.other_basis = _Basis(nonham_basis,d,sparse=self.sparse)
-        else: # nonham_basis is a list of matrices
-            self.other_basis = _Basis(matrices=nonham_basis,dim=d,sparse=self.sparse)
         
+        #Determine whether we're using sparse bases or not
+        sparse = None
+        if ham_basis is not None:
+            if isinstance(ham_basis, _Basis): sparse = ham_basis.sparse
+            elif _compat.isstr(ham_basis): sparse = _sps.issparse(errgen)
+            elif len(ham_basis) > 0: sparse = _sps.issparse(ham_basis[0])
+        if sparse is None and nonham_basis is not None:
+            if isinstance(nonham_basis, _Basis): sparse = nonham_basis.sparse
+            elif _compat.isstr(nonham_basis): sparse = _sps.issparse(errgen)
+            elif len(nonham_basis) > 0: sparse = _sps.issparse(nonham_basis[0])
+        if sparse is None: sparse = False #the default
+
+        #Create or convert bases to appropriate sparsity
+        if isinstance(ham_basis, _Basis) or _compat.isstr(ham_basis):
+            ham_basis = _Basis(ham_basis,d,sparse=sparse)
+        else: # ham_basis is a list of matrices
+            ham_basis = _Basis(matrices=ham_basis,dim=d,sparse=sparse)
+        
+        if isinstance(nonham_basis, _Basis) or _compat.isstr(nonham_basis):
+            other_basis = _Basis(nonham_basis,d,sparse=sparse)
+        else: # ham_basis is a list of matrices
+            other_basis = _Basis(matrices=nonham_basis,dim=d,sparse=sparse)
+        
+        matrix_basis = _Basis(mxBasis,d,sparse=sparse)
+
+        # errgen + bases => coeffs
+        hamC, otherC = \
+            _gt.lindblad_errgen_projections(
+                errgen, ham_basis, other_basis, matrix_basis, normalize=False,
+                return_generators=False, other_diagonal_only=nonham_diagonal_only,
+                sparse=sparse)
+
+        # coeffs + bases => Ltermdict, basisdict
+        Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
+            hamC, otherC, ham_basis, other_basis)
+        
+        return cls(unitaryPostfactor, Ltermdict, basisdict,
+                   cptp, nonham_diagonal_only, truncate,
+                   matrix_basis, evotype )
+
+        
+    def __init__(self, unitaryPostfactor, Ltermdict, basisdict=None,
+                 cptp=True, nonham_diagonal_only="auto",
+                 truncate=True, mxBasis="pp", evotype="densitymx"):
+        """
+        TODO: docstring
+        Ltermdict keys are (termType, basisLabel(s)); values are floating point coeffs (error rates)
+        basisdict keys are string/int basis element "names"; values are numpy matrices or an "embedded matrix",
+                i.e. a *list* of (matrix, state_space_label) elements -- e.g. [(sigmaX,'Q1'), (sigmaY,'Q4')]
+         -- maybe let keys be tuples of (basisname, state_space_label) e.g. (('X','Q1'),('Y','Q4')) -- and maybe allow ('XY','Q1','Q4')
+                 format when can assume single-letter labels.
+        """
+
+        # Extract superop dimension from 'unitaryPostfactor'
+        # (which can just be an integer dimension)
+        if isinstance(unitaryPostfactor,_numbers.Integral): 
+            d2 = unitaryPostfactor
+            unitaryPostfactor = None
+        else:
+            try:
+                d2 = unitaryPostfactor.dim # if a gate
+            except:
+                unitaryPostfactor = GateMatrix.convert_to_matrix(unitaryPostfactor)
+                d2 = unitaryPostfactor.shape[0] # otherwise try to treat as array
+        d = int(round(_np.sqrt(d2)))
+        assert(d*d == d2), "Gate dim must be a perfect square"
+
+        # Compute automatic other_diagonal_only value
+        if nonham_diagonal_only == 'auto':
+            nonham_diagonal_only = all(
+                [ len(termLbl)==2 for termLbl in Ltermdict if termLbl[0]=="S"])
+                #Note: don't really need "if..." b/c Ham terms are all length=2
+        
+        # Ltermdict, basisdict => bases + parameter values
+        # but maybe we want Ltermdict, basisdict => basis + projections/coeffs, then projections/coeffs => paramvals?
+        # since the latter is what set_errgen needs
+        hamC, otherC, self.ham_basis, self.other_basis = _gt.lindblad_terms_to_projections(
+            Ltermdict, basisdict, d, nonham_diagonal_only)
+
+        self.ham_basis_size = len(self.ham_basis)
+        self.other_basis_size = len(self.other_basis)
+
+        if self.ham_basis_size > 0: self.sparse = _sps.issparse(self.ham_basis[0])
+        elif self.other_basis_size > 0: self.sparse = _sps.issparse(self.other_basis[0])
+        else: self.sparse = False
+
         self.matrix_basis = _Basis(mxBasis,d,sparse=self.sparse)
 
-        #Assumed gate was in the pauli-product basis initially.  I think
-        # everything should work fine in the current general case with any other
-        # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
+        self.paramvals = _gt.lindblad_projections_to_paramvals(
+            hamC, otherC, cptp, nonham_diagonal_only, truncate)
+        self.nonham_diagonal_only = nonham_diagonal_only
+        self.cptp = cptp
+
+        Gate.__init__(self, d2, evotype) #sets self.dim
+
+        #Finish initialization based on evolution type
+        assert(evotype in ("densitymx","svterm","cterm")), \
+            "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
+
+        #Fast CSR-matrix summing variables: N/A if not sparse or using terms
+        self.hamCSRSumIndices = None
+        self.otherCSRSumIndices = None
+        self.sparse_err_gen_template = None            
+        
+        if evotype == "densitymx":
+            self.unitary_postfactor = unitaryPostfactor #can be None
+            self.hamGens, self.otherGens = self._init_generators()
+
+            if self.sparse:
+                #Precompute for faster CSR sums in _construct_errgen
+                all_csr_matrices = []
+                if self.hamGens is not None:
+                    all_csr_matrices.extend(self.hamGens)
+
+                if self.otherGens is not None:
+                    oList = self.otherGens if self.nonham_diagonal_only else \
+                            [ mx for mxRow in self.otherGens for mx in mxRow ]
+                    all_csr_matrices.extend(oList)
+    
+                csr_sum_array, indptr, indices, N = \
+                        _mt.get_csr_sum_indices(all_csr_matrices)
+                self.hamCSRSumIndices = csr_sum_array[0:len(self.hamGens)]
+                self.otherCSRSumIndices = csr_sum_array[len(self.hamGens):]
+                self.sparse_err_gen_template = (indptr, indices, N)
+
+            #initialize intermediate storage for matrix and for deriv computation
+            # (needed for _construct_errgen)
+            bsO = self.other_basis_size
+            self.Lmx = _np.zeros((bsO-1,bsO-1),'complex') if bsO > 0 else None
+
+            self.err_gen = None
+            self.err_gen_prep = None
+            self.exp_err_gen = None
+            self._construct_errgen() #sets the above three members as needed
+            
+            self.Lterms = self.terms = None # Unused
+            
+        else: # Term-based evolution
+            
+            termtype = "dense" if evotype == "svterm" else "clifford"
+
+            # Store *unitary* as self.unitary_postfactor - NOT a superop
+            if unitaryPostfactor is not None: #can be None
+                gate_std = _bt.change_basis(unitaryPostfactor, self.matrix_basis, 'std')
+                self.unitary_postfactor = _gt.process_mx_to_unitary(gate_std)
+
+                # automatically "up-convert" gate to CliffordGate if needed
+                if termtype == "clifford":
+                    # OLD and not isinstance(baseunitary, (CliffordGate, EmbeddedCliffordGate)):
+                    self.unitary_postfactor = CliffordGate(self.unitary_postfactor) 
+            else:
+                self.unitary_postfactor = None
+            
+            self.Lterms = self._create_terms(Ltermdict, basisdict,
+                                             hamBasisLabels, otherBasisLabels,
+                                             termtype)
+            self.terms = {}
+            
+            # Unused
+            self.hamGens = self.other = self.Lmx = None
+            self.err_gen_prep = self.exp_err_gen = self.err_gen = None
+
+        #Done with __init__(...)
+
+
+    def _init_generators(self):
+        #assumes self.dim, self.ham_basis, self.other_basis, and self.matrix_basis are setup...
+        
+        d2 = self.dim
+        d = int(round(_np.sqrt(d2)))
+        assert(d*d == d2), "Gate dim must be a perfect square"
+
+        # Get basis transfer matrix
         mxBasisToStd = _bt.transform_matrix(self.matrix_basis, "std", d)
-        self.leftTrans  = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
+        leftTrans  = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
                           else _np.linalg.inv(mxBasisToStd)
-        self.rightTrans = mxBasisToStd            
+        rightTrans = mxBasisToStd
 
+        
+        hamBasisMxs = _basis_matrices(self.ham_basis, d, sparse=self.sparse)
+        otherBasisMxs = _basis_matrices(self.other_basis, d, sparse=self.sparse)
+        hamGens, otherGens = _gt.lindblad_error_generators(
+            hamBasisMxs,otherBasisMxs,normalize=False,
+            other_diagonal_only=self.nonham_diagonal_only) # in std basis
 
-        self._set_params_from_errgen(errgen, truncate)
-          #also sets self.hamGens and self.otherGens as side effect (TODO FIX)
-          # and self.ham_basis_size and self.other_basis_size.  Requires
-          # self.leftTrans and self.rightTrans be set already
-
-        #initialize intermediate storage for matrix and for deriv computation
-        # (needed for _construct_errgen)
-        bsO = self.other_basis_size
-        if bsO > 0:
-            self.Lmx = _np.zeros((bsO-1,bsO-1),'complex')
-        else: self.Lmx = None
-          
-        #set self.err_gen (can't just use `errgen` b/c of truncation)
-        self._construct_errgen() 
-
-
-
-    def _set_params_from_errgen(self, errgen, truncate):
-        d2 = errgen.shape[0]
-
-        hamC, otherC, self.hamGens, self.otherGens = \
-            _gt.lindblad_errgen_projections(
-                errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
-                return_generators=True, other_diagonal_only=self.nonham_diagonal_only,
-                sparse=self.sparse) # in std basis
-        # Note: lindblad_errgen_projections will return sparse generators when
+        # Note: lindblad_error_generators will return sparse generators when
         #  given a sparse basis (or basis matrices)
 
-        if self.hamGens is not None:
-            bsH = len(self.hamGens)+1 #projection-basis size (not nec. == d2)
-            _gt._assert_shape(self.hamGens, (bsH-1,d2,d2), self.sparse)
+        if hamGens is not None:
+            bsH = len(hamGens)+1 #projection-basis size (not nec. == d2)
+            _gt._assert_shape(hamGens, (bsH-1,d2,d2), self.sparse)
 
             # apply basis change now, so we don't need to do so repeatedly later
             if self.sparse:
-                self.hamGens = [ _mt.safereal(_mt.safedot(self.leftTrans, _mt.safedot(mx, self.rightTrans)),
-                                              inplace=True, check=True) for mx in self.hamGens ]
-                for mx in self.hamGens: mx.sort_indices()
+                hamGens = [ _mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
+                                              inplace=True, check=True) for mx in hamGens ]
+                for mx in hamGens: mx.sort_indices()
                   # for faster addition ops in _construct_errgen
             else:
-                self.hamGens = _np.einsum("ik,akl,lj->aij", self.leftTrans, self.hamGens, self.rightTrans)
-            
-            assert(_np.isclose(_np.linalg.norm(hamC.imag),0)), \
-                "Hamiltoian coeffs are not all real!"
-            hamParams = hamC.real
+                hamGens = _np.einsum("ik,akl,lj->aij", leftTrans, hamGens, rightTrans)
         else:
             bsH = 0
-            hamParams = _np.empty(0,'d')
+        assert(bsH == self.ham_basis_size)
             
-
-        if self.otherGens is not None:
-            bsO = len(self.otherGens)+1 #projection-basis size (not nec. == d2)
+        if otherGens is not None:
+            bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
 
             if self.nonham_diagonal_only:
-                _gt._assert_shape(self.otherGens, (bsO-1,d2,d2), self.sparse)
+                _gt._assert_shape(otherGens, (bsO-1,d2,d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
-                    self.otherGens = [ _mt.safereal(_mt.safedot(self.leftTrans, _mt.safedot(mx, self.rightTrans)),
-                                                    inplace=True, check=True) for mx in self.otherGens ]
-                    for mx in self.hamGens: mx.sort_indices()
+                    otherGens = [ _mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
+                                                    inplace=True, check=True) for mx in otherGens ]
+                    for mx in hamGens: mx.sort_indices()
                       # for faster addition ops in _construct_errgen
                 else:
-                    self.otherGens = _np.einsum("ik,akl,lj->aij", self.leftTrans, self.otherGens, self.rightTrans)
+                    otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
 
-
-                assert(_np.isclose(_np.linalg.norm(_np.imag(otherC)),0))
-                #assert(_np.all(_np.isreal(otherC))) #sometimes fails even when imag to machine prec
-    
-                if self.cptp: #otherParams is a 1D vector of the sqrts of diagonal els
-                    otherC = otherC.clip(1e-16,1e100) #must be positive
-                    otherParams = _np.sqrt(otherC.real) # shape (bs-1,)
-                else: #otherParams is a 1D vector of the real diagonal els of otherC
-                    otherParams = otherC.real # shape (bs-1,)
-    
             else:
-                _gt._assert_shape(self.otherGens, (bsO-1,bsO-1,d2,d2), self.sparse)
+                _gt._assert_shape(otherGens, (bsO-1,bsO-1,d2,d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
-                    self.otherGens = [ [_mt.safedot(self.leftTrans, _mt.safedot(mx, self.rightTrans))
-                                        for mx in mxRow ] for mxRow in self.otherGens ]
+                    otherGens = [ [_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans))
+                                        for mx in mxRow ] for mxRow in otherGens ]
                     #Note: complex OK here, as only linear combos of otherGens (like (i,j) + (j,i)
                     # terms) need to be real
 
-                    for mxRow in self.otherGens:
+                    for mxRow in otherGens:
                         for mx in mxRow: mx.sort_indices()
                           # for faster addition ops in _construct_errgen:
                 else:
-                    preshape = self.otherGens.shape
-                    self.otherGens = _np.einsum("ik,abkl,lj->abij", self.leftTrans,
-                                                self.otherGens, self.rightTrans)
-
-                assert(_np.isclose(_np.linalg.norm(otherC-otherC.T.conjugate())
-                                   ,0)), "other coeff mx is not Hermitian!"
-    
-                otherParams = _np.empty((bsO-1,bsO-1),'d')
-    
-                if self.cptp: #otherParams mx stores Cholesky decomp
-    
-                    #push any slightly negative evals of otherC positive so that
-                    # the Cholesky decomp will work.
-                    evals,U = _np.linalg.eig(otherC)
-                    Ui = _np.linalg.inv(U)
-    
-                    assert(truncate or all([ev >= -1e-12 for ev in evals])), \
-                        "gateMatrix must be CPTP (truncate == False)!"
-    
-                    pos_evals = evals.clip(1e-16,1e100)
-                    otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
-                    try:
-                        Lmx = _np.linalg.cholesky(otherC)
-
-                    # if Lmx not postitive definite, try again with 1e-12 (same lines as above)
-                    except _np.linalg.LinAlgError:                         # pragma: no cover
-                        pos_evals = evals.clip(1e-12,1e100)                # pragma: no cover
-                        otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))# pragma: no cover
-                        Lmx = _np.linalg.cholesky(otherC)                  # pragma: no cover
-    
-                    for i in range(bsO-1):
-                        assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
-                        otherParams[i,i] = Lmx[i,i].real
-                        for j in range(i):
-                            otherParams[i,j] = Lmx[i,j].real
-                            otherParams[j,i] = Lmx[i,j].imag
-    
-                else: #otherParams mx stores otherC (hermitian) directly
-                    for i in range(bsO-1):
-                        assert(_np.linalg.norm(_np.imag(otherC[i,i])) < IMAG_TOL)
-                        otherParams[i,i] = otherC[i,i].real
-                        for j in range(i):
-                            otherParams[i,j] = otherC[i,j].real
-                            otherParams[j,i] = otherC[i,j].imag
+                    preshape = otherGens.shape
+                    otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
+                                                otherGens, rightTrans)
         else:
             bsO = 0
-            otherParams = _np.empty(0,'d')
+        assert(bsO == self.other_basis_size)
+        return hamGens, otherGens
 
-        if self.sparse:
-            #Precompute for faster CSR sums in _construct_errgen
-            all_csr_matrices = []; nHam = 0; nOther = 0;
-            
-            if self.hamGens is not None:
-                all_csr_matrices.extend(self.hamGens)
-                nHam = len(self.hamGens)
-                
-            if self.otherGens is not None:
-                if self.nonham_diagonal_only:
-                    oList = self.otherGens
-                else:
-                    oList = [ mx for mxRow in self.otherGens for mx in mxRow ]
-                all_csr_matrices.extend(oList)
-
-            csr_sum_array, indptr, indices, N = \
-                    self.get_csr_sum_indices(all_csr_matrices)
-            self.hamCSRSumIndices = csr_sum_array[0:nHam]
-            self.otherCSRSumIndices = csr_sum_array[nHam:]
-            self.sparse_err_gen_template = (indptr, indices, N)
-        else:
-            #N/A if not sparse
-            self.hamCSRSumIndices = None
-            self.otherCSRSumIndices = None
-            self.sparse_err_gen_template = None            
-
-        self.paramvals = _np.concatenate( (hamParams, otherParams.flat) )
-        self.ham_basis_size = bsH
-        self.other_basis_size = bsO
-
-        #True unless bsH,bsO are zero
-        #if nonham_diagonal_only:
-        #    assert(self.paramvals.shape == ((bsH-1)+(bsO-1),))
-        #else:
-        #    assert(self.paramvals.shape == ((bsH-1)+(bsO-1)**2,))
-
-    def get_csr_sum_indices(self, csr_matrices):
-        """ 
-        Precomputes the indices needed to sum a set of CSR sparse matrices.
-
-        Computes the index-arrays needed for use in :method:`csr_sum`,
-        along with the index pointer and column-indices arrays for constructing
-        a "template" CSR matrix to be the destination of `csr_sum`.
-
-        Parameters
-        ----------
-        csr_matrices : list
-            The SciPy CSR matrices to be summed.
-
-        Returns
-        -------
-        ind_arrays : list
-            A list of numpy arrays giving the destination data-array indices
-            of each element of `csr_matrices`.
-        indptr, indices : numpy.ndarray
-            The row-pointer and column-indices arrays specifying the sparsity 
-            structure of a the destination CSR matrix.
-        N : int
-            The dimension of the destination matrix (and of each member of
-            `csr_matrices`)
-        """
-        if len(csr_matrices) == 0: return []
-        
-        N = csr_matrices[0].shape[0]
-        for mx in csr_matrices:
-            assert(mx.shape == (N,N)), "Matrices must have the same square shape!"
-            
-        indptr = [0]
-        indices = []
-        csr_sum_array = [ list() for mx in csr_matrices ]
-
-        #FUTURE sort column indices
-        
-        for iRow in range(N):
-            dataInds = {} #keys = column indices, values = data indices (for data in current row)
-                
-            for iMx,mx in enumerate(csr_matrices):
-                for i in range(mx.indptr[iRow],mx.indptr[iRow+1]):
-                    iCol = mx.indices[i]
-                    if iCol not in dataInds: #add a new element to final mx
-                        indices.append(iCol)
-                        dataInds[iCol] = len(indices)-1 #marks the final data index for this column
-                    csr_sum_array[iMx].append(dataInds[iCol])
-            indptr.append( len(indices) )
-
-        #convert lists -> arrays
-        csr_sum_array = [ _np.array(lst,'i') for lst in csr_sum_array ]
-        indptr = _np.array( indptr )
-        indices = _np.array( indices )
-
-        return csr_sum_array, indptr, indices, N
     
+    def _init_terms(self, Ltermdict, basisdict, hamBasisLabels, otherBasisLabels, termtype):
 
-        
-    def csr_sum(self, data, coeffs, csr_mxs, csr_sum_indices):
-        """ 
-        Accelerated summation of several CSR-format sparse matrices.
+        tt = termtype # shorthand - used to construct RankOneTerm objects below,
+                      # as we expect `basisdict` will contain *dense* basis
+                      # matrices (maybe change in FUTURE?)
 
-        :method:`get_csr_sum_indices` precomputes the necessary indices for
-        summing directly into the data-array of a destination CSR sparse matrix.
-        If `data` is the data-array of matrix `D` (for "destination"), then this
-        method performs:
+        # Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
+        # coeffs (w/ *local* variable indices) that get converted to per-order
+        # terms later.
+        IDENT = None # sentinel for the do-nothing identity op
+        Lterms = []
+        for termLbl in Ltermdict:
+            print("DB: processing ",termLbl)
+            termType = termLbl[0]
+            if termType == "H": # Hamiltonian
+                k = hamBasisLabels[termLbl[1]] #index of parameter
+                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT, tt) )
+                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T, tt) )
+                print("DB: H term w/index %d= " % k, " len=",len(Lterms))
+                #print("  coeff: ", list(Lterms[-1].coeff.keys()) )
+                #print("  coeff: ", list(Lterms[-2].coeff.keys()) )
+                #print("  coeff: ", list(Lterms[-1].coeff.inds) )
+                #print("  coeff: ", list(Lterms[-2].coeff.inds) )
 
-        `D += sum_i( coeff[i] * csr_mxs[i] )`
+            elif termType == "S": # Stochastic
+                if nonham_diagonal_only:
+                    k = numHamParams + otherBasisLabels[termLbl[1]] #index of parameter
+                    Lm = Ln = basisdict[termLbl[1]]
+                    pw = 2 if cptp else 1 # power to raise parameter to in order to get coeff
 
-        Note that `D` is not returned; the sum is done internally into D's
-        data-array.
+                    Lm_dag = Lm.conjugate().T # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
+                    Ln_dag = Ln.conjugate().T
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw:  1.0} ), Ln, Lm_dag, tt) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm), tt) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT, tt) )
+                else:
+                    i = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
+                    j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
+                    Lm, Ln = basisdict[termLbl[1]],basisdict[termLbl[2]]
+                    print("DB: S indices = ",i,j)
 
-        Parameters
-        ----------
-        data : numpy.ndarray
-            The data-array of the destination CSR-matrix.
+                    # TODO: create these polys and place below...
+                    polyTerms = {}
+                    if cptp:
+                        # otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
+                        # coeff_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
+                        #          = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
+                        def iRe(a,b): return numHamParams + (a*numOtherBasisEls + b)
+                        def iIm(a,b): return numHamParams + (b*numOtherBasisEls + a)
+                        for k in range(0,min(i,j)+1):
+                            if k <= i and k <= j:
+                                polyTerms[ (iRe(i,k),iRe(j,k)) ] = 1.0
+                            if k <= i and k < j:
+                                polyTerms[ (iRe(i,k),iIm(j,k)) ] = -1.0j
+                            if k < i and k <= j:
+                                polyTerms[ (iIm(i,k),iRe(j,k)) ] = 1.0j
+                            if k < i and k < j:
+                                polyTerms[ (iIm(i,k),iIm(j,k)) ] = 1.0
+                    else: # coeff_ij = otherParam[i,j] + 1j*otherParam[j,i] (otherCoeffs is Hermitian)
+                        ijIndx = numHamParams + (i*numOtherBasisEls + j)
+                        jiIndx = numHamParams + (j*numOtherBasisEls + i)
+                        polyTerms = { (ijIndx,): 1.0, (jiIndx,): 1.0j }
 
-        coeffs : iterable
-            The weight coefficients which multiply each summed matrix.
+                    base_poly = _Polynomial(polyTerms)
+                    Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
+                    Lterms.append( _term.RankOneTerm(1.0*base_poly, Ln, Lm, tt) )
+                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm), tt) ) # adjoint(_np.dot(Lm_dag,Ln))
+                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT, tt ) )
+                    print("DB: S term w/index terms= ", polyTerms, " len=",len(Lterms))
+                    print("  coeff: ", list(Lterms[-1].coeff.keys()) )
+                    print("  coeff: ", list(Lterms[-2].coeff.keys()) )
+                    print("  coeff: ", list(Lterms[-3].coeff.keys()) )
 
-        csr_mxs : iterable
-            A list of CSR matrix objects whose data-array is given by
-            `obj.data` (e.g. a SciPy CSR sparse matrix).
 
-        csr_sum_indices : list
-            A list of precomputed index arrays as returned by
-            :method:`get_csr_sum_indices`.
+                #TODO: check normalization of these terms vs those used in projections.
 
-        Returns
-        -------
-        None
-        """
-        for coeff,mx,inds in zip(coeffs, csr_mxs, csr_sum_indices):
-            data[inds] += coeff*mx.data        
+        print("DB: params = ", list(enumerate(params)))
+        print("DB: Lterms = ")
+        for i,lt in enumerate(Lterms):
+            print("Term %d:" % i)
+            print("  coeff: ", str(lt.coeff)) # list(lt.coeff.keys()) )
+            print("  pre:\n", lt.pre_ops[0] if len(lt.pre_ops) else "IDENT")
+            print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
 
+        return Lterms
+
+    
+    def _set_params_from_errgen(self, errgen, truncate):
+        """ Sets self.paramvals based on `errgen` """
+        hamC, otherC  = \
+            _gt.lindblad_errgen_projections(
+                errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
+                return_generators=False, other_diagonal_only=self.nonham_diagonal_only,
+                sparse=self.sparse) # in std basis
+
+        self.paramvals = _gt.lindblad_projections_to_paramvals(
+            hamC, otherC, self.cptp, self.nonham_diagonal_only, truncate)
+
+            
     def _construct_errgen(self):
         """
         Build the error generator matrix using the current parameters.
@@ -2850,16 +2325,16 @@ class LindbladBase(object):
             
             if bsH > 0:
                 # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
-                self.csr_sum(data,hamCoeffs, self.hamGens, self.hamCSRSumIndices)
+                _mt.csr_sum(data,hamCoeffs, self.hamGens, self.hamCSRSumIndices)
 
             if bsO > 0:
                 if self.nonham_diagonal_only:
                     # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
-                    self.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
+                    _mt.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
                 else:
                     # lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
                     #                      for c,gen in zip(cRow,genRow)])
-                    self.csr_sum(data, otherCoeffs.flat,
+                    _mt.csr_sum(data, otherCoeffs.flat,
                                  [oGen for oGenRow in self.otherGens for oGen in oGenRow],
                                  self.otherCSRSumIndices)
             lnd_error_gen = _sps.csr_matrix( (data, indices.copy(), indptr.copy()), shape=(N,N) ) #copies needed (?)
@@ -2885,8 +2360,110 @@ class LindbladBase(object):
         #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)        
         self.err_gen = _mt.safereal(lnd_error_gen, inplace=True)
 
+        #Pre-compute the exponential of the error generator if dense matrices
+        # are used, otherwise cache prepwork for sparse expm calls
+        if self.sparse:
+            self.err_gen_prep = _mt.expm_multiply_prep(self.err_gen)
+        else:
+            self.exp_err_gen = _spl.expm(self.err_gen)
+
 
         
+    def set_gpindices(self, gpindices, parent, memo=None):
+        """
+        Set the parent and indices into the parent's parameter vector that
+        are used by this GateSetMember object.
+
+        Parameters
+        ----------
+        gpindices : slice or integer ndarray
+            The indices of this objects parameters in its parent's array.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        None
+        """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
+        self.terms = {} # clear terms cache since param indices have changed now
+        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
+
+
+    def todense(self):
+        """
+        Return this gate as a dense matrix.
+        """
+        assert(not self.sparse), "todense() not implemented for sparse LindbladParameterizedGateMap objects"
+        if self.unitary_postfactor is not None:
+            dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
+        else:
+            dense = self.exp_err_gen
+        return dense
+
+    #FUTURE: maybe remove this function altogether, as it really shouldn't be called
+    def tosparse(self):
+        """
+        Return the gate as a sparse matrix.
+        """
+        _warnings.warn(("Constructing the sparse matrix of a LindbladParameterizedGate."
+                        "  Usually this is *NOT* a sparse matrix (the exponential of a"
+                        " sparse matrix isn't generally sparse)!"))
+        if self.sparse:
+            exp_err_gen = _spsl.expm(self.err_gen.tocsc()).tocsr()
+            if self.unitary_postfactor is not None:
+                return exp_err_gen.dot(self.unitary_postfactor)
+            else:
+                return exp_err_gen
+        else:
+            return _sps.csr_matrix(self.todense())
+
+        
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        if self.unitary_postfactor is not None:
+            state = self.unitary_postfactor.dot(state) #works for sparse or dense matrices
+            
+        if self.sparse:
+            #state = _spsl.expm_multiply( self.err_gen, state) #SLOW
+            state = _mt.expm_multiply_fast(self.err_gen_prep, state) # (N,) -> (N,) shape mapping
+        else:
+            state = _np.dot(self.exp_err_gen, state)
+        return state
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this gate matrix on an input state """
+        # adj( exp(errgen)*U ) = adj(U) * adj(exp(errgen)) ...
+        raise NotImplementedError("No adjoint action implemented for LindbladParameterizedGateMaps")
+
+        
+    def get_order_terms(self, order):
+        """ TODO: docstring """
+
+        def _compose_poly_indices(terms):
+            for term in terms:
+                term.map_indices(lambda x: tuple(_gatesetmember._compose_gpindices(
+                    self.gpindices, _np.array(x,'i'))) )
+            return terms
+        
+        if order not in self.terms:
+            if self._evotype == "svterm": tt = "dense"
+            elif self._evotype == "cterm": tt = "clifford"
+            else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
+
+            assert(self.gpindices is not None),"LindbladTermGate must be added to a GateSet before use!"
+            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.unitary_postfactor,
+                                         self.unitary_postfactor, tt)
+            loc_terms = _term.exp_terms(self.Lterms, [order], postTerm)[order]
+            #loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
+            self.terms[order] = _compose_poly_indices(loc_terms)
+        return self.terms[order]
+
+
     def num_params(self):
         """
         Get the number of independent parameters which specify this gate.
@@ -2927,199 +2504,39 @@ class LindbladBase(object):
         """
         assert(len(v) == self.num_params())
         self.paramvals = v
-        self._construct_errgen()
+        if self._evotype == "densitymx":
+            self._construct_errgen()                
         self.dirty = True
 
-
-
-class LindbladParameterizedGateMap(LindbladBase, GateMap):
-
-    def __init__(self, gateMatrix, unitaryPostfactor=None,
-                 ham_basis="pp", nonham_basis="pp", cptp=True,
-                 nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
+        
+    def set_value(self, M):
         """
-        Initialize a LindbladParameterizedGateMap object.
+        Attempts to modify gate parameters so that the specified raw
+        gate matrix becomes mx.  Will raise ValueError if this operation
+        is not possible.
 
         Parameters
         ----------
-        gateMatrix : numpy array or SciPy sparse matrix
-            a square 2D array that gives the raw gate matrix, assumed to
-            be in the `mxBasis` basis, to parameterize.  The shape of this
-            array sets the dimension of the gate. If None, then it is assumed
-            equal to `unitaryPostfactor` (which cannot also be None). The
-            quantity `gateMatrix inv(unitaryPostfactor)` is parameterized via
-            projection onto the Lindblad terms.
-            
-        unitaryPostfactor : numpy array or SciPy sparse matrix, optional
-            a square 2D array of the same size of `gateMatrix` (if
-            not None).  This matrix specifies a part of the gate action 
-            to remove before parameterization via Lindblad projections.
-            Typically, this is a target (desired) gate operation such 
-            that only the erroneous part of the gate (i.e. the gate 
-            relative to the target), which should be close to the identity,
-            is parameterized.  If none, the identity is used by default.
-
-        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the Stochastic-type lindblad error
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt), list of numpy arrays, or a custom basis object.
-
-        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the Stochastic-type lindblad error
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt), list of numpy arrays, or a custom basis object.
-
-        cptp : bool, optional
-            Whether or not the new gate should be constrained to CPTP.
-            (if True, see behavior or `truncate`).
-
-        nonham_diagonal_only : boolean, optional
-            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
-            included in the parameterization.
-
-        truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in
-            order to preserve CPTP (when necessary).  If False, then an 
-            error is thrown when `cptp == True` and when Lindblad projections
-            result in a non-positive-definite matrix of non-Hamiltonian term
-            coefficients.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-        """
-        if gateMatrix is None:
-            assert(unitaryPostfactor is not None), "arguments cannot both be None"
-            gateMatrix = unitaryPostfactor
-            
-        self.unitary_postfactor = unitaryPostfactor #can be None
-        if unitaryPostfactor is None:
-            if _sps.issparse(gateMatrix):
-                unitaryPostfactor = _sps.identity(gateMatrix.shape[0],'d','csr')
-            else: unitaryPostfactor = _np.identity(gateMatrix.shape[0],'d')
-        
-        #Init base from error generator: sets basis members and ultimately
-        # the parameters in self.paramvals
-        if _sps.issparse(gateMatrix):
-            #Instead of making error_generator compatible with sparse matrices
-            # we require sparse matrices to have trivial initial error generators
-            # or we convert to dense:
-            if(_mt.safenorm(gateMatrix-unitaryPostfactor) < 1e-8):
-                errgen = _sps.csr_matrix( gateMatrix.shape, dtype='d' ) # all zeros
-            else:
-                errgen = _sps.csr_matrix(
-                    _gt.error_generator(
-                        gateMatrix.toarray(), unitaryPostfactor.toarray(),
-                        mxBasis, "logGTi"), dtype='d')
-        else:
-            errgen = _gt.error_generator(gateMatrix, unitaryPostfactor, mxBasis, "logGTi")
-            
-        GateMap.__init__(self, errgen.shape[0]) #sets self.dim
-        LindbladBase.__init__(self, errgen, ham_basis, nonham_basis, cptp,
-                              nonham_diagonal_only, truncate, mxBasis)
-          # initializes self.paramvals and self.err_gen among other things
-        
-        #Pre-compute the exponential of the error generator if dense matrices are used
-        if self.sparse:
-            self.err_gen_prep = _mt.expm_multiply_prep(self.err_gen)
-            self.exp_err_gen = None
-        else:
-            self.err_gen_prep = None
-            self.exp_err_gen = _spl.expm(self.err_gen)            
-        
-    def acton(self, state):
-        """ Act this gate map on an input state """
-        if self.unitary_postfactor is not None:
-            state = self.unitary_postfactor.dot(state) #works for sparse or dense matrices
-            
-        if self.sparse:
-            #state = _spsl.expm_multiply( self.err_gen, state) #SLOW
-            state = _mt.expm_multiply_fast(self.err_gen_prep, state) # (N,) -> (N,) shape mapping
-        else:
-            state = _np.dot(self.exp_err_gen, state)
-        return state
-
-    def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
-        # adj( exp(errgen)*U ) = adj(U) * adj(exp(errgen)) ...
-        raise NotImplementedError("No adjoint action implemented for LindbladParameterizedGateMaps")
-
-
-    #FUTURE: maybe remove this function altogether, as it really shouldn't be called
-    def as_sparse_matrix(self):
-        """
-        Return the gate as a sparse matrix.
-        """
-        _warnings.warn(("Constructing the sparse matrix of a LindbladParameterizedGate."
-                        "  Usually this is *NOT* a sparse matrix (the exponential of a"
-                        " sparse matrix isn't generally sparse)!"))
-        if self.sparse:
-            exp_err_gen = _spsl.expm(self.err_gen.tocsc()).tocsr()
-            if self.unitary_postfactor is not None:
-                return exp_err_gen.dot(self.unitary_postfactor)
-            else:
-                return exp_err_gen
-        else:
-            if self.unitary_postfactor is not None:
-                dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
-            else:
-                dense = self.exp_err_gen
-            return _sps.csr_matrix( dense )
-
-    
-    def from_vector(self, v):
-        """
-        Initialize the gate using a vector of its parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params().
+        M : array_like or Gate
+            An array of shape (dim, dim) or Gate representing the gate action.
 
         Returns
         -------
         None
         """
-        LindbladBase.from_vector(self, v)
-        if self.sparse:
-            self.err_gen_prep = _mt.expm_multiply_prep(self.err_gen)
-        else:
-            self.exp_err_gen = _spl.expm(self.err_gen)
-            
+        tGate = LindbladParameterizedGateMap.from_gate_matrix(
+            M,self.unitary_postfactor,
+            self.ham_basis, self.other_basis,
+            self.cptp,self.nonham_diagonal_only,
+            True, self.matrix_basis, self._evotype)
 
-    def copy(self, parent=None):
-        """
-        Copy this gate.
+        #Note: truncate=True to be safe
+        self.paramvals[:] = tGate.paramvals[:]
+        if self._evotype == "densitymx":
+            self._construct_errgen()
+        self.dirty = True
 
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        #Construct new gate with dummy identity mx
-        if self.unitary_postfactor is not None:
-            factor = self.unitary_postfactor.copy()
-        elif self.sparse:
-            factor = _sps.identity( self.err_gen.shape[0], 'd', 'csr' )
-        else:
-            factor = _np.identity( self.err_gen.shape[0], 'd' )
-        newGate = LindbladParameterizedGateMap(factor,factor,
-                                            _copy.deepcopy(self.ham_basis),
-                                            _copy.deepcopy(self.other_basis),
-                                            self.cptp,self.nonham_diagonal_only,
-                                            True, _copy.deepcopy(self.matrix_basis))
-        
-        #Deep copy data
-        newGate.paramvals = self.paramvals.copy()
-        newGate._construct_errgen()
-        if not newGate.sparse:
-            newGate.exp_err_gen = _spl.expm(newGate.err_gen) 
-
-        return self._copy_gpindices( newGate, parent )
-
-
+    
     def transform(self, S):
         """
         Update gate matrix G with inv(S) * G * S,
@@ -3146,10 +2563,6 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
             self.err_gen = _mt.safedot(Uinv,_mt.safedot(self.err_gen, U))
             self._set_params_from_errgen(self.err_gen, truncate=True)
             self._construct_errgen() # unnecessary? (TODO)
-            if self.sparse:
-                self.err_gen_prep = _mt.expm_multiply_prep(self.err_gen)
-            else:
-                self.exp_err_gen = _spl.expm(self.err_gen)
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -3167,145 +2580,14 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
             raise ValueError("Invalid transform for this LindbladParameterizedGate: type %s"
                              % str(type(S)))
 
-
-    def depolarize(self, amount):
-        """
-        Depolarize this gate by the given `amount`.
-
-        Generally, the depolarize function updates the *parameters* of 
-        the gate such that the resulting gate matrix is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. In standard
-            bases, depolarization corresponds to multiplying the gate matrix
-            by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
-            (corresponding to non-identity basis elements) equal
-            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
-            float).
-
-        Returns
-        -------
-        None
-        """
-        assert(not self.sparse), "depolarize() not implemented for sparse LindbladParameterizedGateMap objects"
-        if isinstance(amount,float):
-            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
-        else:
-            assert(len(amount) == self.dim-1)
-            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-
-        if self.unitary_postfactor is not None:
-            dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
-        else:
-            dense = self.exp_err_gen
-        mx = _np.dot(D,dense)
-        tGate = LindbladParameterizedGateMap(mx,self.unitary_postfactor,
-                                          self.ham_basis, self.other_basis,
-                                          self.cptp,self.nonham_diagonal_only,
-                                          True, self.matrix_basis)
-
-        #Note: truncate=True to be safe
-        self.paramvals[:] = tGate.paramvals[:]
-        self._construct_errgen()
-        self.dirty = True
-
-
-    def rotate(self, amount, mxBasis="gm"):
-        """
-        Rotate this gate by the given `amount`.
-
-        Generally, the rotate function updates the *parameters* of 
-        the gate such that the resulting gate matrix is rotated.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
-        """
-        assert(not self.sparse), "rotate() not implemented for sparse LindbladParameterizedGateMap objects"
-        rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
-        if self.unitary_postfactor is not None:
-            dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
-        else:
-            dense = self.exp_err_gen
-        mx = _np.dot(rotnMx,dense)
-        tGate = LindbladParameterizedGateMap(mx,self.unitary_postfactor,
-                                          self.ham_basis, self.other_basis,
-                                          self.cptp,self.nonham_diagonal_only,
-                                          True, self.matrix_basis)
-        #Note: truncate=True to be safe
-        self.paramvals[:] = tGate.paramvals[:]
-        self._construct_errgen()
-        self.dirty = True
-
-
-    def compose(self, otherGate):
-        """
-        Create and return a new gate that is the composition of this gate
-        followed by otherGate, which *must be another 
-        LindbladParameterizedGate*.  (For more general compositions between
-        different types of gates, use the module-level compose function.)  The
-        returned gate's matrix is equal to dot(this, otherGate).
-
-        Parameters
-        ----------
-        otherGate : LindbladParameterizedGateMap
-            The gate to compose to the right of this one.
-
-        Returns
-        -------
-        LindbladParameterizedGateMap
-        """
-        assert(not self.sparse), "compose() not implemented for sparse LindbladParameterizedGateMap objects"
-        assert( isinstance(otherGate, LindbladParameterizedGateMap) )
-        assert(self.cptp == otherGate.cptp)
-        assert(self.nonham_diagonal_only == otherGate.nonham_diagonal_only)
-
-        if self.unitary_postfactor is not None:
-            dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
-        else:
-            dense = self.exp_err_gen
-
-        if otherGate.unitary_postfactor is not None:
-            other_dense = _np.dot(otherGate.exp_err_gen, otherGate.unitary_postfactor)
-        else:
-            other_dense = otherGate.exp_err_gen
-
-        composed_mx = _np.dot(dense, other_dense)
-        return LindbladParameterizedGateMap(composed_mx,self.unitary_postfactor,
-                                          self.ham_basis, self.other_basis,
-                                          self.cptp,self.nonham_diagonal_only,
-                                          True, self.matrix_basis)
-
+        
     def __str__(self):
         s = "Lindblad Parameterized gate map with dim = %d, num params = %d\n" % \
             (self.err_gen.shape[0], self.num_params())
         return s
 
 
-class LindbladParameterizedGate(LindbladBase,GateMatrix):
+class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
     """
     Encapsulates a gate matrix that is parameterized by a Lindblad-form
     expression, such that each parameter multiplies a particular term in
@@ -3313,11 +2595,13 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
     to an optional unitary prefactor).  The basis used by the Lindblad
     form is referred to as the "projection basis".
     """
-    
-    def __init__(self, gateMatrix, unitaryPostfactor=None,
-                 ham_basis="pp", nonham_basis="pp", cptp=True,
-                 nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
+
+
+    def __init__(self, unitaryPostfactor, Ltermdict, basisdict=None,
+                 cptp=True, nonham_diagonal_only="auto",
+                 truncate=True, mxBasis="pp", evotype="densitymx"):
         """
+        TODO: fix this docstring
         Initialize a LindbladParameterizedGate object.
 
         Parameters
@@ -3369,47 +2653,34 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
             values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt) (or a custom basis object).
         """
-        if gateMatrix is None:
-            assert(unitaryPostfactor is not None), "arguments cannot both be None"
-            gateMatrix = unitaryPostfactor
-        if unitaryPostfactor is None:
-            unitaryPostfactor = _np.identity(gateMatrix.shape[0],'d')
-            
-        self.unitary_postfactor = unitaryPostfactor
+        assert(evotype == "densitymx"), \
+            "LindbladParameterizedGate objects can only be used for the 'densitymx' evolution type"
+            #Note: cannot remove the evotype argument b/c we need to maintain the same __init__
+            # signature as LindbladParameterizedGateMap so its @classmethods will work on us.
         
-        #Init base from error generator: sets basis members and ultimately
-        # the parameters in self.paramvals
-        errgen = _gt.error_generator(gateMatrix, unitaryPostfactor, mxBasis, "logGTi")
-        GateMatrix.__init__(self, self.unitary_postfactor) #sets self.dim
-        LindbladBase.__init__(self, errgen, ham_basis, nonham_basis, cptp,
-                              nonham_diagonal_only, truncate, mxBasis) # like from_error_generator
+        #Start with base class construction
+        LindbladParameterizedGateMap.__init__(
+            self, unitaryPostfactor, Ltermdict, basisdict, cptp,
+            nonham_diagonal_only, truncate, mxBasis, evotype) #(sets self.dim)
+        
+        GateMatrix.__init__(self, _np.identity(self.dim,'d'), "densitymx")
 
-        assert(not self.sparse), "LindbladParameterizedGate cannot be sparse - use LindbladParameterizedGateMap"
-        assert(not _np.array_equal(gateMatrix,unitaryPostfactor) or
-               _np.allclose(self.paramvals,0.0,atol=1e-6))
-
-        self._construct_matrix() # construct base from the parameters
-
-        if not truncate:
-            assert(not _np.array_equal(gateMatrix,self.base)), \
-                   "Gate matrix must be truncated and truncate == False!"
-
+        assert(not self.sparse), \
+            "LindbladParameterizedGate objects must use *dense* basis elements!"
+        
+        self._construct_errgen() # construct matrix (may be unnecessary since base class calls this...)
+        
             
-    def _construct_matrix(self):
+    def _construct_errgen(self): 
         """
         Build the internal gate matrix using the current parameters.
         """
-        self._construct_errgen() # constructs self.err_gen
-        self.exp_err_gen = _spl.expm(self.err_gen)
-        matrix = _np.dot(self.exp_err_gen, self.unitary_postfactor)
-
-        #gen0_pp = hamGens_pp[0] #_np.dot(self.leftTrans, _np.dot(self.hamGens[0], self.rightTrans))
-        #print("DEBUG CONSTRUCTED BASE:\n", self.unitary_postfactor)
-        #print("DEBUG CONSTRUCTED GEN:\n", lnd_error_gen)
-        #print("DEBUG CONSTRUCTED EXP(GEN):\n", _spl.expm(lnd_error_gen))
-        #print("DEBUG CONSTRUCTED EXP(GEN)*GEN0:\n", _np.dot(_spl.expm(lnd_error_gen), gen0_pp))
-        #print("DEBUG CONSTRUCTED MX:\n", matrix)
-        #print("DEBUG GEN0:\n", gen0_pp)
+        # Formerly a separate "construct_matrix" function, this extends
+        # LindbladParmaeterizedGateMap's version, which just constructs
+        # self.err_gen & self.exp_err_gen, to constructing the entire
+        # final matrix.
+        LindbladParameterizedGateMap._construct_errgen(self) 
+        matrix = self.todense()  # dot(exp_err_gen, unitary_postfactor)
 
         assert(_np.linalg.norm(matrix.imag) < IMAG_TOL)
         assert(matrix.shape == (self.dim,self.dim))
@@ -3438,166 +2709,6 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
         #    print("Evals of otherCoeffs = ",sorted(_np.linalg.eigvals(otherCoeffs)))
         #    assert(False)
         
-
-    def set_value(self, M):
-        """
-        Attempts to modify gate parameters so that the specified raw
-        gate matrix becomes mx.  Will raise ValueError if this operation
-        is not possible.
-
-        Parameters
-        ----------
-        M : numpy array or Gate
-            A numpy array of shape (dim, dim) or Gate representing the gate action.
-
-        Returns
-        -------
-        None
-        """
-        mx = GateMatrix.convert_to_matrix(M)
-        if(mx.shape != (self.dim, self.dim)):
-            raise ValueError("Argument must be a (%d,%d) matrix!" % (self.dim,self.dim))
-        raise ValueError("Currently, directly setting the matrix of an" +
-                         " LindbladParameterizedGate object is not" +
-                         " supported.  Please use the from_vector method.")
-
-    
-    def from_vector(self, v):
-        """
-        Initialize the gate using a vector of its parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params().
-
-        Returns
-        -------
-        None
-        """
-        assert(len(v) == self.num_params())
-        self.paramvals = v
-        self._construct_matrix()
-        self.dirty = True
-
-
-#    def old_deriv_wrt_params(self, wrtFilter=None):
-#        """
-#        Construct a matrix whose columns are the vectorized
-#        derivatives of the flattened gate matrix with respect to a
-#        single gate parameter.  Thus, each column is of length
-#        gate_dim^2 and there is one column per gate parameter.
-#
-#        Returns
-#        -------
-#        numpy array
-#            Array of derivatives, shape == (dimension^2, num_params)
-#        """
-#        if self.base_deriv is None:
-#            d2 = self.dim
-#            bsH = self.ham_basis_size
-#            bsO = self.other_basis_size
-#            TERM_TOL = 1e-12
-#    
-#            #Deriv wrt hamiltonian params
-#            if bsH > 0:
-#                dHdp = _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
-#                series = last_commutant = term = dHdp; i=2
-#                while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
-#                    commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
-#                        _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
-#                    term = 1/_np.math.factorial(i) * commutant
-#                    series += term #1/_np.math.factorial(i) * commutant
-#                    last_commutant = commutant; i += 1
-#                dH = _np.einsum('ika,kl,lj->ija', series, self.exp_err_gen, self.unitary_postfactor)
-#                dH = dH.reshape((d2**2,bsH-1)) # [iFlattenedGate,iHamParam]
-#                nHam = bsH-1
-#            else:
-#                dH = _np.empty( (d2**2,0), 'd') #so concat works below
-#                nHam = 0
-#    
-#            #Deriv wrt other params
-#            if bsO > 0:
-#                if self.nonham_diagonal_only:
-#                    otherParams = self.paramvals[nHam:]
-#                
-#                    # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
-#                    if self.cptp:
-#                        dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
-#                    else:
-#                        dOdp  = _np.einsum('alj->lja', self.otherGens)
-#                
-#                    #apply basis transform
-#                    dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
-#                    assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
-#                
-#                    #take d(matrix-exp) using series approximation
-#                    series = last_commutant = term = dOdp; i=2
-#                    while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
-#                        commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
-#                            _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
-#                        term = 1/_np.math.factorial(i) * commutant
-#                        series += term #1/_np.math.factorial(i) * commutant
-#                        last_commutant = commutant; i += 1
-#                    dO = _np.einsum('ika,kl,lj->ija', series, self.exp_err_gen, self.unitary_postfactor) # dim [d2,d2,bs-1]
-#                    dO = dO.reshape(d2**2,bsO-1)
-#                
-#                
-#                else: #all lindblad terms included                
-#                    if self.cptp:
-#                        L,Lbar = self.Lmx,self.Lmx.conjugate()
-#                        F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'))
-#                        F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
-#                
-#                          # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-#                        dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
-#                        dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
-#                        dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
-#                        dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
-#                    else:
-#                        F0 = _np.identity(bsO-1,'d')
-#                        F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'),-1)
-#                        F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
-#                
-#                          # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-#                        dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
-#                        dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
-#                                _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
-#                        dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
-#                                _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
-#                
-#                    #apply basis transform
-#                    dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
-#                    assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
-#                
-#                    #take d(matrix-exp) using series approximation
-#                    series = last_commutant = term = dOdp; i=2
-#                    while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
-#                        commutant = _np.einsum("ik,kjab->ijab",self.err_gen,last_commutant) - \
-#                            _np.einsum("ikab,kj->ijab",last_commutant,self.err_gen)
-#                        term = 1/_np.math.factorial(i) * commutant
-#                        series += term #1/_np.math.factorial(i) * commutant
-#                        last_commutant = commutant; i += 1
-#                    dO = _np.einsum('ikab,kl,lj->ijab', series, self.exp_err_gen, self.unitary_postfactor) # dim [d2,d2,bs-1,bs-1]
-#                    dO = dO.reshape(d2**2,(bsO-1)**2)
-#            else:
-#                dO = _np.empty( (d2**2,0), 'd') #so concat works below
-#            
-#            derivMx = _np.concatenate((dH,dO), axis=1)
-#            assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)
-#            derivMx = _np.real(derivMx)
-#            self.base_deriv = derivMx
-#
-#            #check_deriv_wrt_params(self, derivMx, eps=1e-7)
-#            #fd_deriv = finite_difference_deriv_wrt_params(self, eps=1e-7)
-#            #derivMx = fd_deriv
-#
-#        if wrtFilter is None:
-#            return self.base_deriv
-#        else:
-#            return _np.take( self.base_deriv, wrtFilter, axis=1 )
-
     def _dHdp(self):
         return self.hamGens.transpose((1,2,0)) #PRETRANS
         #return _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
@@ -3854,190 +2965,6 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
                                  wrtFilter2, axis=2 )
 
 
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        #Construct new gate with dummy identity mx
-        newGate = LindbladParameterizedGate(None,self.unitary_postfactor.copy(),
-                                            _copy.deepcopy(self.ham_basis),
-                                            _copy.deepcopy(self.other_basis),
-                                            self.cptp,self.nonham_diagonal_only,
-                                            True, _copy.deepcopy(self.matrix_basis))
-        
-        #Deep copy data
-        newGate.paramvals = self.paramvals.copy()
-        newGate._construct_matrix()
-
-        return self._copy_gpindices( newGate, parent )
-
-
-    def transform(self, S):
-        """
-        Update gate matrix G with inv(S) * G * S,
-
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting gate matrix is altered as 
-        described above.  If such an update cannot be done (because
-        the gate parameters do not allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.
-        """
-        if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement) or \
-           isinstance(S, _gaugegroup.TPSpamGaugeGroupElement):
-            U = S.get_transform_matrix()
-            Uinv = S.get_transform_matrix_inverse()
-
-            #just conjugate postfactor and Lindbladian exponent by U:
-            self.unitary_postfactor = _np.dot(Uinv,_np.dot(self.unitary_postfactor, U))
-            self.err_gen = _np.dot(Uinv,_np.dot(self.err_gen, U))
-            self._set_params_from_errgen(self.err_gen, truncate=True)
-            self._construct_matrix()
-            self.dirty = True
-            #Note: truncate=True above because some unitary transforms seem to
-            ## modify eigenvalues to be negative beyond the tolerances
-            ## checked when truncate == False.  I'm not sure why this occurs,
-            ## since a true unitary should map CPTP -> CPTP...
-
-            #CHECK WITH OLD (passes) TODO move to unit tests?
-            #tMx = _np.dot(Uinv,_np.dot(self.base, U)) #Move above for checking
-            #tGate = LindbladParameterizedGate(tMx,self.unitary_postfactor,
-            #                                self.ham_basis, self.other_basis,
-            #                                self.cptp,self.nonham_diagonal_only,
-            #                                True, self.matrix_basis)
-            #assert(_np.linalg.norm(tGate.paramvals - self.paramvals) < 1e-6)
-        else:
-            raise ValueError("Invalid transform for this LindbladParameterizedGate: type %s"
-                             % str(type(S)))
-
-
-    def depolarize(self, amount):
-        """
-        Depolarize this gate by the given `amount`.
-
-        Generally, the depolarize function updates the *parameters* of 
-        the gate such that the resulting gate matrix is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. In standard
-            bases, depolarization corresponds to multiplying the gate matrix
-            by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
-            (corresponding to non-identity basis elements) equal
-            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
-            float).
-
-        Returns
-        -------
-        None
-        """
-        if isinstance(amount,float):
-            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
-        else:
-            assert(len(amount) == self.dim-1)
-            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        mx = _np.dot(D,self.base)
-        tGate = LindbladParameterizedGate(mx,self.unitary_postfactor,
-                                          self.ham_basis, self.other_basis,
-                                          self.cptp,self.nonham_diagonal_only,
-                                          True, self.matrix_basis)
-
-        #Note: truncate=True to be safe
-        self.paramvals[:] = tGate.paramvals[:]
-        self._construct_matrix()
-        self.dirty = True
-
-
-    def rotate(self, amount, mxBasis="gm"):
-        """
-        Rotate this gate by the given `amount`.
-
-        Generally, the rotate function updates the *parameters* of 
-        the gate such that the resulting gate matrix is rotated.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
-        """
-        rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
-        mx = _np.dot(rotnMx,self.base)
-        tGate = LindbladParameterizedGate(mx,self.unitary_postfactor,
-                                          self.ham_basis, self.other_basis,
-                                          self.cptp,self.nonham_diagonal_only,
-                                          True, self.matrix_basis)
-        #Note: truncate=True to be safe
-        self.paramvals[:] = tGate.paramvals[:]
-        self._construct_matrix()
-        self.dirty = True
-
-
-    def compose(self, otherGate):
-        """
-        Create and return a new gate that is the composition of this gate
-        followed by otherGate, which *must be another 
-        LindbladParameterizedGate*.  (For more general compositions between
-        different types of gates, use the module-level compose function.)  The
-        returned gate's matrix is equal to dot(this, otherGate).
-
-        Parameters
-        ----------
-        otherGate : LindbladParameterizedGate
-            The gate to compose to the right of this one.
-
-        Returns
-        -------
-        LindbladParameterizedGate
-        """
-        assert( isinstance(otherGate, LindbladParameterizedGate) )
-        assert(self.cptp == otherGate.cptp)
-        assert(self.nonham_diagonal_only == otherGate.nonham_diagonal_only)
-
-        composed_mx = _np.dot(self, otherGate)
-        return LindbladParameterizedGate(composed_mx,self.unitary_postfactor,
-                                          self.ham_basis, self.other_basis,
-                                          self.cptp,self.nonham_diagonal_only,
-                                          True, self.matrix_basis)
-
-
-    def __str__(self):
-        s = "Lindblad Parameterized gate with shape %s, num params = %d\n" % \
-            (str(self.base.shape), self.num_params())
-        s += _mt.mx_to_string(self.base, width=5, prec=1)
-        return s
-
-
-
 def _dexpSeries(X, dX):
     TERM_TOL = 1e-12
     tr = len(dX.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
@@ -4176,7 +3103,8 @@ class TPInstrumentGate(GateMatrix):
         """
         self.param_gates = param_gates
         self.index = index
-        GateMatrix.__init__(self, _np.identity(param_gates[0].dim,'d')) #Note: sets self.gpindices; TP assumed real
+        GateMatrix.__init__(self, _np.identity(param_gates[0].dim,'d'),
+                            "densitymx") #Note: sets self.gpindices; TP assumed real
         self._construct_matrix()
 
         #Set our own parent and gpindices based on param_gates
@@ -4212,25 +3140,6 @@ class TPInstrumentGate(GateMatrix):
         self.base.flags.writeable = False
 
         
-
-    def set_value(self, M):
-        """
-        Attempts to modify gate parameters so that the specified raw
-        gate matrix becomes mx.  Will raise ValueError if this operation
-        is not possible.
-
-        Parameters
-        ----------
-        M : array_like or Gate
-            An array of shape (dim, dim) or Gate representing the gate action.
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Cannot set the value of a TPInstrumentGate directly!")
-
-
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized
@@ -4244,7 +3153,7 @@ class TPInstrumentGate(GateMatrix):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        Np = len(self.gpindices_as_array())
+        Np = self.num_params()
         derivMx = _np.zeros((self.dim**2,Np),'d')
         Nels = len(self.param_gates)
 
@@ -4284,7 +3193,31 @@ class TPInstrumentGate(GateMatrix):
         return False
 
 
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this gate.
 
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.gpindices_as_array())
+
+    
+    def to_vector(self):
+        """
+        Get the gate parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The gate parameters as a 1D array with length num_params().
+        """
+        raise ValueError(("TPInstrumentGate.to_vector() should never be called"
+                          " - use TPInstrument.to_vector() instead"))
+
+    
     def from_vector(self, v):
         """
         Initialize this partially-implemented gate using a vector of its parameters.
@@ -4314,374 +3247,10 @@ class TPInstrumentGate(GateMatrix):
         self._construct_matrix()
 
 
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        assert(parent is None),"TPInstrumentGate set's it's own parent, so `parent` arg of copy must be None"
-        return self._copy_gpindices( TPInstrumentGate(self.param_gates,self.index), parent)
-          #Note: this doesn't deep-copy self.param_gates, since the TPInstrumentGate doesn't really own these.
-
-    def __str__(self):
-        s = "TPInstrumentGate with shape %s\n" % str(self.base.shape)
-        s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s
-
-
-    
-class ComposedGate(GateMatrix):
-    """
-    A gate that is the composition of a number of matrix factors (possibly other gates).
-    """
-    
-    def __init__(self, gates_to_compose):
-        """
-        Creates a new ComposedGate.
-
-        Parameters
-        ----------
-        gates_to_compose : list
-            A list of 2D numpy arrays (matrices) and/or `GateMatrix`-derived
-            objects that are composed to form this gate.  Elements are composed
-            with vectors  in  *left-to-right* ordering, maintaining the same
-            convention as gate sequences in pyGSTi.  Note that this is
-            *opposite* from standard matrix multiplication order.
-        """
-        assert(len(gates_to_compose) > 0), "Must compose at least one gate!"
-        self.factorgates = gates_to_compose
-        
-        dim = gates_to_compose[0].dim
-        assert(all([dim == gate.dim for gate in gates_to_compose])), \
-            "All gates must have the same dimension!"
-
-        GateMatrix.__init__(self, _np.identity(dim)) #type doesn't matter here - just a dummy
-        self._construct_matrix()
-
-    def allocate_gpindices(self, startingIndex, parent):
-        """
-        Sets gpindices array for this object or any objects it
-        contains (i.e. depends upon).  Indices may be obtained
-        from contained objects which have already been initialized
-        (e.g. if a contained object is shared with other
-         top-level objects), or given new indices starting with
-        `startingIndex`.
-
-        Parameters
-        ----------
-        startingIndex : int
-            The starting index for un-allocated parameters.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
-        Returns
-        -------
-        num_new: int
-            The number of *new* allocated parameters (so 
-            the parent should mark as allocated parameter
-            indices `startingIndex` to `startingIndex + new_new`).
-        """
-        #figure out how many parameters we need to allocate based on
-        # which factorgates still need to be "allocated" within the
-        # parent's parameter array:
-        tot_new_params = 0
-        all_gpindices = []
-        #print(">>> DB COMPOSEDGATE %d allocating: " % id(self), [id(g) for g in self.factorgates]) #remove enumerate below too!
-        for gate in self.factorgates:
-            num_new_params = gate.allocate_gpindices( startingIndex, parent ) # *same* parent as this ComposedGate
-            startingIndex += num_new_params
-            tot_new_params += num_new_params
-            all_gpindices.extend( gate.gpindices_as_array() )
-            #print("  sub-gate%d: %d new params: indices = %s" % (i,num_new_params, str(gate.gpindices)))
-        #print("<<< DB COMPOSEDGATE done allocating")
-
-        _gatesetmember.GateSetMember.set_gpindices(
-            self, _slct.list_to_slice(all_gpindices, array_ok=True), parent)
-        return tot_new_params
-
-    
-    def set_gpindices(self, gpindices, parent, memo=None):
-        """
-        Set the parent and indices into the parent's parameter vector that
-        are used by this GateSetMember object.
-
-        Parameters
-        ----------
-        gpindices : slice or integer ndarray
-            The indices of this objects parameters in its parent's array.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
-        Returns
-        -------
-        None
-        """
-        if memo is None: memo = set()
-        elif id(self) in memo: return
-        memo.add(id(self))
-        
-        #must set the gpindices of self.factorgates based on new
-        my_old_gpindices = self.gpindices
-        for gate in self.factorgates:
-            if id(gate) in memo: continue # already processed
-            rel_gate_gpindices = _gatesetmember._decompose_gpindices(
-                my_old_gpindices, gate.gpindices)
-            new_gate_gpindices = _gatesetmember._compose_gpindices(
-                gpindices, rel_gate_gpindices)
-            gate.set_gpindices(new_gate_gpindices, parent, memo)
-            
-        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
-    
-
-    def _construct_matrix(self):
-        mx = self.factorgates[0]
-        for gate in self.factorgates[1:]:
-            mx = _np.dot(gate,mx)
-        self.base = mx
-        assert(self.base.shape == (self.dim,self.dim))
-        self.base.flags.writeable = False
-        
-    
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this gate.
-
-        Returns
-        -------
-        int
-           the number of independent parameters.
-        """
-        return len(self.gpindices_as_array())
-
-
-    def to_vector(self):
-        """
-        Get the gate parameters as an array of values.
-
-        Returns
-        -------
-        numpy array
-            The gate parameters as a 1D array with length num_params().
-        """
-        v = _np.empty(self.num_params(), 'd')
-        for gate in self.factorgates:
-            factorgate_local_inds = _gatesetmember._decompose_gpindices(
-                    self.gpindices, gate.gpindices)
-            v[factorgate_local_inds] = gate.to_vector()
-        return v
-
-
-    def from_vector(self, v):
-        """
-        Initialize the gate using a vector of parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params()
-
-        Returns
-        -------
-        None
-        """
-        assert(len(v) == self.num_params())
-        for gate in self.factorgates:
-            factorgate_local_inds = _gatesetmember._decompose_gpindices(
-                    self.gpindices, gate.gpindices)
-            gate.from_vector( v[factorgate_local_inds] )
-        self._construct_matrix()
-        self.dirty = True
-
-
-    def deriv_wrt_params(self, wrtFilter=None):
-        """
-        Construct a matrix whose columns are the vectorized
-        derivatives of the flattened gate matrix with respect to a
-        single gate parameter.  Thus, each column is of length
-        gate_dim^2 and there is one column per gate parameter.
-
-        Returns
-        -------
-        numpy array
-            Array of derivatives with shape (dimension^2, num_params)
-        """
-        typ = complex if any([_np.iscomplexobj(gate) for gate in self.factorgates]) else 'd'
-        derivMx = _np.zeros( (self.dim,self.dim, self.num_params()), typ)
-        
-        #Product rule to compute jacobian
-        for i,gate in enumerate(self.factorgates): # loop over the gate we differentiate wrt
-            if gate.num_params() == 0: continue #no contribution
-            deriv = gate.deriv_wrt_params(None) #TODO: use filter?? / make relative to this gate...
-            deriv.shape = (self.dim,self.dim,gate.num_params())
-
-            if i > 0: # factors before ith
-                pre = self.factorgates[0]
-                for gateA in self.factorgates[1:i]:
-                    pre = _np.dot(gateA,pre)
-                deriv = _np.einsum("ija,jk->ika", deriv, pre )
-
-            if i+1 < len(self.factorgates): # factors after ith
-                post = self.factorgates[i+1]
-                for gateA in self.factorgates[i+2:]:
-                    post = _np.dot(gateA,post)
-                deriv = _np.einsum("ij,jka->ika", post, deriv )
-
-            factorgate_local_inds = _gatesetmember._decompose_gpindices(
-                self.gpindices, gate.gpindices)
-            derivMx[:,:,factorgate_local_inds] += deriv
-
-        derivMx.shape = (self.dim**2, self.num_params())
-        if wrtFilter is None:
-            return derivMx
-        else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
-
-
-    def has_nonzero_hessian(self):
-        """ 
-        Returns whether this gate has a non-zero Hessian with
-        respect to its parameters, i.e. whether it only depends
-        linearly on its parameters or not.
-
-        Returns
-        -------
-        bool
-        """
-        return any([gate.has_nonzero_hessian() for gate in self.factorgates])
-
-
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        return self._copy_gpindices( ComposedGate([gate.copy(parent) for gate in self.factorgates]), parent )
-
-
-    def transform(self, S):
-        """
-        Update gate matrix G with inv(S) * G * S,
-
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting gate matrix is altered as 
-        described above.  If such an update cannot be done (because
-        the gate parameters do not allow for it), ValueError is raised.
-
-        In this particular case any TP gauge transformation is possible,
-        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
-        corresponds to a TP-like transform matrix.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.
-        """
-        for gate in self.factorgates:
-            gate.transform(S)
-
-            
-    def depolarize(self, amount):
-        """
-        Depolarize this gate by the given `amount`.
-
-        Generally, the depolarize function updates the *parameters* of 
-        the gate such that the resulting gate matrix is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. In standard
-            bases, depolarization corresponds to multiplying the gate matrix
-            by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
-            (corresponding to non-identity basis elements) equal
-            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
-            float).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Can't depolarize a ComposedGate")
-
-
-    def rotate(self, amount, mxBasis="gm"):
-        """
-        Rotate this gate by the given `amount`.
-
-        Generally, the rotate function updates the *parameters* of 
-        the gate such that the resulting gate matrix is rotated.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Can't rotate a ComposedGate")
-
-
-    def compose(self, otherGate):
-        """
-        Create and return a new gate that is the composition of this gate
-        followed by otherGate, which *must be another EmbeddedGate*.
-        (For more general compositions between different types of gates, use
-        the module-level compose function.)  The returned gate's matrix is
-        equal to dot(this, otherGate).
-
-        Parameters
-        ----------
-        otherGate : EmbeddedGate
-            The gate to compose to the right of this one.
-
-        Returns
-        -------
-        EmbeddedGate
-        """
-        raise NotImplementedError("TODO Later")
-
-
-    def __str__(self):
-        """ Return string representation """
-        s = "Composed gate of %d factors:\n" % len(self.factorgates)
-        s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s
-
-    
-class ComposedGateMap(GateMap):
+class ComposedGateMap(Gate):
     """
     A gate map that is the composition of a number of map-like factors (possibly
-    other `GateMap`s)
+    other `Gate`s)
     """
     
     def __init__(self, gates_to_compose):
@@ -4691,7 +3260,7 @@ class ComposedGateMap(GateMap):
         Parameters
         ----------
         gates_to_compose : list
-            List of `Gate`-derived objects (`GateMatrix`- or `GateMap`-derived)
+            List of `Gate`-derived objects
             that are composed to form this gate map.  Elements are composed
             with vectors  in  *left-to-right* ordering, maintaining the same
             convention as gate sequences in pyGSTi.  Note that this is
@@ -4704,7 +3273,7 @@ class ComposedGateMap(GateMap):
         assert(all([dim == gate.dim for gate in gates_to_compose])), \
             "All gates must have the same dimension!"
         
-        GateMap.__init__(self, dim)
+        Gate.__init__(self, dim, gates_to_compose[0]._evotype)
 
 
     def allocate_gpindices(self, startingIndex, parent):
@@ -4793,11 +3362,17 @@ class ComposedGateMap(GateMap):
             state = gate.adjoint_acton(state)
         return state
 
-    def as_sparse_matrix(self):
+    def tosparse(self):
         """ Return the gate as a sparse matrix """
-        mx = self.factorgates[0].as_sparse_matrix()
+        mx = self.factorgates[0].tosparse()
         for gate in self.factorgates[1:]:
-            mx = gate.as_sparse_matrix().dot(mx)
+            mx = gate.tosparse().dot(mx)
+        return mx
+
+    def todense(self):
+        mx = self.factorgates[0].todense()
+        for gate in self.factorgates[1:]:
+            mx = _np.dot(gate.todense(),mx)
         return mx
 
     def get_order_terms(self, order):
@@ -4807,11 +3382,6 @@ class ComposedGateMap(GateMap):
             for factors in _itertools.product(*factor_lists):
                 terms.append( _term.compose_terms(factors) )
         return terms # Cache terms in FUTURE?
-
-    
-    #def as_matrix(self):
-    #    """ Return the gate as a sparse matrix """
-    #    return self.as_sparse_matrix().toarray()
 
     
     def num_params(self):
@@ -4864,18 +3434,6 @@ class ComposedGateMap(GateMap):
         self.dirty = True
 
 
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        return self._copy_gpindices( ComposedGateMap([gate.copy() for gate in self.factorgates]), parent )
-
-
     def transform(self, S):
         """
         Update gate matrix G with inv(S) * G * S,
@@ -4898,104 +3456,129 @@ class ComposedGateMap(GateMap):
         for gate in self.factorgates:
             gate.transform(S)
 
-            
-    def depolarize(self, amount):
-        """
-        Depolarize this gate by the given `amount`.
-
-        Generally, the depolarize function updates the *parameters* of 
-        the gate such that the resulting gate matrix is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. In standard
-            bases, depolarization corresponds to multiplying the gate matrix
-            by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
-            (corresponding to non-identity basis elements) equal
-            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
-            float).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Can't depolarize a ComposedGateMap")
-
-
-    def rotate(self, amount, mxBasis="gm"):
-        """
-        Rotate this gate by the given `amount`.
-
-        Generally, the rotate function updates the *parameters* of 
-        the gate such that the resulting gate matrix is rotated.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Can't rotate a ComposedGateMap")
-
-
-    def compose(self, otherGate):
-        """
-        Create and return a new gate that is the composition of this gate
-        followed by otherGate, which *must be another EmbeddedGate*.
-        (For more general compositions between different types of gates, use
-        the module-level compose function.)  The returned gate's matrix is
-        equal to dot(this, otherGate).
-
-        Parameters
-        ----------
-        otherGate : EmbeddedGate
-            The gate to compose to the right of this one.
-
-        Returns
-        -------
-        EmbeddedGate
-        """
-        raise NotImplementedError("TODO Later")
-
 
     def __str__(self):
         """ Return string representation """
-        s = "Composed gate map of %d factors:\n" % len(self.factorgates)
+        s = "Composed gate of %d factors:\n" % len(self.factorgates)
         for i,gate in enumerate(self.factorgates):
             s += "Factor %d:\n" % i
             s += str(gate)
         return s
 
+    
+class ComposedGate(ComposedGateMap,GateMatrix):
+    """
+    A gate that is the composition of a number of matrix factors (possibly other gates).
+    """
+    
+    def __init__(self, gates_to_compose):
+        """
+        Creates a new ComposedGate.
+
+        Parameters
+        ----------
+        gates_to_compose : list
+            A list of 2D numpy arrays (matrices) and/or `GateMatrix`-derived
+            objects that are composed to form this gate.  Elements are composed
+            with vectors  in  *left-to-right* ordering, maintaining the same
+            convention as gate sequences in pyGSTi.  Note that this is
+            *opposite* from standard matrix multiplication order.
+        """
+        ComposedGateMap.__init__(self, gates_to_compose) #sets self.dim
+        GateMatrix.__init__(self, _np.identity(self.dim)) #type doesn't matter here - just a dummy
+        self._construct_matrix()
 
 
-class EmbeddedGateMap(GateMap):
+    def _construct_matrix(self):
+        self.base = self.todense()
+        assert(self.base.shape == (self.dim,self.dim))
+        self.base.flags.writeable = False
+        
+
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        ComposedGateMap.from_vector(self, v)
+        self._construct_matrix()
+
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the vectorized
+        derivatives of the flattened gate matrix with respect to a
+        single gate parameter.  Thus, each column is of length
+        gate_dim^2 and there is one column per gate parameter.
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives with shape (dimension^2, num_params)
+        """
+        typ = complex if any([_np.iscomplexobj(gate) for gate in self.factorgates]) else 'd'
+        derivMx = _np.zeros( (self.dim,self.dim, self.num_params()), typ)
+        
+        #Product rule to compute jacobian
+        for i,gate in enumerate(self.factorgates): # loop over the gate we differentiate wrt
+            if gate.num_params() == 0: continue #no contribution
+            deriv = gate.deriv_wrt_params(None) #TODO: use filter?? / make relative to this gate...
+            deriv.shape = (self.dim,self.dim,gate.num_params())
+
+            if i > 0: # factors before ith
+                pre = self.factorgates[0]
+                for gateA in self.factorgates[1:i]:
+                    pre = _np.dot(gateA,pre)
+                deriv = _np.einsum("ija,jk->ika", deriv, pre )
+
+            if i+1 < len(self.factorgates): # factors after ith
+                post = self.factorgates[i+1]
+                for gateA in self.factorgates[i+2:]:
+                    post = _np.dot(gateA,post)
+                deriv = _np.einsum("ij,jka->ika", post, deriv )
+
+            factorgate_local_inds = _gatesetmember._decompose_gpindices(
+                self.gpindices, gate.gpindices)
+            derivMx[:,:,factorgate_local_inds] += deriv
+
+        derivMx.shape = (self.dim**2, self.num_params())
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
+
+
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this gate has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return any([gate.has_nonzero_hessian() for gate in self.factorgates])
+            
+
+
+class EmbeddedGateMap(Gate):
     """
     A gate map containing a single lower (or equal) dimensional gate within it.
     An EmbeddedGateMap acts as the identity on all of its domain except the 
     subspace of its contained gate, where it acts as the contained gate does.
     """
-    
-    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None, mode="superop"):
+
+    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None): # TODO: remove basisdim as arg
         """
         Initialize an EmbeddedGateMap object.
 
@@ -5025,23 +3608,12 @@ class EmbeddedGateMap(GateMap):
             space described by `stateSpaceLabels`.  Thus, this must be the
             same dimension and direct-sum structure given by the
             `stateSpaceLabels`.  If None, then this dimension is assumed.
-
-        mode : {"superop", "unitary", "termsonly"}
-            Whether the `gate_to_embed` represents the unitary action on
-            a (complex) state vector or the superoperator action on a (real)
-            vectorized density matrix.  If "termsonly" is specified, then
-            the `gate_to_embed` can be a unitary or superoperator gate, but
-            only calling :method:`acton` is *not* supported (only 
-            :method:`get_order_terms`.
         """
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
         self.stateSpaceLabels = _StateSpaceLabels(stateSpaceLabels)
         self.targetLabels = targetLabels
         self.embedded_gate = gate_to_embed
         self.basisdim = basisdim
-
-        assert(mode in ("superop", "unitary", "termsonly")), "Invalid mode: %s" % mode
-        self.mode = mode
 
         labels = targetLabels
         gatemx = gate_to_embed
@@ -5055,8 +3627,10 @@ class EmbeddedGateMap(GateMap):
             self.basisdim = _Dim(blockDims)
         dmDim, superOpDim, _ = self.basisdim
 
-        if mode != "termsonly":
-            iTensorProdBlks = [ self.stateSpaceLabels.tpb_index[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
+        evotype = gate_to_embed._evotype
+        if evotype in ("densitymx","statevec"):
+            iTensorProdBlks = [ self.stateSpaceLabels.tpb_index[label] for label in labels ]
+              # index of tensor product block (of state space) a bit label is part of
             if len(set(iTensorProdBlks)) != 1:
                 raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" + \
                                  " same tensor-product-block of the state space -- checked previously") # pragma: no cover
@@ -5065,9 +3639,9 @@ class EmbeddedGateMap(GateMap):
             tensorProdBlkLabels = self.stateSpaceLabels.labels[iTensorProdBlk]
             basisInds = [] # list of possible *density-matrix-space* indices of each component of the tensor product block
             for l in tensorProdBlkLabels:
-                if mode == "superop":
+                if evotype == "densitymx":
                     basisInds.append( list(range(self.stateSpaceLabels.labeldims[l]**2)) ) # e.g. [0,1,2,3] for qubits (I, X, Y, Z)
-                else: # mode == "unitary"
+                else: # evotype == "statevec"
                     basisInds.append( list(range(self.stateSpaceLabels.labeldims[l])) ) # e.g. [0,1] for qubits (std *complex* basis)
     
             # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
@@ -5079,18 +3653,18 @@ class EmbeddedGateMap(GateMap):
                 basisInds_noop_blankaction[labelIndex] = [0]
                         
             #offset into "active" tensor product block
-            if mode == "superop":
+            if evotype == "densitymx":
                 self.offset = sum( [ blockDims[i]**2 for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
-            else: #  mode == "unitary"
+            else: # evotype == "statevec"
                 self.offset = sum( [ blockDims[i] for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
     
             divisor = 1
             self.divisors = []
             for l in labels:
                 self.divisors.append(divisor)
-                if mode == "superop":
+                if evotype == "densitymx":
                     divisor *= self.stateSpaceLabels.labeldims[l]**2 # e.g. 4 for qubits
-                else: # mode == "unitary"
+                else: # evotype == "statevec"
                     divisor *= self.stateSpaceLabels.labeldims[l] # e.g. 2 for qubits
     
             # multipliers to go from per-label indices to tensor-product-block index
@@ -5133,8 +3707,9 @@ class EmbeddedGateMap(GateMap):
                 inds.append(vec_index)
             self.baseinds = _np.array(inds,'i')
             
-        else: # term-mode doesn't need any of the following members (precomputed for acton optimization)
-
+        else: # evotype in ("stabilizer","svterm","cterm"):
+            # term-mode doesn't need any of the following members, which are
+            # just precomputed for faster acton(...) performance.
             self.offset = None
             self.multipliers = None
             self.divisors = None
@@ -5153,35 +3728,79 @@ class EmbeddedGateMap(GateMap):
             self.noop_incrementers = None
             self.baseinds = None
 
+        if evotype == "stabilizer":
+            # assert that all state space labels == qubits, since we only know
+            # how to embed cliffords on qubits...
+            assert(len(self.stateSpaceLabels.labels) == 1 and
+                   all([ld == 2 for ld in self.stateSpaceLabels.labeldims.values()])), \
+                   "All state space labels must correspond to *qubits*"
+            assert(len(targetLabels) == len(self.embedded_gate.svector) // 2), \
+                "Inconsistent number of qubits in `targetLabels` and `embedded_gate`"
+
+            #Cache info to speedup _stabilizer_acton(...) methods:
+            # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
+            qubitLabels = self.stateSpaceLabels.labels[0] 
+            self.qubit_indices =  [ qubitLabels.index(targetLbl)
+                                    for targetLbl in self.targetLabels ]
+        else:
+            self.qubit_indices = None # (unused)
+
         #DEBUG TO REMOVE
         #print("self.numBasisEls_noop_blankaction = ",self.numBasisEls_noop_blankaction)
         #print("numBasisEls_action = ",self.numBasisEls_action)
         #print("multipliers = ",self.multipliers)
         #print("noop incrementers = ",self.noop_incrementers," dim=",gateDim)
         #print("baseinds = ",self.baseinds)
-        self._set_acton()
 
-        gateDim = superOpDim if mode == "superop" else dmDim
-        GateMap.__init__(self, gateDim)
+        gateDim = dmDim if evotype in ("statevec","stabilizer") else superOpDim
+          # ("densitymx","svterm","cterm") all use super-op dimension
+        Gate.__init__(self, gateDim, evotype)
 
+        # set self.acton and self.adjoint_acton methods based on evotype
+        # and specifics of self.embedded_gate
+        self._set_acton() 
+
+        
     def _set_acton(self):
         """ Set the self.acton() method """
         #Set self.acton and self.adjoint_action appropriately:
         # NOTE: there are only several cases of fast adjoint_acton's that
         #       are implemented so far (FUTURE UPDATE?)
+        
+        if self._evotype in ("svterms","cterms"):
+            return # acton methods should not be called these types
+
+        if self._evotype == "stabilizer":
+            self.acton = self._stabilizer_acton
+            self.adjoint_acton = self._stabilizer_adjoint_acton
+            return
+
+        #If haven't returned yet, evotype is either "statevec" or "densitymx"
+        assert(self._evotype in ("statevec","densitymx"))
+        
+        complex_action = bool(self._evotype == "statevec")
+          # assume "densitymx" evotype means *real* vectors - could change add
+          # some type of "has_complex_action" to Gate objs in the future, but
+          # this seems fine for now.
+
         if _fastcalc is None:
+            # No Cython support
             self.acton = self._slow_acton
             self.adjoint_acton = self._slow_adjoint_acton
-        elif isinstance(self.embedded_gate, LindbladParameterizedGateMap) and \
+            return
+
+        #We have Cython support - pick the most specific function we can to
+        # maximize speed.
+        if isinstance(self.embedded_gate, LindbladParameterizedGateMap) and \
              self.embedded_gate.sparse and self.embedded_gate.unitary_postfactor is None:
-            self.acton = self._fast_acton_sp1 if self.mode == "superop" \
+            self.acton = self._fast_acton_sp1 if not complex_action \
                          else self._fast_acton_sp1_complex # "special case #1"
-            self.adjoint_action = self._slow_adjoint_acton if self.mode == "superop" \
+            self.adjoint_action = self._slow_adjoint_acton if not complex_action \
                          else self._fast_adjoint_acton_complex # NO SPECIAL case implemented
         elif isinstance(self.embedded_gate, GateMatrix):
-            self.acton = self._fast_acton_sp2 if self.mode == "superop" \
+            self.acton = self._fast_acton_sp2 if not complex_action \
                          else self._fast_acton_sp2_complex # "special case #2"
-            self.adjoint_action = self._slow_adjoint_acton if self.mode == "superop" \
+            self.adjoint_action = self._slow_adjoint_acton if not complex_action \
                          else self._fast_adjoint_acton_sp2_complex # "special case #2"
 
         else:
@@ -5194,9 +3813,9 @@ class EmbeddedGateMap(GateMap):
             #    print("Can't use special case b/c embedded Lind. gate has postfactor")
             #else:
             #    print("Can't use special case for some other reason (????)")
-            self.acton = self._fast_acton if self.mode == "superop" \
+            self.acton = self._fast_acton if not complex_action \
                          else self._fast_acton_complex
-            self.adjoint_acton = self._slow_adjoint_acton if self.mode == "superop" \
+            self.adjoint_acton = self._slow_adjoint_acton if not complex_action \
                          else self._fast_adjoint_acton_complex
 
     def __getstate__(self):
@@ -5317,17 +3936,14 @@ class EmbeddedGateMap(GateMap):
     def acton(self, state):
         """ Act this gate map on an input state """
         raise NotImplementedError(
-            ("EmbeddedGateMap not intialized properly, as this acton(...) "
-             "method *should* have been replaced by an appropriate "
-             "implementation based on Cython availability")) # pragma: no cover
+            ("EmbeddedGateMap.acton(...) not intialized, perhaps due to an "
+             "incompatible evolution type %s") % self._evotype) # pragma: no cover
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         raise NotImplementedError(
-            ("EmbeddedGateMap not intialized properly, as this adjoint_acton(...) "
-             "method *should* have been replaced by an appropriate "
-             "implementation based on Cython availability")) # pragma: no cover
-
+            ("EmbeddedGateMap.adjoint_acton(...) not intialized, perhaps due to an "
+             "incompatible evolution type %s") % self._evotype) # pragma: no cover
     
     def _slow_acton(self, state):
         """ Act this gate map on an input state """
@@ -5374,12 +3990,38 @@ class EmbeddedGateMap(GateMap):
         assert(output_state.shape == state.shape)
         return output_state
 
+    def _stabilizer_acton(self, state):
+        """ Act this gate map on an input state """
+        #OLD - when StabilizerState.toarray() gave s,p tuple
+        #state_s, state_p = state # should be output of StabilizerState.toarray()
+        #return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
+        #                                                state_s,state_p)
+
+        #Now StabilizerState.toarray() gives a StabilizerFrame obj
+        state = state.copy() # needed? expected?    
+        state.clifford_update(self.embedded_gate.smatrix, self.embedded_gate.svector,
+                              self.embedded_gate.unitary, self.qubit_indices)
+        return state
+
+    
+    def _stabilizer_adjoint_acton(self, state):
+        """ Act the adjoint of this gate map on an input state """
+        # Note: cliffords are unitary, so adjoint == inverse
+
+        #StabilizerState.toarray() gives a StabilizerFrame obj
+        invs, invp = _symp.inverse_clifford(self.embedded_gate.smatrix,
+                                            self.embedded_gate.svector)
+        state = state.copy() # needed? expected?
+        state.clifford_update(invs, invp, self.embedded_gate.unitary.conjugate().T,
+                              self.qubit_indices)
+        return state
+
     
     def _acton_other_blocks_trivially(self, output_state,state):
         offset = 0
         _, _, blockDims = self.basisdim # dmDim, gateDim, blockDims
         for i,blockDim in enumerate(blockDims):
-            blockSize = blockDim**2 if self.mode == "superop" else blockDim
+            blockSize = blockDim**2 if self._evotype != "statevec" else blockDim
             if i != self.iTensorProdBlk:
                 output_state[offset:offset+blockSize] = state[offset:offset+blockSize] #identity op
             offset += blockSize
@@ -5528,36 +4170,46 @@ class EmbeddedGateMap(GateMap):
         return output_state
 
 
-    def as_sparse_matrix(self):
+    def tosparse(self):
         """ Return the gate as a sparse matrix """
         dmDim, superOpDim, blockDims = self.basisdim
-        typ = 'd' if self.mode == "superop" else complex
-        dim = superOpDim if self.mode == "superop" else dmDim
-        finalGate = _sps.identity( dim, typ, format='lil' )
+        embedded_sparse = self.embedded_gate.as_sparse_matrix().tolil()
+        dim = superOpDim if self._evotype != "statevec" else dmDim
+        finalGate = _sps.identity( dim, embedded_sparse.dtype, format='lil' )
 
         #fill in embedded_gate contributions (always overwrites the diagonal
         # of finalGate where appropriate, so OK it starts as identity)
-        embedded_sparse = self.embedded_gate.as_sparse_matrix().tolil()
         for i,j,gi,gj in self._iter_matrix_elements():
             finalGate[i,j] = embedded_sparse[gi,gj]
-
         return finalGate.tocsr()
 
     
-    def as_matrix(self):
-        """ Return the gate as a sparse matrix """
+    def todense(self):
+        """ Return the gate as a dense matrix """
+        
+        #FUTURE: maybe here or in a new "tosymplectic" method, could
+        # create an embeded clifford symplectic rep as follows (when
+        # evotype == "stabilizer"):
+        #def tosymplectic(self):
+        #    #Embed gate's symplectic rep in larger "full" symplectic rep
+        #    #Note: (qubit) labels are in first (and only) tensor-product-block
+        #    qubitLabels = self.stateSpaceLabels.labels[0]
+        #    smatrix, svector = _symp.embed_clifford(self.embedded_gate.smatrix,
+        #                                            self.embedded_gate.svector,
+        #                                            self.qubit_indices,len(qubitLabels))        
+        
         dmDim, superOpDim, blockDims = self.basisdim
-        typ = 'd' if self.mode == "superop" else complex
-        dim = superOpDim if self.mode == "superop" else dmDim
-        finalGate = _np.identity( dim, typ ) # operates on entire state space (direct sum of tensor prod. blocks)
+        embedded_dense = self.embedded_gate.todense()
+        dim = superOpDim if self._evotype != "statevec" else dmDim
+        finalGate = _np.identity( dim, embedded_dense.dtype ) # operates on entire state space (direct sum of tensor prod. blocks)
 
         #fill in embedded_gate contributions (always overwrites the diagonal
         # of finalGate where appropriate, so OK it starts as identity)
         for i,j,gi,gj in self._iter_matrix_elements():
-            finalGate[i,j] = self.embedded_gate[gi,gj]
-
+            finalGate[i,j] = embedded_dense[gi,gj]
         return finalGate
 
+    
     def get_order_terms(self, order):
         """ TODO: docstring """
         return [ _term.embed_term(t, self.stateSpaceLabels,
@@ -5608,22 +4260,6 @@ class EmbeddedGateMap(GateMap):
         self.dirty = True
 
 
-
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        return self._copy_gpindices( EmbeddedGateMap(self.stateSpaceLabels,
-                                                     self.targetLabels,
-                                                     self.embedded_gate, self.basisdim), parent )
-
-
-
     def transform(self, S):
         """
         Update gate matrix G with inv(S) * G * S,
@@ -5643,8 +4279,11 @@ class EmbeddedGateMap(GateMap):
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
-        raise ValueError("Cannot transform an EmbeddedGate!")
+        # I think we could do this but extracting the approprate parts of the
+        # S and Sinv matrices... but haven't needed it yet.
+        raise NotImplementedError("Cannot transform an EmbeddedGate yet...")
 
+    
     def depolarize(self, amount):
         """
         Depolarize this gate by the given `amount`.
@@ -5704,29 +4343,41 @@ class EmbeddedGateMap(GateMap):
         self.embedded_gate.rotate(amount, mxBasis)
 
 
-    def compose(self, otherGate):
-        """
-        Create and return a new gate that is the composition of this gate
-        followed by otherGate, which *must be another EmbeddedGate*.
-        (For more general compositions between different types of gates, use
-        the module-level compose function.)  The returned gate's matrix is
-        equal to dot(this, otherGate).
+    #def compose(self, otherGate):
+    #    """
+    #    Create and return a new gate that is the composition of this gate
+    #    followed by otherGate, which *must be another EmbeddedGate*.
+    #    (For more general compositions between different types of gates, use
+    #    the module-level compose function.)  The returned gate's matrix is
+    #    equal to dot(this, otherGate).
+    #
+    #    Parameters
+    #    ----------
+    #    otherGate : EmbeddedGate
+    #        The gate to compose to the right of this one.
+    #
+    #    Returns
+    #    -------
+    #    EmbeddedGate
+    #    """
+    #    raise NotImplementedError("Can't compose an EmbeddedGate yet")
 
-        Parameters
-        ----------
-        otherGate : EmbeddedGate
-            The gate to compose to the right of this one.
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this gate has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
 
         Returns
         -------
-        EmbeddedGate
+        bool
         """
-        raise NotImplementedError("TODO Later")
+        return self.embedded_gate.has_nonzero_hessian()
 
 
     def __str__(self):
         """ Return string representation """
-        s = "Embedded gate map with full dimension %d and state space %s\n" % (self.dim,self.stateSpaceLabels)
+        s = "Embedded gate with full dimension %d and state space %s\n" % (self.dim,self.stateSpaceLabels)
         s += " that embeds the following %d-dimensional gate into acting on the %s space\n" \
              % (self.embedded_gate.dim, str(self.targetLabels))
         s += str(self.embedded_gate)
@@ -5734,13 +4385,13 @@ class EmbeddedGateMap(GateMap):
 
     
 
-class EmbeddedGate(GateMatrix):
+class EmbeddedGate(EmbeddedGateMap, GateMatrix):
     """
     A gate containing a single lower (or equal) dimensional gate within it.
     An EmbeddedGate acts as the identity on all of its domain except the 
     subspace of its contained gate, where it acts as the contained gate does.
     """
-    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None, mode="superop"):
+    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None):
         """
         Initialize a EmbeddedGate object.
 
@@ -5770,102 +4421,16 @@ class EmbeddedGate(GateMatrix):
             space described by `stateSpaceLabels`.  Thus, this must be the
             same dimension and direct-sum structure given by the
             `stateSpaceLabels`.  If None, then this dimension is assumed.
-
-        mode : {"superop", "unitary"}
-            Whether the `gate_to_embed` represents the unitary action on
-            a (complex) state vector or the superoperator action on a (real)
-            vectorized density matrix.
         """
-        self.embedded_map = EmbeddedGateMap(stateSpaceLabels, targetLabels, gate_to_embed, basisdim, mode)
-        GateMatrix.__init__(self, _np.identity(self.embedded_map.dim)) # type irrelevant - just a dummy
+        EmbeddedGateMap.__init__(self, stateSpaceLabels, targetLabels,
+                                 gate_to_embed, basisdim) # sets self.dim
+        GateMatrix.__init__(self, _np.identity(self.dim)) # type irrelevant - just a dummy
         self._construct_matrix()
 
     def _construct_matrix(self):
         self.base = self.embedded_map.as_matrix()
         assert(self.base.shape == (self.dim,self.dim))
         self.base.flags.writeable = False
-
-        
-    def allocate_gpindices(self, startingIndex, parent):
-        """
-        Sets gpindices array for this object or any objects it
-        contains (i.e. depends upon).  Indices may be obtained
-        from contained objects which have already been initialized
-        (e.g. if a contained object is shared with other
-         top-level objects), or given new indices starting with
-        `startingIndex`.
-
-        Parameters
-        ----------
-        startingIndex : int
-            The starting index for un-allocated parameters.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
-        Returns
-        -------
-        num_new: int
-            The number of *new* allocated parameters (so 
-            the parent should mark as allocated parameter
-            indices `startingIndex` to `startingIndex + new_new`).
-        """
-        #print(">>> DB EmbeddedGate %d allocating: " % id(self), id(self.embedded_map.embedded_gate))
-        num_new_params = self.embedded_map.allocate_gpindices(startingIndex, parent)
-        _gatesetmember.GateSetMember.set_gpindices(
-            self, self.embedded_map.gpindices, parent)
-        return num_new_params
-
-    
-    def set_gpindices(self, gpindices, parent, memo=None):
-        """
-        Set the parent and indices into the parent's parameter vector that
-        are used by this GateSetMember object.
-
-        Parameters
-        ----------
-        gpindices : slice or integer ndarray
-            The indices of this objects parameters in its parent's array.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
-        Returns
-        -------
-        None
-        """
-        if memo is None: memo = set()
-        elif id(self) in memo: return
-        memo.add(id(self))
-
-        #must set the gpindices of self.embedded_gate
-        self.embedded_map.set_gpindices(gpindices, parent, memo)
-        _gatesetmember.GateSetMember.set_gpindices(
-            self, gpindices, parent) #could have used self.embedded_gate.gpindices (same)
-
-
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this gate.
-
-        Returns
-        -------
-        int
-           the number of independent parameters.
-        """
-        return self.embedded_map.num_params()
-
-
-    def to_vector(self):
-        """
-        Get the gate parameters as an array of values.
-
-        Returns
-        -------
-        numpy array
-            The gate parameters as a 1D array with length num_params().
-        """
-        return self.embedded_map.to_vector()
 
 
     def from_vector(self, v):
@@ -5882,10 +4447,8 @@ class EmbeddedGate(GateMatrix):
         -------
         None
         """
-        assert(len(v) == self.num_params())
-        self.embedded_map.from_vector(v)
+        EmbeddedGateMap.from_vector(self, v)
         self._construct_matrix()
-        assert(self.base.shape == (self.dim, self.dim))
         self.dirty = True
 
 
@@ -5902,13 +4465,13 @@ class EmbeddedGate(GateMatrix):
             Array of derivatives with shape (dimension^2, num_params)
         """
         # Note: this function exploits knowledge of EmbeddedGateMap internals!!
-        embedded_deriv = self.embedded_map.embedded_gate.deriv_wrt_params(wrtFilter)
+        embedded_deriv = self.embedded_gate.deriv_wrt_params(wrtFilter)
         derivMx = _np.zeros((self.dim**2,self.num_params()),embedded_deriv.dtype)
-        M = self.embedded_map.embedded_gate.dim
+        M = self.embedded_gate.dim
 
         #fill in embedded_gate contributions (always overwrites the diagonal
         # of finalGate where appropriate, so OK it starts as identity)
-        for i,j,gi,gj in self.embedded_map._iter_matrix_elements():
+        for i,j,gi,gj in self._iter_matrix_elements():
             derivMx[i*self.dim+j,:] = embedded_deriv[gi*M+gj,:] #fill row of jacobian
 
         if wrtFilter is None:
@@ -5916,82 +4479,14 @@ class EmbeddedGate(GateMatrix):
         else:
             return _np.take( derivMx, wrtFilter, axis=1 )
 
-        
-    def has_nonzero_hessian(self):
-        """ 
-        Returns whether this gate has a non-zero Hessian with
-        respect to its parameters, i.e. whether it only depends
-        linearly on its parameters or not.
-
-        Returns
-        -------
-        bool
-        """
-        return self.embedded_map.embedded_gate.has_nonzero_hessian()
-
-
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        return self._copy_gpindices( EmbeddedGate(
-            self.embedded_map.stateSpaceLabels,
-            self.embedded_map.targetLabels,
-            self.embedded_map.embedded_gate, self.embedded_map.basisdim), parent )
-    
-
-    def transform(self, S):
-        """
-        Update gate matrix G with inv(S) * G * S,
-
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting gate matrix is altered as 
-        described above.  If such an update cannot be done (because
-        the gate parameters do not allow for it), ValueError is raised.
-
-        In this particular case any TP gauge transformation is possible,
-        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
-        corresponds to a TP-like transform matrix.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.
-        """
-        raise ValueError("Cannot transform an EmbeddedGate!")
 
     def depolarize(self, amount):
         """
         Depolarize this gate by the given `amount`.
 
-        Generally, the depolarize function updates the *parameters* of 
-        the gate such that the resulting gate matrix is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. In standard
-            bases, depolarization corresponds to multiplying the gate matrix
-            by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
-            (corresponding to non-identity basis elements) equal
-            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
-            float).
-
-        Returns
-        -------
-        None
+        See :method:`EmbeddedGateMap.depolarize`.
         """
-        self.embedded_map.depolarize(amount)
+        EmbeddedGateMap.depolarize(self, amount)
         self._construct_matrix()
 
 
@@ -5999,62 +4494,10 @@ class EmbeddedGate(GateMatrix):
         """
         Rotate this gate by the given `amount`.
 
-        Generally, the rotate function updates the *parameters* of 
-        the gate such that the resulting gate matrix is rotated.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
+        See :method:`EmbeddedGateMap.rotate`.
         """
-        self.embedded_map.rotate(amount, mxBasis)
+        EmbeddedGateMap.rotate(self, amount, mxBasis)
         self._construct_matrix()
-
-
-    def compose(self, otherGate):
-        """
-        Create and return a new gate that is the composition of this gate
-        followed by otherGate, which *must be another EmbeddedGate*.
-        (For more general compositions between different types of gates, use
-        the module-level compose function.)  The returned gate's matrix is
-        equal to dot(this, otherGate).
-
-        Parameters
-        ----------
-        otherGate : EmbeddedGate
-            The gate to compose to the right of this one.
-
-        Returns
-        -------
-        EmbeddedGate
-        """
-        raise NotImplementedError("TODO Later")
-
-
-    def __str__(self):
-        """ Return string representation """
-        s = "Embedded gate map with shape %s and state space %s\n" % (self.base.shape, self.embedded_map.stateSpaceLabels)
-        s += " that embeds the following %d-dimensional gate into acting on the %s space\n" \
-             % (self.embedded_map.embedded_gate.dim, str(self.embedded_map.targetLabels))
-        s += str(self.embedded_map.embedded_gate)
-        #s += _mt.mx_to_string(self.base, width=4, prec=2) #show *entire* matrix
-        return s
 
 
 class CliffordGate(Gate):
@@ -6085,8 +4528,8 @@ class CliffordGate(Gate):
             self.smatrix, self.svector = _symp.unitary_to_symplectic(self.unitary, flagnonclifford=True)
 
         nQubits = len(self.svector) // 2
-        dim = 2**nQubits # assume "unitary evolution"-type mode?
-        Gate.__init__(self, dim)
+        dim = 2**nQubits # "stabilizer" is a "unitary evolution"-type mode
+        Gate.__init__(self, dim, "stabilizer")
 
 
     def acton(self, state):
@@ -6119,406 +4562,11 @@ class CliffordGate(Gate):
         return state
 
 
-    
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this gate.
-
-        Returns
-        -------
-        int
-           the number of independent parameters.
-        """
-        return 0 #static clifford
-
-    
-    def to_vector(self):
-        """
-        Get the gate parameters as an array of values.
-
-        Returns
-        -------
-        numpy array
-            The gate parameters as a 1D array with length num_params().
-        """
-        return _np.array([], 'd') # no parameters
-
-
-    def from_vector(self, v):
-        """
-        Initialize the gate using a vector of parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params()
-
-        Returns
-        -------
-        None
-        """
-        assert(len(v) == 0) #should be no parameters, and nothing to do
-
-
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        return self._copy_gpindices( CliffordGate(symplecticrep=(self.smatrix,self.svector)), parent )
-
-
-    def transform(self, S):
-        """
-        Update gate matrix G with inv(S) * G * S,
-
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting gate matrix is altered as 
-        described above.  If such an update cannot be done (because
-        the gate parameters do not allow for it), ValueError is raised.
-
-        In this particular case any TP gauge transformation is possible,
-        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
-        corresponds to a TP-like transform matrix.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.
-        """
-        raise ValueError("Cannot transform a CliffordGate")
-
-            
-    def depolarize(self, amount):
-        """
-        Depolarize this gate by the given `amount`.
-
-        Generally, the depolarize function updates the *parameters* of 
-        the gate such that the resulting gate matrix is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. In standard
-            bases, depolarization corresponds to multiplying the gate matrix
-            by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
-            (corresponding to non-identity basis elements) equal
-            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
-            float).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Can't depolarize a CliffordGate")
-
-
-    def rotate(self, amount, mxBasis="gm"):
-        """
-        Rotate this gate by the given `amount`.
-
-        Generally, the rotate function updates the *parameters* of 
-        the gate such that the resulting gate matrix is rotated.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Can't rotate a CliffordGate")
-
-
-    def compose(self, otherGate):
-        """
-        Create and return a new gate that is the composition of this gate
-        followed by otherGate, which *must be another CliffordGate*.
-
-        Parameters
-        ----------
-        otherGate : CliffordGate
-            The gate to compose to the right of this one.
-
-        Returns
-        -------
-        CliffordGate
-        """
-        raise NotImplementedError("TODO Later")
-
-
     def __str__(self):
         """ Return string representation """
         s = "Clifford gate with matrix:\n"
         s += _mt.mx_to_string(self.smatrix, width=2, prec=0)
         s += " and vector " + _mt.mx_to_string(self.svector, width=2, prec=0)
-        return s
-
-
-
-class EmbeddedCliffordGate(Gate):
-    """
-    A gate containing an embedded CliffordGate (represented via a symplectic)
-    """
-    
-    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed):
-        """
-        Creates a new EmbeddedCliffordGate
-        TODO: docstring
-
-        Parameters
-        ----------
-        """
-        from .labeldicts import StateSpaceLabels as _StateSpaceLabels
-        assert(isinstance(gate_to_embed, CliffordGate))
-        
-        self.stateSpaceLabels = _StateSpaceLabels(stateSpaceLabels)
-        self.targetLabels = targetLabels
-        self.embedded_gate = gate_to_embed
-        self.basisdim = _Dim(self.stateSpaceLabels.dim.blockDims)
-
-        # assert that all state space labels == qubits
-        assert(len(self.stateSpaceLabels.labels) == 1 and
-               all([ld == 2 for ld in self.stateSpaceLabels.labeldims.values()])), \
-               "All state space labels must correspond to *qubits*"
-        assert(len(targetLabels) == len(self.embedded_gate.svector) // 2), \
-            "Inconsistent number of qubits in `targetLabels` and `embedded_gate`"
-
-        # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
-        qubitLabels = self.stateSpaceLabels.labels[0] 
-        self.qubit_indices =  [ qubitLabels.index(targetLbl)
-                                for targetLbl in self.targetLabels ]
-        
-        dmDim, superOpDim, blockDims = self.basisdim
-        dim = dmDim # assume "unitary evoluation"-type mode
-        Gate.__init__(self, dim)
-        #self._construct_symplectic() # sets self.smatrix, self.svector
-
-    #Not needed - but could be useful -> change to "as_matrix()?"
-    #def _construct_symplectic(self):
-    #    #Embed gate's symplectic rep in larger "full" symplectic rep
-    #
-    #    # get (qubit) labels in first (and only) tensor-product-block
-    #    qubitLabels = self.stateSpaceLabels.labels[0]
-    #    qubit_inds =  [ qubitLabels.index(targetLbl) for targetLbl in self.targetLabels ]
-    #      # could cache this in __init__ for performance
-    #      
-    #    self.smatrix, self.svector = _symp.embed_clifford(self.embedded_gate.smatrix,
-    #                                                      self.embedded_gate.svector,
-    #                                                      qubit_inds,len(qubitLabels))        
-
-
-    def acton(self, state):
-        """ Act this gate map on an input state """
-        #OLD - when StabilizerState.toarray() gave s,p tuple
-        #state_s, state_p = state # should be output of StabilizerState.toarray()
-        #return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
-        #                                                state_s,state_p)
-
-        #Now StabilizerState.toarray() gives a StabilizerFrame obj
-        state = state.copy() # needed? expected?    
-        state.clifford_update(self.embedded_gate.smatrix, self.embedded_gate.svector,
-                              self.embedded_gate.unitary, self.qubit_indices)
-        return state
-
-    def adjoint_acton(self, state):
-        """ Act the adjoint of this gate map on an input state """
-        # Note: cliffords are unitary, so adjoint == inverse
-
-        #StabilizerState.toarray() gives a StabilizerFrame obj
-        invs, invp = _symp.inverse_clifford(self.embedded_gate.smatrix,
-                                            self.embedded_gate.svector)
-        state = state.copy() # needed? expected?
-        state.clifford_update(invs, invp, self.embedded_gate.unitary.conjugate().T,
-                              self.qubit_indices)
-        return state
-
-    
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this gate.
-
-        Returns
-        -------
-        int
-           the number of independent parameters.
-        """
-        return self.embedded_gate.num_params()
-
-    
-    def to_vector(self):
-        """
-        Get the gate parameters as an array of values.
-
-        Returns
-        -------
-        numpy array
-            The gate parameters as a 1D array with length num_params().
-        """
-        return self.embedded_gate.to_vector()
-
-    
-    def from_vector(self, v):
-        """
-        Initialize the gate using a vector of parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params()
-
-        Returns
-        -------
-        None
-        """
-        assert(len(v) == self.num_params())
-        self.embedded_gate.from_vector(v)
-        self._construct_symplectic()
-        self.dirty = True
-
-
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        return self._copy_gpindices( EmbeddedCliffordGate(
-            self.stateSpaceLabels, self.targetLabels, self.embedded_gate), parent )
-
-
-    def transform(self, S):
-        """
-        Update gate matrix G with inv(S) * G * S,
-
-        Generally, the transform function updates the *parameters* of 
-        the gate such that the resulting gate matrix is altered as 
-        described above.  If such an update cannot be done (because
-        the gate parameters do not allow for it), ValueError is raised.
-
-        In this particular case any TP gauge transformation is possible,
-        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
-        corresponds to a TP-like transform matrix.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.
-        """
-        raise ValueError("Cannot transform an EmbeddedCliffordGate")
-
-            
-    def depolarize(self, amount):
-        """
-        Depolarize this gate by the given `amount`.
-
-        Generally, the depolarize function updates the *parameters* of 
-        the gate such that the resulting gate matrix is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. In standard
-            bases, depolarization corresponds to multiplying the gate matrix
-            by a diagonal matrix whose first diagonal element (corresponding
-            to the identity) equals 1.0 and whose subsequent elements 
-            (corresponding to non-identity basis elements) equal
-            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
-            float).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Can't depolarize an EmbeddedCliffordGate")
-
-
-    def rotate(self, amount, mxBasis="gm"):
-        """
-        Rotate this gate by the given `amount`.
-
-        Generally, the rotate function updates the *parameters* of 
-        the gate such that the resulting gate matrix is rotated.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator 
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Can't rotate an EmbeddedCliffordGate")
-
-
-    def compose(self, otherGate):
-        """
-        Create and return a new gate that is the composition of this gate
-        followed by otherGate, which *must be another CliffordGate*.
-
-        Parameters
-        ----------
-        otherGate : CliffordGate
-            The gate to compose to the right of this one.
-
-        Returns
-        -------
-        CliffordGate
-        """
-        raise NotImplementedError("TODO Later")
-
-
-    def __str__(self):
-        """ Return string representation """
-        s = "Embedded Clifford gate with full dimension %d and state space %s\n" % (self.dim,self.stateSpaceLabels)
-        s += " that embeds the following %d-dimensional gate into acting on the %s space\n" \
-             % (self.embedded_gate.dim, str(self.targetLabels))
-        s += str(self.embedded_gate)
         return s
 
 
@@ -6533,495 +4581,3 @@ class EmbeddedCliffordGate(Gate):
 # - so LindbladTermGate doesn't need to deal w/"kite-structure" bases of terms;
 #    leave this to some higher level constructor which can create compositions
 #    of multiple LindbladTermGates based on kite structure (one per kite block).
-
-        #OLD - when we were going to try to process embedded gates and kite-structure here -- maybe use somewhere else...
-        ##try to find block-structure of "other" terms when nonham_diagonal_only == False
-        #lblDict = OrderedDict()
-        #if not nonham_diagonal_only:
-        #    #Pass 1: get number of different basis elements used and assign an index to each
-        #    for termLbl,coeff in Ltermdict.items():
-        #        if termType == "S": # Stochastic
-        #            assert(len(termLbl) == 3),"Stochastic term labels should have form ('S',<bel1>, <bel2>)"
-        #            if termLbl[1] not in lblDict:
-        #                lblDict[termLbl[1]] = nextIndx; nextIndx += 1
-        #            if termLbl[2] not in lblDict:
-        #                lblDict[termLbl[2]] = nextIndx; nextIndx += 1
-        #
-        #    #Pass 2: fill in which off-diagonal terms are present
-        #    coeffsPresent = _np.zeros((nextIndx,nextIndx),dtype=bool)
-        #    for termLbl,coeff in Ltermdict.items():
-        #        if termType == "S": # Stochastic
-        #            coeffsPresent[ lblDict[termLbl[1]], lblDict[termLbl[2]] ] = True # maybe order these so only upper triangle is filled?
-        #    
-        #
-        ## go through lindblad terms and figure out how many parameters we need
-        #hamParams = []; numHamParams = 0
-        #otherParams = []; numOtherParams = 0
-        #otherParamBlks = [] # list of ints, one per full *block* of "other" params (when nonham_diagonal_only == False)
-        #for termLbl,coeff in Ltermdict.items():
-        #    termType = termLbl[0]
-        #    if termType == "H": # Hamiltonian
-        #        assert(len(termLbl) == 2),"Hamiltonian term labels should have form ('H',<basis element label>)"
-        #        numHamParams += 1
-        #        hamParams.append(coeff)
-        #    elif termType == "S": # Stochastic
-        #        if nonham_diagonal_only:
-        #            assert(len(termLbl) == 2),"Stochastic term labels should have form ('S',<basis element label>)"
-        #        
-        #        else:
-        #            assert(len(termLbl) == 3),"Stochastic term labels should have form ('S',<bel1>, <bel2>)"
-        #            coeffsPresent[ termLbl[1]],termLbl[2] ] = True
-        #            
-        #            Lm, Ln = basisDict[termLbl[1]],basisDict[termLbl[2]]
-
-
-class TermGate(Gate):
-
-    @property
-    def size(self):
-        return self.dim**2
-
-
-class LindbladTermGate(TermGate):
-    """ A Lindblad-parameterized gate that is expandable into terms """
-
-    # TODO: init & basis specification; maybe breakout an OrderedTermGate base class?
-
-    
-
-    @classmethod
-    def from_error_generator(cls, baseunitary, errgen, ham_basis="pp", nonham_basis="pp", cptp=True,
-                             nonham_diagonal_only=False, truncate=True, mxBasis="pp", termtype="dense"):
-        # This looks like a from_errgen constructor; we want a from_rates constructor that
-        # takes a dict(?) of rate coeffs (0 by default) associated with lindblad terms (ham_i terms and other_ij terms...)
-        # --> add same construction methods to other lindblad gates, which currently just have "from_errgen"-type __init__ functions?
-        """
-        TODO: docstring (similar to other Lindblad gates above)
-        """
-
-        d2 = errgen.shape[0]
-        d = int(round(_np.sqrt(d2)))
-        assert(d*d == d2), "Gate dim must be a perfect square"
-        
-        #Determine whether we're using sparse bases or not
-        sparse = None
-        if ham_basis is not None:
-            if isinstance(ham_basis, _Basis): sparse = ham_basis.sparse
-            elif _compat.isstr(ham_basis): sparse = _sps.issparse(errgen)
-            elif len(ham_basis) > 0: sparse = _sps.issparse(ham_basis[0])
-        if sparse is None and nonham_basis is not None:
-            if isinstance(nonham_basis, _Basis): sparse = nonham_basis.sparse
-            elif _compat.isstr(nonham_basis): sparse = _sps.issparse(errgen)
-            elif len(nonham_basis) > 0: sparse = _sps.issparse(nonham_basis[0])
-        if sparse is None: sparse = False #the default
-
-        #Get matrices (possibly sparse ones) from the bases
-        if isinstance(ham_basis, _Basis) or _compat.isstr(ham_basis):
-            ham_basis = _Basis(ham_basis,d,sparse=sparse)
-        else: # ham_basis is a list of matrices
-            ham_basis = _Basis(matrices=ham_basis,dim=d,sparse=sparse)
-        
-        if isinstance(nonham_basis, _Basis) or _compat.isstr(nonham_basis):
-            other_basis = _Basis(nonham_basis,d,sparse=sparse)
-        else: # ham_basis is a list of matrices
-            other_basis = _Basis(matrices=nonham_basis,dim=d,sparse=sparse)
-        
-        matrix_basis = _Basis(mxBasis,d,sparse=sparse)
-
-        
-        hamC, otherC = \
-            _gt.lindblad_errgen_projections(
-                errgen, ham_basis, other_basis, matrix_basis, normalize=False,
-                return_generators=False, other_diagonal_only=nonham_diagonal_only,
-                sparse=sparse)
-        print("DB: ham projections = ",hamC)
-        print("DB: sto projections = ",otherC)
-
-        # Make None => length-0 arrays so iteration code works below (when basis is None)
-        if hamC is None: hamC = _np.empty(0,'d') 
-        if otherC is None:
-            otherC = _np.empty(0,'d') if nonham_diagonal_only \
-                     else _np.empty((0,0),'d')
-
-        Ltermdict = _collections.OrderedDict()
-        basisdict = _collections.OrderedDict(); nextLbl = 0
-        def get_basislbl(bmx):
-            for l,b in basisdict.items():
-                if _np.allclose(b,bmx): return l
-            blbl = nextLbl
-            basisdict[blbl] = bmx
-            nextLbl += 1
-            return blbl
-        
-        ham_mxs = ham_basis.get_composite_matrices()
-        assert(len(ham_mxs[1:]) == len(hamC))
-        
-        for coeff, bmx in zip(hamC,ham_mxs[1:]): # skip identity
-            Ltermdict[('H',nextLbl)] = coeff
-            basisdict[nextLbl] = bmx
-            nextLbl += 1
-            
-        other_mxs = other_basis.get_composite_matrices()
-        if nonham_diagonal_only:
-            assert(len(other_mxs[1:]) == len(otherC))
-            for coeff, bmx in zip(otherC,other_mxs[1:]): # skip identity
-                blbl = get_basislbl(bmx)
-                Ltermdict[('S',blbl)] = coeff
-        else:
-            assert((len(other_mxs[1:]),len(other_mxs[1:])) == otherC.shape)
-            for i, bmx1 in enumerate(other_mxs[1:]): # skip identity
-                blbl1 = get_basislbl(bmx1)
-                for j, bmx2 in enumerate(other_mxs[1:]): # skip identity
-                    blbl2 = get_basislbl(bmx2)
-                    Ltermdict[('S',blbl1,blbl2)] = otherC[i,j]
-
-        print("DB: Ltermdict = ",Ltermdict)
-        print("DB: basisdict = ")
-        for k,v in basisdict.items():
-            print(k,":")
-            print(v)
-        return cls.from_lindblad_terms(baseunitary, Ltermdict, basisdict,
-                                       cptp, nonham_diagonal_only, truncate,
-                                       termtype)
-
-
-
-        
-    @classmethod
-    def from_lindblad_terms(cls, baseunitary, Ltermdict, basisdict=None,
-                            cptp=True, nonham_diagonal_only=False,
-                            truncate=True, termtype="dense"):
-        """
-        TODO: docstring
-        Ltermdict keys are (termType, basisLabel(s)); values are floating point coeffs (error rates)
-        basisdict keys are string/int basis element "names"; values are numpy matrices or an "embedded matrix",
-                i.e. a *list* of (matrix, state_space_label) elements -- e.g. [(sigmaX,'Q1'), (sigmaY,'Q4')]
-         -- maybe let keys be tuples of (basisname, state_space_label) e.g. (('X','Q1'),('Y','Q4')) -- and maybe allow ('XY','Q1','Q4')
-                 format when can assume single-letter labels.
-        """
-        tt = termtype # shorthand - used to construct RankOneTerm objects below,
-                      # as we expect `basisdict` will contain *dense* basis
-                      # matrices (maybe change in FUTURE?)
-
-        #Enumerate the basis elements used for Hamiltonian and Stochasitic
-        # error terms (separately)
-        hamBasisLabels = _collections.OrderedDict()  # holds index of each basis element
-        otherBasisLabels = _collections.OrderedDict()
-        for termLbl,coeff in Ltermdict.items():
-            termType = termLbl[0]
-            if termType == "H": # Hamiltonian
-                assert(len(termLbl) == 2),"Hamiltonian term labels should have form ('H',<basis element label>)"
-                if termLbl[1] not in hamBasisLabels:
-                    hamBasisLabels[ termLbl[1] ] = len(hamBasisLabels)
-                    
-            elif termType == "S": # Stochastic
-                if nonham_diagonal_only == 'auto':
-                    nonham_diagonal_only = bool(len(termLbl) == 2)
-                    
-                if nonham_diagonal_only:
-                    assert(len(termLbl) == 2),"Stochastic term labels should have form ('S',<basis element label>)"
-                    if termLbl[1] not in otherBasisLabels:
-                        otherBasisLabels[ termLbl[1] ] = len(otherBasisLabels)
-                else:
-                    assert(len(termLbl) == 3),"Stochastic term labels should have form ('S',<bel1>, <bel2>)"
-                    if termLbl[1] not in otherBasisLabels:
-                        otherBasisLabels[ termLbl[1] ] = len(otherBasisLabels)
-                    if termLbl[2] not in otherBasisLabels:
-                        otherBasisLabels[ termLbl[2] ] = len(otherBasisLabels)
-
-        #Get parameter counts based on # of basis elements
-        numHamParams = len(hamBasisLabels)
-        if nonham_diagonal_only:  # OK if this runs for 'auto' too since then len(otherBasisLabels) == 0
-            numOtherParams = len(otherBasisLabels)
-        else:
-            numOtherBasisEls = len(otherBasisLabels)
-            numOtherParams = numOtherBasisEls**2
-            otherCoeffs = _np.zeros((numOtherParams,numOtherParams),'complex')
-        nTotalParams = numHamParams + numOtherParams
-        print("DB: hamBasisLabels = ",hamBasisLabels)
-        print("DB: otherBasisLabels = ",otherBasisLabels)
-
-
-        #Create & fill parameter array
-        params = _np.zeros(nTotalParams, 'd') # ham params, then "other"
-        for termLbl,coeff in Ltermdict.items():
-            termType = termLbl[0]
-            if termType == "H": # Hamiltonian
-                k = hamBasisLabels[termLbl[1]] #index of parameter
-                assert(abs(_np.imag(coeff)) < IMAG_TOL)
-                params[k] = _np.real_if_close(coeff)
-            elif termType == "S": # Stochastic
-                if nonham_diagonal_only:
-                    k = numHamParams + otherBasisLabels[termLbl[1]] #index of parameter
-                    assert(abs(_np.imag(coeff)) < IMAG_TOL)
-                    if cptp:
-                        if -1e-12 < coeff < 0: coeff = 0.0 # avoid sqrt warning due to small negative numbers
-                        params[k] = _np.sqrt(_np.real_if_close(coeff))
-                    else:
-                        params[k] = _np.real_if_close(coeff)
-                else:
-                    k = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
-                    j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
-                    otherCoeffs[k,j] = coeff
-                    
-        if not nonham_diagonal_only:
-            #Finish up filling parameters for "other" terms - need to take
-            # cholesky decomp of otherCoeffs matrix:
-            otherParams = _np.empty((numOtherBasisEls,numOtherBasisEls),'d')
-
-            #ROBIN: is this necessary? -- or just need otherCoeffs to be positive semidefinite?
-            # Assume for now this must be true, as code for parameterizing otherCoeffs
-            # depends upon it (and parameter counting indicates this probably is a valid condition)
-            assert(_np.isclose(_np.linalg.norm(otherCoeffs-otherCoeffs.T.conjugate())
-                               ,0)), "other coeff mx is not Hermitian!"
-
-            if cptp: #otherParams mx stores Cholesky decomp
-    
-                #push any slightly negative evals of otherC positive so that
-                # the Cholesky decomp will work.
-                evals,U = _np.linalg.eig(otherCoeffs)
-                Ui = _np.linalg.inv(U)
-    
-                assert(truncate or all([ev >= -1e-12 for ev in evals])), \
-                    "Given error germs are not CPTP (truncate == False)!"
-    
-                pos_evals = evals.clip(1e-16,1e100)
-                otherCoeffs = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
-                try:
-                    Lmx = _np.linalg.cholesky(otherCoeffs)
-
-                # if Lmx not postitive definite, try again with 1e-12 (same lines as above)
-                except _np.linalg.LinAlgError:                              # pragma: no cover
-                    pos_evals = evals.clip(1e-12,1e100)                     # pragma: no cover
-                    otherCoeffs = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))# pragma: no cover
-                    Lmx = _np.linalg.cholesky(otherCoeffs)                  # pragma: no cover
-    
-                for i in range(numOtherBasisEls):
-                    assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
-                    otherParams[i,i] = Lmx[i,i].real
-                    for j in range(i):
-                        otherParams[i,j] = Lmx[i,j].real
-                        otherParams[j,i] = Lmx[i,j].imag
-    
-            else: #otherParams mx stores otherC (hermitian) directly
-                for i in range(numOtherBasisEls):
-                    assert(_np.linalg.norm(_np.imag(otherC[i,i])) < IMAG_TOL)
-                    otherParams[i,i] = otherC[i,i].real
-                    for j in range(i):
-                        otherParams[i,j] = otherC[i,j].real
-                        otherParams[j,i] = otherC[i,j].imag
-
-            params[numHamParams:] = otherParams.flatten()
-
-        
-        # Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
-        # coeffs (w/ *local* variable indices) that get converted to per-order
-        # terms later.
-        IDENT = None # sentinel for the do-nothing identity op
-        Lterms = []
-        for termLbl in Ltermdict:
-            print("DB: processing ",termLbl)
-            termType = termLbl[0]
-            if termType == "H": # Hamiltonian
-                k = hamBasisLabels[termLbl[1]] #index of parameter
-                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT, tt) )
-                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T, tt) )
-                print("DB: H term w/index %d= " % k, " len=",len(Lterms))
-                #print("  coeff: ", list(Lterms[-1].coeff.keys()) )
-                #print("  coeff: ", list(Lterms[-2].coeff.keys()) )
-                #print("  coeff: ", list(Lterms[-1].coeff.inds) )
-                #print("  coeff: ", list(Lterms[-2].coeff.inds) )
-
-            elif termType == "S": # Stochastic
-                if nonham_diagonal_only:
-                    k = numHamParams + otherBasisLabels[termLbl[1]] #index of parameter
-                    Lm = Ln = basisdict[termLbl[1]]
-                    pw = 2 if cptp else 1 # power to raise parameter to in order to get coeff
-
-                    Lm_dag = Lm.conjugate().T # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
-                    Ln_dag = Ln.conjugate().T
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw:  1.0} ), Ln, Lm_dag, tt) )
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm), tt) )
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT, tt) )
-                else:
-                    i = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
-                    j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
-                    Lm, Ln = basisdict[termLbl[1]],basisdict[termLbl[2]]
-                    print("DB: S indices = ",i,j)
-
-                    # TODO: create these polys and place below...
-                    polyTerms = {}
-                    if cptp:
-                        # otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
-                        # coeff_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
-                        #          = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
-                        def iRe(a,b): return numHamParams + (a*numOtherBasisEls + b)
-                        def iIm(a,b): return numHamParams + (b*numOtherBasisEls + a)
-                        for k in range(0,min(i,j)+1):
-                            if k <= i and k <= j:
-                                polyTerms[ (iRe(i,k),iRe(j,k)) ] = 1.0
-                            if k <= i and k < j:
-                                polyTerms[ (iRe(i,k),iIm(j,k)) ] = -1.0j
-                            if k < i and k <= j:
-                                polyTerms[ (iIm(i,k),iRe(j,k)) ] = 1.0j
-                            if k < i and k < j:
-                                polyTerms[ (iIm(i,k),iIm(j,k)) ] = 1.0
-                    else: # coeff_ij = otherParam[i,j] + 1j*otherParam[j,i] (otherCoeffs is Hermitian)
-                        ijIndx = numHamParams + (i*numOtherBasisEls + j)
-                        jiIndx = numHamParams + (j*numOtherBasisEls + i)
-                        polyTerms = { (ijIndx,): 1.0, (jiIndx,): 1.0j }
-
-                    base_poly = _Polynomial(polyTerms)
-                    Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                    Lterms.append( _term.RankOneTerm(1.0*base_poly, Ln, Lm, tt) )
-                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm), tt) ) # adjoint(_np.dot(Lm_dag,Ln))
-                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT, tt ) )
-                    print("DB: S term w/index terms= ", polyTerms, " len=",len(Lterms))
-                    print("  coeff: ", list(Lterms[-1].coeff.keys()) )
-                    print("  coeff: ", list(Lterms[-2].coeff.keys()) )
-                    print("  coeff: ", list(Lterms[-3].coeff.keys()) )
-
-
-                #TODO: check normalization of these terms vs those used in projections.
-
-        print("DB: params = ", list(enumerate(params)))
-        print("DB: Lterms = ")
-        for i,lt in enumerate(Lterms):
-            print("Term %d:" % i)
-            print("  coeff: ", str(lt.coeff)) # list(lt.coeff.keys()) )
-            print("  pre:\n", lt.pre_ops[0] if len(lt.pre_ops) else "IDENT")
-            print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
-        return cls(baseunitary, params, Lterms, cptp, nonham_diagonal_only, tt)
-
-    
-    def __init__(self, baseunitary=None, initial_paramvals=None, Lterms=None,
-                 cptp=True, nonham_diagonal_only=False, termtype="dense"):
-        """
-        Initialize a LindbladTermGateBase object.
-        TODO: docstring
-        """
-        # 'baseunitary' can just be a dimension
-        if isinstance(baseunitary,_numbers.Integral): 
-            dim = baseunitary
-            baseunitary = None
-        else:
-            try:
-                dim = baseunitary.dim # if a gate
-            except:
-                baseunitary = GateMatrix.convert_to_matrix(baseunitary)
-                dim = baseunitary.shape[0] # otherwise try to treat as array
-
-            # automatically "up-convert" gate to CliffordGate if needed
-            if termtype == "clifford" and not isinstance(
-                    baseunitary, (CliffordGate, EmbeddedCliffordGate)):
-                baseunitary = CliffordGate(baseunitary) 
-                
-        self.termtype = termtype
-        self.cptp = cptp
-        self.nonham_diagonal_only = nonham_diagonal_only
-        self.paramvals = _np.array(initial_paramvals,'d')
-        self.Lterms = Lterms
-        self.baseunitary = baseunitary
-        self.terms = {}
-        TermGate.__init__(self, dim**2) #sets self.dim
-
-    #def get_max_order(self):
-    #    if len(self.Lterms) > 0: return 2**32 # ~inf
-    #    else: return 1
-
-    def set_gpindices(self, gpindices, parent, memo=None):
-        """
-        Set the parent and indices into the parent's parameter vector that
-        are used by this GateSetMember object.
-
-        Parameters
-        ----------
-        gpindices : slice or integer ndarray
-            The indices of this objects parameters in its parent's array.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
-        Returns
-        -------
-        None
-        """
-        if memo is None: memo = set()
-        elif id(self) in memo: return
-        memo.add(id(self))
-
-        self.terms = {} # clear terms cache since param indices have changed now
-        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
-
-    def _compose_poly_indices(self, terms):
-        for term in terms:
-            term.map_indices(lambda x: tuple(_gatesetmember._compose_gpindices(
-                self.gpindices, _np.array(x,'i'))) )
-        return terms
-        
-
-    def get_order_terms(self, order):
-        if order not in self.terms:
-            assert(self.gpindices is not None),"LindbladTermGate must be added to a GateSet before use!"
-            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.baseunitary, self.baseunitary, self.termtype)
-            loc_terms = _term.exp_terms(self.Lterms, [order], postTerm)[order]
-            #loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
-            self.terms[order] = self._compose_poly_indices(loc_terms)
-        return self.terms[order]
-    
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this gate.
-
-        Returns
-        -------
-        int
-           the number of independent parameters.
-        """
-        return len(self.paramvals)
-
-    #TODO: Are these to/from vector fns needed??? -- maybe calc only needs to get terms & construct polys...
-    def to_vector(self):
-        """
-        Extract a vector of the underlying gate parameters from this gate.
-
-        Returns
-        -------
-        numpy array
-            a 1D numpy array with length == num_params().
-        """
-        return self.paramvals
-
-
-    def from_vector(self, v):
-        """
-        Initialize the gate using a vector of its parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params().
-
-        Returns
-        -------
-        None
-        """
-        assert(len(v) == self.num_params())
-        self.paramvals = v
-        self.dirty = True
-
-        
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        return self._copy_gpindices( LindbladTermGate(
-            self.baseunitary, self.paramvals, self.Lterms, self.cptp,
-            self.nonham_diagonal_only), parent)
-
