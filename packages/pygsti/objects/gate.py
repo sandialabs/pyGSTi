@@ -465,6 +465,9 @@ class Gate(_gatesetmember.GateSetMember):
         """ Act the adjoint of this gate matrix on an input state """
         return _np.dot(self.todense().conjugate().T, state)
 
+    def get_order_terms(self, order):
+        """ TODO: docstring """
+        raise NotImplementedError("get_order_terms(...) not implemented for %s objects!" % self.__class__.__name__)
 
     def frobeniusdist2(self, otherGate, transform=None, inv_transform=None):
         """ 
@@ -719,6 +722,50 @@ class Gate(_gatesetmember.GateSetMember):
 
     #Note: no __str__ fn
 
+    @staticmethod
+    def convert_to_matrix(M):
+        """
+        Static method that converts a matrix-like object to a 2D numpy array.
+
+        Parameters
+        ----------
+        M : array_like
+
+        Returns
+        -------
+        numpy array
+        """
+        if isinstance(M, Gate):
+            dim = M.dim
+            matrix = _np.asarray(M).copy()
+              # Gate objs should also derive from ndarray
+        elif isinstance(M, _np.ndarray):
+            matrix = M.copy()
+        else:
+            try:
+                dim = len(M)
+                d2  = len(M[0]) #pylint : disable=unused-variable
+            except:
+                raise ValueError("%s doesn't look like a 2D array/list" % M)
+            if any([len(row) != dim for row in M]):
+                raise ValueError("%s is not a *square* 2D array" % M)
+
+            ar = _np.array(M)
+            if _np.all(_np.isreal(ar)):
+                matrix = _np.array(ar.real, 'd')
+            else:
+                matrix = _np.array(ar, 'complex')
+
+        if len(matrix.shape) != 2:
+            raise ValueError("%s has %d dimensions when 2 are expected"
+                             % (M, len(matrix.shape)))
+
+        if matrix.shape[0] != matrix.shape[1]: # checked above, but just to be safe
+            raise ValueError("%s is not a *square* 2D array" % M) # pragma: no cover
+
+        return matrix
+
+
         
 #class GateMap(Gate):
 #    def __init__(self, dim, evotype):
@@ -831,50 +878,6 @@ class GateMatrix(Gate):
     def __complex__(self):     return complex(self.base)
 
 
-    @staticmethod
-    def convert_to_matrix(M):
-        """
-        Static method that converts a matrix-like object to a 2D numpy array.
-
-        Parameters
-        ----------
-        M : array_like
-
-        Returns
-        -------
-        numpy array
-        """
-        if isinstance(M, Gate):
-            dim = M.dim
-            matrix = _np.asarray(M).copy()
-              # Gate objs should also derive from ndarray
-        elif isinstance(M, _np.ndarray):
-            matrix = M.copy()
-        else:
-            try:
-                dim = len(M)
-                d2  = len(M[0]) #pylint : disable=unused-variable
-            except:
-                raise ValueError("%s doesn't look like a 2D array/list" % M)
-            if any([len(row) != dim for row in M]):
-                raise ValueError("%s is not a *square* 2D array" % M)
-
-            ar = _np.array(M)
-            if _np.all(_np.isreal(ar)):
-                matrix = _np.array(ar.real, 'd')
-            else:
-                matrix = _np.array(ar, 'complex')
-
-        if len(matrix.shape) != 2:
-            raise ValueError("%s has %d dimensions when 2 are expected"
-                             % (M, len(matrix.shape)))
-
-        if matrix.shape[0] != matrix.shape[1]: # checked above, but just to be safe
-            raise ValueError("%s is not a *square* 2D array" % M) # pragma: no cover
-
-        return matrix
-
-
 
 class StaticGate(GateMatrix):
     """
@@ -892,7 +895,7 @@ class StaticGate(GateMatrix):
             a square 2D array-like or Gate object representing the gate action.
             The shape of M sets the dimension of the gate.
         """
-        M = GateMatrix.convert_to_matrix(M)
+        M = Gate.convert_to_matrix(M)
         if evotype == "auto":
             evotype = "statevec" if _np.iscomplexobj(M) else "densitymx"
         assert(evotype in ("statevec","densitymx")), \
@@ -922,7 +925,7 @@ class FullyParameterizedGate(GateMatrix):
             a square 2D array-like or Gate object representing the gate action.
             The shape of M sets the dimension of the gate.
         """
-        M = GateMatrix.convert_to_matrix(M)
+        M = Gate.convert_to_matrix(M)
         if evotype == "auto":
             evotype = "statevec" if _np.iscomplexobj(M) else "densitymx"
         assert(evotype in ("statevec","densitymx")), \
@@ -945,7 +948,7 @@ class FullyParameterizedGate(GateMatrix):
         -------
         None
         """
-        mx = GateMatrix.convert_to_matrix(M)
+        mx = Gate.convert_to_matrix(M)
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim,self.dim))
@@ -1060,7 +1063,7 @@ class TPParameterizedGate(GateMatrix):
             shape of this array sets the dimension of the gate.
         """
         #Gate.__init__(self, Gate.convert_to_matrix(M))
-        mx = GateMatrix.convert_to_matrix(M)
+        mx = Gate.convert_to_matrix(M)
         assert(_np.isrealobj(mx)),"TPParameterizedGate must have *real* values!"
         if not (_np.isclose(mx[0,0], 1.0) and \
                 _np.allclose(mx[0,1:], 0.0)):
@@ -1086,7 +1089,7 @@ class TPParameterizedGate(GateMatrix):
         -------
         None
         """
-        mx = GateMatrix.convert_to_matrix(M)
+        mx = Gate.convert_to_matrix(M)
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim,self.dim))
@@ -1248,7 +1251,7 @@ class LinearlyParameterizedGate(GateMatrix):
             elements.
         """
 
-        baseMatrix = _np.array( GateMatrix.convert_to_matrix(baseMatrix), 'complex')
+        baseMatrix = _np.array( Gate.convert_to_matrix(baseMatrix), 'complex')
           #complex, even if passed all real base matrix
 
         elementExpressions = {}
@@ -1909,6 +1912,9 @@ class LindbladParameterizedGateMap(Gate):
         d2 = errgen.shape[0]
         d = int(round(_np.sqrt(d2)))
         assert(d*d == d2), "Gate dim must be a perfect square"
+
+        if unitaryPostfactor is None:
+            unitaryPostfactor = gateMatrix.shape[0] # just set as dimension (for __init__)
         
         #Determine whether we're using sparse bases or not
         sparse = None
@@ -1972,7 +1978,7 @@ class LindbladParameterizedGateMap(Gate):
             try:
                 d2 = unitaryPostfactor.dim # if a gate
             except:
-                unitaryPostfactor = GateMatrix.convert_to_matrix(unitaryPostfactor)
+                unitaryPostfactor = Gate.convert_to_matrix(unitaryPostfactor)
                 d2 = unitaryPostfactor.shape[0] # otherwise try to treat as array
         d = int(round(_np.sqrt(d2)))
         assert(d*d == d2), "Gate dim must be a perfect square"
@@ -2455,7 +2461,7 @@ class LindbladParameterizedGateMap(Gate):
             elif self._evotype == "cterm": tt = "clifford"
             else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
 
-            assert(self.gpindices is not None),"LindbladTermGate must be added to a GateSet before use!"
+            assert(self.gpindices is not None),"LindbladParameterizedGateMap must be added to a GateSet before use!"
             postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.unitary_postfactor,
                                          self.unitary_postfactor, tt)
             loc_terms = _term.exp_terms(self.Lterms, [order], postTerm)[order]

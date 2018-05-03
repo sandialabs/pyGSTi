@@ -50,6 +50,7 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
             assert(gate_matrices is None), "`items` was given when gate_matrices != None"
 
         dim = None
+        evotype = None
         
         if gate_matrices is not None:
             if isinstance(gate_matrices,dict):
@@ -63,12 +64,20 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
             for k,v in matrix_list:
                 gate = v if isinstance(v, _gate.Gate) else \
                        _gate.FullyParameterizedGate(v)
+
+                if evotype is None: evotype = gate._evotype
+                else: assert(evotype == gate._evotype), \
+                    "All instrument gates must have the same evolution type"
+
                 if dim is None: dim = gate.dim
-                assert(dim == gate.dim),"All gates must have the same dimension!"
+                assert(dim == gate.dim),"All instrument gates must have the same dimension!"
                 items.append( (k,gate) )
 
+        if evotype is None:
+            evotype = "densitymx" # default (if no instrument gates)
+
         _collections.OrderedDict.__init__(self, items)
-        _gm.GateSetMember.__init__(self, dim)
+        _gm.GateSetMember.__init__(self, dim, evotype)
         self._paramvec = self._build_paramvec()
         self._readonly = True
 
@@ -294,19 +303,6 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
             self._paramvec[gate.gpindices] = gate.to_vector()
         self.dirty = True
 
-        
-    def copy(self, parent=None):
-        """
-        Copy this Instrument.
-
-        Returns
-        -------
-        Instrument
-            A copy of this Instrument
-        """
-        copied_items = [ (k,v.copy()) for k,v in self.items() ]
-        return self._copy_gpindices( Instrument(copied_items), parent)
-
     def __str__(self):
         s = "Instrument with elements:\n"
         for lbl,element in self.items():
@@ -399,7 +395,7 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
 
 
         _collections.OrderedDict.__init__(self,items)
-        _gm.GateSetMember.__init__(self,dim)
+        _gm.GateSetMember.__init__(self,dim,"densitymx")
         self._readonly = True
 
     def __setitem__(self, key, value):
@@ -594,18 +590,6 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
         self.dirty = True
 
         
-    def copy(self, parent=None):
-        """
-        Copy this Instrument.
-
-        Returns
-        -------
-        Instrument
-            A copy of this Instrument
-        """
-        #Note: items will get copied in constructor, so we don't need to here.
-        return self._copy_gpindices( TPInstrument( list(self.items()) ), parent)
-
     def __str__(self):
         s = "TPInstrument with elements:\n"
         for lbl,element in self.items():

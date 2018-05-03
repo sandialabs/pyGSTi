@@ -44,7 +44,7 @@ class GateSetMember(GateSetChild):
     this member.  Note that GateSetMembers may contain other GateSetMembers (may
     be nested).
     """
-    def __init__(self, dim, evotype="densitymx", gpindices=None, parent=None):
+    def __init__(self, dim, evotype, gpindices=None, parent=None):
         """ Initialize a new GateSetMember """
         self.dim = dim
         self._evotype = evotype

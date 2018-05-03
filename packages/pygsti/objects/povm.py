@@ -181,10 +181,10 @@ class POVM(_gm.GateSetMember, _collections.OrderedDict):
     include a collection of effect vectors that may or may not
     have all of the properties associated by a mathematical POVM.
     """
-    def __init__(self, dim, items=[]):
+    def __init__(self, dim, evotype, items=[]):
         self._readonly = False #until init is done
         _collections.OrderedDict.__init__(self, items)
-        _gm.GateSetMember.__init__(self, dim)
+        _gm.GateSetMember.__init__(self, dim, evotype)
         self._readonly = True
         assert(self.dim == dim)
 
@@ -195,7 +195,105 @@ class POVM(_gm.GateSetMember, _collections.OrderedDict):
     def __pygsti_reduce__(self):
         return self.__reduce__()
 
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this POVM.
 
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return 0 # default == no parameters
+
+
+    def to_vector(self):
+        """
+        Extract a vector of the underlying gate parameters from this POVM.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        return _np.array([], 'd') # no parameters
+
+
+    def from_vector(self, v):
+        """
+        Initialize this POVM using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of POVM parameters.  Length
+            must == num_params().
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == 0) #should be no parameters
+
+        
+    def transform(self, S):
+        """
+        Update each POVM effect E as S^T * E.
+
+        Note that this is equivalent to the *transpose* of the effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.            
+        """
+        raise ValueError("Cannot transform a %s object" % self.__class__.__name__)
+        #self.dirty = True
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this POVM by the given `amount`.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. All but the
+            first element of each spam vector (often corresponding to the 
+            identity element) are multiplied by `amount` (if a float) or
+            the corresponding `amount[i]` (if a tuple).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot depolarize a %s object" % self.__class__.__name__)
+        #self.dirty = True
+
+
+    def num_elements(self):
+        """
+        Return the number of total spam vector elements in this povm.
+        This is in general different from the number of *parameters*,
+        which are the number of free variables used to generate all of
+        the vector *elements*.
+
+        Returns
+        -------
+        int
+        """
+        return sum([ E.size for E in self.values() ])
+
+    def __str__(self):
+        s = "%s with effect vectors:\n" % self.__class__.__name__
+        for lbl,effect in self.items():
+            s += "%s: %s\n" % (lbl, str(effect))
+        return s
+
+    
 
 class _BasePOVM(POVM):
     """ The base behavior for both UnconstrainedPOVM and TPPOVM """
@@ -233,10 +331,15 @@ class _BasePOVM(POVM):
         #Copy each effect vector and set it's parent and gpindices.
         # Assume each given effect vector's parameters are independent.
         copied_items = []
+        evotype = None
         for k,v in items:
             if k == self.complement_label: continue
-            effect = v.copy() if isinstance(v,_sv.SPAMVec) else \
+            effect = v if isinstance(v,_sv.SPAMVec) else \
                      _sv.FullyParameterizedSPAMVec(v)
+
+            if evotype is None: evotype = effect._evotype
+            else: assert(evotype == effect._evotype), \
+                "All effect vectors must have the same evolution type"
 
             if dim is None: dim = effect.dim
             assert(dim == effect.dim),"All effect vectors must have the same dimension"
@@ -245,6 +348,9 @@ class _BasePOVM(POVM):
             effect.set_gpindices(slice(self.Np,self.Np+N),self); self.Np += N
             copied_items.append( (k,effect) )
         items = copied_items
+        
+        if evotype is None:
+            evotype = "densitymx" # default (if no effects)
 
         #Add a complement effect if desired
         if self.complement_label is not None:  # len(items) > 0 by assert
@@ -256,7 +362,7 @@ class _BasePOVM(POVM):
             complement_effect.set_gpindices(slice(0,self.Np), self) #all parameters
             items.append( (self.complement_label, complement_effect) )
 
-        super(_BasePOVM, self).__init__(dim, items)
+        super(_BasePOVM, self).__init__(dim, evotype, items)
         
 
     def _reset_member_gpindices(self):
@@ -372,6 +478,19 @@ class _BasePOVM(POVM):
 
 
     def from_vector(self, v):
+        """
+        Initialize this POVM using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of POVM parameters.  Length
+            must == num_params().
+
+        Returns
+        -------
+        None
+        """
         for lbl,effect in self.items():
             if lbl == self.complement_label: continue
             effect.from_vector( v[effect.gpindices] )
@@ -441,20 +560,6 @@ class _BasePOVM(POVM):
         self.dirty = True
 
 
-    def num_elements(self):
-        """
-        Return the number of total spam vector elements in this povm.
-        This is in general different from the number of *parameters*,
-        which are the number of free variables used to generate all of
-        the vector *elements*.
-
-        Returns
-        -------
-        int
-        """
-        return sum([ E.size for E in self.values() ])    
-
-
 class UnconstrainedPOVM(_BasePOVM):
     """ 
     An unconstrained POVM that just holds a set of effect vectors,
@@ -470,31 +575,12 @@ class UnconstrainedPOVM(_BasePOVM):
             A dict (or list of key,value pairs) of the effect vectors.
         """
         super(UnconstrainedPOVM,self).__init__(effects, preserve_sum=False)
-
-
-    def copy(self, parent=None):
-        """
-        Copy this POVM.
-
-        Returns
-        -------
-        POVM
-            A copy of this POVM
-        """
-        effects = [ (k,v.copy()) for k,v in self.items() ]
-        return self._copy_gpindices(UnconstrainedPOVM(effects), parent)
-
+    
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         assert(self.complement_label is None)
         effects = [ (lbl,effect) for lbl,effect in self.items()]
         return (UnconstrainedPOVM, (effects,), {'_gpindices': self._gpindices} )
-
-    def __str__(self):
-        s = "Unconstrained POVM with effect vectors:\n"
-        for lbl,effect in self.items():
-            s += "%s: %s\n" % (lbl, str(effect))
-        return s
 
 
 
@@ -520,20 +606,6 @@ class TPPOVM(_BasePOVM):
         super(TPPOVM,self).__init__(effects, preserve_sum=True)
         
     
-    def copy(self, parent=None):
-        """
-        Copy this POVM.
-
-        Returns
-        -------
-        TPPOVM
-            A copy of this POVM
-        """
-        assert(self.complement_label is not None)
-        effects = [ (k,v.copy()) for k,v in self.items() if k != self.complement_label]
-        effects.append( (self.complement_label, _np.array(self[self.complement_label])) )
-        return self._copy_gpindices(TPPOVM(effects), parent)
-
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         assert(self.complement_label is not None)
@@ -546,12 +618,6 @@ class TPPOVM(_BasePOVM):
                          _np.array(self[self.complement_label])) )
             
         return (TPPOVM, (effects,), {'_gpindices': self._gpindices} )
-
-    def __str__(self):
-        s = "TP-POVM with effect vectors:\n"
-        for lbl,effect in self.items():
-            s += "%s:\n%s\n" % (lbl, str(effect))
-        return s
 
 
 
@@ -576,10 +642,17 @@ class TensorProdPOVM(POVM):
         #  Assume each one's parameters are independent.
         self.factorPOVMs = [povm.copy() for povm in factorPOVMs]
         
-        off = 0
+        off = 0; evotype = None
         for povm in self.factorPOVMs:
             N = povm.num_params()
             povm.set_gpindices(slice(off,off+N),self); off += N
+
+            if evotype is None: evotype = povm._evotype
+            else: assert(evotype == povm._evotype), \
+                "All factor povms must have the same evolution type"
+
+        if evotype is None:
+            evotype = "densitymx" # default (if there are no factors)
 
         items = []
         effectLabelKeys = [ povm.keys() for povm in factorPOVMs ]
@@ -587,7 +660,7 @@ class TensorProdPOVM(POVM):
             effect = _sv.TensorProdSPAMVec('effect',self.factorPOVMs, el) #infers parent & gpindices from factorPOVMs
             items.append( ("".join(el), effect) )
 
-        super(TensorProdPOVM, self).__init__(dim, items)
+        super(TensorProdPOVM, self).__init__(dim, evotype, items)
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
@@ -662,29 +735,25 @@ class TensorProdPOVM(POVM):
 
 
     def from_vector(self, v):
+        """
+        Initialize this POVM using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of POVM parameters.  Length
+            must == num_params().
+
+        Returns
+        -------
+        None
+        """
         for povm in self.factorPOVMs:
             povm.from_vector( v[povm.gpindices] )
         #TODO: REMOVE
         #I don't think there's any need to do this (re-inits effect vector from factor POVMs)
         #for effect in self.values():
         #    effect.toarray()
-
-        
-    def transform(self, S):
-        """
-        Update each POVM effect E as S^T * E.
-
-        Note that this is equivalent to the *transpose* of the effect vectors
-        being mapped as `E^T -> E^T * S`.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.            
-        """
-        raise ValueError("Cannot transform a TensorProdPOVM")
-        #self.dirty = True
 
 
     def depolarize(self, amount):
@@ -711,34 +780,7 @@ class TensorProdPOVM(POVM):
         # version of their vector - they just create it from factorPOVMs on demand
         self.dirty = True
 
-
-    def num_elements(self):
-        """
-        Return the number of total spam vector elements in this povm.
-        This is in general different from the number of *parameters*,
-        which are the number of free variables used to generate all of
-        the vector *elements*.
-
-        Returns
-        -------
-        int
-        """
-        return sum([ E.dim for E in self.values() ])
-          #Note: Use .dim instead of .size b/c TensorProdSPAMVec's
-          # are not DenseSPAMVec-derived
         
-    def copy(self, parent=None):
-        """
-        Copy this POVM.
-
-        Returns
-        -------
-        TensorProdPOVM
-            A copy of this POVM
-        """
-        #Note: factorPOVMs will get copied in constructor, so don't need to here
-        return self._copy_gpindices( TensorProdPOVM(self.factorPOVMs), parent )
-
     def __str__(self):
         s = "Tensor-product POVM with %d factor POVMs\n" % len(self.factorPOVMs)
         #s += " and final effect labels " + ", ".join(self.keys()) + "\n"
@@ -787,7 +829,7 @@ class StabilizerZPOVM(POVM):
         iterover = [(0,1)]*nqubits
         items = [ (''.join(map(str,outcomes)), _sv.StabilizerEffectVec(outcomes,self))
                   for outcomes in _itertools.product(*iterover) ]
-        super(StabilizerZPOVM, self).__init__(dim, items)
+        super(StabilizerZPOVM, self).__init__(dim, "stabilizer", items)
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
@@ -820,99 +862,7 @@ class StabilizerZPOVM(POVM):
         return compiled
 
 
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this POVM.
-
-        Returns
-        -------
-        int
-           the number of independent parameters.
-        """
-        return 0
-
-
-    def to_vector(self):
-        """
-        Extract a vector of the underlying gate parameters from this POVM.
-
-        Returns
-        -------
-        numpy array
-            a 1D numpy array with length == num_params().
-        """
-        return _np.array([], 'd') # no parameters
-
-
-    def from_vector(self, v):
-        assert(len(v) == 0) #should be no parameters, and nothing to do
-
-        
-    def transform(self, S):
-        """
-        Update each POVM effect E as S^T * E.
-
-        Note that this is equivalent to the *transpose* of the effect vectors
-        being mapped as `E^T -> E^T * S`.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.            
-        """
-        raise ValueError("Cannot transform a StabilizerZPOVM")
-        #self.dirty = True
-
-
-    def depolarize(self, amount):
-        """
-        Depolarize this POVM by the given `amount`.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. All but the
-            first element of each spam vector (often corresponding to the 
-            identity element) are multiplied by `amount` (if a float) or
-            the corresponding `amount[i]` (if a tuple).
-
-        Returns
-        -------
-        None
-        """
-        raise ValueError("Cannot depolarize a StabilizerZPOVM!")
-        #self.dirty = True
-
-
-    def num_elements(self):
-        """
-        Return the number of total spam vector elements in this povm.
-        This is in general different from the number of *parameters*,
-        which are the number of free variables used to generate all of
-        the vector *elements*.
-
-        Returns
-        -------
-        int
-        """
-        return sum([ E.dim for E in self.values() ])
-          #Note: Use .dim instead of .size b/c TensorProdSPAMVec's
-          # are not DenseSPAMVec-derived
-        
-    def copy(self, parent=None):
-        """
-        Copy this POVM.
-
-        Returns
-        -------
-        StabilizerZPOVM
-            A copy of this POVM
-        """
-        #Note: factorPOVMs will get copied in constructor, so don't need to here
-        return self._copy_gpindices( StabilizerZPOVM(self.nqubits, self.qubit_filter), parent )
-
     def __str__(self):
-        s = "Stabilizer Z POVM on %d qubits and filter %s\n" % (self.nqubits,str(self.qubit_filter))
+        s = "Stabilizer Z POVM on %d qubits and filter %s\n" \
+            % (self.nqubits,str(self.qubit_filter))
         return s
