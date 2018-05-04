@@ -421,6 +421,14 @@ class StabilizerFrame(object):
                     amps[ tuple(zvals) ]  = g_amp*camp
         return amps
 
+    def to_statevec(self):
+        """ Return a dense length-2^nqubits state vector of amplitudes"""
+        ret = _np.empty(2**self.n, complex)
+        amps = self.extract_all_amplitudes()
+        for k,zvals in enumerate(_itertools.product(*([[0,1]]*self.n))):
+            ret[k] = amps.get(zvals, 0.0)
+        return ret
+
     
     def extract_amplitude(self, zvals):
         """ Return the *full* amplitude of a given computational basis state """

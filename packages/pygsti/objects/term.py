@@ -42,23 +42,11 @@ def exp_terms(terms, orders, postterm=None):
 def embed_term(term, stateSpaceLabels, targetLabels, basisdim=None):
     """ TODO docstring - converts a term's gate operators to embedded gate ops"""
     from . import gate as _gate
-    mode="unitary" # not an argument currently, since there's no reason this should be "superop"
     ret = RankOneTerm(term.coeff, None, None, term.typ)
-    if term.typ == "dense":
-        ret.pre_ops = [ _gate.EmbeddedGateMap(stateSpaceLabels, targetLabels, op, basisdim, mode)
-                        for op in term.pre_ops ]
-        ret.post_ops = [ _gate.EmbeddedGateMap(stateSpaceLabels, targetLabels, op, basisdim, mode)
-                        for op in term.post_ops ]
-        
-    elif term.typ == "clifford":
-        ret.pre_ops = [ _gate.EmbeddedCliffordGate(stateSpaceLabels, targetLabels, op)
-                        for op in term.pre_ops ]
-        ret.post_ops = [ _gate.EmbeddedCliffordGate(stateSpaceLabels, targetLabels, op)
-                        for op in term.post_ops ]
-        
-    else:
-        raise ValueError("Unrecognized term type: %s" % term.typ)
-
+    ret.pre_ops = [ _gate.EmbeddedGateMap(stateSpaceLabels, targetLabels, op, basisdim)
+                    for op in term.pre_ops ]
+    ret.post_ops = [ _gate.EmbeddedGateMap(stateSpaceLabels, targetLabels, op, basisdim)
+                     for op in term.post_ops ]
     return ret
 
 
@@ -170,13 +158,13 @@ class RankOneTerm(object):
             raise NotImplementedError("Term collapse_vec for types other than 'dense' are not implemented yet!")
 
         if len(self.pre_ops) >= 1:
-            pre = self.pre_ops[0].toarray() # first op is a SPAMVec
+            pre = self.pre_ops[0].todense() # first op is a SPAMVec
             for B in self.pre_ops[1:]: # and the rest are Gates 
                 pre = B.acton(pre)
         else: pre = None
             
         if len(self.post_ops) >= 1:
-            post = self.post_ops[0].toarray() # first op is a SPAMVec
+            post = self.post_ops[0].todense() # first op is a SPAMVec
             for B in self.post_ops[1:]: # and the rest are Gates 
                 post = B.acton(post)
         else: post = None

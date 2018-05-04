@@ -69,13 +69,17 @@ class GateTermCalc(GateCalc):
         paramvec : ndarray
             The parameter vector of the GateSet.
         """
-        #self.unitary_evolution = False
+        # self.unitary_evolution = False # Unused - idea was to have this flag
+        #    allow unitary-evolution calcs to be term-based, which essentially
+        #    eliminates the "pRight" portion of all the propagation calcs, and
+        #    would require pLeft*pRight => |pLeft|^2
+
         self.max_order = max_order
-        self.unitary_evolution = False
-        self.term_op_clifford_evolution = False
         super(GateTermCalc, self).__init__(
             dim, gates, preps, effects, paramvec)
-
+        if self.evotype not in ("svterm","cterm"):
+            raise ValueError(("Evolution type %s is incompatbile with "
+                              "term-based calculations" % self.evotype))
         
     def copy(self):
         """ Return a shallow copy of this GateMatrixCalc """
@@ -96,7 +100,7 @@ class GateTermCalc(GateCalc):
         return rho,E
 
     def _rhoEs_from_labels(self, rholabel, elabels):
-        """ Returns SPAMVec *objects*, so must call .toarray() later """
+        """ Returns SPAMVec *objects*, so must call .todense() later """
         rho = self.preps[rholabel]
         Es = [ self.effects[elabel] for elabel in elabels ]
         #No support for "custom" spamlabel stuff here
@@ -208,7 +212,7 @@ class GateTermCalc(GateCalc):
         cgate_terms = { glmap[gl]: val for gl,val in gate_terms.items() }
         prps_fast = _fastgatecalc.fast_prs_as_polys(cgatestring, rho_terms, cgate_terms,
                                                     E_terms, E_indices, len(Es), self.max_order,
-                                                    self.term_op_clifford_evolution) # returns list of dicts
+                                                    bool(self.evotype == "cterm")) # returns list of dicts
         #return [ dict_to_fastpoly(p) for p in prps_fast ] 
 
         #HERE DEBUG
@@ -249,12 +253,12 @@ class GateTermCalc(GateCalc):
                         factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
                         
                         if incd == 0: # need to re-evaluate rho vector
-                            rhoVecL = factors[0].pre_ops[0].toarray() # or, at least "to the thing that we can acton(...)"
+                            rhoVecL = factors[0].pre_ops[0].todense() # or, at least "to the thing that we can acton(...)"
                             for f in factors[0].pre_ops[1:]:
                                 rhoVecL = f.acton(rhoVecL)
                             leftSaved[0] = rhoVecL
 
-                            rhoVecR = factors[0].post_ops[0].toarray()
+                            rhoVecR = factors[0].post_ops[0].todense()
                             for f in factors[0].post_ops[1:]:
                                 rhoVecR = f.acton(rhoVecR)
                             rightSaved[0] = rhoVecR
@@ -282,13 +286,13 @@ class GateTermCalc(GateCalc):
 
                         # for the last index, no need to save, and need to construct
                         # and apply effect vector
-                        if self.term_op_clifford_evolution == False:
-                            EVec = factors[-1].post_ops[0].toarray() # TODO USE scratch here
+                        if self.evotype == "svterm":
+                            EVec = factors[-1].post_ops[0].todense() # TODO USE scratch here
                             for f in factors[-1].post_ops[1:]: # evaluate effect term to arrive at final EVec
                                 EVec = f.acton(EVec)
                             pLeft = _np.vdot(EVec,rhoVecL) # complex amplitudes, *not* real probabilities
     
-                            EVec = factors[-1].pre_ops[0].toarray() # TODO USE scratch here
+                            EVec = factors[-1].pre_ops[0].todense() # TODO USE scratch here
                             for f in factors[-1].pre_ops[1:]: # evaluate effect term to arrive at final EVec
                                 EVec = f.acton(EVec)
                             pRight = _np.conjugate(_np.vdot(EVec,rhoVecR)) # complex amplitudes, *not* real probabilities
@@ -319,8 +323,8 @@ class GateTermCalc(GateCalc):
                         factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
                         coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
                         pLeft  = self.unitary_sim_pre(factors, comm, memLimit)
-                        pRight = self.unitary_sim_post(factors, comm, memLimit) \
-                                 if not self.unitary_evolution else 1.0
+                        pRight = self.unitary_sim_post(factors, comm, memLimit)
+                                 # if not self.unitary_evolution else 1.0
                         res = coeff.mult_scalar( (pLeft * pRight) )
                         final_factor_indx = fi[-1]
                         Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
@@ -377,14 +381,14 @@ class GateTermCalc(GateCalc):
     
 
     def unitary_sim_pre(self, complete_factors, comm, memLimit):
-        rhoVec = complete_factors[0].pre_ops[0].toarray() # or, at least "to the thing that we can acton(...)"
+        rhoVec = complete_factors[0].pre_ops[0].todense() # or, at least "to the thing that we can acton(...)"
         for f in complete_factors[0].pre_ops[1:]:
             rhoVec = f.acton(rhoVec)
         for f in _itertools.chain(*[f.pre_ops for f in complete_factors[1:-1]]):
             rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
             
-        if self.term_op_clifford_evolution == False:
-            EVec = complete_factors[-1].post_ops[0].toarray() # TODO USE scratch here
+        if self.evotype == "svterm":
+            EVec = complete_factors[-1].post_ops[0].todense() # TODO USE scratch here
             for f in complete_factors[-1].post_ops[1:]: # evaluate effect term to arrive at final EVec
                 EVec = f.acton(EVec)
             return _np.vdot(EVec,rhoVec) # complex amplitudes, *not* real probabilities
@@ -397,14 +401,14 @@ class GateTermCalc(GateCalc):
 
     
     def unitary_sim_post(self, complete_factors, comm, memLimit):
-        rhoVec = complete_factors[0].post_ops[0].toarray()
+        rhoVec = complete_factors[0].post_ops[0].todense()
         for f in complete_factors[0].post_ops[1:]:
             rhoVec = f.acton(rhoVec)
         for f in _itertools.chain(*[f.post_ops for f in complete_factors[1:-1]]):
             rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
             
-        if self.term_op_clifford_evolution == False:
-            EVec = complete_factors[-1].pre_ops[0].toarray() # TODO USE scratch here
+        if self.evotype == "svterm":
+            EVec = complete_factors[-1].pre_ops[0].todense() # TODO USE scratch here
             for f in complete_factors[-1].pre_ops[1:]: # evaluate effect term to arrive at final EVec
                 EVec = f.acton(EVec)
             return _np.conjugate(_np.vdot(EVec,rhoVec)) # complex amplitudes, *not* real probabilities
@@ -556,8 +560,8 @@ class GateTermCalc(GateCalc):
 #        #comm is currently ignored
 #        #TODO: if evalTree is split, distribute among processors
 #
-#        Escratch = _np.empty(rho.shape[0],typ) # memory for E.toarray() if it wants it
-#        rho = rhoVec.toarray(Escratch) #rho can use same scratch space (enables fastkron)
+#        Escratch = _np.empty(rho.shape[0],typ) # memory for E.todense() if it wants it
+#        rho = rhoVec.todense(Escratch) #rho can use same scratch space (enables fastkron)
 #        for i in evalTree.get_evaluation_order():
 #            iStart,remainder,iCache = evalTree[i]
 #            if iStart is None:  init_state = rho #[:,0]
@@ -568,12 +572,12 @@ class GateTermCalc(GateCalc):
 #
 #            if self.unitary_evolution:
 #                for j,E in enumerate(EVecs):
-#                    ret[i,j] = _np.abs(_np.vdot(E.toarray(Escratch),final_state))**2
+#                    ret[i,j] = _np.abs(_np.vdot(E.todense(Escratch),final_state))**2
 #            else:
 #                for j,E in enumerate(EVecs):
-#                    ret[i,j] = _np.vdot(E.toarray(Escratch),final_state)
-#                    #OLD (slower): _np.dot(_np.conjugate(E.toarray(Escratch)).T,final_state)
-#                    # FUTURE: optionally pre-compute toarray() results for speed if mem is available?
+#                    ret[i,j] = _np.vdot(E.todense(Escratch),final_state)
+#                    #OLD (slower): _np.dot(_np.conjugate(E.todense(Escratch)).T,final_state)
+#                    # FUTURE: optionally pre-compute todense() results for speed if mem is available?
 #                
 #        #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
 #        return ret
@@ -1275,11 +1279,3 @@ class GateTermCalc(GateCalc):
         #if check:
         #    self._check(evalTree, spam_label_rows,
         #                prMxToFill, deriv1MxToFill, mxToFill, clipTo)
-
-
-class CliffordGateTermCalc(GateTermCalc):
-    """ TODO: docstring """
-    def __init__(self, dim, gates, preps, effects, paramvec, max_order):
-        """ TODO: docstring """
-        super(CliffordGateTermCalc,self).__init__(dim, gates, preps, effects, paramvec, max_order)
-        self.term_op_clifford_evolution = True

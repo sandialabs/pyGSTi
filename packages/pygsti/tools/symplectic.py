@@ -613,7 +613,7 @@ def stabilizer_measurement_prob(state_sp_tuple, moutcomes, qubit_filter=None,
         allows a subset of qubits to be measured -- len(moutcomes) == len(qubit_filter)
         if qubit_filter is None, then assume *all* qubits measureed and len(moutcomes) == nqubits
         """
-        state_s, state_p = state_sp_tuple # should be a StabilizerState.toarray() "object"
+        state_s, state_p = state_sp_tuple # should be a StabilizerState.todense() "object"
         
         p = 1
         if qubit_filter is None: # len(moutcomes) == nQubits

@@ -162,7 +162,6 @@ def compose(gate1, gate2, basis, parameterization="auto"):
     return cgate1.compose(cgate2)
 
 
-
 def convert(gate, toType, basis, extra=None):
     """
     Convert gate to a new type of parameterization, potentially creating
@@ -182,8 +181,7 @@ def convert(gate, toType, basis, extra=None):
         (or a custom basis object).
 
     extra : object, optional
-        Additional information for conversion.  An ideal unitary
-        operation in "H+S terms" case.
+        Additional information for conversion.
 
     Returns
     -------
@@ -215,22 +213,37 @@ def convert(gate, toType, basis, extra=None):
             raise ValueError("Cannot convert type %s to LinearlyParameterizedGate"
                              % type(gate))
 
-    elif toType in ("CPTP","H+S","S","GLND"):
-        RANK_TOL = 1e-6        
-        J = _jt.fast_jamiolkowski_iso_std(gate, basis) #Choi mx basis doesn't matter
-        if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
-            unitary_post = gate # when 'gate' is unitary
-        else: unitary_post = None
+    elif toType in ("CPTP","H+S","S","GLND","H+S terms","H+S clifford terms"):
+        
+        RANK_TOL = 1e-6
+
+        unitary_post = None
+
+        if extra is None:
+            #Try to obtain unitary_post by getting the closest unitary
+            if isinstance(gate, LindbladParameterizedGate):
+                unitary_post = gate.unitary_post
+            elif gate._evotype == "densitymx":
+                J = _jt.fast_jamiolkowski_iso_std(gate.todense(), basis) #Choi mx basis doesn't matter
+                if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
+                    unitary_post = gate # when 'gate' is unitary
+            # FUTURE: support other gate._evotypes?
+        else:
+            unitary_post = extra # assume extra info is a unitary "target" gate
 
         nQubits = _np.log2(gate.dim)/2.0
         bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
         
         proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-        ham_basis = proj_basis if toType in ("CPTP","H+S") else None
+        ham_basis = proj_basis if toType in ("CPTP","H+S","H+S terms","H+S clifford terms") else None
         nonham_basis = proj_basis
-        nonham_diagonal_only = bool(toType in ("H+S","S") )
+        nonham_diagonal_only = bool(toType in ("H+S","S","H+S terms","H+S clifford terms") )
         cptp = False if toType == "GLND" else True #only "General LiNDbladian" is non-cptp
         truncate=True
+
+        if toType == "H+S terms":            evotype = "svterm"
+        elif toType == "H+S clifford terms": evotype = "cterm"
+        else:                                evotype = "densitymx"
 
         def beq(b1,b2):
             """ Check if bases have equal names """
@@ -238,40 +251,35 @@ def convert(gate, toType, basis, extra=None):
             b2 = b2.name if isinstance(b2,_Basis) else b2
             return b1 == b2
 
-        if isinstance(gate, LindbladParameterizedGate) and \
-           _np.linalg.norm(gate.unitary_postfactor-unitary_post) < 1e-6 \
+        def normeq(a,b):
+            if a is None and b is None: return True
+            return _mt.safenorm(a-b) < 1e-6 # what about possibility of Clifford gates?
+
+        LindbladGateType = LindbladParameterizedGateMap \
+                           if toType in ("H+S terms","H+S clifford terms") \
+                            else LindbladParameterizedGate
+
+        if isinstance(gate, LindbladParameterizedGateMap) and \
+           normeq(gate.unitary_postfactor,unitary_post) \
            and beq(ham_basis,gate.ham_basis) and beq(nonham_basis,gate.other_basis) \
            and cptp==gate.cptp and nonham_diagonal_only==gate.nonham_diagonal_only \
-           and beq(basis,gate.matrix_basis):
+           and beq(basis,gate.matrix_basis) and gate._evotype == evotype:
             return gate #no conversion necessary
         else:
-            return LindbladParameterizedGate.from_gate_matrix(
+            return LindbladGateType.from_gate_matrix(
                 gate, unitary_post, ham_basis, nonham_basis, cptp,
-                nonham_diagonal_only, truncate, basis, gate._evotype)
+                nonham_diagonal_only, truncate, basis, evotype)
         
-
     elif toType == "static":
         if isinstance(gate, StaticGate):
             return gate #no conversion necessary
         else:
             return StaticGate( gate )
 
-    elif toType in ("H+S terms","H+S clifford terms"):
-        typ = "dense" if toType == "H+S terms" else "clifford"
-        if isinstance(gate, LindbladTermGate) and gate.termtype == typ:
-            return gate #no conversion necessary
-
-        if extra is None:
-            gate_std = _bt.change_basis(gate, basis, 'std')
-            ideal_unitary = _gt.process_mx_to_unitary(gate_std)
-        else:
-            ideal_unitary = extra
-        
-        target_gate = _bt.change_basis( _gt.unitary_to_process_mx(ideal_unitary), 'std', basis)
-        errgen = _gt.error_generator(gate, target_gate, basis, typ='logGTi')
-        return LindbladTermGate.from_error_generator(ideal_unitary, errgen,
-                                                     nonham_diagonal_only=True,
-                                                     termtype=typ)
+    elif toType == "static unitary":
+        gate_std = _bt.change_basis(gate, basis, 'std')
+        unitary = _gt.process_mx_to_unitary(gate_std)
+        return StaticGate(unitary, "statevec")
 
     elif toType == "clifford":
         if isinstance(gate, CliffordGate):
@@ -280,22 +288,6 @@ def convert(gate, toType, basis, extra=None):
         # assume gate represents a unitary op (otherwise
         #  would need to change GateSet dim, which isn't allowed)
         return CliffordGate(gate)
-
-    elif toType == "H+S clifford terms":
-        if isinstance(gate, LindbladTermGate) and gate.termtype == "clifford":
-            return gate #no conversion necessary
-
-        if extra is None:
-            gate_std = _bt.change_basis(gate, basis, 'std')
-            ideal_unitary = _gt.process_mx_to_unitary(gate_std)
-        else:
-            ideal_unitary = extra
-        
-        target_gate = _bt.change_basis( _gt.unitary_to_process_mx(ideal_unitary), 'std', basis)
-        errgen = _gt.error_generator(gate, target_gate, basis, typ='logGTi')
-        return LindbladTermGate.from_error_generator(ideal_unitary, errgen,
-                                                     nonham_diagonal_only=True)
-
 
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
@@ -648,7 +640,9 @@ class Gate(_gatesetmember.GateSetMember):
         -------
         GateMatrix
         """
-        return self.copy().set_value( _np.dot( self.todense(), otherGate.base) )
+        cpy = self.copy()
+        cpy.set_value( _np.dot( self.todense(), otherGate.base) )
+        return cpy
 
     
     def deriv_wrt_params(self, wrtFilter=None):
@@ -1914,7 +1908,7 @@ class LindbladParameterizedGateMap(Gate):
         assert(d*d == d2), "Gate dim must be a perfect square"
 
         if unitaryPostfactor is None:
-            unitaryPostfactor = gateMatrix.shape[0] # just set as dimension (for __init__)
+            unitaryPostfactor = errgen.shape[0] # just set as dimension (for __init__)
         
         #Determine whether we're using sparse bases or not
         sparse = None
@@ -1950,7 +1944,7 @@ class LindbladParameterizedGateMap(Gate):
 
         # coeffs + bases => Ltermdict, basisdict
         Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
-            hamC, otherC, ham_basis, other_basis)
+            hamC, otherC, ham_basis, other_basis, nonham_diagonal_only)
         
         return cls(unitaryPostfactor, Ltermdict, basisdict,
                    cptp, nonham_diagonal_only, truncate,
@@ -1992,8 +1986,9 @@ class LindbladParameterizedGateMap(Gate):
         # Ltermdict, basisdict => bases + parameter values
         # but maybe we want Ltermdict, basisdict => basis + projections/coeffs, then projections/coeffs => paramvals?
         # since the latter is what set_errgen needs
-        hamC, otherC, self.ham_basis, self.other_basis = _gt.lindblad_terms_to_projections(
-            Ltermdict, basisdict, d, nonham_diagonal_only)
+        hamC, otherC, self.ham_basis, self.other_basis, hamBInds, otherBInds = \
+            _gt.lindblad_terms_to_projections(Ltermdict, basisdict, d,
+                                              nonham_diagonal_only)
 
         self.ham_basis_size = len(self.ham_basis)
         self.other_basis_size = len(self.other_basis)
@@ -2069,9 +2064,8 @@ class LindbladParameterizedGateMap(Gate):
             else:
                 self.unitary_postfactor = None
             
-            self.Lterms = self._create_terms(Ltermdict, basisdict,
-                                             hamBasisLabels, otherBasisLabels,
-                                             termtype)
+            self.Lterms = self._init_terms(Ltermdict, basisdict, hamBInds,
+                                           otherBInds, termtype)
             self.terms = {}
             
             # Unused
@@ -2163,7 +2157,9 @@ class LindbladParameterizedGateMap(Gate):
         tt = termtype # shorthand - used to construct RankOneTerm objects below,
                       # as we expect `basisdict` will contain *dense* basis
                       # matrices (maybe change in FUTURE?)
-
+        numHamParams = len(hamBasisLabels)
+        numOtherBasisEls = len(otherBasisLabels)
+                      
         # Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
         # coeffs (w/ *local* variable indices) that get converted to per-order
         # terms later.
@@ -2183,10 +2179,10 @@ class LindbladParameterizedGateMap(Gate):
                 #print("  coeff: ", list(Lterms[-2].coeff.inds) )
 
             elif termType == "S": # Stochastic
-                if nonham_diagonal_only:
+                if self.nonham_diagonal_only:
                     k = numHamParams + otherBasisLabels[termLbl[1]] #index of parameter
                     Lm = Ln = basisdict[termLbl[1]]
-                    pw = 2 if cptp else 1 # power to raise parameter to in order to get coeff
+                    pw = 2 if self.cptp else 1 # power to raise parameter to in order to get coeff
 
                     Lm_dag = Lm.conjugate().T # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
@@ -2201,7 +2197,7 @@ class LindbladParameterizedGateMap(Gate):
 
                     # TODO: create these polys and place below...
                     polyTerms = {}
-                    if cptp:
+                    if self.cptp:
                         # otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
                         # coeff_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
                         #          = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
@@ -2234,7 +2230,7 @@ class LindbladParameterizedGateMap(Gate):
 
                 #TODO: check normalization of these terms vs those used in projections.
 
-        print("DB: params = ", list(enumerate(params)))
+        print("DB: params = ", list(enumerate(self.paramvals)))
         print("DB: Lterms = ")
         for i,lt in enumerate(Lterms):
             print("Term %d:" % i)
@@ -3490,8 +3486,8 @@ class ComposedGate(ComposedGateMap,GateMatrix):
             convention as gate sequences in pyGSTi.  Note that this is
             *opposite* from standard matrix multiplication order.
         """
-        ComposedGateMap.__init__(self, gates_to_compose) #sets self.dim
-        GateMatrix.__init__(self, _np.identity(self.dim)) #type doesn't matter here - just a dummy
+        ComposedGateMap.__init__(self, gates_to_compose) #sets self.dim & self._evotype
+        GateMatrix.__init__(self, _np.identity(self.dim), self._evotype) #type doesn't matter here - just a dummy
         self._construct_matrix()
 
 
@@ -3773,7 +3769,7 @@ class EmbeddedGateMap(Gate):
         # NOTE: there are only several cases of fast adjoint_acton's that
         #       are implemented so far (FUTURE UPDATE?)
         
-        if self._evotype in ("svterms","cterms"):
+        if self._evotype in ("svterm","cterm"):
             return # acton methods should not be called these types
 
         if self._evotype == "stabilizer":
@@ -3827,7 +3823,7 @@ class EmbeddedGateMap(Gate):
     def __getstate__(self):
         # Don't pickle 'instancemethod' or parent (see gatesetmember implementation)
         d = _gatesetmember.GateSetMember.__getstate__(self)
-        del d['acton']
+        if 'acton' in d: del d['acton'] # sometimes acton is not set (e.g. term evotypes)
         return d
     
     def __setstate__(self, d):
@@ -3998,12 +3994,12 @@ class EmbeddedGateMap(Gate):
 
     def _stabilizer_acton(self, state):
         """ Act this gate map on an input state """
-        #OLD - when StabilizerState.toarray() gave s,p tuple
-        #state_s, state_p = state # should be output of StabilizerState.toarray()
+        #OLD - when StabilizerState.todense() gave s,p tuple
+        #state_s, state_p = state # should be output of StabilizerState.todense()
         #return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
         #                                                state_s,state_p)
 
-        #Now StabilizerState.toarray() gives a StabilizerFrame obj
+        #Now StabilizerState.todense() gives a StabilizerFrame obj
         state = state.copy() # needed? expected?    
         state.clifford_update(self.embedded_gate.smatrix, self.embedded_gate.svector,
                               self.embedded_gate.unitary, self.qubit_indices)
@@ -4014,7 +4010,7 @@ class EmbeddedGateMap(Gate):
         """ Act the adjoint of this gate map on an input state """
         # Note: cliffords are unitary, so adjoint == inverse
 
-        #StabilizerState.toarray() gives a StabilizerFrame obj
+        #StabilizerState.todense() gives a StabilizerFrame obj
         invs, invp = _symp.inverse_clifford(self.embedded_gate.smatrix,
                                             self.embedded_gate.svector)
         state = state.copy() # needed? expected?
@@ -4429,12 +4425,12 @@ class EmbeddedGate(EmbeddedGateMap, GateMatrix):
             `stateSpaceLabels`.  If None, then this dimension is assumed.
         """
         EmbeddedGateMap.__init__(self, stateSpaceLabels, targetLabels,
-                                 gate_to_embed, basisdim) # sets self.dim
-        GateMatrix.__init__(self, _np.identity(self.dim)) # type irrelevant - just a dummy
+                                 gate_to_embed, basisdim) # sets self.dim & self._evotype
+        GateMatrix.__init__(self, _np.identity(self.dim), self._evotype) # type irrelevant - just a dummy
         self._construct_matrix()
 
     def _construct_matrix(self):
-        self.base = self.embedded_map.as_matrix()
+        self.base = self.todense()
         assert(self.base.shape == (self.dim,self.dim))
         self.base.flags.writeable = False
 
@@ -4540,12 +4536,12 @@ class CliffordGate(Gate):
 
     def acton(self, state):
         """ Act this gate map on an input state TODO: docstring """
-        #OLD - when StabilizerState.toarray() gave s,p tuple
-        #state_s, state_p = state # should be output of StabilizerState.toarray()
+        #OLD - when StabilizerState.todense() gave s,p tuple
+        #state_s, state_p = state # should be output of StabilizerState.todense()
         #return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
         #                                                state_s,state_p)
 
-        #Now StabilizerState.toarray() gives a StabilizerFrame obj
+        #Now StabilizerState.todense() gives a StabilizerFrame obj
         state = state.copy() # needed? expected?
         state.clifford_update(self.smatrix, self.svector, self.unitary)
         return state
@@ -4555,13 +4551,13 @@ class CliffordGate(Gate):
         """ Act the adjoint of this gate map on an input state """
         # Note: cliffords are unitary, so adjoint == inverse
 
-        #OLD - when StabilizerState.toarray() gave s,p tuple
-        #state_s, state_p = state # should be output of StabilizerState.toarray()
+        #OLD - when StabilizerState.todense() gave s,p tuple
+        #state_s, state_p = state # should be output of StabilizerState.todense()
         #invs, invp = _symp.inverse_clifford(self.smatrix, self.svector)
         #return _symp.apply_clifford_to_stabilizer_state(invs, invp,
         #                                                state_s,state_p)
 
-        #Now StabilizerState.toarray() gives a StabilizerFrame obj
+        #Now StabilizerState.todense() gives a StabilizerFrame obj
         invs, invp = _symp.inverse_clifford(self.smatrix, self.svector)
         state = state.copy() # needed? expected?
         state.clifford_update(invs, invp, self.unitary.conjugate().T)
@@ -4581,9 +4577,9 @@ class CliffordGate(Gate):
 # - Note: if/when terms return a *polynomial* coefficient the poly's 'variables' should
 #    reference the *global* GateSet-level parameters, not just the local gate ones.
 # - create an EmbeddedTermGate class to handle embeddings, which holds a
-#    LindbladTermGate (or other in the future?) and essentially wraps it's
+#    LindbladParameterizedGate (or other in the future?) and essentially wraps it's
 #    terms in EmbeddedGateMap or EmbeddedClifford objects.
 # - similarly create an ComposedTermGate class...
-# - so LindbladTermGate doesn't need to deal w/"kite-structure" bases of terms;
+# - so LindbladParameterizedGate doesn't need to deal w/"kite-structure" bases of terms;
 #    leave this to some higher level constructor which can create compositions
-#    of multiple LindbladTermGates based on kite structure (one per kite block).
+#    of multiple LindbladParameterizedGates based on kite structure (one per kite block).

@@ -22,7 +22,7 @@ def convert(instrument, typ, basis):
             return instrument
         else:
             return TPInstrument(list(instrument.items()))
-    elif typ in ("full","static"):
+    elif typ in ("full","static","static unitary"):
         gate_list = [(k,_gate.convert(g,typ,basis)) for k,g in instrument.items()]
         return Instrument(gate_list)
     else:

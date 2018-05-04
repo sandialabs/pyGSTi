@@ -855,6 +855,7 @@ def process_mx_to_unitary(superop):
 
 def spam_error_generator(spamvec, target_spamvec, mxBasis, typ="logGTi"):
     """
+    TODO: docstring - fix this!
     Construct an error generator from a SPAM vector and it's target.
 
     Computes the value of the error generator given by
@@ -888,10 +889,10 @@ def spam_error_generator(spamvec, target_spamvec, mxBasis, typ="logGTi"):
     # Compute error generator for rho:   rho = exp(E)rho0 => rho = A*rho0 => A = diag(rho/rho0)
     assert(typ == "logGTi"), "Only logGTi type is supported so far"
     
-    d2 = spamvec.dim    
+    d2 = len(spamvec)
     errgen = _np.zeros((d2,d2),'d') # type assumes this is density-mx evolution
     diags = []
-    for a,b in zip(spamvec.toarray(),target_spamvec):
+    for a,b in zip(spamvec,target_spamvec):
         if _np.isclose(b,0.0):
             if _np.isclose(a,b): d = 1
             else: raise ValueError("Cannot take spam_error_generator")
@@ -1671,7 +1672,7 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
     def get_basislbl(bmx):
         """ Retrieves or creates a basis-element "label" (just an integer) from `basisdict` """
         for l,b in basisdict.items():
-            if _mt.safenorm(b-bmx): return l
+            if _mt.safenorm(b-bmx) < 1e-8: return l
         blbl = nextLbl
         basisdict[blbl] = bmx
         nextLbl += 1
@@ -1707,37 +1708,38 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
     #DEBUG:     print(v)
     return Ltermdict, basisdict
 
+
 def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal_only=False):
     """ TODO: docstring - note: basisdim is required for case thwn basisdict is empty """
 
     d = basisdim
-    
+
     #Separately enumerate the (distinct) basis elements used for Hamiltonian
     # and Stochasitic error terms
-    hamBasisLabels = _collections.OrderedDict()  # holds index of each basis element
-    otherBasisLabels = _collections.OrderedDict() # in coefficient/projection arrays
+    hamBasisIndices = _collections.OrderedDict()  # holds index of each basis element
+    otherBasisIndices = _collections.OrderedDict() # in coefficient/projection arrays
     for termLbl,coeff in Ltermdict.items():
         termType = termLbl[0]
         if termType == "H": # Hamiltonian
             assert(len(termLbl) == 2),"Hamiltonian term labels should have form ('H',<basis element label>)"
-            if termLbl[1] not in hamBasisLabels:
-                hamBasisLabels[ termLbl[1] ] = len(hamBasisLabels)
+            if termLbl[1] not in hamBasisIndices:
+                hamBasisIndices[ termLbl[1] ] = len(hamBasisIndices)
                 
         elif termType == "S": # Stochastic                
             if other_diagonal_only:
                 assert(len(termLbl) == 2),"Stochastic term labels should have form ('S',<basis element label>)"
-                if termLbl[1] not in otherBasisLabels:
-                    otherBasisLabels[ termLbl[1] ] = len(otherBasisLabels)
+                if termLbl[1] not in otherBasisIndices:
+                    otherBasisIndices[ termLbl[1] ] = len(otherBasisIndices)
             else:
                 assert(len(termLbl) == 3),"Stochastic term labels should have form ('S',<bel1>, <bel2>)"
-                if termLbl[1] not in otherBasisLabels:
-                    otherBasisLabels[ termLbl[1] ] = len(otherBasisLabels)
-                if termLbl[2] not in otherBasisLabels:
-                    otherBasisLabels[ termLbl[2] ] = len(otherBasisLabels)
+                if termLbl[1] not in otherBasisIndices:
+                    otherBasisIndices[ termLbl[1] ] = len(otherBasisIndices)
+                if termLbl[2] not in otherBasisIndices:
+                    otherBasisIndices[ termLbl[2] ] = len(otherBasisIndices)
 
     #Construct bases
-    ham_basis_mxs = [ basisdict[bl] for bl in hamBasisLabels ] # requires OrderedDict
-    other_basis_mxs = [ basisdict[bl] for bl in otherBasisLabels ] # requires OrderedDict
+    ham_basis_mxs = [ basisdict[bl] for bl in hamBasisIndices ] # requires OrderedDict
+    other_basis_mxs = [ basisdict[bl] for bl in otherBasisIndices ] # requires OrderedDict
 
     if len(ham_basis_mxs) > 0: sparse = _sps.issparse(ham_basis_mxs[0])
     elif len(other_basis_mxs) > 0: sparse = _sps.issparse(other_basis_mxs[0])
@@ -1760,7 +1762,7 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
     # the corresponding basis is empty (as per our convention)
     hamProjs = _np.zeros(bsH-1, 'complex') if bsH > 0 else None
     if bsO > 0:
-        if other_diagonal_only:  # OK if this runs for 'auto' too since then len(otherBasisLabels) == 0
+        if other_diagonal_only:  # OK if this runs for 'auto' too since then len(otherBasisIndices) == 0
             otherProjs = _np.zeros(bsO-1,'complex')
         else:
             otherProjs = _np.zeros((bsO-1,bsO-1),'complex')
@@ -1770,18 +1772,18 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
     for termLbl,coeff in Ltermdict.items():
         termType = termLbl[0]
         if termType == "H": # Hamiltonian
-            k = hamBasisLabels[termLbl[1]] #index of coefficient in array
+            k = hamBasisIndices[termLbl[1]] #index of coefficient in array
             hamProjs[k] = coeff
         elif termType == "S": # Stochastic
             if other_diagonal_only:
-                k = otherBasisLabels[termLbl[1]] #index of coefficient in array
+                k = otherBasisIndices[termLbl[1]] #index of coefficient in array
                 otherProjs[k] = coeff
             else:
-                k = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
-                j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
+                k = otherBasisIndices[termLbl[1]] #index of row in "other" coefficient matrix
+                j = otherBasisIndices[termLbl[2]] #index of col in "other" coefficient matrix
                 otherProjs[k,j] = coeff
                 
-    return hamProjs, otherProjs, ham_basis, other_basis
+    return hamProjs, otherProjs, ham_basis, other_basis, hamBasisIndices, otherBasisIndices
 
 
 def lindblad_projections_to_paramvals(hamProjs, otherProjs, cptp=True,

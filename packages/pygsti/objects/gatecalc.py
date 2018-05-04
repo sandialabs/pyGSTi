@@ -72,6 +72,12 @@ class GateCalc(object):
         self.paramvec = paramvec
         self.Np = len(paramvec)
 
+        #assume consistency in evotypes, so just use the first one we find
+        self.evotype = None
+        if len(gates)>0: self.evotype = next(iter(gates.values()))._evotype
+        if len(preps)>0: self.evotype = next(iter(preps.values()))._evotype
+        if len(effects)>0: self.evotype = next(iter(effects.values()))._evotype
+        
 
     def to_vector(self):
         """
@@ -192,9 +198,9 @@ class GateCalc(object):
             for j in range(dim):  # *generator* mx, not gauge mx itself
                 unitMx = _bt.mut(i,j,dim)
                 for lbl,rhoVec in self.preps.items():
-                    gsDeriv_preps[lbl] = _np.dot(unitMx, rhoVec.toarray())
+                    gsDeriv_preps[lbl] = _np.dot(unitMx, rhoVec.todense())
                 for lbl,EVec in self.effects.items():
-                    gsDeriv_effects[lbl] = -_np.dot(EVec.toarray().T, unitMx).T
+                    gsDeriv_effects[lbl] = -_np.dot(EVec.todense().T, unitMx).T
 
                 for lbl,gate in self.gates.items():
                     #if isinstance(gate,_gate.GateMatrix):

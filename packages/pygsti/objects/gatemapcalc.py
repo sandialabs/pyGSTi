@@ -67,9 +67,11 @@ class GateMapCalc(GateCalc):
         paramvec : ndarray
             The parameter vector of the GateSet.
         """
-        self.evolution_type = SUPEROP 
         super(GateMapCalc, self).__init__(
             dim, gates, preps, effects, paramvec)
+        if self.evotype not in ("statevec","densitymx","stabilizer"):
+            raise ValueError(("Evolution type %s is incompatbile with "
+                              "map-based calculations" % self.evotype))
 
         
     def copy(self):
@@ -83,13 +85,13 @@ class GateMapCalc(GateCalc):
         assert( len(spamTuple) == 2 )
         if isinstance(spamTuple[0],_Label): # OLD _compat.isstr(spamTuple[0])
             rholabel,elabel = spamTuple
-            if self.evolution_type in (SUPEROP,UNITARY):  # FUTURE: use enum (make sure it's supported in Python2.7?)
-                typ = complex if self.evolution_type == UNITARY else 'd'
+            if self.evotype in ("densitymx","statevec"):  # FUTURE: use enum (make sure it's supported in Python2.7?)
+                typ = complex if self.evotype == "statevec" else 'd'
                 scratch = _np.empty(self.preps[rholabel].dim, typ) # allocate local scratch
-                rho = self.preps[rholabel].toarray(scratch).copy() # copy b/c use scratch again (next line)
-                E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray(scratch)))
+                rho = self.preps[rholabel].todense(scratch).copy() # copy b/c use scratch again (next line)
+                E   = _np.conjugate(_np.transpose(self.effects[elabel].todense(scratch)))
             else: # CLIFFORD
-                rho = self.preps[rholabel].toarray()
+                rho = self.preps[rholabel].todense()
                 E = self.effects[elabel] # just return raw effect object
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
@@ -99,7 +101,7 @@ class GateMapCalc(GateCalc):
         return rho,E
 
     def _rhoEs_from_labels(self, rholabel, elabels):
-        """ Returns SPAMVec *objects*, so must call .toarray() later """
+        """ Returns SPAMVec *objects*, so must call .todense() later """
         rho = self.preps[rholabel]
         Es = [ self.effects[elabel] for elabel in elabels ]
         #No support for "custom" spamlabel stuff here
@@ -162,11 +164,11 @@ class GateMapCalc(GateCalc):
         """
         rho,E = self._rhoE_from_spamTuple(spamTuple)
         rho = self.propagate_state(rho, gatestring)
-        if self.evolution_type == UNITARY:
+        if self.evotype == "statevec":
             p = float(abs(_np.dot(E,rho))**2)
-        elif self.evolution_type == SUPEROP:
+        elif self.evotype == "densitymx":
             p = float(_np.dot(E,rho))
-        else: # CLIFFORD
+        else: # evotype == "stabilizer"
             #OLD: p = _symp.stabilizer_measurement_prob(rho, E.outcomes)
             p = rho.measurement_probability(E.outcomes)
 
@@ -307,9 +309,9 @@ class GateMapCalc(GateCalc):
         ret = _np.empty((len(evalTree),len(elabels)),'d')
 
         #Get rho & rhoCache
-        if self.evolution_type in (UNITARY, SUPEROP):
+        if self.evotype in ("statevec", "densitymx"):
             #Scratch type (for holding spam/state vectors)
-            typ = complex if self.evolution_type == UNITARY else 'd'
+            typ = complex if self.evotype == "statevec" else 'd'
             
             if scratch is None:
                 rho_cache = _np.zeros((cacheSize, dim), typ)
@@ -317,11 +319,11 @@ class GateMapCalc(GateCalc):
                 assert(scratch.shape == (cacheSize,dim))
                 rho_cache = scratch #to avoid recomputation
                 
-            Escratch = _np.empty(dim,typ) # memory for E.toarray() if it wants it
-            rho = rhoVec.toarray(Escratch).copy() #rho can use same scratch space (enables fastkron)
+            Escratch = _np.empty(dim,typ) # memory for E.todense() if it wants it
+            rho = rhoVec.todense(Escratch).copy() #rho can use same scratch space (enables fastkron)
                                                   # copy b/c use Escratch again (below)
         else: # CLIFFORD case
-            rho = rhoVec.toarray()
+            rho = rhoVec.todense()
             if scratch is None:
                 rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
             else:
@@ -339,17 +341,17 @@ class GateMapCalc(GateCalc):
             final_state = self.propagate_state(init_state, remainder)
             if iCache is not None: rho_cache[iCache] = final_state # [:,0] #store this state in the cache
 
-            if self.evolution_type == UNITARY:
+            if self.evotype == "statevec":
                 for j,E in enumerate(EVecs):
-                    ret[i,j] = _np.abs(_np.vdot(E.toarray(Escratch),final_state))**2
-            elif self.evolution_type == SUPEROP:
+                    ret[i,j] = _np.abs(_np.vdot(E.todense(Escratch),final_state))**2
+            elif self.evotype == "densitymx":
                 for j,E in enumerate(EVecs):
-                    ret[i,j] = _np.vdot(E.toarray(Escratch),final_state)
-                    #OLD (slower): _np.dot(_np.conjugate(E.toarray(Escratch)).T,final_state)
-                    # FUTURE: optionally pre-compute toarray() results for speed if mem is available?
-            else: # CLIFFORD case
+                    ret[i,j] = _np.vdot(E.todense(Escratch),final_state)
+                    #OLD (slower): _np.dot(_np.conjugate(E.todense(Escratch)).T,final_state)
+                    # FUTURE: optionally pre-compute todense() results for speed if mem is available?
+            else: # evotype == "stabilizer" case
                 #TODO: compute using tree-like fanout, only fanning when necessary. -- at least when there are O(d=2^nQ) effects
-                state_s, state_p = final_state # should be a StabilizerState.toarray() "object"
+                state_s, state_p = final_state # should be a StabilizerState.todense() "object"
                 for j,E in enumerate(EVecs):
                     #OLDER
                     #p = 1; ss = state_s.copy(); sp = state_p.copy()
@@ -380,15 +382,15 @@ class GateMapCalc(GateCalc):
         dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
 
         # Allocate cache space if needed
-        if self.evolution_type in (UNITARY, SUPEROP):
-            typ = complex if self.evolution_type == UNITARY else 'd'
+        if self.evotype in ("statevec", "densitymx"):
+            typ = complex if self.evotype == "statevec" else 'd'
 
             if scratch is None:
                 rho_cache  = _np.zeros((cacheSize, dim), typ)
             else:
                 assert(scratch.shape == (cacheSize,dim))
                 rho_cache  = scratch
-        else: # CLIFFORD case
+        else: # evotype == "stabilizer" case
             if scratch is None:
                 rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
             else:
@@ -442,10 +444,10 @@ class GateMapCalc(GateCalc):
         hpr_cache  = _np.zeros((len(evalTree),len(elabels), nDerivCols1, nDerivCols2),'d')
 
         # Allocate scratch space for compute_dpr_cache
-        if self.evolution_type in (UNITARY, SUPEROP):
-            typ = complex if self.evolution_type == UNITARY else 'd'
+        if self.evotype in ("statevec", "densitymx"):
+            typ = complex if self.evotype == "statevec" else 'd'
             dpr_scratch  = _np.zeros((cacheSize, dim), typ)
-        else: # CLIFFORD case
+        else: # evotype == "stabilizer" case
             dpr_scratch = [None]*cacheSize # so we can store (s,p) tuples in cache
             
         eps = 1e-4 #hardcoded?
@@ -1072,18 +1074,3 @@ class GateMapCalc(GateCalc):
         #if check:
         #    self._check(evalTree, spam_label_rows,
         #                prMxToFill, deriv1MxToFill, mxToFill, clipTo)
-
-
-class UnitaryGateMapCalc(GateMapCalc):
-    """ TODO: docstring """
-    def __init__(self, dim, gates, preps, effects, paramvec):
-        """ TODO: docstring """
-        super(UnitaryGateMapCalc,self).__init__(dim, gates, preps, effects, paramvec)
-        self.evolution_type = UNITARY
-
-class CliffordGateMapCalc(GateMapCalc):
-    """ TODO: docstring """
-    def __init__(self, dim, gates, preps, effects, paramvec):
-        """ TODO: docstring """
-        super(CliffordGateMapCalc,self).__init__(dim, gates, preps, effects, paramvec)
-        self.evolution_type = CLIFFORD

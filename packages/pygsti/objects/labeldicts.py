@@ -130,6 +130,17 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
                              "%s to gateset of dimension %d"
                              % (dim,self.parent.dim))
 
+
+    def _check_evotype(self, evotype):
+        if self.parent is None: return
+        if self.parent._evotype is None:
+            self.parent._evotype = evotype
+        elif self.parent._evotype != evotype:
+            raise ValueError(("Cannot add an object with evolution type"
+                              " '%s' to a gateset with one of '%s'") %
+                             (evotype,self.parent._evotype))
+
+
     def __getitem__(self, key):
         #if self.parent is not None:
         #    #print("DEBUG: cleaning paramvec before getting ", key)
@@ -192,11 +203,12 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             #  the parents to None).
             wrongParent = (value.parent is not None) and (value.parent is not self.parent)
             inappInds = (value.parent is None) and (value.gpindices is not None)
-            
+
             if self.parent is not None and (wrongParent or inappInds):
                 value = value.copy()  # copy value (so we don't mess up other parent) and
                 value.set_gpindices(None, self.parent) # erase gindices don't apply to us
 
+            self._check_evotype(value._evotype)
             super(OrderedMemberDict,self).__setitem__(key, value)
 
         elif key in self: #if a object already exists...
@@ -211,7 +223,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             if obj is None:
                 raise ValueError("Cannot set a value of type: ",type(value))
 
-            
+            self._check_evotype(obj._evotype)
             if self.parent is not None: obj.set_gpindices(None, self.parent)
             super(OrderedMemberDict,self).__setitem__(key, obj)
 

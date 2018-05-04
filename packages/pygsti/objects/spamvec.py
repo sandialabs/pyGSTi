@@ -110,8 +110,7 @@ def convert(spamvec, toType, basis, extra=None):
         (or a custom basis object).
 
     extra : object, optional
-        Additional information for conversion.  An ideal pure state
-        in "H+S terms" case.
+        Additional information for conversion.
 
 
     Returns
@@ -146,26 +145,39 @@ def convert(spamvec, toType, basis, extra=None):
         else:
             return StaticSPAMVec( spamvec )
 
+    elif toType == "static unitary":
+        dmvec = _bt.change_basis(spamvec.todense(),basis,'std')
+        purevec = _gt.dmvec_to_state(dmvec)
+        return StaticSPAMVec(purevec, "statevec")
+
     elif toType in ("H+S terms","H+S clifford terms"):
-        typ = "dense" if toType == "H+S terms" else "clifford prep"
-        if isinstance(spamvec, LindbladTermSPAMVec) and spamvec.termtype == typ:
+        evotype = "svterm" if toType == "H+S terms" else "cterm"
+        if isinstance(spamvec, LindbladParameterizedSPAMVec) \
+           and spamvec._evotype == evotype and spamvec.typ == "prep": # TODO: more checks for equality?!
             return spamvec
 
         if extra is None:
-            dmvec = _bt.change_basis(spamvec.toarray(),basis,'std')
-            ideal_purevec = _gt.dmvec_to_state(dmvec)
+            purevec = spamvec # right now, we don't try to extract a "closest pure vec"
+                              # to spamvec - below will fail if spamvec isn't pure.
         else:
-            ideal_purevec = extra
-
-        # Compute error generator for rho
-        d2 = spamvec.dim ; d = len(ideal_purevec)
-        assert(d**2 == d2) # what about for unitary evolution?? purevec could be size "d2"
-        ideal_purevec = _np.array(ideal_purevec); ideal_purevec.shape = (d,1) # expect this is a dense vector
-        ideal_spamvec = _bt.change_basis(_np.kron( ideal_purevec, _np.conjugate(ideal_purevec.T)).flatten(), 'std', basis)
-        errgen = _gt.spam_error_generator(spamvec, ideal_spamvec, basis)
-        return LindbladTermSPAMVec.from_error_generator(ideal_purevec[:,0], errgen,
-                                                        nonham_diagonal_only=True, termtype=typ)
-            # ham_basis=None, nonham_basis=None #DEBUG - to disable spamvec parameterization
+            purevec = extra # assume extra info is a pure vector
+        
+        return LindbladParameterizedSPAMVec.from_spam_vector(
+            spamvec, purevec, "prep", ham_basis="pp", nonham_basis="pp", cptp=True,
+            nonham_diagonal_only=True, truncate=True, mxBasis="pp",
+            evotype=evotype)
+                                                             
+        #OLD
+        ## Compute error generator for rho
+        #d2 = spamvec.dim ; d = len(ideal_purevec)
+        #assert(d**2 == d2) # what about for unitary evolution?? purevec could be size "d2"
+        #ideal_purevec = _np.array(ideal_purevec); ideal_purevec.shape = (d,1) # expect this is a dense vector
+        #ideal_spamvec = _bt.change_basis(_np.kron( ideal_purevec, _np.conjugate(ideal_purevec.T)).flatten(), 'std', basis)
+        #errgen = _gt.spam_error_generator(spamvec, ideal_spamvec, basis)
+        #return LindbladTermSPAMVec.from_error_generator(ideal_purevec[:,0], errgen,
+        #                                                nonham_diagonal_only=True, termtype=typ)
+        #    # ham_basis=None, nonham_basis=None #DEBUG - to disable spamvec parameterization
+        
 
     elif toType == "clifford":
         if isinstance(spamvec, StabilizerSPAMVec):
@@ -1578,10 +1590,11 @@ class TensorProdSPAMVec(SPAMVec):
         assert(self._evotype in ("svterm","cterm")), \
             "Invalid evolution type: %s" % self._evotype
         
-        from .gate import CliffordGate as _CliffordGate
+        from .gate import EmbeddedGateMap as _EmbeddedGateMap
         terms = []
         fnq = [ int(round(_np.log2(f.dim)))//2 for f in self.factors ] # num of qubits per factor
           # assumes density matrix evolution
+        total_nQ = sum(fnq) # total number of qubits
         
         for p in _lt.partition_into(order, len(self.factors)):
             if self.typ == "prep":
@@ -1612,22 +1625,32 @@ class TensorProdSPAMVec(SPAMVec):
                 term = _term.RankOneTerm(coeff, pre_op, post_op)
 
                 if not collapsible: # then may need to add more ops.  Assume factor ops are clifford gates
-                    def iop(nq): # identity symplectic op for missing factors
-                        return _np.identity(2*nq,int), _np.zeros(2*nq,int)
-                    
-                    mx = max([len(f.pre_ops) for f in factors])
-                    for i in range(1,mx): # for each "layer" of additional terms
-                        ops = [ (f.pre_ops[i].smatrix,f.pre_ops[i].svector)
-                                if (i < len(f.pre_ops)) else iop(nq) for f,nq in zip(factors,fnq)]
-                        term.pre_ops.append( _CliffordGate(
-                            symplecticrep = _symp.symplectic_kronecker(ops)))
+                    # Embed each factors ops according to their target qubit(s) and just daisy chain them
+                    stateSpaceLabels = tuple(range(total_nQ)); curQ=0
+                    for f,nq in zip(factors,fnq):
+                        targetLabels = tuple(range(curQ,curQ+nq)); curQ += nq
+                        term.pre_ops.extend( [ _EmbeddedGateMap(stateSpaceLabels,targetLabels,op)
+                                               for op in f.pre_ops[1:] ] ) # embed and add ops
+                        term.post_ops.extend( [ _EmbeddedGateMap(stateSpaceLabels,targetLabels,op)
+                                               for op in f.post_ops[1:] ] ) # embed and add ops
 
-                    mx = max([len(f.post_ops) for f in factors])
-                    for i in range(1,mx): # for each "layer" of additional terms
-                        ops = [ (f.post_ops[i].smatrix,f.post_ops[i].svector)
-                                if (i < len(f.post_ops)) else iop(nq) for f,nq in zip(factors,fnq)]
-                        term.post_ops.append( _CliffordGate(
-                            symplecticrep = _symp.symplectic_kronecker(ops)))
+                    #OLD - would required kroneckering up large unitaries (since we need to track unitary ops now) -- eek!
+                    #def iop(nq): # identity symplectic op for missing factors
+                    #    return _np.identity(2*nq,int), _np.zeros(2*nq,int)
+                    #
+                    #mx = max([len(f.pre_ops) for f in factors])
+                    #for i in range(1,mx): # for each "layer" of additional terms
+                    #    ops = [ (f.pre_ops[i].smatrix,f.pre_ops[i].svector)
+                    #            if (i < len(f.pre_ops)) else iop(nq) for f,nq in zip(factors,fnq)]
+                    #    term.pre_ops.append( _CliffordGate(
+                    #        symplecticrep = _symp.symplectic_kronecker(ops)))
+                    #
+                    #mx = max([len(f.post_ops) for f in factors])
+                    #for i in range(1,mx): # for each "layer" of additional terms
+                    #    ops = [ (f.post_ops[i].smatrix,f.post_ops[i].svector)
+                    #            if (i < len(f.post_ops)) else iop(nq) for f,nq in zip(factors,fnq)]
+                    #    term.post_ops.append( _CliffordGate(
+                    #        symplecticrep = _symp.symplectic_kronecker(ops)))
                 
                 terms.append(term)
                     
@@ -1907,7 +1930,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
     """ A Lindblad-parameterized SPAMVec (that is also expandable into terms)"""
 
     @classmethod
-    def from_spam_vector(cls, spamVec, pureVec,
+    def from_spam_vector(cls, spamVec, pureVec, typ,
                          ham_basis="pp", nonham_basis="pp", cptp=True,
                          nonham_diagonal_only=False, truncate=True, mxBasis="pp",
                          evotype="densitymx"):
@@ -1919,7 +1942,10 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         # (spamVec, pureVec) pair.
 
         assert(pureVec is not None), "Must supply `pureVec`!" # since there's no good default?
-        d2 = len(pureVec) # expect pureVec to be something dense with well-defined length
+        try: d2 = pureVec.dim
+        except:
+            pureVec = SPAMVec.convert_to_vector(pureVec)
+            d2 = pureVec.size
 
         #Determine whether we're using sparse bases or not
         sparse = None
@@ -1932,15 +1958,23 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             elif not _compat.isstr(nonham_basis) and len(nonham_basis) > 0:
                 sparse = _sps.issparse(nonham_basis[0])
         if sparse is None: sparse = False #the default
-        
-        if spamVec is None:
+
+        if spamVec is None or spamVec is pureVec:
             if sparse: errgen = _sps.csr_matrix((d2,d2), dtype='d')
             else:      errgen = _np.zeros((d2,d2),'d')
         else:
+            #Special case: If we're given a stabilizer vec as `pureVec` (and we
+            # need to compute an error generator, b/c `spamVec` is different),
+            # use the special 'to_dmvec' methods to compare w/ `spamVec.todense()`
+            if isinstance(pureVec, PureStateSPAMVec) and \
+               isinstance(pureVec.pure_state_vec, (StabilizerSPAMVec,StabilizerEffectVec)):
+                pvdense = pureVec.pure_state_vec.to_dmvec(mxBasis)
+            else: pvdense = pureVec.todense()
+            svdense = spamVec.todense()
             errgen = _gt.spam_error_generator(spamVec, pureVec, mxBasis)
             if sparse: errgen = _sps.csr_matrix( errgen )
 
-        return cls.from_error_generator(pureVec, errgen, ham_basis,
+        return cls.from_error_generator(pureVec, errgen, typ, ham_basis,
                                         nonham_basis, cptp, nonham_diagonal_only,
                                         truncate, mxBasis, evotype)
 
@@ -1951,7 +1985,8 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         """
         TODO: docstring (similar to other Lindblad gates above)
         """
-        errmap = LindbladParameterizedGateMap.from_error_generator(
+        from .gate import LindbladParameterizedGateMap as _LPGMap
+        errmap = _LPGMap.from_error_generator(
             None, errgen, ham_basis, nonham_basis, cptp,
             nonham_diagonal_only, truncate, mxBasis, evotype)
 
@@ -1976,9 +2011,9 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             pureVec = SPAMVec.convert_to_vector(pureVec)
             d2 = pureVec.size
 
-        errmap = LindbladParameterizedGateMap(d2, Ltermdict, basisdict,cptp,
-                                              nonham_diagonal_only, truncate,
-                                              mxBasis, evotype)
+        from .gate import LindbladParameterizedGateMap as _LPGMap
+        errmap = _LPGMap(d2, Ltermdict, basisdict,cptp, nonham_diagonal_only,
+                         truncate, mxBasis, evotype)
         return cls(pureVec, errmap, typ)
 
     
@@ -1994,19 +2029,20 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         #Need to extract the pure state SPAMVec from pureVec, which is
         # a density-matrix-holding evec.
         if isinstance(pureVec, DenseSPAMVec):
-            dmvec = _bt.change_basis(pureVec,mxBasis,'std')
+            dmvec = _bt.change_basis(pureVec,errormap.matrix_basis,'std')
             purestate = StaticSPAMVec(_gt.dmvec_to_state(dmvec))
             
         elif isinstance(pureVec, PureStateSPAMVec):
-            purestate = StaticSPAMVec(pureVec.pure_state_vec)
+            purestate = pureVec.pure_state_vec # a SPAMVec
         else:
             raise ValueError("Unable to obtain pure state from density matrix type %s!" % type(pureVec))
 
-        # automatically "up-convert" gate to Stabilizer vecs if needed
+        # automatically "up-convert" to Stabilizer vecs if needed
         if evotype == "cterm":
             if typ =="prep" and not isinstance(purestate, StabilizerSPAMVec):
                 purestate = StabilizerSPAMVec.from_dense_purevec(purestate)
             elif typ == "effect" and not isinstance(purestate, StabilizerEffectVec):
+                # TODO: need a way to extract outcomes from a dense vec...
                 #purestate = StabilizerEffectVec(outcomes, stabilizerZPOVM)
                 raise ValueError(("Must supply a base StabilizerEffectVec when "
                                   " creating an 'clifford effect' LindbladTermSPAMVec"))
@@ -2121,7 +2157,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         -------
         None
         """
-        self.error_map.from_vector()
+        self.error_map.from_vector(v)
         self.dirty = True
 
 
@@ -2172,6 +2208,37 @@ class StabilizerSPAMVec(SPAMVec):
         return self.sframe # a more C-native type in the future?
 
 
+    def to_statevec(self):
+        """
+        Return this SPAM vector as a dense state vector of shape
+        (2^(nqubits), 1)
+
+        Returns
+        -------
+        numpy array
+        """
+        statevec = self.sframe.to_statevec()
+        statevec.shape = (statevec.size,1)
+        return statevec
+
+    def to_dmvec(self, basis):
+        """
+        Return this SPAM vector as a dense density-matrix vector of shape
+        (4^(nqubits), 1)
+
+        Parameters
+        ----------
+        basis : {'std','gm','pp'} or Basis object
+            The basis for the returned density-matrix vector.
+
+        Returns
+        -------
+        numpy array
+        """
+        svec = self.to_statevec()
+        return _bt.change_basis(
+            _np.kron(svec,_np.conjugate(svec.T)).flatten(), 'std', basis)
+
     def __str__(self):
         s = "Stabilizer spam vector for %d qubits with rep:\n" % (self.sframe.nqubits)
         s += str(self.sframe)
@@ -2199,12 +2266,49 @@ class StabilizerEffectVec(SPAMVec):
             The parent POVM object, used to cache 1Q-factor-POVM outcomes
             to avoid repeated calculations.
         """
-        self.outcomes = _np.array(outcomes,int)
+        self._outcomes = _np.array(outcomes,int)
         self.parent_povm = stabilizerPOVM
         nqubits = len(outcomes)
         dim = 2**nqubits # assume "unitary evolution"-type mode?
         SPAMVec.__init__(self, dim, "stabilizer")
 
+    def to_statevec(self):
+        """
+        Return this SPAM vector as a dense state vector of shape
+        (2^(nqubits), 1)
+
+        Returns
+        -------
+        numpy array
+        """
+        v = (_np.array([1,0],'d'), _np.array([0,1],'d')) # (v0,v1) - eigenstates of sigma_z
+        statevec = _functools.reduce(_np.kron, [v[i] for i in self.outcomes])
+        statevec.shape = (statevec.size,1)
+        return statevec
+
+    def to_dmvec(self, basis):
+        """
+        Return this SPAM vector as a dense density-matrix vector of shape
+        (4^(nqubits), 1)
+
+        Parameters
+        ----------
+        basis : {'std','gm','pp'} or Basis object
+            The basis for the returned density-matrix vector.
+
+        Returns
+        -------
+        numpy array
+        """
+        svec = self.to_statevec()
+        return _bt.change_basis(
+            _np.kron(svec,_np.conjugate(svec.T)).flatten(), 'std', basis)
+
+        
+    @property
+    def outcomes(self):
+        """ TODO: docstring """
+        return self._outcomes
 
     def __str__(self):
         nQubits = len(self.outcomes)

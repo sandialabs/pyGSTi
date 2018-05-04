@@ -84,7 +84,7 @@ def convert(povm, toType, basis, extra=None):
        The converted POVM vector, usually a distinct
        object from the object passed as input.
     """
-    if toType in ("full","static"):
+    if toType in ("full","static","static unitary"):
         converted_effects = [ (lbl,_sv.convert(vec, toType, basis))
                               for lbl,vec in povm.items() ]
         return UnconstrainedPOVM(converted_effects)
@@ -98,14 +98,15 @@ def convert(povm, toType, basis, extra=None):
             return TPPOVM(converted_effects)
 
     elif toType in ("H+S terms","H+S clifford terms"):
-        typ = "dense" if toType == "H+S terms" else "clifford effect"
-        if all([(isinstance(Evec, _sv.LindbladTermSPAMVec) and Evec.termtype == typ)
+        evotype = "svterm" if toType == "H+S terms" else "cterm"
+        if all([(isinstance(Evec, _sv.LindbladParameterizedSPAMVec) \
+                 and Evec._evotype == evotype and Evec.typ == "effect")  # TODO: more checks for equality?!
                 for Evec in povm.values()]):
             return povm
         
-        ideal_purevecs = extra if (extra is not None) else None
+        purevecs = extra if (extra is not None) else None
 
-        # Create an Unconstrained POVM with LindbladTermSPAMVecs
+        # Create an Unconstrained POVM with LindbladParameterizedSPAMVecs
         new_effects = []
         d2 = povm.dim
 
@@ -119,26 +120,31 @@ def convert(povm, toType, basis, extra=None):
         
         for (lbl,Evec),zs in zip(povm.items(),zvals):
             #Below block is similar to spamvec convert(...) case
-            if ideal_purevecs is not None:
-                ideal_purevec = _np.array(ideal_purevecs[lbl],complex); d = len(ideal_purevec)
-                ideal_purevec.shape = (d,1)
-                assert(d**2 == d2) # what about for unitary evolution?? purevec could be size "d2"
+            if purevecs is not None:
+                purevec = purevecs[lbl]
             else:
-                dmvec = _bt.change_basis(Evec.toarray(),basis,'std')
-                ideal_purevec = _gt.dmvec_to_state(dmvec); d = len(ideal_purevec)
-            ideal_spamvec = _bt.change_basis( _gt.state_to_dmvec(ideal_purevec), "std", basis)
+                purevec = Evec # right now, we don't try to extract a "closest pure dmvec"
+                               # to Evec - below will fail if Evec isn't pure.
 
             if toType == "H+S clifford terms":
-                testvec = _functools.reduce(_np.kron, [v[i] for i in zs])
-                if not _np.allclose(testvec, ideal_purevec.flat):
+                #Update purevec to a StabilizerEffect if we need to.  This can't be done
+                # sensibly within LindbladParameterizedSPAMVec.from_spam_vector because
+                # the StabilizerEffectVec needs a reference to `stabilizerZPOVM`.
+                bPerfect = bool(purevec is Evec) # so we know whether to "convert" Evec below too
+                stabE = _sv.StabilizerEffectVec(zs, stabilizerZPOVM) # what we expect purevec to be...
+                
+                #Check that the ideal "target" of Evec is what we expect for a Z-stabilizer povm
+                if not _np.allclose(stabE.to_dmvec(basis).flat, purevec.todense().flat):
                     raise ValueError("POVM ideal pure-vec does not match that of a Z-basis POVM")
-                ideal_purevec = _sv.StabilizerEffectVec(zs, stabilizerZPOVM) # for LindbladTermSPAMVec constructor
-            else:
-                ideal_purevec = ideal_purevec[:,0] # for LindbladTermSPAMVec constructor
+                
+                purevec = _sv.PureStateSPAMVec(stabE)
+                if bPerfect:       # then save from_spam_vector from having to 
+                    Evec = purevec # call 'to_dmvec' to construct an errgen
 
-            errgen = _gt.spam_error_generator(Evec, ideal_spamvec, basis)
-            new_effects.append( (lbl, _sv.LindbladTermSPAMVec.from_error_generator(
-                ideal_purevec, errgen, nonham_diagonal_only=True, termtype=typ)) )
+
+            new_effects.append( (lbl, _sv.LindbladParameterizedSPAMVec.from_spam_vector(
+                Evec, purevec, "effect", ham_basis="pp", nonham_basis="pp", cptp=True,
+                nonham_diagonal_only=True, truncate=True, mxBasis="pp", evotype=evotype)) )
             # ham_basis=None, nonham_basis=None #DEBUG - to disable spamvec parameterization
         
         #Always return unconstrained?? TODO FUTURE
@@ -164,7 +170,7 @@ def convert(povm, toType, basis, extra=None):
         v = (_np.array([1,0],'d'), _np.array([0,1],'d')) # (v0,v1) - eigenstates of sigma_z
         for zvals,lbl in zip(_itertools.product(*([(0,1)]*nqubits)), povm.keys()):
             testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
-            if not _np.allclose(testvec, povm[lbl].toarray()):
+            if not _np.allclose(testvec, povm[lbl].todense()):
                 raise ValueError("Cannot convert POVM into a Z-basis stabilizer state POVM")
 
         #If no errors, then return a stabilizer POVM
@@ -336,7 +342,7 @@ class _BasePOVM(POVM):
             if k == self.complement_label: continue
             effect = v if isinstance(v,_sv.SPAMVec) else \
                      _sv.FullyParameterizedSPAMVec(v)
-
+            
             if evotype is None: evotype = effect._evotype
             else: assert(evotype == effect._evotype), \
                 "All effect vectors must have the same evolution type"
@@ -579,7 +585,7 @@ class UnconstrainedPOVM(_BasePOVM):
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         assert(self.complement_label is None)
-        effects = [ (lbl,effect) for lbl,effect in self.items()]
+        effects = [ (lbl,effect.copy()) for lbl,effect in self.items()]
         return (UnconstrainedPOVM, (effects,), {'_gpindices': self._gpindices} )
 
 
@@ -609,7 +615,7 @@ class TPPOVM(_BasePOVM):
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         assert(self.complement_label is not None)
-        effects = [ (lbl,effect) for lbl,effect in self.items()
+        effects = [ (lbl,effect.copy()) for lbl,effect in self.items()
                     if lbl != self.complement_label ]
 
         #add complement effect as a std numpy array - it will get
@@ -664,7 +670,7 @@ class TensorProdPOVM(POVM):
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
-        return (TensorProdPOVM, (self.factorPOVMs,),
+        return (TensorProdPOVM, ([povm.copy() for povm in self.factorPOVMs],),
                 {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
 
 
@@ -753,7 +759,7 @@ class TensorProdPOVM(POVM):
         #TODO: REMOVE
         #I don't think there's any need to do this (re-inits effect vector from factor POVMs)
         #for effect in self.values():
-        #    effect.toarray()
+        #    effect.todense()
 
 
     def depolarize(self, amount):
@@ -791,7 +797,7 @@ class TensorProdPOVM(POVM):
         #s = "Tensor-product POVM with effect labels:\n"
         #s += ", ".join(self.keys()) + "\n"
         #s += " Effects (one per column):\n"
-        #s += _mt.mx_to_string( _np.concatenate( [effect.toarray() for effect in self.values()],
+        #s += _mt.mx_to_string( _np.concatenate( [effect.todense() for effect in self.values()],
         #                                   axis=1), width=6, prec=2)
         return s
 

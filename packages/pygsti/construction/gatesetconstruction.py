@@ -805,7 +805,7 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
             gateTermInFinalBasis = _gate.FullyParameterizedGate(gateMxInFinalBasis)
 
         else: raise ValueError("Invalid gate name: %s" % gateName)
-
+        
         if gateInFinalBasis is None:
             gateInFinalBasis = gateTermInFinalBasis
         else:

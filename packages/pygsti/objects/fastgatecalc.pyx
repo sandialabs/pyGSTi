@@ -259,12 +259,12 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
 
             if incd == 0: # need to re-evaluate rho vector
                 factor = factor_lists[0][b[0]]
-                rhoVecL = factor.pre_ops[0].toarray()
+                rhoVecL = factor.pre_ops[0].todense()
                 for j in range(1,len(factor.pre_ops)):
                     rhoVecL = factor.pre_ops[j].acton(rhoVecL)
                 leftSaved[0] = rhoVecL
 
-                rhoVecR = factor.post_ops[0].toarray()
+                rhoVecR = factor.post_ops[0].todense()
                 for j in range(1,len(factor.post_ops)):
                     rhoVecR = factor.post_ops[j].acton(rhoVecR)
                 rightSaved[0] = rhoVecR
@@ -296,12 +296,12 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
             # and apply effect vector
             if stabilizer_evo == 0:
                 factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
-                EVec = factor.post_ops[0].toarray() # TODO USE scratch here
+                EVec = factor.post_ops[0].todense() # TODO USE scratch here
                 for j in range(1,len(factor.post_ops)): # evaluate effect term to arrive at final EVec
                     EVec = factor.post_ops[j].acton(EVec)
                 pLeft = np.vdot(EVec,rhoVecL) # complex amplitudes, *not* real probabilities
     
-                EVec = factor.pre_ops[0].toarray() # TODO USE scratch here
+                EVec = factor.pre_ops[0].todense() # TODO USE scratch here
                 for j in range(1,len(factor.pre_ops)): # evaluate effect term to arrive at final EVec
                     EVec = factor.pre_ops[j].acton(EVec)
                 pRight = np.conjugate(np.vdot(EVec,rhoVecR)) # complex amplitudes, *not* real probabilities
@@ -378,7 +378,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
 
             #pLeft / "pre" sim
             factor = factor_lists[0][b[0]] # 0th-factor = rhoVec
-            rhoVec = factor.pre_ops[0].toarray()
+            rhoVec = factor.pre_ops[0].todense()
             for j in range(1,len(factor.pre_ops)):
                 rhoVec = factor.pre_ops[j].acton(rhoVec)
             for i in range(1,last_index):
@@ -388,7 +388,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
             factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
 
             if stabilizer_evo == 0:
-                EVec = factor.post_ops[0].toarray() # TODO USE scratch here
+                EVec = factor.post_ops[0].todense() # TODO USE scratch here
                 for j in range(1,len(factor.post_ops)): # evaluate effect term to arrive at final EVec
                     EVec = factor.post_ops[j].acton(EVec)
                 pLeft = np.vdot(EVec,rhoVec) # complex amplitudes, *not* real probabilities
@@ -403,7 +403,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                 
             #pRight / "post" sim
             factor = factor_lists[0][b[0]] # 0th-factor = rhoVec
-            rhoVec = factor.post_ops[0].toarray()
+            rhoVec = factor.post_ops[0].todense()
             for j in range(1,len(factor.post_ops)):
                 rhoVec = factor.post_ops[j].acton(rhoVec)
             for i in range(1,last_index):
@@ -413,7 +413,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
             factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
 
             if stabilizer_evo == 0:
-                EVec = factor.pre_ops[0].toarray() # TODO USE scratch here
+                EVec = factor.pre_ops[0].todense() # TODO USE scratch here
                 for j in range(1,len(factor.pre_ops)): # evaluate effect term to arrive at final EVec
                     EVec = factor.pre_ops[j].acton(EVec)
                 pRight = np.conjugate(np.vdot(EVec,rhoVec)) # complex amplitudes, *not* real probabilities

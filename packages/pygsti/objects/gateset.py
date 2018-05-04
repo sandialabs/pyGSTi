@@ -33,7 +33,6 @@ from . import labeldicts as _ld
 from . import gaugegroup as _gg
 from . import gatematrixcalc as _gatematrixcalc
 from . import gatemapcalc as _gatemapcalc
-from . import gatecliffordcalc as _gatecliffordcalc
 from . import gatetermcalc as _gatetermcalc
 from .label import Label as _Label
 
@@ -57,7 +56,7 @@ class GateSet(object):
 
     def __init__(self, default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 povm_prefix="M", instrument_prefix="I", sim_type="dmmatrix"):
+                 povm_prefix="M", instrument_prefix="I", sim_type="matrix"):
         """
         Initialize a gate set. TODO: docstring -- at least add sim_type!
 
@@ -85,6 +84,7 @@ class GateSet(object):
 
         #Gate dimension of this GateSet (None => unset, to be determined)
         self._dim = None
+        self._evotype = None
 
         #Name and dimension (or list of dims) of the *basis*
         # that the gates and SPAM vectors are expressed in.  This
@@ -117,13 +117,9 @@ class GateSet(object):
         #Calculator selection based on simulation type
         simtype_and_args = sim_type.split(":")
         sim_type = simtype_and_args[0]
-        if sim_type == "dmmatrix":     c = _gatematrixcalc.GateMatrixCalc
-        elif sim_type == "dmmap":      c = _gatemapcalc.GateMapCalc
-        elif sim_type == "svmatrix":   c = _gatematrixcalc.UnitaryGateMatrixCalc
-        elif sim_type == "svmap":      c = _gatemapcalc.UnitaryGateMapCalc
-        elif sim_type == "clifford":   c = _gatemapcalc.CliffordGateMapCalc
-        elif sim_type == "termorder":  c = _gatetermcalc.GateTermCalc
-        elif sim_type == "ctermorder": c = _gatetermcalc.CliffordGateTermCalc
+        if sim_type == "matrix":      c = _gatematrixcalc.GateMatrixCalc
+        elif sim_type == "map":       c = _gatemapcalc.GateMapCalc
+        elif sim_type == "termorder": c = _gatetermcalc.GateTermCalc
         else: raise ValueError("Invalid `sim_type` (%s)" % sim_type)
 
         self._calcClass = c
@@ -138,14 +134,12 @@ class GateSet(object):
         if self.stateSpaceLabels is None:
             raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
 
-        if self._sim_type in ("svmatrix","dmmatrix"):
+        if self._sim_type == "matrix":
             return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
-        elif self._sim_type in ("svmap","dmmap","termorder","ctermorder"):
+        elif self._sim_type in ("map","termorder"):
             return _gate.EmbeddedGateMap(self.stateSpaceLabels, gateTargetLabels, gateVal)
-        elif self._sim_type in ("clifford",):
-            return _gate.EmbeddedCliffordGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
-
-        assert(False), "Invalid GateSet sim type == %s" % str(self._sim_type)
+        else:
+            assert(False), "Invalid GateSet sim type == %s" % str(self._sim_type)
 
 
     @property
@@ -429,46 +423,47 @@ class GateSet(object):
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
 
-    def copy_new_action(self, new_action):
-        """ TODO: docstring """
-        cpy = GateSet()
-        basis = self.basis
-        if new_action == "unitary":
-            for lbl,gate in self.gates.items():
-                gate_std = _bt.change_basis(gate, basis, 'std')
-                unitary = _gt.process_mx_to_unitary(gate_std)
-                cpy.gates[lbl] = _gate.StaticGate(unitary)
-
-            for lbl,inst in self.instruments.items():
-                new_elems = []
-                for ilbl,elem in inst.items():
-                    elem_std = _bt.change_basis(elem, basis, 'std')
-                    unitary = _gt.process_mx_to_unitary(elem_std)
-                    new_elems.append( (ilbl,_gate.StaticGate(unitary)) )
-                cpy.instruments[lbl] = _instrument.Instrument(new_elems)
-                
-            for lbl,vec in self.preps.items():
-                dmvec = _bt.change_basis(vec.toarray(),basis,'std')
-                purevec = _gt.dmvec_to_state(dmvec)
-                cpy.preps[lbl] = _sv.StaticSPAMVec(purevec)
-    
-            for lbl,povm in self.povms.items():
-                new_evecs = []
-                for elbl,evec in povm.items():
-                    dmvec = _bt.change_basis(evec.toarray(),basis,'std')
-                    purevec = _gt.dmvec_to_state(dmvec)
-                    new_evecs.append( (elbl,_sv.StaticSPAMVec(purevec)) )
-                cpy.povms[lbl] = _povm.UnconstrainedPOVM(new_evecs)
-
-            cpy.set_simtype('svmap')
-            cpy.default_gauge_group = _gg.TrivialGaugeGroup(cpy.dim)
-            cpy._rebuild_paramvec()
-            cpy.stateSpaceLabels = self.stateSpaceLabels # TODO: copy()?
-            cpy.basis = None # _Basis('std', cpy.dim)?
-        else:
-            raise ValueError("Invalid `new_action`: %s" % new_action)
-
-        return cpy
+#OLD TODO REMOVE
+#    def copy_new_action(self, new_action):
+#        """ TODO: docstring """
+#        cpy = GateSet()
+#        basis = self.basis
+#        if new_action == "unitary":
+#            for lbl,gate in self.gates.items():
+#                gate_std = _bt.change_basis(gate, basis, 'std')
+#                unitary = _gt.process_mx_to_unitary(gate_std)
+#                cpy.gates[lbl] = _gate.StaticGate(unitary)
+#
+#            for lbl,inst in self.instruments.items():
+#                new_elems = []
+#                for ilbl,elem in inst.items():
+#                    elem_std = _bt.change_basis(elem, basis, 'std')
+#                    unitary = _gt.process_mx_to_unitary(elem_std)
+#                    new_elems.append( (ilbl,_gate.StaticGate(unitary)) )
+#                cpy.instruments[lbl] = _instrument.Instrument(new_elems)
+#                
+#            for lbl,vec in self.preps.items():
+#                dmvec = _bt.change_basis(vec.todense(),basis,'std')
+#                purevec = _gt.dmvec_to_state(dmvec)
+#                cpy.preps[lbl] = _sv.StaticSPAMVec(purevec)
+#    
+#            for lbl,povm in self.povms.items():
+#                new_evecs = []
+#                for elbl,evec in povm.items():
+#                    dmvec = _bt.change_basis(evec.todense(),basis,'std')
+#                    purevec = _gt.dmvec_to_state(dmvec)
+#                    new_evecs.append( (elbl,_sv.StaticSPAMVec(purevec)) )
+#                cpy.povms[lbl] = _povm.UnconstrainedPOVM(new_evecs)
+#
+#            cpy.set_simtype('svmap')
+#            cpy.default_gauge_group = _gg.TrivialGaugeGroup(cpy.dim)
+#            cpy._rebuild_paramvec()
+#            cpy.stateSpaceLabels = self.stateSpaceLabels # TODO: copy()?
+#            cpy.basis = None # _Basis('std', cpy.dim)?
+#        else:
+#            raise ValueError("Invalid `new_action`: %s" % new_action)
+#
+#        return cpy
             
             
         
@@ -491,11 +486,42 @@ class GateSet(object):
         """
         typ = parameterization_type
         assert(parameterization_type in ('full','TP','CPTP','H+S','S','static',
-                                         'H+S terms','clifford','H+S clifford terms'))
+                                         'H+S terms','clifford','H+S clifford terms',
+                                         'static unitary'))
 
         povmtyp = rtyp = ityp = "TP" if typ in ("CPTP","H+S","S") else typ
         #rtyp = "CPTP" if typ in ("H+S","S") else typ #TESTING, but CPTP spamvec still unreliable
 
+        #Update dim and evolution type so that setting converted elements works correctly
+        orig_dim = self.dim
+        orig_evotype = self._evotype
+        if typ in ('full','TP','CPTP','H+S','S','static'):
+            self._evotype = "densitymx"
+            if self._sim_type not in ("matrix","map"):
+                self.set_simtype("matrix" if self.dim <= 16 else "map")
+                
+        elif typ == 'clifford':
+            self._evotype = "stabilizer"
+            self.set_simtype("map")
+            
+        elif typ == 'H+S terms':
+            self._evotype = "svterm"
+            if self._sim_type != "termorder":
+                self.set_simtype("termorder:1")
+            
+        elif typ == 'H+S clifford terms':
+            self._evotype = "cterm"
+            if self._sim_type != "termorder":
+                self.set_simtype("termorder:1")
+            
+        elif typ == 'static unitary': 
+            assert(self._evotype == "densitymx"), \
+                "Can only convert to 'static unitary' from a density-matrix evolution type."
+            self._evotype = "statevec"
+            self._dim = int(round(_np.sqrt(self.dim))) # reduce dimension d -> sqrt(d)
+            if self._sim_type not in ("matrix","map"):
+                self.set_simtype("matrix" if self.dim <= 4 else "map")
+            
         basis = self.basis
         if extra is None: extra = {}
 
@@ -2861,6 +2887,7 @@ class GateSet(object):
         if GateSet._pcheck: self._check_paramvec()
         
         newGateset = GateSet()
+        newGateset._evotype = self._evotype
         newGateset.preps = self.preps.copy(newGateset)
         newGateset.povms = self.povms.copy(newGateset)
         #newGateset.effects = self.effects.copy(newGateset)
