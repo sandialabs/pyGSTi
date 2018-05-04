@@ -422,49 +422,6 @@ class GateSet(object):
             return self.instruments[label]
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
-
-#OLD TODO REMOVE
-#    def copy_new_action(self, new_action):
-#        """ TODO: docstring """
-#        cpy = GateSet()
-#        basis = self.basis
-#        if new_action == "unitary":
-#            for lbl,gate in self.gates.items():
-#                gate_std = _bt.change_basis(gate, basis, 'std')
-#                unitary = _gt.process_mx_to_unitary(gate_std)
-#                cpy.gates[lbl] = _gate.StaticGate(unitary)
-#
-#            for lbl,inst in self.instruments.items():
-#                new_elems = []
-#                for ilbl,elem in inst.items():
-#                    elem_std = _bt.change_basis(elem, basis, 'std')
-#                    unitary = _gt.process_mx_to_unitary(elem_std)
-#                    new_elems.append( (ilbl,_gate.StaticGate(unitary)) )
-#                cpy.instruments[lbl] = _instrument.Instrument(new_elems)
-#                
-#            for lbl,vec in self.preps.items():
-#                dmvec = _bt.change_basis(vec.todense(),basis,'std')
-#                purevec = _gt.dmvec_to_state(dmvec)
-#                cpy.preps[lbl] = _sv.StaticSPAMVec(purevec)
-#    
-#            for lbl,povm in self.povms.items():
-#                new_evecs = []
-#                for elbl,evec in povm.items():
-#                    dmvec = _bt.change_basis(evec.todense(),basis,'std')
-#                    purevec = _gt.dmvec_to_state(dmvec)
-#                    new_evecs.append( (elbl,_sv.StaticSPAMVec(purevec)) )
-#                cpy.povms[lbl] = _povm.UnconstrainedPOVM(new_evecs)
-#
-#            cpy.set_simtype('svmap')
-#            cpy.default_gauge_group = _gg.TrivialGaugeGroup(cpy.dim)
-#            cpy._rebuild_paramvec()
-#            cpy.stateSpaceLabels = self.stateSpaceLabels # TODO: copy()?
-#            cpy.basis = None # _Basis('std', cpy.dim)?
-#        else:
-#            raise ValueError("Invalid `new_action`: %s" % new_action)
-#
-#        return cpy
-            
             
         
     def set_all_parameterizations(self, parameterization_type, extra=None):

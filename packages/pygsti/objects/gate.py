@@ -2059,7 +2059,6 @@ class LindbladParameterizedGateMap(Gate):
 
                 # automatically "up-convert" gate to CliffordGate if needed
                 if termtype == "clifford":
-                    # OLD and not isinstance(baseunitary, (CliffordGate, EmbeddedCliffordGate)):
                     self.unitary_postfactor = CliffordGate(self.unitary_postfactor) 
             else:
                 self.unitary_postfactor = None
@@ -2166,17 +2165,11 @@ class LindbladParameterizedGateMap(Gate):
         IDENT = None # sentinel for the do-nothing identity op
         Lterms = []
         for termLbl in Ltermdict:
-            print("DB: processing ",termLbl)
             termType = termLbl[0]
             if termType == "H": # Hamiltonian
                 k = hamBasisLabels[termLbl[1]] #index of parameter
                 Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT, tt) )
                 Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T, tt) )
-                print("DB: H term w/index %d= " % k, " len=",len(Lterms))
-                #print("  coeff: ", list(Lterms[-1].coeff.keys()) )
-                #print("  coeff: ", list(Lterms[-2].coeff.keys()) )
-                #print("  coeff: ", list(Lterms[-1].coeff.inds) )
-                #print("  coeff: ", list(Lterms[-2].coeff.inds) )
 
             elif termType == "S": # Stochastic
                 if self.nonham_diagonal_only:
@@ -2193,7 +2186,6 @@ class LindbladParameterizedGateMap(Gate):
                     i = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
                     j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
                     Lm, Ln = basisdict[termLbl[1]],basisdict[termLbl[2]]
-                    print("DB: S indices = ",i,j)
 
                     # TODO: create these polys and place below...
                     polyTerms = {}
@@ -2222,21 +2214,17 @@ class LindbladParameterizedGateMap(Gate):
                     Lterms.append( _term.RankOneTerm(1.0*base_poly, Ln, Lm, tt) )
                     Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm), tt) ) # adjoint(_np.dot(Lm_dag,Ln))
                     Lterms.append( _term.RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT, tt ) )
-                    print("DB: S term w/index terms= ", polyTerms, " len=",len(Lterms))
-                    print("  coeff: ", list(Lterms[-1].coeff.keys()) )
-                    print("  coeff: ", list(Lterms[-2].coeff.keys()) )
-                    print("  coeff: ", list(Lterms[-3].coeff.keys()) )
-
 
                 #TODO: check normalization of these terms vs those used in projections.
 
-        print("DB: params = ", list(enumerate(self.paramvals)))
-        print("DB: Lterms = ")
-        for i,lt in enumerate(Lterms):
-            print("Term %d:" % i)
-            print("  coeff: ", str(lt.coeff)) # list(lt.coeff.keys()) )
-            print("  pre:\n", lt.pre_ops[0] if len(lt.pre_ops) else "IDENT")
-            print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
+        #DEBUG
+        #print("DB: params = ", list(enumerate(self.paramvals)))
+        #print("DB: Lterms = ")
+        #for i,lt in enumerate(Lterms):
+        #    print("Term %d:" % i)
+        #    print("  coeff: ", str(lt.coeff)) # list(lt.coeff.keys()) )
+        #    print("  pre:\n", lt.pre_ops[0] if len(lt.pre_ops) else "IDENT")
+        #    print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
 
         return Lterms
 
@@ -3994,13 +3982,7 @@ class EmbeddedGateMap(Gate):
 
     def _stabilizer_acton(self, state):
         """ Act this gate map on an input state """
-        #OLD - when StabilizerState.todense() gave s,p tuple
-        #state_s, state_p = state # should be output of StabilizerState.todense()
-        #return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
-        #                                                state_s,state_p)
-
-        #Now StabilizerState.todense() gives a StabilizerFrame obj
-        state = state.copy() # needed? expected?    
+        state = state.copy() # needed?
         state.clifford_update(self.embedded_gate.smatrix, self.embedded_gate.svector,
                               self.embedded_gate.unitary, self.qubit_indices)
         return state
@@ -4009,8 +3991,7 @@ class EmbeddedGateMap(Gate):
     def _stabilizer_adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         # Note: cliffords are unitary, so adjoint == inverse
-
-        #StabilizerState.todense() gives a StabilizerFrame obj
+        # Note: StabilizerState.todense() gives a StabilizerFrame obj
         invs, invp = _symp.inverse_clifford(self.embedded_gate.smatrix,
                                             self.embedded_gate.svector)
         state = state.copy() # needed? expected?
@@ -4536,13 +4517,7 @@ class CliffordGate(Gate):
 
     def acton(self, state):
         """ Act this gate map on an input state TODO: docstring """
-        #OLD - when StabilizerState.todense() gave s,p tuple
-        #state_s, state_p = state # should be output of StabilizerState.todense()
-        #return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
-        #                                                state_s,state_p)
-
-        #Now StabilizerState.todense() gives a StabilizerFrame obj
-        state = state.copy() # needed? expected?
+        state = state.copy() # needed?
         state.clifford_update(self.smatrix, self.svector, self.unitary)
         return state
 
@@ -4550,14 +4525,6 @@ class CliffordGate(Gate):
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         # Note: cliffords are unitary, so adjoint == inverse
-
-        #OLD - when StabilizerState.todense() gave s,p tuple
-        #state_s, state_p = state # should be output of StabilizerState.todense()
-        #invs, invp = _symp.inverse_clifford(self.smatrix, self.svector)
-        #return _symp.apply_clifford_to_stabilizer_state(invs, invp,
-        #                                                state_s,state_p)
-
-        #Now StabilizerState.todense() gives a StabilizerFrame obj
         invs, invp = _symp.inverse_clifford(self.smatrix, self.svector)
         state = state.copy() # needed? expected?
         state.clifford_update(invs, invp, self.unitary.conjugate().T)

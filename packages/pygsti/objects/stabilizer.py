@@ -212,7 +212,6 @@ class StabilizerFrame(object):
             nk = len(qs_to_sample)
             anchor_indx = sum([ anchor[qs_to_sample[k]]*(2**(nk-1-k)) for k in range(nk)])
             amp_samples[ anchor_indx ] = anchor_amp
-            #print("Anchor index = ",anchor_indx, " for anchor=",anchor, " amp_samples = ",amp_samples)
 
 
         #STAGE 2b - for sampling a set
@@ -271,8 +270,6 @@ class StabilizerFrame(object):
             return result, new_amp
         
         def get_target_ampl(tgt):
-            #DEBUG print("GETTING TARGET!!! ", tgt, " from anchor = ",anchor)
-            #DEBUG print(str(self))
             #requires just a single pass through X-block
             zvals = anchor.copy();  amp = anchor_amp #start with anchor state
             lead = -1
@@ -287,13 +284,11 @@ class StabilizerFrame(object):
                         assert(j > lead) # lead should be strictly increasing as we iterate due to rref structure
                         lead = j; break
                 else: assert(False),"Should always break loop!"
-                #print("  Current gen = ",i," phase = ",gen_p, " lead=",lead) # DEBUG
 
                 #Check whether we should apply this generator to zvals
                 if zvals[lead] != tgt[lead]:
                     # then applying this generator is productive - do it!
                     zvals, amp = apply_xgen(i, gen_p, zvals, amp)
-                    #print(" --> Applying -> result=",zvals, " w/amp=",amp) # DEBUG
                     
                     #Check if we've found target
                     if _np.array_equal(zvals, tgt): return amp
@@ -303,7 +298,6 @@ class StabilizerFrame(object):
             return get_target_ampl(target)
         elif qs_to_sample is not None:
             target = anchor.copy()
-            # print("AMP_SAMPLES = ",amp_samples) # DEBUG
             for k,tup in enumerate(_itertools.product(*([[0,1]]*len(qs_to_sample)))):
                 if _np.isnan(amp_samples[k]):
                     target[list(qs_to_sample)] = tup
@@ -444,37 +438,27 @@ class StabilizerFrame(object):
 
         debug = False
 
-        #print("APPLY CLIFFORD TO FRAME")
-        #self._apply_clifford_to_frame(smatrix, svector, qubit_filter)
         qubits = qubit_filter if (qubit_filter is not None) else list(range(self.n)) # being acted on
         nQ = len(qubits) #number of qubits being acted on (<= n in general)
         sampled_amplitudes = []
-
-        #print("APPLYING smx = "); print(smatrix); print(""); #DEBUG
 
         #Step1: Update global amplitudes - Part A
         if debug: print("UPDATE GLOBAL AMPS: zstart=",self.zblock_start) # DEBUG
         for ip in range(len(self.ps)):
             if debug: print("SAMPLE AMPLITUDES")
             base_state, ampls = self._sample_amplitude(ip,qubits)
-            #OLD (zvals1, camp1) = bs[0]
-            #OLD assert(abs(camp1) > 1e-6)
             if debug: print("GOT ",base_state,ampls)
             sampled_amplitudes.append( (base_state,ampls) )
 
         #Step2: Apply clifford to stabilizer reps in self.s, self.ps
         if debug: print("APPLY CLIFFORD TO FRAME")
-        #print("PRE-APPLY:"); print(str(self)); print("") # DEBUG
         self._apply_clifford_to_frame(smatrix, svector, qubit_filter)
-        #print("PRE-REF:"); print(str(self)); print("") # DEBUG
         self._rref()
 
         #Step3: Update global amplitudes - Part B
         for ip,(base_state,ampls) in enumerate(sampled_amplitudes):
             
             if debug: print("APPLYING U to instate =", ampls)
-            #OLD: prodstate = _functools.reduce(_np.kron, [vs[zvals1[i]] for i in qubits])
-            #OLD: instate = camp1 * prodstate
             instate = ampls
             outstate = _np.dot(Umx,instate) # state-vector propagation
             if debug: print("OUTSTATE = ",outstate)
@@ -501,7 +485,6 @@ class StabilizerFrame(object):
             else:
                 raise ValueError("Outstate was completely zero!")
                 # (this shouldn't happen if Umx is unitary!)
-            #print("POST UPDATE frame is: \n",str(self)); print("") #DEBUG
                     
 
     def measurement_probability(self, zvals, qubit_filter=None, return_state=False, check=True):
@@ -528,11 +511,6 @@ class StabilizerFrame(object):
         if check:
             p_chk = sum( [ abs(a)**2 * _symp.stabilizer_measurement_prob((self.s,p), zvals)
                            for a,p in zip(self.a,self.ps)] )
-            if not _np.isclose(p,p_chk):
-                print("FAILURE on measuring %s for state:" % str(zvals))
-                print(str(self)) # HERE
-                print("amp => p=",p)
-                print("anticom => p=",p_chk)
             assert(_np.isclose(p,p_chk)), \
                 "Stabilizer-frame meas. probability check failed: %g != %g" % (p,p_chk)
         

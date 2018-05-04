@@ -1610,7 +1610,7 @@ class GateMatrixCalc(GateCalc):
 
     def _rhoE_from_spamTuple(self, spamTuple):
         assert( len(spamTuple) == 2 )
-        if isinstance(spamTuple[0],_Label): # OLD _compat.isstr(spamTuple[0])
+        if isinstance(spamTuple[0],_Label):
             rholabel,elabel = spamTuple
             rho = self.preps[rholabel].todense()[:,None] # This calculator uses the convention that rho has shape (N,1)
             E   = _np.conjugate(_np.transpose(self.effects[elabel].todense()[:,None])) # convention: E has shape (1,N)

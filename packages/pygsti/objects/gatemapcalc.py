@@ -83,7 +83,7 @@ class GateMapCalc(GateCalc):
     #Same as GateMatrixCalc, but not general enough to be in base class
     def _rhoE_from_spamTuple(self, spamTuple):
         assert( len(spamTuple) == 2 )
-        if isinstance(spamTuple[0],_Label): # OLD _compat.isstr(spamTuple[0])
+        if isinstance(spamTuple[0],_Label): 
             rholabel,elabel = spamTuple
             if self.evotype in ("densitymx","statevec"):  # FUTURE: use enum (make sure it's supported in Python2.7?)
                 typ = complex if self.evotype == "statevec" else 'd'
@@ -169,7 +169,6 @@ class GateMapCalc(GateCalc):
         elif self.evotype == "densitymx":
             p = float(_np.dot(E,rho))
         else: # evotype == "stabilizer"
-            #OLD: p = _symp.stabilizer_measurement_prob(rho, E.outcomes)
             p = rho.measurement_probability(E.outcomes)
 
         if _np.isnan(p):
@@ -353,20 +352,8 @@ class GateMapCalc(GateCalc):
                 #TODO: compute using tree-like fanout, only fanning when necessary. -- at least when there are O(d=2^nQ) effects
                 state_s, state_p = final_state # should be a StabilizerState.todense() "object"
                 for j,E in enumerate(EVecs):
-                    #OLDER
-                    #p = 1; ss = state_s.copy(); sp = state_p.copy()
-                    #for k,outcm in enumerate(E.outcomes): # len(E.outcomes) == nQubits
-                    #    p0,p1,ss0,ss1,sp0,sp1 = _symp.pauli_z_measurement(ss, sp, k) # cache this (for other evecs)
-                    #    if outcm == 0:
-                    #        p *= p0; ss, sp = ss0, sp0
-                    #    else:
-                    #        p *= p1; ss, sp = ss1, sp1
-                    #OLD p = _symp.stabilizer_measurement_prob((state_s,state_p), E.outcomes)
-                    #    ret[i,j] = p
                     ret[i,j] = rho.measurement_probability(E.outcomes)
 
-
-                
         #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
         return ret
 

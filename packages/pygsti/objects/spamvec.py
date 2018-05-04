@@ -167,17 +167,6 @@ def convert(spamvec, toType, basis, extra=None):
             nonham_diagonal_only=True, truncate=True, mxBasis="pp",
             evotype=evotype)
                                                              
-        #OLD
-        ## Compute error generator for rho
-        #d2 = spamvec.dim ; d = len(ideal_purevec)
-        #assert(d**2 == d2) # what about for unitary evolution?? purevec could be size "d2"
-        #ideal_purevec = _np.array(ideal_purevec); ideal_purevec.shape = (d,1) # expect this is a dense vector
-        #ideal_spamvec = _bt.change_basis(_np.kron( ideal_purevec, _np.conjugate(ideal_purevec.T)).flatten(), 'std', basis)
-        #errgen = _gt.spam_error_generator(spamvec, ideal_spamvec, basis)
-        #return LindbladTermSPAMVec.from_error_generator(ideal_purevec[:,0], errgen,
-        #                                                nonham_diagonal_only=True, termtype=typ)
-        #    # ham_basis=None, nonham_basis=None #DEBUG - to disable spamvec parameterization
-        
 
     elif toType == "clifford":
         if isinstance(spamvec, StabilizerSPAMVec):
@@ -1633,24 +1622,6 @@ class TensorProdSPAMVec(SPAMVec):
                                                for op in f.pre_ops[1:] ] ) # embed and add ops
                         term.post_ops.extend( [ _EmbeddedGateMap(stateSpaceLabels,targetLabels,op)
                                                for op in f.post_ops[1:] ] ) # embed and add ops
-
-                    #OLD - would required kroneckering up large unitaries (since we need to track unitary ops now) -- eek!
-                    #def iop(nq): # identity symplectic op for missing factors
-                    #    return _np.identity(2*nq,int), _np.zeros(2*nq,int)
-                    #
-                    #mx = max([len(f.pre_ops) for f in factors])
-                    #for i in range(1,mx): # for each "layer" of additional terms
-                    #    ops = [ (f.pre_ops[i].smatrix,f.pre_ops[i].svector)
-                    #            if (i < len(f.pre_ops)) else iop(nq) for f,nq in zip(factors,fnq)]
-                    #    term.pre_ops.append( _CliffordGate(
-                    #        symplecticrep = _symp.symplectic_kronecker(ops)))
-                    #
-                    #mx = max([len(f.post_ops) for f in factors])
-                    #for i in range(1,mx): # for each "layer" of additional terms
-                    #    ops = [ (f.post_ops[i].smatrix,f.post_ops[i].svector)
-                    #            if (i < len(f.post_ops)) else iop(nq) for f,nq in zip(factors,fnq)]
-                    #    term.post_ops.append( _CliffordGate(
-                    #        symplecticrep = _symp.symplectic_kronecker(ops)))
                 
                 terms.append(term)
                     
@@ -2193,7 +2164,6 @@ class StabilizerSPAMVec(SPAMVec):
             to indicate the 0/1 value of each qubit in the Z basis.
             If None, the all-zeros state is created.
         """
-        #OLD: self.smatrix, self.phasevec = _symp.prep_stabilizer_state(nqubits, zvals)
         self.sframe = _stabilizer.StabilizerFrame.from_zvals(nqubits,zvals)
         dim = 2**nqubits # assume "unitary evolution"-type mode?
         SPAMVec.__init__(self, dim, "stabilizer")
@@ -2204,7 +2174,6 @@ class StabilizerSPAMVec(SPAMVec):
         Return this SPAM vector as a (dense) numpy array.  The memory
         in `scratch` maybe used when it is not-None.
         """
-        #OLD: return (self.smatrix,self.phasevec)  # need to concat?
         return self.sframe # a more C-native type in the future?
 
 

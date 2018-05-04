@@ -221,10 +221,6 @@ class GateTermCalc(GateCalc):
         db_factor_cnt = 0
         #print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
 
-        #OLD
-        #pLeft = _np.empty(len(Es),complex)  #preallocate space to avoid
-        #pRight = _np.empty(len(Es),complex) #lots of allocs in inner loop
-
         fastmode = False #HERE
         
         prps = [None]*len(Es)  # an array in "bulk" mode? or Polynomial in "symbolic" mode?
@@ -396,7 +392,6 @@ class GateTermCalc(GateCalc):
             for f in reversed(complete_factors[-1].post_ops[1:]):
                 rhoVec = f.adjoint_acton(rhoVec)
             EVec = complete_factors[-1].post_ops[0]
-            #OLD return _np.sqrt( _symp.stabilizer_measurement_prob(rhoVec, EVec.outcomes) )
             return rhoVec.extract_amplitude(EVec.outcomes)
 
     
@@ -418,7 +413,6 @@ class GateTermCalc(GateCalc):
             for f in reversed(complete_factors[-1].pre_ops[1:]):
                 rhoVec = f.adjoint_acton(rhoVec)
             EVec = complete_factors[-1].pre_ops[0]
-            #OLD return _np.sqrt( _symp.stabilizer_measurement_prob(rhoVec, EVec.outcomes) )
             return _np.conjugate(rhoVec.extract_amplitude(EVec.outcomes)) # conjugate for same reason as above
         
 
@@ -540,143 +534,6 @@ class GateTermCalc(GateCalc):
             if returnDeriv: return hp, dp
             else:           return hp
 
-#
-#    def _compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch=None):
-#        #tStart = _time.time()
-#        dim = self.dim
-#        cacheSize = evalTree.cache_size()
-#        rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
-#        ret = _np.empty((len(evalTree),len(elabels)),'d')
-#
-#        #Scratch type (for holding spam/state vectors)
-#        typ = complex if self.unitary_evolution else 'd'
-#        
-#        if scratch is None:
-#            rho_cache = _np.zeros((cacheSize, dim), typ)
-#        else:
-#            assert(scratch.shape == (cacheSize,dim))
-#            rho_cache = scratch #to avoid recomputation
-#
-#        #comm is currently ignored
-#        #TODO: if evalTree is split, distribute among processors
-#
-#        Escratch = _np.empty(rho.shape[0],typ) # memory for E.todense() if it wants it
-#        rho = rhoVec.todense(Escratch) #rho can use same scratch space (enables fastkron)
-#        for i in evalTree.get_evaluation_order():
-#            iStart,remainder,iCache = evalTree[i]
-#            if iStart is None:  init_state = rho #[:,0]
-#            else:               init_state = rho_cache[iStart][:,None]
-#
-#            final_state = self.propagate_state(init_state, remainder)
-#            if iCache is not None: rho_cache[iCache] = final_state[:,0] #store this state in the cache
-#
-#            if self.unitary_evolution:
-#                for j,E in enumerate(EVecs):
-#                    ret[i,j] = _np.abs(_np.vdot(E.todense(Escratch),final_state))**2
-#            else:
-#                for j,E in enumerate(EVecs):
-#                    ret[i,j] = _np.vdot(E.todense(Escratch),final_state)
-#                    #OLD (slower): _np.dot(_np.conjugate(E.todense(Escratch)).T,final_state)
-#                    # FUTURE: optionally pre-compute todense() results for speed if mem is available?
-#                
-#        #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
-#        return ret
-#
-#    
-#    def _compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
-#        #Compute finite difference derivatives, one parameter at a time.
-#        tStart = _time.time() #DEBUG
-#        param_indices = range(self.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
-#        nDerivCols = len(param_indices) # *all*, not just locally computed ones
-#        
-#        dim = self.dim
-#        cacheSize = evalTree.cache_size()
-#        dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
-#        typ = complex if self.unitary_evolution else 'd'
-#        if scratch is None:
-#            rho_cache  = _np.zeros((cacheSize, dim), typ)
-#        else:
-#            assert(scratch.shape == (cacheSize,dim))
-#            rho_cache  = scratch
-#            
-#        eps = 1e-7 #hardcoded?
-#        pCache = self._compute_pr_cache(rholabel,elabels,evalTree,comm,rho_cache)
-#
-#        all_slices, my_slice, owners, subComm = \
-#                _mpit.distribute_slice(slice(0,len(param_indices)), comm)
-#
-#        my_param_indices = param_indices[my_slice]
-#        st = my_slice.start #beginning of where my_param_indices results
-#                            # get placed into dpr_cache
-#        
-#        #Get a map from global parameter indices to the desired
-#        # final index within dpr_cache
-#        iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
-#
-#        orig_vec = self.to_vector().copy()
-#        for i in range(self.Np): # range(20): #
-#            #print("dprobs cache %d of %d" % (i,self.Np))
-#            if i in iParamToFinal:
-#                iFinal = iParamToFinal[i]
-#                vec = orig_vec.copy(); vec[i] += eps
-#                self.from_vector(vec)
-#                dpr_cache[:,:,iFinal] = ( self._compute_pr_cache(
-#                    rholabel,elabels,evalTree,subComm,rho_cache) - pCache)/eps
-#        self.from_vector(orig_vec)
-#
-#        #Now each processor has filled the relavant parts of dpr_cache,
-#        # so gather together:
-#        _mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=2, comm=comm)
-#        print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" % 
-#              (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
-#
-#        return dpr_cache
-#
-#    def _compute_hpr_cache(self, rholabel, elabels, evalTree, wrtSlice1, wrtSlice2, comm):
-#        #Compute finite difference hessians, one parameter at a time.
-#
-#        param_indices1 = range(self.Np) if (wrtSlice1 is None) else _slct.indices(wrtSlice1)
-#        param_indices2 = range(self.Np) if (wrtSlice2 is None) else _slct.indices(wrtSlice2)
-#        nDerivCols1 = len(param_indices1) # *all*, not just locally computed ones
-#        nDerivCols2 = len(param_indices2) # *all*, not just locally computed ones
-#        
-#        dim = self.dim
-#        cacheSize = evalTree.cache_size()
-#        dpr_scratch = _np.zeros((cacheSize,dim),'d')
-#        hpr_cache  = _np.zeros((len(evalTree),len(elabels), nDerivCols1, nDerivCols2),'d')
-#            
-#        eps = 1e-4 #hardcoded?
-#        dpCache = self._compute_dpr_cache(rholabel,elabels,evalTree,wrtSlice2,comm,
-#                                          dpr_scratch).copy()
-#           #need copy here b/c scratch space is used by sub-calls to
-#           # _compute_dpr_cache below in finite difference computation.
-#           
-#        all_slices, my_slice, owners, subComm = \
-#                _mpit.distribute_slice(slice(0,len(param_indices1)), comm)
-#
-#        my_param_indices = param_indices1[my_slice]
-#        st = my_slice.start #beginning of where my_param_indices results
-#                            # get placed into dpr_cache
-#        
-#        #Get a map from global parameter indices to the desired
-#        # final index within dpr_cache
-#        iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
-#
-#        orig_vec = self.to_vector().copy()
-#        for i in range(self.Np):
-#            if i in iParamToFinal:
-#                iFinal = iParamToFinal[i]
-#                vec = orig_vec.copy(); vec[i] += eps
-#                self.from_vector(vec)
-#                hpr_cache[:,:,iFinal,:] = ( self._compute_dpr_cache(
-#                    rholabel,elabels,evalTree,wrtSlice2,subComm,dpr_scratch) - dpCache)/eps
-#        self.from_vector(orig_vec)
-#
-#        #Now each processor has filled the relavant parts of dpr_cache,
-#        # so gather together:
-#        _mpit.gather_slices(all_slices, owners, hpr_cache,[], axes=2, comm=comm)
-#
-#        return hpr_cache
 
     def default_distribute_method(self):
         """ 
@@ -684,19 +541,7 @@ class GateTermCalc(GateCalc):
         """
         return "gatestrings"
 
-    
-#    def estimate_cache_size(self, nGateStrings):
-#        """
-#        Return an estimate of the ideal/desired cache size given a number of 
-#        gate strings.
-#
-#        Returns
-#        -------
-#        int
-#        """
-#        return int( 0.7 * nGateStrings )
-
-    
+        
     def construct_evaltree(self):
         """
         Constructs an EvalTree object appropriate for this calculator.
