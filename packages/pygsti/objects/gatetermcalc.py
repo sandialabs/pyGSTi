@@ -221,7 +221,7 @@ class GateTermCalc(GateCalc):
         db_factor_cnt = 0
         #print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
 
-        fastmode = False #HERE
+        fastmode = True #HERE
         
         prps = [None]*len(Es)  # an array in "bulk" mode? or Polynomial in "symbolic" mode?
         for order in range(self.max_order+1):

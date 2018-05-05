@@ -215,7 +215,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
     #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
 
     cdef int i,j
-    cdef int fastmode = 0 # HARDCODED - but it has been checked that non-fast-mode agrees w/fastmode
+    cdef int fastmode = 1 # HARDCODED - but it has been checked that non-fast-mode agrees w/fastmode
     cdef unordered_map[int, complex].iterator it1, it2, itk
     cdef unordered_map[int, complex] result, coeff, coeff2, curCoeff
     cdef double complex scale, val, newval, pLeft, pRight, p
