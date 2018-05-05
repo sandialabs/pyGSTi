@@ -10,5 +10,6 @@ from .gateconstruction import *
 from .gatesetconstruction import *
 from .gatestringconstruction import *
 from .datasetconstruction import *
+from .nqnoiseconstruction import *
 from .stdlists import *
 from .qutrit import make_qutrit_gateset
