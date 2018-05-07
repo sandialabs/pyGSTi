@@ -231,8 +231,8 @@ def randomized_global_gaussian_elimination(s, pspec=None, ctype = 'basic', costf
         permuted_s = _mtx.dotmod2(_mtx.dotmod2(P2n,s),_np.transpose(P2n))
         
         if ctype == 'advanced':
-            print("This method is not yet written!")
-            circuit = advanced_global_gaussian_elimination(permuted_s ,pspec.shortestpaths,depth_compression=depth_compression)
+            raise NotImplementedError("This method is not yet written!")
+            #circuit = advanced_global_gaussian_elimination(permuted_s,pspec.shortestpath,depth_compression=depth_compression)
         
         if ctype == 'basic':
             circuit = basic_global_gaussian_elimination(permuted_s ,depth_compression=depth_compression)
@@ -291,8 +291,8 @@ def ordered_global_gaussian_elimination(s, pspec=None, ctype = 'basic', costfunc
         permuted_s = _mtx.dotmod2(_mtx.dotmod2(P2n,s),_np.transpose(P2n))
         
         if ctype == 'advanced':
-            print("This method is not yet written!")
-            circuit = advanced_global_gaussian_elimination(permuted_s ,pspec.shortestpaths,depth_compression=depth_compression)
+            raise NotImplementedError("This method is not yet written!")
+            #circuit = advanced_global_gaussian_elimination(permuted_s ,pspec.shortestpaths,depth_compression=depth_compression)
         
         if ctype == 'basic':
             circuit = basic_global_gaussian_elimination(permuted_s ,depth_compression=depth_compression)
@@ -345,6 +345,7 @@ def advanced_cnotcircuit_gaussian_elimination(s):
 
 # Todo : write this function - a connectivity-aware GGE algorithm
 def advanced_global_gaussian_elimination(s, shortestpaths):
+    raise NotImplementedError("This method is not yet written!")
     circuit = None
     return circuit
 
@@ -1343,6 +1344,9 @@ def compile_CNOT_circuit(mcnot,ds,custom_ordering=None,std_ordering='connectivit
 
         while len(qubits) > 0:
 
+            # complement of `remaining_qubits` = "elimintated qubits"
+            eliminated_qubits = set(range(n)) - set(remaining_qubits)
+            
             # Find the most distant remaining qubit
             farthest_qubit_found = False
             while not farthest_qubit_found:
@@ -1361,29 +1365,17 @@ def compile_CNOT_circuit(mcnot,ds,custom_ordering=None,std_ordering='connectivit
 
                 # Find the shortest path out from i to farthest_qubit, and do CNOTs to make that
                 # all 1s.
-                includes_eliminated_qubits = False
-                currentqubit = i       
-                while currentqubit != farthest_qubit:
-                    nextqubit = ds.shortestpath[farthest_qubit,currentqubit]
-                    if nextqubit not in remainingqubits:
-                        includes_eliminated_qubits = True
-                        #print("  - Resorting to CNOT via SWAPs!!!")
-                        break
-                    currentqubit = nextqubit
-                
-                if not includes_eliminated_qubits:
-                    currentqubit = i       
-                    while currentqubit != farthest_qubit:
-
-                        nextqubit = ds.shortestpath[farthest_qubit,currentqubit]
-                        #print(currentqubit,nextqubit)
-
+                if ds.qubitgraph.shortest_path_intersect(farthest_qubit, i, eliminated_qubits):
+                    # shortest path from farthest_qubit -> i includes eliminated qubits
+                    #print("  - Resorting to CNOT via SWAPs!!!")
+                    rowaction_instructionlist.append(_Label('CNOT',(i,farthest_qubit)))
+                    sout[farthest_qubit,:] =  sout[i,:] ^ sout[farthest_qubit,:]
+                else:
+                    for nextqubit, currentqubit in reversed(ds.qubitgraph.shortest_path_edges(farthest_qubit, i)):
+                        # EGN: reverse-iter to follow Tim's prior implementation
                         if sout[nextqubit,i] == 0:
                             rowaction_instructionlist.append(_Label('CNOT',(currentqubit,nextqubit)))
                             sout[nextqubit,:] = sout[nextqubit,:] ^ sout[currentqubit,:]
-                        currentqubit = nextqubit
-
-                    assert(currentqubit == farthest_qubit)
 
                     # Set the farthest qubit s-matrix element to 0 (but don't change the others)
                     quse = ds.shortestpath[i,farthest_qubit]
@@ -1391,73 +1383,134 @@ def compile_CNOT_circuit(mcnot,ds,custom_ordering=None,std_ordering='connectivit
                     rowaction_instructionlist.append(_Label('CNOT',(quse,farthest_qubit)))
                     sout[farthest_qubit,:] =  sout[quse,:] ^ sout[farthest_qubit,:]
 
-                    currentqubit = farthest_qubit
-                    while currentqubit != i:
-
-                        nextqubit = ds.shortestpath[i,currentqubit]
-
+                    for nextqubit, currentqubit in reversed(ds.qubitgraph.shortest_path_edges(i,farthest_qubit)):
+                        # EGN: reverse-iter to follow Tim's prior implementation
                         if currentqubit not in remainingqubits:
                             rowaction_instructionlist.append(_Label('CNOT',(nextqubit,currentqubit)))
                             sout[currentqubit,:] = sout[nextqubit,:] ^ sout[currentqubit,:]
 
-                        currentqubit = nextqubit
-                              
-                else:
-                    rowaction_instructionlist.append(_Label('CNOT',(i,farthest_qubit)))
-                    sout[farthest_qubit,:] =  sout[i,:] ^ sout[farthest_qubit,:]                    
-                     
-                #print(sout)
+
+                #OLD CODE - TODO REMOVE - kept b/c we still need to check whether this works TIM
+                #currentqubit = i       
+                #while currentqubit != farthest_qubit:
+                #    nextqubit = ds.shortestpath[farthest_qubit,currentqubit]
+                #    if nextqubit not in remainingqubits:
+                #        includes_eliminated_qubits = True
+                #        #print("  - Resorting to CNOT via SWAPs!!!")
+                #        break
+                #    currentqubit = nextqubit
+                #
+                #if not includes_eliminated_qubits:
+                #    currentqubit = i       
+                #    while currentqubit != farthest_qubit:
+                #
+                #        nextqubit = ds.shortestpath[farthest_qubit,currentqubit]
+                #        #print(currentqubit,nextqubit)
+                #
+                #        if sout[nextqubit,i] == 0:
+                #            rowaction_instructionlist.append(_Label('CNOT',(currentqubit,nextqubit)))
+                #            sout[nextqubit,:] = sout[nextqubit,:] ^ sout[currentqubit,:]
+                #        currentqubit = nextqubit
+                #
+                #    assert(currentqubit == farthest_qubit)
+                #
+                #    # Set the farthest qubit s-matrix element to 0 (but don't change the others)
+                #    quse = ds.shortestpath[i,farthest_qubit]
+                #    #print(quse,i,farthest_qubit)
+                #    rowaction_instructionlist.append(_Label('CNOT',(quse,farthest_qubit)))
+                #    sout[farthest_qubit,:] =  sout[quse,:] ^ sout[farthest_qubit,:]
+                #
+                #    currentqubit = farthest_qubit
+                #    while currentqubit != i:
+                #
+                #        nextqubit = ds.shortestpath[i,currentqubit]
+                #
+                #        if currentqubit not in remainingqubits:
+                #            rowaction_instructionlist.append(_Label('CNOT',(nextqubit,currentqubit)))
+                #            sout[currentqubit,:] = sout[nextqubit,:] ^ sout[currentqubit,:]
+                #
+                #        currentqubit = nextqubit
+                #              
+                #else:
+                #    rowaction_instructionlist.append(_Label('CNOT',(i,farthest_qubit)))
+                #    sout[farthest_qubit,:] =  sout[i,:] ^ sout[farthest_qubit,:]                    
+                #     
+                ##print(sout)
 
 
-            if sout[i,farthest_qubit] == 1:
+            if sout[i,farthest_qubit] == 1: # TIM - this condition looks the same as one above... (?)
                 #print('  - Farthest qubit needs column eliminating...')
                 
                 # Find the shortest path out from i to farthest_qubit, and do CNOTs to make that
                 # all 1s.
-                
-                includes_eliminated_qubits = False
-                currentqubit = i       
-                while currentqubit != farthest_qubit:
-                    nextqubit = ds.shortestpath[farthest_qubit,currentqubit]
-                    if nextqubit not in remainingqubits:
-                        includes_eliminated_qubits = True
-                        #print("  - Resorting to CNOT via SWAPs!!!")
-                        break
-                    currentqubit = nextqubit
-                
-                if not includes_eliminated_qubits:
-                
-                    currentqubit = i       
-                    while currentqubit != farthest_qubit:
-
-                        nextqubit = ds.shortestpath[farthest_qubit,currentqubit]
-                        #print(currentqubit,nextqubit)
-
+                if ds.qubitgraph.shortest_path_intersect(farthest_qubit, i, eliminated_qubits):
+                    # shortest path from farthest_qubit -> i includes eliminated qubits
+                    columnaction_instructionlist.append(_Label('CNOT',(farthest_qubit,i)))
+                    sout[:,farthest_qubit] = sout[:,i] ^ sout[:,farthest_qubit]
+                else:
+                    
+                    for nextqubit, currentqubit in reversed(ds.qubitgraph.shortest_path_edges(farthest_qubit, i)):
+                        # EGN: reverse-iter to follow Tim's prior implementation
                         if sout[i,nextqubit] == 0:
                             columnaction_instructionlist.append(_Label('CNOT',(nextqubit,currentqubit)))
                             sout[:,nextqubit] = sout[:,nextqubit] ^ sout[:,currentqubit]
-                        currentqubit = nextqubit
-
-                    assert(currentqubit == farthest_qubit)
 
                     # Set the farthest qubit s-matrix element to 0 (but don't change the others)
                     quse = ds.shortestpath[i,farthest_qubit]
                     columnaction_instructionlist.append(_Label('CNOT',(farthest_qubit,quse)))
                     sout[:,farthest_qubit] =  sout[:,quse] ^ sout[:,farthest_qubit]
 
-                    currentqubit = farthest_qubit
-                    while currentqubit != i:
-
-                        nextqubit = ds.shortestpath[i,currentqubit]
-
+                    for nextqubit, currentqubit in reversed(ds.qubitgraph.shortest_path_edges(i,farthest_qubit)):
+                        # EGN: reverse-iter to follow Tim's prior implementation
                         if currentqubit not in remainingqubits:
                             columnaction_instructionlist.append(_Label('CNOT',(currentqubit,nextqubit)))
                             sout[:,currentqubit] = sout[:,nextqubit] ^ sout[:,currentqubit]
-                        currentqubit = nextqubit
-                        
-                else:
-                    columnaction_instructionlist.append(_Label('CNOT',(farthest_qubit,i)))
-                    sout[:,farthest_qubit] = sout[:,i] ^ sout[:,farthest_qubit]
+                            
+
+                #OLD - TODO REMOVE
+                #includes_eliminated_qubits = False
+                #currentqubit = i       
+                #while currentqubit != farthest_qubit:
+                #    nextqubit = ds.shortestpath[farthest_qubit,currentqubit]
+                #    if nextqubit not in remainingqubits:
+                #        includes_eliminated_qubits = True
+                #        #print("  - Resorting to CNOT via SWAPs!!!")
+                #        break
+                #    currentqubit = nextqubit
+                #
+                #if not includes_eliminated_qubits:
+                #
+                #    currentqubit = i       
+                #    while currentqubit != farthest_qubit:
+                #
+                #        nextqubit = ds.shortestpath[farthest_qubit,currentqubit]
+                #        #print(currentqubit,nextqubit)
+                #
+                #        if sout[i,nextqubit] == 0:
+                #            columnaction_instructionlist.append(_Label('CNOT',(nextqubit,currentqubit)))
+                #            sout[:,nextqubit] = sout[:,nextqubit] ^ sout[:,currentqubit]
+                #        currentqubit = nextqubit
+                #
+                #    assert(currentqubit == farthest_qubit)
+                #
+                #    # Set the farthest qubit s-matrix element to 0 (but don't change the others)
+                #    quse = ds.shortestpath[i,farthest_qubit]
+                #    columnaction_instructionlist.append(_Label('CNOT',(farthest_qubit,quse)))
+                #    sout[:,farthest_qubit] =  sout[:,quse] ^ sout[:,farthest_qubit]
+                #
+                #    currentqubit = farthest_qubit
+                #    while currentqubit != i:
+                #
+                #        nextqubit = ds.shortestpath[i,currentqubit]
+                #
+                #        if currentqubit not in remainingqubits:
+                #            columnaction_instructionlist.append(_Label('CNOT',(currentqubit,nextqubit)))
+                #            sout[:,currentqubit] = sout[:,nextqubit] ^ sout[:,currentqubit]
+                #        currentqubit = nextqubit
+                #        
+                #else:
+                #    columnaction_instructionlist.append(_Label('CNOT',(farthest_qubit,i)))
+                #    sout[:,farthest_qubit] = sout[:,i] ^ sout[:,farthest_qubit]
                     
                  
                 #print(sout)

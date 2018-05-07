@@ -70,9 +70,7 @@ class ProcessorSpec(object):
         self.compilations = _collections.OrderedDict()
 
         #Compiler-cost variables (set in construct_compiler_costs)
-        self.connectivity = None
-        self.distance = None
-        self.shortestpath = None
+        self.qubitgraph = None
         self.qubitcosts = None
         self.costorderedqubits = None
 
@@ -214,26 +212,25 @@ class ProcessorSpec(object):
         # A matrix that stores whether there is any gate between a pair of qubits
         if custom_connectivity is not None:
             assert(custom_connectivity.shape == (self.number_of_qubits,self.number_of_qubits))
-            self.connectivity = custom_connectivity
+            connectivity = custom_connectivity
         else:
-            self.connectivity = _np.zeros((self.number_of_qubits,self.number_of_qubits),dtype=bool)
+            connectivity = _np.zeros((self.number_of_qubits,self.number_of_qubits),dtype=bool)
             for gatelabel in self.models['clifford'].gates:
                 if gatelabel.number_of_qubits > 1:
                     for p in _itertools.permutations(gatelabel.qubits, 2):
-                        self.connectivity[p] = True
+                        connectivity[p] = True
         
-        self.distance, self.shortestpath = _fw(self.connectivity,return_predecessors=True, 
-                                               directed=True, unweighted=False)
-        
+        self.qubitgraph = _QubitGraph(list(range(self.number_of_qubits)), connectivity)
         self.qubitcosts = {}
         
         #
         # todo -- I'm not sure whether this makes sense when the graph is directed.
         #
+        distances = qubitgraph.shortest_path_distance_matrix()
         for i in range(0,self.number_of_qubits):
-            self.qubitcosts[i] = _np.sum(self.distance[i,:])
+            self.qubitcosts[i] = _np.sum(distances[i,:])
         
-        temp_distances = list(_np.sum(self.distance,0))
+        temp_distances = list(_np.sum(distances,0))
         temp_qubits = list(_np.arange(0,self.number_of_qubits))
         self.costorderedqubits = []
                

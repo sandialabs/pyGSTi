@@ -21,140 +21,6 @@ from ..baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 from ..baseobjs import Basis as _Basis
 
 from .gatesetconstruction import basis_build_vector as _basis_build_vector
-
-#TODO: MOVE
-class QubitGraph(object):
-    """ Graph data structure TODO: docstrings"""
-    def __init__(self, nQubits=0, geometry="line"):
-        self._graph = _collections.defaultdict(set)
-        self.nQubits = nQubits
-        if nQubits == 0: 
-            return
-        elif nQubits == 1: 
-            self._graph[0] = set() # no neighbors
-            return
-        else: #at least 2 qubits
-            if geometry in ("line","ring"):
-                for i in range(nQubits-1):
-                    self.add(i,i+1)
-                if nQubits > 2 and geometry == "ring":
-                    self.add(nQubits-1,0)
-            elif geometry in ("grid","torus"):
-                s = int(round(_np.sqrt(nQubits)))
-                assert(nQubits >= 4 and s*s == nQubits), \
-                    "`nQubits` must be a perfect square >= 4"
-                #row links
-                for irow in range(s):
-                    for icol in range(s):
-                        if icol+1 < s:
-                            self.add(irow*s+icol, irow*s+icol+1) #link right
-                        elif geometry == "torus" and s > 2:
-                            self.add(irow*s+icol, irow*s+0)
-                            
-                        if irow+1 < s:
-                            self.add(irow*s+icol, (irow+1)*s+icol) #link down
-                        elif geometry == "torus" and s > 2:
-                            self.add(irow*s+icol, 0+icol)
-            else:
-                raise ValueError("Invalid `geometry`: %s" % geometry)
-                
-    def add_connections(self, connections):
-        """ Add connections (list of tuple pairs) to graph """
-        for node1, node2 in connections:
-            self.add(node1, node2)
-
-    def add(self, node1, node2):
-        """ Add connection between node1 and node2 """
-        self._graph[node1].add(node2)
-        self._graph[node2].add(node1)
-        
-    def edges(self):
-        ret = set()
-        for node,neighbors in self._graph.items():
-            for neighbor in neighbors:
-                if node < neighbor: # all edge tuples have lower index first
-                    ret.add( (node,neighbor) )
-                else:
-                    ret.add( (neighbor,node) )
-        return sorted(list(ret))
-    
-    def radius(self, base_indices, max_hops):
-        """ 
-        Returns a (sorted) array of indices that can be reached
-        from traversing at most `max_hops` edges starting
-        from a vertex in base_indices
-        """
-        ret = set()
-        assert(max_hops >= 0)
-        
-        def traverse(start, hops_left):
-            ret.add(start)
-            if hops_left <= 0: return
-            for i in self._graph[start]:
-                traverse(i,hops_left-1)
-                
-        for node in base_indices:
-            traverse(node,max_hops)
-        return _np.array(sorted(list(ret)),'i')
-
-    def connected_combos(self, possible_indices, size):
-        count = 0
-        for selected_inds in _itertools.combinations(possible_indices, size):
-            if self.are_connected(selected_inds): count += 1
-        return count
-
-#     def remove(self, node):
-#         """ Remove all references to node """
-#         for n, cxns in self._graph.iteritems():
-#             try:
-#                 cxns.remove(node)
-#             except KeyError:
-#                 pass
-#         try:
-#             del self._graph[node]
-#         except KeyError:
-#             pass
-
-    def is_connected(self, node1, node2):
-        """ Is node1 directly connected to node2 """
-        return node1 in self._graph and node2 in self._graph[node1]
-
-    def are_connected(self, indices):
-        """
-        Are all the nodes in `indices` connected to at least
-        one other node in `indices`?
-        """
-        if len(indices) < 2: return True # 0 or 1 indices are "connected"        
-
-        for node in indices: #check
-            if node not in self._graph: return False
-
-        glob = set()
-        def add_to_glob(node):
-            glob.add(node)
-            for neighbor in self._graph[node].intersection(indices):
-                if neighbor not in glob:
-                    add_to_glob(neighbor)
-        
-        add_to_glob(indices[0])
-        return bool(glob == set(indices))
-
-#     def find_path(self, node1, node2, path=[]):
-#         """ Find any path between node1 and node2 (may not be shortest) """
-#         path = path + [node1]
-#         if node1 == node2:
-#             return path
-#         if node1 not in self._graph:
-#             return None
-#         for node in self._graph[node1]:
-#             if node not in path:
-#                 new_path = self.find_path(node, node2, path)
-#                 if new_path:
-#                     return new_path
-#         return None
-
-    def __str__(self):
-        return '{}({})'.format(self.__class__.__name__, dict(self._graph))
     
 
 def iter_basis_inds(weight):
@@ -177,7 +43,7 @@ def nparams_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0
     printer = _VerbosityPrinter.build_printer(verbosity)
     printer.log("Computing parameters for a %d-qubit %s gateset" % (nQubits,geometry))
 
-    qubitGraph = QubitGraph(nQubits, geometry)
+    qubitGraph = _objs.QubitGraph.common_graph(nQubits, geometry)
     #printer.log("Created qubit graph:\n"+str(qubitGraph))
 
     def idle_count_nparams(maxWeight):
@@ -195,7 +61,7 @@ def nparams_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0
         ret = 0
         #Note: no contrib from idle noise (already parameterized)
         for wt, maxHops in weight_maxhops_tuples:
-            possible_err_qubit_inds = qubitGraph.radius(target_qubit_inds, maxHops)
+            possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),'i')
             if requireConnected:
                 nErrTargetLocations = qubitGraph.connected_combos(possible_err_qubit_inds,wt)
             else:
@@ -278,7 +144,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     #    effectLabels=eLbls, effectExpressions=eExprs)
     printer.log("Created initial gateset")
 
-    qubitGraph = QubitGraph(nQubits, geometry)
+    qubitGraph = _objs.QubitGraph.common_graph(nQubits, geometry)
     printer.log("Created qubit graph:\n"+str(qubitGraph))
 
     printer.log("Creating Idle:")
@@ -477,10 +343,10 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
     printer.log("*** Creating global idle ***")
     
     termgates = [] # gates to compose
-    ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nQubits)])]
-    basisAllQ = _Basis('pp', 2**qubitGraph.nQubits, sparse=sparse)
+    ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nqubits)])]
+    basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse)
     
-    nQubits = qubitGraph.nQubits
+    nQubits = qubitGraph.nqubits
     possible_err_qubit_inds = _np.arange(nQubits)
     nPossible = nQubits  
     for wt in range(1,maxWeight+1):
@@ -490,7 +356,7 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
         wtBasis = _Basis('pp', 2**wt, sparse=sparse)
         
         for err_qubit_inds in _itertools.combinations(possible_err_qubit_inds, wt):
-            if len(err_qubit_inds) == 2 and not qubitGraph.is_connected(err_qubit_inds[0],err_qubit_inds[1]):
+            if len(err_qubit_inds) == 2 and not qubitGraph.is_directly_connected(err_qubit_inds[0],err_qubit_inds[1]):
                 continue # TO UPDATE - check whether all wt indices are a connected subgraph
 
             errbasis = [basisEl_Id]
@@ -523,7 +389,7 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
 #    assert(spectatorMaxWeight <= 1) #only 0 and 1 are currently supported
 #    
 #    errinds = [] # list of basis indices for all error terms
-#    possible_err_qubit_inds = qubitGraph.radius(target_qubit_inds, maxHops)
+#    possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),'i')
 #    nPossible = len(possible_err_qubit_inds)
 #    for wt in range(maxWeight+1):
 #        if mode == "no-embedding": # make an error term for the entire gate
@@ -549,8 +415,8 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
 #
 #    errbasis = [ basisProductMatrix(err) for err in errinds]
 #    
-#    ssAllQ = ['Q%d'%i for i in range(qubitGraph.nQubits)]
-#    basisAllQ = pygsti.objects.Basis('pp', 2**qubitGraph.nQubits)
+#    ssAllQ = ['Q%d'%i for i in range(qubitGraph.nqubits)]
+#    basisAllQ = pygsti.objects.Basis('pp', 2**qubitGraph.nqubits)
 #    
 #    if mode == "no-embedding":     
 #        fullTargetOp = EmbeddedGate(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
@@ -638,8 +504,8 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
     #Factor1: target operation
     printer.log("Creating %d-qubit target op factor on qubits %s" %
                 (len(target_qubit_inds),str(target_qubit_inds)),2)
-    ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nQubits)])]
-    basisAllQ = _Basis('pp', 2**qubitGraph.nQubits, sparse=sparse)
+    ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nqubits)])]
+    basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse)
     fullTargetOp = Embedded(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
                             Static(targetOp,"pp"), basisAllQ.dim) 
 
@@ -656,7 +522,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
             Id_1Q = _np.identity(4**1,'d') #always dense for now...
             fullIdleErr = Composed(
                 [ Embedded(ssAllQ, ('Q%d'%i,), Lindblad(Id_1Q.copy()),basisAllQ.dim)
-                  for i in range(qubitGraph.nQubits)] )
+                  for i in range(qubitGraph.nqubits)] )
         elif idle_noise == False:
             printer.log("No idle factor",3)
             fullIdleErr = None
@@ -676,13 +542,13 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
     if loc_noise_type == "onebig": 
         # make a single embedded Lindblad-gate containing all specified error terms
         loc_noise_errinds = [] # list of basis indices for all local-error terms
-        all_possible_err_qubit_inds = qubitGraph.radius(
-            target_qubit_inds, max([hops for _,hops in weight_maxhops_tuples]) )
+        all_possible_err_qubit_inds = _np.array( qubitGraph.radius(
+            target_qubit_inds, max([hops for _,hops in weight_maxhops_tuples]) ), 'i') # node labels are ints
         nLocal = len(all_possible_err_qubit_inds)
         basisEl_Id = basisProductMatrix(_np.zeros(nPossible,'i'),sparse) #identity basis el
         
         for wt, maxHops in weight_maxhops_tuples:
-            possible_err_qubit_inds = qubitGraph.radius(target_qubit_inds, maxHops)
+            possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),'i') # node labels are ints
             nPossible = len(possible_err_qubit_inds)
             possible_to_local = [ all_possible_err_qubit_inds.index(
                 possible_err_qubit_inds[i]) for i in range(nPossible)]
@@ -729,7 +595,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
         for wt, maxHops in weight_maxhops_tuples:
                 
             ## loc_noise_errinds = [] # list of basis indices for all local-error terms 
-            possible_err_qubit_inds = qubitGraph.radius(target_qubit_inds, maxHops)
+            possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),'i') # we know node labels are integers
             nPossible = len(possible_err_qubit_inds) # also == "nLocal" in this case
             basisEl_Id = basisProductMatrix(_np.zeros(wt,'i'),sparse) #identity basis el
 

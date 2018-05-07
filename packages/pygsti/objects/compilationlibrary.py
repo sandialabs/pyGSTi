@@ -16,6 +16,7 @@ from ..tools import symplectic as _symp
 from ..tools import listtools as _lt
 from .label import Label as _Label
 from .circuit import Circuit as _Circuit
+from .qubitgraph import QubitGraph as _QubitGraph
 
 
 
@@ -41,8 +42,7 @@ class CompilationLibrary(_collections.OrderedDict):
         self.gateset = clifford_gateset # gateset of (all Clifford) gates to compile requested gates into
         self.ctype = ctyp
         self.templates = _collections.defaultdict(list)
-        self.connectivity = {} # (connectivity, distance, shortestpath) of
-                               # gates currently compiled in library (key=gate_name)                        
+        self.connectivity = {} # QubitGraphs for gates currently compiled in library (key=gate_name)                        
         super(CompilationLibrary,self).__init__(items)
 
 
@@ -265,7 +265,9 @@ class CompilationLibrary(_collections.OrderedDict):
     def compute_connectivity_of(self, gate_name):
         """ TODO: docstring """
         nQ = int(round(_np.log2(self.gateset.dim))) # assumes *unitary* mode (OK?)
-        d = { qlbl: i for i,qlbl in enumerate(self.gateset.stateSpaceLabels.labels[0]) }
+        qubit_labels = self.gateset.stateSpaceLabels.labels[0]
+        d = { qlbl: i for i,qlbl in enumerate(qubit_labels) }
+        assert(len(qubit_labels) == nQ),"Number of qubit labels is inconsistent with GateSet dimension!"
         
         connectivity = _np.zeros( (nQ,nQ), dtype=bool )
         for compiled_gatelabel in self.keys():
@@ -274,9 +276,7 @@ class CompilationLibrary(_collections.OrderedDict):
                     connectivity[d[p[0]],d[p[1]]] = True
                       # Note: d converts from qubit labels to integer indices
                       
-        distance, shortestpath = _fw(connectivity,return_predecessors=True, 
-                                     directed=True, unweighted=False)
-        self.connectivity[gate_name] = (connectivity, distance, shortestpath)
+        self.connectivity[gate_name] = _QubitGraph(qubit_labels, connectivity)
 
 
     def add_nonlocal_compilation_of(self, gatelabel, force=False, verbosity=1, check=True):
@@ -310,33 +310,27 @@ class CompilationLibrary(_collections.OrderedDict):
         if gatelabel.name not in self.connectivity: #need to recompute
             self.compute_connectivity_of(gatelabel.name)
             
-        _, distancematrix, shortestpathmatrix = self.connectivity[gatelabel.name]
+        qgraph = self.connectivity[gatelabel.name]
 
         #CNOT specific
         q1 = gatelabel.qubits[0]
         q2 = gatelabel.qubits[1]
+        dist = qgraph.shortest_path_distance(q1,q2)
         
         if verbosity > 0:
             print("")
             print("Attempting to generate a compilation for CNOT, up to Paulis,")
             print("with control qubit = {} and target qubit = {}".format(q1,q2))
             print("")
-            print("Distance between qubits is = {}".format(distancematrix[q1,q2]))
+            print("Distance between qubits is = {}".format(dist))
             
-        assert(shortestpathmatrix[q1,q2] >= 0), "There is no path between the qubits!"
-        
-        # Find the shortest path between q1 and q2, from self.shortest_path_matrix
-        # We do this by following the chain in the shortest_path_matrix until we arrive at q1
-        shortestpath = [q2]
-        current_node = q2
-                
-        while current_node != q1:            
-            preceeding_node = shortestpathmatrix[q1,current_node]
-            shortestpath.insert(0,preceeding_node)
-            current_node = preceeding_node
-            
-        # If the qubits are connected, this algorithm may not behave well.
-        assert(len(shortestpath)> 2), "Qubits are connected! Algorithm is not needed or valid."
+        assert(qgraph.is_connected(q1,q2) >= 0), "There is no path between the qubits!"
+
+        # If the qubits are directly connected, this algorithm may not behave well.
+        assert(not qgraph.is_directly_connected(q1,q2)), "Qubits are connected! Algorithm is not needed or valid."
+
+        # Find the shortest path between q1 and q2
+        shortestpath = qgraph.shortest_path(q1,q2)
         
         # Part 1 of the circuit is CNOTs along the shortest path from q1 to q2.
         # To do: describe the circuit.
