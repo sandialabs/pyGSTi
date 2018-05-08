@@ -15,10 +15,12 @@ import scipy.sparse as _sps
 from .. import objects as _objs
 from ..tools import basistools as _bt
 from ..tools import gatetools as _gt
+from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 from ..baseobjs import Basis as _Basis
+from ..baseobjs import Label as _Lbl
 
 from .gatesetconstruction import basis_build_vector as _basis_build_vector
     
@@ -78,7 +80,7 @@ def nparams_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0
     nParams = _collections.OrderedDict()
 
     printer.log("Creating Idle:")                
-    nParams['Gi'] = idle_count_nparams(maxIdleWeight)
+    nParams[_Lbl('Gi')] = idle_count_nparams(maxIdleWeight)
      
     #1Q gates: X(pi/2) & Y(pi/2) on each qubit
     weight_maxhops_tuples_1Q = [(1,maxhops+extraWeight1Hops)] + \
@@ -87,25 +89,25 @@ def nparams_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0
     if independent1Qgates:
         for i in range(nQubits):
             printer.log("Creating 1Q X(pi/2) and Y(pi/2) gates on qubit %d!!" % i)
-            nParams["Gx%d"%i] = gate_count_nparams((i,), weight_maxhops_tuples_1Q)
-            nParams["Gy%d"%i] = gate_count_nparams((i,), weight_maxhops_tuples_1Q)
+            nParams[_Lbl("Gx",i)] = gate_count_nparams((i,), weight_maxhops_tuples_1Q)
+            nParams[_Lbl("Gy",i)] = gate_count_nparams((i,), weight_maxhops_tuples_1Q)
     else:
         printer.log("Creating common 1Q X(pi/2) and Y(pi/2) gates")
         rep = int(nQubits / 2)
-        nParams["Gxrep"] = gate_count_nparams((rep,), weight_maxhops_tuples_1Q)
-        nParams["Gyrep"] = gate_count_nparams((rep,), weight_maxhops_tuples_1Q)
+        nParams[_Lbl("Gxrep")] = gate_count_nparams((rep,), weight_maxhops_tuples_1Q)
+        nParams[_Lbl("Gyrep")] = gate_count_nparams((rep,), weight_maxhops_tuples_1Q)
 
     #2Q gates: CNOT gates along each graph edge
     weight_maxhops_tuples_2Q = [(1,maxhops+extraWeight1Hops),(2,maxhops)] + \
                                [ (2+x,maxhops) for x in range(1,extraGateWeight+1) ]
     for i,j in qubitGraph.edges(): #note: all edges have i<j so "control" of CNOT is always lower index (arbitrary)
         printer.log("Creating CNOT gate between qubits %d and %d!!" % (i,j))
-        nParams["Gc%dt%d"% (i,j)] = gate_count_nparams((i,j), weight_maxhops_tuples_2Q)
+        nParams[_Lbl("Gcnot",(i,j))] = gate_count_nparams((i,j), weight_maxhops_tuples_2Q)
 
     #SPAM
     nPOVM_1Q = 4 # params for a single 1Q POVM
-    nParams['rho0'] = 3*nQubits # 3 b/c each component is TP
-    nParams['Mdefault'] = nPOVM_1Q * nQubits # nQubits 1Q-POVMs
+    nParams[_Lbl('rho0')] = 3*nQubits # 3 b/c each component is TP
+    nParams[_Lbl('Mdefault')] = nPOVM_1Q * nQubits # nQubits 1Q-POVMs
 
     return nParams, sum(nParams.values())
 
@@ -127,6 +129,8 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     printer.log("Creating a %d-qubit %s gateset" % (nQubits,geometry))
 
     gs = _objs.GateSet(sim_type=sim_type, default_param=parameterization) # no preps/POVMs
+    gs.stateSpaceLabels = _StateSpaceLabels(list(range(nQubits))) #TODO: better way of setting this... (__init__?)
+    
     # OLD: sim_type = "map" if sparse else "matrix") # no preps/POVMs
     
     # TODO: sparse prep & effect vecs... acton(...) analogue?
@@ -148,7 +152,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     printer.log("Created qubit graph:\n"+str(qubitGraph))
 
     printer.log("Creating Idle:")
-    gs.gates['Gi'] = build_nqn_global_idle(qubitGraph, maxIdleWeight, sparse,
+    gs.gates[_Lbl('Gi')] = build_nqn_global_idle(qubitGraph, maxIdleWeight, sparse,
                                         sim_type, parameterization, printer-1)
 
     #1Q gates: X(pi/2) & Y(pi/2) on each qubit
@@ -158,14 +162,14 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
                                [ (1+x,maxhops) for x in range(1,extraGateWeight+1) ]
     for i in range(nQubits):
         printer.log("Creating 1Q X(pi/2) gate on qubit %d!!" % i)
-        gs.gates["Gx%d"%i] = build_nqn_composed_gate(
+        gs.gates[_Lbl("Gx",i)] = build_nqn_composed_gate(
             Gx, (i,), qubitGraph, weight_maxhops_tuples_1Q,
             idle_noise=gs.gates['Gi'], loc_noise_type="manylittle",
             sparse=sparse, sim_type=sim_type, parameterization=parameterization,
             verbosity=printer-1)
 
         printer.log("Creating 1Q Y(pi/2) gate on qubit %d!!" % i)
-        gs.gates["Gy%d"%i] = build_nqn_composed_gate(
+        gs.gates[_Lbl("Gy",i)] = build_nqn_composed_gate(
             Gy, (i,), qubitGraph, weight_maxhops_tuples_1Q,
             idle_noise=gs.gates['Gi'], loc_noise_type="manylittle",
             sparse=sparse, sim_type=sim_type, parameterization=parameterization,
@@ -177,7 +181,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
                                [ (2+x,maxhops) for x in range(1,extraGateWeight+1) ]
     for i,j in qubitGraph.edges(): #note: all edges have i<j so "control" of CNOT is always lower index (arbitrary)
         printer.log("Creating CNOT gate between qubits %d and %d!!" % (i,j))
-        gs.gates["Gc%dt%d"% (i,j)] = build_nqn_composed_gate(
+        gs.gates[_Lbl("Gcnot",(i,j))] = build_nqn_composed_gate(
             Gcnot, (i,j), qubitGraph, weight_maxhops_tuples_2Q,
             idle_noise=gs.gates['Gi'], loc_noise_type="manylittle",
             sparse=sparse, sim_type=sim_type, parameterization=parameterization,
@@ -238,8 +242,8 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
             depolAmts = povmNoise[0:nQubits]
         for amt,povm in zip(depolAmts,povm_factors): povm.depolarize(amt) 
            
-    gs.preps['rho0'] = _objs.TensorProdSPAMVec('prep', prep_factors)
-    gs.povms['Mdefault'] = _objs.TensorProdPOVM(povm_factors)
+    gs.preps[_Lbl('rho0')] = _objs.TensorProdSPAMVec('prep', prep_factors)
+    gs.povms[_Lbl('Mdefault')] = _objs.TensorProdPOVM(povm_factors)
 
 
 

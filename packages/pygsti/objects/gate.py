@@ -3724,8 +3724,9 @@ class EmbeddedGateMap(Gate):
             assert(len(self.stateSpaceLabels.labels) == 1 and
                    all([ld == 2 for ld in self.stateSpaceLabels.labeldims.values()])), \
                    "All state space labels must correspond to *qubits*"
-            assert(len(targetLabels) == len(self.embedded_gate.svector) // 2), \
-                "Inconsistent number of qubits in `targetLabels` and `embedded_gate`"
+            if isinstance(self.embedded_gate, CliffordGate):
+                assert(len(targetLabels) == len(self.embedded_gate.svector) // 2), \
+                    "Inconsistent number of qubits in `targetLabels` and Clifford `embedded_gate`"
 
             #Cache info to speedup _stabilizer_acton(...) methods:
             # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
@@ -3982,22 +3983,21 @@ class EmbeddedGateMap(Gate):
 
     def _stabilizer_acton(self, state):
         """ Act this gate map on an input state """
+        #print("STAB ACTON: ",self.qubit_indices,state.view_filter,type(self.embedded_gate))
         state = state.copy() # needed?
-        state.clifford_update(self.embedded_gate.smatrix, self.embedded_gate.svector,
-                              self.embedded_gate.unitary, self.qubit_indices)
-        return state
-
+        state.push_view(self.qubit_indices)
+        ret = self.embedded_gate.acton(state)
+        state.pop_view()
+        return ret
     
     def _stabilizer_adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         # Note: cliffords are unitary, so adjoint == inverse
-        # Note: StabilizerState.todense() gives a StabilizerFrame obj
-        invs, invp = _symp.inverse_clifford(self.embedded_gate.smatrix,
-                                            self.embedded_gate.svector)
-        state = state.copy() # needed? expected?
-        state.clifford_update(invs, invp, self.embedded_gate.unitary.conjugate().T,
-                              self.qubit_indices)
-        return state
+        state = state.copy() # needed?
+        state.push_view(self.qubit_indices)
+        ret = self.embedded_gate.acton(state)
+        state.pop_view()
+        return ret
 
     
     def _acton_other_blocks_trivially(self, output_state,state):

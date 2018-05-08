@@ -11,6 +11,8 @@ import numpy as _np
 import copy as _copy
 import sys
 
+from ..baseobjs import Label as _Label
+
 
 if sys.version_info >= (3,):
     long = int
@@ -818,9 +820,7 @@ def clifford_layer_in_symplectic_rep(layer, n, srep_dict=None):
     p : numpy array
         The phase vector representing the Clifford implement by specified 
         circuit layer
-    """ 
-    from ..objects.label import Label as _Label #TODO: move label.py to baseobjs??
-    
+    """
     #
     # Todo: this method is currently pretty stupid. It is probably useful to keep it, but for
     # the circuit function above to not use it, and instead just perform the action of each 

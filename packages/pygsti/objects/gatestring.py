@@ -10,7 +10,7 @@ import numpy as _np
 #import uuid  as _uuid
 from ..tools import compattools as _compat
 from ..baseobjs import GateStringParser as _GateStringParser
-from .label import Label as _Label
+from ..baseobjs import Label as _Label
 
 def _gateSeqToStr(seq):
     if len(seq) == 0: return "{}" #special case of empty gate string
@@ -54,18 +54,20 @@ class GateString(object):
         """
         #self.uuid = _uuid.uuid4()
 
+        def convert_to_label(l):
+            if isinstance(l, _Label): return l
+            elif _compat.isstr(l): return _Label(l,None)
+            else: return _Label(l[0],l[1:]) #assume label is an iterable of (name, stateSpcLbl0, stateSpcLbl1, ...)
+
         if tupleOfGateLabels is None and stringRepresentation is None:
             raise ValueError("tupleOfGateLabels and stringRepresentation cannot both be None");
 
         if tupleOfGateLabels is None or (bCheck and stringRepresentation is not None):
             gsparser = _GateStringParser()
             gsparser.lookup = lookup
-            chkTuple = gsparser.parse(stringRepresentation)
-            if tupleOfGateLabels and isinstance(tupleOfGateLabels[0],_Label):
-                chkTuple = tuple(map(_Label,chkTuple)) # TEMPORARY: until parser returns Label-tuples
-
-            if tupleOfGateLabels is None: tupleOfGateLabels = chkTuple
-            elif tuple(tupleOfGateLabels) != chkTuple:
+            chk = gsparser.parse(stringRepresentation) # tuple of Labels
+            if tupleOfGateLabels is None: tupleOfGateLabels = chk
+            elif tuple(map(convert_to_label,tupleOfGateLabels)) != chk:
                 raise ValueError("Error intializing GateString: " +
                             " tuple and string do not match: %s != %s"
                              % (tuple(tupleOfGateLabels),stringRepresentation))
@@ -82,10 +84,6 @@ class GateString(object):
             #If we weren't given a GateString, convert all the elements of the tuple
             # to Labels.  Note that this post-processer parser output too, since the
             # parser returns a *tuple* not a GateString
-            def convert_to_label(l):
-                if isinstance(l, _Label): return l
-                elif _compat.isstr(l): return _Label(l,None)
-                else: return _Label(l[0],l[1:]) #assume label is an iterable of (name, stateSpcLbl0, stateSpcLbl1, ...)
             tupleOfGateLabels = tuple(map(convert_to_label,tupleOfGateLabels))
 
             if stringRepresentation is None:

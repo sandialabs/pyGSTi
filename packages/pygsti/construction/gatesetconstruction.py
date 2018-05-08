@@ -22,7 +22,7 @@ from ..objects import povm as _povm
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
 from ..objects import labeldicts as _ld
-from ..objects import label as _label
+from ..baseobjs import label as _label
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Dim as _Dim
 

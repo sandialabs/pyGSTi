@@ -34,10 +34,10 @@ from . import gaugegroup as _gg
 from . import gatematrixcalc as _gatematrixcalc
 from . import gatemapcalc as _gatemapcalc
 from . import gatetermcalc as _gatetermcalc
-from .label import Label as _Label
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
+from ..baseobjs import Label as _Label
 
 class GateSet(object):
     """
@@ -133,6 +133,10 @@ class GateSet(object):
             raise ValueError("Must set gateset dimension before adding auto-embedded gates.")
         if self.stateSpaceLabels is None:
             raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
+
+        if len(self.stateSpaceLabels.labels) == 1 and \
+           set(self.stateSpaceLabels.labels[0]) == set(gateTargetLabels):
+            return gateVal # if gate operates on *all* the labels, no need to embed
 
         if self._sim_type == "matrix":
             return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal)

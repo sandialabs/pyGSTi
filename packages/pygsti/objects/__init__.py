@@ -48,7 +48,6 @@ from .povm import TensorProdPOVM
 from .instrument import Instrument
 from .instrument import TPInstrument
 
-from .label import Label
 from .gateset import GateSet
 from .gatestring import GateString
 from .gatestring import WeightedGateString
@@ -77,4 +76,4 @@ from .results import Results
 from .gate import compose, optimize_gate, finite_difference_deriv_wrt_params
 
 #Important Base Objects
-from ..baseobjs import VerbosityPrinter, Profiler, SmartCache, Basis
+from ..baseobjs import VerbosityPrinter, Profiler, SmartCache, Basis, Label

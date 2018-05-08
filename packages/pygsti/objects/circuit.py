@@ -11,7 +11,7 @@ import numpy as _np
 import copy as _copy
 
 from . import gatestring as _gstr
-from .label import Label as _Label
+from ..baseobjs import Label as _Label
 
 IDENT = 'I' # Identity-get sentinel
 #FUTURE?

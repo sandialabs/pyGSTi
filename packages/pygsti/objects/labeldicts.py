@@ -14,9 +14,10 @@ import warnings as _warnings
 from . import spamvec as _sv
 from . import gate as _gate
 from . import gatesetmember as _gm
-from .label import Label as _Label
 from ..tools import compattools as _compat
 from ..baseobjs import Dim as _Dim
+from ..baseobjs import Label as _Label
+
 
 class PrefixOrderedDict(_collections.OrderedDict):
     """ 

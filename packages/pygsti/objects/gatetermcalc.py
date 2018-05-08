@@ -19,10 +19,10 @@ from ..tools import compattools as _compat
 from ..tools import listtools as _lt
 from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
+from ..baseobjs import Label as _Label
 from .termevaltree import TermEvalTree as _TermEvalTree
 from .polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
 from .gatecalc import GateCalc
-from .label import Label as _Label
 from .polynomial import Polynomial as _Polynomial
 from .polynomial import FastPolynomial as _FastPolynomial
 

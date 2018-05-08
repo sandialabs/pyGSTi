@@ -8,7 +8,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numbers as _numbers
 
-from ..tools import compattools as _compat
+try:  basestring
+except NameError: basestring = str
+
+def isstr(x): #Duplicates isstr from compattools! (b/c can't import!)
+    """ Return whether `x` has a string type """
+    return isinstance(x, basestring)
+
 
 class Label(object):
     """ 
@@ -39,23 +45,29 @@ class Label(object):
         """
 
         #Case when stateSpaceLabels are given after name in a single tuple
-        if not _compat.isstr(name) and stateSpaceLabels is None \
+        if not isstr(name) and stateSpaceLabels is None \
            and isinstance(name, (tuple,list)):
             stateSpaceLabels = tuple(name[1:])
             name = name[0]
         
         #Type checking
-        assert(_compat.isstr(name)), "`name` must be a string, but it's '%s'" % str(name)
+        assert(isstr(name)), "`name` must be a string, but it's '%s'" % str(name)
         if stateSpaceLabels is not None:
             if not isinstance(stateSpaceLabels, (tuple,list)):
                 stateSpaceLabels = (stateSpaceLabels,)
             for ssl in stateSpaceLabels:
-                assert(_compat.isstr(ssl) or isinstance(ssl, _numbers.Integral)), \
+                assert(isstr(ssl) or isinstance(ssl, _numbers.Integral)), \
                     "State space label '%s' must be a string or integer!" % str(ssl)
+
+            #Try to convert integer-strings to ints (for parsing from files...)
+            integerized_sslbls = []
+            for ssl in stateSpaceLabels:
+                try: integerized_sslbls.append( int(ssl) )
+                except: integerized_sslbls.append( ssl )
                 
             # Regardless of whether the input is a list, tuple, or int, the state space labels
             # (qubits) that the item/gate acts on are stored as a tuple (because tuples are immutable).
-            self.sslbls = tuple(stateSpaceLabels)
+            self.sslbls = tuple(integerized_sslbls)
         else:
             self.sslbls = None
         self.name = name
@@ -93,7 +105,7 @@ class Label(object):
         return "Label" + str(tuple(self))
     
     def __add__(self, s):
-        if _compat.isstr(s):
+        if isstr(s):
             return Label(self.name + s, self.sslbls)
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
@@ -103,7 +115,7 @@ class Label(object):
         Defines equality between gates, so that they are equal if their values
         are equal.
         """
-        if _compat.isstr(other):
+        if isstr(other):
             if self.sslbls: return False # tests for None and len > 0
             return self.name == other
         return self.name == other.name and self.sslbls == other.sslbls # ok to compare None

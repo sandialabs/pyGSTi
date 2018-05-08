@@ -10,6 +10,7 @@ import numpy as _np
 import itertools as _itertools
 import functools as _functools
 import collections as _collections
+import copy as _copy
 from ..tools import symplectic as _symp
 from ..tools import matrixmod2 as _mtx
 
@@ -65,11 +66,26 @@ class StabilizerFrame(object):
         self.u[n:2*n,0:n] = _np.identity(n,int)
         
         self.zblock_start = None # first column of Z-block, set by _rref()
+        self.view_filters = []   # holds qubit filters limiting the action
+                                 # of clifford_update for this state
         self._rref()
 
     def copy(self):
-        return StabilizerFrame(self.s.copy(), [p.copy() for p in self.ps],
-                              self.a.copy())
+        cpy = StabilizerFrame(self.s.copy(), [p.copy() for p in self.ps],
+                              self.a.copy()) # NOT a view
+        cpy.view_filters = self.view_filters[:]
+        return cpy
+    
+    def push_view(self, qubit_filter):
+        """ Applies a filter to the action of `clifford_update`.
+        """
+        self.view_filters.append(qubit_filter)
+
+    def pop_view(self):
+        """ Pops the last applied filter to the action of `clifford_update`.
+        """
+        return self.view_filters.pop()
+        
 
     @property
     def nqubits(self):
@@ -438,7 +454,12 @@ class StabilizerFrame(object):
 
         debug = False
 
-        qubits = qubit_filter if (qubit_filter is not None) else list(range(self.n)) # being acted on
+        qubits = list(range(self.n)) # start with all qubits being acted on
+        for qfilter in self.view_filters:
+            qubits = [qubits[i] for i in qfilter] # apply each filter
+        if qubit_filter is not None:
+            qubits = [qubits[i] for i in qubit_filter] # finally apply qubit_filter
+
         nQ = len(qubits) #number of qubits being acted on (<= n in general)
         sampled_amplitudes = []
 

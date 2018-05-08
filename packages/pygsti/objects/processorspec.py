@@ -13,7 +13,7 @@ from scipy.sparse.csgraph import floyd_warshall as _fw
 
 from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
-from .label import Label as _Label
+from ..baseobjs import Label as _Label
 
 class ProcessorSpec(object):
     """ TODO: docstring """
