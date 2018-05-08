@@ -1023,6 +1023,7 @@ class GateSet(object):
         #Indexed by parent index (an integer)
         elIndicesByParent = _collections.OrderedDict() # final
         outcomesByParent = _collections.OrderedDict()  # final
+        elIndsToOutcomesByParent = _collections.OrderedDict()
 
         # Helper dict: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
         spamTupleToOutcome = { None : ("NONE",) } #Dummy label for placeholding (see resolveSPAM below)
@@ -1050,7 +1051,7 @@ class GateSet(object):
                              for elbl in self.povms[povm_lbl]]
             return gatestring, spamtups
                     
-        def process(action,s,spamtuples,iParent=None,gate_outcomes=(),start=0):
+        def process(s, spamtuples,elIndsToOutcomes,gate_outcomes=(),start=0):
             """ 
             Implements recursive processing of a string. Separately
             implements two different behaviors:
@@ -1064,55 +1065,89 @@ class GateSet(object):
                     #we've found an instrument - recurse!
                     for inst_el_lbl in self.instruments[gate_label]:
                         compiled_el_lbl = gate_label + "_" + inst_el_lbl
-                        process(action, s[0:i] + _gs.GateString((compiled_el_lbl,)) + s[i+1:],
-                                spamtuples, iParent, gate_outcomes + (inst_el_lbl,), i+1)
+                        process(s[0:i] + _gs.GateString((compiled_el_lbl,)) + s[i+1:],
+                                spamtuples, elIndsToOutcomes, gate_outcomes + (inst_el_lbl,), i+1)
                     break
             else: #no instruments -- add "raw" gate string s
                 if s in raw_spamTuples_dict:
-                    assert(gate_outcomes == raw_gateOutcomes_dict[s])
-                    if action == "add":
-                        raw_spamTuples_dict[s] = _lt.remove_duplicates(raw_spamTuples_dict[s] + spamtuples)
-                        # Note: there should only be duplicates if there are duplicates in
-                        # original `gatestring_list` - check this?
-                    elif action == "index":  # fill *ByParent dicts
-                        assert(iParent is not None)
-                        offset = raw_offsets[s]
-                        all_spamtuples = raw_spamTuples_dict[s]
-                        final_outcomes = [ spamTupleToOutcome[x] for x in spamtuples ]
-                        my_spamTuple_indices = [ offset+all_spamtuples.index(x) for x in spamtuples ]
-                        my_outcome_tuples =  [ gate_outcomes + x for x in final_outcomes ]
-                        for i,tup in zip(my_spamTuple_indices,my_outcome_tuples):
-                            if i not in elIndicesByParent[iParent]: #don't duplicate existing indices
-                                elIndicesByParent[iParent].append(i)
-                                outcomesByParent[iParent].append(tup)
-                            else: assert(tup in outcomesByParent) # pragma: no check
-                                    # double-check - could REMOVE for speed in future
+                    assert(gate_outcomes == raw_gateOutcomes_dict[s]) #DEBUG
+                    #if action == "add":
+                    od = raw_spamTuples_dict[s] # ordered dict
+                    for spamtup in spamtuples:
+                        spamtup_indx = od.get(spamtup,None)
+                        if spamtup is None:
+                            # although we've seen this raw string, we haven't
+                            # seen spamtup yet - add it at end
+                            spamtup_indx = len(od)
+                            od[spamtup] = spamtup_indx
+    
+                        #Link the current iParent to this index (even if it was already going to be computed)
+                        outcome_tup = gate_outcomes + spamTupleToOutcome[spamtup]
+                        elIndsToOutcomes[(s,spamtup_indx)] = outcome_tup
+                        
+                    #OLD: raw_spamTuples_dict[s] = _lt.remove_duplicates(raw_spamTuples_dict[s] + spamtuples)
+                    # Note: there should only be duplicates if there are duplicates in
+                    # original `gatestring_list` - check this?
+    
+                    #OLD - "index" case
+                    #elif action == "index":  # fill *ByParent dicts
+                    #    assert(iParent is not None)
+                    #    offset = raw_offsets[s]
+                    #    all_spamtuples = raw_spamTuples_dict[s] # an OrderedDict
+                    #    final_outcomes = [ spamTupleToOutcome[x] for x in spamtuples ]
+                    #    my_spamTuple_indices = [ offset+all_spamtuples[x] for x in spamtuples ]
+                    #    my_outcome_tuples =  [ gate_outcomes + x for x in final_outcomes ]
+                    #    for i,tup in zip(my_spamTuple_indices,my_outcome_tuples):
+                    #        if i not in elIndicesByParent[iParent]: #don't duplicate existing indices
+                    #            elIndicesByParent[iParent][i] = True #just a placeholder; just care about (ordered) keys
+                    #            outcomesByParent[iParent].append(tup)
+                    #        else: assert(tup in outcomesByParent) # pragma: no check
+                    #                # double-check - could REMOVE for speed in future
+                    
                 else:
-                    assert(action == "add") # s should have been added in "add" process!
-                    raw_spamTuples_dict[s] = spamtuples
-                    raw_gateOutcomes_dict[s] = gate_outcomes
+                    # Note: store elements of raw_spamTuples_dict as dicts for
+                    # now, for faster lookup during "index" mode
+                    raw_spamTuples_dict[s] = _collections.OrderedDict([(spamtup,i) for i,spamtup in enumerate(spamtuples)])
+                    raw_gateOutcomes_dict[s] = gate_outcomes #DEBUG
+    
+                    spamTuple_indices = range(len(spamtuples))
+                    outcome_tuples =  [ gate_outcomes + spamTupleToOutcome[x] for x in spamtuples ]
+                    for ist,out_tup in zip(spamTuple_indices,outcome_tuples):
+                        elIndsToOutcomes[(s,ist)] = out_tup
+                          # Note: works even if `i` already exists - doesn't reorder keys then
+    
+                    
 
         #Begin actual processing work:
 
-        # Step1: recursively populate raw_spamTuples_dict and
-        #        raw_gateOutcomes_dict
-        for gstr in gatestrings:
-            gstr, spamtuples = resolveSPAM(gstr)
-            process("add",gstr,spamtuples)  
-
+        # Step1: recursively populate raw_spamTuples_dict,
+        #        raw_gateOutcomes_dict, and elIndsToOutcomesByParent
+        resolved_gatestrings = list(map(resolveSPAM, gatestrings))
+        for iParent,(gstr,spamtuples) in enumerate(resolved_gatestrings):
+            elIndsToOutcomesByParent[iParent] = _collections.OrderedDict()
+            process(gstr,spamtuples, elIndsToOutcomesByParent[iParent])
+            
         # Step2: fill raw_offsets dictionary
         off = 0 
         for raw_str, spamtuples in raw_spamTuples_dict.items():
             raw_offsets[raw_str] = off; off += len(spamtuples)
         nTotElements = off
 
-        # Step3: 2nd round... recursively gather per-parent indices
-        for k,gstr in enumerate(gatestrings):
-            gstr, spamtuples = resolveSPAM(gstr)
-            elIndicesByParent[k] = []
-            outcomesByParent[k] = []
-            process("index",gstr,spamtuples,k)
-            elIndicesByParent[k] = _slct.list_to_slice(elIndicesByParent[k], array_ok=True)
+        # Step3: split elIndsToOutcomesByParent into
+        #        elIndicesByParent and outcomesByParent
+        for iParent,elIndsToOutcomes in elIndsToOutcomesByParent.items():
+            elIndicesByParent[iParent] = []
+            outcomesByParent[iParent] = []
+            for (raw_str,rel_spamtup_indx),outcomes in elIndsToOutcomes.items():
+                elIndicesByParent[iParent].append( raw_offsets[raw_str]+rel_spamtup_indx )
+                outcomesByParent[iParent].append( outcomes )
+            elIndicesByParent[iParent] = _slct.list_to_slice(elIndicesByParent[iParent], array_ok=True)
+        
+        #Step3b: convert elements of raw_spamTuples_dict from OrderedDicts
+        # to lists not that we don't need to use them for lookups anymore.
+        for s in list(raw_spamTuples_dict.keys()):
+            raw_spamTuples_dict[s] = list(raw_spamTuples_dict[s].keys())
+            
 
         #Step4: change lists/slices -> index arrays for user convenience
         elIndicesByParent = _collections.OrderedDict(
@@ -1120,14 +1155,14 @@ class GateSet(object):
               for k,v in elIndicesByParent.items()] )
 
         
-        #DEBUG: SANITY CHECK
-        if len(gatestrings) > 1:
-            for k,gstr in enumerate(gatestrings):
-                _,outcomes_k = self.compile_gatestring(gstr)
-                nIndices = _slct.length(elIndicesByParent[k]) if isinstance(elIndicesByParent[k], slice) \
-                              else len(elIndicesByParent[k])
-                assert(len(outcomes_k) == nIndices)
-                assert(outcomes_k == outcomesByParent[k])
+        ##DEBUG: SANITY CHECK
+        #if len(gatestrings) > 1:
+        #    for k,gstr in enumerate(gatestrings):
+        #        _,outcomes_k = self.compile_gatestring(gstr)
+        #        nIndices = _slct.length(elIndicesByParent[k]) if isinstance(elIndicesByParent[k], slice) \
+        #                      else len(elIndicesByParent[k])
+        #        assert(len(outcomes_k) == nIndices)
+        #        assert(outcomes_k == outcomesByParent[k])
 
         #print("GateSet.compile debug:")
         #print("input = ",gatestrings)
