@@ -118,10 +118,10 @@ class Results(object):
         self.gatestring_lists['all'] = _tools.remove_duplicates(
             list(_itertools.chain(*self.gatestring_lists['iteration'])) )
         
-        running_lst = []; delta_lsts = []
+        running_set = set(); delta_lsts = []
         for lst in self.gatestring_lists['iteration']:
-            delta_lst = [ x for x in lst if (x not in running_lst) ]
-            delta_lsts.append(delta_lst); running_lst.extend(delta_lst) 
+            delta_lst = [ x for x in lst if (x not in running_set) ]
+            delta_lsts.append(delta_lst); running_set.update(delta_lst) 
         self.gatestring_lists['iteration delta'] = delta_lsts # *added* at each iteration
 
         #Set "Ls and germs" info: gives particular structure

@@ -1271,8 +1271,9 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                 if reopt and (opt_args is not None):
                     #convert weights dict to an array for do_XXX methods below
                     gsWeightsArray = _np.ones( len(rawLists[-1]), 'd')
+                    gsindx = { gatestr:i for i,gatestr in enumerate(rawLists[-1]) }
                     for gatestr, weight in gsWeights.items():
-                        gsWeightsArray[ rawLists[-1].index(gatestr) ] = weight
+                        gsWeightsArray[ gsindx[gatestr] ] = weight
                     
                     reopt_args = dict(dataset=ds,
                                       startGateset=gs_lsgst_list[-1],

@@ -12,6 +12,9 @@ from ..tools import compattools as _compat
 from ..baseobjs import GateStringParser as _GateStringParser
 from ..baseobjs import Label as _Label
 
+import os,inspect
+debug_record = {}
+
 def _gateSeqToStr(seq):
     if len(seq) == 0: return "{}" #special case of empty gate string
     return ''.join(map(str,seq))
@@ -53,6 +56,10 @@ class GateString(object):
             which can be used for substitutions using the S<label> syntax.
         """
         #self.uuid = _uuid.uuid4()
+        
+        #caller = inspect.getframeinfo(inspect.currentframe().f_back)
+        #ky = "%s:%s:%d" % (caller[2],os.path.basename(caller[0]),caller[1])
+        #debug_record[ky] = debug_record.get(ky, 0) + 1
 
         def convert_to_label(l):
             if isinstance(l, _Label): return l
@@ -86,8 +93,9 @@ class GateString(object):
             # parser returns a *tuple* not a GateString
             tupleOfGateLabels = tuple(map(convert_to_label,tupleOfGateLabels))
 
-            if stringRepresentation is None:
-                stringRepresentation = _gateSeqToStr( tupleOfGateLabels )
+            #Note: now it's OK to have _str == None, as str is build on demand
+            # In the past we did: if stringRepresentation is None:
+            #    stringRepresentation = _gateSeqToStr( tupleOfGateLabels )
 
             self._tup = tuple(tupleOfGateLabels)
             self._str = str(stringRepresentation)
@@ -103,6 +111,8 @@ class GateString(object):
 
     @property
     def str(self):
+        if self._str is None:
+            self._str = _gateSeqToStr(self.tup)
         return self._str
 
     @str.setter

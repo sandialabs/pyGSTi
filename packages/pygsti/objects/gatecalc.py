@@ -152,7 +152,7 @@ class GateCalc(object):
            any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.preps.values()]) or \
            any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.effects.values()]):
             raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
-                                       "parameters for GateSets with sparse "
+                                       "parameters for GateSets with non-dense "
                                        "member representations"))
 
         bSkipEcs = True #Whether we should artificially skip complement-type
