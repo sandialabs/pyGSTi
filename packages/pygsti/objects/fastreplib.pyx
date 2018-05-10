@@ -5,15 +5,23 @@
 
 import sys
 import numpy as np
-from libcpp cimport bool
 from libc.stdlib cimport malloc, free
+from libcpp cimport bool
+from libcpp.vector cimport vector
+#from libcpp.unordered_map cimport unordered_map
+from cython.operator cimport dereference as deref, preincrement as inc
 cimport numpy as np
 cimport cython
+
+from ..tools import mpitools as _mpit
+from ..tools import slicetools as _slct
+
 
 
 cdef extern from "fastreps.h" namespace "CReps":    
     cdef cppclass DMStateCRep:
         DMStateCRep() except +
+        DMStateCRep(int) except +
         DMStateCRep(double*,int,bool) except +
         int _dim
         double* _dataptr
@@ -32,6 +40,10 @@ cdef extern from "fastreps.h" namespace "CReps":
         int _dim
         double* _dataptr
 
+
+ctypedef DMGateCRep* DMGateCRep_ptr
+ctypedef DMStateCRep* DMStateCRep_ptr
+ctypedef DMEffectCRep* DMEffectCRep_ptr
         
 cdef class StateRep:
     pass
@@ -176,41 +188,258 @@ def propagate_staterep(staterep, gatereps):
     return ret
 
 
-def compute_pr_cache(ret, rhorep, ereps, gatereps, ievalTree, comm, scratch=None):
-    #tStart = _time.time()
-    #dim = self.dim
-    #cacheSize = evalTree.cache_size()
-    #rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
 
 
-    #Get rho & rhoCache
-    if scratch is None:
-        rho_cache = {}
-    else:
-        rho_cache = scratch
-                   
-    #comm is currently ignored
-    #TODO: if evalTree is split, distribute among processors
-    for i,iStart,remainder,iCache in ievalTree:
-        if iStart is None:  init_state = rhorep
-        else:               init_state = rho_cache[iStart] #[:,None]
-
+cdef vector[vector[int]] convert_evaltree(evalTree, gate_lookup):
+    # c_evalTree :
+    # an array of int-arrays; each int-array is [i,iStart,iCache,<remainder gate indices>]
+    cdef vector[int] intarray
+    cdef vector[vector[int]] c_evalTree = vector[vector[int]](len(evalTree))
+    for kk,ii in enumerate(evalTree.get_evaluation_order()):
+        iStart,remainder,iCache = evalTree[ii]
+        if iStart is None: iStart = -1 # so always an int
+        if iCache is None: iCache = -1 # so always an int
+        intarray = vector[int](3 + len(remainder))
+        intarray[0] = ii
+        intarray[1] = iStart
+        intarray[2] = iCache
+        for jj,gl in enumerate(remainder,start=3):
+            intarray[jj] = gate_lookup[gl]
+        c_evalTree[kk] = intarray
         
-        #Propagate state rep
-        #print("init ",i,str(init_state))
-        #print("applying")
-        #for r in remainder:
-        #    print("mx:")
-        #    print(gatereps[r])
-        final_state = propagate_staterep(init_state, [gatereps[r] for r in remainder] )
-        #print("final ",i,str(final_state))
-        if iCache is not None: rho_cache[iCache] = final_state # [:,0] #store this state in the cache
+    return c_evalTree
 
-        for j,erep in enumerate(ereps):
+cdef vector[DMStateCRep*] create_rhocache(int cacheSize, int state_dim):
+    cdef int i
+    cdef vector[DMStateCRep*] rho_cache = vector[DMStateCRep_ptr](cacheSize)
+    for i in range(cacheSize): # fill cache with empty but alloc'd states
+        rho_cache[i] = new DMStateCRep(state_dim)
+    return rho_cache
+
+cdef void free_rhocache(vector[DMStateCRep*] rho_cache):
+    cdef unsigned int i
+    for i in range(rho_cache.size()): # fill cache with empty but alloc'd states
+        del rho_cache[i]
+
+
+cdef vector[DMGateCRep*] convert_gatereps(gatereps):
+    # c_gatereps : an array of DMGateCReps
+    cdef vector[DMGateCRep*] c_gatereps = vector[DMGateCRep_ptr](len(gatereps))
+    for ii,grep in gatereps.items(): # (ii = python variable)
+        c_gatereps[ii] = &(<DMGateRep?>grep).c_gate
+    return c_gatereps
+
+cdef DMStateCRep* convert_rhorep(rhorep):
+    # extract c-reps from rhorep and ereps => c_rho and c_ereps
+    return (<DMStateRep?>rhorep).c_state
+
+cdef vector[DMEffectCRep*] convert_ereps(ereps):
+    cdef vector[DMEffectCRep*] c_ereps = vector[DMEffectCRep_ptr](len(ereps))
+    for i in range(len(ereps)):
+        c_ereps[i] = &(<DMEffectRep>ereps[i]).c_effect
+    return c_ereps
+
+
+def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None): # TODO remove scratch
+
+
+    rhoVec,EVecs = calc._rhoEs_from_labels(rholabel, elabels)
+    pCache = np.empty((len(evalTree),len(EVecs)),'d')
+
+    #Get (extension-type) representation objects
+    rhorep = rhoVec.torep('prep')
+    ereps = [ E.torep('effect') for E in EVecs]  # could cache these? then have torep keep a non-dense rep that can be quickly kron'd for a tensorprod spamvec
+    gate_lookup = { lbl:i for i,lbl in enumerate(calc.gates.keys()) } # gate labels -> ints for faster lookup
+    gatereps = { i:calc.gates[lbl].torep() for lbl,i in gate_lookup.items() }
+    
+    # convert to C-mode:  evaltree, gate_lookup, gatereps
+    cdef c_evalTree = convert_evaltree(evalTree, gate_lookup)
+    cdef DMStateCRep *c_rho = convert_rhorep(rhorep)
+    cdef vector[DMGateCRep*] c_gatereps = convert_gatereps(gatereps)
+    cdef vector[DMEffectCRep*] c_ereps = convert_ereps(ereps)
+
+    # create rho_cache = vector of DMStateCReps
+    cdef vector[DMStateCRep*] rho_cache = create_rhocache(evalTree.cache_size(), c_rho._dim)
+
+    #OLD cdef double[:,:] ret_view = ret
+    dm_compute_pr_cache(pCache, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
+
+    free_rhocache(rho_cache)  #delete cache entries
+    return pCache
+        
+
+
+cdef dm_compute_pr_cache(double[:,:] ret,
+                         vector[vector[int]] c_evalTree,
+                         vector[DMGateCRep*] c_gatereps,
+                         DMStateCRep *c_rho, vector[DMEffectCRep*] c_ereps,
+                         vector[DMStateCRep*]* prho_cache, comm): # any way to transmit comm?
+    #Note: we need to take in rho_cache as a pointer b/c we may alter the values its
+    # elements point to (instead of copying the states) - we just guarantee that in the end
+    # all of the cache entries are filled with allocated (by 'new') states that the caller
+    # can deallocate at will.
+    cdef int k,l, i, istart, icache
+    cdef double p
+    cdef int dim = c_rho._dim
+    cdef DMStateCRep *init_state
+    cdef DMStateCRep *prop1
+    cdef DMStateCRep *tprop
+    cdef DMStateCRep *final_state
+    cdef DMStateCRep *prop2 = new DMStateCRep(dim)
+    cdef DMStateCRep *shelved = new DMStateCRep(dim)
+
+    #print "BEGIN"
+
+    #Invariants required for proper memory management:
+    # - upon loop entry, prop2 is allocated and prop1 is not (it doesn't "own" any memory)
+    # - all rho_cache entries have been allocated via "new"
+    for k in range(c_evalTree.size()):
+        intarray = c_evalTree[k]
+        i = intarray[0]
+        istart = intarray[1]
+        icache = intarray[2]
+
+        if istart == -1:  init_state = c_rho
+        else:             init_state = deref(prho_cache)[istart]
+        
+        #DEBUG
+        #print "LOOP i=",i," istart=",istart," icache=",icache," remcnt=",(intarray.size()-3)
+        #print [ init_state._dataptr[t] for t in range(4) ]
+    
+        #Propagate state rep
+        # prop2 should already be alloc'd; need to "allocate" prop1 - either take from cache or from "shelf"
+        #OLD: prop1 = new DMStateCRep(init_state._dataptr, dim, <bool>1) 
+        prop1 = shelved if icache == -1 else deref(prho_cache)[icache]
+        for j in range(dim): prop1._dataptr[j] = init_state._dataptr[j] # copy init_state -> prop1   FUTURE: a method of DMStateCRep?
+        #print " prop1:";  print [ prop1._dataptr[t] for t in range(4) ]
+        for l in range(3,intarray.size()): #during loop, both prop1 & prop2 are alloc'd        
+            c_gatereps[intarray[l]].acton(prop1,prop2)
+            #print " post-act prop2:"; print [ prop2._dataptr[t] for t in range(4) ]
+            tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
+        final_state = prop1 # output = prop1 (after swap from loop above)
+        # Note: prop2 is the other alloc'd state and this maintains invariant
+        #print " final:"; print [ final_state._dataptr[t] for t in range(4) ]
+        
+        for j in range(c_ereps.size()):
             # p = erep.probability(final_state) #outcome probability
-            p = erep.amplitude(final_state) #outcome probability
+            p = c_ereps[j].amplitude(final_state) #outcome probability
             #print("processing ",i,j,p)
             ret[i,j] = p
+
+        if icache != -1:
+            deref(prho_cache)[icache] = final_state # store this state in the cache
+        else: # our 2nd state was pulled from the shelf before; return it
+            shelved = final_state
+            final_state = NULL
+
+
+    #delete our temp states
+    del prop2
+    del shelved
+
+
+    
+def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
+
+    cdef double eps = 1e-7 #hardcoded?
+
+    #Compute finite difference derivatives, one parameter at a time.
+    param_indices = range(calc.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
+    nDerivCols = len(param_indices) # *all*, not just locally computed ones
+
+    rhoVec,EVecs = calc._rhoEs_from_labels(rholabel, elabels)
+    pCache = np.empty((len(evalTree),len(elabels)),'d')
+    dpr_cache  = np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
+
+    #Get (extension-type) representation objects
+    rhorep = calc.preps[rholabel].torep('prep')
+    ereps = [ calc.effects[el].torep('effect') for el in elabels]
+    gate_lookup = { lbl:i for i,lbl in enumerate(calc.gates.keys()) } # gate labels -> ints for faster lookup
+    gatereps = { i:calc.gates[lbl].torep() for lbl,i in gate_lookup.items() }
+    
+    # convert to C-mode:  evaltree, gate_lookup, gatereps
+    cdef c_evalTree = convert_evaltree(evalTree, gate_lookup)
+    cdef DMStateCRep *c_rho = convert_rhorep(rhorep)
+    cdef vector[DMGateCRep*] c_gatereps = convert_gatereps(gatereps)
+    cdef vector[DMEffectCRep*] c_ereps = convert_ereps(ereps)
+
+    # create rho_cache = vector of DMStateCReps
+    cdef vector[DMStateCRep*] rho_cache = create_rhocache(evalTree.cache_size(), c_rho._dim)
+
+    dm_compute_pr_cache(pCache, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
+    pCache_delta = pCache.copy() # for taking finite differences
+
+    all_slices, my_slice, owners, subComm = \
+            _mpit.distribute_slice(slice(0,len(param_indices)), comm)
+
+    my_param_indices = param_indices[my_slice]
+    st = my_slice.start #beginning of where my_param_indices results
+                        # get placed into dpr_cache
+    
+    #Get a map from global parameter indices to the desired
+    # final index within dpr_cache
+    iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
+
+    orig_vec = calc.to_vector().copy()
+    for i in range(calc.Np):
+        #print("dprobs cache %d of %d" % (i,self.Np))
+        if i in iParamToFinal:
+            iFinal = iParamToFinal[i]
+            vec = orig_vec.copy(); vec[i] += eps
+            calc.from_vector(vec)
+
+            #rebuild reps (not evaltree or gate_lookup)
+            rhorep = calc.preps[rholabel].torep('prep')
+            ereps = [ calc.effects[el].torep('effect') for el in elabels]
+            gatereps = { i:calc.gates[lbl].torep() for lbl,i in gate_lookup.items() }
+            c_rho = convert_rhorep(rhorep)
+            c_ereps = convert_ereps(ereps)
+            c_gatereps = convert_gatereps(gatereps)
+
+            dm_compute_pr_cache(pCache_delta, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
+            dpr_cache[:,:,iFinal] = (pCache_delta - pCache)/eps
+
+    calc.from_vector(orig_vec)
+    free_rhocache(rho_cache)
+    
+    #Now each processor has filled the relavant parts of dpr_cache,
+    # so gather together:
+    _mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=2, comm=comm)
+    
+    # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
+    #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" % 
+    #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
+
+    return dpr_cache
+
+
+    
+
+#OLD LOOP - maybe good for python version?
+#    #comm is currently ignored
+#    #TODO: if evalTree is split, distribute among processors
+#    for i,iStart,remainder,iCache in ievalTree:
+#        if iStart is None:  init_state = rhorep
+#        else:               init_state = rho_cache[iStart] #[:,None]
+#
+#        
+#        #Propagate state rep
+#        #print("init ",i,str(init_state))
+#        #print("applying")
+#        #for r in remainder:
+#        #    print("mx:")
+#        #    print(gatereps[r])
+#        final_state = propagate_staterep(init_state, [gatereps[r] for r in remainder] )
+#        #print("final ",i,str(final_state))
+#        if iCache is not None: rho_cache[iCache] = final_state # [:,0] #store this state in the cache
+#
+#        for j,erep in enumerate(ereps):
+#            # p = erep.probability(final_state) #outcome probability
+#            p = erep.amplitude(final_state) #outcome probability
+#            #print("processing ",i,j,p)
+#            ret[i,j] = p
+
+
 
         #if self.evotype == "statevec":
         #    for j,E in enumerate(EVecs):

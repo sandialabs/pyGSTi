@@ -171,10 +171,9 @@ class GateMapCalc(GateCalc):
         """
         #NEW HERE
         rholabel,elabel = spamTuple # can't handle custom rho/e -- this seems ok...
-        istring = tuple((self.gate_lookup[gl] for gl in gatestring))
         rhorep = self.preps[rholabel].torep('prep')
         erep = self.effects[elabel].torep('effect')
-        rhorep = replib.propagate_staterep(rhorep, [self.gatereps[i] for i in istring]) #HERE
+        rhorep = replib.propagate_staterep(rhorep, [self.gates[gl].torep() for gl in gatestring])
         # p = erep.probability(rhorep) #outcome probability
         p = erep.amplitude(rhorep) #outcome probability - ONLY WORKS for "densitymx" mode 
 
@@ -319,20 +318,9 @@ class GateMapCalc(GateCalc):
 
     def _compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch=None):
 
-
         #TEST FAST MODE (if available)
-        rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
-        ievalTree = []
-        for i in evalTree.get_evaluation_order():
-            iStart,remainder,iCache = evalTree[i]
-            ievalTree.append( (i,iStart,tuple( (self.gate_lookup[gl] for gl in remainder)),iCache) )
-
-        ret2 = _np.empty((len(ievalTree),len(EVecs)),'d')
-        #erep0 = EVecs[0].torep('effect') # first E so we can reuse below?
-        rhorep = rhoVec.torep('prep')
-        ereps = [ E.torep('effect') for E in EVecs]  # could cache these? then have torep keep a non-dense rep that can be quickly kron'd for a tensorprod spamvec        
-        replib.compute_pr_cache(ret2, rhorep, ereps, self.gatereps, ievalTree, comm, scratch=None)
-        #return ret
+        #ret2 = replib.DM_compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch)
+        #return ret2
         #END TEST FAST MODE
         
         #tStart = _time.time()
@@ -391,12 +379,18 @@ class GateMapCalc(GateCalc):
 
         #CHECK
         #print("DB: ",ret); print("DB: ",ret2)
-        assert(_np.linalg.norm(ret-ret2) < 1e-6)
+        #assert(_np.linalg.norm(ret-ret2) < 1e-6)
         
         return ret
 
     
     def _compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
+        #TEST FAST MODE (if available)
+        #dpr_cache2 = replib.DM_compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch)
+        #return dpr_cache2
+        #END TEST FAST MODE
+
+        
         #Compute finite difference derivatives, one parameter at a time.
         tStart = _time.time() #DEBUG
         param_indices = range(self.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
@@ -453,6 +447,9 @@ class GateMapCalc(GateCalc):
         # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
         #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" % 
         #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
+
+        #CHECK
+        #assert(_np.linalg.norm(dpr_cache-dpr_cache2) < 1e-6)
 
         return dpr_cache
 

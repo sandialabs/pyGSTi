@@ -14,6 +14,14 @@ namespace CReps {
     _ownmem = false;
   }
 
+  DMStateCRep::DMStateCRep(int dim) {
+    _dataptr = new double[dim];
+    for(int i=0; i<dim; i++) _dataptr[i] = 0;
+    _dim = dim;
+    _ownmem = true;
+  }
+
+  
   DMStateCRep::DMStateCRep(double* data, int dim, bool copy=false) {
     if(copy) {
       _dataptr = new double[dim];
@@ -27,10 +35,10 @@ namespace CReps {
   }
 
   DMStateCRep::~DMStateCRep() {
-    //std::cout << "DELETING " << _dataptr << std::endl;
-    //if(_ownmem && _dataptr != NULL)
-    //  delete [] _dataptr;
-    //std::cout << "Done deconstr." << std::endl;
+    std::cout << "DELETING " << _dataptr << std::endl;
+    if(_ownmem && _dataptr != NULL)
+      delete [] _dataptr;
+    std::cout << "Done deconstr." << std::endl;
   }
 
 

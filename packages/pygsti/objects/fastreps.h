@@ -10,6 +10,7 @@ namespace CReps {
     bool _ownmem;
 
     DMStateCRep();
+    DMStateCRep(int dim);    
     DMStateCRep(double* data, int dim, bool copy);
     ~DMStateCRep();
   };

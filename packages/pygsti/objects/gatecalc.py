@@ -71,11 +71,11 @@ class GateCalc(object):
         self.effects = effects
 
         #Conversion of labels -> integers for speed & C-compatibility
-        self.gate_lookup = { lbl:i for i,lbl in enumerate(gates.keys()) }
-        self.prep_lookup = { lbl:i for i,lbl in enumerate(preps.keys()) }
-        self.effect_lookup = { lbl:i for i,lbl in enumerate(effects.keys()) }
-        
-        self.gatereps = { i:self.gates[lbl].torep() for lbl,i in self.gate_lookup.items() }
+        #self.gate_lookup = { lbl:i for i,lbl in enumerate(gates.keys()) }
+        #self.prep_lookup = { lbl:i for i,lbl in enumerate(preps.keys()) }
+        #self.effect_lookup = { lbl:i for i,lbl in enumerate(effects.keys()) }
+        #
+        #self.gatereps = { i:self.gates[lbl].torep() for lbl,i in self.gate_lookup.items() }
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
         
@@ -118,7 +118,7 @@ class GateCalc(object):
             obj.from_vector( v[obj.gpindices] )
 
         #Re-init reps for computation
-        self.gatereps = { i:self.gates[lbl].torep() for lbl,i in self.gate_lookup.items() }
+        #self.gatereps = { i:self.gates[lbl].torep() for lbl,i in self.gate_lookup.items() }
         #self.gatereps = { lbl:g.torep() for lbl,g in gates.items() }
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
