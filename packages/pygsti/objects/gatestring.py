@@ -98,7 +98,8 @@ class GateString(object):
             #    stringRepresentation = _gateSeqToStr( tupleOfGateLabels )
 
             self._tup = tuple(tupleOfGateLabels)
-            self._str = str(stringRepresentation)
+            self._str = str(stringRepresentation) \
+                        if (stringRepresentation is not None) else None
 
     @property
     def tup(self):

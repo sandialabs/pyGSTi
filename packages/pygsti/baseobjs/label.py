@@ -126,7 +126,7 @@ class Label(tuple):
         """
         Defines how a Gate is printed out, e.g. Gx:0 or Gcnot:1:2
         """
-        return "Label" + str(self)
+        return "Label[" + str(self) + "]"
     
     def __add__(self, s):
         if isstr(s):
@@ -146,10 +146,10 @@ class Label(tuple):
         #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
 
     def __lt__(self,x):
-        return self < tuple(x)
+        return tuple.__lt__(self,tuple(x))
 
     def __gt__(self,x):
-        return self > tuple(x)
+        return tuple.__gt__(self,tuple(x))
 
     __hash__ = tuple.__hash__ # this is why we derive from tuple - using the
                               # native tuple.__hash__ directly == speed boost
