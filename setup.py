@@ -33,7 +33,15 @@ try:
                   language="c++",
                   extra_compile_args=["-std=c++11"], #,"-stdlib=libc++"
                   extra_link_args=["-std=c++11"]
+                  ),
+        Extension("pygsti.objects.fastreplib",
+                  sources=["packages/pygsti/objects/fastreplib.pyx", "packages/pygsti/objects/fastreps.cpp"], 
+                  include_dirs=['.', np.get_include()],
+                  language="c++",
+                  extra_compile_args=["-std=c++11"], #,"-stdlib=libc++"
+                  extra_link_args=["-std=c++11"]
                   )
+
         ]
     ext_modules = cythonize(ext_modules)
 except ImportError: # if Cython isn't available (e.g. in readthedocs) just skip

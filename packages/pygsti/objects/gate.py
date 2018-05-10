@@ -41,6 +41,11 @@ TOL = 1e-12
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
 try:
+    from . import fastreplib as replib
+except ImportError:
+    from . import replib
+
+try:
     #import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
     from ..tools import fastcalc as _fastcalc
 except ImportError:
@@ -443,6 +448,19 @@ class Gate(_gatesetmember.GateSetMember):
         """
         raise NotImplementedError("todense(...) not implemented for %s objects!" % self.__class__.__name__)
 
+    def torep(self):
+        """
+        Return a "representation" object for this gate.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        GateRep
+        """
+        raise NotImplementedError("torep(...) not implemented for %s objects!" % self.__class__.__name__)
+
     def tosparse(self):
         """
         Return this gate as a sparse matrix.
@@ -802,6 +820,25 @@ class GateMatrix(Gate):
         Return this gate as a dense matrix.
         """
         return self.base
+
+    def torep(self):
+        """
+        Return a "representation" object for this gate.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        GateRep
+        """
+        if self._evotype == "statevec":
+            return replib.SVGateRep(self.base)
+        elif self._evotype == "densitymx":
+            return replib.DMGateRep(self.base)
+        else:
+            raise ValueError("Invalid evotype for torep(): %s" % self._evotype)
+
 
     def __copy__(self):
         # We need to implement __copy__ because we defer all non-existing

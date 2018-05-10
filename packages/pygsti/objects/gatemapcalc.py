@@ -21,6 +21,12 @@ from ..baseobjs import Label as _Label
 from .mapevaltree import MapEvalTree as _MapEvalTree
 from .gatecalc import GateCalc
 
+try:
+    from . import fastreplib as replib
+except ImportError:
+    from . import replib
+
+
 
 _dummy_profiler = _DummyProfiler()
 
@@ -163,14 +169,24 @@ class GateMapCalc(GateCalc):
         -------
         probability: float
         """
-        rho,E = self._rhoE_from_spamTuple(spamTuple)
-        rho = self.propagate_state(rho, gatestring)
-        if self.evotype == "statevec":
-            p = float(abs(_np.dot(E,rho))**2)
-        elif self.evotype == "densitymx":
-            p = float(_np.dot(E,rho))
-        else: # evotype == "stabilizer"
-            p = rho.measurement_probability(E.outcomes)
+        #NEW HERE
+        rholabel,elabel = spamTuple # can't handle custom rho/e -- this seems ok...
+        istring = tuple((self.gate_lookup[gl] for gl in gatestring))
+        rhorep = self.preps[rholabel].torep('prep')
+        erep = self.effects[elabel].torep('effect')
+        rhorep = replib.propagate_staterep(rhorep, [self.gatereps[i] for i in istring]) #HERE
+        # p = erep.probability(rhorep) #outcome probability
+        p = erep.amplitude(rhorep) #outcome probability - ONLY WORKS for "densitymx" mode 
+
+        #OLD
+        #rho,E = self._rhoE_from_spamTuple(spamTuple)
+        #rho = self.propagate_state(rho, gatestring)
+        #if self.evotype == "statevec":
+        #    p = float(abs(_np.dot(E,rho))**2)
+        #elif self.evotype == "densitymx":
+        #    p = float(_np.dot(E,rho))
+        #else: # evotype == "stabilizer"
+        #    p = rho.measurement_probability(E.outcomes)
 
         if _np.isnan(p):
             if len(gatestring) < 10:
@@ -302,6 +318,23 @@ class GateMapCalc(GateCalc):
 
 
     def _compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch=None):
+
+
+        #TEST FAST MODE (if available)
+        rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
+        ievalTree = []
+        for i in evalTree.get_evaluation_order():
+            iStart,remainder,iCache = evalTree[i]
+            ievalTree.append( (i,iStart,tuple( (self.gate_lookup[gl] for gl in remainder)),iCache) )
+
+        ret2 = _np.empty((len(ievalTree),len(EVecs)),'d')
+        #erep0 = EVecs[0].torep('effect') # first E so we can reuse below?
+        rhorep = rhoVec.torep('prep')
+        ereps = [ E.torep('effect') for E in EVecs]  # could cache these? then have torep keep a non-dense rep that can be quickly kron'd for a tensorprod spamvec        
+        replib.compute_pr_cache(ret2, rhorep, ereps, self.gatereps, ievalTree, comm, scratch=None)
+        #return ret
+        #END TEST FAST MODE
+        
         #tStart = _time.time()
         dim = self.dim
         cacheSize = evalTree.cache_size()
@@ -317,7 +350,7 @@ class GateMapCalc(GateCalc):
                 rho_cache = _np.zeros((cacheSize, dim), typ)
             else:
                 assert(scratch.shape == (cacheSize,dim))
-                rho_cache = scratch #to avoid recomputation
+                rho_cache = scratch #to avoid reallocation
                 
             Escratch = _np.empty(dim,typ) # memory for E.todense() if it wants it
             rho = rhoVec.todense(Escratch).copy() #rho can use same scratch space (enables fastkron)
@@ -351,11 +384,15 @@ class GateMapCalc(GateCalc):
                     # FUTURE: optionally pre-compute todense() results for speed if mem is available?
             else: # evotype == "stabilizer" case
                 #TODO: compute using tree-like fanout, only fanning when necessary. -- at least when there are O(d=2^nQ) effects
-                state_s, state_p = final_state # should be a StabilizerState.todense() "object"
                 for j,E in enumerate(EVecs):
                     ret[i,j] = rho.measurement_probability(E.outcomes)
 
         #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
+
+        #CHECK
+        #print("DB: ",ret); print("DB: ",ret2)
+        assert(_np.linalg.norm(ret-ret2) < 1e-6)
+        
         return ret
 
     
@@ -400,7 +437,7 @@ class GateMapCalc(GateCalc):
         iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
 
         orig_vec = self.to_vector().copy()
-        for i in range(self.Np): #HERE range(20): #
+        for i in range(self.Np):
             #print("dprobs cache %d of %d" % (i,self.Np))
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]

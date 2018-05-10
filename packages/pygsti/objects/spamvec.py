@@ -33,6 +33,10 @@ from . import term as _term
 from . import stabilizer as _stabilizer
 from .polynomial import Polynomial as _Polynomial
 
+try:
+    from . import fastreplib as replib
+except ImportError:
+    from . import replib
 
 try:
     #import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
@@ -321,7 +325,29 @@ class SPAMVec(_gatesetmember.GateSetMember):
         """
         raise NotImplementedError("todense(...) not implemented for %s objects!" % self.__class__.__name__)
 
-    
+    def torep(self, typ, outrep=None):
+        """
+        Return a "representation" object for this SPAM vector.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Parameters
+        ----------
+        typ : {'prep','effect'}
+            The type of representation (for cases when the vector type is
+            not already defined).
+
+        outrep : StateRep
+            If not None, an existing state representation appropriate to this
+            SPAM vector that may be used instead of allocating a new one.
+
+        Returns
+        -------
+        StateRep
+        """
+        raise NotImplementedError("torep(...) not implemented for %s objects!" % self.__class__.__name__)
+            
     def get_order_terms(self, order):
         """ TODO: docstring """
         raise NotImplementedError("get_order_terms(...) not implemented for %s objects!" % self.__class__.__name__)
@@ -638,6 +664,43 @@ class DenseSPAMVec(SPAMVec):
         """
         #don't use scratch since we already have memory allocated
         return self.base[:,0]
+
+    def torep(self, typ, outrep=None):
+        """
+        Return a "representation" object for this SPAM vector.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Parameters
+        ----------
+        typ : {'prep','effect'}
+            The type of representation (for cases when the vector type is
+            not already defined).
+
+        outrep : StateRep
+            If not None, an existing state representation appropriate to this
+            SPAM vector that may be used instead of allocating a new one.
+
+        Returns
+        -------
+        StateRep
+        """
+        if typ == "prep":
+            if self._evotype == "statevec":
+                return replib.SVStateRep(self.base[:,0])
+            elif self._evotype == "densitymx":
+                return replib.DMStateRep(self.base[:,0])
+            raise ValueError("Invalid evotype for torep(): %s" % self._evotype)
+        elif typ == "effect":
+            if self._evotype == "statevec":
+                return replib.SVEffectRep(self.base[:,0])
+            elif self._evotype == "densitymx":
+                return replib.DMEffectRep(self.base[:,0])
+            raise ValueError("Invalid evotype for torep(): %s" % self._evotype)            
+        else:
+            raise ValueError("Invalid `typ` argument for torep(): %s" % typ)
+
 
     def __copy__(self):
         # We need to implement __copy__ because we defer all non-existing
