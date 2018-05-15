@@ -401,10 +401,7 @@ class StabilizerFrame(object):
         # Hostens and De Moor PRA 71, 042315 (2005).
         out_s = _mtx.dotmod2(s,self.s)    
         
-        u = _np.zeros((2*n,2*n),int)
-        u[n:2*n,0:n] = _np.identity(n,int)
-
-        inner = _np.dot(_np.dot(_np.transpose(s),u),s)
+        inner = _np.dot(_np.dot(_np.transpose(s),self.u),s)
         vec1 = _np.dot(_np.transpose(self.s),p - _mtx.diagonal_as_vec(inner))
         matrix = 2*_mtx.strictly_upper_triangle(inner)+_mtx.diagonal_as_matrix(inner)
         vec2 = _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(self.s),matrix),self.s))
@@ -473,7 +470,7 @@ class StabilizerFrame(object):
 
         #Step2: Apply clifford to stabilizer reps in self.s, self.ps
         if debug: print("APPLY CLIFFORD TO FRAME")
-        self._apply_clifford_to_frame(smatrix, svector, qubit_filter)
+        self._apply_clifford_to_frame(smatrix, svector, qubits)
         self._rref()
 
         #Step3: Update global amplitudes - Part B

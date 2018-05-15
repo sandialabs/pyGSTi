@@ -346,7 +346,23 @@ class SPAMVec(_gatesetmember.GateSetMember):
         -------
         StateRep
         """
-        raise NotImplementedError("torep(...) not implemented for %s objects!" % self.__class__.__name__)
+        if typ == "prep":
+            if self._evotype == "statevec":
+                return replib.SVStateRep(self.todense())
+            elif self._evotype == "densitymx":
+                return replib.DMStateRep(self.todense())
+            raise NotImplementedError("torep(%s) not implemented for %s objects!" %
+                                      (self._evotype, self.__class__.__name__))
+        elif typ == "effect":
+            if self._evotype == "statevec":
+                return replib.SVEffectRep_Dense(self.todense())
+            elif self._evotype == "densitymx":
+                return replib.DMEffectRep_Dense(self.todense())
+            raise NotImplementedError("torep(%s) not implemented for %s objects!" %
+                                      (self._evotype, self.__class__.__name__))
+        else:
+            raise ValueError("Invalid `typ` argument for torep(): %s" % typ)
+
             
     def get_order_terms(self, order):
         """ TODO: docstring """
@@ -664,43 +680,6 @@ class DenseSPAMVec(SPAMVec):
         """
         #don't use scratch since we already have memory allocated
         return self.base[:,0]
-
-    def torep(self, typ, outrep=None):
-        """
-        Return a "representation" object for this SPAM vector.
-
-        Such objects are primarily used internally by pyGSTi to compute
-        things like probabilities more efficiently.
-
-        Parameters
-        ----------
-        typ : {'prep','effect'}
-            The type of representation (for cases when the vector type is
-            not already defined).
-
-        outrep : StateRep
-            If not None, an existing state representation appropriate to this
-            SPAM vector that may be used instead of allocating a new one.
-
-        Returns
-        -------
-        StateRep
-        """
-        if typ == "prep":
-            if self._evotype == "statevec":
-                return replib.SVStateRep(self.base[:,0])
-            elif self._evotype == "densitymx":
-                return replib.DMStateRep(self.base[:,0])
-            raise ValueError("Invalid evotype for torep(): %s" % self._evotype)
-        elif typ == "effect":
-            if self._evotype == "statevec":
-                return replib.SVEffectRep(self.base[:,0])
-            elif self._evotype == "densitymx":
-                return replib.DMEffectRep(self.base[:,0])
-            raise ValueError("Invalid evotype for torep(): %s" % self._evotype)            
-        else:
-            raise ValueError("Invalid `typ` argument for torep(): %s" % typ)
-
 
     def __copy__(self):
         # We need to implement __copy__ because we defer all non-existing
@@ -1627,6 +1606,61 @@ class TensorProdSPAMVec(SPAMVec):
         else: # self._evotype in ("svterm","cterm")
             raise NotImplementedError("todense() not implemented for %s evolution type" % self._evotype)
 
+
+    def torep(self, typ, outrep=None):
+        """
+        Return a "representation" object for this SPAM vector.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Parameters
+        ----------
+        typ : {'prep','effect'}
+            The type of representation (for cases when the vector type is
+            not already defined).
+
+        outrep : StateRep
+            If not None, an existing state representation appropriate to this
+            SPAM vector that may be used instead of allocating a new one.
+
+        Returns
+        -------
+        StateRep
+        """
+        assert(len(self.factors) > 0), "Cannot get representation of a TensorProdSPAMVec with no factors!"
+        assert(self.typ in ('prep','effect')), "Invalid internal type: %s!" % self.typ
+        
+        #FUTURE: use outrep as scratch for rep constructor?
+        if self._evotype == "statevec":
+            if self.typ == "prep":
+                return replib.SVStateRep( self.todense(_np.empty(self.dim, complex)) )
+            else:
+                return replib.SVEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
+                                                     len(self.factors), self._fast_kron_array.shape[1], self.dim)
+        elif self._evotype == "densitymx":
+            if self.typ == "prep":
+                return replib.DMStateRep( self.todense(_np.empty(self.dim, complex)) )
+            else:
+                return replib.DMEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
+                                                     len(self.factors), self._fast_kron_array.shape[1], self.dim)
+        
+        elif self._evotype == "stabilizer":
+            raise NotImplementedError("TODO - stabilizer representations!")
+            if self.typ == "prep":
+                # => self.factors should all be StabilizerSPAMVec objs
+                #Return stabilizer-rep tuple, just like StabilizerSPAMVec
+                sframe_factors = [ f.todense() for f in self.factors ]
+                return _stabilizer.sframe_kronecker(sframe_factors)
+
+            else: #self.typ == "effect", so each factor is a StabilizerEffectVec
+                raise ValueError("Cannot convert Stabilizer tensor product effect to a representation!")
+                # should be using effect.outcomes property...
+                
+        else: # self._evotype in ("svterm","cterm")
+            raise NotImplementedError("torep() not implemented for %s evolution type" % self._evotype)
+
+
     @property
     def outcomes(self):
         """ TODO: docstring - to mimic StabilizerEffectVec """
@@ -2124,16 +2158,8 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         dmVec_std = _gt.state_to_dmvec( self.pure_state_vec.todense() )
         dmVec = _bt.change_basis(dmVec_std, 'std', self.error_map.matrix_basis)
         return _np.dot(self.error_map.todense(), dmVec)
-        
 
-    #TODO REMOVE
-    #def _compose_poly_indices(self, terms):
-    #    for term in terms:
-    #        term.map_indices(lambda x: tuple(_gatesetmember._compose_gpindices(
-    #            self.gpindices, _np.array(x,'i'))) )
-    #    return terms
-        
-
+    
     def get_order_terms(self, order):
         """ TODO: docstring """
         
@@ -2239,6 +2265,10 @@ class StabilizerSPAMVec(SPAMVec):
         """
         return self.sframe # a more C-native type in the future?
 
+    def torep(self, typ, outvec=None):
+        # changes to_statevec/to_dmvec -> todense, and have
+        # torep create a stabilizer frame rep object? -- maybe StabilizerFrame should have a torep()?
+        raise NotImplementedError("TODO!")
 
     def to_statevec(self):
         """
@@ -2303,6 +2333,11 @@ class StabilizerEffectVec(SPAMVec):
         nqubits = len(outcomes)
         dim = 2**nqubits # assume "unitary evolution"-type mode?
         SPAMVec.__init__(self, dim, "stabilizer")
+
+    def torep(self, typ, outvec=None):
+        # changes to_statevec/to_dmvec -> todense, and have
+        # torep create an effect rep object...
+        raise NotImplementedError("TODO!")
 
     def to_statevec(self):
         """

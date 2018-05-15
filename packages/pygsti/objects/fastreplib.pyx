@@ -16,8 +16,6 @@ cimport cython
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 
-
-
 cdef extern from "fastreps.h" namespace "CReps":    
     cdef cppclass DMStateCRep:
         DMStateCRep() except +
@@ -28,45 +26,70 @@ cdef extern from "fastreps.h" namespace "CReps":
 
     cdef cppclass DMEffectCRep:
         DMEffectCRep() except +
-        DMEffectCRep(double*,int) except +
+        DMEffectCRep(int) except +
+        double amplitude(DMStateCRep* state)
+        int _dim
+
+    cdef cppclass DMEffectCRep_Dense(DMEffectCRep):
+        DMEffectCRep_Dense() except +
+        DMEffectCRep_Dense(double*,int) except +
         double amplitude(DMStateCRep* state)
         int _dim
         double* _dataptr
 
+    cdef cppclass DMEffectCRep_TensorProd(DMEffectCRep):
+        DMEffectCRep_TensorProd() except +
+        DMEffectCRep_TensorProd(double*, int*, int, int, int) except +
+        double amplitude(DMStateCRep* state)
+        int _dim
+
     cdef cppclass DMGateCRep:
-        DMGateCRep() except +
-        DMGateCRep(double*,int) except +
+        DMGateCRep(int) except +
         DMStateCRep* acton(DMStateCRep*, DMStateCRep*);
         int _dim
-        double* _dataptr
 
+    cdef cppclass DMGateCRep_Dense(DMGateCRep):
+        DMGateCRep_Dense(double*,int) except +
+        DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
+        double* _dataptr
+        int _dim
+
+    cdef cppclass DMGateCRep_Embedded(DMGateCRep):
+        DMGateCRep_Embedded(DMGateCRep*, int*, int*, int*, int*, int, int, int, int, int) except +
+        DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
+
+    cdef cppclass DMGateCRep_Composed(DMGateCRep):
+        DMGateCRep_Composed(vector[DMGateCRep*], int, int) except +
+        DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
+
+    cdef cppclass DMGateCRep_Lindblad(DMGateCRep):
+        DMGateCRep_Lindblad(double* A_data, int* A_indices, int* A_indptr, int nnz,
+			    double mu, double eta, int m_star, int s, int dim,
+			    double* unitarypost_data, int* unitarypost_indices,
+                            int* unitarypost_indptr, int unitarypost_nnz) except +
+        DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
+
+    #TODO LATER: import Stabilizer classes
 
 ctypedef DMGateCRep* DMGateCRep_ptr
 ctypedef DMStateCRep* DMStateCRep_ptr
 ctypedef DMEffectCRep* DMEffectCRep_ptr
         
-cdef class StateRep:
-    pass
+#cdef class StateRep:
+#    pass
 
-cdef class DMStateRep(StateRep):
+cdef class DMStateRep: #(StateRep):
     cdef DMStateCRep* c_state
-    #cdef np.ndarray dataview 
-    cdef double [:] data_view
-    #cdef int dim
+    cdef np.ndarray data_ref
+    #cdef double [:] data_view # alt way to hold a reference
 
     def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] data):
-        #print("DMStateRep init: refcnt(data)=",sys.getrefcount(data),data.shape[0] )
-        cdef np.ndarray[double, ndim=1, mode='c'] np_cbuf = np.ascontiguousarray(data, dtype='d')
-        cdef double [:] view = data
-        self.data_view = view # holds reference to data so it doesn't get garbage collected - or could copy=true
-        ##self.dataview = data # also holds reference to data so it doesn't get garbage collected - or could copy=true
-        #print("DMStateRep init2: refcnt(data)=",sys.getrefcount(data) )
-        self.c_state = new DMStateCRep(<double*>np_cbuf.data,<int>np_cbuf.shape[0],<bool>0)
-        #self.c_state = new DMStateCRep(<double*>data.data,<int>data.shape[0],<bool>0)
-        
-        #self.data_view = data
-        #self.dim = data.shape[0]
-        #print("DMStateRep DONE init")
+        #print("PYX state constructed w/dim ",data.shape[0])
+        #cdef np.ndarray[double, ndim=1, mode='c'] np_cbuf = np.ascontiguousarray(data, dtype='d') # would allow non-contig arrays
+        #cdef double [:] view = data;  self.data_view = view # ALT: holds reference...
+        self.data_ref = data # holds reference to data so it doesn't get garbage collected - or could copy=true
+        #self.c_state = new DMStateCRep(<double*>np_cbuf.data,<int>np_cbuf.shape[0],<bool>0)
+        self.c_state = new DMStateCRep(<double*>data.data,<int>data.shape[0],<bool>0)
 
     def __dealloc__(self):
         del self.c_state
@@ -75,111 +98,149 @@ cdef class DMStateRep(StateRep):
         return str([self.c_state._dataptr[i] for i in range(self.c_state._dim)])
 
 
-cdef class EffectRep:
-    #cdef double camplitude(self, StateRep state): pass
-    def amplitude(self, state):  pass
+cdef class DMEffectRep:
+    cdef DMEffectCRep* c_effect
 
-cdef class DMEffectRep(EffectRep):
-    cdef DMEffectCRep c_effect
-    #cdef double [:] data_view
-    #cdef int dim
+    def __cinit__(self):
+        pass # no init; could set self.c_effect = NULL? could assert(False)?
+    def __dealloc__(self):
+        del self.c_effect # check for NULL?
 
-    def __cinit__(self, np.ndarray[double, ndim=1] data):
-        #print("DMEffectRep init: refcnt(data)=",sys.getrefcount(data) )
-        cdef np.ndarray[double, ndim=1, mode='c'] np_cbuf = np.ascontiguousarray(data, dtype='d')
-        self.c_effect = DMEffectCRep(<double*>np_cbuf.data,<int>np_cbuf.shape[0])
+    def amplitude(self, DMStateRep state not None):
+        #unnecessary (just put in signature): cdef DMStateRep st = <DMStateRep?>state
+        return self.c_effect.amplitude(state.c_state)
 
-        #self.data_view = data
-        #self.dim = data.shape[0]
+cdef class DMEffectRep_Dense(DMEffectRep):
+    cdef np.ndarray data_ref
 
-    #cdef double camplitude(self, StateRep state):
-    #    cdef double ret = 0.0
-    #    for i in range(self.dim):
-    #        ret += self.data_view[i] * state.data_view[i]
-    #    return ret
-            
-    def amplitude(self, StateRep state not None):
-        cdef DMStateRep st = <DMStateRep?>state
-        return self.c_effect.amplitude(st.c_state)
-        
+    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] data):
+        self.data_ref = data # holds reference to data
+        self.c_effect = new DMEffectCRep_Dense(<double*>data.data,
+                                               <int>data.shape[0])
 
-cdef class GateRep:
-    #cdef cacton(self, StateRep state, StateRep out_state): pass
-    def acton(self, state):  pass
-        
-cdef class DMGateRep(GateRep):
-    cdef DMGateCRep c_gate
-    #cdef double [:,:] data_view
-    #cdef int dim
+cdef class DMEffectRep_TensorProd(DMEffectRep):
+    cdef np.ndarray data_ref1
+    cdef np.ndarray data_ref2
 
-    def __cinit__(self, np.ndarray[double, ndim=2] data):
-        #print("DMGateRep init")
-        cdef np.ndarray[double, ndim=2, mode='c'] np_cbuf = np.ascontiguousarray(data, dtype='d')
-        self.c_gate = DMGateCRep(<double*>np_cbuf.data,<int>np_cbuf.shape[0])
-        #self.data_view = data
-        #self.dim = data.shape[0]
-
-#    cdef cacton(self, StateRep state, StateRep out_state):
-#        print("cacton begin")
-#        cdef int i,j
-#        cdef DMStateRep instate = <DMStateRep?>state
-#        cdef DMStateRep outstate = <DMStateRep?>out_state
-#        
-#        for i in range(self.dim):
-#            outstate.data_view[i] = 0
-#            for j in range(self.dim):
-#                outstate.data_view[i] += self.data_view[i,j]*instate.data_view[j]
-#        print("cacton end")
-
-#    def acton_effect_test(self, EffectRep state not None):
-#        cdef np.ndarray[double, ndim=1, mode="c"] nparr = np.empty(4, dtype='d')
-#        cdef np.ndarray[double, ndim=1, mode="c"] nparr2 = np.empty(4, dtype='d')
-#        cdef DMEffectRep st = <DMEffectRep?>state
-#        print("PRE PTR = ",<long>st.c_effect._dataptr)
-#        print("ACTON PTRS = ",<long>st.c_effect._dataptr, <long>nparr.data, <long>nparr2.data)
+    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] kron_array,
+                  np.ndarray[int, ndim=1, mode='c'] factor_dims, int nfactors, int max_factor_dim, int dim):
+        # cdef int dim = np.product(factor_dims) -- just send as argument
+        self.data_ref1 = kron_array
+        self.data_ref2 = factor_dims
+        self.c_effect = new DMEffectCRep_TensorProd(<double*>kron_array.data,
+                                                    <int*>factor_dims.data,
+                                                    nfactors, max_factor_dim, dim)
 
 
-    def acton(self, StateRep state not None):
-        #print("acton: refcnt(state)=",sys.getrefcount(state) )
+cdef class DMGateRep:
+    cdef DMGateCRep* c_gate
 
-        #DEBUG
-        #cdef np.ndarray[double, ndim=1, mode="c"] nparr = np.empty(4, dtype='d')
-        #cdef np.ndarray[double, ndim=1, mode="c"] nparr2 = np.empty(4, dtype='d')
+    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] data):
+        pass # self.c_gate = NULL ?
+    
+    def __dealloc__(self):
+        del self.c_gate
 
-        cdef DMStateRep st = <DMStateRep?>state
-        #print("DEBUG PTRS = ",<long>st.c_state._dataptr, <long>nparr.data, <long>nparr2.data)
-        
+    def acton(self, DMStateRep state not None):
         cdef DMStateRep out_state = DMStateRep(np.empty(self.c_gate._dim, dtype='d'))
-        #print("ACTON PTRS = ",<long>st.c_state._dataptr, <long>out_state.c_state._dataptr)
-        assert(st.c_state._dataptr != out_state.c_state._dataptr) # DEBUG
-        #print("ACTON IN = ",str(st))
-        #print("ACTON WITH = \n",str(self))
-
-        self.c_gate.acton(st.c_state, out_state.c_state)
-        #Cython version of above c-func so we can debug-print during it...
-        #for i in range(self.c_gate._dim):
-        #  out_state.c_state._dataptr[i] = 0.0
-        #  k = i*self.c_gate._dim
-        #  print("ROW ",i," k=",k)
-        #  for j in range(self.c_gate._dim):
-        #    out_state.c_state._dataptr[i] += self.c_gate._dataptr[k+j] * st.c_state._dataptr[j]
-        #    print("  COL ",j,": ",self.c_gate._dataptr[k+j]," * ",st.c_state._dataptr[j], "-->", out_state.c_state._dataptr[i])
-        
-        #print("ACTON OUT = ",str(out_state))
+        #print("PYX acton called w/dim ", self.c_gate._dim, out_state.c_state._dim)
+        # assert(state.c_state._dataptr != out_state.c_state._dataptr) # DEBUG
+        self.c_gate.acton(state.c_state, out_state.c_state)
         return out_state
 
+    #FUTURE: adjoint acton
+        
+cdef class DMGateRep_Dense(DMGateRep):
+    cdef np.ndarray data_ref
+
+    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] data):
+        self.data_ref = data
+        #print("PYX dense gate constructed w/dim ",data.shape[0])
+        self.c_gate = new DMGateCRep_Dense(<double*>data.data,
+                                           <int>data.shape[0])
     def __str__(self):
         s = ""
+        cdef DMGateCRep_Dense* my_cgate = <DMGateCRep_Dense*>self.c_gate # b/c we know it's a _Dense gate...
         cdef int i,j,k 
-        for i in range(self.c_gate._dim):
-            k = i*self.c_gate._dim
-            for j in range(self.c_gate._dim):
-                s += str(self.c_gate._dataptr[k+j]) + " "
+        for i in range(my_cgate._dim):
+            k = i*my_cgate._dim
+            for j in range(my_cgate._dim):
+                s += str(my_cgate._dataptr[k+j]) + " "
             s += "\n"
         return s
 
 
+cdef class DMGateRep_Embedded(DMGateRep):
+    cdef np.ndarray data_ref1
+    cdef np.ndarray data_ref2
+    cdef np.ndarray data_ref3
+    cdef np.ndarray data_ref4
+    cdef DMGateRep embedded
 
+    def __cinit__(self, DMGateRep embedded_gate,
+                  np.ndarray[int, ndim=1, mode='c'] noop_incrementers,
+		  np.ndarray[int, ndim=1, mode='c'] numBasisEls_noop_blankaction,
+                  np.ndarray[int, ndim=1, mode='c'] baseinds,
+                  np.ndarray[int, ndim=1, mode='c'] blocksizes,
+		  int nActive, int nComponents, int iActiveBlock, int nBlocks, int dim):
+        self.data_ref1 = noop_incrementers
+        self.data_ref2 = numBasisEls_noop_blankaction
+        self.data_ref3 = baseinds
+        self.data_ref4 = blocksizes
+        self.embedded = embedded_gate # needed to prevent garbage collection?
+        self.c_gate = new DMGateCRep_Embedded(embedded_gate.c_gate, # may need to have a base class w/ DMGateCRep* cgate member(?) - and maybe put acton there?
+                                              <int*>noop_incrementers.data, <int*>numBasisEls_noop_blankaction.data,
+                                              <int*>baseinds.data, <int*>blocksizes.data,
+                                              nActive, nComponents, iActiveBlock, nBlocks, dim)
+
+
+cdef class DMGateRep_Composed(DMGateRep):
+    cdef object list_of_factors # list of DMGateRep objs?
+
+    def __cinit__(self, factor_gates, int dim):
+        self.list_of_factors = factor_gates
+        cdef int i
+        cdef int nfactors = len(factor_gates)
+        cdef vector[DMGateCRep*] gate_creps = vector[DMGateCRep_ptr](nfactors)
+        for i in range(nfactors):
+            gate_creps[i] = (<DMGateRep?>factor_gates[i]).c_gate
+        self.c_gate = new DMGateCRep_Composed(gate_creps, nfactors, dim) # TODO - need to mesh this w/array-of-gates type expected... now a ptr-of-ptr...
+
+
+cdef class DMGateRep_Lindblad(DMGateRep):
+    cdef np.ndarray data_ref1
+    cdef np.ndarray data_ref2
+    cdef np.ndarray data_ref3
+    cdef np.ndarray data_ref4
+    cdef np.ndarray data_ref5
+    cdef np.ndarray data_ref6
+
+    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] A_data,
+                  np.ndarray[int, ndim=1, mode='c'] A_indices,
+                  np.ndarray[int, ndim=1, mode='c'] A_indptr,
+                  double mu, double eta, int m_star, int s,
+                  np.ndarray[double, ndim=1, mode='c'] unitarypost_data,
+                  np.ndarray[int, ndim=1, mode='c'] unitarypost_indices,
+                  np.ndarray[int, ndim=1, mode='c'] unitarypost_indptr):
+        self.data_ref1 = A_data
+        self.data_ref2 = A_indices
+        self.data_ref3 = A_indptr
+        self.data_ref4 = unitarypost_data
+        self.data_ref5 = unitarypost_indices
+        self.data_ref6 = unitarypost_indptr
+        cdef int nnz = A_data.shape[0]
+        cdef int dim = A_indptr.shape[0]-1
+        cdef int upost_nnz = unitarypost_data.shape[0]
+        self.c_gate = new DMGateCRep_Lindblad(<double*>A_data.data, <int*>A_indices.data,
+                                              <int*>A_indptr.data, nnz, mu, eta, m_star, s, dim,
+                                              <double*>unitarypost_data.data,
+                                              <int*>unitarypost_indices.data,
+                                              <int*>unitarypost_indptr.data, upost_nnz)
+
+        
+#HERE - still need state vec and stabilizer evolution-type class wrappers
+
+    
     
 def propagate_staterep(staterep, gatereps):
     ret = staterep
@@ -226,7 +287,7 @@ cdef vector[DMGateCRep*] convert_gatereps(gatereps):
     # c_gatereps : an array of DMGateCReps
     cdef vector[DMGateCRep*] c_gatereps = vector[DMGateCRep_ptr](len(gatereps))
     for ii,grep in gatereps.items(): # (ii = python variable)
-        c_gatereps[ii] = &(<DMGateRep?>grep).c_gate
+        c_gatereps[ii] = (<DMGateRep?>grep).c_gate
     return c_gatereps
 
 cdef DMStateCRep* convert_rhorep(rhorep):
@@ -236,7 +297,7 @@ cdef DMStateCRep* convert_rhorep(rhorep):
 cdef vector[DMEffectCRep*] convert_ereps(ereps):
     cdef vector[DMEffectCRep*] c_ereps = vector[DMEffectCRep_ptr](len(ereps))
     for i in range(len(ereps)):
-        c_ereps[i] = &(<DMEffectRep>ereps[i]).c_effect
+        c_ereps[i] = (<DMEffectRep>ereps[i]).c_effect
     return c_ereps
 
 

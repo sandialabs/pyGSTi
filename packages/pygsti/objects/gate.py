@@ -459,7 +459,13 @@ class Gate(_gatesetmember.GateSetMember):
         -------
         GateRep
         """
-        raise NotImplementedError("torep(...) not implemented for %s objects!" % self.__class__.__name__)
+        if self._evotype == "statevec":
+            return replib.SVGateRep_Dense(self.todense())
+        elif self._evotype == "densitymx":
+            return replib.DMGateRep_Dense(self.todense())
+        else:
+            raise NotImplementedError("torep(%s) not implemented for %s objects!" %
+                                      (self._evotype, self.__class__.__name__))
 
     def tosparse(self):
         """
@@ -820,25 +826,6 @@ class GateMatrix(Gate):
         Return this gate as a dense matrix.
         """
         return self.base
-
-    def torep(self):
-        """
-        Return a "representation" object for this gate.
-
-        Such objects are primarily used internally by pyGSTi to compute
-        things like probabilities more efficiently.
-
-        Returns
-        -------
-        GateRep
-        """
-        if self._evotype == "statevec":
-            return replib.SVGateRep(self.base)
-        elif self._evotype == "densitymx":
-            return replib.DMGateRep(self.base)
-        else:
-            raise ValueError("Invalid evotype for torep(): %s" % self._evotype)
-
 
     def __copy__(self):
         # We need to implement __copy__ because we defer all non-existing
@@ -2009,7 +1996,8 @@ class LindbladParameterizedGateMap(Gate):
             try:
                 d2 = unitaryPostfactor.dim # if a gate
             except:
-                unitaryPostfactor = Gate.convert_to_matrix(unitaryPostfactor)
+                if not _sps.issparse(unitaryPostfactor): # sparse matrix is OK
+                    unitaryPostfactor = Gate.convert_to_matrix(unitaryPostfactor)
                 d2 = unitaryPostfactor.shape[0] # otherwise try to treat as array
         d = int(round(_np.sqrt(d2)))
         assert(d*d == d2), "Gate dim must be a perfect square"
@@ -2033,6 +2021,13 @@ class LindbladParameterizedGateMap(Gate):
         if self.ham_basis_size > 0: self.sparse = _sps.issparse(self.ham_basis[0])
         elif self.other_basis_size > 0: self.sparse = _sps.issparse(self.other_basis[0])
         else: self.sparse = False
+
+        # conform unitary postfactor to the sparseness of the basis mxs (self.sparse)
+        # FUTURE: warn if there is a sparsity mismatch btwn basis and postfactor?
+        if self.sparse == False and _sps.issparse(unitaryPostfactor):
+            unitaryPostfactor = unitaryPostfactor.toarray() # sparse -> dense
+        elif self.sparse == True and not _sps.issparse(unitaryPostfactor):
+            unitaryPostfactor = _sps.csr_matrix( unitaryPostfactor.toarray() ) # dense -> sparse
 
         self.matrix_basis = _Basis(mxBasis,d,sparse=self.sparse)
 
@@ -2086,7 +2081,9 @@ class LindbladParameterizedGateMap(Gate):
             self.Lterms = self.terms = None # Unused
             
         else: # Term-based evolution
-            
+
+            assert(not self.sparse), "Sparse bases are not supported for term-based evolution"
+              #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitaryPostfactor
             termtype = "dense" if evotype == "svterm" else "clifford"
 
             # Store *unitary* as self.unitary_postfactor - NOT a superop
@@ -2450,6 +2447,43 @@ class LindbladParameterizedGateMap(Gate):
             return _sps.csr_matrix(self.todense())
 
         
+    def torep(self):
+        """
+        Return a "representation" object for this gate.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        GateRep
+        """
+        if self._evotype == "densitymx":
+            if self.sparse:
+                if self.unitary_postfactor is None:
+                    Udata = _np.empty(0,'d')
+                    Uindices = Uindptr = _np.empty(0,'i')
+                else:
+                    assert(_sps.isspmatrix_csr(self.unitary_postfactor)), \
+                        "Internal error! Unitary postfactor should be a *sparse* CSR matrix!"
+                    Udata = self.unitary_postfactor.data
+                    Uindptr = self.unitary_postfactor.indptr
+                    Uindices = self.unitary_postfactor.indices
+                           
+                A, mu, m_star, s, eta = self.err_gen_prep
+                return replib.DMGateRep_Lindblad(A.data, A.indptr, A.indices,
+                                                 mu, eta, m_star, s,
+                                                 Udata, Uindices, Uindptr)
+            else:
+                if self.unitary_postfactor is not None:
+                    dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
+                else: dense = self.exp_err_gen
+                return replib.DMGateRep_Dense(dense)
+        else:
+            raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
+                             (self._evotype, self.__class__.__name__))
+
+        
     def acton(self, state):
         """ Act this gate map on an input state """
         if self.unitary_postfactor is not None:
@@ -2483,8 +2517,10 @@ class LindbladParameterizedGateMap(Gate):
             else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
 
             assert(self.gpindices is not None),"LindbladParameterizedGateMap must be added to a GateSet before use!"
+            assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
+              # for now - until StaticGate and CliffordGate can init themselves from a *sparse* matrix
             postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.unitary_postfactor,
-                                         self.unitary_postfactor, tt)
+                                         self.unitary_postfactor, tt) 
             loc_terms = _term.exp_terms(self.Lterms, [order], postTerm)[order]
             #loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
             self.terms[order] = _compose_poly_indices(loc_terms)
@@ -2735,6 +2771,26 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         #    print("Choi evals of exp(othergen) = ", sorted(_np.linalg.eigvals(_jt.jamiolkowski_iso(other_exp_err_gen,"pp"))))
         #    print("Evals of otherCoeffs = ",sorted(_np.linalg.eigvals(otherCoeffs)))
         #    assert(False)
+
+    def torep(self):
+        """
+        Return a "representation" object for this gate.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        GateRep
+        """
+        #Implement this b/c some ambiguity since both LindbladParameterizedGate
+        # and GateMatrix implement torep() - and we want to use the GateMatrix one.
+        if self._evotype == "densitymx":
+            return GateMatrix.torep(self)
+        else:
+            raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
+                             (self._evotype, self.__class__.__name__))
+
         
     def _dHdp(self):
         return self.hamGens.transpose((1,2,0)) #PRETRANS
@@ -3402,6 +3458,21 @@ class ComposedGateMap(Gate):
             mx = _np.dot(gate.todense(),mx)
         return mx
 
+    def torep(self):
+        """
+        Return a "representation" object for this gate.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        GateRep
+        """
+        factor_gate_reps = [ gate.torep() for gate in self.factorgates ]
+        return replib.DMGate_Composed(factor_gate_reps, self.dim)
+
+
     def get_order_terms(self, order):
         terms = []
         for p in _lt.partition_into(order, len(self.factorgates)):
@@ -3520,7 +3591,20 @@ class ComposedGate(ComposedGateMap,GateMatrix):
         self.base = self.todense()
         assert(self.base.shape == (self.dim,self.dim))
         self.base.flags.writeable = False
-        
+
+    def torep(self):
+        """
+        Return a "representation" object for this gate.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        GateRep
+        """
+        # implement this so we're sure to use GateMatrix version
+        return GateMatrix.torep(self)
 
     def from_vector(self, v):
         """
@@ -3959,6 +4043,47 @@ class EmbeddedGateMap(Gate):
                     in_vec_index  = _np.dot(self.multipliers, tuple(b_in))  # index of input dm basis el within vec(tensor block basis)
 
                     yield (out_vec_index+offset, in_vec_index+offset, gate_i, gate_j)
+
+    def torep(self):
+        """
+        Return a "representation" object for this gate.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        GateRep
+        """
+        if self._evotype == "stabilizer":
+            raise NotImplementedError("TODO: implement stabilizer evo")
+            #return replib.SBGateRep_Embedded(...)
+
+        if self._evotype not in ("statevec","densitymx"):
+            raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
+                             (self._evotype, self.__class__.__name__))
+
+
+        nBlocks = len(self.stateSpaceLabels.labels)
+        iActiveBlock = self.iTensorProdBlk
+        nComponents = len(self.stateSpaceLabels.labels[iActiveBlock])
+        nActive = len(self.targetLabels)
+        _, _, blockDims = self.basisdim # dmDim, gateDim, blockDims
+        
+        if self._evotype == "statevec":
+            blocksizes = blockDims
+            return replib.SVGateRep_Embedded(self.embedded_gate.torep(),
+                                             self.noop_incrementers,
+                                             self.numBasisEls_noop_blankaction,
+                                             self.baseinds, blocksizes,
+                                             nActive, nComponents, iActiveBlock, nBlocks, self.dim)
+        else:
+            blocksizes = blockDims**2
+            return replib.DMGateRep_Embedded(self.embedded_gate.torep(),
+                                             self.noop_incrementers,
+                                             self.numBasisEls_noop_blankaction,
+                                             self.baseinds, blocksizes,
+                                             nActive, nComponents, iActiveBlock, nBlocks, self.dim)
 
 
     def acton(self, state):
@@ -4451,6 +4576,20 @@ class EmbeddedGate(EmbeddedGateMap, GateMatrix):
         self.base = self.todense()
         assert(self.base.shape == (self.dim,self.dim))
         self.base.flags.writeable = False
+
+    def torep(self):
+        """
+        Return a "representation" object for this gate.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        GateRep
+        """
+        # implement this so we're sure to use GateMatrix version
+        return GateMatrix.torep(self)
 
 
     def from_vector(self, v):
