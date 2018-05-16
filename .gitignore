@@ -41,6 +41,9 @@ test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
 *.aux
 *.dvi
 *.toc
+build/*
+dist/*
+packages/pygsti.egg-info
 
 # Packages #
 ############
@@ -88,6 +91,11 @@ scripts/profiling/report/tp_report.py
 scripts/profiling/report/rigetti_nocache.py
 
 # Profiling data #
+#################
 scripts/profiling/output
 scripts/profiling/data
+
+# Other Local-only Files #
+############################
+local
 

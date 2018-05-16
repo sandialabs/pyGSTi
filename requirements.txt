@@ -3,4 +3,5 @@ numpy
 scipy
 plotly
 ply
-
+nose
+msgpack # For IO specifically.. make optional?
