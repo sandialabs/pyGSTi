@@ -566,6 +566,17 @@ class Circuit(_gstr.GateString):
                 if self.line_items[q][j].number_of_qubits == 2:
                     count += 1
         return count//2
+    
+    def predicted_infidelity(self,fidelities):
+        
+        f = 1.
+        
+        gatestring = self._flatten_to_tup()
+        for label in gatestring:
+            
+            f = f*fidelities[label]
+        
+        return 1 - f
 
     def __str__(self):
         """

@@ -11,13 +11,13 @@ import matplotlib.pyplot as _plt
 from scipy.optimize import minimize as _minimize
 
 
-def sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=None,maxweight=1):
+def sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=None,
+                                              return_numerrors=False):
     """
     Todo :  
     """
-    assert(maxweight == 1), "Only weight-1 errors currently supported!"
     
-    #numerrors = 0
+    numerrors = 0
     n = pspec.number_of_qubits
     depth = c.depth()
     paulivector = _np.zeros(2*n,int)
@@ -28,17 +28,32 @@ def sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=None,
         layer = c.get_circuit_layer(l)
         s, p = _symp.clifford_layer_in_symplectic_rep(layer,n,srep_dict=srep)                
         paulivector = _np.dot(s,paulivector) % 2  
-
+        
+        layer_paulivector = _np.zeros(2*n,int)
+        
         for q in range(0,n):
             gate = layer[q]
+            
+            # This stops us including multi-qubit gates more than once.
             if gate.qubits[0] == q: 
-                sampledpauli = _np.zeros(2*n,int)
-                sampledvec = _np.array([list(_np.random.multinomial(1,p)) for p in pauliprobs[gate]]) 
-                sampledpauli[:n] = sampledvec[:,1] ^ sampledvec[:,2]
-                sampledpauli[n:] = sampledvec[:,2] ^ sampledvec[:,3]
-                paulivector = sampledpauli ^ paulivector
                 
-    
+                # Sample a pauli vector for the gate
+                gate_paulivector = _np.zeros(2*n,int)
+                sampledvec = _np.array([list(_np.random.multinomial(1,p)) for p in pauliprobs[gate]]) 
+                gate_paulivector[:n] = sampledvec[:,1] ^ sampledvec[:,2]
+                gate_paulivector[n:] = sampledvec[:,2] ^ sampledvec[:,3]
+                
+                # Combine with the current pauli operator for the layer
+                layer_paulivector = layer_paulivector ^ gate_paulivector
+        
+        # Combine the layer error with the error in the circuit so far.
+        paulivector = paulivector ^ layer_paulivector
+        
+        # If we are storing the number of imperfect layers, record this here
+        if return_numerrors:
+            if not _np.array_equal(layer_paulivector,_np.zeros(2*n)):
+                numerrors += 1
+
     if spamprobs is not None:
     
         sampledpauli = _np.zeros(2*n,int)
@@ -48,17 +63,39 @@ def sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=None,
             sampledpauli[q+n] = sampledvec[2] ^ sampledvec[3]
 
         paulivector = sampledpauli ^ paulivector
+    
+    if return_numerrors:
+        return paulivector, numerrors
+    else:
+        return paulivector
 
-    return paulivector
+def simulate_prb_circuit_with_pauli_errors(circuit,pspec,pauliprobs,N,
+                                           spamprobs=None):
+    
+    SP = 0
+    n = pspec.number_of_qubits
+    
+    for i in range(N):
+        
+        sample = sample_and_compute_effective_pauli_errors(circuit,pspec,pauliprobs,spamprobs=spamprobs)
+        
+        if _np.array_equal(sample[:n],_np.zeros(n,int)):
+            
+            SP += 1
+    
+    SP = SP/N   
+    
+    return SP
 
-def pauli_errors_rb_simulator(pspec, pauliprobs, lengths,k, N, filename, rbtype='PRB', verbosity=0, 
+def pauli_errors_rb_simulator(pspec, pauliprobs, lengths,k, N, filename=None, rbtype='PRB', verbosity=0, 
                                 spamprobs=None, appenddata=False, returndata=False, improved_CNOT_compiler=True,
                                 ICC_custom_ordering=None, sampler=None, sampler_args=None, idle_name = 'Gi',
                              iterations = 100):
-    
-    if not appenddata:
-        with open(filename,'w') as f:
-            f.write('#length Pm circuitdepth 2Qgatecount\n')
+          
+    if filename is not None:    
+        if not appenddata:
+            with open(filename,'w') as f:
+                f.write('#length Pm circuitdepth 2Qgatecount\n')
             
     n = pspec.number_of_qubits
     sps = {}
@@ -91,8 +128,9 @@ def pauli_errors_rb_simulator(pspec, pauliprobs, lengths,k, N, filename, rbtype=
             sps[l].append(sp)
             cdepth[l].append(c.depth())
             ctwoqubitgatecount[l].append(c.twoqubit_gatecount())
-            with open(filename,'a') as f:
-                f.write('{} {} {} {}\n'.format(l,sp,cdepth[l][-1],ctwoqubitgatecount[l][-1]))
+            if filename is not None:    
+                with open(filename,'a') as f:
+                    f.write('{} {} {} {}\n'.format(l,sp,cdepth[l][-1],ctwoqubitgatecount[l][-1]))
                 
     if returndata:
         return sps
