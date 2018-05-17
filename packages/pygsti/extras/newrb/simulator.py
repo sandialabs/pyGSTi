@@ -134,6 +134,61 @@ def pauli_errors_rb_simulator(pspec, pauliprobs, lengths,k, N, filename=None, rb
                 
     if returndata:
         return sps
+    
+    
+# Should change to allow finite sampling.
+def rb_simulator(pspec, model_name, lengths,k, filename=None, rbtype='PRB', verbosity=0, appenddata=False,
+                 returndata = False,
+                 improved_CNOT_compiler=True, ICC_custom_ordering=None, sampler=None, 
+                 sampler_args=None, idle_name = 'Gi', iterations = 100): 
+
+    if filename is not None:    
+        if not appenddata:
+            with open(filename,'w') as f:
+                f.write('#length Pm circuitdepth 2Qgatecount\n')
+
+    n = pspec.number_of_qubits
+    sps = {}
+    cdepth = {}
+    ctwoqubitgatecount = {}
+
+    for l in lengths:
+        sps[l] = []
+        cdepth[l] = []
+        ctwoqubitgatecount[l] = []
+
+    for i in range(k):
+        if verbosity > 0:
+            print('-- Round {} of {}'.format(i,k))
+        for l in lengths:
+            if verbosity > 0:
+                print('  -- Circuit length {}'.format(l))
+                print('    -- Sampling an RB circuit...',end='')
+            if rbtype == 'PRB':
+                c = _samp.sample_prb_circuit(pspec,l,iterations=iterations,improved_CNOT_compiler=improved_CNOT_compiler,
+                                               ICC_custom_ordering=ICC_custom_ordering,sampler=sampler,
+                                               sampler_args=sampler_args)
+            if rbtype == 'CRB':
+                c = _samp.sample_crb_circuit(pspec,l,algorithms=['RGGE'],iterations={u'RGGE': iterations})
+            c.replace_gatename('I',idle_name)
+            
+            if verbosity > 0:
+                print('complete.')
+                print('    -- Simulating the circuit...',end='')  
+            sp = c.simulate(pspec.models[model_name])['0'*n]
+            if verbosity > 0:
+                print('complete')
+            sps[l].append(sp)
+            cdepth[l].append(c.depth())
+            ctwoqubitgatecount[l].append(c.twoqubit_gatecount())
+                
+            if filename is not None:    
+                with open(filename,'a') as f:
+                    f.write('{} {} {} {}\n'.format(l,sp,cdepth[l][-1],ctwoqubitgatecount[l][-1]))
+
+    if returndata:
+        return sps
+
 
 
 #
