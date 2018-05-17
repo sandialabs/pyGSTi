@@ -448,7 +448,7 @@ def list_lgst_gatestrings(prepStrs, effectStrs, gateLabels):
     list of GateString objects
         The list of required gate strings, without duplicates.
     """
-    singleGates = [ _gs.GateString( (gl,), "(%s)" % gl ) for gl in gateLabels ]
+    singleGates = [ _gs.GateString( (gl,), "(%s)" % str(gl) ) for gl in gateLabels ]
     ret = create_gatestring_list('eStr','prepStr','prepStr+eStr','prepStr+g+eStr',
                                eStr=effectStrs, prepStr=prepStrs, g=singleGates,
                                order=['g','prepStr','eStr'] ) # LEXICOGRAPHICAL VS MATRIX ORDER
