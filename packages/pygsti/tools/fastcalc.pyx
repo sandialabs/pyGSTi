@@ -694,7 +694,7 @@ cdef custom_expm_multiply_simple_core_c(double* Adata, int* Aindptr,
             c2 = 0.0
             normF = 0.0
             for k in range(N):
-                B[k] = scratch[k] #finishes B = coeff * A.dot(B) 
+                B[k] = coeff * scratch[k] #finishes B = coeff * A.dot(B) 
                 F[k] += B[k] #F += B
         
                 a = abs(B[k])
@@ -761,7 +761,7 @@ cdef custom_expm_multiply_simple_core_c_complex(double complex* Adata, int* Aind
             c2 = 0.0
             normF = 0.0
             for k in range(N):
-                B[k] = scratch[k] #finishes B = coeff * A.dot(B) 
+                B[k] = coeff * scratch[k] #finishes B = coeff * A.dot(B) 
                 F[k] += B[k] #F += B
         
                 a = abs(B[k])
