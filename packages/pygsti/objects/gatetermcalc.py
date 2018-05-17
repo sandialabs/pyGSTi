@@ -210,6 +210,7 @@ class GateTermCalc(GateCalc):
         glmap = { gl: i for i,gl in enumerate(self.gates.keys()) }
         cgatestring = tuple( (glmap[gl] for gl in gatestring) )
         cgate_terms = { glmap[gl]: val for gl,val in gate_terms.items() }
+        #HERE - currently: we call obj.get_order_terms -> convert to FastPoly -> pass to below:
         prps_fast = _fastgatecalc.fast_prs_as_polys(cgatestring, rho_terms, cgate_terms,
                                                     E_terms, E_indices, len(Es), self.max_order,
                                                     bool(self.evotype == "cterm")) # returns list of dicts

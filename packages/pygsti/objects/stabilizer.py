@@ -14,6 +14,11 @@ import copy as _copy
 from ..tools import symplectic as _symp
 from ..tools import matrixmod2 as _mtx
 
+try:
+    from . import fastreplib as replib
+except ImportError:
+    from . import replib
+
 
 # TODO: docstring - for this entire module!
 class StabilizerFrame(object):
@@ -50,16 +55,20 @@ class StabilizerFrame(object):
 
         self.s = state_s
         if state_ps is not None:
-            self.ps = [ p for p in state_ps ]
+            self.ps = _np.empty((len(state_ps),2*self.n),'i')
+            for i,p in enumerate(state_ps):
+                self.ps[i,:] = p[:]
+            #OLD self.ps = [ p for p in state_ps ]
         else:
-            self.ps = []
+            self.ps = _np.empty((0,2*self.n),'i')
+            #OLD self.ps = []
 
         if amps is not None:
             assert(len(amps) == len(self.ps)), \
                 "Number of amplitudes must match number of phase vectors!"
-            self.a = [ complex(a) for a in amps ]
+            self.a = _np.array([ complex(a) for a in amps ],complex)
         else:
-            self.a = [ 1.0+0j for p in self.ps ] # all == 1.0 by default
+            self.a = _np.ones(self.ps.shape[0], complex) # all == 1.0 by default
 
         n = self.n
         self.u = _np.zeros((2*n,2*n),int) # for colsum(...)
@@ -69,6 +78,19 @@ class StabilizerFrame(object):
         self.view_filters = []   # holds qubit filters limiting the action
                                  # of clifford_update for this state
         self._rref()
+
+    def torep(self):
+        """
+        Return a "representation" object for this StabilizerFrame
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        SBStateRep
+        """
+        return replib.SBStateRep(_np.ascontiguousarray(self.s,'i'), self.ps, self.a)
 
     def copy(self):
         cpy = StabilizerFrame(self.s.copy(), [p.copy() for p in self.ps],
@@ -167,7 +189,7 @@ class StabilizerFrame(object):
         # Stage1: go through Z-block columns and find an "anchor" - the first
         # basis state that is allowed given the Z-block parity constraints.
         # (In Z-block, cols can have only Z,I literals)
-        if debug: print("CanonicalAmps STAGE1")
+        if debug: print("CanonicalAmps STAGE1: zblock_start = ", self.zblock_start)
         anchor = _np.zeros(n,int) # "anchor" basis state (zvals), which gets amplitude 1.0 by definition
         lead = n
         for i in reversed(range(self.zblock_start,n)): #index of current generator
@@ -301,16 +323,21 @@ class StabilizerFrame(object):
                         lead = j; break
                 else: assert(False),"Should always break loop!"
 
+                if debug: print("get_target_ampl: iter ",i," lead=",lead," genp=",gen_p," amp=",amp)
+
                 #Check whether we should apply this generator to zvals
                 if zvals[lead] != tgt[lead]:
                     # then applying this generator is productive - do it!
+                    if debug: print("Applying XGEN amp=",amp)
                     zvals, amp = apply_xgen(i, gen_p, zvals, amp)
+                    if debug: print("Resulting amp = ", amp, " zvals = ",zvals)
                     
                     #Check if we've found target
                     if _np.array_equal(zvals, tgt): return amp
             raise ValueError("Falied to find amplitude of target: ", tgt)
                 
         if target is not None:
+            if debug: print("Getting Target Amplitude")
             return get_target_ampl(target)
         elif qs_to_sample is not None:
             target = anchor.copy()
@@ -472,6 +499,8 @@ class StabilizerFrame(object):
         if debug: print("APPLY CLIFFORD TO FRAME")
         self._apply_clifford_to_frame(smatrix, svector, qubits)
         self._rref()
+        #DEBUG print("DB: s = \n",self.s)
+        #DEBUG print("DB: ps = ",self.ps)
 
         #Step3: Update global amplitudes - Part B
         for ip,(base_state,ampls) in enumerate(sampled_amplitudes):

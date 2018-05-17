@@ -170,22 +170,27 @@ class GateMapCalc(GateCalc):
         probability: float
         """
         #NEW HERE
+        #print("NEW pr for gatestring = ",gatestring)
         rholabel,elabel = spamTuple # can't handle custom rho/e -- this seems ok...
         rhorep = self.preps[rholabel].torep('prep')
         erep = self.effects[elabel].torep('effect')
         rhorep = replib.propagate_staterep(rhorep, [self.gates[gl].torep() for gl in gatestring])
-        # p = erep.probability(rhorep) #outcome probability
-        p = erep.amplitude(rhorep) #outcome probability - ONLY WORKS for "densitymx" mode 
+        p = erep.probability(rhorep) #outcome probability
+        #print("NEW pr => ",p)
 
         #OLD
+        ##print("\n\nOLD pr BEGIN")
         #rho,E = self._rhoE_from_spamTuple(spamTuple)
         #rho = self.propagate_state(rho, gatestring)
         #if self.evotype == "statevec":
-        #    p = float(abs(_np.dot(E,rho))**2)
+        #    p_old = float(abs(_np.dot(E,rho))**2)
         #elif self.evotype == "densitymx":
-        #    p = float(_np.dot(E,rho))
+        #    p_old = float(_np.dot(E,rho))
         #else: # evotype == "stabilizer"
-        #    p = rho.measurement_probability(E.outcomes)
+        #    #print("MEASURE!!")
+        #    p_old = rho.measurement_probability(E.outcomes)
+        #assert(_np.isclose(p,p_old)),"New code is giving a different result!"
+        ##print("OLD pr END => ",p_old,"\n\n")
 
         if _np.isnan(p):
             if len(gatestring) < 10:
@@ -319,12 +324,12 @@ class GateMapCalc(GateCalc):
     def _compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch=None):
 
         #TEST FAST MODE (if available)
-        #ret2 = replib.DM_compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch)
+        ret2 = replib.DM_compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch)
         #return ret2
         #END TEST FAST MODE
 
         #TEST PY MODE
-        ret2 = self._new_compute_pr_cache(rholabel, elabels, evalTree, comm, scratch)
+        #ret2 = self._new_compute_pr_cache(rholabel, elabels, evalTree, comm, scratch)
         #return ret2
         #END TEST PY MODE
         
@@ -419,14 +424,9 @@ class GateMapCalc(GateCalc):
             if iCache is not None: rho_cache[iCache] = final_state # [:,0] #store this state in the cache
 
             for j,erep in enumerate(ereps):
-                #ret[i,j] = erep.probability(final_state) #outcome probability
-                ret[i,j] = erep.amplitude(final_state) #outcome probability for now...
+                ret[i,j] = erep.probability(final_state) #outcome probability
 
         #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
-
-        #CHECK
-        #print("DB: ",ret); print("DB: ",ret2)
-        #assert(_np.linalg.norm(ret-ret2) < 1e-6)
         
         return ret
 
@@ -434,7 +434,7 @@ class GateMapCalc(GateCalc):
     
     def _compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
         #TEST FAST MODE (if available)
-        #dpr_cache2 = replib.DM_compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch)
+        dpr_cache2 = replib.DM_compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch)
         #return dpr_cache2
         #END TEST FAST MODE
 
@@ -497,7 +497,7 @@ class GateMapCalc(GateCalc):
         #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
 
         #CHECK
-        #assert(_np.linalg.norm(dpr_cache-dpr_cache2) < 1e-6)
+        assert(_np.linalg.norm(dpr_cache-dpr_cache2) < 1e-6)
 
         return dpr_cache
 

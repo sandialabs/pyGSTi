@@ -1640,21 +1640,24 @@ class TensorProdSPAMVec(SPAMVec):
                                                      len(self.factors), self._fast_kron_array.shape[1], self.dim)
         elif self._evotype == "densitymx":
             if self.typ == "prep":
-                return replib.DMStateRep( self.todense(_np.empty(self.dim, complex)) )
+                return replib.DMStateRep( self.todense(_np.empty(self.dim, 'd')) )
             else:
                 return replib.DMEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
                                                      len(self.factors), self._fast_kron_array.shape[1], self.dim)
         
         elif self._evotype == "stabilizer":
-            raise NotImplementedError("TODO - stabilizer representations!")
             if self.typ == "prep":
                 # => self.factors should all be StabilizerSPAMVec objs
                 #Return stabilizer-rep tuple, just like StabilizerSPAMVec
                 sframe_factors = [ f.todense() for f in self.factors ]
-                return _stabilizer.sframe_kronecker(sframe_factors)
+                return _stabilizer.sframe_kronecker(sframe_factors).torep()
 
             else: #self.typ == "effect", so each factor is a StabilizerEffectVec
-                raise ValueError("Cannot convert Stabilizer tensor product effect to a representation!")
+                outcomes = _np.array( list(_itertools.chain(*[f.outcomes for f in self.factors])), int)
+                return replib.SBEffectRep(outcomes)
+                
+                #OLD - now can remove outcomes prop?
+                #raise ValueError("Cannot convert Stabilizer tensor product effect to a representation!")
                 # should be using effect.outcomes property...
                 
         else: # self._evotype in ("svterm","cterm")
@@ -1662,7 +1665,7 @@ class TensorProdSPAMVec(SPAMVec):
 
 
     @property
-    def outcomes(self):
+    def outcomes(self): #DEPRECATED! - can use torep() now...
         """ TODO: docstring - to mimic StabilizerEffectVec """
         assert(self._evotype == "stabilizer"), \
             "'outcomes' property is only valid for the 'stabilizer' evolution type"
@@ -2267,8 +2270,7 @@ class StabilizerSPAMVec(SPAMVec):
 
     def torep(self, typ, outvec=None):
         # changes to_statevec/to_dmvec -> todense, and have
-        # torep create a stabilizer frame rep object? -- maybe StabilizerFrame should have a torep()?
-        raise NotImplementedError("TODO!")
+        return self.sframe.torep()
 
     def to_statevec(self):
         """
@@ -2337,7 +2339,8 @@ class StabilizerEffectVec(SPAMVec):
     def torep(self, typ, outvec=None):
         # changes to_statevec/to_dmvec -> todense, and have
         # torep create an effect rep object...
-        raise NotImplementedError("TODO!")
+        return replib.SBEffectRep(_np.ascontiguousarray(self._outcomes,'i'))
+          #Note: dtype='i' => int in Cython, whereas dtype=int => long in Cython
 
     def to_statevec(self):
         """

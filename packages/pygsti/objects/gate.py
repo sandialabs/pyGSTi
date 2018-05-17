@@ -805,6 +805,8 @@ class GateMatrix(Gate):
         """ Initialize a new Gate """
         self.base = mx
         super(GateMatrix, self).__init__(self.base.shape[0], evotype)
+        assert(evotype in ("densitymx","statevec")), \
+            "Invalid evotype for a GateMatrix: %s" % evotype
         
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -2024,10 +2026,11 @@ class LindbladParameterizedGateMap(Gate):
 
         # conform unitary postfactor to the sparseness of the basis mxs (self.sparse)
         # FUTURE: warn if there is a sparsity mismatch btwn basis and postfactor?
-        if self.sparse == False and _sps.issparse(unitaryPostfactor):
-            unitaryPostfactor = unitaryPostfactor.toarray() # sparse -> dense
-        elif self.sparse == True and not _sps.issparse(unitaryPostfactor):
-            unitaryPostfactor = _sps.csr_matrix( unitaryPostfactor.toarray() ) # dense -> sparse
+        if unitaryPostfactor is not None:
+            if self.sparse == False and _sps.issparse(unitaryPostfactor):
+                unitaryPostfactor = unitaryPostfactor.toarray() # sparse -> dense
+            elif self.sparse == True and not _sps.issparse(unitaryPostfactor):
+                unitaryPostfactor = _sps.csr_matrix( unitaryPostfactor.toarray() ) # dense -> sparse
 
         self.matrix_basis = _Basis(mxBasis,d,sparse=self.sparse)
 
@@ -2471,14 +2474,14 @@ class LindbladParameterizedGateMap(Gate):
                     Uindices = self.unitary_postfactor.indices
                            
                 A, mu, m_star, s, eta = self.err_gen_prep
-                return replib.DMGateRep_Lindblad(A.data, A.indptr, A.indices,
+                return replib.DMGateRep_Lindblad(A.data, A.indices, A.indptr,
                                                  mu, eta, m_star, s,
                                                  Udata, Uindices, Uindptr)
             else:
                 if self.unitary_postfactor is not None:
                     dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
                 else: dense = self.exp_err_gen
-                return replib.DMGateRep_Dense(dense)
+                return replib.DMGateRep_Dense(_np.ascontiguousarray(dense,'d'))
         else:
             raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
                              (self._evotype, self.__class__.__name__))
@@ -3470,7 +3473,15 @@ class ComposedGateMap(Gate):
         GateRep
         """
         factor_gate_reps = [ gate.torep() for gate in self.factorgates ]
-        return replib.DMGate_Composed(factor_gate_reps, self.dim)
+        if self._evotype == "densitymx":
+            return replib.DMGateRep_Composed(factor_gate_reps, self.dim)
+        elif self._evotype == "statevec":
+            return replib.SVGateRep_Composed(factor_gate_reps, self.dim)
+        elif self._evotype == "stabilizer":
+            nQubits = int(round(_np.log2(self.dim)))
+            return replib.SBGateRep_Composed(factor_gate_reps, nQubits)
+        
+        assert(False), "Invalid internal _evotype: %s" % self._evotype
 
 
     def get_order_terms(self, order):
@@ -4056,34 +4067,34 @@ class EmbeddedGateMap(Gate):
         GateRep
         """
         if self._evotype == "stabilizer":
-            raise NotImplementedError("TODO: implement stabilizer evo")
-            #return replib.SBGateRep_Embedded(...)
+            nQubits = int(round(_np.log2(self.dim)))
+            return replib.SBGateRep_Embedded(self.embedded_gate.torep(),
+                                             nQubits, self.qubit_indices)
 
         if self._evotype not in ("statevec","densitymx"):
             raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
                              (self._evotype, self.__class__.__name__))
 
-
         nBlocks = len(self.stateSpaceLabels.labels)
         iActiveBlock = self.iTensorProdBlk
         nComponents = len(self.stateSpaceLabels.labels[iActiveBlock])
-        nActive = len(self.targetLabels)
+        embeddedDim = self.baseinds.shape[0]
         _, _, blockDims = self.basisdim # dmDim, gateDim, blockDims
         
         if self._evotype == "statevec":
-            blocksizes = blockDims
+            blocksizes = _np.array(blockDims,'i')
             return replib.SVGateRep_Embedded(self.embedded_gate.torep(),
                                              self.noop_incrementers,
                                              self.numBasisEls_noop_blankaction,
                                              self.baseinds, blocksizes,
-                                             nActive, nComponents, iActiveBlock, nBlocks, self.dim)
+                                             embeddedDim, nComponents, iActiveBlock, nBlocks, self.dim)
         else:
-            blocksizes = blockDims**2
+            blocksizes = _np.array(blockDims,'i')**2
             return replib.DMGateRep_Embedded(self.embedded_gate.torep(),
                                              self.noop_incrementers,
                                              self.numBasisEls_noop_blankaction,
                                              self.baseinds, blocksizes,
-                                             nActive, nComponents, iActiveBlock, nBlocks, self.dim)
+                                             embeddedDim, nComponents, iActiveBlock, nBlocks, self.dim)
 
 
     def acton(self, state):
@@ -4689,6 +4700,25 @@ class CliffordGate(Gate):
         nQubits = len(self.svector) // 2
         dim = 2**nQubits # "stabilizer" is a "unitary evolution"-type mode
         Gate.__init__(self, dim, "stabilizer")
+
+
+    def torep(self):
+        """
+        Return a "representation" object for this gate.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        GateRep
+        """
+        invs, invp = _symp.inverse_clifford(self.smatrix, self.svector)
+        U = self.unitary.todense() if isinstance(self.unitary, Gate) else self.unitary
+        return replib.SBGateRep_Clifford(_np.ascontiguousarray(self.smatrix,'i'),
+                                         _np.ascontiguousarray(self.svector,'i'),
+                                         _np.ascontiguousarray(invs,'i'),
+                                         _np.ascontiguousarray(invp,'i'), U)
 
 
     def acton(self, state):
