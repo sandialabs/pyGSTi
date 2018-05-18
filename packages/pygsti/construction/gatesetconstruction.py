@@ -1089,11 +1089,13 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
     
     if availability is None: availability = {}
 
-    if evotype == "auto":
+    if evotype == "auto": # Note: this same logic is repeated in build_nqubit_standard_gateset
         if parameterization == "clifford": evotype = "stabilizer"
+        elif parameterization == "H+S terms": evotype = "svterm"
+        elif parameterization == "H+S clifford terms": evotype = "cterm"
         else: evotype = "densitymx" #everything else
 
-    if evotype == "densitymx":
+    if evotype in ("densitymx","svterm"):
         basis1Q = _Basis("pp",2)
         v0 = basis_build_vector("0", basis1Q)
         v1 = basis_build_vector("1", basis1Q)
@@ -1101,9 +1103,9 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
         basis1Q = None
         v0 = _np.array([[1],[0]],complex)
         v1 = _np.array([[0],[1]],complex)
-    elif evotype == "stabilizer":
+    else:
+        assert(evotype in ("stabilizer","cterm")), "Invalid evolution type: %s" % evotype
         basis1Q = v0 = v1 = None # then we shouldn't use these
-    else: raise ValueError("Invalid evolution type: %s" % evotype)
 
     #OLD - now consolidate by using X.convert(...) TODO REMOVE
     #if parameterization == "full":
@@ -1144,7 +1146,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
         elif evotype == "stabilizer":
             sim_type = "map" # use map as default for stabilizer-type evolutions
         else: assert(False) # should be unreachable
-        
+
     gs = _gateset.GateSet(default_param = parameterization, # "full", "TP" or "static", "clifford", ...
                           sim_type = sim_type)              # "matrix", "map", "termorder:X"
     gs.stateSpaceLabels = _ld.StateSpaceLabels(tuple(range(nQubits)))
@@ -1182,7 +1184,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
                 if on_construction_error in ('warn','ignore'): continue
                 else: raise e
 
-        gate_nQubits = int(round(_np.log2(gate.dim)/2)) if (evotype == "densitymx") \
+        gate_nQubits = int(round(_np.log2(gate.dim)/2)) if (evotype in ("densitymx","svterm")) \
                        else int(round(_np.log2(gate.dim)))
         
         availList = availability.get(gateName, 'all-permutations')
@@ -1251,6 +1253,8 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
 
     if evotype == "auto": # same logic as in build_nqubit_gateset
         if parameterization == "clifford": evotype = "stabilizer"
+        elif parameterization == "H+S terms": evotype = "svterm"
+        elif parameterization == "H+S clifford terms": evotype = "cterm"
         else: evotype = "densitymx" #everything else
     
     gatedict = _collections.OrderedDict()
@@ -1263,9 +1267,10 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
             
         U = nonstd_gate_unitaries.get(name, std_unitaries.get(name,None))
         if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
-        if evotype == "densitymx":
+        if evotype in ("densitymx","svterm"): 
             gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
         else: #we just store the unitaries
+            assert(evotype in ("statevec","cterm","stabilizer")), "Invalid evotype: %s" % evotype
             gatedict[name] = U
 
     return build_nqubit_gateset(nQubits,gatedict,availability,parameterization,

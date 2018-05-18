@@ -26,6 +26,11 @@ from .gatecalc import GateCalc
 from .polynomial import Polynomial as _Polynomial
 from .polynomial import FastPolynomial as _FastPolynomial
 
+try:
+    from . import fastreplib as replib
+except ImportError:
+    from . import replib
+
 #try:
 #import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
 from . import fastgatecalc as _fastgatecalc
@@ -139,6 +144,12 @@ class GateTermCalc(GateCalc):
         TODO: docstring - computes polynomials of the probabilities for multiple spam-tuples of `gatestring`
         """
 
+        #FAST MODE TEST
+        poly_reps = replib.SV_prs_as_polys(self, rholabel, elabels, gatestring, comm, memLimit)
+        prps_fast = [ _Polynomial.fromrep(rep) for rep in poly_reps ]
+        ##return [ dict_to_fastpoly(p) for p in prps_fast ]
+        #END FAST MODE TEST
+        
         #print("DB: prs_as_polys(",spamTuple,gatestring,self.max_order,")")
         rho,Es = self._rhoEs_from_labels(rholabel, elabels)
 
@@ -155,11 +166,11 @@ class GateTermCalc(GateCalc):
                 new_terms = []
                 for term in orig_terms:
                     t = term.copy()
-                    t.coeff = _FastPolynomial(term.coeff, max_poly_vars, max_poly_order)
+                    #t.coeff = _FastPolynomial(term.coeff, max_poly_vars, max_poly_order)
                     new_terms.append(t)
                     
                 gate_terms[glbl].append(new_terms)
-
+        
         rho_terms = []
         for order in range(self.max_order+1):
             orig_terms = rho.get_order_terms(order)
@@ -167,10 +178,10 @@ class GateTermCalc(GateCalc):
             new_terms = []
             for term in orig_terms:
                 t = term.copy()
-                t.coeff = _FastPolynomial(term.coeff, max_poly_vars, max_poly_order)
+                #t.coeff = _FastPolynomial(term.coeff, max_poly_vars, max_poly_order)
                 new_terms.append(t)
             rho_terms.append(new_terms)
-
+        
         E_terms = []; E_indices = []
         for order in range(self.max_order+1):
             cur_terms = []
@@ -180,41 +191,41 @@ class GateTermCalc(GateCalc):
                                
                 for term in orig_terms:
                     t = term.copy()
-                    t.coeff = _FastPolynomial(term.coeff, max_poly_vars, max_poly_order)
+                    #t.coeff = _FastPolynomial(term.coeff, max_poly_vars, max_poly_order)
                     cur_terms.append(t)
                     cur_indices.append(i) # index of effect vector
             E_terms.append(cur_terms)
             E_indices.append(cur_indices)
             
                 
-        ##Prepare rho and E vecs as much as possible for unitary_sim
-        #if not self.unitary_evolution:
-        #    # rho and E should be PureStateSPAMVec objects (density matrices but which encode pure states)
-        #    rho = rho.pure_state_vec
-        #    Es = [ E.pure_state_vec.conjugate().T for E in Es ]
-        #else:
-        #    # rhoVec unaltered
-        #    Es = [ E.conjugate().T for E in Es ]
-
-        #if len(gatestring) == 0: #special case - at least for now until SPAM vecs have factors...
-        #    pLeft = _np.empty(len(Es),complex)  #preallocate space to avoid
-        #    pLeft = self.unitary_sim_pre(rho,Es, [], comm, memLimit, pLeft) # pre/post doesn't matter
-        #    return [ _Polynomial( {(): abs(p)**2} ) for p in pLeft ] # poly w/single constant term
-
-        def dict_to_fastpoly(d):
-            ret = _FastPolynomial(None, max_poly_vars, max_poly_order)
-            ret.update(d)
-            return ret
-
-        #Convert gate Label object to integers for faster/easier cython
-        glmap = { gl: i for i,gl in enumerate(self.gates.keys()) }
-        cgatestring = tuple( (glmap[gl] for gl in gatestring) )
-        cgate_terms = { glmap[gl]: val for gl,val in gate_terms.items() }
-        #HERE - currently: we call obj.get_order_terms -> convert to FastPoly -> pass to below:
-        prps_fast = _fastgatecalc.fast_prs_as_polys(cgatestring, rho_terms, cgate_terms,
-                                                    E_terms, E_indices, len(Es), self.max_order,
-                                                    bool(self.evotype == "cterm")) # returns list of dicts
-        #return [ dict_to_fastpoly(p) for p in prps_fast ] 
+        ###Prepare rho and E vecs as much as possible for unitary_sim
+        ##if not self.unitary_evolution:
+        ##    # rho and E should be PureStateSPAMVec objects (density matrices but which encode pure states)
+        ##    rho = rho.pure_state_vec
+        ##    Es = [ E.pure_state_vec.conjugate().T for E in Es ]
+        ##else:
+        ##    # rhoVec unaltered
+        ##    Es = [ E.conjugate().T for E in Es ]
+        #
+        ##if len(gatestring) == 0: #special case - at least for now until SPAM vecs have factors...
+        ##    pLeft = _np.empty(len(Es),complex)  #preallocate space to avoid
+        ##    pLeft = self.unitary_sim_pre(rho,Es, [], comm, memLimit, pLeft) # pre/post doesn't matter
+        ##    return [ _Polynomial( {(): abs(p)**2} ) for p in pLeft ] # poly w/single constant term
+        #
+        #def dict_to_fastpoly(d):
+        #    ret = _FastPolynomial(None, max_poly_vars, max_poly_order)
+        #    ret.update(d)
+        #    return ret
+        #
+        ##Convert gate Label object to integers for faster/easier cython
+        #glmap = { gl: i for i,gl in enumerate(self.gates.keys()) }
+        #cgatestring = tuple( (glmap[gl] for gl in gatestring) )
+        #cgate_terms = { glmap[gl]: val for gl,val in gate_terms.items() }
+        ##HERE - currently: we call obj.get_order_terms -> convert to FastPoly -> pass to below:
+        #prps_fast = _fastgatecalc.fast_prs_as_polys(cgatestring, rho_terms, cgate_terms,
+        #                                            E_terms, E_indices, len(Es), self.max_order,
+        #                                            bool(self.evotype == "cterm")) # returns list of dicts
+        ##return [ dict_to_fastpoly(p) for p in prps_fast ] 
 
         #HERE DEBUG
         global DEBUG_FCOUNT

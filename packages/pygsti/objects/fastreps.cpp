@@ -13,6 +13,8 @@
 
 namespace CReps {
 
+  // DENSE MATRIX (DM) propagation
+  
   /****************************************************************************\
   |* DMStateCRep                                                              *|
   \****************************************************************************/
@@ -508,9 +510,432 @@ namespace CReps {
     return NULL; //to avoid compiler warning
   }
 
-  // SIMILAR for STATE VECS (SV) propagation...
   
-  // <<TODO>>
+  // STATE VECTOR (SV) propagation
+
+  /****************************************************************************\
+  |* SVStateCRep                                                              *|
+  \****************************************************************************/
+  SVStateCRep::SVStateCRep(int dim) {
+    _dataptr = new dcomplex[dim];
+    for(int i=0; i<dim; i++) _dataptr[i] = 0;
+    _dim = dim;
+    _ownmem = true;
+  }
+  
+  SVStateCRep::SVStateCRep(dcomplex* data, int dim, bool copy=false) {
+    //DEGUG std::cout << "SVStateCRep initialized w/dim = " << dim << std::endl;
+    if(copy) {
+      _dataptr = new dcomplex[dim];
+      for(int i=0; i<dim; i++) {
+	_dataptr[i] = data[i];
+      }
+    } else {
+      _dataptr = data;
+    }
+    _dim = dim;
+    _ownmem = copy;
+  }
+
+  SVStateCRep::~SVStateCRep() {
+    if(_ownmem && _dataptr != NULL)
+      delete [] _dataptr;
+  }
+
+  void SVStateCRep::print(const char* label) {
+    std::cout << label << " = [";
+    for(int i=0; i<_dim; i++) std::cout << _dataptr[i] << " ";
+    std::cout << "]" << std::endl;
+  }
+
+  void SVStateCRep::copy_from(SVStateCRep* st) {
+    assert(_dim == st->_dim);
+    for(int i=0; i<_dim; i++)
+      _dataptr[i] = st->_dataptr[i];
+  }
+
+  /****************************************************************************\
+  |* SVEffectCRep                                                             *|
+  \****************************************************************************/
+  SVEffectCRep::SVEffectCRep(int dim) {
+    _dim = dim;
+  }
+  SVEffectCRep::~SVEffectCRep() { }
+
+
+  /****************************************************************************\
+  |* SVEffectCRep_Dense                                                       *|
+  \****************************************************************************/
+  SVEffectCRep_Dense::SVEffectCRep_Dense(dcomplex* data, int dim)
+    :SVEffectCRep(dim)
+  {
+    _dataptr = data;
+  }
+
+  SVEffectCRep_Dense::~SVEffectCRep_Dense() { }
+
+  double SVEffectCRep_Dense::probability(SVStateCRep* state) {
+    return (double)pow(std::abs(amplitude(state)),2);
+  }
+
+  dcomplex SVEffectCRep_Dense::amplitude(SVStateCRep* state) {
+    dcomplex ret = 0.0;
+    for(int i=0; i< _dim; i++) {
+      ret += _dataptr[i] * state->_dataptr[i];
+    }
+    return ret;
+  }
+
+  
+  /****************************************************************************\
+  |* SVEffectCRep_TensorProd                                                  *|
+  \****************************************************************************/
+
+  SVEffectCRep_TensorProd::SVEffectCRep_TensorProd(dcomplex* kron_array,
+						   int* factordims, int nfactors,
+						   int max_factor_dim, int dim) 
+    :SVEffectCRep(dim)
+  {
+    _kron_array = kron_array;
+    _max_factor_dim = max_factor_dim;
+    _factordims = factordims;
+    _nfactors = nfactors;
+  }
+
+  SVEffectCRep_TensorProd::~SVEffectCRep_TensorProd() { }
+
+  double SVEffectCRep_TensorProd::probability(SVStateCRep* state) {
+    return (double)pow(std::abs(amplitude(state)),2);
+  }
+  
+  dcomplex SVEffectCRep_TensorProd::amplitude(SVStateCRep* state) {
+    //future: add scratch buffer as argument? or compute in place somehow?
+    dcomplex ret = 0.0;
+    dcomplex* scratch = new dcomplex[_dim];
+
+    // BEGIN _fastcalc.fast_kron(scratch, _kron_array, _factordims)
+    // - TODO: make this into seprate function & reuse in fastcals.pyx?
+    int N = _dim;
+    int i, j, k, sz, off, endoff, krow;
+    dcomplex mult;
+    dcomplex* array = _kron_array;
+    int* arraysizes = _factordims;
+
+    // Put last factor at end of scratch
+    k = _nfactors-1;  //last factor
+    off = N - arraysizes[k]; //offset into scratch
+    krow = k * _max_factor_dim; //offset to k-th row of `array`
+    for(i=0; i < arraysizes[k]; i++)
+      scratch[off+i] = array[krow+i];
+    sz = arraysizes[k];
+
+    // Repeatedly scale&copy last "sz" elements of outputvec forward
+    // (as many times as there are elements in the current factor array)
+    //  - but multiply *in-place* the last "sz" elements.
+    for(k=_nfactors-2; k >= 0; k--) { //for all but the last factor
+      off = N - sz*arraysizes[k];
+      endoff = N - sz;
+      krow = k * _max_factor_dim; //offset to k-th row of `array`
+
+      // For all but the final element of array[k,:],
+      // mult&copy final sz elements of scratch into position
+      for(j=0; j< arraysizes[k]-1; j++) {
+	mult = array[krow+j];
+	for(i=0; i<sz; i++) scratch[off+i] = mult*scratch[endoff+i];
+        off += sz;
+      }
+
+      // Last element: in-place mult
+      // assert(off == endoff)
+      mult = array[krow + arraysizes[k]-1];
+      for(i=0; i<sz; i++) scratch[endoff+i] *= mult;
+      sz *= arraysizes[k];
+    }
+    //assert(sz == N)
+    // END _fastcalc.fast_kron (output in `scratch`)
+
+    for(int i=0; i< _dim; i++) {
+      ret += scratch[i] * state->_dataptr[i];
+    }
+    delete [] scratch;
+    return ret;
+  }
+
+  /****************************************************************************\
+  |* SVGateCRep                                                               *|
+  \****************************************************************************/
+
+  SVGateCRep::SVGateCRep(int dim) {
+    _dim = dim;
+  }
+  SVGateCRep::~SVGateCRep() { }
+
+
+  /****************************************************************************\
+  |* SVGateCRep_Dense                                                         *|
+  \****************************************************************************/
+
+  SVGateCRep_Dense::SVGateCRep_Dense(dcomplex* data, int dim)
+    :SVGateCRep(dim)
+  {
+    _dataptr = data;
+  }
+  SVGateCRep_Dense::~SVGateCRep_Dense() { }
+
+  SVStateCRep* SVGateCRep_Dense::acton(SVStateCRep* state,
+				       SVStateCRep* outstate) {
+    DEBUG(std::cout << "Dense acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    int k;
+    for(int i=0; i< _dim; i++) {
+      outstate->_dataptr[i] = 0.0;
+      k = i*_dim; // "row" offset into _dataptr, so dataptr[k+j] ~= dataptr[i,j]
+      for(int j=0; j< _dim; j++) {
+	outstate->_dataptr[i] += _dataptr[k+j] * state->_dataptr[j];
+      }
+    }
+    DEBUG(outstate->print("OUTPUT"));
+    return outstate;
+  }
+
+  SVStateCRep* SVGateCRep_Dense::adjoint_acton(SVStateCRep* state,
+					       SVStateCRep* outstate) {
+    DEBUG(std::cout << "Dense adjoint_acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    for(int i=0; i< _dim; i++) {
+      outstate->_dataptr[i] = 0.0;
+      for(int j=0; j< _dim; j++) {
+	outstate->_dataptr[i] += _dataptr[j*_dim+i] * state->_dataptr[j]; //CONJUGATE _dataptr[...] in statevec case!!
+      }
+    }
+    DEBUG(outstate->print("OUTPUT"));
+    return outstate;
+  }
+
+
+  /****************************************************************************\
+  |* SVGateCRep_Embedded                                                      *|
+  \****************************************************************************/
+
+  SVGateCRep_Embedded::SVGateCRep_Embedded(SVGateCRep* embedded_gate_crep, int* noop_incrementers,
+					   int* numBasisEls_noop_blankaction, int* baseinds, int* blocksizes,
+					   int embeddedDim, int nComponents, int iActiveBlock, int nBlocks, int dim)
+    :SVGateCRep(dim)
+  {
+    _embedded_gate_crep = embedded_gate_crep;
+    _noop_incrementers = noop_incrementers;
+    _numBasisEls_noop_blankaction = numBasisEls_noop_blankaction;
+    _baseinds = baseinds;
+    _blocksizes = blocksizes;
+    _nComponents = nComponents;
+    _embeddedDim = embeddedDim;
+    _iActiveBlock = iActiveBlock;
+    _nBlocks = nBlocks;
+  }
+  SVGateCRep_Embedded::~SVGateCRep_Embedded() { }
+  
+  SVStateCRep* SVGateCRep_Embedded::acton(SVStateCRep* state, SVStateCRep* out_state) {
+
+    DEBUG(std::cout << "Emedded acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    //_fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
+    //                                         output_state, state,
+    //                                         self.noop_incrementers,
+    //                                         self.numBasisEls_noop_blankaction,
+    //                                         self.baseinds)
+    int i, j, k, vec_index_noop = 0;
+    int nParts = _nComponents;
+    int nActionIndices = _embeddedDim;
+    int offset;
+
+    dcomplex* state_data = state->_dataptr;
+    dcomplex* outstate_data = out_state->_dataptr;
+
+    //zero-out output state initially
+    for(i=0; i<_dim; i++) outstate_data[i] = 0.0;
+
+    int b[100]; // could alloc dynamically (LATER?)
+    assert(nParts <= 100); // need to increase size of static arrays above
+    for(i=0; i<nParts; i++) b[i] = 0;
+
+    // Temporary states for acting the embedded gate on a subset of the whole
+    SVStateCRep subState1(nActionIndices);
+    SVStateCRep subState2(nActionIndices);
+    
+    while(true) {
+      // Act with embedded gate on appropriate sub-space of state
+      // out_state[ inds ] += embedded_gate_acton( state[inds] ) (fancy index notn)
+      // out_state[inds] += state[inds]
+      for(k=0; k<nActionIndices; k++)
+	subState1._dataptr[k] = state_data[ vec_index_noop+_baseinds[k] ];
+      _embedded_gate_crep->acton(&subState1, &subState2);
+      for(k=0; k<nActionIndices; k++)
+	outstate_data[ vec_index_noop+_baseinds[k] ] += subState2._dataptr[k];
+        
+      // increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+      for(i=nParts-1; i >= 0; i--) {
+	if(b[i]+1 < _numBasisEls_noop_blankaction[i]) {
+	  b[i] += 1; vec_index_noop += _noop_incrementers[i];
+	  break;
+	}
+	else {
+	  b[i] = 0;
+	}
+      }
+      if(i < 0) break;  // if didn't break out of loop above, then can't
+    }                   // increment anything - break while(true) loop.
+
+    //act on other blocks trivially:
+    if(_nBlocks > 1) { // if there's more than one basis "block" (in direct sum)
+      offset = 0;
+      for(i=0; i<_nBlocks; i++) {
+	if(i != _iActiveBlock) {
+	  for(j=0; j<_blocksizes[i]; j++) // identity op on this block
+	    outstate_data[offset+j] = state_data[offset+j];
+	  offset += _blocksizes[i];
+	}
+      }
+    }
+
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
+
+  SVStateCRep* SVGateCRep_Embedded::adjoint_acton(SVStateCRep* state, SVStateCRep* out_state) {
+
+    //Note: exactly the same as acton(...) but calls embedded gate's adjoint_acton
+    DEBUG(std::cout << "Emedded adjoint_acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    int i, j, k, vec_index_noop = 0;
+    int nParts = _nComponents;
+    int nActionIndices = _embeddedDim;
+    int offset;
+
+    dcomplex* state_data = state->_dataptr;
+    dcomplex* outstate_data = out_state->_dataptr;
+
+    //zero-out output state initially
+    for(i=0; i<_dim; i++) outstate_data[i] = 0.0;
+
+    int b[100]; // could alloc dynamically (LATER?)
+    assert(nParts <= 100); // need to increase size of static arrays above
+    for(i=0; i<nParts; i++) b[i] = 0;
+
+    // Temporary states for acting the embedded gate on a subset of the whole
+    SVStateCRep subState1(nActionIndices);
+    SVStateCRep subState2(nActionIndices);
+    
+    while(true) {
+      // Act with embedded gate on appropriate sub-space of state
+      // out_state[ inds ] += embedded_gate_acton( state[inds] ) (fancy index notn)
+      // out_state[inds] += state[inds]
+      for(k=0; k<nActionIndices; k++)
+	subState1._dataptr[k] = state_data[ vec_index_noop+_baseinds[k] ];
+      _embedded_gate_crep->adjoint_acton(&subState1, &subState2);
+      for(k=0; k<nActionIndices; k++)
+	outstate_data[ vec_index_noop+_baseinds[k] ] += subState2._dataptr[k];
+        
+      // increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+      for(i=nParts-1; i >= 0; i--) {
+	if(b[i]+1 < _numBasisEls_noop_blankaction[i]) {
+	  b[i] += 1; vec_index_noop += _noop_incrementers[i];
+	  break;
+	}
+	else {
+	  b[i] = 0;
+	}
+      }
+      if(i < 0) break;  // if didn't break out of loop above, then can't
+    }                   // increment anything - break while(true) loop.
+
+    //act on other blocks trivially:
+    if(_nBlocks > 1) { // if there's more than one basis "block" (in direct sum)
+      offset = 0;
+      for(i=0; i<_nBlocks; i++) {
+	if(i != _iActiveBlock) {
+	  for(j=0; j<_blocksizes[i]; j++) // identity op on this block
+	    outstate_data[offset+j] = state_data[offset+j];
+	  offset += _blocksizes[i];
+	}
+      }
+    }
+
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
+
+
+  /****************************************************************************\
+  |* SVGateCRep_Composed                                                      *|
+  \****************************************************************************/
+  SVGateCRep_Composed::SVGateCRep_Composed(std::vector<SVGateCRep*> factor_gate_creps, int dim)
+    :SVGateCRep(dim),_factor_gate_creps(factor_gate_creps)
+  {
+  }
+  SVGateCRep_Composed::~SVGateCRep_Composed() { }
+  
+  SVStateCRep* SVGateCRep_Composed::acton(SVStateCRep* state, SVStateCRep* out_state) {
+
+    DEBUG(std::cout << "Composed acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    std::size_t nfactors = _factor_gate_creps.size();
+    SVStateCRep *tmp2, *tmp1 = out_state; //tmp1 already alloc'd
+    SVStateCRep* t; // for swapping
+
+    //Act with first gate: output in tmp1
+    _factor_gate_creps[0]->acton(state, tmp1);
+    
+    if(nfactors > 1) {
+      SVStateCRep temp_state(_dim); tmp2 = &temp_state;
+
+      //Act with additional gates: tmp1 -> tmp2 then swap, so output in tmp1
+      for(std::size_t i=1; i < nfactors; i++) {
+	_factor_gate_creps[i]->acton(tmp1,tmp2);
+	t = tmp1; tmp1 = tmp2; tmp2 = t;
+      }
+      
+      //tmp1 holds the output state now; if tmp1 == out_state
+      // we're in luck, otherwise we need to copy it into out_state.
+      if(tmp1 != out_state) {
+	out_state->copy_from(tmp1);
+      }
+    }
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
+  SVStateCRep* SVGateCRep_Composed::adjoint_acton(SVStateCRep* state, SVStateCRep* out_state) {
+
+    DEBUG(std::cout << "Composed adjoint_acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    std::size_t nfactors = _factor_gate_creps.size();
+    SVStateCRep *tmp2, *tmp1 = out_state; //tmp1 already alloc'd
+    SVStateCRep* t; // for swapping
+
+    //Note: same as acton(...) but reverse order of gates and perform adjoint_acton
+    //Act with last gate: output in tmp1
+    _factor_gate_creps[nfactors-1]->adjoint_acton(state, tmp1);
+    
+    if(nfactors > 1) {
+      SVStateCRep temp_state(_dim); tmp2 = &temp_state;
+
+      //Act with additional gates: tmp1 -> tmp2 then swap, so output in tmp1
+      for(int i=nfactors-2; i >= 0; i--) {
+	_factor_gate_creps[i]->adjoint_acton(tmp1,tmp2);
+	t = tmp1; tmp1 = tmp2; tmp2 = t;
+      }
+      
+      //tmp1 holds the output state now; if tmp1 == out_state
+      // we're in luck, otherwise we need to copy it into out_state.
+      if(tmp1 != out_state) {
+	out_state->copy_from(tmp1);
+      }
+    }
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
 
 
   // STABILIZER propagation
@@ -1517,5 +1942,157 @@ namespace CReps {
     }
     // output value is in F upon returning
   }
+
+
+  // OTHER Classes
+
+  /****************************************************************************\
+  |* PolyCRep                                                                 *|
+  \****************************************************************************/
+
+  //std::unordered_map[int, dcomplex] _coeffs;
+  //int _max_order;
+  //int _max_num_vars;
+  PolyCRep::PolyCRep() {
+    _coeffs = std::unordered_map<int, dcomplex>();
+    _max_order = 0;
+    _max_num_vars = 0;
+  }
   
+  PolyCRep::PolyCRep(std::unordered_map<int, dcomplex> coeffs, int max_order, int max_num_vars) {
+    _coeffs = coeffs;
+    _max_order = max_order;
+    _max_num_vars = max_num_vars;
+  }
+
+  PolyCRep::PolyCRep(const PolyCRep& other) {
+    _coeffs = other._coeffs;
+    _max_order = other._max_order;
+    _max_num_vars = other._max_num_vars;
+  }
+
+  PolyCRep::~PolyCRep() { }
+
+  PolyCRep PolyCRep::mult(const PolyCRep& other) {
+    std::unordered_map<int, dcomplex>::iterator it1, itk;
+    std::unordered_map<int, dcomplex>::const_iterator it2;
+    std::unordered_map<int, dcomplex> result;
+    dcomplex val;
+    int k;
+
+    for(it1 = _coeffs.begin(); it1 != _coeffs.end(); ++it1) {
+      for(it2 = other._coeffs.begin(); it2 != other._coeffs.end(); ++it2) {
+	k = mult_vinds_ints(it1->first, it2->first); //key to add
+	itk = result.find(k);
+	val = it1->second * it2->second;
+	if(itk != result.end())
+	  itk->second = itk->second + val;
+	else result[k] = val;
+      }
+    }
+    PolyCRep ret(result, _max_order, _max_num_vars);
+    return ret; // need a copy constructor?
+  }
+
+  void PolyCRep::add_inplace(const PolyCRep& other) {
+    std::unordered_map<int, dcomplex>::const_iterator it2;
+      std::unordered_map<int, dcomplex>::iterator itk;
+    dcomplex val, newval;
+    int k;
+
+    for(it2 = other._coeffs.begin(); it2 != other._coeffs.end(); ++it2) {
+      k = it2->first; // key
+      val = it2->second; // value
+      itk = _coeffs.find(k);
+      if(itk != _coeffs.end()) {
+	newval = itk->second + val;
+	if(std::abs(newval) > 1e-12) {
+	  itk->second = newval; // note: += doens't work here (complex Cython?)
+	} else {
+	  _coeffs.erase(itk);
+	}
+      }
+      else if(std::abs(val) > 1e-12) {
+	_coeffs[k] = val;
+      }
+    }
+  }
+
+  void PolyCRep::scale(dcomplex scale) {
+    std::unordered_map<int, dcomplex>::iterator it;
+    for(it = _coeffs.begin(); it != _coeffs.end(); ++it) {
+      it->second = it->second * scale; // note: *= doesn't work here (complex Cython?)
+    }
+  }
+
+  int PolyCRep::vinds_to_int(std::vector<int> vinds) {
+    int ret = 0;
+    int m = 1;
+    for(std::size_t i=0; i<vinds.size(); i++) { // last tuple index is most significant
+      ret += (vinds[i]+1)*m;
+      m *= _max_num_vars+1;
+    }
+    return ret;
+  }
+  
+  std::vector<int> PolyCRep::int_to_vinds(int indx) {
+    std::vector<int> ret;
+    int nxt, i;
+    while(indx != 0) {
+      nxt = indx / (_max_num_vars+1);
+      i = indx - nxt*(_max_num_vars+1);
+      ret.push_back(i-1);
+      indx = nxt;
+      //assert(indx >= 0);
+    }
+    std::sort(ret.begin(),ret.end());
+    return ret;
+  }
+  
+  int PolyCRep::mult_vinds_ints(int i1, int i2) {
+    // multiply vinds corresponding to i1 & i2 and return resulting integer
+    std::vector<int> vinds1 = int_to_vinds(i1);
+    std::vector<int> vinds2 = int_to_vinds(i2);
+    vinds1.insert( vinds1.end(), vinds2.begin(), vinds2.end() );
+    std::sort(vinds1.begin(),vinds1.end());
+    return vinds_to_int(vinds1);
+  }
+  
+  /****************************************************************************\
+  |* SVTermCRep                                                               *|
+  \****************************************************************************/
+    
+  SVTermCRep::SVTermCRep(PolyCRep* coeff, SVStateCRep* pre_state, SVStateCRep* post_state,
+			 std::vector<SVGateCRep*> pre_ops, std::vector<SVGateCRep*> post_ops) {
+    _coeff = coeff;
+    _pre_state = pre_state;
+    _post_state = post_state;
+    _pre_effect = NULL;
+    _post_effect = NULL;
+    _pre_ops = pre_ops;
+    _post_ops = post_ops;
+  }
+  
+  SVTermCRep::SVTermCRep(PolyCRep* coeff, SVEffectCRep* pre_effect, SVEffectCRep* post_effect,
+			 std::vector<SVGateCRep*> pre_ops, std::vector<SVGateCRep*> post_ops) {
+    _coeff = coeff;
+    _pre_state = NULL;
+    _post_state = NULL;
+    _pre_effect = pre_effect;
+    _post_effect = post_effect;
+    _pre_ops = pre_ops;
+    _post_ops = post_ops;
+  }
+  
+  SVTermCRep::SVTermCRep(PolyCRep* coeff, std::vector<SVGateCRep*> pre_ops,
+			 std::vector<SVGateCRep*> post_ops) {
+    _coeff = coeff;
+    _pre_state = NULL;
+    _post_state = NULL;
+    _pre_effect = NULL;
+    _post_effect = NULL;
+    _pre_ops = pre_ops;
+    _post_ops = post_ops;
+  }
+
 }

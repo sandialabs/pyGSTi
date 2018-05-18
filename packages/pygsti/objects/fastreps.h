@@ -1,5 +1,6 @@
 #include <complex>
 #include <vector>
+#include <unordered_map>
 #include <cmath>
 
 typedef std::complex<double> dcomplex;
@@ -129,9 +130,102 @@ namespace CReps {
   };
 
 
-  // SIMILAR for STATE VECS (SV) propagation...
-  
-  // <<TODO>>
+
+  // STATE VECTOR (SV) propagation
+
+  // STATEs
+  class SVStateCRep {
+    public:
+    dcomplex* _dataptr;
+    int _dim;
+    bool _ownmem;
+    SVStateCRep(int dim);    
+    SVStateCRep(dcomplex* data, int dim, bool copy);
+    ~SVStateCRep();
+    void print(const char* label);
+    void copy_from(SVStateCRep* st);
+  };
+
+  // EFFECTSs
+  class SVEffectCRep {
+    public:
+    int _dim;
+    SVEffectCRep(int dim);
+    virtual ~SVEffectCRep();
+    virtual double probability(SVStateCRep* state) = 0;
+    virtual dcomplex amplitude(SVStateCRep* state) = 0;
+  };
+
+
+  class SVEffectCRep_Dense :public SVEffectCRep {
+    public:
+    dcomplex* _dataptr;
+    SVEffectCRep_Dense(dcomplex* data, int dim);
+    virtual ~SVEffectCRep_Dense();
+    virtual double probability(SVStateCRep* state);
+    virtual dcomplex amplitude(SVStateCRep* state);;
+  };
+
+  class SVEffectCRep_TensorProd :public SVEffectCRep {
+    public:
+    dcomplex* _kron_array;
+    int _max_factor_dim;
+    int* _factordims;
+    int _nfactors;
+
+    SVEffectCRep_TensorProd(dcomplex* kron_array, int* factordims, int nfactors, int max_factor_dim, int dim);
+    virtual ~SVEffectCRep_TensorProd();
+    virtual double probability(SVStateCRep* state);
+    virtual dcomplex amplitude(SVStateCRep* state);
+  };
+
+
+  // GATEs
+  class SVGateCRep {
+    public:
+    int _dim;
+
+    SVGateCRep(int dim);
+    virtual ~SVGateCRep();
+    virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state) = 0;
+    virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state) = 0;
+  };
+
+  class SVGateCRep_Dense :public SVGateCRep {
+    public:
+    dcomplex* _dataptr;
+    SVGateCRep_Dense(dcomplex* data, int dim);
+    virtual ~SVGateCRep_Dense();
+    virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
+    virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
+  };
+
+  class SVGateCRep_Embedded :public SVGateCRep{
+    public:
+    SVGateCRep* _embedded_gate_crep;
+    int* _noop_incrementers;
+    int* _numBasisEls_noop_blankaction;
+    int* _baseinds;
+    int* _blocksizes; // basis blockdim**2 elements
+    int _nComponents, _embeddedDim, _iActiveBlock, _nBlocks;
+    
+    
+    SVGateCRep_Embedded(SVGateCRep* embedded_gate_crep, int* noop_incrementers,
+			int* numBasisEls_noop_blankaction, int* baseinds, int* blocksizes,
+			int embeddedDim, int nComponents, int iActiveBlock, int nBlocks, int dim);
+    virtual ~SVGateCRep_Embedded();
+    virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
+    virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
+  };
+
+  class SVGateCRep_Composed :public SVGateCRep{
+    public:
+    std::vector<SVGateCRep*> _factor_gate_creps;
+    SVGateCRep_Composed(std::vector<SVGateCRep*> factor_gate_creps, int dim);
+    virtual ~SVGateCRep_Composed();
+    virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
+    virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
+  };
 
 
   // STABILIZER propagation
@@ -228,6 +322,42 @@ namespace CReps {
     virtual ~SBGateCRep_Clifford();
     virtual SBStateCRep* acton(SBStateCRep* state, SBStateCRep* out_state);
     virtual SBStateCRep* adjoint_acton(SBStateCRep* state, SBStateCRep* out_state);
+  };
+
+  //Polynomial class
+  class PolyCRep {
+    public:
+    std::unordered_map<int, dcomplex> _coeffs;
+    int _max_order;
+    int _max_num_vars;
+    PolyCRep();
+    PolyCRep(std::unordered_map<int, dcomplex> coeffs, int max_order, int max_num_vars);
+    PolyCRep(const PolyCRep& other);
+    ~PolyCRep();
+    PolyCRep mult(const PolyCRep& other);
+    void add_inplace(const PolyCRep& other);
+    void scale(dcomplex scale);
+    private:
+    int vinds_to_int(std::vector<int> vinds);
+    std::vector<int> int_to_vinds(int indx);
+    int mult_vinds_ints(int i1, int i2); // multiply vinds corresponding to i1 & i2 and return resulting integer
+  };
+  
+  //TERMS
+  class SVTermCRep {
+    public:
+    PolyCRep* _coeff;
+    SVStateCRep* _pre_state;
+    SVEffectCRep* _pre_effect;
+    std::vector<SVGateCRep*> _pre_ops;
+    SVStateCRep* _post_state;
+    SVEffectCRep* _post_effect;
+    std::vector<SVGateCRep*> _post_ops;
+    SVTermCRep(PolyCRep* coeff, SVStateCRep* pre_state, SVStateCRep* post_state,
+	       std::vector<SVGateCRep*> pre_ops, std::vector<SVGateCRep*> post_ops);
+    SVTermCRep(PolyCRep* coeff, SVEffectCRep* pre_effect, SVEffectCRep* post_effect,
+	       std::vector<SVGateCRep*> pre_ops, std::vector<SVGateCRep*> post_ops);
+    SVTermCRep(PolyCRep* coeff, std::vector<SVGateCRep*> pre_ops, std::vector<SVGateCRep*> post_ops);
   };
 
 

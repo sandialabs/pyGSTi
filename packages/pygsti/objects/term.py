@@ -10,6 +10,11 @@ import numpy as _np
 import itertools as _itertools
 import numbers as _numbers
 from .polynomial import Polynomial as _Polynomial
+try:
+    from . import fastreplib as replib
+except ImportError:
+    from . import replib
+
 
 def compose_terms(terms):
     if len(terms) == 0: return RankOneTerm(1.0,None,None)
@@ -184,7 +189,23 @@ class RankOneTerm(object):
             "Coefficient (type %s) must implements `map_indices`" % str(type(self.coeff))
         self.coeff.map_indices(mapfn)
         
-           
+    def torep(self, max_poly_order, max_poly_vars, typ):
 
-
+        coeffrep = self.coeff.torep(max_poly_order, max_poly_vars)
+        if typ == "prep": # first el of pre_ops & post_ops is a state vec
+            return replib.SVTermRep(coeffrep, self.pre_ops[0].torep("prep"),
+                                    self.post_ops[0].torep("prep"), None, None,
+                                    [ op.torep() for op in self.pre_ops[1:] ],
+                                    [ op.torep() for op in self.post_ops[1:] ])
+        elif typ == "effect": # first el of pre_ops & post_ops is an effect vec
+            return replib.SVTermRep(coeffrep, None, None, self.pre_ops[0].torep("effect"),
+                                    self.post_ops[0].torep("effect"),
+                                    [ op.torep() for op in self.pre_ops[1:] ],
+                                    [ op.torep() for op in self.post_ops[1:] ])
+        else:
+            assert(typ == "gate"), "Invalid typ argument to torep: %s" % typ
+            return replib.SVTermRep(coeffrep, None, None, None, None,
+                                    [ op.torep() for op in self.pre_ops ],
+                                    [ op.torep() for op in self.post_ops ])
+        
     

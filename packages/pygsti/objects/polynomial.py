@@ -7,10 +7,36 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
+try:
+    from . import fastreplib as replib
+except ImportError:
+    from . import replib
+
 
 
 class Polynomial(dict):
     """ Encapsulates a polynomial """
+
+    @classmethod
+    def fromrep(cls, rep):
+        """ TODO docstring """
+        max_num_vars = rep.max_num_vars  # one of the few/only cases where a rep
+        max_order = rep.max_order        # needs to expose some python properties
+
+        def int_to_vinds(indx):
+            ret = []
+            while indx != 0:
+                nxt = indx // (max_num_vars+1)
+                i = indx - nxt*(max_num_vars+1)
+                ret.append(i-1)
+                indx = nxt
+            assert(len(ret) <= max_order)
+            return tuple(sorted(ret))
+        
+        tup_coeff_dict = { int_to_vinds(k): val for k,val in rep.coeffs.items() }
+        return cls(tup_coeff_dict)
+
+    
     def __init__(self, coeffs=None):
         """ TODO: docstring - coeffs is a dict of coefficients w/keys == tuples
              of integer variable indices.  E.g. (1,1) means "variable1 squared"
@@ -176,6 +202,42 @@ class Polynomial(dict):
     def __copy__(self):
         return self.copy()
 
+    def torep(self, max_order=None, max_num_vars=None):
+        """ TODO: docstring """
+        # Set max_order (determines based on coeffs if necessary)
+        default_max_order = 0 if len(self) == 0 else \
+                            max([ len(k) for k in self.keys()])
+        if max_order is None:
+            max_order = default_max_order
+        else:
+            assert(default_max_order <= max_order)
+
+        # Set max_num_vars (determines based on coeffs if necessary)
+        default_max_vars = 0 if len(self) == 0 else \
+                           max([ (max(k)+1 if k else 0) for k in self.keys()])
+        if max_num_vars is None:
+            max_num_vars = default_max_vars
+        else:
+            assert(default_max_vars <= max_num_vars)
+
+        #new.max_order = max_order            
+        #new.max_num_vars = max_num_vars
+        def vinds_to_int(vinds):
+            """ Convert tuple index of ints to single int given max_order,max_numvars """
+            assert(len(vinds) <= max_order), "max_order is too low!"
+            ret = 0; m = 1
+            for i in vinds: # last tuple index is most significant                                                                                                          
+                assert(i < max_num_vars), "Variable index exceed maximum!"
+                ret += (i+1)*m
+                m *= max_num_vars+1
+            return ret
+        
+        int_coeffs = { vinds_to_int(k): v for k,v in self.items() }
+        return replib.PolyRep(int_coeffs, max_order, max_num_vars)
+
+
+
+#TODO: change FastPolynomial into Python-version of replib.PolyRep...
 class FastPolynomial(dict):
     """ Encapsulates a polynomial """
     def __init__(self, coeffs=None, max_num_vars=None, max_order=None):

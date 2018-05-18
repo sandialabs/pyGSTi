@@ -771,6 +771,9 @@ class StaticSPAMVec(DenseSPAMVec):
         vec = SPAMVec.convert_to_vector(vec)
         if evotype == "auto":
             evotype = "statevec" if _np.iscomplexobj(vec) else "densitymx"
+        elif evotype == "statevec":
+            vec = _np.asarray(vec,complex) # ensure all statevec vecs are complex (densitymx could be either?)
+            
         assert(evotype in ("statevec","densitymx")), \
             "Invalid evolution type '%s' for %s" % (evotype,self.__class__.__name__)
         DenseSPAMVec.__init__(self, vec, evotype)
@@ -1633,14 +1636,21 @@ class TensorProdSPAMVec(SPAMVec):
         
         #FUTURE: use outrep as scratch for rep constructor?
         if self._evotype == "statevec":
-            if self.typ == "prep":
-                return replib.SVStateRep( self.todense(_np.empty(self.dim, complex)) )
+            if self.typ == "prep": # prep-type vectors can be represented as dense effects too
+                if typ == "prep":
+                    return replib.SVStateRep( self.todense(_np.empty(self.dim, complex)) )
+                else:
+                    return replib.SVEffectRep_Dense( self.todense(_np.empty(self.dim, complex)) )
             else:
                 return replib.SVEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
                                                      len(self.factors), self._fast_kron_array.shape[1], self.dim)
         elif self._evotype == "densitymx":
             if self.typ == "prep":
-                return replib.DMStateRep( self.todense(_np.empty(self.dim, 'd')) )
+                if typ == "prep":
+                    return replib.DMStateRep( self.todense(_np.empty(self.dim, 'd')) )
+                else:
+                    return replib.DMEffectRep_Dense( self.todense(_np.empty(self.dim, 'd')) )
+
             else:
                 return replib.DMEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
                                                      len(self.factors), self._fast_kron_array.shape[1], self.dim)
@@ -1706,6 +1716,8 @@ class TensorProdSPAMVec(SPAMVec):
                 # create a term with a TensorProdSPAMVec - Note we always create
                 # "prep"-mode vectors, since even when self.typ == "effect" these
                 # vectors are created with factor SPAMVecs not factor POVMs
+                # we workaround this by still allowing such "prep"-mode
+                # TensorProdSPAMVecs to be represented as effects (i.e. in torep('effect'...) works)
                 coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
                 pre_op = TensorProdSPAMVec("prep", [f.pre_ops[0] for f in factors
                                                       if (f.pre_ops[0] is not None)])
