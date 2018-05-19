@@ -1499,6 +1499,7 @@ namespace CReps {
 	  }
 	  if(bi < 0) break;  // if didn't break out of loop above, then can't
 	}                    // increment anything - break while(true) loop.
+	delete [] b;
       }
     }
     
@@ -1535,6 +1536,7 @@ namespace CReps {
       }
       if(bi < 0) break;  // if didn't break out of loop above, then can't
     }
+    delete [] b;
     return;
   }
 

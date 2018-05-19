@@ -144,8 +144,11 @@ class GateTermCalc(GateCalc):
         TODO: docstring - computes polynomials of the probabilities for multiple spam-tuples of `gatestring`
         """
 
+        #print("PRS_AS_POLY gatestring = ",gatestring)
+        
         #FAST MODE TEST
-        poly_reps = replib.SV_prs_as_polys(self, rholabel, elabels, gatestring, comm, memLimit)
+        fastmode = True
+        poly_reps = replib.SV_prs_as_polys(self, rholabel, elabels, gatestring, comm, memLimit, fastmode)
         prps_fast = [ _Polynomial.fromrep(rep) for rep in poly_reps ]
         ##return [ dict_to_fastpoly(p) for p in prps_fast ]
         #END FAST MODE TEST

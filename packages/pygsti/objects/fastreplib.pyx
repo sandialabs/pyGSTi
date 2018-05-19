@@ -201,6 +201,11 @@ ctypedef SVTermCRep* SVTermCRep_ptr
 ctypedef SBGateCRep* SBGateCRep_ptr
 ctypedef PolyCRep* PolyCRep_ptr
 ctypedef vector[SVTermCRep_ptr]* vector_SVTermCRep_ptr_ptr
+
+#Create a function pointer type for term-based calc inner loop
+ctypedef void (*innerloopfn_ptr)(vector[vector_SVTermCRep_ptr_ptr],
+                                 vector[int]*, vector[PolyCRep*]*, int)
+
         
 #cdef class StateRep:
 #    pass
@@ -924,7 +929,7 @@ cdef vector[vector[SVTermCRep_ptr]] extract_cterms(python_termrep_lists, int max
     return ret
 
 
-def SV_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None):
+def SV_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None, fastmode=True):
 
     # Create gatelable -> int mapping to be used throughout
     glmap = { gl: i for i,gl in enumerate(calc.gates.keys()) }
@@ -981,7 +986,7 @@ def SV_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=Non
     #Call C-only function (which operates with C-representations only)
     cdef vector[PolyCRep*] polys = sv_prs_as_polys(
         cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
-        E_cindices, numEs, calc.max_order, mpo, mpv, calc.dim)
+        E_cindices, numEs, calc.max_order, mpo, mpv, calc.dim, <bool>fastmode)
 
     return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<int>polys.size()) ]
 
@@ -990,10 +995,11 @@ cdef PolyRep_from_allocd_PolyCRep(PolyCRep* crep):
     ret.c_poly = crep
     return ret
 
-cdef vector[PolyCRep*] sv_prs_as_polys(vector[int]& gatestring, vector[vector[SVTermCRep_ptr]] rho_term_reps,
-                                      unordered_map[int, vector[vector[SVTermCRep_ptr]]] gate_term_reps,
-                                      vector[vector[SVTermCRep_ptr]] E_term_reps, vector[vector[int]] E_term_indices,
-                                       int numEs, int max_order, int max_poly_order, int max_poly_vars, int dim):
+cdef vector[PolyCRep*] sv_prs_as_polys(
+    vector[int]& gatestring, vector[vector[SVTermCRep_ptr]] rho_term_reps,
+    unordered_map[int, vector[vector[SVTermCRep_ptr]]] gate_term_reps,
+    vector[vector[SVTermCRep_ptr]] E_term_reps, vector[vector[int]] E_term_indices,
+    int numEs, int max_order, int max_poly_order, int max_poly_vars, int dim, bool fastmode):
 
     #NOTE: gatestring and gate_terms use *integers* as gate labels, not Label objects, to speed
     # lookups and avoid weird string conversion stuff with Cython
@@ -1002,6 +1008,12 @@ cdef vector[PolyCRep*] sv_prs_as_polys(vector[int]& gatestring, vector[vector[SV
     cdef int* p = <int*>malloc((N+2) * sizeof(int))
     cdef int i,j,k,order,nTerms
     cdef int gn
+
+    cdef innerloopfn_ptr innerloop_fn;
+    if fastmode:
+        innerloop_fn = sv_pr_as_poly_innerloop_savepartials
+    else:
+        innerloop_fn = sv_pr_as_poly_innerloop
 
     #extract raw data from gate_terms dictionary-of-lists for faster lookup
     #gate_term_prefactors = _np.empty( (nGates,max_order+1,dim,dim)
@@ -1041,7 +1053,7 @@ cdef vector[PolyCRep*] sv_prs_as_polys(vector[int]& gatestring, vector[vector[SV
             Einds = &E_term_indices[p[N+1]]
         
             #print("Part0 ",p)
-            sv_pr_as_poly_innerloop(factor_lists,Einds,&prps,dim) #, prps_chk)
+            innerloop_fn(factor_lists,Einds,&prps,dim) #, prps_chk)
 
 
         elif order == 1:
@@ -1057,7 +1069,7 @@ cdef vector[PolyCRep*] sv_prs_as_polys(vector[int]& gatestring, vector[vector[SV
                 Einds = &E_term_indices[p[N+1]]
 
                 #print "DB: Order1 "
-                sv_pr_as_poly_innerloop(factor_lists,Einds,&prps,dim) #, prps_chk)
+                innerloop_fn(factor_lists,Einds,&prps,dim) #, prps_chk)
                 p[i] = 0
             
         elif order == 2:
@@ -1072,7 +1084,7 @@ cdef vector[PolyCRep*] sv_prs_as_polys(vector[int]& gatestring, vector[vector[SV
                 factor_lists[N+1] = &E_term_reps[p[N+1]]
                 Einds = &E_term_indices[p[N+1]]
 
-                sv_pr_as_poly_innerloop(factor_lists,Einds,&prps,dim) #, prps_chk)
+                innerloop_fn(factor_lists,Einds,&prps,dim) #, prps_chk)
                 p[i] = 0
 
             for i in range(N+2):
@@ -1088,26 +1100,23 @@ cdef vector[PolyCRep*] sv_prs_as_polys(vector[int]& gatestring, vector[vector[SV
                     factor_lists[N+1] = &E_term_reps[p[N+1]]
                     Einds = &E_term_indices[p[N+1]]
 
-                    sv_pr_as_poly_innerloop(factor_lists,Einds,&prps,dim) #, prps_chk)
+                    innerloop_fn(factor_lists,Einds,&prps,dim) #, prps_chk)
                     p[j] = 0
                 p[i] = 0
         else:
             assert(False) # order > 2 not implemented yet...
 
+    free(p)
     return prps
 
                 
 
-cdef sv_pr_as_poly_innerloop(vector[vector_SVTermCRep_ptr_ptr] factor_lists, vector[int]* Einds,
-                             vector[PolyCRep*]* prps, int dim): #, prps_chk):
+cdef void sv_pr_as_poly_innerloop(vector[vector_SVTermCRep_ptr_ptr] factor_lists, vector[int]* Einds,
+                                  vector[PolyCRep*]* prps, int dim): #, prps_chk):
     #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
 
-    cdef int i,j
-    cdef int fastmode = 1 # HARDCODED - but it has been checked that non-fast-mode agrees w/fastmode
-    #cdef unordered_map[int, complex].iterator it1, it2, itk
-    #cdef unordered_map[int, complex] result, coeff, coeff2, curCoeff
+    cdef int i,j,Ei
     cdef double complex scale, val, newval, pLeft, pRight, p
-    #cdef vector[vector[unordered_map[int, complex]]] reduced_coeff_lists
 
     cdef int incd
     cdef SVTermCRep* factor
@@ -1116,6 +1125,119 @@ cdef sv_pr_as_poly_innerloop(vector[vector_SVTermCRep_ptr_ptr] factor_lists, vec
     cdef int* factorListLens = <int*>malloc(nFactorLists * sizeof(int))
     cdef int last_index = nFactorLists-1
 
+    for i in range(nFactorLists):
+        factorListLens[i] = factor_lists[i].size()
+        if factorListLens[i] == 0:
+            free(factorListLens)
+            return # nothing to loop over! - (exit before we allocate more)
+
+    cdef PolyCRep coeff
+    cdef PolyCRep result    
+
+    cdef SVStateCRep *prop1 = new SVStateCRep(dim)
+    cdef SVStateCRep *prop2 = new SVStateCRep(dim)
+    cdef SVStateCRep *tprop
+    cdef SVEffectCRep* EVec
+
+    cdef int* b = <int*>malloc(nFactorLists * sizeof(int))
+    for i in range(nFactorLists): b[i] = 0
+
+    assert(nFactorLists > 0), "Number of factor lists must be > 0!"
+    
+    #for factors in _itertools.product(*factor_lists):
+    while(True):
+        # In this loop, b holds "current" indices into factor_lists
+        factor = deref(factor_lists[0])[b[0]] # the last factor (an Evec)
+        coeff = deref(factor._coeff) # an unordered_map (copies to new "coeff" variable)
+            
+        for i in range(1,nFactorLists):
+            coeff = coeff.mult( deref(deref(factor_lists[i])[b[i]]._coeff) )
+            
+        #pLeft / "pre" sim
+        factor = deref(factor_lists[0])[b[0]] # 0th-factor = rhoVec
+        prop1.copy_from(factor._pre_state)
+        for j in range(<int>factor._pre_ops.size()):
+            factor._pre_ops[j].acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop
+        for i in range(1,last_index):
+            factor = deref(factor_lists[i])[b[i]]
+            for j in range(<int>factor._pre_ops.size()):
+                factor._pre_ops[j].acton(prop1,prop2)
+                tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+        factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
+
+        # can't propagate effects, so act w/adjoint of post_ops in reverse order...
+        EVec = factor._post_effect
+        for j in range(<int>factor._post_ops.size()-1,-1,-1): # (reversed)
+            rhoVec = factor._post_ops[j].adjoint_acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+        pLeft = EVec.amplitude(prop1)
+                        
+        #pRight / "post" sim
+        factor = deref(factor_lists[0])[b[0]] # 0th-factor = rhoVec
+        prop1.copy_from(factor._post_state)
+        for j in range(<int>factor._post_ops.size()):
+            factor._post_ops[j].acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+        for i in range(1,last_index):
+            factor = deref(factor_lists[i])[b[i]]
+            for j in range(<int>factor._post_ops.size()):
+                factor._post_ops[j].acton(prop1,prop2)
+                tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+        factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
+        
+        EVec = factor._pre_effect
+        for j in range(<int>factor._pre_ops.size()-1,-1,-1): # (reversed)
+            factor._pre_ops[j].adjoint_acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+        pRight = EVec.amplitude(prop1).conjugate()
+
+
+        #Add result to appropriate poly
+        result = coeff  # use a reference?
+        result.scale(pLeft * pRight)
+        final_factor_indx = b[last_index]
+        Ei = deref(Einds)[final_factor_indx] #final "factor" index == E-vector index
+        deref(prps)[Ei].add_inplace(result)
+        
+        #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+        for i in range(nFactorLists-1,-1,-1):
+            if b[i]+1 < factorListLens[i]:
+                b[i] += 1
+                break
+            else:
+                b[i] = 0
+        else:
+            break # can't increment anything - break while(True) loop
+
+    #Clenaup: free allocated memory
+    del prop1
+    del prop2
+    free(factorListLens)
+    free(b)
+    return
+
+
+cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr] factor_lists,
+                                               vector[int]* Einds, vector[PolyCRep*]* prps, int dim): #, prps_chk):
+    #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
+
+    cdef int i,j,Ei
+    cdef double complex scale, val, newval, pLeft, pRight, p
+
+    cdef int incd
+    cdef SVTermCRep* factor
+
+    cdef int nFactorLists = factor_lists.size() # may need to recompute this after fast-mode
+    cdef int* factorListLens = <int*>malloc(nFactorLists * sizeof(int))
+    cdef int last_index = nFactorLists-1
+
+    for i in range(nFactorLists):
+        factorListLens[i] = factor_lists[i].size()
+        if factorListLens[i] == 0:
+            free(factorListLens)
+            return # nothing to loop over! (exit before we allocate anything else)
+        
     cdef PolyCRep coeff
     cdef PolyCRep result    
 
@@ -1128,240 +1250,162 @@ cdef sv_pr_as_poly_innerloop(vector[vector_SVTermCRep_ptr_ptr] factor_lists, vec
     cdef SVStateCRep *prop1
     cdef SVStateCRep *tprop
     cdef SVEffectCRep* EVec
-
-    #slow mode
-    #SVStateCRep *
-    prop1 = shelved #new SVStateCRep(dim)
-    #cdef SVStateCRep *prop2 = new SVStateCRep(dim)
-    #cdef SVStateCRep *tprop
-    #cdef SVEffectCRep* EVec
-
-
-    for i in range(nFactorLists):
-        factorListLens[i] = factor_lists[i].size()
-        if factorListLens[i] == 0: return # nothing to loop over!
     
     cdef int* b = <int*>malloc(nFactorLists * sizeof(int))
     for i in range(nFactorLists): b[i] = 0
-
     assert(nFactorLists > 0), "Number of factor lists must be > 0!"
     
-    if fastmode: # filter factor_lists to matrix-compose all length-1 lists
-        incd = 0
+    incd = 0
 
-        #Fill saved arrays with allocated states
-        for i in range(nFactorLists-1):
-            leftSaved[i] = new SVStateCRep(dim)  #TODO - DELETE these?
-            rightSaved[i] = new SVStateCRep(dim)
+    #Fill saved arrays with allocated states
+    for i in range(nFactorLists-1):
+        leftSaved[i] = new SVStateCRep(dim)
+        rightSaved[i] = new SVStateCRep(dim)
 
-        #for factors in _itertools.product(*factor_lists):
-        #for incd,fi in incd_product(*[range(len(l)) for l in factor_lists]):
-        while(True):
-            # In this loop, b holds "current" indices into factor_lists
-            #print "DB: iter-product BEGIN"
+    #for factors in _itertools.product(*factor_lists):
+    #for incd,fi in incd_product(*[range(len(l)) for l in factor_lists]):
+    while(True):
+        # In this loop, b holds "current" indices into factor_lists
+        #print "DB: iter-product BEGIN"
 
-            if incd == 0: # need to re-evaluate rho vector
-                #print "DB: re-eval at incd=0"
-                factor = deref(factor_lists[0])[b[0]]
+        if incd == 0: # need to re-evaluate rho vector
+            #print "DB: re-eval at incd=0"
+            factor = deref(factor_lists[0])[b[0]]
 
-                #print "DB: re-eval left"
-                prop1 = leftSaved[0] # the final destination (prop2 is already alloc'd)
-                prop1.copy_from(factor._pre_state)
-                for j in range(<int>factor._pre_ops.size()):
-                    #print "DB: re-eval left item"
-                    factor._pre_ops[j].acton(prop1,prop2)
-                    tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
-                rhoVecL = prop1
-                leftSaved[0] = prop1 # final state -> saved
-                # (prop2 == the other allocated state)
-
-                #print "DB: re-eval right"
-                prop1 = rightSaved[0] # the final destination (prop2 is already alloc'd)
-                prop1.copy_from(factor._post_state)
-                for j in range(<int>factor._post_ops.size()):
-                    #print "DB: re-eval right item"
-                    factor._post_ops[j].acton(prop1,prop2)
-                    tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
-                rhoVecR = prop1
-                rightSaved[0] = prop1 # final state -> saved
-                # (prop2 == the other allocated state)
-
-                #print "DB: re-eval coeff"
-                coeff = deref(factor._coeff)
-                coeffSaved[0] = coeff
-                incd += 1
-            else:
-                #print "DB: init from incd"
-                rhoVecL = leftSaved[incd-1]
-                rhoVecR = rightSaved[incd-1]
-                coeff = coeffSaved[incd-1]
-
-            # propagate left and right states, saving as we go
-            for i in range(incd,last_index):
-                #print "DB: propagate left begin"
-                factor = deref(factor_lists[i])[b[i]]
-                prop1 = leftSaved[i] # destination
-                prop1.copy_from(rhoVecL) #starting state
-                for j in range(<int>factor._pre_ops.size()):
-                    #print "DB: propagate left item"
-                    factor._pre_ops[j].acton(prop1,prop2)
-                    tprop = prop1; prop1 = prop2; prop2 = tprop
-                rhoVecL = prop1
-                leftSaved[i] = prop1
-                # (prop2 == the other allocated state)
-
-                #print "DB: propagate right begin"
-                prop1 = rightSaved[i] # destination
-                prop1.copy_from(rhoVecR) #starting state
-                for j in range(<int>factor._post_ops.size()):
-                    #print "DB: propagate right item"
-                    factor._post_ops[j].acton(prop1,prop2)
-                    tprop = prop1; prop1 = prop2; prop2 = tprop
-                rhoVecR = prop1
-                rightSaved[i] = prop1
-                # (prop2 == the other allocated state)
-
-                #print "DB: propagate coeff mult"
-                coeff = coeff.mult(deref(factor._coeff)) # copy a PolyCRep
-                coeffSaved[i] = coeff
-
-            # for the last index, no need to save, and need to construct
-            # and apply effect vector
-            prop1 = shelved # so now prop1 (and prop2) are alloc'd states
-
-            #print "DB: left ampl"
-            factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
-            EVec = factor._post_effect
-            prop1.copy_from(rhoVecL) # initial state (prop2 already alloc'd)
-            for j in range(<int>factor._post_ops.size()-1,-1,-1): # (reversed)
-                factor._post_ops[j].adjoint_acton(prop1,prop2)
-                tprop = prop1; prop1 = prop2; prop2 = tprop
-            pLeft = EVec.amplitude(prop1) # output in prop1, so this is final amplitude
-
-            #print "DB: right ampl"
-            EVec = factor._pre_effect
-            prop1.copy_from(rhoVecR)
-            for j in range(<int>factor._pre_ops.size()-1,-1,-1): # (reversed)
-                factor._pre_ops[j].adjoint_acton(prop1,prop2)
-                tprop = prop1; prop1 = prop2; prop2 = tprop
-            pRight = EVec.amplitude(prop1).conjugate()
-
-            shelved = prop1 # return prop1 to the "shelf" since we'll use prop1 for other things next
-
-            #DO THIS IN SB VARIANT
-            #else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-            #    factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
-            #    EVec = factor.post_ops[0]
-            #    for j in range(len(factor.post_ops)-1,0,-1): # (reversed)
-            #        rhoVecL = factor.post_ops[j].adjoint_acton(rhoVecL)
-            #    #OLD: p = stabilizer_measurement_prob(rhoVecL, EVec.outcomes)
-            #    #OLD: pLeft = np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
-            #    pLeft = rhoVecL.extract_amplitude(EVec.outcomes)
-            #
-            #    EVec = factor.pre_ops[0]
-            #    for j in range(len(factor.pre_ops)-1,0,-1): # (reversed)
-            #        rhoVecR = factor.pre_ops[j].adjoint_acton(rhoVecR)
-            #    #OLD: p = stabilizer_measurement_prob(rhoVecR, EVec.outcomes)
-            #    #OLD: pRight = np.sqrt(p) # sqrt b/c pRight is just *amplitude*
-            #    pRight = np.conjugate(rhoVecR.extract_amplitude(EVec.outcomes))
-
-            #print "DB: final block"
-            #print "DB running coeff = ",dict(coeff._coeffs)
-            #print "DB factor coeff = ",dict(factor._coeff._coeffs)
-            result = coeff.mult(deref(factor._coeff))
-            #print "DB result = ",dict(result._coeffs)
-            result.scale(pLeft * pRight)
-            final_factor_indx = b[last_index]
-            Ei = deref(Einds)[final_factor_indx] #final "factor" index == E-vector index
-            deref(prps)[Ei].add_inplace(result)
-            #print "DB prps[",int(Ei),"] = ",dict(deref(prps)[Ei]._coeffs)
-
-            #assert(debug < 100) #DEBUG
-            #print "DB: end product loop"
-            
-            #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
-            for i in range(nFactorLists-1,-1,-1):
-                if b[i]+1 < factorListLens[i]:
-                    b[i] += 1; incd = i
-                    break
-                else:
-                    b[i] = 0
-            else:
-                break # can't increment anything - break while(True) loop
-
-        #TODO: DELETE things?
-
-    else: # "slow" mode
-        
-        #for factors in _itertools.product(*factor_lists):
-        while(True):
-            # In this loop, b holds "current" indices into factor_lists
-            factor = deref(factor_lists[0])[b[0]] # the last factor (an Evec)
-            coeff = deref(factor._coeff) # an unordered_map (copies to new "coeff" variable)
-                
-            for i in range(1,nFactorLists):
-                coeff = coeff.mult( deref(deref(factor_lists[i])[b[i]]._coeff) )
-                
-            #pLeft / "pre" sim
-            factor = deref(factor_lists[0])[b[0]] # 0th-factor = rhoVec
+            #print "DB: re-eval left"
+            prop1 = leftSaved[0] # the final destination (prop2 is already alloc'd)
             prop1.copy_from(factor._pre_state)
             for j in range(<int>factor._pre_ops.size()):
+                #print "DB: re-eval left item"
                 factor._pre_ops[j].acton(prop1,prop2)
-                tprop = prop1; prop1 = prop2; prop2 = tprop
-            for i in range(1,last_index):
-                factor = deref(factor_lists[i])[b[i]]
-                for j in range(<int>factor._pre_ops.size()):
-                    factor._pre_ops[j].acton(prop1,prop2)
-                    tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
-            factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
+                tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
+            rhoVecL = prop1
+            leftSaved[0] = prop1 # final state -> saved
+            # (prop2 == the other allocated state)
 
-            # can't propagate effects, so act w/adjoint of post_ops in reverse order...
-            EVec = factor._post_effect
-            for j in range(<int>factor._post_ops.size()-1,-1,-1): # (reversed)
-                rhoVec = factor._post_ops[j].adjoint_acton(prop1,prop2)
-                tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
-            pLeft = EVec.amplitude(prop1)
-            
-                
-            #pRight / "post" sim
-            factor = deref(factor_lists[0])[b[0]] # 0th-factor = rhoVec
+            #print "DB: re-eval right"
+            prop1 = rightSaved[0] # the final destination (prop2 is already alloc'd)
             prop1.copy_from(factor._post_state)
             for j in range(<int>factor._post_ops.size()):
+                #print "DB: re-eval right item"
                 factor._post_ops[j].acton(prop1,prop2)
-                tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
-            for i in range(1,last_index):
-                factor = deref(factor_lists[i])[b[i]]
-                for j in range(<int>factor._post_ops.size()):
-                    factor._post_ops[j].acton(prop1,prop2)
-                    tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
-            factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
+                tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
+            rhoVecR = prop1
+            rightSaved[0] = prop1 # final state -> saved
+            # (prop2 == the other allocated state)
 
-            EVec = factor._pre_effect
-            for j in range(<int>factor._pre_ops.size()-1,-1,-1): # (reversed)
-                factor._pre_ops[j].adjoint_acton(prop1,prop2)
-                tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
-            pRight = EVec.amplitude(prop1).conjugate()
+            #print "DB: re-eval coeff"
+            coeff = deref(factor._coeff)
+            coeffSaved[0] = coeff
+            incd += 1
+        else:
+            #print "DB: init from incd"
+            rhoVecL = leftSaved[incd-1]
+            rhoVecR = rightSaved[incd-1]
+            coeff = coeffSaved[incd-1]
 
+        # propagate left and right states, saving as we go
+        for i in range(incd,last_index):
+            #print "DB: propagate left begin"
+            factor = deref(factor_lists[i])[b[i]]
+            prop1 = leftSaved[i] # destination
+            prop1.copy_from(rhoVecL) #starting state
+            for j in range(<int>factor._pre_ops.size()):
+                #print "DB: propagate left item"
+                factor._pre_ops[j].acton(prop1,prop2)
+                tprop = prop1; prop1 = prop2; prop2 = tprop
+            rhoVecL = prop1
+            leftSaved[i] = prop1
+            # (prop2 == the other allocated state)
 
-            #Add result to appropriate poly
-            result = coeff  # use a reference?
-            result.scale(pLeft * pRight)
-            final_factor_indx = b[last_index]
-            Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
-            deref(prps)[Ei].add_inplace(result)
-            
-            #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
-            for i in range(nFactorLists-1,-1,-1):
-                if b[i]+1 < factorListLens[i]:
-                    b[i] += 1
-                    break
-                else:
-                    b[i] = 0
+            #print "DB: propagate right begin"
+            prop1 = rightSaved[i] # destination
+            prop1.copy_from(rhoVecR) #starting state
+            for j in range(<int>factor._post_ops.size()):
+                #print "DB: propagate right item"
+                factor._post_ops[j].acton(prop1,prop2)
+                tprop = prop1; prop1 = prop2; prop2 = tprop
+            rhoVecR = prop1
+            rightSaved[i] = prop1
+            # (prop2 == the other allocated state)
+
+            #print "DB: propagate coeff mult"
+            coeff = coeff.mult(deref(factor._coeff)) # copy a PolyCRep
+            coeffSaved[i] = coeff
+
+        # for the last index, no need to save, and need to construct
+        # and apply effect vector
+        prop1 = shelved # so now prop1 (and prop2) are alloc'd states
+
+        #print "DB: left ampl"
+        factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
+        EVec = factor._post_effect
+        prop1.copy_from(rhoVecL) # initial state (prop2 already alloc'd)
+        for j in range(<int>factor._post_ops.size()-1,-1,-1): # (reversed)
+            factor._post_ops[j].adjoint_acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop
+        pLeft = EVec.amplitude(prop1) # output in prop1, so this is final amplitude
+
+        #print "DB: right ampl"
+        EVec = factor._pre_effect
+        prop1.copy_from(rhoVecR)
+        for j in range(<int>factor._pre_ops.size()-1,-1,-1): # (reversed)
+            factor._pre_ops[j].adjoint_acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop
+        pRight = EVec.amplitude(prop1).conjugate()
+
+        shelved = prop1 # return prop1 to the "shelf" since we'll use prop1 for other things next
+
+        #DO THIS IN SB VARIANT
+        #else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
+        #    factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
+        #    EVec = factor.post_ops[0]
+        #    for j in range(len(factor.post_ops)-1,0,-1): # (reversed)
+        #        rhoVecL = factor.post_ops[j].adjoint_acton(rhoVecL)
+        #    #OLD: p = stabilizer_measurement_prob(rhoVecL, EVec.outcomes)
+        #    #OLD: pLeft = np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
+        #    pLeft = rhoVecL.extract_amplitude(EVec.outcomes)
+        #
+        #    EVec = factor.pre_ops[0]
+        #    for j in range(len(factor.pre_ops)-1,0,-1): # (reversed)
+        #        rhoVecR = factor.pre_ops[j].adjoint_acton(rhoVecR)
+        #    #OLD: p = stabilizer_measurement_prob(rhoVecR, EVec.outcomes)
+        #    #OLD: pRight = np.sqrt(p) # sqrt b/c pRight is just *amplitude*
+        #    pRight = np.conjugate(rhoVecR.extract_amplitude(EVec.outcomes))
+
+        #print "DB: final block"
+        #print "DB running coeff = ",dict(coeff._coeffs)
+        #print "DB factor coeff = ",dict(factor._coeff._coeffs)
+        result = coeff.mult(deref(factor._coeff))
+        #print "DB result = ",dict(result._coeffs)
+        result.scale(pLeft * pRight)
+        final_factor_indx = b[last_index]
+        Ei = deref(Einds)[final_factor_indx] #final "factor" index == E-vector index
+        deref(prps)[Ei].add_inplace(result)
+        #print "DB prps[",int(Ei),"] = ",dict(deref(prps)[Ei]._coeffs)
+
+        #assert(debug < 100) #DEBUG
+        #print "DB: end product loop"
+        
+        #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+        for i in range(nFactorLists-1,-1,-1):
+            if b[i]+1 < factorListLens[i]:
+                b[i] += 1; incd = i
+                break
             else:
-                break # can't increment anything - break while(True) loop
+                b[i] = 0
+        else:
+            break # can't increment anything - break while(True) loop
 
-        #TODO: DELETE things?
-        #print("DB: pr_as_poly   partition=",p,"(cnt ",db_part_cnt," with ",db_nfactors," factors (cnt=",db_factor_cnt,")")
+    #Cleanup: free allocated memory
+    for i in range(nFactorLists-1):
+        del leftSaved[i]
+        del rightSaved[i]
+    del prop2
+    del shelved
+    free(factorListLens)
+    free(b)
+    return
 
 
     
