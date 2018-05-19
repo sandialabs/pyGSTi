@@ -199,7 +199,7 @@ namespace CReps {
     for(int i=0; i< _dim; i++) {
       outstate->_dataptr[i] = 0.0;
       for(int j=0; j< _dim; j++) {
-	outstate->_dataptr[i] += _dataptr[j*_dim+i] * state->_dataptr[j]; //CONJUGATE _dataptr[...] in statevec case!!
+	outstate->_dataptr[i] += _dataptr[j*_dim+i] * state->_dataptr[j];
       }
     }
     DEBUG(outstate->print("OUTPUT"));
@@ -581,7 +581,7 @@ namespace CReps {
   dcomplex SVEffectCRep_Dense::amplitude(SVStateCRep* state) {
     dcomplex ret = 0.0;
     for(int i=0; i< _dim; i++) {
-      ret += _dataptr[i] * state->_dataptr[i];
+      ret += std::conj(_dataptr[i]) * state->_dataptr[i];
     }
     return ret;
   }
@@ -655,7 +655,10 @@ namespace CReps {
     // END _fastcalc.fast_kron (output in `scratch`)
 
     for(int i=0; i< _dim; i++) {
-      ret += scratch[i] * state->_dataptr[i];
+      ret += std::conj(scratch[i]) * state->_dataptr[i];
+        //conjugate scratch b/c we assume _kron_array contains
+        // info for building up the *column* "effect vector" E
+        // s.t. amplitudes are computed as dot(E.T.conj,state_col_vec)
     }
     delete [] scratch;
     return ret;
@@ -705,7 +708,7 @@ namespace CReps {
     for(int i=0; i< _dim; i++) {
       outstate->_dataptr[i] = 0.0;
       for(int j=0; j< _dim; j++) {
-	outstate->_dataptr[i] += _dataptr[j*_dim+i] * state->_dataptr[j]; //CONJUGATE _dataptr[...] in statevec case!!
+	outstate->_dataptr[i] += std::conj(_dataptr[j*_dim+i]) * state->_dataptr[j];
       }
     }
     DEBUG(outstate->print("OUTPUT"));
