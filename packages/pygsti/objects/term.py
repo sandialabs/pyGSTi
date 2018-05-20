@@ -70,6 +70,7 @@ class RankOneTerm(object):
         self.pre_ops = [] # list of ops to perform - in order of operation to a ket
         self.post_ops = [] # list of ops to perform - in order of operation to a bra
         self.typ = typ
+        
         if pre_op is not None:
             if not isinstance(pre_op,_gsm.GateSetMember):
                 try:
@@ -191,21 +192,26 @@ class RankOneTerm(object):
         
     def torep(self, max_poly_order, max_poly_vars, typ):
 
+        #Note: typ == "prep" / "effect" / "gate"
+        # whereas self.typ == "dense" / "clifford" (~evotype)
         coeffrep = self.coeff.torep(max_poly_order, max_poly_vars)
+        RepTermType = replib.SVTermRep if (self.typ == "dense") \
+                      else replib.SBTermRep
+        
         if typ == "prep": # first el of pre_ops & post_ops is a state vec
-            return replib.SVTermRep(coeffrep, self.pre_ops[0].torep("prep"),
-                                    self.post_ops[0].torep("prep"), None, None,
-                                    [ op.torep() for op in self.pre_ops[1:] ],
-                                    [ op.torep() for op in self.post_ops[1:] ])
+            return RepTermType(coeffrep, self.pre_ops[0].torep("prep"),
+                               self.post_ops[0].torep("prep"), None, None,
+                               [ op.torep() for op in self.pre_ops[1:] ],
+                               [ op.torep() for op in self.post_ops[1:] ])
         elif typ == "effect": # first el of pre_ops & post_ops is an effect vec
-            return replib.SVTermRep(coeffrep, None, None, self.pre_ops[0].torep("effect"),
-                                    self.post_ops[0].torep("effect"),
-                                    [ op.torep() for op in self.pre_ops[1:] ],
-                                    [ op.torep() for op in self.post_ops[1:] ])
+            return RepTermType(coeffrep, None, None, self.pre_ops[0].torep("effect"),
+                               self.post_ops[0].torep("effect"),
+                               [ op.torep() for op in self.pre_ops[1:] ],
+                               [ op.torep() for op in self.post_ops[1:] ])
         else:
             assert(typ == "gate"), "Invalid typ argument to torep: %s" % typ
-            return replib.SVTermRep(coeffrep, None, None, None, None,
-                                    [ op.torep() for op in self.pre_ops ],
-                                    [ op.torep() for op in self.post_ops ])
+            return RepTermType(coeffrep, None, None, None, None,
+                               [ op.torep() for op in self.pre_ops ],
+                               [ op.torep() for op in self.post_ops ])
         
     

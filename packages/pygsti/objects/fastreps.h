@@ -360,5 +360,22 @@ namespace CReps {
     SVTermCRep(PolyCRep* coeff, std::vector<SVGateCRep*> pre_ops, std::vector<SVGateCRep*> post_ops);
   };
 
+  class SBTermCRep {
+    public:
+    PolyCRep* _coeff;
+    SBStateCRep* _pre_state;
+    SBEffectCRep* _pre_effect;
+    std::vector<SBGateCRep*> _pre_ops;
+    SBStateCRep* _post_state;
+    SBEffectCRep* _post_effect;
+    std::vector<SBGateCRep*> _post_ops;
+    SBTermCRep(PolyCRep* coeff, SBStateCRep* pre_state, SBStateCRep* post_state,
+	       std::vector<SBGateCRep*> pre_ops, std::vector<SBGateCRep*> post_ops);
+    SBTermCRep(PolyCRep* coeff, SBEffectCRep* pre_effect, SBEffectCRep* post_effect,
+	       std::vector<SBGateCRep*> pre_ops, std::vector<SBGateCRep*> post_ops);
+    SBTermCRep(PolyCRep* coeff, std::vector<SBGateCRep*> pre_ops, std::vector<SBGateCRep*> post_ops);
+  };
+
+  
 
 }

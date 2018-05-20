@@ -138,8 +138,15 @@ cdef extern from "fastreps.h" namespace "CReps":
         SBStateCRep(int*, int*, double complex*, int, int) except +
         SBStateCRep(int, int) except +
         SBStateCRep(double*,int,bool) except +
+        void copy_from(SBStateCRep*)
         int _n
         int _namps
+        # for DEBUG
+        int* _smatrix
+        int* _pvectors
+        int _zblock_start
+        double complex* _amps
+
 
     cdef cppclass SBEffectCRep:
         SBEffectCRep(int*, int) except +
@@ -149,20 +156,32 @@ cdef extern from "fastreps.h" namespace "CReps":
 
     cdef cppclass SBGateCRep:
         SBGateCRep(int) except +
-        SBStateCRep* acton(SBStateCRep*, SBStateCRep*);
+        SBStateCRep* acton(SBStateCRep*, SBStateCRep*)
+        SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
         int _n
 
     cdef cppclass SBGateCRep_Embedded(SBGateCRep):
         SBGateCRep_Embedded(SBGateCRep*, int, int*, int) except +
         SBStateCRep* acton(SBStateCRep*, SBStateCRep*)
+        SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
 
     cdef cppclass SBGateCRep_Composed(SBGateCRep):
         SBGateCRep_Composed(vector[SBGateCRep*], int) except +
         SBStateCRep* acton(SBStateCRep*, SBStateCRep*)
+        SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
 
     cdef cppclass SBGateCRep_Clifford(SBGateCRep):
         SBGateCRep_Clifford(int*, int*, double complex*, int*, int*, double complex*, int) except +
         SBStateCRep* acton(SBStateCRep*, SBStateCRep*)
+        SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
+        #for DEBUG:
+        int *_smatrix
+        int *_svector
+        int *_smatrix_inv
+        int *_svector_inv
+        double complex *_unitary
+        double complex *_unitary_adj
+
 
     #Other classes
     cdef cppclass PolyCRep:
@@ -188,6 +207,18 @@ cdef extern from "fastreps.h" namespace "CReps":
         SVEffectCRep* _post_effect
         vector[SVGateCRep*] _post_ops
 
+    cdef cppclass SBTermCRep:    
+        SBTermCRep(PolyCRep*, SBStateCRep*, SBStateCRep*, vector[SBGateCRep*], vector[SBGateCRep*]) except +
+        SBTermCRep(PolyCRep*, SBEffectCRep*, SBEffectCRep*, vector[SBGateCRep*], vector[SBGateCRep*]) except +
+        SBTermCRep(PolyCRep*, vector[SBGateCRep*], vector[SBGateCRep*]) except +
+        PolyCRep* _coeff
+        SBStateCRep* _pre_state
+        SBEffectCRep* _pre_effect
+        vector[SBGateCRep*] _pre_ops
+        SBStateCRep* _post_state
+        SBEffectCRep* _post_effect
+        vector[SBGateCRep*] _post_ops
+
         
     
 
@@ -199,12 +230,18 @@ ctypedef SVStateCRep* SVStateCRep_ptr
 ctypedef SVEffectCRep* SVEffectCRep_ptr
 ctypedef SVTermCRep* SVTermCRep_ptr
 ctypedef SBGateCRep* SBGateCRep_ptr
+ctypedef SBStateCRep* SBStateCRep_ptr
+ctypedef SBEffectCRep* SBEffectCRep_ptr
+ctypedef SBTermCRep* SBTermCRep_ptr
 ctypedef PolyCRep* PolyCRep_ptr
 ctypedef vector[SVTermCRep_ptr]* vector_SVTermCRep_ptr_ptr
+ctypedef vector[SBTermCRep_ptr]* vector_SBTermCRep_ptr_ptr
 
 #Create a function pointer type for term-based calc inner loop
-ctypedef void (*innerloopfn_ptr)(vector[vector_SVTermCRep_ptr_ptr],
-                                 vector[int]*, vector[PolyCRep*]*, int)
+ctypedef void (*sv_innerloopfn_ptr)(vector[vector_SVTermCRep_ptr_ptr],
+                                    vector[int]*, vector[PolyCRep*]*, int)
+ctypedef void (*sb_innerloopfn_ptr)(vector[vector_SBTermCRep_ptr_ptr],
+                                    vector[int]*, vector[PolyCRep*]*, int)
 
         
 #cdef class StateRep:
@@ -517,7 +554,15 @@ cdef class SBStateRep: #(StateRep):
         del self.c_state
 
     def __str__(self):
-        return "STABSTATE **"
+        #DEBUG
+        cdef int n = self.c_state._n
+        cdef int namps = self.c_state._namps
+        s = "SBStateRep\n"
+        s +=" smx = " + str([ self.c_state._smatrix[ii] for ii in range(2*n*2*n) ])
+        s +=" pvecs = " + str([ self.c_state._pvectors[ii] for ii in range(2*n) ])
+        s +=" amps = " + str([ self.c_state._amps[ii] for ii in range(namps) ])
+        s +=" zstart = " + str(self.c_state._zblock_start)
+        return s
 
 
 cdef class SBEffectRep:
@@ -535,6 +580,10 @@ cdef class SBEffectRep:
     def probability(self, SBStateRep state not None):
         #unnecessary (just put in signature): cdef SBStateRep st = <SBStateRep?>state
         return self.c_effect.probability(state.c_state)
+
+    def amplitude(self, SBStateRep state not None):
+        return self.c_effect.amplitude(state.c_state)
+
 
 
 cdef class SBGateRep:
@@ -555,8 +604,15 @@ cdef class SBGateRep:
         self.c_gate.acton(state.c_state, out_state.c_state)
         return out_state
 
-    #FUTURE: adjoint acton
-        
+    def adjoint_acton(self, SBStateRep state not None):
+        cdef int n = self.c_gate._n
+        cdef int namps = state.c_state._namps
+        cdef SBStateRep out_state = SBStateRep(np.empty((2*n,2*n), dtype='i'),
+                                               np.empty((namps,2*n), dtype='i'),
+                                               np.empty(namps, dtype=np.complex128))
+        self.c_gate.adjoint_acton(state.c_state, out_state.c_state)
+        return out_state
+
 
 cdef class SBGateRep_Embedded(SBGateRep):
     cdef np.ndarray data_ref
@@ -603,7 +659,8 @@ cdef class SBGateRep_Clifford(SBGateRep):
         self.data_ref3 = unitary
         self.data_ref4 = smatrix_inv
         self.data_ref5 = svector_inv
-        self.data_ref6 = np.conjugate(np.transpose(unitary))
+        self.data_ref6 = np.ascontiguousarray(np.conjugate(np.transpose(unitary)))
+           # the "ascontiguousarray" is crucial, since we just use the .data below
         cdef int n = smatrix.shape[0] // 2
         self.c_gate = new SBGateCRep_Clifford(<int*>smatrix.data, <int*>svector.data, <double complex*>unitary.data,
                                               <int*>smatrix_inv.data, <int*>svector_inv.data,
@@ -684,6 +741,53 @@ cdef class SVTermRep:
         del self.c_term
 
 
+cdef class SBTermRep:
+    cdef SBTermCRep* c_term
+
+    #Hold references to other reps so we don't GC them
+    cdef PolyRep coeff_ref
+    cdef SBStateRep state_ref1
+    cdef SBStateRep state_ref2
+    cdef SBEffectRep effect_ref1
+    cdef SBEffectRep effect_ref2
+    cdef object list_of_preops_ref
+    cdef object list_of_postops_ref
+
+    def __cinit__(self, PolyRep coeff, SBStateRep pre_state, SBStateRep post_state,
+                  SBEffectRep pre_effect, SBEffectRep post_effect, pre_ops, post_ops):
+        self.coeff_ref = coeff
+        self.list_of_preops_ref = pre_ops
+        self.list_of_postops_ref = post_ops
+
+        cdef int i
+        cdef int npre = len(pre_ops)
+        cdef int npost = len(post_ops)
+        cdef vector[SBGateCRep*] c_pre_ops = vector[SBGateCRep_ptr](npre)
+        cdef vector[SBGateCRep*] c_post_ops = vector[SBGateCRep_ptr](<int>len(post_ops))
+        for i in range(npre):
+            c_pre_ops[i] = (<SBGateRep?>pre_ops[i]).c_gate
+        for i in range(npost):
+            c_post_ops[i] = (<SBGateRep?>post_ops[i]).c_gate
+        
+        if pre_state is not None or post_state is not None:
+            assert(pre_state is not None and post_state is not None)
+            self.state_ref1 = pre_state
+            self.state_ref2 = post_state
+            self.c_term = new SBTermCRep(coeff.c_poly, pre_state.c_state, post_state.c_state,
+                                         c_pre_ops, c_post_ops);
+        elif pre_effect is not None or post_effect is not None:
+            assert(pre_effect is not None and post_effect is not None)
+            self.effect_ref1 = pre_effect
+            self.effect_ref2 = post_effect
+            self.c_term = new SBTermCRep(coeff.c_poly, pre_effect.c_effect, post_effect.c_effect,
+                                         c_pre_ops, c_post_ops);
+        else:
+            self.c_term = new SBTermCRep(coeff.c_poly, c_pre_ops, c_post_ops);
+
+    def __dealloc__(self):
+        del self.c_term
+
+
 ## END CLASSES -- BEGIN CALC METHODS
 
 
@@ -691,6 +795,7 @@ def propagate_staterep(staterep, gatereps):
     ret = staterep
     for gaterep in gatereps:
         ret = gaterep.acton(ret)
+        # DEBUG print("post-action rhorep = ",str(ret))
     return ret
 
 
@@ -917,8 +1022,13 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     return dpr_cache
 
 
+# Helper functions
+cdef PolyRep_from_allocd_PolyCRep(PolyCRep* crep):
+    cdef PolyRep ret = PolyRep.__new__(PolyRep) # doesn't call __init__
+    ret.c_poly = crep
+    return ret
 
-cdef vector[vector[SVTermCRep_ptr]] extract_cterms(python_termrep_lists, int max_order):
+cdef vector[vector[SVTermCRep_ptr]] sv_extract_cterms(python_termrep_lists, int max_order):
     cdef vector[vector[SVTermCRep_ptr]] ret = vector[vector[SVTermCRep_ptr]](max_order+1)
     cdef vector[SVTermCRep*] vec_of_terms
     for order,termreps in enumerate(python_termrep_lists): # maxorder+1 lists
@@ -970,11 +1080,11 @@ def SV_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=Non
 
     #convert to c-reps
     cdef int gi
-    cdef vector[vector[SVTermCRep_ptr]] rho_term_creps = extract_cterms(rho_term_reps,calc.max_order)
-    cdef vector[vector[SVTermCRep_ptr]] E_term_creps = extract_cterms(E_term_reps,calc.max_order)
+    cdef vector[vector[SVTermCRep_ptr]] rho_term_creps = sv_extract_cterms(rho_term_reps,calc.max_order)
+    cdef vector[vector[SVTermCRep_ptr]] E_term_creps = sv_extract_cterms(E_term_reps,calc.max_order)
     cdef unordered_map[int, vector[vector[SVTermCRep_ptr]]] gate_term_creps
     for gi,termrep_lists in gate_term_reps.items():
-        gate_term_creps[gi] = extract_cterms(termrep_lists,calc.max_order)
+        gate_term_creps[gi] = sv_extract_cterms(termrep_lists,calc.max_order)
 
     E_cindices = vector[vector[int]](<int>len(E_indices))
     for ii,inds in enumerate(E_indices):
@@ -990,10 +1100,6 @@ def SV_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=Non
 
     return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<int>polys.size()) ]
 
-cdef PolyRep_from_allocd_PolyCRep(PolyCRep* crep):
-    cdef PolyRep ret = PolyRep.__new__(PolyRep) # doesn't call __init__
-    ret.c_poly = crep
-    return ret
 
 cdef vector[PolyCRep*] sv_prs_as_polys(
     vector[int]& gatestring, vector[vector[SVTermCRep_ptr]] rho_term_reps,
@@ -1009,7 +1115,7 @@ cdef vector[PolyCRep*] sv_prs_as_polys(
     cdef int i,j,k,order,nTerms
     cdef int gn
 
-    cdef innerloopfn_ptr innerloop_fn;
+    cdef sv_innerloopfn_ptr innerloop_fn;
     if fastmode:
         innerloop_fn = sv_pr_as_poly_innerloop_savepartials
     else:
@@ -1374,6 +1480,512 @@ cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr]
         #    pRight = np.conjugate(rhoVecR.extract_amplitude(EVec.outcomes))
 
         #print "DB: final block"
+        #print "DB running coeff = ",dict(coeff._coeffs)
+        #print "DB factor coeff = ",dict(factor._coeff._coeffs)
+        result = coeff.mult(deref(factor._coeff))
+        #print "DB result = ",dict(result._coeffs)
+        result.scale(pLeft * pRight)
+        final_factor_indx = b[last_index]
+        Ei = deref(Einds)[final_factor_indx] #final "factor" index == E-vector index
+        deref(prps)[Ei].add_inplace(result)
+        #print "DB prps[",int(Ei),"] = ",dict(deref(prps)[Ei]._coeffs)
+
+        #assert(debug < 100) #DEBUG
+        #print "DB: end product loop"
+        
+        #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+        for i in range(nFactorLists-1,-1,-1):
+            if b[i]+1 < factorListLens[i]:
+                b[i] += 1; incd = i
+                break
+            else:
+                b[i] = 0
+        else:
+            break # can't increment anything - break while(True) loop
+
+    #Cleanup: free allocated memory
+    for i in range(nFactorLists-1):
+        del leftSaved[i]
+        del rightSaved[i]
+    del prop2
+    del shelved
+    free(factorListLens)
+    free(b)
+    return
+
+
+# Stabilizer-evolution version of poly term calcs -----------------------
+
+cdef vector[vector[SBTermCRep_ptr]] sb_extract_cterms(python_termrep_lists, int max_order):
+    cdef vector[vector[SBTermCRep_ptr]] ret = vector[vector[SBTermCRep_ptr]](max_order+1)
+    cdef vector[SBTermCRep*] vec_of_terms
+    for order,termreps in enumerate(python_termrep_lists): # maxorder+1 lists
+        vec_of_terms = vector[SBTermCRep_ptr](len(termreps))
+        for i,termrep in enumerate(termreps):
+            vec_of_terms[i] = (<SBTermRep?>termrep).c_term
+        ret[order] = vec_of_terms
+    return ret
+
+
+def SB_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None, fastmode=True):
+
+    # Create gatelable -> int mapping to be used throughout
+    glmap = { gl: i for i,gl in enumerate(calc.gates.keys()) }
+
+    # Convert gatestring to a vector of ints
+    cdef int i
+    cdef vector[int] cgatestring
+    for gl in gatestring:
+        cgatestring.push_back(<int>glmap[gl])
+
+    cdef int mpv = calc.Np # max_poly_vars
+    cdef int mpo = calc.max_order*2 #max_poly_order
+    cdef int order;
+    cdef int numEs = len(elabels)
+
+    # Construct dict of gate term reps, then *convert* to c-reps, as this
+    #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
+    gate_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in gate.get_order_terms(order)]
+                                      for order in range(calc.max_order+1) ]
+                       for glbl,gate in calc.gates.items() }
+
+    #Similar with rho_terms and E_terms
+    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.preps[rholabel].get_order_terms(order)]
+                      for order in range(calc.max_order+1) ]
+
+    E_term_reps = []
+    E_indices = []
+    for order in range(calc.max_order+1):
+        cur_term_reps = [] # the term reps for *all* the effect vectors
+        cur_indices = [] # the Evec-index corresponding to each term rep
+        for i,elbl in enumerate(elabels):
+            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.effects[elbl].get_order_terms(order) ]
+            cur_term_reps.extend( term_reps )
+            cur_indices.extend( [i]*len(term_reps) )
+        E_term_reps.append( cur_term_reps )
+        E_indices.append( cur_indices )
+
+
+    #convert to c-reps
+    cdef int gi
+    cdef vector[vector[SBTermCRep_ptr]] rho_term_creps = sb_extract_cterms(rho_term_reps,calc.max_order)
+    cdef vector[vector[SBTermCRep_ptr]] E_term_creps = sb_extract_cterms(E_term_reps,calc.max_order)
+    cdef unordered_map[int, vector[vector[SBTermCRep_ptr]]] gate_term_creps
+    for gi,termrep_lists in gate_term_reps.items():
+        gate_term_creps[gi] = sb_extract_cterms(termrep_lists,calc.max_order)
+
+    E_cindices = vector[vector[int]](<int>len(E_indices))
+    for ii,inds in enumerate(E_indices):
+        E_cindices[ii] = vector[int](<int>len(inds))
+        for jj,indx in enumerate(inds):
+            E_cindices[ii][jj] = <int>indx
+
+    # Assume when we calculate terms, that "dimension" of GateSet is
+    # a full vectorized-density-matrix dimension, so nqubits is:
+    cdef int nqubits = <int>(np.log2(calc.dim)//2)
+            
+    #Call C-only function (which operates with C-representations only)
+    cdef vector[PolyCRep*] polys = sb_prs_as_polys(
+        cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
+        E_cindices, numEs, calc.max_order, mpo, mpv, nqubits, <bool>fastmode)
+
+    return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<int>polys.size()) ]
+
+
+cdef vector[PolyCRep*] sb_prs_as_polys(
+    vector[int]& gatestring, vector[vector[SBTermCRep_ptr]] rho_term_reps,
+    unordered_map[int, vector[vector[SBTermCRep_ptr]]] gate_term_reps,
+    vector[vector[SBTermCRep_ptr]] E_term_reps, vector[vector[int]] E_term_indices,
+    int numEs, int max_order, int max_poly_order, int max_poly_vars, int nqubits, bool fastmode):
+
+    #NOTE: gatestring and gate_terms use *integers* as gate labels, not Label objects, to speed
+    # lookups and avoid weird string conversion stuff with Cython
+    
+    cdef int N = len(gatestring)
+    cdef int* p = <int*>malloc((N+2) * sizeof(int))
+    cdef int i,j,k,order,nTerms
+    cdef int gn
+
+    cdef sb_innerloopfn_ptr innerloop_fn;
+    if fastmode:
+        innerloop_fn = sb_pr_as_poly_innerloop_savepartials
+    else:
+        innerloop_fn = sb_pr_as_poly_innerloop
+
+    #extract raw data from gate_terms dictionary-of-lists for faster lookup
+    #gate_term_prefactors = _np.empty( (nGates,max_order+1,dim,dim)
+    #cdef unordered_map[int, vector[vector[unordered_map[int, complex]]]] gate_term_coeffs
+    #cdef vector[vector[unordered_map[int, complex]]] rho_term_coeffs
+    #cdef vector[vector[unordered_map[int, complex]]] E_term_coeffs
+    #cdef vector[vector[int]] E_indices
+                         
+    cdef vector[int]* Einds
+    cdef vector[vector_SBTermCRep_ptr_ptr] factor_lists
+
+    assert(max_order <= 2) # only support this partitioning below (so far)
+
+    cdef vector[PolyCRep_ptr] prps = vector[PolyCRep_ptr](numEs)
+    for i in range(numEs):
+        prps[i] = new PolyCRep(unordered_map[int,complex](),max_poly_order, max_poly_vars)
+        # create empty polys - maybe overload constructor for this?
+        # these PolyCReps are alloc'd here and returned - it is the job of the caller to
+        #  free them (or assign them to new PolyRep wrapper objs)
+
+    for order in range(max_order+1):
+        #print("DB: pr_as_poly order=",order)
+        
+        #for p in partition_into(order, N):
+        for i in range(N+2): p[i] = 0 # clear p
+        factor_lists = vector[vector_SBTermCRep_ptr_ptr](N+2)
+        
+        if order == 0:
+            #inner loop(p)
+            #factor_lists = [ gate_terms[glbl][pi] for glbl,pi in zip(gatestring,p) ]
+            factor_lists[0] = &rho_term_reps[p[0]]
+            for k in range(N):
+                gn = gatestring[k]
+                factor_lists[k+1] = &gate_term_reps[gatestring[k]][p[k+1]]
+                #if factor_lists[k+1].size() == 0: continue # WHAT???
+            factor_lists[N+1] = &E_term_reps[p[N+1]]
+            Einds = &E_term_indices[p[N+1]]
+        
+            #print("Part0 ",p)
+            innerloop_fn(factor_lists,Einds,&prps,nqubits) #, prps_chk)
+
+
+        elif order == 1:
+            for i in range(N+2):
+                p[i] = 1
+                #inner loop(p)
+                factor_lists[0] = &rho_term_reps[p[0]]
+                for k in range(N):
+                    gn = gatestring[k]
+                    factor_lists[k+1] = &gate_term_reps[gn][p[k+1]]
+                    #if len(factor_lists[k+1]) == 0: continue #WHAT???
+                factor_lists[N+1] = &E_term_reps[p[N+1]]
+                Einds = &E_term_indices[p[N+1]]
+
+                #print "DB: Order1 "
+                innerloop_fn(factor_lists,Einds,&prps,nqubits) #, prps_chk)
+                p[i] = 0
+            
+        elif order == 2:
+            for i in range(N+2):
+                p[i] = 2
+                #inner loop(p)
+                factor_lists[0] = &rho_term_reps[p[0]]
+                for k in range(N):
+                    gn = gatestring[k]
+                    factor_lists[k+1] = &gate_term_reps[gatestring[k]][p[k+1]]
+                    #if len(factor_lists[k+1]) == 0: continue # WHAT???
+                factor_lists[N+1] = &E_term_reps[p[N+1]]
+                Einds = &E_term_indices[p[N+1]]
+
+                innerloop_fn(factor_lists,Einds,&prps,nqubits) #, prps_chk)
+                p[i] = 0
+
+            for i in range(N+2):
+                p[i] = 1
+                for j in range(i+1,N+2):
+                    p[j] = 1
+                    #inner loop(p)
+                    factor_lists[0] = &rho_term_reps[p[0]]
+                    for k in range(N):
+                        gn = gatestring[k]
+                        factor_lists[k+1] = &gate_term_reps[gatestring[k]][p[k+1]]
+                        #if len(factor_lists[k+1]) == 0: continue #WHAT???
+                    factor_lists[N+1] = &E_term_reps[p[N+1]]
+                    Einds = &E_term_indices[p[N+1]]
+
+                    innerloop_fn(factor_lists,Einds,&prps,nqubits) #, prps_chk)
+                    p[j] = 0
+                p[i] = 0
+        else:
+            assert(False) # order > 2 not implemented yet...
+
+    free(p)
+    return prps
+
+                
+
+cdef void sb_pr_as_poly_innerloop(vector[vector_SBTermCRep_ptr_ptr] factor_lists, vector[int]* Einds,
+                                  vector[PolyCRep*]* prps, int n): #, prps_chk):
+    #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
+
+    cdef int i,j,Ei
+    cdef double complex scale, val, newval, pLeft, pRight, p
+
+    cdef int incd
+    cdef SBTermCRep* factor
+
+    cdef int nFactorLists = factor_lists.size() # may need to recompute this after fast-mode
+    cdef int* factorListLens = <int*>malloc(nFactorLists * sizeof(int))
+    cdef int last_index = nFactorLists-1
+
+    for i in range(nFactorLists):
+        factorListLens[i] = factor_lists[i].size()
+        if factorListLens[i] == 0:
+            free(factorListLens)
+            return # nothing to loop over! - (exit before we allocate more)
+
+    cdef PolyCRep coeff
+    cdef PolyCRep result    
+
+    cdef int namps = 1 # HARDCODED namps for SB states - in future this may be just the *initial* number
+    cdef SBStateCRep *prop1 = new SBStateCRep(namps, n)
+    cdef SBStateCRep *prop2 = new SBStateCRep(namps, n)
+    cdef SBStateCRep *tprop
+    cdef SBEffectCRep* EVec
+
+    cdef int* b = <int*>malloc(nFactorLists * sizeof(int))
+    for i in range(nFactorLists): b[i] = 0
+
+    assert(nFactorLists > 0), "Number of factor lists must be > 0!"
+    
+    #for factors in _itertools.product(*factor_lists):
+    while(True):
+        # In this loop, b holds "current" indices into factor_lists
+        factor = deref(factor_lists[0])[b[0]] # the last factor (an Evec)
+        coeff = deref(factor._coeff) # an unordered_map (copies to new "coeff" variable)
+            
+        for i in range(1,nFactorLists):
+            coeff = coeff.mult( deref(deref(factor_lists[i])[b[i]]._coeff) )
+            
+        #pLeft / "pre" sim
+        factor = deref(factor_lists[0])[b[0]] # 0th-factor = rhoVec
+        prop1.copy_from(factor._pre_state)
+        for j in range(<int>factor._pre_ops.size()):
+            factor._pre_ops[j].acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop
+        for i in range(1,last_index):
+            factor = deref(factor_lists[i])[b[i]]
+            for j in range(<int>factor._pre_ops.size()):
+                factor._pre_ops[j].acton(prop1,prop2)
+                tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+        factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
+
+        # can't propagate effects, so act w/adjoint of post_ops in reverse order...
+        EVec = factor._post_effect
+        for j in range(<int>factor._post_ops.size()-1,-1,-1): # (reversed)
+            rhoVec = factor._post_ops[j].adjoint_acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+        pLeft = EVec.amplitude(prop1)
+                        
+        #pRight / "post" sim
+        factor = deref(factor_lists[0])[b[0]] # 0th-factor = rhoVec
+        prop1.copy_from(factor._post_state)
+        for j in range(<int>factor._post_ops.size()):
+            factor._post_ops[j].acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+        for i in range(1,last_index):
+            factor = deref(factor_lists[i])[b[i]]
+            for j in range(<int>factor._post_ops.size()):
+                factor._post_ops[j].acton(prop1,prop2)
+                tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+        factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
+        
+        EVec = factor._pre_effect
+        for j in range(<int>factor._pre_ops.size()-1,-1,-1): # (reversed)
+            factor._pre_ops[j].adjoint_acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+        pRight = EVec.amplitude(prop1).conjugate()
+
+
+        #Add result to appropriate poly
+        result = coeff  # use a reference?
+        result.scale(pLeft * pRight)
+        final_factor_indx = b[last_index]
+        Ei = deref(Einds)[final_factor_indx] #final "factor" index == E-vector index
+        deref(prps)[Ei].add_inplace(result)
+        
+        #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+        for i in range(nFactorLists-1,-1,-1):
+            if b[i]+1 < factorListLens[i]:
+                b[i] += 1
+                break
+            else:
+                b[i] = 0
+        else:
+            break # can't increment anything - break while(True) loop
+
+    #Clenaup: free allocated memory
+    del prop1
+    del prop2
+    free(factorListLens)
+    free(b)
+    return
+
+
+cdef void sb_pr_as_poly_innerloop_savepartials(vector[vector_SBTermCRep_ptr_ptr] factor_lists,
+                                               vector[int]* Einds, vector[PolyCRep*]* prps, int n): #, prps_chk):
+    #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
+
+    cdef int i,j,Ei
+    cdef double complex scale, val, newval, pLeft, pRight, p
+
+    cdef int incd
+    cdef SBTermCRep* factor
+
+    cdef int nFactorLists = factor_lists.size() # may need to recompute this after fast-mode
+    cdef int* factorListLens = <int*>malloc(nFactorLists * sizeof(int))
+    cdef int last_index = nFactorLists-1
+
+    for i in range(nFactorLists):
+        factorListLens[i] = factor_lists[i].size()
+        if factorListLens[i] == 0:
+            free(factorListLens)
+            return # nothing to loop over! (exit before we allocate anything else)
+        
+    cdef PolyCRep coeff
+    cdef PolyCRep result    
+
+    cdef int namps = 1 # HARDCODED namps for SB states - in future this may be just the *initial* number
+    cdef vector[SBStateCRep*] leftSaved = vector[SBStateCRep_ptr](nFactorLists-1)  # saved[i] is state after i-th
+    cdef vector[SBStateCRep*] rightSaved = vector[SBStateCRep_ptr](nFactorLists-1) # factor has been applied
+    cdef vector[PolyCRep] coeffSaved = vector[PolyCRep](nFactorLists-1)
+    cdef SBStateCRep *shelved = new SBStateCRep(namps, n)
+    cdef SBStateCRep *prop2 = new SBStateCRep(namps, n) # prop2 is always a temporary allocated state not owned by anything else
+    cdef SBStateCRep *prop1
+    cdef SBStateCRep *tprop
+    cdef SBEffectCRep* EVec
+    
+    cdef int* b = <int*>malloc(nFactorLists * sizeof(int))
+    for i in range(nFactorLists): b[i] = 0
+    assert(nFactorLists > 0), "Number of factor lists must be > 0!"
+    
+    incd = 0
+
+    #Fill saved arrays with allocated states
+    for i in range(nFactorLists-1):
+        leftSaved[i] = new SBStateCRep(namps, n)
+        rightSaved[i] = new SBStateCRep(namps, n)
+
+    #for factors in _itertools.product(*factor_lists):
+    #for incd,fi in incd_product(*[range(len(l)) for l in factor_lists]):
+    while(True):
+        # In this loop, b holds "current" indices into factor_lists
+        #print "DB: iter-product BEGIN"
+
+        if incd == 0: # need to re-evaluate rho vector
+            #print "DB: re-eval at incd=0"
+            factor = deref(factor_lists[0])[b[0]]
+
+            #print "DB: re-eval left"
+            prop1 = leftSaved[0] # the final destination (prop2 is already alloc'd)
+            prop1.copy_from(factor._pre_state)
+            for j in range(<int>factor._pre_ops.size()):
+                #print "DB: re-eval left item"
+                factor._pre_ops[j].acton(prop1,prop2)
+                tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
+            rhoVecL = prop1
+            leftSaved[0] = prop1 # final state -> saved
+            # (prop2 == the other allocated state)
+
+            #print "DB: re-eval right"
+            prop1 = rightSaved[0] # the final destination (prop2 is already alloc'd)
+            prop1.copy_from(factor._post_state)
+            for j in range(<int>factor._post_ops.size()):
+                #print "DB: re-eval right item"
+                factor._post_ops[j].acton(prop1,prop2)
+                tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
+            rhoVecR = prop1
+            rightSaved[0] = prop1 # final state -> saved
+            # (prop2 == the other allocated state)
+
+            #print "DB: re-eval coeff"
+            coeff = deref(factor._coeff)
+            coeffSaved[0] = coeff
+            incd += 1
+        else:
+            #print "DB: init from incd"
+            rhoVecL = leftSaved[incd-1]
+            rhoVecR = rightSaved[incd-1]
+            coeff = coeffSaved[incd-1]
+
+        # propagate left and right states, saving as we go
+        for i in range(incd,last_index):
+            #print "DB: propagate left begin"
+            factor = deref(factor_lists[i])[b[i]]
+            prop1 = leftSaved[i] # destination
+            prop1.copy_from(rhoVecL) #starting state
+            for j in range(<int>factor._pre_ops.size()):
+                #print "DB: propagate left item"
+                factor._pre_ops[j].acton(prop1,prop2)
+                tprop = prop1; prop1 = prop2; prop2 = tprop
+            rhoVecL = prop1
+            leftSaved[i] = prop1
+            # (prop2 == the other allocated state)
+
+            #print "DB: propagate right begin"
+            prop1 = rightSaved[i] # destination
+            prop1.copy_from(rhoVecR) #starting state
+            for j in range(<int>factor._post_ops.size()):
+                #print "DB: propagate right item"
+                factor._post_ops[j].acton(prop1,prop2)
+                tprop = prop1; prop1 = prop2; prop2 = tprop
+            rhoVecR = prop1
+            rightSaved[i] = prop1
+            # (prop2 == the other allocated state)
+
+            #print "DB: propagate coeff mult"
+            coeff = coeff.mult(deref(factor._coeff)) # copy a PolyCRep
+            coeffSaved[i] = coeff
+
+        # for the last index, no need to save, and need to construct
+        # and apply effect vector
+        prop1 = shelved # so now prop1 (and prop2) are alloc'd states
+
+        #print "DB: left ampl"
+        factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
+        EVec = factor._post_effect
+        prop1.copy_from(rhoVecL) # initial state (prop2 already alloc'd)
+        for j in range(<int>factor._post_ops.size()-1,-1,-1): # (reversed)
+            factor._post_ops[j].adjoint_acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop
+        pLeft = EVec.amplitude(prop1) # output in prop1, so this is final amplitude
+
+        #print "DB: right ampl"
+        EVec = factor._pre_effect
+        prop1.copy_from(rhoVecR)
+        pRight = EVec.amplitude(prop1)
+        #DEBUG print "  - begin: ",complex(pRight)
+        for j in range(<int>factor._pre_ops.size()-1,-1,-1): # (reversed)
+            #DEBUG print " - state = ", [ prop1._smatrix[ii] for ii in range(2*2)]
+            #DEBUG print "         = ", [ prop1._pvectors[ii] for ii in range(2)]
+            #DEBUG print "         = ", [ prop1._amps[ii] for ii in range(1)]
+            factor._pre_ops[j].adjoint_acton(prop1,prop2)
+            #DEBUG print " - action with ", [ (<SBGateCRep_Clifford*>factor._pre_ops[j])._smatrix_inv[ii] for ii in range(2*2)]
+            #DEBUG print " - action with ", [ (<SBGateCRep_Clifford*>factor._pre_ops[j])._svector_inv[ii] for ii in range(2)]
+            #DEBUG print " - action with ", [ (<SBGateCRep_Clifford*>factor._pre_ops[j])._unitary_adj[ii] for ii in range(2*2)]
+            tprop = prop1; prop1 = prop2; prop2 = tprop
+            pRight = EVec.amplitude(prop1)
+            #DEBUG print "  - prop ",int(j)," = ",complex(pRight)
+            #DEBUG print " - post state = ", [ prop1._smatrix[ii] for ii in range(2*2)]
+            #DEBUG print "              = ", [ prop1._pvectors[ii] for ii in range(2)]
+            #DEBUG print "              = ", [ prop1._amps[ii] for ii in range(1)]
+
+        pRight = EVec.amplitude(prop1).conjugate()
+
+        shelved = prop1 # return prop1 to the "shelf" since we'll use prop1 for other things next
+
+        #DO THIS IN SB VARIANT
+        #else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
+        #    factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
+        #    EVec = factor.post_ops[0]
+        #    for j in range(len(factor.post_ops)-1,0,-1): # (reversed)
+        #        rhoVecL = factor.post_ops[j].adjoint_acton(rhoVecL)
+        #    #OLD: p = stabilizer_measurement_prob(rhoVecL, EVec.outcomes)
+        #    #OLD: pLeft = np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
+        #    pLeft = rhoVecL.extract_amplitude(EVec.outcomes)
+        #
+        #    EVec = factor.pre_ops[0]
+        #    for j in range(len(factor.pre_ops)-1,0,-1): # (reversed)
+        #        rhoVecR = factor.pre_ops[j].adjoint_acton(rhoVecR)
+        #    #OLD: p = stabilizer_measurement_prob(rhoVecR, EVec.outcomes)
+        #    #OLD: pRight = np.sqrt(p) # sqrt b/c pRight is just *amplitude*
+        #    pRight = np.conjugate(rhoVecR.extract_amplitude(EVec.outcomes))
+
+        #print "DB: final block: pLeft=",complex(pLeft)," pRight=",complex(pRight)
         #print "DB running coeff = ",dict(coeff._coeffs)
         #print "DB factor coeff = ",dict(factor._coeff._coeffs)
         result = coeff.mult(deref(factor._coeff))

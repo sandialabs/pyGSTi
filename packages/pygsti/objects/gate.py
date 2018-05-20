@@ -3863,8 +3863,8 @@ class EmbeddedGateMap(Gate):
             #Cache info to speedup _stabilizer_acton(...) methods:
             # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
             qubitLabels = self.stateSpaceLabels.labels[0] 
-            self.qubit_indices =  [ qubitLabels.index(targetLbl)
-                                    for targetLbl in self.targetLabels ]
+            self.qubit_indices =  _np.array([ qubitLabels.index(targetLbl)
+                                              for targetLbl in self.targetLabels ], 'i')
         else:
             self.qubit_indices = None # (unused)
 
@@ -4718,7 +4718,8 @@ class CliffordGate(Gate):
         return replib.SBGateRep_Clifford(_np.ascontiguousarray(self.smatrix,'i'),
                                          _np.ascontiguousarray(self.svector,'i'),
                                          _np.ascontiguousarray(invs,'i'),
-                                         _np.ascontiguousarray(invp,'i'), U)
+                                         _np.ascontiguousarray(invp,'i'),
+                                         _np.ascontiguousarray(U,complex))
 
 
     def acton(self, state):

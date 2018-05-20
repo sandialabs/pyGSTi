@@ -305,6 +305,7 @@ class StabilizerFrame(object):
                 elif self.s[j+n,igen] == 1: # Z
                     # Z => a' == -a constraint if basis[j] == |1> (otherwise a == a)
                     if result[j] == 1: new_amp *= -1
+            #DEBUG print("DB PYTHON XGEN returns ",result,new_amp)
             return result, new_amp
         
         def get_target_ampl(tgt):
@@ -499,12 +500,13 @@ class StabilizerFrame(object):
         if debug: print("APPLY CLIFFORD TO FRAME")
         self._apply_clifford_to_frame(smatrix, svector, qubits)
         self._rref()
-        #DEBUG print("DB: s = \n",self.s)
-        #DEBUG print("DB: ps = ",self.ps)
+        #print("DB: s = \n",self.s) # DEBUG 
+        #print("DB: ps = ",self.ps) # DEBUG 
 
         #Step3: Update global amplitudes - Part B
         for ip,(base_state,ampls) in enumerate(sampled_amplitudes):
-            
+
+            # print("DB: Umx = ",Umx) # DEBUG
             if debug: print("APPLYING U to instate =", ampls)
             instate = ampls
             outstate = _np.dot(Umx,instate) # state-vector propagation

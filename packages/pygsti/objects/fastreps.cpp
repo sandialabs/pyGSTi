@@ -1024,7 +1024,7 @@ namespace CReps {
     apply_clifford_to_frame(smatrix, svector, qubits);
     rref();
 
-    //DEBUG!!!
+    //DEBUG!!! - print smx and pvecs
     //std::cout << "S = ";
     //for(i=0; i<_2n*_2n; i++) std::cout << _smatrix[i] << " ";
     //std::cout << std::endl;
@@ -1036,6 +1036,11 @@ namespace CReps {
     for(ip=0; ip<_namps; ip++) {
       const std::vector<int> & base_state = sampled_states[ip];
       const std::vector<dcomplex> & ampls = sampled_amplitudes[ip];
+
+      //DEBUG!!! - print Umx
+      //std::cout << "U = ";
+      //for(i=0; i<action_size*action_size; i++) std::cout << Umx[i] << " ";
+      //std::cout << std::endl;
 
       // APPLYING U to instate = ampls, i.e. outstate = _np.dot(Umx,ampls)
       DEBUG(std::cout << "APPLYING U to instate = ");
@@ -1224,7 +1229,7 @@ namespace CReps {
       }
       else if(_smatrix[(j+_n)*_2n + igen] == 1) { // Z
 	// Z => a' == -a constraint if basis[j] == |1> (otherwise a == a)
-	if(result[j] == 1) new_amp *= -1;
+	if(result[j] == 1) new_amp *= -1.0;
 	//DEBUG std::cout << "new_amp3 = "<<new_amp<<std::endl;
       }
     }
@@ -1262,9 +1267,11 @@ namespace CReps {
 	std::vector<int> zvals_copy(zvals);
 	amp = apply_xgen(i, gen_p, zvals, amp, zvals_copy);
 	zvals = zvals_copy; //will this work (copy)?
-	DEBUG(std::cout << "Resulting amp = " << amp << " zvals=");
-        DEBUG(for(std::size_t z=0; z<zvals.size(); z++) std::cout << zvals[z]);
-	DEBUG(std::cout << std::endl);
+
+	//DEBUG!!! - print XGEN return val
+	//std::cout << "Resulting amp = " << amp << " zvals=";
+        //for(std::size_t z=0; z<zvals.size(); z++) std::cout << zvals[z];
+	//std::cout << std::endl;
                     
 	// Check if we've found target
 	for(k=0; k<_n; k++) {
@@ -1296,7 +1303,7 @@ namespace CReps {
       int gen_p = _pvectors[ip*_2n + i]; //phase of generator
       gen_p = (gen_p + 3*udot1(i,i)) % 4;  //counts number of Y's => -i's
       assert(gen_p == 0 || gen_p == 2);
-      std::cout << "STARTING LOOP!" << std::endl;
+      DEBUG(std::cout << "STARTING LOOP!" << std::endl);
             
       // get positions of Zs
       std::vector<int> zpos;
@@ -1831,6 +1838,12 @@ namespace CReps {
     _svector_inv = svector_inv;
     _unitary = unitary;
     _unitary_adj = unitary_adj;
+
+    //DEBUG!!!
+    //std::cout << "IN SBGateCRep_Clifford CONSTRUCTOR U = ";
+    //for(int i=0; i<2*2; i++) std::cout << _unitary_adj[i] << " ";
+    //std::cout << std::endl;
+
   }
   SBGateCRep_Clifford::~SBGateCRep_Clifford() { }
   
@@ -1843,6 +1856,12 @@ namespace CReps {
 
   SBStateCRep* SBGateCRep_Clifford::adjoint_acton(SBStateCRep* state, SBStateCRep* out_state) {
     DEBUG(std::cout << "Stabilizer Clifford adjoint_acton called!" << std::endl);
+
+    //DEBUG!!!
+    //std::cout << "AT SBGateCRep_Clifford::adjoint_acton U = ";
+    //for(int i=0; i<2*2; i++) std::cout << _unitary_adj[i] << " ";
+    //std::cout << std::endl;
+    
     out_state->copy_from(state);
     out_state->clifford_update(_smatrix_inv, _svector_inv, _unitary_adj);
     return out_state;
@@ -2100,4 +2119,42 @@ namespace CReps {
     _post_ops = post_ops;
   }
 
+  /****************************************************************************\
+  |* SBTermCRep                                                               *|
+  \****************************************************************************/
+    
+  SBTermCRep::SBTermCRep(PolyCRep* coeff, SBStateCRep* pre_state, SBStateCRep* post_state,
+			 std::vector<SBGateCRep*> pre_ops, std::vector<SBGateCRep*> post_ops) {
+    _coeff = coeff;
+    _pre_state = pre_state;
+    _post_state = post_state;
+    _pre_effect = NULL;
+    _post_effect = NULL;
+    _pre_ops = pre_ops;
+    _post_ops = post_ops;
+  }
+  
+  SBTermCRep::SBTermCRep(PolyCRep* coeff, SBEffectCRep* pre_effect, SBEffectCRep* post_effect,
+			 std::vector<SBGateCRep*> pre_ops, std::vector<SBGateCRep*> post_ops) {
+    _coeff = coeff;
+    _pre_state = NULL;
+    _post_state = NULL;
+    _pre_effect = pre_effect;
+    _post_effect = post_effect;
+    _pre_ops = pre_ops;
+    _post_ops = post_ops;
+  }
+  
+  SBTermCRep::SBTermCRep(PolyCRep* coeff, std::vector<SBGateCRep*> pre_ops,
+			 std::vector<SBGateCRep*> post_ops) {
+    _coeff = coeff;
+    _pre_state = NULL;
+    _post_state = NULL;
+    _pre_effect = NULL;
+    _post_effect = NULL;
+    _pre_ops = pre_ops;
+    _post_ops = post_ops;
+  }
+
+  
 }

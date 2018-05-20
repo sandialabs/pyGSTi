@@ -1095,7 +1095,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
         elif parameterization == "H+S clifford terms": evotype = "cterm"
         else: evotype = "densitymx" #everything else
 
-    if evotype in ("densitymx","svterm"):
+    if evotype in ("densitymx","svterm","cterm"):
         basis1Q = _Basis("pp",2)
         v0 = basis_build_vector("0", basis1Q)
         v1 = basis_build_vector("1", basis1Q)
@@ -1104,7 +1104,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
         v0 = _np.array([[1],[0]],complex)
         v1 = _np.array([[0],[1]],complex)
     else:
-        assert(evotype in ("stabilizer","cterm")), "Invalid evolution type: %s" % evotype
+        assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
         basis1Q = v0 = v1 = None # then we shouldn't use these
 
     #OLD - now consolidate by using X.convert(...) TODO REMOVE
@@ -1184,8 +1184,8 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
                 if on_construction_error in ('warn','ignore'): continue
                 else: raise e
 
-        gate_nQubits = int(round(_np.log2(gate.dim)/2)) if (evotype in ("densitymx","svterm")) \
-                       else int(round(_np.log2(gate.dim)))
+        gate_nQubits = int(round(_np.log2(gate.dim)/2)) if (evotype in ("densitymx","svterm","cterm")) \
+                       else int(round(_np.log2(gate.dim))) # evotype in ("statevec","stabilizer")
         
         availList = availability.get(gateName, 'all-permutations')
         if availList == 'all-combinations': 
@@ -1267,10 +1267,10 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
             
         U = nonstd_gate_unitaries.get(name, std_unitaries.get(name,None))
         if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
-        if evotype in ("densitymx","svterm"): 
+        if evotype in ("densitymx","svterm","cterm"): 
             gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
         else: #we just store the unitaries
-            assert(evotype in ("statevec","cterm","stabilizer")), "Invalid evotype: %s" % evotype
+            assert(evotype in ("statevec","stabilizer")), "Invalid evotype: %s" % evotype
             gatedict[name] = U
 
     return build_nqubit_gateset(nQubits,gatedict,availability,parameterization,

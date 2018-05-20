@@ -148,9 +148,12 @@ class GateTermCalc(GateCalc):
         
         #FAST MODE TEST
         fastmode = True
-        poly_reps = replib.SV_prs_as_polys(self, rholabel, elabels, gatestring, comm, memLimit, fastmode)
+        if self.evotype == "svterm":
+            poly_reps = replib.SV_prs_as_polys(self, rholabel, elabels, gatestring, comm, memLimit, fastmode)
+        else: # "cterm" (stabilizer-based term evolution)
+            poly_reps = replib.SB_prs_as_polys(self, rholabel, elabels, gatestring, comm, memLimit, fastmode)
         prps_fast = [ _Polynomial.fromrep(rep) for rep in poly_reps ]
-        ##return [ dict_to_fastpoly(p) for p in prps_fast ]
+        ##return prps_fast
         #END FAST MODE TEST
         
         #print("DB: prs_as_polys(",spamTuple,gatestring,self.max_order,")")
@@ -315,17 +318,32 @@ class GateTermCalc(GateCalc):
                             pLeft = rhoVecL.extract_amplitude(E.outcomes)
 
                             #Same for pre_ops and rhoVecR
+                            #DEBUG print("DB PYTHON right ampl")
+                            #DEBUG print("  - begin: ", rhoVecR.extract_amplitude(E.outcomes))
                             for f in reversed(factors[-1].pre_ops[1:]):
+                                #DEBUG print( " - state = ", rhoVecR.s)
+                                #DEBUG print( "         = ", rhoVecR.ps)
+                                #DEBUG print( "         = ", rhoVecR.a)
                                 rhoVecR = f.adjoint_acton(rhoVecR)
+                                #DEBUG print("  - action with ", f.smatrix)
+                                #DEBUG print("  - action with ", f.svector)
+                                #DEBUG print("  - action with ", f.unitary)
+                                #DEBUG print("  - prop: ", rhoVecR.extract_amplitude(E.outcomes))
+                                #DEBUG print( " - post state = ", rhoVecR.s)
+                                #DEBUG print( "              = ", rhoVecR.ps)
+                                #DEBUG print( "              = ", rhoVecR.a)
                             E = factors[-1].pre_ops[0]
                             pRight = _np.conjugate(rhoVecR.extract_amplitude(E.outcomes))
 
+                        #DEBUG print("DB PYTHON: final block: pLeft=",pLeft," pRight=",pRight)
                         coeff = coeff.mult_poly(factors[-1].coeff)
                         res = coeff.mult_scalar( (pLeft * pRight) )
+                        #DEBUG print("DB PYTHON: result = ",coeff)
                         final_factor_indx = fi[-1]
                         Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
                         if prps[Ei] is None: prps[Ei]  = res
                         else:                prps[Ei] += res
+                        #DEBUG print("DB PYHON: prps[%d] = " % Ei, prps[Ei])
                         
                 else: # non-fast mode
                     last_index = len(factor_lists)-1

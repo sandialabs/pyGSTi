@@ -134,10 +134,10 @@ class GateMapCalc(GateCalc):
         SPAMVec
         """
         #from .label import Label #DEBUG
-        #print("INIT: \n",rho[0],'\n',rho[1]) #DEBUG
+        #print("INIT: \n",rho) #DEBUG
         for lbl in gatestring:
             rho = self.gates[lbl].acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
-            #print("AFTER %s: \n" % lbl,rho[0],'\n',rho[1]) #DEBUG
+            #print("AFTER %s: \n" % str(lbl),rho) #DEBUG HERE
         return rho
 
 
@@ -173,23 +173,32 @@ class GateMapCalc(GateCalc):
         #print("NEW pr for gatestring = ",gatestring)
         rholabel,elabel = spamTuple # can't handle custom rho/e -- this seems ok...
         rhorep = self.preps[rholabel].torep('prep')
+        #print("RhoRep = ",rhorep)
         erep = self.effects[elabel].torep('effect')
         rhorep = replib.propagate_staterep(rhorep, [self.gates[gl].torep() for gl in gatestring])
+        #print("Final RhoRep = ",rhorep)
+        #amp = erep.amplitude(rhorep) #outcome probability
         p = erep.probability(rhorep) #outcome probability
         #print("NEW pr => ",p)
 
         #OLD
         ##print("\n\nOLD pr BEGIN")
-        #rho,E = self._rhoE_from_spamTuple(spamTuple)
-        #rho = self.propagate_state(rho, gatestring)
-        #if self.evotype == "statevec":
-        #    p_old = float(abs(_np.dot(E,rho))**2)
-        #elif self.evotype == "densitymx":
-        #    p_old = float(_np.dot(E,rho))
-        #else: # evotype == "stabilizer"
-        #    #print("MEASURE!!")
-        #    p_old = rho.measurement_probability(E.outcomes)
-        #assert(_np.isclose(p,p_old)),"New code is giving a different result!"
+        rho,E = self._rhoE_from_spamTuple(spamTuple)
+        rho = self.propagate_state(rho, gatestring)
+        # DEBUG print( " - state = ", rho.s)
+        # DEBUG print( "         = ", rho.ps)
+        # DEBUG print( "         = ", rho.a)
+        if self.evotype == "statevec":
+            p_old = float(abs(_np.dot(E,rho))**2)
+        elif self.evotype == "densitymx":
+            p_old = float(_np.dot(E,rho))
+        else: # evotype == "stabilizer"
+            #print("MEASURE!!")
+            p_old = rho.measurement_probability(E.outcomes)
+            #a_old = rho.extract_amplitude(E.outcomes)
+            # DEBUG print("AMP DEBUG COMP = ",amp,a_old)
+            #assert(_np.isclose(amp,a_old)),"New code is giving a different amplitude result!"
+        assert(_np.isclose(p,p_old)),"New code is giving a different result!"
         ##print("OLD pr END => ",p_old,"\n\n")
 
         if _np.isnan(p):

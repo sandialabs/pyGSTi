@@ -1656,14 +1656,22 @@ class TensorProdSPAMVec(SPAMVec):
                                                      len(self.factors), self._fast_kron_array.shape[1], self.dim)
         
         elif self._evotype == "stabilizer":
-            if self.typ == "prep":
-                # => self.factors should all be StabilizerSPAMVec objs
-                #Return stabilizer-rep tuple, just like StabilizerSPAMVec
-                sframe_factors = [ f.todense() for f in self.factors ]
-                return _stabilizer.sframe_kronecker(sframe_factors).torep()
+            if self.typ == "prep": # prep-type vectors can be represented as dense effects too; this just
+                                   # means that self.factors 
+                if typ == "prep":
+                    # => self.factors should all be StabilizerSPAMVec objs
+                    #Return stabilizer-rep tuple, just like StabilizerSPAMVec
+                    sframe_factors = [ f.todense() for f in self.factors ] # StabilizerFrame for each factor
+                    return _stabilizer.sframe_kronecker(sframe_factors).torep()
+                else: #self.typ == "effect", so each factor is a StabilizerEffectVec
+                    outcomes = _np.array( list(_itertools.chain(*[f.outcomes for f in self.factors])), 'i')
+                    return replib.SBEffectRep(outcomes)
 
-            else: #self.typ == "effect", so each factor is a StabilizerEffectVec
-                outcomes = _np.array( list(_itertools.chain(*[f.outcomes for f in self.factors])), int)
+            else: #self.typ == "effect", so each factor is a StabilizerZPOVM
+                # like above, but get a StabilizerEffectVec from each StabilizerZPOVM factor
+                factorPOVMs = self.factors
+                factorVecs = [ factorPOVMs[i][self.effectLbls[i]] for i in range(1,len(factorPOVMs)) ]
+                outcomes = _np.array( list(_itertools.chain(*[f.outcomes for f in factorVecs])), 'i')
                 return replib.SBEffectRep(outcomes)
                 
                 #OLD - now can remove outcomes prop?
@@ -1686,8 +1694,9 @@ class TensorProdSPAMVec(SPAMVec):
 
     def get_order_terms(self, order):
         """ TODO: docstring """
-        assert(self._evotype in ("svterm","cterm")), \
-            "Invalid evolution type: %s" % self._evotype
+        if self._evotype == "svterm": tt = "dense"
+        elif self._evotype == "cterm": tt = "clifford"
+        else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
         
         from .gate import EmbeddedGateMap as _EmbeddedGateMap
         terms = []
@@ -1715,7 +1724,7 @@ class TensorProdSPAMVec(SPAMVec):
             for factors in _itertools.product(*factor_lists):
                 # create a term with a TensorProdSPAMVec - Note we always create
                 # "prep"-mode vectors, since even when self.typ == "effect" these
-                # vectors are created with factor SPAMVecs not factor POVMs
+                # vectors are created with factor (prep- or effect-type) SPAMVecs not factor POVMs
                 # we workaround this by still allowing such "prep"-mode
                 # TensorProdSPAMVecs to be represented as effects (i.e. in torep('effect'...) works)
                 coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
@@ -1723,7 +1732,7 @@ class TensorProdSPAMVec(SPAMVec):
                                                       if (f.pre_ops[0] is not None)])
                 post_op = TensorProdSPAMVec("prep", [f.post_ops[0] for f in factors
                                                        if (f.post_ops[0] is not None)])
-                term = _term.RankOneTerm(coeff, pre_op, post_op)
+                term = _term.RankOneTerm(coeff, pre_op, post_op, tt)
 
                 if not collapsible: # then may need to add more ops.  Assume factor ops are clifford gates
                     # Embed each factors ops according to their target qubit(s) and just daisy chain them
