@@ -67,7 +67,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         manually incrementing seeds between those calls.
 
     aliasDict : dict, optional
-        A dictionary mapping single gate labels into tuples of one or more 
+        A dictionary mapping single gate labels into tuples of one or more
         other gate labels which translate the given gate strings before values
         are computed using `gatesetOrDataset`.  The resulting Dataset, however,
         contains the *un-translated* gate strings as keys.
@@ -78,7 +78,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
-        across multiple processors and ensuring that the *same* dataset is 
+        across multiple processors and ensuring that the *same* dataset is
         generated on each processor.
 
 
@@ -89,7 +89,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
 
     """
     TOL = 1e-10
-    
+
     if isinstance(gatesetOrDataset, _ds.DataSet):
         dsGen = gatesetOrDataset
         gsGen = None
@@ -111,27 +111,27 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                                       for s in gatestring_list ]
             all_probs = gsGen.bulk_probs(trans_gatestring_list)
             #all_dprobs = gsGen.bulk_dprobs(gatestring_list) #DEBUG - not needed here!!!
-                
+
         for k,s in enumerate(gatestring_list):
 
             #print("DB GEN %d of %d (len %d)" % (k,len(gatestring_list),len(s)))
             trans_s = _gstrc.translate_gatestring(s, aliasDict)
             if gsGen:
                 ps = all_probs[trans_s]
-    
+
                 if sampleError in ("binomial","multinomial"):
                     #Adjust to probabilities if needed (and warn if not close to in-bounds)
-                    for ol in ps: 
+                    for ol in ps:
                         if ps[ol] < 0:
                             if ps[ol] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
                             ps[ol] = 0.0
-                        elif ps[ol] > 1: 
+                        elif ps[ol] > 1:
                             if ps[ol] > (1+TOL): _warnings.warn("Clipping probs > 1 to 1")
                             ps[ol] = 1.0
             else:
                 ps = _collections.OrderedDict([ (ol,frac) for ol,frac
                                                 in dsGen[trans_s].fractions.items()])
-                            
+
             if gsGen and sampleError in ("binomial","multinomial"):
                 #Check that sum ~= 1 (and nudge if needed) since binomial and
                 #  multinomial random calls assume this.
@@ -144,9 +144,22 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                             x = min(ps[lbl],extra_p)
                             ps[lbl] -= x; extra_p -= x
                         else: break
+                elif psum < 1:
+                    if psum < 1-TOL: _warnings.warn("Adjusting sum(probs) < 1 to 1")
+                    needed_p = (psum-1.0) * (1.000000001) # to sum < 1+eps (numerical prec insurance)
+                    # needed_p is NEGATIVE after the previous line
+                    # now is is positive:
+                    needed_p = abs(needed_p)
+                    for lbl in ps:
+                        if needed_p > 0:
+                            x = min(ps[lbl], needed_p)
+                            ps[lbl] += x # ADD here rather than subtract
+                            needed_p -= x
+                        else: break
+
                 #TODO: add adjustment if psum < 1?
-                assert(1.-TOL <= sum(ps.values()) <= 1.+TOL)
-                    
+                assert(1.-TOL <= sum(ps.values()) <= 1.+TOL, 'psum={}'.format(psum))
+
             if nSamples is None and dsGen is not None:
                 N = dsGen[trans_s].total #use the number of samples from the generating dataset
                  #Note: total() accounts for other intermediate-measurment branches automatically
@@ -155,13 +168,13 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                     N = nSamples[k] #try to treat nSamples as a list
                 except:
                     N = nSamples #if not indexable, nSamples should be a single number
-        
+
             #Weight the number of samples according to a WeightedGateString
             if isinstance(s, _gs.WeightedGateString):
                 nWeightedSamples = int(round(s.weight * N))
             else:
                 nWeightedSamples = N
-    
+
             counts = {} #don't use an ordered dict here - add_count_dict will sort keys
             labels = sorted(list(ps.keys())) # "outcome labels" - sort for consistent generation
             if sampleError == "binomial":
@@ -169,13 +182,13 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                 ol0,ol1 = labels[0], labels[1]
                 counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
                 counts[ol1] = nWeightedSamples - counts[ol0]
-                
+
             elif sampleError == "multinomial":
                 countsArray = rndm.multinomial(nWeightedSamples,
                         [ps[ol] for ol in labels], size=1) # well-ordered list of probs
                 for i,ol in enumerate(labels):
                     counts[ol] = countsArray[0,i]
-                    
+
             else:
                 for outcomeLabel,p in ps.items():
                     pc = _np.clip(p,0,1)
@@ -184,13 +197,13 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                     elif sampleError == "round":
                         counts[outcomeLabel] = int(round(nWeightedSamples*pc))
                     else: raise ValueError("Invalid sample error parameter: '%s'  Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError)
-                    
+
             dataset.add_count_dict(s, counts)
         dataset.done_adding_data()
 
     if comm is not None: # broadcast to non-root procs
         dataset = comm.bcast(dataset if (comm.Get_rank() == 0) else None,root=0)
-                    
+
     return dataset
 
 
@@ -199,20 +212,20 @@ def merge_outcomes(dataset,label_merge_dict):
     Creates a DataSet which merges certain outcomes in input DataSet;
     used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
     DataSet.
-    
+
     Parameters
     ----------
     dataset : DataSet object
-        The input DataSet whose results will be compiled according to the rules 
+        The input DataSet whose results will be compiled according to the rules
         set forth in label_merge_dict
 
     label_merge_dict : dictionary
-        The dictionary whose keys define the new DataSet outcomes, and whose items 
+        The dictionary whose keys define the new DataSet outcomes, and whose items
         are lists of input DataSet outcomes that are to be summed together.  For example,
         if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
         we want to ''trace out'' the second qubit, we could use label_merge_dict =
         {'0':['00','01'],'1':['10','11']}.
-    
+
     Returns
     -------
     merged_dataset : DataSet object
