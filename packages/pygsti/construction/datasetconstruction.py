@@ -158,7 +158,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                         else: break
 
                 #TODO: add adjustment if psum < 1?
-                assert(1.-TOL <= sum(ps.values()) <= 1.+TOL, 'psum={}'.format(psum))
+                assert 1.-TOL <= sum(ps.values()) <= 1.+TOL, 'psum={}'.format(psum)
 
             if nSamples is None and dsGen is not None:
                 N = dsGen[trans_s].total #use the number of samples from the generating dataset
