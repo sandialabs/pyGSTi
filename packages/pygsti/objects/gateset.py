@@ -134,9 +134,13 @@ class GateSet(object):
         if self.stateSpaceLabels is None:
             raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
 
-        if len(self.stateSpaceLabels.labels) == 1 and \
-           set(self.stateSpaceLabels.labels[0]) == set(gateTargetLabels):
-            return gateVal # if gate operates on *all* the labels, no need to embed
+        if gateVal.dim == self.dim:
+            return gateVal # if gate operates on full dimension, no need to embed
+
+        # TODO: REMOVE - I think this is redundant w/case above and less general
+        #if len(self.stateSpaceLabels.labels) == 1 and \
+        #   set(self.stateSpaceLabels.labels[0]) == set(gateTargetLabels):
+        #    return gateVal # if gate operates on *all* the labels, no need to embed
 
         if self._sim_type == "matrix":
             return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal)

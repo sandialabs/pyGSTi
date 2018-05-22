@@ -165,7 +165,7 @@ def convert(spamvec, toType, basis, extra=None):
                               # to spamvec - below will fail if spamvec isn't pure.
         else:
             purevec = extra # assume extra info is a pure vector
-        
+
         return LindbladParameterizedSPAMVec.from_spam_vector(
             spamvec, purevec, "prep", ham_basis="pp", nonham_basis="pp", cptp=True,
             nonham_diagonal_only=True, truncate=True, mxBasis="pp",
@@ -2038,7 +2038,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         try: d2 = pureVec.dim
         except:
             pureVec = SPAMVec.convert_to_vector(pureVec)
-            d2 = pureVec.size
+            d2 = pureVec.size            
 
         #Determine whether we're using sparse bases or not
         sparse = None
@@ -2141,7 +2141,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
                                   " creating an 'clifford effect' LindbladTermSPAMVec"))
 
         d = purestate.dim
-        d2 = d*2
+        d2 = d**2
         self.typ = typ
         self.pure_state_vec = purestate
         self.error_map = errormap

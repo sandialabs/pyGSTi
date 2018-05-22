@@ -96,7 +96,7 @@ class QubitGraph(object):
     def add_edges(self, edges):
         """ Add connections (list of tuple pairs) to graph """
         for node1, node2 in edges:
-            self.add(node1, node2, directed)
+            self.add_edge(node1, node2)
 
     def add_edge(self, node1, node2):
         """ Add connection between node1 and node2 """

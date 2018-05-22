@@ -3789,9 +3789,13 @@ class EmbeddedGateMap(Gate):
                 reversed(list(map(len,basisInds[:-1]))))) ), 'i')
     
             # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
+            labelIndices = [ tensorProdBlkLabels.index(label) for label in labels ]
+            self.actionInds = _np.array(labelIndices,'i')
+            assert(_np.product([self.numBasisEls[i] for i in self.actionInds]) == self.embedded_gate.dim), \
+                "Embedded gate has dimension (%d) inconsistent with the given target labels (%s)" % (self.embedded_gate.dim, str(labels))
+
             basisInds_noop = basisInds[:]
             basisInds_noop_blankaction = basisInds[:]
-            labelIndices = [ tensorProdBlkLabels.index(label) for label in labels ]
             for labelIndex in sorted(labelIndices,reverse=True):
                 del basisInds_noop[labelIndex]
                 basisInds_noop_blankaction[labelIndex] = [0]
@@ -3808,7 +3812,7 @@ class EmbeddedGateMap(Gate):
             self.nBasisBlocks = len(blockDims) #store this separately for faster
                                                #shortcuts in common 1-block case
             #tensorBlkEls_noop = list(_itertools.product(*basisInds_noop)) #dm-space basis for noop-indices only (unneeded)
-            self.basisInds_noop = basisInds_noop
+            #self.basisInds_noop = basisInds_noop
             self.basisInds_noop_blankaction = basisInds_noop_blankaction
             self.actionInds = _np.array(labelIndices,'i')
             self.basisInds_action = [ basisInds[i] for i in labelIndices ]
@@ -3893,7 +3897,7 @@ class EmbeddedGateMap(Gate):
         gateDim = dmDim if evotype in ("statevec","stabilizer") else superOpDim
           # ("densitymx","svterm","cterm") all use super-op dimension
         Gate.__init__(self, gateDim, evotype)
-
+        
         # set self.acton and self.adjoint_acton methods based on evotype
         # and specifics of self.embedded_gate
         self._set_acton() 
@@ -4057,7 +4061,7 @@ class EmbeddedGateMap(Gate):
             between nonzero elements of gate matrix and elements of the embedded gate matrx """
 
         #DEPRECATED REP - move some __init__ constructed vars to here?
-        
+
         offset = 0 if relToBlock else self.offset
         for gate_i in range(self.embedded_gate.dim):     # rows ~ "output" of the gate map
             for gate_j in range(self.embedded_gate.dim): # cols ~ "input"  of the gate map
@@ -4174,7 +4178,7 @@ class EmbeddedGateMap(Gate):
         state = state.copy() # needed?
         state.push_view(self.qubit_indices)
         ret = self.embedded_gate.acton(state)
-        state.pop_view()
+        state.pop_view(); ret.pop_view()
         return ret
     
     def _stabilizer_adjoint_acton(self, state):
@@ -4183,7 +4187,7 @@ class EmbeddedGateMap(Gate):
         state = state.copy() # needed?
         state.push_view(self.qubit_indices)
         ret = self.embedded_gate.adjoint_acton(state)
-        state.pop_view()
+        state.pop_view(); ret.pop_view()
         return ret
 
     

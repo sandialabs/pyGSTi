@@ -498,16 +498,18 @@ class SBGateRep_Embedded(SBGateRep):
     def acton(self, state):
         state = state.copy() # needed?
         state.sframe.push_view(self.qubit_indices)
-        state = self.embedded_gate.acton( state ) # works b/c sfame has "view filters"
-        state.sframe.pop_view()
-        return state
+        outstate = self.embedded_gate.acton( state ) # works b/c sfame has "view filters"
+        state.sframe.pop_view() # return input state to original view
+        outstate.sframe.pop_view()
+        return outstate
 
     def adjoint_acton(self, state):
         state = state.copy() # needed?
         state.sframe.push_view(self.qubit_indices)
-        state = self.embedded_gate.adjoint_acton( state ) # works b/c sfame has "view filters"
-        state.sframe.pop_view()
-        return state
+        outstate = self.embedded_gate.adjoint_acton( state ) # works b/c sfame has "view filters"
+        state.sframe.pop_view() # return input state to original view
+        outstate.sframe.pop_view()
+        return outstate
 
 
 class SBGateRep_Composed(SBGateRep):
