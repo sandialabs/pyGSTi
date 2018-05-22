@@ -1020,7 +1020,7 @@ namespace CReps {
       sampled_amplitudes[ip].resize( action_size );
       canonical_amplitudes_sample(ip,qubits, sampled_states[ip], sampled_amplitudes[ip]);
     }
-
+    
     // Step2: Apply clifford to stabilizer reps in _smatrix, _pvectors
     DEBUG(std::cout << "APPLY CLIFFORD TO FRAME" << std::endl);
     apply_clifford_to_frame(smatrix, svector, qubits);
@@ -1311,7 +1311,7 @@ namespace CReps {
       std::vector<int> zpos;
       for(j=0; j<_n; j++) {
 	if(_smatrix[(j+_n)*_2n+i] == 1) zpos.push_back(j);
-      }
+      }      
 
       // set values of anchor between zpos[0] and lead
       // (between current leading-Z position and the last iteration's,
@@ -1329,18 +1329,18 @@ namespace CReps {
 
 	if(target[j] == 1) target1s += 1;
       }
-	
+
       assert(zpos_to_fill.size() > 0); // structure of rref Z-block should ensure this
       int parity = gen_p/2;
       int eff_parity = (parity - (fixed1s % 2)) % 2; // effective parity for zpos_to_fill
 
-      DEBUG(std::cout << "  Current gen = "<<i<<" phase = "<<gen_p<<" zpos="<<zpos.size()<<" fixed1s="<<fixed1s<<" tofill="<<zpos_to_fill.size()<<" eff_parity="<<eff_parity<<"lead="<<lead << std::endl);
+      DEBUG(std::cout << "  Current gen = "<<i<<" phase = "<<gen_p<<" zpos="<<zpos.size()<<" fixed1s="<<fixed1s<<" tofill="<<zpos_to_fill.size()<<" eff_parity="<<eff_parity<<" lead="<<lead << std::endl);
       DEBUG(std::cout << "   -anchor: ");
       DEBUG(for(int dbi=0; dbi<_n; dbi++) std::cout << anchor[dbi] << "  ");
       
       if((target1s % 2) != parity)
 	return dcomplex(0.0); // target fails this parity check -> it's amplitude == 0 (OK)
-
+      
       if(eff_parity == 0) { // even parity - fill with all 0s
 	// BUT already initalized to 0s, so don't need to do anything for anchor
       }
@@ -1558,7 +1558,7 @@ namespace CReps {
     int i,j,ne = qubit_filter.size();
     int two_ne = 2*ne;
     for(i=0; i<_2n; i++) {
-      for(j=0; j<_2n; j++) full_s[i] = (i==j) ? 1 : 0; // full_s == identity
+      for(j=0; j<_2n; j++) full_s[i*_2n+j] = (i==j) ? 1 : 0; // full_s == identity
     }
     for(i=0; i<_2n; i++) full_p[i] = 0; // full_p = zero
     

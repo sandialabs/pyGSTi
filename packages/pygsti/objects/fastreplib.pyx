@@ -1620,7 +1620,7 @@ def SB_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=Non
     cdef int mpo = calc.max_order*2 #max_poly_order
     cdef int order;
     cdef int numEs = len(elabels)
-
+    
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
     gate_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in gate.get_order_terms(order)]
@@ -1661,7 +1661,7 @@ def SB_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=Non
     # Assume when we calculate terms, that "dimension" of GateSet is
     # a full vectorized-density-matrix dimension, so nqubits is:
     cdef int nqubits = <int>(np.log2(calc.dim)//2)
-            
+
     #Call C-only function (which operates with C-representations only)
     cdef vector[PolyCRep*] polys = sb_prs_as_polys(
         cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
@@ -1710,7 +1710,7 @@ cdef vector[PolyCRep*] sb_prs_as_polys(
         #  free them (or assign them to new PolyRep wrapper objs)
 
     for order in range(max_order+1):
-        #print("DB: pr_as_poly order=",order)
+        #print "DB CYTHON: pr_as_poly order=",int(order)
         
         #for p in partition_into(order, N):
         for i in range(N+2): p[i] = 0 # clear p
@@ -1727,7 +1727,7 @@ cdef vector[PolyCRep*] sb_prs_as_polys(
             factor_lists[N+1] = &E_term_reps[p[N+1]]
             Einds = &E_term_indices[p[N+1]]
         
-            #print("Part0 ",p)
+            #print "DB CYTHON: Order0"
             innerloop_fn(factor_lists,Einds,&prps,nqubits) #, prps_chk)
 
 
@@ -1743,7 +1743,7 @@ cdef vector[PolyCRep*] sb_prs_as_polys(
                 factor_lists[N+1] = &E_term_reps[p[N+1]]
                 Einds = &E_term_indices[p[N+1]]
 
-                #print "DB: Order1 "
+                #print "DB CYTHON: Order1 "
                 innerloop_fn(factor_lists,Einds,&prps,nqubits) #, prps_chk)
                 p[i] = 0
             
