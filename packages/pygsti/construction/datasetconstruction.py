@@ -136,29 +136,38 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                 #Check that sum ~= 1 (and nudge if needed) since binomial and
                 #  multinomial random calls assume this.
                 psum = sum(ps.values())
-                if psum > 1:
-                    if psum > 1+TOL: _warnings.warn("Adjusting sum(probs) > 1 to 1")
-                    extra_p = (psum-1.0) * (1.000000001) # to sum < 1+eps (numerical prec insurance)
-                    for lbl in ps:
-                        if extra_p > 0:
-                            x = min(ps[lbl],extra_p)
-                            ps[lbl] -= x; extra_p -= x
-                        else: break
-                elif psum < 1:
-                    if psum < 1-TOL: _warnings.warn("Adjusting sum(probs) < 1 to 1")
-                    needed_p = (psum-1.0) * (1.000000001) # to sum < 1+eps (numerical prec insurance)
-                    # needed_p is NEGATIVE after the previous line
-                    # now is is positive:
-                    needed_p = abs(needed_p)
-                    for lbl in ps:
-                        if needed_p > 0:
-                            x = min(ps[lbl], needed_p)
-                            ps[lbl] += x # ADD here rather than subtract
-                            needed_p -= x
-                        else: break
-
-                #TODO: add adjustment if psum < 1?
-                assert 1.-TOL <= sum(ps.values()) <= 1.+TOL, 'psum={}'.format(psum)
+                adjusted = False
+                if psum > 1+TOL:
+                    adjusted = True
+                    _warnings.warn("Adjusting sum(probs) > 1 to 1")
+                if psum < 1-TOL:
+                    adjusted = True
+                    _warnings.warn("Adjusting sum(probs) < 1 to 1")
+                # The following while loop is needed if the data generating gateset
+                # is bad enough that one loop over the probabilities is not enough
+                OVERTOL  = 1.0 + TOL
+                UNDERTOL = 1.0 - TOL
+                normalized = lambda : UNDERTOL <= sum(ps.values()) <= OVERTOL
+                while not normalized():
+                    if psum > 1:
+                        extra_p = (psum-1.0) * OVERTOL
+                        for lbl in ps:
+                            if extra_p > 0:
+                                x = min(ps[lbl],extra_p)
+                                ps[lbl] -= x; extra_p -= x
+                            else: break
+                    elif psum < 1:
+                        needed_p = abs((psum-1.0) * UNDERTOL)
+                        for lbl in ps:
+                            if needed_p > 0:
+                                x = min(ps[lbl], needed_p)
+                                ps[lbl] += x # ADD here rather than subtract
+                                needed_p -= x
+                            else: break
+                    psum = sum(ps.values())
+                assert normalized(), 'psum={}'.format(psum)
+                if adjusted:
+                    _warnings.warn('Adjustment finished')
 
             if nSamples is None and dsGen is not None:
                 N = dsGen[trans_s].total #use the number of samples from the generating dataset
