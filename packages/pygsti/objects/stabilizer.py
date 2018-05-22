@@ -53,7 +53,7 @@ class StabilizerFrame(object):
         self.n = state_s.shape[0] // 2
         assert(state_s.shape == (2*self.n,2*self.n))
 
-        self.s = state_s
+        self.s = state_s.copy()
         if state_ps is not None:
             self.ps = _np.empty((len(state_ps),2*self.n),'i')
             for i,p in enumerate(state_ps):
@@ -90,7 +90,9 @@ class StabilizerFrame(object):
         -------
         SBStateRep
         """
-        return replib.SBStateRep(_np.ascontiguousarray(self.s,'i'), self.ps, self.a)
+        return replib.SBStateRep(_np.ascontiguousarray(self.s,'i'),
+                                 _np.ascontiguousarray(self.ps,'i'),
+                                 _np.ascontiguousarray(self.a,complex))
 
     def copy(self):
         cpy = StabilizerFrame(self.s.copy(), [p.copy() for p in self.ps],

@@ -331,9 +331,10 @@ class GateMapCalc(GateCalc):
 
 
     def _compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch=None):
+        #DEPRECATED REPS - just call replib version
 
         #TEST FAST MODE (if available)
-        ret2 = replib.DM_compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch)
+        ret2 = replib.DM_compute_pr_cache(self, rholabel, elabels, evalTree, comm)
         #return ret2
         #END TEST FAST MODE
 
@@ -401,47 +402,11 @@ class GateMapCalc(GateCalc):
         assert(_np.linalg.norm(ret-ret2) < 1e-6)
         
         return ret
-
-    def _new_compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch=None):
-        
-        cacheSize = evalTree.cache_size()
-        rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
-        ret = _np.empty((len(evalTree),len(elabels)),'d')
-
-        #Get rho & rhoCache
-        rho = rhoVec.torep('prep')
-        rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
-
-        #Get gatereps and ereps now so we don't make unnecessary .torep() calls
-        gatereps = { gl:gate.torep() for gl,gate in self.gates.items() }
-        ereps = [ E.torep('effect') for E in EVecs ]
-
-        #REMOVE?? - want some way to speed tensorprod effect actions...
-        #if self.evotype in ("statevec", "densitymx"):
-        #    Escratch = _np.empty(self.dim,typ) # memory for E.todense() if it wants it            
-                       
-
-        #comm is currently ignored
-        #TODO: if evalTree is split, distribute among processors
-        for i in evalTree.get_evaluation_order():
-            iStart,remainder,iCache = evalTree[i]
-            if iStart is None:  init_state = rho
-            else:               init_state = rho_cache[iStart] #[:,None]
-
-            #OLD final_state = self.propagate_state(init_state, remainder)
-            final_state = replib.propagate_staterep(init_state, [gatereps[gl] for gl in remainder])
-            if iCache is not None: rho_cache[iCache] = final_state # [:,0] #store this state in the cache
-
-            for j,erep in enumerate(ereps):
-                ret[i,j] = erep.probability(final_state) #outcome probability
-
-        #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
-        
-        return ret
-
     
     
     def _compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
+        #DEPRECATED REPS - just call replib version
+        
         #TEST FAST MODE (if available)
         dpr_cache2 = replib.DM_compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch)
         #return dpr_cache2

@@ -24,7 +24,7 @@ from .termevaltree import TermEvalTree as _TermEvalTree
 from .polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
 from .gatecalc import GateCalc
 from .polynomial import Polynomial as _Polynomial
-from .polynomial import FastPolynomial as _FastPolynomial
+#from .polynomial import FastPolynomial as _FastPolynomial TODO REMOVE ALL REFS (DEPRECATED REPS)
 
 try:
     from . import fastreplib as replib
@@ -143,7 +143,8 @@ class GateTermCalc(GateCalc):
         """
         TODO: docstring - computes polynomials of the probabilities for multiple spam-tuples of `gatestring`
         """
-
+        #DEPRECATED REPS - just call replib version
+        
         #print("PRS_AS_POLY gatestring = ",gatestring)
         
         #FAST MODE TEST
@@ -202,7 +203,15 @@ class GateTermCalc(GateCalc):
                     cur_indices.append(i) # index of effect vector
             E_terms.append(cur_terms)
             E_indices.append(cur_indices)
-            
+
+        ##DEBUG!!!
+        #print("-------------- BASE DB gate terms = ")
+        #for glbl,order_terms in gate_terms.items():
+        #    print("GATE ",glbl)
+        #    for i,termlist in enumerate(order_terms):
+        #        print("ORDER %d" % i)
+        #        for term in termlist:
+        #            print("Coeff: ",str(term.coeff))
                 
         ###Prepare rho and E vecs as much as possible for unitary_sim
         ##if not self.unitary_evolution:
@@ -233,6 +242,8 @@ class GateTermCalc(GateCalc):
         #                                            bool(self.evotype == "cterm")) # returns list of dicts
         ##return [ dict_to_fastpoly(p) for p in prps_fast ] 
 
+        #print("--------------- BASE CASE -------------")
+        
         #HERE DEBUG
         global DEBUG_FCOUNT
         db_part_cnt = 0
@@ -256,7 +267,6 @@ class GateTermCalc(GateCalc):
                 if any([len(fl)==0 for fl in factor_lists]): continue
 
                 #print("DB partition = ",p, "listlens = ",[len(fl) for fl in factor_lists])
-                rhoLeft = rhoRight = rho
                 if fastmode: # filter factor_lists to matrix-compose all length-1 lists
                     leftSaved = [None]*(len(factor_lists)-1)  # saved[i] is state after i-th
                     rightSaved = [None]*(len(factor_lists)-1) # factor has been applied
@@ -295,7 +305,7 @@ class GateTermCalc(GateCalc):
                                 rhoVecR = f.acton(rhoVecR)
                             rightSaved[i] = rhoVecR
 
-                            coeff = coeff.mult_poly(factors[i].coeff)
+                            coeff = coeff.mult(factors[i].coeff)
                             coeffSaved[i] = coeff
 
                         # for the last index, no need to save, and need to construct
@@ -335,26 +345,26 @@ class GateTermCalc(GateCalc):
                             E = factors[-1].pre_ops[0]
                             pRight = _np.conjugate(rhoVecR.extract_amplitude(E.outcomes))
 
-                        #DEBUG print("DB PYTHON: final block: pLeft=",pLeft," pRight=",pRight)
-                        coeff = coeff.mult_poly(factors[-1].coeff)
-                        res = coeff.mult_scalar( (pLeft * pRight) )
-                        #DEBUG print("DB PYTHON: result = ",coeff)
+                        #print("DB PYTHON: final block: pLeft=",pLeft," pRight=",pRight)
+                        coeff = coeff.mult(factors[-1].coeff)
+                        res = coeff.scalar_mult( (pLeft * pRight) )
+                        #print("DB PYTHON: result = ",res)
                         final_factor_indx = fi[-1]
                         Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
                         if prps[Ei] is None: prps[Ei]  = res
                         else:                prps[Ei] += res
-                        #DEBUG print("DB PYHON: prps[%d] = " % Ei, prps[Ei])
+                        #print("DB PYHON: prps[%d] = " % Ei, prps[Ei])
                         
                 else: # non-fast mode
                     last_index = len(factor_lists)-1
                     for fi in _itertools.product(*[range(l) for l in factor_list_lens]):
                         #if len(factors) == 0: coeff = _FastPolynomial({(): 1.0}, max_poly_vars, max_poly_order) #never happens TODO REMOVE
                         factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
-                        coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
+                        coeff = _functools.reduce(lambda x,y: x.mult(y), [f.coeff for f in factors])
                         pLeft  = self.unitary_sim_pre(factors, comm, memLimit)
                         pRight = self.unitary_sim_post(factors, comm, memLimit)
                                  # if not self.unitary_evolution else 1.0
-                        res = coeff.mult_scalar( (pLeft * pRight) )
+                        res = coeff.scalar_mult( (pLeft * pRight) )
                         final_factor_indx = fi[-1]
                         Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
                         #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
@@ -409,6 +419,7 @@ class GateTermCalc(GateCalc):
                                  comm, memLimit)[0]
     
 
+    #DEPRECATED REPS
     def unitary_sim_pre(self, complete_factors, comm, memLimit):
         rhoVec = complete_factors[0].pre_ops[0].todense() # or, at least "to the thing that we can acton(...)"
         for f in complete_factors[0].pre_ops[1:]:
@@ -427,7 +438,8 @@ class GateTermCalc(GateCalc):
             EVec = complete_factors[-1].post_ops[0]
             return rhoVec.extract_amplitude(EVec.outcomes)
 
-    
+
+    #DEPRECATED REPS
     def unitary_sim_post(self, complete_factors, comm, memLimit):
         rhoVec = complete_factors[0].post_ops[0].todense()
         for f in complete_factors[0].post_ops[1:]:

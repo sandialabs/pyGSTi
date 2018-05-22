@@ -1571,6 +1571,7 @@ class TensorProdSPAMVec(SPAMVec):
         if self._evotype in ("statevec","densitymx"):
             if len(self.factors) == 0: return _np.empty(0,complex if self._evotype == "statevec" else 'd')
             if scratch is not None and _fastcalc is not None:
+                #DEPRECATED REPS - don't need a fast todense anymore?  or could use "todense" method of Rep object?
                 assert(scratch.shape[0] == self.dim)
                 # use faster kron that avoids memory allocation.
                 # Note: this uses more memory b/c all self.factors.todense() results
@@ -1683,7 +1684,7 @@ class TensorProdSPAMVec(SPAMVec):
 
 
     @property
-    def outcomes(self): #DEPRECATED! - can use torep() now...
+    def outcomes(self): #DEPRECATED REPS! - can use torep() now...
         """ TODO: docstring - to mimic StabilizerEffectVec """
         assert(self._evotype == "stabilizer"), \
             "'outcomes' property is only valid for the 'stabilizer' evolution type"
@@ -1727,7 +1728,7 @@ class TensorProdSPAMVec(SPAMVec):
                 # vectors are created with factor (prep- or effect-type) SPAMVecs not factor POVMs
                 # we workaround this by still allowing such "prep"-mode
                 # TensorProdSPAMVecs to be represented as effects (i.e. in torep('effect'...) works)
-                coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
+                coeff = _functools.reduce(lambda x,y: x.mult(y), [f.coeff for f in factors])
                 pre_op = TensorProdSPAMVec("prep", [f.pre_ops[0] for f in factors
                                                       if (f.pre_ops[0] is not None)])
                 post_op = TensorProdSPAMVec("prep", [f.post_ops[0] for f in factors

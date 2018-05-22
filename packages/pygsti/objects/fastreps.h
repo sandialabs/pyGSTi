@@ -92,7 +92,8 @@ namespace CReps {
     
     DMGateCRep_Embedded(DMGateCRep* embedded_gate_crep, int* noop_incrementers,
 			int* numBasisEls_noop_blankaction, int* baseinds, int* blocksizes,
-			int embeddedDim, int nComponents, int iActiveBlock, int nBlocks, int dim);
+			int embedded_dim, int nComponentsInActiveBlock, int iActiveBlock,
+			int nBlocks, int dim);
     virtual ~DMGateCRep_Embedded();
     virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
@@ -101,7 +102,7 @@ namespace CReps {
   class DMGateCRep_Composed :public DMGateCRep{
     public:
     std::vector<DMGateCRep*> _factor_gate_creps;
-    DMGateCRep_Composed(std::vector<DMGateCRep*> factor_gate_creps, int dim);
+    DMGateCRep_Composed(std::vector<DMGateCRep*> factor_gate_creps);
     virtual ~DMGateCRep_Composed();
     virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
@@ -212,7 +213,8 @@ namespace CReps {
     
     SVGateCRep_Embedded(SVGateCRep* embedded_gate_crep, int* noop_incrementers,
 			int* numBasisEls_noop_blankaction, int* baseinds, int* blocksizes,
-			int embeddedDim, int nComponents, int iActiveBlock, int nBlocks, int dim);
+			int embedded_dim, int nComponentsInActiveBlock, int iActiveBlock,
+			int nBlocks, int dim);
     virtual ~SVGateCRep_Embedded();
     virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
     virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
@@ -221,7 +223,7 @@ namespace CReps {
   class SVGateCRep_Composed :public SVGateCRep{
     public:
     std::vector<SVGateCRep*> _factor_gate_creps;
-    SVGateCRep_Composed(std::vector<SVGateCRep*> factor_gate_creps, int dim);
+    SVGateCRep_Composed(std::vector<SVGateCRep*> factor_gate_creps);
     virtual ~SVGateCRep_Composed();
     virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
     virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
@@ -305,7 +307,7 @@ namespace CReps {
   class SBGateCRep_Composed :public SBGateCRep {
     std::vector<SBGateCRep*> _factor_gate_creps;
     public:
-    SBGateCRep_Composed(std::vector<SBGateCRep*> factor_gate_creps, int n);
+    SBGateCRep_Composed(std::vector<SBGateCRep*> factor_gate_creps);
     virtual ~SBGateCRep_Composed();
     virtual SBStateCRep* acton(SBStateCRep* state, SBStateCRep* out_state);
     virtual SBStateCRep* adjoint_acton(SBStateCRep* state, SBStateCRep* out_state);

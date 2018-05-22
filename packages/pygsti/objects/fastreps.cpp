@@ -213,7 +213,8 @@ namespace CReps {
 
   DMGateCRep_Embedded::DMGateCRep_Embedded(DMGateCRep* embedded_gate_crep, int* noop_incrementers,
 					   int* numBasisEls_noop_blankaction, int* baseinds, int* blocksizes,
-					   int embeddedDim, int nComponents, int iActiveBlock, int nBlocks, int dim)
+					   int embedded_dim, int nComponentsInActiveBlock, int iActiveBlock,
+					   int nBlocks, int dim)
     :DMGateCRep(dim)
   {
     _embedded_gate_crep = embedded_gate_crep;
@@ -221,8 +222,8 @@ namespace CReps {
     _numBasisEls_noop_blankaction = numBasisEls_noop_blankaction;
     _baseinds = baseinds;
     _blocksizes = blocksizes;
-    _nComponents = nComponents;
-    _embeddedDim = embeddedDim;
+    _nComponents = nComponentsInActiveBlock;
+    _embeddedDim = embedded_dim;
     _iActiveBlock = iActiveBlock;
     _nBlocks = nBlocks;
   }
@@ -364,8 +365,8 @@ namespace CReps {
   /****************************************************************************\
   |* DMGateCRep_Composed                                                      *|
   \****************************************************************************/
-  DMGateCRep_Composed::DMGateCRep_Composed(std::vector<DMGateCRep*> factor_gate_creps, int dim)
-    :DMGateCRep(dim),_factor_gate_creps(factor_gate_creps)
+  DMGateCRep_Composed::DMGateCRep_Composed(std::vector<DMGateCRep*> factor_gate_creps)
+    :DMGateCRep(factor_gate_creps[0]->_dim),_factor_gate_creps(factor_gate_creps)
   {
   }
   DMGateCRep_Composed::~DMGateCRep_Composed() { }
@@ -722,7 +723,8 @@ namespace CReps {
 
   SVGateCRep_Embedded::SVGateCRep_Embedded(SVGateCRep* embedded_gate_crep, int* noop_incrementers,
 					   int* numBasisEls_noop_blankaction, int* baseinds, int* blocksizes,
-					   int embeddedDim, int nComponents, int iActiveBlock, int nBlocks, int dim)
+					   int embedded_dim, int nComponentsInActiveBlock, int iActiveBlock,
+					   int nBlocks, int dim)
     :SVGateCRep(dim)
   {
     _embedded_gate_crep = embedded_gate_crep;
@@ -730,8 +732,8 @@ namespace CReps {
     _numBasisEls_noop_blankaction = numBasisEls_noop_blankaction;
     _baseinds = baseinds;
     _blocksizes = blocksizes;
-    _nComponents = nComponents;
-    _embeddedDim = embeddedDim;
+    _nComponents = nComponentsInActiveBlock;
+    _embeddedDim = embedded_dim;
     _iActiveBlock = iActiveBlock;
     _nBlocks = nBlocks;
   }
@@ -873,8 +875,8 @@ namespace CReps {
   /****************************************************************************\
   |* SVGateCRep_Composed                                                      *|
   \****************************************************************************/
-  SVGateCRep_Composed::SVGateCRep_Composed(std::vector<SVGateCRep*> factor_gate_creps, int dim)
-    :SVGateCRep(dim),_factor_gate_creps(factor_gate_creps)
+  SVGateCRep_Composed::SVGateCRep_Composed(std::vector<SVGateCRep*> factor_gate_creps)
+    :SVGateCRep(factor_gate_creps[0]->_dim),_factor_gate_creps(factor_gate_creps)
   {
   }
   SVGateCRep_Composed::~SVGateCRep_Composed() { }
@@ -1764,8 +1766,8 @@ namespace CReps {
   /****************************************************************************\
   |* SBGateCRep_Composed                                                      *|
   \****************************************************************************/
-  SBGateCRep_Composed::SBGateCRep_Composed(std::vector<SBGateCRep*> factor_gate_creps, int n)
-    :SBGateCRep(n),_factor_gate_creps(factor_gate_creps)
+  SBGateCRep_Composed::SBGateCRep_Composed(std::vector<SBGateCRep*> factor_gate_creps)
+    :SBGateCRep(factor_gate_creps[0]->_n),_factor_gate_creps(factor_gate_creps)
   {
   }
   SBGateCRep_Composed::~SBGateCRep_Composed() { }

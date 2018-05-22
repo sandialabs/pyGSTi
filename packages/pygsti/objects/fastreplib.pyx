@@ -13,6 +13,7 @@ from cython.operator cimport dereference as deref, preincrement as inc
 cimport numpy as np
 cimport cython
 
+import itertools as _itertools
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 
@@ -66,7 +67,7 @@ cdef extern from "fastreps.h" namespace "CReps":
         DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
 
     cdef cppclass DMGateCRep_Composed(DMGateCRep):
-        DMGateCRep_Composed(vector[DMGateCRep*], int) except +
+        DMGateCRep_Composed(vector[DMGateCRep*]) except +
         DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
         DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
 
@@ -128,7 +129,7 @@ cdef extern from "fastreps.h" namespace "CReps":
         SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
 
     cdef cppclass SVGateCRep_Composed(SVGateCRep):
-        SVGateCRep_Composed(vector[SVGateCRep*], int) except +
+        SVGateCRep_Composed(vector[SVGateCRep*]) except +
         SVStateCRep* acton(SVStateCRep*, SVStateCRep*)
         SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
 
@@ -166,7 +167,7 @@ cdef extern from "fastreps.h" namespace "CReps":
         SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
 
     cdef cppclass SBGateCRep_Composed(SBGateCRep):
-        SBGateCRep_Composed(vector[SBGateCRep*], int) except +
+        SBGateCRep_Composed(vector[SBGateCRep*]) except +
         SBStateCRep* acton(SBStateCRep*, SBStateCRep*)
         SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
 
@@ -318,7 +319,13 @@ cdef class DMGateRep:
         self.c_gate.acton(state.c_state, out_state.c_state)
         return out_state
 
-    #FUTURE: adjoint acton
+    def adjoint_acton(self, DMStateRep state not None):
+        cdef DMStateRep out_state = DMStateRep(np.empty(self.c_gate._dim, dtype='d'))
+        #print("PYX acton called w/dim ", self.c_gate._dim, out_state.c_state._dim)
+        # assert(state.c_state._dataptr != out_state.c_state._dataptr) # DEBUG
+        self.c_gate.adjoint_acton(state.c_state, out_state.c_state)
+        return out_state
+
         
 cdef class DMGateRep_Dense(DMGateRep):
     cdef np.ndarray data_ref
@@ -348,33 +355,79 @@ cdef class DMGateRep_Embedded(DMGateRep):
     cdef DMGateRep embedded
 
     def __cinit__(self, DMGateRep embedded_gate,
-                  np.ndarray[int, ndim=1, mode='c'] noop_incrementers,
-		  np.ndarray[int, ndim=1, mode='c'] numBasisEls_noop_blankaction,
-                  np.ndarray[int, ndim=1, mode='c'] baseinds,
+                  np.ndarray[int, ndim=1, mode='c'] numBasisEls,
+                  np.ndarray[int, ndim=1, mode='c'] actionInds,                  
                   np.ndarray[int, ndim=1, mode='c'] blocksizes,
-		  int nActive, int nComponents, int iActiveBlock, int nBlocks, int dim):
+		  int embedded_dim, int nComponentsInActiveBlock,
+                  int iActiveBlock, int nBlocks, int dim):
+
+#OLD: TODO REMOVE
+#                 np.ndarray[int, ndim=1, mode='c'] noop_incrementers,
+#		  np.ndarray[int, ndim=1, mode='c'] numBasisEls_noop_blankaction,
+#                 np.ndarray[int, ndim=1, mode='c'] baseinds,
+
+
+        cdef int i, j
+
+        # numBasisEls_noop_blankaction is just numBasisEls with actionInds == 1
+        cdef np.ndarray[int, ndim=1, mode='c'] numBasisEls_noop_blankaction = numBasisEls.copy()
+        for i in actionInds:
+            numBasisEls_noop_blankaction[i] = 1 # for indexing the identity space
+
+        # multipliers to go from per-label indices to tensor-product-block index
+        # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
+        cdef np.ndarray tmp = np.empty(nComponentsInActiveBlock,'i')
+        tmp[0] = 1
+        for i in range(1,nComponentsInActiveBlock):
+            tmp[i] = numBasisEls[nComponentsInActiveBlock-1-i]
+        multipliers = np.array( np.flipud( np.cumprod(tmp) ), 'i')
+        
+        # noop_incrementers[i] specifies how much the overall vector index
+        #  is incremented when the i-th "component" digit is advanced
+        cdef int dec = 0
+        cdef np.ndarray[int, ndim=1, mode='c'] noop_incrementers = np.empty(nComponentsInActiveBlock,'i')
+        for i in range(nComponentsInActiveBlock-1,-1,-1):
+            noop_incrementers[i] = multipliers[i] - dec
+            dec += (numBasisEls_noop_blankaction[i]-1)*multipliers[i]
+
+        cdef int vec_index
+        cdef int offset = 0 #number of basis elements preceding our block's elements
+        for i in range(iActiveBlock):
+            offset += blocksizes[i]
+                
+        # self.baseinds specifies the contribution from the "active
+        #  component" digits to the overall vector index.
+        cdef np.ndarray[int, ndim=1, mode='c'] baseinds = np.empty(embedded_dim,'i')
+        basisInds_action = [ list(range(numBasisEls[i])) for i in actionInds ]
+        for ii,gate_b in enumerate(_itertools.product(*basisInds_action)):
+            vec_index = offset
+            for j,bInd in zip(actionInds,gate_b):
+                vec_index += multipliers[j]*bInd
+            baseinds[ii] = vec_index
+        
         self.data_ref1 = noop_incrementers
         self.data_ref2 = numBasisEls_noop_blankaction
         self.data_ref3 = baseinds
         self.data_ref4 = blocksizes
         self.embedded = embedded_gate # needed to prevent garbage collection?
-        self.c_gate = new DMGateCRep_Embedded(embedded_gate.c_gate, # may need to have a base class w/ DMGateCRep* cgate member(?) - and maybe put acton there?
+        self.c_gate = new DMGateCRep_Embedded(embedded_gate.c_gate,
                                               <int*>noop_incrementers.data, <int*>numBasisEls_noop_blankaction.data,
                                               <int*>baseinds.data, <int*>blocksizes.data,
-                                              nActive, nComponents, iActiveBlock, nBlocks, dim)
+                                              embedded_dim, nComponentsInActiveBlock,
+                                              iActiveBlock, nBlocks, dim)
 
 
 cdef class DMGateRep_Composed(DMGateRep):
     cdef object list_of_factors # list of DMGateRep objs?
 
-    def __cinit__(self, factor_gates, int dim):
+    def __cinit__(self, factor_gates):
         self.list_of_factors = factor_gates
         cdef int i
         cdef int nfactors = len(factor_gates)
         cdef vector[DMGateCRep*] gate_creps = vector[DMGateCRep_ptr](nfactors)
         for i in range(nfactors):
             gate_creps[i] = (<DMGateRep?>factor_gates[i]).c_gate
-        self.c_gate = new DMGateCRep_Composed(gate_creps, dim)
+        self.c_gate = new DMGateCRep_Composed(gate_creps)
 
 
 cdef class DMGateRep_Lindblad(DMGateRep):
@@ -502,34 +555,75 @@ cdef class SVGateRep_Embedded(SVGateRep):
     cdef np.ndarray data_ref4
     cdef SVGateRep embedded
 
+
     def __cinit__(self, SVGateRep embedded_gate,
-                  np.ndarray[int, ndim=1, mode='c'] noop_incrementers,
-		  np.ndarray[int, ndim=1, mode='c'] numBasisEls_noop_blankaction,
-                  np.ndarray[int, ndim=1, mode='c'] baseinds,
+                  np.ndarray[int, ndim=1, mode='c'] numBasisEls,
+                  np.ndarray[int, ndim=1, mode='c'] actionInds,                  
                   np.ndarray[int, ndim=1, mode='c'] blocksizes,
-		  int nActive, int nComponents, int iActiveBlock, int nBlocks, int dim):
+		  int embedded_dim, int nComponentsInActiveBlock,
+                  int iActiveBlock, int nBlocks, int dim):
+
+        cdef int i, j
+
+        # numBasisEls_noop_blankaction is just numBasisEls with actionInds == 1
+        cdef np.ndarray[int, ndim=1, mode='c'] numBasisEls_noop_blankaction = numBasisEls.copy()
+        for i in actionInds:
+            numBasisEls_noop_blankaction[i] = 1 # for indexing the identity space
+
+        # multipliers to go from per-label indices to tensor-product-block index
+        # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
+        cdef np.ndarray tmp = np.empty(nComponentsInActiveBlock,'i')
+        tmp[0] = 1
+        for i in range(1,nComponentsInActiveBlock):
+            tmp[i] = numBasisEls[nComponentsInActiveBlock-1-i]
+        multipliers = np.array( np.flipud( np.cumprod(tmp) ), 'i')
+        
+        # noop_incrementers[i] specifies how much the overall vector index
+        #  is incremented when the i-th "component" digit is advanced
+        cdef int dec = 0
+        cdef np.ndarray[int, ndim=1, mode='c'] noop_incrementers = np.empty(nComponentsInActiveBlock,'i')
+        for i in range(nComponentsInActiveBlock-1,-1,-1):
+            noop_incrementers[i] = multipliers[i] - dec
+            dec += (numBasisEls_noop_blankaction[i]-1)*multipliers[i]
+
+        cdef int vec_index
+        cdef int offset = 0 #number of basis elements preceding our block's elements
+        for i in range(iActiveBlock):
+            offset += blocksizes[i]
+                
+        # self.baseinds specifies the contribution from the "active
+        #  component" digits to the overall vector index.
+        cdef np.ndarray[int, ndim=1, mode='c'] baseinds = np.empty(embedded_dim,'i')
+        basisInds_action = [ list(range(numBasisEls[i])) for i in actionInds ]
+        for ii,gate_b in enumerate(_itertools.product(*basisInds_action)):
+            vec_index = offset
+            for j,bInd in zip(actionInds,gate_b):
+                vec_index += multipliers[j]*bInd
+            baseinds[ii] = vec_index
+        
         self.data_ref1 = noop_incrementers
         self.data_ref2 = numBasisEls_noop_blankaction
         self.data_ref3 = baseinds
         self.data_ref4 = blocksizes
         self.embedded = embedded_gate # needed to prevent garbage collection?
-        self.c_gate = new SVGateCRep_Embedded(embedded_gate.c_gate, # may need to have a base class w/ SVGateCRep* cgate member(?) - and maybe put acton there?
+        self.c_gate = new SVGateCRep_Embedded(embedded_gate.c_gate,
                                               <int*>noop_incrementers.data, <int*>numBasisEls_noop_blankaction.data,
                                               <int*>baseinds.data, <int*>blocksizes.data,
-                                              nActive, nComponents, iActiveBlock, nBlocks, dim)
+                                              embedded_dim, nComponentsInActiveBlock,
+                                              iActiveBlock, nBlocks, dim)
 
 
 cdef class SVGateRep_Composed(SVGateRep):
     cdef object list_of_factors # list of SVGateRep objs?
 
-    def __cinit__(self, factor_gates, int dim):
+    def __cinit__(self, factor_gates):
         self.list_of_factors = factor_gates
         cdef int i
         cdef int nfactors = len(factor_gates)
         cdef vector[SVGateCRep*] gate_creps = vector[SVGateCRep_ptr](nfactors)
         for i in range(nfactors):
             gate_creps[i] = (<SVGateRep?>factor_gates[i]).c_gate
-        self.c_gate = new SVGateCRep_Composed(gate_creps, dim)
+        self.c_gate = new SVGateCRep_Composed(gate_creps)
 
         
 # Stabilizer state (SB) propagation wrapper classes
@@ -629,14 +723,14 @@ cdef class SBGateRep_Embedded(SBGateRep):
 cdef class SBGateRep_Composed(SBGateRep):
     cdef object list_of_factors # list of SBGateRep objs?
 
-    def __cinit__(self, factor_gates, int n):
+    def __cinit__(self, factor_gates):
         self.list_of_factors = factor_gates
         cdef int i
         cdef int nfactors = len(factor_gates)
         cdef vector[SBGateCRep*] gate_creps = vector[SBGateCRep_ptr](nfactors)
         for i in range(nfactors):
             gate_creps[i] = (<SBGateRep?>factor_gates[i]).c_gate
-        self.c_gate = new SBGateCRep_Composed(gate_creps, n)
+        self.c_gate = new SBGateCRep_Composed(gate_creps)
 
 
 
@@ -792,6 +886,8 @@ cdef class SBTermRep:
 
 
 def propagate_staterep(staterep, gatereps):
+    # FUTURE: could use inner C-reps to do propagation
+    # instead of using extension type wrappers as this does now
     ret = staterep
     for gaterep in gatereps:
         ret = gaterep.acton(ret)
@@ -849,8 +945,7 @@ cdef vector[DMEffectCRep*] convert_ereps(ereps):
     return c_ereps
 
 
-def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None): # TODO remove scratch
-
+def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm):
 
     rhoVec,EVecs = calc._rhoEs_from_labels(rholabel, elabels)
     pCache = np.empty((len(evalTree),len(EVecs)),'d')
@@ -949,6 +1044,7 @@ cdef dm_compute_pr_cache(double[:,:] ret,
 
     
 def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
+    # can remove unused 'scratch' arg once we move hpr_cache to replibs
 
     cdef double eps = 1e-7 #hardcoded?
 
@@ -1224,7 +1320,6 @@ cdef void sv_pr_as_poly_innerloop(vector[vector_SVTermCRep_ptr_ptr] factor_lists
     cdef int i,j,Ei
     cdef double complex scale, val, newval, pLeft, pRight, p
 
-    cdef int incd
     cdef SVTermCRep* factor
 
     cdef int nFactorLists = factor_lists.size() # may need to recompute this after fast-mode
@@ -1461,23 +1556,6 @@ cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr]
         pRight = EVec.amplitude(prop1).conjugate()
 
         shelved = prop1 # return prop1 to the "shelf" since we'll use prop1 for other things next
-
-        #DO THIS IN SB VARIANT
-        #else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-        #    factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
-        #    EVec = factor.post_ops[0]
-        #    for j in range(len(factor.post_ops)-1,0,-1): # (reversed)
-        #        rhoVecL = factor.post_ops[j].adjoint_acton(rhoVecL)
-        #    #OLD: p = stabilizer_measurement_prob(rhoVecL, EVec.outcomes)
-        #    #OLD: pLeft = np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
-        #    pLeft = rhoVecL.extract_amplitude(EVec.outcomes)
-        #
-        #    EVec = factor.pre_ops[0]
-        #    for j in range(len(factor.pre_ops)-1,0,-1): # (reversed)
-        #        rhoVecR = factor.pre_ops[j].adjoint_acton(rhoVecR)
-        #    #OLD: p = stabilizer_measurement_prob(rhoVecR, EVec.outcomes)
-        #    #OLD: pRight = np.sqrt(p) # sqrt b/c pRight is just *amplitude*
-        #    pRight = np.conjugate(rhoVecR.extract_amplitude(EVec.outcomes))
 
         #print "DB: final block"
         #print "DB running coeff = ",dict(coeff._coeffs)
