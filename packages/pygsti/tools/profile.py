@@ -1,6 +1,6 @@
 import cProfile
+from mpi4py import MPI
 
-@profile(filename="profile_out")
 def profile(filename=None, comm=MPI.COMM_WORLD):
   def prof_decorator(f):
     def wrap_f(*args, **kwargs):
