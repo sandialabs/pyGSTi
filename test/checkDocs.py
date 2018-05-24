@@ -2,31 +2,47 @@
 import os.path, importlib, pkgutil, sys
 import pygsti
 
+from pprint import pprint
+
 from inspect import *
+import inspect
+
+missing = []
+
+def check_args_in_docstring(item):
+    args, _, kwargs, _ = getargspec(item)
+    if kwargs is None:
+        kwargs = []
+    for arg in args + [k for k, v in kwargs]:
+        if item.__doc__ is None or arg not in item.__doc__:
+            missing.append(item)
 
 def check_function(f):
-    pass
+    print('Checking function')
+    check_args_in_docstring(f)
 
 def check_class(c):
-    pass
+    check(c)
 
 def check_method(m):
-    pass
+    check_args_in_docstring(m)
 
-def check_module(module):
+def check(module):
     for member in getmembers(module):
-        if isfunction(member):
-            pass
-        if ismethod(member):
-            pass
-        if isclass(member):
-            pass
-        if ismodule(member):
-            check_module(member)
-        print(member)
+        if 'pygsti' in str(member[1]):
+            name, member = member
+            if isfunction(member):
+                check_function(member)
+            if ismethod(member):
+                check_method(member)
+            if isclass(member):
+                check_class(member)
+            if ismodule(member):
+                check(member)
 
 def main(args):
-    check_module(pygsti)
+    check(pygsti)
+    pprint(missing)
     return 0
 
 if __name__ == '__main__':
