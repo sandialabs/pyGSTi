@@ -19,50 +19,17 @@
 apt-get install libsuitesparse-dev
 cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so
 
-
-#Latex is no longer needed!
-#echo "Checking if pdflatex install is needed"
-#
-#if [ "$ReportA" == "True" ]; then
-#    apt-get -qq install texlive-full
-#fi
-#
-#if [ "$Drivers" == "True" ]; then
-#    apt-get -qq install texlive-latex-base
-#fi
-#
-#if [ "$ReportA" == "True" ] || [ "$Drivers" == "True" ]; then
-#    echo "Installing pdflatex requirements"
-#    pushd /usr/share/texmf-texlive/
-#    wget http://mirrors.ctan.org/install/macros/latex/contrib/etoolbox.tds.zip
-#    wget http://mirrors.ctan.org/install/macros/latex/contrib/adjustbox.tds.zip
-#    wget http://mirrors.ctan.org/install/macros/latex/contrib/collectbox.tds.zip
-#    wget http://mirrors.ctan.org/install/macros/latex/contrib/pdfcomment.tds.zip
-#    wget http://mirrors.ctan.org/install/macros/latex/contrib/datetime2.tds.zip
-#    wget http://mirrors.ctan.org/install/macros/generic/tracklang.tds.zip
-#    wget http://mirrors.ctan.org/install/macros/latex/contrib/bezos.tds.zip
-#    wget http://mirrors.ctan.org/install/macros/latex/contrib/hyperref.tds.zip
-#    wget http://mirrors.ctan.org/install/macros/latex/contrib/oberdiek.tds.zip
-#    wget http://mirrors.ctan.org/install/macros/generic/ifxetex.tds.zip
-#    wget http://mirrors.ctan.org/install/macros/latex/contrib/standalone.tds.zip
-#    unzip -o etoolbox.tds.zip
-#    unzip -o adjustbox.tds.zip
-#    unzip -o collectbox.tds.zip
-#    unzip -o pdfcomment.tds.zip
-#    unzip -o datetime2.tds.zip
-#    unzip -o tracklang.tds.zip
-#    unzip -o bezos.tds.zip
-#    unzip -o hyperref.tds.zip
-#    unzip -o oberdiek.tds.zip
-#    unzip -o ifxetex.tds.zip
-#    unzip -o standalone.tds.zip
-#    texhash
-#    popd
-#else
-#    echo "pdflatex is not required for these tests (ReportA is not set to \"True\")"
-#fi
-
-sudo apt remove cmake
-sudo -E add-apt-repository -y ppa:george-edison55/cmake-3.x
-sudo -E apt-get update
-sudo apt-get install cmake
+# Install the following version of CMAKE
+version=3.11
+build=1
+mkdir ~/temp
+cd ~/temp
+wget https://cmake.org/files/v$version/cmake-$version.$build.tar.gz
+tar -xzvf cmake-$version.$build.tar.gz
+cd cmake-$version.$build/
+./bootstrap
+make -j4
+sudo make install
+cd ..
+rm -r temp
+cmake --version
