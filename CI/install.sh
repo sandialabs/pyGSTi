@@ -45,20 +45,24 @@ cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so
 #    wget http://mirrors.ctan.org/install/macros/latex/contrib/oberdiek.tds.zip
 #    wget http://mirrors.ctan.org/install/macros/generic/ifxetex.tds.zip
 #    wget http://mirrors.ctan.org/install/macros/latex/contrib/standalone.tds.zip
-#    unzip -o etoolbox.tds.zip 
-#    unzip -o adjustbox.tds.zip 
-#    unzip -o collectbox.tds.zip 
-#    unzip -o pdfcomment.tds.zip 
-#    unzip -o datetime2.tds.zip 
-#    unzip -o tracklang.tds.zip 
-#    unzip -o bezos.tds.zip 
-#    unzip -o hyperref.tds.zip 
-#    unzip -o oberdiek.tds.zip 
-#    unzip -o ifxetex.tds.zip 
-#    unzip -o standalone.tds.zip 
-#    texhash  
+#    unzip -o etoolbox.tds.zip
+#    unzip -o adjustbox.tds.zip
+#    unzip -o collectbox.tds.zip
+#    unzip -o pdfcomment.tds.zip
+#    unzip -o datetime2.tds.zip
+#    unzip -o tracklang.tds.zip
+#    unzip -o bezos.tds.zip
+#    unzip -o hyperref.tds.zip
+#    unzip -o oberdiek.tds.zip
+#    unzip -o ifxetex.tds.zip
+#    unzip -o standalone.tds.zip
+#    texhash
 #    popd
 #else
 #    echo "pdflatex is not required for these tests (ReportA is not set to \"True\")"
 #fi
 
+sudo apt remove cmake
+sudo -E add-apt-repository -y ppa:george-edison55/cmake-3.x
+sudo -E apt-get update
+sudo apt-get install cmake
