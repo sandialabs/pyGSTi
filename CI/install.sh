@@ -19,6 +19,7 @@
 apt-get install libsuitesparse-dev
 cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so
 
+sudo apt remove cmake
 # Install the following version of CMAKE
 version=3.11
 build=1
