@@ -103,21 +103,24 @@ class GateString(object):
 
     @property
     def tup(self):
-        """ This GateString as a standard Python tuple."""
+        """ This GateString as a standard Python tuple of Labels."""
         return self._tup
 
     @tup.setter
     def tup(self, value):
+        """ This GateString as a standard Python tuple of Labels."""
         self._tup = value
 
     @property
     def str(self):
+        """ The Python string representation of this GateString."""
         if self._str is None:
             self._str = _gateSeqToStr(self.tup)
         return self._str
 
     @str.setter
     def str(self, value):
+        """ The Python string representation of this GateString."""
         self._str = value
 
             

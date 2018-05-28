@@ -177,8 +177,10 @@ def convert(gate, toType, basis, extra=None):
     gate : Gate
         Gate to convert
 
-    toType : {"full", "TP", "CPTP", "H+S", "S", "static", "GLND", "H+S terms", "clifford"}
-        The type of parameterizaton to convert to.
+    toType : {"full", "TP", "CPTP", "H+S", "S", "static", "static unitary",
+              "GLND", "H+S terms", "H+S clifford terms", "clifford"}
+        The type of parameterizaton to convert to.  See 
+        :method:`GateSet.set_all_parameterizations` for more details.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `gate`.  Allowed values are Matrix-unit (std),

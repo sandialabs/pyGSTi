@@ -25,12 +25,14 @@ from ..baseobjs import Label as _Lbl
 from .gatesetconstruction import basis_build_vector as _basis_build_vector
     
 
-def iter_basis_inds(weight):
+def _iter_basis_inds(weight):
+    """ Iterate over product of `weight` non-identity Pauli 1Q basis indices """
     basisIndList = [ [1,2,3] ]*weight #assume pauli 1Q basis, and only iterate over non-identity els
     for basisInds in _itertools.product(*basisIndList):
         yield basisInds
 
 def basisProductMatrix(sigmaInds, sparse):
+    """ Construct the Pauli product matrix from the given `sigmaInds` """
     sigmaVec = (id2x2/sqrt2, sigmax/sqrt2, sigmay/sqrt2, sigmaz/sqrt2)
     M = _np.identity(1,'complex')
     for i in sigmaInds:
@@ -40,6 +42,20 @@ def basisProductMatrix(sigmaInds, sparse):
 def nparams_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
                             extraWeight1Hops=0, extraGateWeight=0, requireConnected=False,
                             independent1Qgates=True, ZZonly=False, verbosity=0):
+    """
+    Returns the number of parameters in the :class:`GateSet` that would be given
+    by a call to :function:`build_nqnoise_gateset` with the same parameters, 
+    without actually constructing the gate set (useful for considering
+    parameter-count scaling).
+
+    Parameters
+    ----------
+    Same as :function:`build_nqnoise_gateset`
+    
+    Returns
+    -------
+    int
+    """
     # noise can be either a seed or a random array that is long enough to use
 
     printer = _VerbosityPrinter.build_printer(verbosity)
@@ -49,6 +65,7 @@ def nparams_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0
     #printer.log("Created qubit graph:\n"+str(qubitGraph))
 
     def idle_count_nparams(maxWeight):
+        """Parameter count of a `build_nqn_global_idle`-constructed gate"""
         ret = 0
         possible_err_qubit_inds = _np.arange(nQubits)
         for wt in range(1,maxWeight+1):
@@ -60,6 +77,7 @@ def nparams_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0
         return ret
 
     def gate_count_nparams(target_qubit_inds,weight_maxhops_tuples,debug=False):
+        """Parameter count of a `build_nqn_composed_gate`-constructed gate"""
         ret = 0
         #Note: no contrib from idle noise (already parameterized)
         for wt, maxHops in weight_maxhops_tuples:
@@ -117,9 +135,90 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
                           extraWeight1Hops=0, extraGateWeight=0, sparse=False,
                           gateNoise=None, prepNoise=None, povmNoise=None,
                           sim_type="matrix", parameterization="H+S", verbosity=0): #, debug=False):
-    """ TODO: docstring - entire module! """
-    assert(sim_type in ("matrix","map") or sim_type.startswith("termorder"))
+    """ 
+    Create a noisy n-qubit gateset using a low-weight and geometrically local
+    error model with a common idle gate.  
+
+    This type of gateset is generally useful for performing GST on a multi-
+    qubit gateset, whereas functions like :function:`build_nqubit_gateset`
+    are more useful for creating static (non-parameterized) gate sets.
+
+    Parameters
+    ----------
+    nQubits : int
+        The number of qubits
+    
+    geometry : {"line","ring","grid","torus"}
+        The type of connectivity among the qubits.
+
+    maxIdleWeight : int, optional
+        The maximum-weight for errors on the global idle gate.
+
+    maxhops : int
+        The locality constraint: for a gate, errors (of weight up to the
+        maximum weight for the gate) are allowed to occur on the gate's
+        target qubits and those reachable by hopping at most `maxhops` times
+        from a target qubit along nearest-neighbor links (defined by the 
+        `geometry`).  
+    
+    extraWeight1Hops : int, optional
+        Additional hops (adds to `maxhops`) for weight-1 errors.  A value > 0
+        can be useful for allowing just weight-1 errors (of which there are 
+        relatively few) to be dispersed farther from a gate's target qubits.
+        For example, a crosstalk-detecting model might use this.
+    
+    extraGateWeight : int, optional
+        Addtional weight, beyond the number of target qubits (taken as a "base
+        weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
+        this equals 1, for instance, then 1-qubit gates can have up to weight-2
+        errors and 2-qubit gates can have up to weight-3 errors.
+
+    sparse : bool, optional
+        Whether the embedded Lindblad-parameterized gates within the constructed
+        `nQubits`-qubit gates are sparse or not.  (This is determied by whether
+        they are constructed using sparse basis matrices.)  When sparse, these
+        Lindblad gates take up less memory, but their action is slightly slower.
+        Usually it's fine to leave this as the default (False), except when
+        considering particularly high-weight terms (b/c then the Lindblad gates
+        are higher dimensional and sparsity has a significant impact).
+
+    gateNoise, prepNoise, povmNoise : tuple or numpy.ndarray, optional
+        If not None, noise to place on the gates, the state prep and the povm.
+        This can either be a `(seed,strength)` 2-tuple, or a long enough numpy
+        array (longer than what is needed is OK).  These values specify random
+        `gate.from_vector` initializatin for the gates and random depolarization
+        amounts on the preparation and POVM.
+
+    sim_type : {"auto","matrix","map","termorder:<N>"}
+        The type of forward simulation (probability computation) to use for the
+        returned :class:`GateSet`.  That is, how should the gate set compute
+        gate string/circuit probabilities when requested.  `"matrix"` is better
+        for small numbers of qubits, `"map"` is better for larger numbers. The
+        `"termorder"` option is designed for even larger numbers.  Usually,
+        the default of `"auto"` is what you want.
+    
+    parameterization : {"H+S", "H+S terms", "H+S clifford terms"}
+        The type of parameterizaton to use in the constructed gate set.  The
+        default of `"H+S"` performs usual density-matrix evolution to compute
+        circuit probabilities.  The other "terms" options compute probabilities
+        using a path-integral approach designed for larger numbers of qubits,
+        and are considered expert options.
+
+    verbosity : int, optional
+        An integer >= 0 dictating how must output to send to stdout.
+
+    Returns
+    -------
+    GateSet
+    """
+
     assert(parameterization in ("H+S","H+S terms","H+S clifford terms"))
+    if sim_type == "auto":
+        if parameterization == "H+S clifford terms": sim_type = "termorder:1"
+        else: sim_type = "map" if nQubits > 2 else "matrix"
+
+    assert(sim_type in ("matrix","map") or sim_type.startswith("termorder"))
+
     from pygsti.construction import std1Q_XY # the base gate set for 1Q gates
     from pygsti.construction import std2Q_XYICNOT # the base gate set for 2Q (CNOT) gate
     
@@ -278,7 +377,9 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     return gs
     
 
-def get_Lindblad_factory(sim_type, parameterization):
+def _get_Lindblad_factory(sim_type, parameterization):
+    """ Returns a function that creates a Lindblad-type gate appropriate
+        given the simulation type and parameterization """
     if parameterization == "H+S":
         evotype = "densitymx"
         cls = _objs.LindbladParameterizedGate if sim_type == "matrix" \
@@ -292,17 +393,19 @@ def get_Lindblad_factory(sim_type, parameterization):
         raise ValueError("Cannot create Lindblad gate factory for ",sim_type, parameterization)
 
     #Just call cls.from_gate_matrix with appropriate evotype
-    def f(gateMatrix, unitaryPostfactor=None,
+    def _f(gateMatrix, unitaryPostfactor=None,
           ham_basis="pp", nonham_basis="pp", cptp=True,
           nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
         return cls.from_gate_matrix(gateMatrix, unitaryPostfactor,
                                     ham_basis, nonham_basis, cptp,
                                     nonham_diagonal_only, truncate,
                                     mxBasis, evotype)
-    return f
+    return _f
                                     
 
-def get_Static_factory(sim_type, parameterization):
+def _get_Static_factory(sim_type, parameterization):
+    """ Returns a function that creates a static-type gate appropriate 
+        given the simulation and parameterization """
     if parameterization == "H+S":
         if sim_type == "matrix":
             return lambda g,b: _objs.StaticGate(g)
@@ -313,16 +416,49 @@ def get_Static_factory(sim_type, parameterization):
         assert(sim_type.startswith("termorder"))
         evotype = "svterm" if parameterization == "H+S terms" else "cterm"
         
-        def f(gateMatrix, mxBasis="pp"):
+        def _f(gateMatrix, mxBasis="pp"):
             return _objs.LindbladParameterizedGateMap.from_gate_matrix(
                 None, gateMatrix, None, None, mxBasis=mxBasis, evotype=evotype)
                 # a LindbladParameterizedGate with None as ham_basis and nonham_basis => no parameters
               
-        return f
+        return _f
     raise ValueError("Cannot create Static gate factory for ",sim_type, parameterization)
 
 
 def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix", parameterization="H+S", verbosity=0):
+    """
+    Create a "global" idle gate, meaning one that acts on all the qubits in 
+    `qubitGraph`.  The gate will have up to `maxWeight` errors on *connected*
+    (via the graph) sets of qubits.
+
+    Parameters
+    ----------
+    qubitGraph : QubitGraph
+        A graph giving the geometry (nearest-neighbor relations) of the qubits.
+
+    maxWeight : int
+        The maximum weight errors to include in the resulting gate.
+
+    sparse : bool, optional
+        Whether the embedded Lindblad-parameterized gates within the constructed
+        gate are represented as sparse or dense matrices.  (This is determied by
+        whether they are constructed using sparse basis matrices.)
+
+    sim_type : {"matrix","map","termorder:<N>"}
+        The type of forward simulation (probability computation) being used by 
+        the gate set this gate is destined for.  This affects what type of 
+        gate objects (e.g. `ComposedGate` vs `ComposedGateMap`) are created.
+    
+    parameterization : {"H+S", "H+S terms", "H+S clifford terms"}
+        The type of parameterizaton for the constructed gate.
+
+    verbosity : int, optional
+        An integer >= 0 dictating how must output to send to stdout.
+
+    Returns
+    -------
+    Gate
+    """
     assert(maxWeight <= 2), "Only `maxWeight` equal to 0, 1, or 2 is supported"
 
     if sim_type == "matrix": 
@@ -331,24 +467,14 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
     else:
         Composed = _objs.ComposedGateMap
         Embedded = _objs.EmbeddedGateMap
-    Lindblad = get_Lindblad_factory(sim_type, parameterization)
-
-    #OLD
-    #if sparse:
-    #    Lindblad = _objs.LindbladParameterizedGateMap
-    #    Composed = _objs.ComposedGateMap
-    #    Embedded = _objs.EmbeddedGateMap
-    #else:
-    #    Lindblad = _objs.LindbladParameterizedGate
-    #    Composed = _objs.ComposedGate
-    #    Embedded = _objs.EmbeddedGate
+    Lindblad = _get_Lindblad_factory(sim_type, parameterization)
     
     printer = _VerbosityPrinter.build_printer(verbosity)
     printer.log("*** Creating global idle ***")
     
     termgates = [] # gates to compose
     ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nqubits)])]
-    basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse)
+    basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse) # TODO: remove - all we need is its 'dim' below
     
     nQubits = qubitGraph.nqubits
     possible_err_qubit_inds = _np.arange(nQubits)
@@ -364,7 +490,7 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
                 continue # TO UPDATE - check whether all wt indices are a connected subgraph
 
             errbasis = [basisEl_Id]
-            for err_basis_inds in iter_basis_inds(wt):        
+            for err_basis_inds in _iter_basis_inds(wt):        
                 error = _np.array(err_basis_inds,'i') #length == wt
                 basisEl = basisProductMatrix(error,sparse)
                 errbasis.append(basisEl)
@@ -460,26 +586,81 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
                             apply_idle_noise_to="all", sparse=False, sim_type="matrix",
                             parameterization="H+S", verbosity=0):
     """ 
-    Final gate is a composition of: 
-    targetOp(target qubits) -> idle_noise(all_qubits) -> loc_noise(local_qubits)
+    Create an n-qubit gate that is a composition of:
     
-    where `idle_noise` is given by the `idle_noise` parameter and loc_noise is given
-    by the other params.  loc_noise can be implemented either by 
-    a single embedded LindbladParameterizedGate with all relevant error generators,
-    or as a composition of embedded-single-error-term gates (see param `loc_noise_type`)
-    
+    `targetOp(target_qubits) -> idle_noise(all_qubits) -> loc_noise(local_qubits)`
+
+    where `idle_noise` is given by the `idle_noise` argument and `loc_noise` is
+    given by the rest of the arguments.  `loc_noise` can be implemented either
+    by a single (n-qubit) embedded Lindblad gate with all relevant error
+    generators, or as a composition of embedded single-error-term Lindblad gates
+    (see param `loc_noise_type`).
+
+    The local noise consists terms up to a maximum weight acting on the qubits
+    given reachable by a given maximum number of hops (along the neareset-
+    neighbor edges of `qubitGraph`) from the target qubits.
+
+
     Parameters
     ----------
-    
+    targetOp : numpy array
+        The target operation as a dense matrix, specifying the action on just
+        the target qubits.
+
+    target_qubit_inds : list
+        The indices of the target qubits.
+        
+    qubitGraph : QubitGraph
+        A graph giving the geometry (nearest-neighbor relations) of the qubits.
+
+    weight_maxhops_tuples : iterable
+        A list of `(weight,maxhops)` 2-tuples specifying which error weights
+        should be included and what region of the graph (as a `maxhops` from
+        the set of target qubits) should have errors of the given weight applied
+        to it.
+
     idle_noise : Gate or boolean
-        either given as an existing gate (on all qubits) or a boolean indicating
+        Either given as an existing gate (on all qubits) or a boolean indicating
         whether a composition of weight-1 noise terms (separately on all the qubits),
         is created.  If `apply_idle_noise_to == "nonlocal"` then `idle_noise` is *only*
         applied to the non-local qubits and `idle_noise` must be a ComposedGate or
-        ComposedMap with nQubits terms so that individual terms for each qubit can
+        ComposedMap with `nQubits` terms so that individual terms for each qubit can
         be extracted as needed.
 
-    TODO   
+
+    loc_noise_type : {"onebig","manylittle"}
+        Whether the `loc_noise` portion of the constructed gate should be a
+        a single Lindblad gate containing all the allowed error terms (onebig)
+        or the composition of many Lindblad gates each containing just a single
+        error term (manylittle).  The resulting gate performs the same action
+        regardless of the value set here; this just affects how the gate is
+        structured internally.
+
+    apply_idle_noise_to : {"all","nonlocal"}
+        Whether the `idle_noise` argument represents a Gate to be applied to 
+        *all* the qubits or whether it is a composed Gate with `nqubits` terms
+        that can be selectively applied only to the non-local qubits. (i.e.
+        those that are more than max-hops away from the target qubits).
+
+    sparse : bool, optional
+        Whether the embedded Lindblad-parameterized gates within the constructed
+        gate are represented as sparse or dense matrices.  (This is determied by
+        whether they are constructed using sparse basis matrices.)
+
+    sim_type : {"matrix","map","termorder:<N>"}
+        The type of forward simulation (probability computation) being used by 
+        the gate set this gate is destined for.  This affects what type of 
+        gate objects (e.g. `ComposedGate` vs `ComposedGateMap`) are created.
+    
+    parameterization : {"H+S", "H+S terms", "H+S clifford terms"}
+        The type of parameterizaton for the constructed gate.
+
+    verbosity : int, optional
+        An integer >= 0 dictating how must output to send to stdout.
+
+    Returns
+    -------
+    Gate
     """
     if sim_type == "matrix": 
         Composed = _objs.ComposedGate
@@ -487,8 +668,8 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
     else:
         Composed = _objs.ComposedGateMap
         Embedded = _objs.EmbeddedGateMap
-    Static = get_Static_factory(sim_type, parameterization)
-    Lindblad = get_Lindblad_factory(sim_type, parameterization)
+    Static = _get_Static_factory(sim_type, parameterization)
+    Lindblad = _get_Lindblad_factory(sim_type, parameterization)
 
     ##OLD
     #if sparse:
@@ -564,7 +745,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
                 #Future: check that err_qubit_inds marks qubits that are connected
                 err_qubit_local_inds = possible_to_local[err_qubit_inds]
                                                         
-                for err_basis_inds in iter_basis_inds(wt):  
+                for err_basis_inds in _iter_basis_inds(wt):  
                     error = _np.zeros(nLocal,'i')
                     error[ err_qubit_local_inds ] = err_basis_inds
                     loc_noise_errinds.append( error )
@@ -613,7 +794,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
                 #Future: check that err_qubit_inds marks qubits that are connected
 
                 errbasis = [basisEl_Id]
-                for err_basis_inds in iter_basis_inds(wt):  
+                for err_basis_inds in _iter_basis_inds(wt):  
                     error = _np.array(err_basis_inds,'i') #length == wt
                     basisEl = basisProductMatrix(error, sparse)
                     errbasis.append(basisEl)

@@ -1084,9 +1084,82 @@ def build_alias_gateset(gs_primitives, alias_dict):
 def build_nqubit_gateset(nQubits, gatedict, availability=None,
                          parameterization='static', evotype="auto",
                          sim_type="auto", on_construction_error='raise'):
-    """ TODO: docstring - creates a gateset from scratch by embedding the *same* gate from `gatedict` 
-    as requested and creating a perfect 0-prep and z-basis POVM"""
+    """
+    Creates a n-qubit gateset by embedding the *same* gates from `gatedict`
+    as requested and creating a perfect 0-prep and z-basis POVM.
+
+    The gates in `gatedict` often act on fewer (typically just 1 or 2) than
+    the total `nQubits` qubits, in which case embedded-gate objects are
+    automatically (and repeatedly) created to wrap the lower-dimensional gate.
+    Parameterization of each gate is done once, before any embedding, so that 
+    just a single set of parameters will exist for each low-dimensional gate.
     
+    Parameters
+    ----------
+    nQubits : int
+        The total number of qubits.
+
+    gatedict : dict
+        A dictionary (an `OrderedDict` if you care about insertion order) which 
+        associates with string-type gate names (e.g. `"Gx"`) :class:`Gate` or
+        `numpy.ndarray` objects.  When the objects may act on fewer than the
+        total number of qubits (determined by their dimension/shape) then they
+        are repeatedly embedded into `nQubits`-qubit gates as specified by
+        `availability`.
+
+    availability : dict, optional
+        If not None, a dictionary whose keys are the same gate names as in
+        `gatedict` and whose values are lists of qubit-label-tuples.  Each
+        qubit-label-tuple must have length equal to the number of qubits
+        the corresponding gate acts upon, and causes that gate to be
+        embedded to act on the specified qubits.  For example,
+        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
+        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
+        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
+        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
+        values of `availability` may take the special values 
+        `"all-permutations"` and `"all-combinations"`, which as their names
+        imply, equate to all possible permutations and combinations of the 
+        appropriate number of qubit labels (deterined by the gate's dimension).
+        If a gate name (a key of `gatedict`) is not present in `availability`,
+        the default is `"all-permutations"`.  If `availability` is None, this is
+        equivalent to the empty dictionary (all gates get `"all-permutations"`).
+
+    parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
+                        "H+S clifford terms", "clifford"}
+        The type of parameterizaton to convert each value in `gatedict` to. See
+        :method:`GateSet.set_all_parameterizations` for more details.
+
+    evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
+        The evolution type.  Often this is determined by the choice of 
+        `parameterization` and can be left as `"auto"`, which prefers
+        `"densitymx"` (full density matrix evolution) when possible. In some
+        cases, however, you may want to specify this manually.  For instance,
+        if you give unitary maps instead of superoperators in `gatedict`
+        you'll want to set this to `"statevec"`.
+
+    sim_type : {"auto", "matrix", "map", "termorder:<N>"} 
+        The simulation method used to compute predicted probabilities for the
+        resulting :class:`GateSet`.  Usually `"auto"` is fine, the default for
+        each `evotype` is usually what you want.  Setting this to something
+        else is expert-level tuning.
+
+    on_construction_error : {'raise','warn',ignore'}
+        What to do when the conversion from a value in `gatedict` to a
+        :class:`Gate` of the type given by `parameterization` fails.
+        Usually you'll want to `"raise"` the error.  In some cases,
+        for example when converting as many gates as you can into
+        `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
+        may be useful.
+
+    Returns
+    -------
+    GateSet
+        A gateset with `"rho0"` prep, `"Mdefault"` POVM, and gates labeled by
+        gate name (keys of `gatedict`) and qubit labels (from within
+        `availability`).  For instance, the gate label for the `"Gx"` gate on
+        qubit 2 might be `Label("Gx",1)`.
+    """
     if availability is None: availability = {}
 
     if evotype == "auto": # Note: this same logic is repeated in build_nqubit_standard_gateset
@@ -1106,37 +1179,6 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
     else:
         assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
         basis1Q = v0 = v1 = None # then we shouldn't use these
-
-    #OLD - now consolidate by using X.convert(...) TODO REMOVE
-    #if parameterization == "full":
-    #    PrepVec = _spamvec.FullyParameterizedSPAMVec
-    #    EVec = _spamvec.FullyParameterizedSPAMVec
-    #    POVM = _povm.UnconstrainedPOVM
-    #    Gate = _gate.FullyParameterizedGate
-    #elif parameterization == "TP":
-    #    PrepVec = _spamvec.TPParameterizedSPAMVec
-    #    EVec = _spamvec.FullyParameterizedSPAMVec
-    #    POVM = _povm.UnconstrainedPOVM
-    #    Gate = _gate.FullyParameterizedGate
-    #elif parameterization == "static":
-    #    PrepVec = _spamvec.StaticSPAMVec
-    #    EVec = _spamvec.StaticSPAMVec
-    #    POVM = _povm.UnconstrainedPOVM
-    #    Gate = _gate.StaticGate
-    #elif parameterization == "clifford":
-    #    PrepVec = _spamvec.StabilizerSPAMVec
-    #    EVec = None
-    #    POVM = _povm.StabilizerZPOVM
-    #    Gate = _gate.CliffordGate
-    #    assert(sim_type == 'clifford'), "clifford parameterization only works with clifford simulation"
-    #
-    #    
-    #
-    ## elif parameterization == "CPTP": TODO
-    ## elif parameterization == "H+S": TODO
-    ##More??
-    #else:
-    #    raise ValueError("Invalid parameterization: %s" % parameterization)
 
     if sim_type == "auto":
         if evotype == "densitymx":
@@ -1207,6 +1249,22 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
 
 
 def get_standard_gate_unitaries():
+    """
+    Constructs and returns a dictionary of unitary matrices describing the
+    action of "standard" gates.  These gates (also the keys of the returned
+    dictionary) are:
+
+    - 'Gi' : the 1Q idle operation
+    - 'Gx','Gy','Gz' : 1Q pi/2 rotations
+    - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
+    - 'Gh' : Hadamard
+    - 'Gp' : phase
+    - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
+
+    Returns
+    -------
+    dict of numpy.ndarray objects.
+    """
     std_unitaries = {}
     
     # The idle gate.
@@ -1247,7 +1305,85 @@ def get_standard_gate_unitaries():
 def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=None,
                                   availability=None, parameterization='static',
                                   evotype="auto", sim_type="auto", on_construction_error='raise'):
-    """ TODO: docstring """
+    """
+    Creates a "standard" n-qubit gate set, usually of ideal gates.
+
+    The returned gate set is "standard", in that the following standard gate
+    names may be specified as elements to `gate_names` without the need to
+    supply their corresponding unitaries (as one must when calling
+    :function:`built_nqubit_gateset`):
+
+    - 'Gi' : the 1Q idle operation
+    - 'Gx','Gy','Gz' : 1Q pi/2 rotations
+    - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
+    - 'Gh' : Hadamard
+    - 'Gp' : phase
+    - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
+
+    Furthermore, if additional "non-standard" gates are needed,
+    they are specified by their *unitary* gate action, even if
+    the final gate set propagates density matrices (as opposed
+    to state vectors).  Other than these, this function operates
+    as :function:`built_nqubit_gateset`, returning a `nQubit`-qubit
+    gate set of embedded gates.
+
+    Parameters
+    ----------
+    nQubits : int
+        The total number of qubits.
+
+    gate_names : list
+        I list of string-type gate names (e.g. `"Gx"`) either taken from
+        the list of builtin "standard" gate names given above or from the
+        keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
+        gates that are repeatedly embedded (based on `availability`) to form
+        the resulting gate set.
+
+    nonstd_gate_unitaries : dict, optional 
+        A dictionary of numpy arrays which specifies the unitary gate action
+        of the gate names given by the dictionary's keys.
+
+    availability : dict, optional
+        If not None, a dictionary whose keys are gate names and whose values
+        are lists of qubit-label-tuples.  See :function:`built_nqubit_gateset`
+        for more details.
+
+    parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
+                        "H+S clifford terms", "clifford"}
+        The type of parameterizaton to use for each gate value before it is
+        embedded. See :method:`GateSet.set_all_parameterizations` for more
+        details.
+
+    evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
+        The evolution type.  Often this is determined by the choice of 
+        `parameterization` and can be left as `"auto"`, which prefers
+        `"densitymx"` (full density matrix evolution) when possible. In some
+        cases, however, you may want to specify this manually.  For instance,
+        if you give unitary maps instead of superoperators in `gatedict`
+        you'll want to set this to `"statevec"`.
+
+    sim_type : {"auto", "matrix", "map", "termorder:<N>"} 
+        The simulation method used to compute predicted probabilities for the
+        resulting :class:`GateSet`.  Usually `"auto"` is fine, the default for
+        each `evotype` is usually what you want.  Setting this to something
+        else is expert-level tuning.
+
+    on_construction_error : {'raise','warn',ignore'}
+        What to do when the creation of a gate with the given 
+        `parameterization` fails.  Usually you'll want to `"raise"` the error.
+        In some cases, for example when converting as many gates as you can
+        into `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
+        may be useful.
+
+
+    Returns
+    -------
+    GateSet
+        A gateset with `"rho0"` prep, `"Mdefault"` POVM, and gates labeled by
+        gate name (keys of `gatedict`) and qubit labels (from within
+        `availability`).  For instance, the gate label for the `"Gx"` gate on
+        qubit 2 might be `Label("Gx",1)`.
+    """
     if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
     std_unitaries = get_standard_gate_unitaries()
 

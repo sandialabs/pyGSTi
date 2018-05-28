@@ -105,8 +105,10 @@ def convert(spamvec, toType, basis, extra=None):
     spamvec : SPAMVec
         SPAM vector to convert
 
-    toType : {"full","TP","static","H+S terms","clifford"}
-        The type of parameterizaton to convert to.
+    toType : {"full","TP","CPTP","static","static unitary","H+S terms",
+              "H+S clifford terms","clifford"}
+        The type of parameterizaton to convert to.  See 
+        :method:`GateSet.set_all_parameterizations` for more details.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `spamvec`.  Allowed values are Matrix-unit (std),

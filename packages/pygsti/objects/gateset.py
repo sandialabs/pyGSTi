@@ -439,10 +439,20 @@ class GateSet(object):
 
         Parameters
         ----------
-        parameterization_type : {"full", "TP", "CPTP", "H+S",
-                                 "S", "static", "H+S terms", "clifford",
-                                 "H+S clifford terms"}
-            The gate and SPAM vector parameterization type
+        parameterization_type : string
+            The gate and SPAM vector parameterization type.  Allowed
+            values are:
+
+            - "full" : each gate / SPAM element is an independent parameter
+            - "TP" : Trace-Preserving gates and state preps
+            - "CPTP" : Completely-Positive-Trace-Preserving gates
+            - "H+S" : Hamiltonian and Pauli-Stochastic errors only
+            - "S" : Pauli-Stochastic errors only
+            - "static" : no parameters
+            - "static unitary" : no parameters; convert superops to unitaries
+            - "H+S terms" : like H+S, but support "svterm" evolution type
+            - "H+S clifford terms" : like H+S, but support "cterm" evo. type
+            - "clifford" : no parameters; convert unitaries to cliffords
 
         extra : dict, optional
             For `"H+S terms"` type, this may specify a dictionary 

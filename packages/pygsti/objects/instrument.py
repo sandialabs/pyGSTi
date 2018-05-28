@@ -16,17 +16,42 @@ from . import gatesetmember as _gm
 from . import gate as _gate
 
 
-def convert(instrument, typ, basis):
-    if typ == "TP":
+def convert(instrument, toType, basis):
+    """
+    Convert intrument to a new type of parameterization, potentially
+    creating a new object.  Raises ValueError for invalid conversions.
+
+    Parameters
+    ----------
+    instrument : Instrument
+        Instrument to convert
+
+    toType : {"full","TP","static","static unitary"}
+        The type of parameterizaton to convert to.  See 
+        :method:`GateSet.set_all_parameterizations` for more details.
+
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis for `povm`.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
+
+    Returns
+    -------
+    Instrument
+       The converted instrument, usually a distinct
+       object from the object passed as input.
+    """
+
+    if toType == "TP":
         if isinstance(instrument, TPInstrument):
             return instrument
         else:
             return TPInstrument(list(instrument.items()))
-    elif typ in ("full","static","static unitary"):
-        gate_list = [(k,_gate.convert(g,typ,basis)) for k,g in instrument.items()]
+    elif toType in ("full","static","static unitary"):
+        gate_list = [(k,_gate.convert(g,toType,basis)) for k,g in instrument.items()]
         return Instrument(gate_list)
     else:
-        raise ValueError("Cannot convert an instrument to type %s" % typ)
+        raise ValueError("Cannot convert an instrument to type %s" % toType)
 
 
 class Instrument(_gm.GateSetMember, _collections.OrderedDict):

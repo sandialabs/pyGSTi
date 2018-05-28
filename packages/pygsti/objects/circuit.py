@@ -20,35 +20,70 @@ IDENT = 'I' # Identity-get sentinel
 #    def __init__(self, gatelist, n):
 #        self.layer = 0
 
-def check_valid_gate(gate):
-    
-    # To do: check that gate is type Gate.
-    assert(type(gate.name) is unicode), "The gate label should be unicode!"
-    assert(type(gate.qubits) is list), "The list of qubits on which the gate acts should be a list!"
-    
-    for i in range(1,gate.number_of_qubits):
-        assert(type(gate.qubits[i]) is int), "The qubits on which a gate acts should be indexed by integers!"
 
-def check_valid_circuit_layer(layer,n):
-    
-    assert(type(layer) is list), "A gate layer must be a list!"
-    #
-    # To do: add other less trivial tests.
-    #
+#OLD: checks whether a Label is valid - could update this & move to Label?
+#def check_valid_gate(gate):
+#    # To do: check that gate is type Gate.
+#    assert(type(gate.name) is unicode), "The gate label should be unicode!"
+#    assert(type(gate.qubits) is list), "The list of qubits on which the gate acts should be a list!"
+#    
+#    for i in range(1,gate.number_of_qubits):
+#        assert(type(gate.qubits[i]) is int), "The qubits on which a gate acts should be indexed by integers!"
+
+#OLD - could add logic like this to Circuit?
+#def check_valid_circuit_layer(layer,n):
+#    
+#    assert(type(layer) is list), "A gate layer must be a list!"
+#    #
+#    # To do: add other less trivial tests.
+#    #
 
 class Circuit(_gstr.GateString):
     """
-    TODO - docstring
-    A circuit is a more structured representation of a sequence of preparation,
+    A Circuit is a more structured representation of a sequence of preparation,
     gate, and measurement operations.  It is composed of some number of "lines",
-    typically one per qubit.
+    typically one per qubit, and permits a richer set of operations than 
+    :class:`GateString`.  These operations include a range of methods for
+    manipulating quantum circuits. E.g., basic depth compression algorithms.
     """
     
     def __init__(self, line_items=None, gatestring=None, num_lines=None, line_labels=None):
         """
-        An object with encapsulates a quantum circuit, and which contains a range of methods for
-        manipulating quantum circuits. E.g., basic depth compression algorithms.
-    
+        Creates a new Circuit object, encapsulating a quantum circuit.
+
+        You can supply at most one of `line_items` and `gatestring` (alternate
+        ways of specifying the gates).  If neither are specified an empty
+        Circuit is created.  Unless `line_items` is specified, you must also
+        specify the number and label for each line via `num_lines` and/or
+        `line_labels` (if labels aren't specified they default to the integers
+        beggining with 0).
+
+        Parameters
+        ----------
+        line_items : list, optional
+            A list of lists of Label objects, giving the gate labels present on
+            each "line" (usually "qubit") of the circuit.  When a gate occupies
+            more than one line its label is present in the lists of *all* the
+            lines it occupies.
+
+        gatestring : list, optional
+            A list of Label objects, specifying a serial sequence of gates to
+            be made into a circuit.  Gates are placed in as few "layers" as 
+            possible, meaning that gates acting on different qubits are 
+            done in parallel (placed at the same position in their respective
+            lines).  This is equivalent to saying the list for each line is 
+            made as short as possible.
+
+        num_lines : int, optional
+            The number of lines (usually qubits).  You only need to specify 
+            this when it cannot be inferred, that is, when `line_items` and
+            `line_labels` are not given.
+
+        line_labels : list, optional
+            A list of strings or integers labelling each of the lines.  The
+            length of this list equals the number of lines in the circuit, 
+            and if `line_labels` is not given these labels default to the 
+            integers starting with 0.
         """
         assert((line_items is not None) or (gatestring is not None) or (num_lines is not None) or (line_labels is not None)), \
             "At least one argument must be not None!"
@@ -82,9 +117,9 @@ class Circuit(_gstr.GateString):
                 self.line_labels = list(range(self.number_of_lines))
             
             if gatestring is not None:
-                self.initialize_circuit_from_gatestring(gatestring)
+                self._initialize_from_gatestring(gatestring)
             else:
-                self.initialize_empty_circuit()
+                self.clear() # initializes an empty circuit
 
             """ Initialize the members of the GateString base class """
             tup = self._flatten_to_tup()
@@ -94,12 +129,14 @@ class Circuit(_gstr.GateString):
             self._tup_dirty = False # keep track of when we need to _flatten_to_tup
 
     def _reinit_base(self):
+        """ Re-initialize the members of the base GateString object """
         if self._tup_dirty:
             self._tup = self._flatten_to_tup()
             self._str = _gstr._gateSeqToStr(self._tup)
             self._tup_dirty = False
         
     def _flatten_to_tup(self):
+        """ Flatten self.line_items into a serial tuple of gate labels """
         #print("DB: flattening to tuple!!")
         if self.number_of_lines <= 0:
             return ()
@@ -124,26 +161,29 @@ class Circuit(_gstr.GateString):
 
     @property
     def tup(self):
-        """ TODO: docstring -- overrides GateString method so we can compute tuple in on-demand way """
+        """ This Circuit as a standard Python tuple of Labels."""
+        # Note: this overrides GateString method so we can compute tuple in on-demand way
         #print("Circuit.tup accessed")
         self._reinit_base()
         return self._tup
 
     @tup.setter
     def tup(self, value):
-        """ TODO: docstring """
+        """ This Circuit as a standard Python tuple of Labels."""
         #print("Circuit.tup setter accessed")
         self._reinit_base()
         self._tup = value
 
     @property
     def str(self):
+        """ The Python string representation of this GateString."""
         #print("Circuit.str accessed")
         self._reinit_base()
         return self._str
 
     @str.setter
     def str(self, value):
+        """ The Python string representation of this GateString."""
         #print("Circuit.str setter accessed")
         self._reinit_base()
         self._str = value
@@ -157,29 +197,25 @@ class Circuit(_gstr.GateString):
             self.done_editing()
         return super(Circuit,self).__hash__()
                       
-    def initialize_empty_circuit(self):
+    def clear(self):
         """
-        Creates an empty circuit, which consists of a dictionary
-        of empty lists.
-        
+        Removes all the gates in a circuit (preserving the number of lines).
         """
         assert(not self._static),"Cannot edit a read-only circuit!"
         self.line_items = []
         for i in range(0,self.number_of_lines):
             self.line_items.append([])
+        self._tup_dirty = True
                         
-    def initialize_circuit_from_gatestring(self,gatestring):
+    def _initialize_from_gatestring(self,gatestring):
         """
-        Creates a circuit from a list of Gate objects. This function assumes that 
-        all gates act on 1 or 2 qubits only, but this could be easily updated if 
-        necessary.
+        Initializes self.line_items from a sequence of Label objects.
         
         Parameters
         ----------
         gatestring : GateString or tuple
             A sequence of state preparation (optional), gates, and measurement
             (optional), given by a :class:`GateString` object.
-        
         """
         assert(not self._static),"Cannot edit a read-only circuit!"
         
@@ -190,7 +226,7 @@ class Circuit(_gstr.GateString):
         # Note: elements of gatestring are guaranteed to be Label objs b/c GateString enforces this.
             
         # Create an empty circuit, to populate from gatestring
-        self.initialize_empty_circuit()
+        self.clear() # inits self.line_items
 
         # keeps track of which gates have been added to the circuit from the list.
         j = 0
@@ -232,29 +268,32 @@ class Circuit(_gstr.GateString):
             # Update the layer number.
             layer_number += 1
     
-    def insert_gate(self,gate,j):
+    def insert_gate(self,gatelbl,j):
         """
         Inserts a gate into a circuit.
         
         Parameters
         ----------
-        gate : Gate
-            A Gate object, to insert.
+        gatelbl : Label
+            The gate label to insert.
             
         j : int
-            The circuit layer at which to insert the gate.
-            
+            The layer index (depth) at which to insert the gate.
+
+        Returns
+        -------
+        None
         """
-        # Check input is a valid gate
-        check_valid_gate(gate)
+        #OLD Check input is a valid gate
+        #OLD check_valid_gate(gatelbl)
         
         # Add an idle layer.
         for i in range(0,self.number_of_lines):
             self.line_items[i].insert(j,_Label(IDENT,self.line_labels[i]))
             
-        # Put the gate in
-        for i in gate.qubits:
-            self.line_items[i][j] = gate
+        # Put the gate label in
+        for i in gatelbl.qubits:
+            self.line_items[i][j] = gatelbl
 
         self._tup_dirty = True
 
@@ -268,14 +307,17 @@ class Circuit(_gstr.GateString):
         
         Parameters
         ----------
-        circuit_layer : Gate
-            A list of gate objects, to insert as a circuit layer.
+        circuit_layer : list
+            A list of Label objects, to insert as a circuit layer.
             
         j : int
-            The depth at which to insert the circuit layer.
-            
+            The layer index (depth) at which to insert the circuit layer.
+
+        Returns
+        -------
+        None
         """
-        check_valid_circuit_layer(circuit_layer,self.number_of_lines)
+        #OLD check_valid_circuit_layer(circuit_layer,self.number_of_lines)
         
         # Add an idle layer.
         for i in range(0,self.number_of_lines):
@@ -283,11 +325,11 @@ class Circuit(_gstr.GateString):
             
         # Put the gates in.
         for i,line_label in enumerate(self.line_labels):
-            for gate in circuit_layer:
-                gate_qubits = gate.qubits if (gate.qubits is not None) \
+            for gatelbl in circuit_layer:
+                gate_qubits = gatelbl.qubits if (gatelbl.qubits is not None) \
                               else self.line_labels
                 if line_label in gate_qubits:
-                    self.line_items[i][j] = gate
+                    self.line_items[i][j] = gatelbl
                     
         self._tup_dirty = True
                     
@@ -301,8 +343,11 @@ class Circuit(_gstr.GateString):
             The circuit to be inserted.
             
         j : int
-            The depth at which to insert the circuit layer.
+            The layer index (depth) at which to insert the circuit.
             
+        Returns
+        -------
+        None
         """        
         assert(self.number_of_lines == circuit.number_of_lines), "The circuits must act on the same number of qubits!"
         
@@ -320,6 +365,9 @@ class Circuit(_gstr.GateString):
         circuit : A Circuit object
             The circuit to be appended.
  
+        Returns
+        -------
+        None
         """        
         assert(self.number_of_lines == circuit.number_of_lines), "The circuits must act on the same number of qubits!"
         
@@ -336,6 +384,9 @@ class Circuit(_gstr.GateString):
         circuit : A Circuit object
             The circuit to be prefixed.
  
+        Returns
+        -------
+        None
         """           
         assert(self.number_of_lines == circuit.number_of_lines), "The circuits must act on the same number of qubits!"
         
@@ -359,8 +410,11 @@ class Circuit(_gstr.GateString):
             The qubit on which the gate is to be replaced
             
         j : int
-            The depth at which the gate is to be replaced.
+            The layer index (depth) of the gate to be replaced.
  
+        Returns
+        -------
+        None
         """
         n = self.line_items[q][j].number_of_qubits 
         assert(n == 1 or n == 2), "Only circuits with only 1 and 2 qubit gates supported!" 
@@ -370,7 +424,6 @@ class Circuit(_gstr.GateString):
             self.line_items[q][j] = _Label(IDENT,self.line_labels[q])
             
         else:
-           
             q1 = self.line_items[q][j].qubits[0]
             q2 = self.line_items[q][j].qubits[1]
             self.line_items[q1][j] = _Label(IDENT,self.line_labels[int(q1)])
@@ -393,10 +446,13 @@ class Circuit(_gstr.GateString):
             A list of Gate objects, defining a valid layer.
             
         j : int
-            The position of the layer to be replaced.
+            The index (depth) of the layer to be replaced.
  
+        Returns
+        -------
+        None
         """
-        check_valid_circuit_layer(circuit_layer,self.number_of_lines)
+        #OLD check_valid_circuit_layer(circuit_layer,self.number_of_lines)
         
         # Replace all gates with idles, in the layer to be replaced.
         for q in range(0,self.number_of_lines):
@@ -420,8 +476,11 @@ class Circuit(_gstr.GateString):
             The circuit to be inserted in place of the layer.
   
         j : int
-            The depth at which the layer is to be replaced.
+            The index (depth) of the layer to be replaced.
  
+        Returns
+        -------
+        None
         """
         depth = circuit.depth()
         
@@ -437,8 +496,26 @@ class Circuit(_gstr.GateString):
             
     def replace_gatename(self,old_gatename,new_gatename):
         """
-        Changes the name of a gate. E.g., can change all instances
-        of 'I' to 'Gi'.
+        Changes the *name* of a gate throughout this Circuit.
+
+        Note that the "name" is only a part of the "label" identifying each
+        gate, and doesn't include the lines (qubits) a gate acts upon.  For
+        example, the "Gx:0" and "Gx:1" labels both have the same name but 
+        act on different qubits.
+
+        Another possible use example is the ability to change all of the
+        default idle gates (`'I'`), which are added as "padding" during
+        circuit construction methods, to something else like `'Gi'`.
+
+        Parameters
+        ----------
+        old_gatename, new_gatename : string
+            The gate name to find and the gate name to replace the found
+            name with.
+
+        Returns
+        -------
+        None
         """
         depth = self.depth()
         for q in range(self.number_of_lines):
@@ -472,7 +549,9 @@ class Circuit(_gstr.GateString):
             gates. E.g., one key-value pair might be 'H','H' : 'I', to
             signify that two Hadamards compose to an idle gate.
             
- 
+        Returns
+        -------
+        None 
         """        
         in_compilation = compilation # _copy.deepcopy(compilation)
         
@@ -502,8 +581,11 @@ class Circuit(_gstr.GateString):
         Parameters
         ----------
         j : int
-            The depth at which the layer is to be deleted.
+            The index (depth) of the layer to be deleted.
  
+        Returns
+        -------
+        None
         """
         for q in range(0,self.number_of_lines):
             del self.line_items[q][j]
@@ -514,6 +596,9 @@ class Circuit(_gstr.GateString):
         """
         Returns the layer at depth j.
 
+        Returns
+        -------
+        None
         """       
         assert(j >= 0 and j < self.depth()), "Circuit layer label invalid! Circuit is only of depth {}".format(self.depth())
         
@@ -527,6 +612,9 @@ class Circuit(_gstr.GateString):
         """
         Reverse the order of the circuit.
 
+        Returns
+        -------
+        None
         """         
         for q in range(0,self.number_of_lines):
             self.line_items[q].reverse()
@@ -535,18 +623,25 @@ class Circuit(_gstr.GateString):
         
     def depth(self):
         """
-        Returns the circuit depth.
+        The circuit depth.
         
+        Returns
+        -------
+        int
         """        
         return len(self.line_items[0])
     
     def size(self):
         """
-        Returns the circuit size, whereby a gate defined as acting
-        on n-qubits of size n, with the exception of the idle gate
-        which is of size 0. Hence, the circuit size is circuit
+        Computes the circuit size, whereby a gate defined as acting on
+        n-qubits of size n, with the exception of the special `I` idle 
+        gate which is of size 0. Hence, the circuit size is circuit
         depth X number of qubits - number of idle gates in the
         circuit.
+        
+        Returns
+        -------
+        int        
         """
         size = 0
         for q in range(0,self.number_of_lines):
@@ -557,8 +652,11 @@ class Circuit(_gstr.GateString):
     
     def twoqubit_gatecount(self):
         """
-        Returns the number of two-qubit gates in the circuit
+        The number of two-qubit gates in the circuit.
         
+        Returns
+        -------
+        int
         """           
         count = 0
         for q in range(0,self.number_of_lines):
@@ -569,8 +667,7 @@ class Circuit(_gstr.GateString):
 
     def __str__(self):
         """
-        To do: replace this with a __str__ method.
-        
+        A text rendering of the circuit.
         """
         s = ''
         for i in range(0,self.number_of_lines):
@@ -593,7 +690,13 @@ class Circuit(_gstr.GateString):
         return s
     
     def write_qcircuit_tex(self,filename):
-        
+        """
+        Renders this circuit as LaTeX (using Qcircuit).
+
+        Returns
+        -------
+        str
+        """
         n = self.number_of_lines
         d = self.depth()
         
@@ -649,13 +752,13 @@ class Circuit(_gstr.GateString):
         """
         Compresses the number of non-idle one-qubit gates in the circuit, 
         using the provided gate relations. 
+
+        TODO: more detail
         
         Parameters
         ----------
         gate_relations : dict
-            Gate relations 
-            
-        To do: better docstring.
+            Gate relations            
         
         Returns
         -------
@@ -706,8 +809,7 @@ class Circuit(_gstr.GateString):
     
     def shift_1q_gates_forward(self):
         """
-        To do: docstring
-        
+        TODO: docstring
         """               
         flag = False
         
@@ -735,8 +837,7 @@ class Circuit(_gstr.GateString):
     
     def shift_2q_gates_forward(self):
         """
-        To do: docstring
-        
+        TODO: docstring
         """                
         flag = False
         
@@ -770,8 +871,7 @@ class Circuit(_gstr.GateString):
     
     def delete_idle_layers(self):
         """
-        To do: docstring
-        
+        TODO: docstring
         """        
         flag = False
         
@@ -793,6 +893,9 @@ class Circuit(_gstr.GateString):
     
     
     def compress_depth(self,gate_relations_1q=None,max_iterations=10000,verbosity=1):
+        """
+        TODO: docstring
+        """        
     
         if verbosity > 0:
             print("--------------------------------------------------")
@@ -837,8 +940,20 @@ class Circuit(_gstr.GateString):
     
     def simulate(self,gateset): #,inputstate=None,store=True,returnall=False):        
         """
-        A wrap-around for the circuit simulators in simulators.py. I like
-        being able to do circuit.simulate()...!
+        Compute the outcome probabilities of this Circuit using `gateset` as a
+        model for the gates.
+
+        Parameters
+        ----------
+        gateset : GateSet
+            A description of the gate and SPAM operations corresponding to the
+            labels stored in this Circuit.
+
+        Returns
+        -------
+        probs : dictionary
+            A dictionary with keys equal to the possible outcomes and values
+            that are float probabilities.
         """
         return gateset.probs(self)
         #return _sim.simulate(self,model,inputstate=inputstate,store=store,returnall=returnall)
@@ -846,6 +961,13 @@ class Circuit(_gstr.GateString):
     def done_editing(self):
         """
         Make this Circuit read-only, so that it can be hashed (used as a
-        dictionary key).
+        dictionary key).  
+
+        This is done automatically when attempting to hash a Circuit for the
+        first time, so there's usually no need to call this function.
+
+        Returns
+        -------
+        None
         """
         self._static = True
