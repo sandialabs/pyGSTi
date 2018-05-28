@@ -182,7 +182,7 @@ class Polynomial(dict):
         if isinstance(x, Polynomial):
             return self.mult(x)
         else: # assume a scalar that can multiply values
-            return self.scale(x)
+            return self.scalar_mult(x)
 
     def __rmul__(self, x):
         return self.__mul__(x)
