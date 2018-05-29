@@ -12,7 +12,7 @@ def profile(filename=None, comm=MPI.COMM_WORLD):
       if filename is None:
         pr.print_stats()
       else:
-        filename_r = filename + ".{}".format(comm.rank)
+        filename_r = filename #+ ".{}".format(comm.rank)
         pr.dump_stats(filename_r)
 
       return result
