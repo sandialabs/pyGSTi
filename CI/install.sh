@@ -21,6 +21,9 @@ sudo apt-get install g++
 apt-get install libsuitesparse-dev
 cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so
 
+sudo apt remove cmake
+sudo apt-get install g++
+
 # Install the following version of CMAKE
 version=3.11
 build=1
