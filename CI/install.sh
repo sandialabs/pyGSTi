@@ -1,7 +1,6 @@
 #!/bin/bash
 # This script needs to be run as admin
 sudo apt-get update
-sudo apt-get install g++
 
 ##An example of how to search for a file in apt packages
 ## (useful for debugging TravisCI build errors)
@@ -21,9 +20,24 @@ sudo apt-get install g++
 apt-get install libsuitesparse-dev
 cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so
 
-sudo apt remove cmake
-sudo apt-get install g++
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+sudo apt-get update
+
+sudo update-alternatives --remove-all gcc
+sudo update-alternatives --remove-all g++
+sudo apt-get install gcc-4.8
+sudo apt-get install g++-4.8
+sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.8 20
+sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 20
+sudo update-alternatives --config gcc
+sudo update-alternatives --config g++
+sudo apt-get update
+sudo apt-get upgrade -y
+sudo apt-get dist-upgrade
+
 export CXX=g++
+
+sudo apt remove cmake
 
 # Install the following version of CMAKE
 version=3.11
