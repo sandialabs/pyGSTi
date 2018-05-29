@@ -1,5 +1,7 @@
 #!/bin/bash
 # This script needs to be run as admin
+sudo apt-get update
+sudo apt-get install g++
 
 ##An example of how to search for a file in apt packages
 ## (useful for debugging TravisCI build errors)
@@ -33,3 +35,4 @@ sudo make install
 cd ..
 rm -r temp
 cmake --version
+export CXX=g++
