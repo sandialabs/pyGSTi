@@ -23,6 +23,7 @@ cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so
 
 sudo apt remove cmake
 sudo apt-get install g++
+export CXX=g++
 
 # Install the following version of CMAKE
 version=3.11
@@ -38,4 +39,3 @@ sudo make install
 cd ..
 rm -r temp
 cmake --version
-export CXX=g++
