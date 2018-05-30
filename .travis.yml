@@ -29,9 +29,10 @@ before_install:
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
 
+# I'm attempting to remove this..?
+#- pip install --global-option=build_ext --global-option="-I/usr/include/suitesparse" cvxpy cvxopt
 install:
   - travis_retry travis_wait pip install -r requirements.txt
-  - pip install --global-option=build_ext --global-option="-I/usr/include/suitesparse" cvxpy cvxopt
   - pip install ipython mpi4py zmq coverage msgpack-python cython psutil >/dev/null
   - pip install -e . >/dev/null
   
