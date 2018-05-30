@@ -1,5 +1,4 @@
 ### Optional Requirements ###
-cvxpy
 mpi4py
 deap
 psutil
