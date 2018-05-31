@@ -194,7 +194,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
 
             elif sampleError == "multinomial":
                 countsArray = rndm.multinomial(nWeightedSamples,
-                        [ps[ol] for ol in labels], size=1) # well-ordered list of probs
+                        sorted([ps[ol] for ol in labels]), size=1) # well-ordered list of probs
                 for i,ol in enumerate(labels):
                     counts[ol] = countsArray[0,i]
 
