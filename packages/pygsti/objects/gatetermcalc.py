@@ -141,7 +141,33 @@ class GateTermCalc(GateCalc):
 
     def prs_as_polys(self, rholabel, elabels, gatestring, comm=None, memLimit=None):
         """
-        TODO: docstring - computes polynomials of the probabilities for multiple spam-tuples of `gatestring`
+        Computes polynomials of the probabilities for multiple spam-tuples of
+        `gatestring`, sharing the same state preparation (so with different
+        POVM effects).
+
+        Parameters
+        ----------
+        rho_label : Label
+            The state preparation label.
+        
+        elabels : list
+            A list of :class:`Label` objects giving the *compiled* effect labels.
+
+        gatestring : GateString or tuple
+            A tuple-like object of *compiled* gates (e.g. may include
+            instrument elements like 'Imyinst_0')
+        
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        memLimit : int, optional
+            A memory limit in bytes to impose on the computation.
+        
+        Returns
+        -------
+        list
+            A list of Polynomial objects.
         """
         #DEPRECATED REPS - just call replib version
         
@@ -409,11 +435,16 @@ class GateTermCalc(GateCalc):
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
         
-        TODO: docstring
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        memLimit : int, optional
+            A memory limit in bytes to impose on the computation.
         
         Returns
         -------
-        probability: float
+        Polynomial
         """
         return self.prs_as_polys(spamTuple[0], [spamTuple[1]], gatestring,
                                  comm, memLimit)[0]
@@ -462,7 +493,29 @@ class GateTermCalc(GateCalc):
         
 
     def pr(self, spamTuple, gatestring, clipTo, bScale):
-        """TOD: docstring
+        """
+        Compute probability of a single "outcome" (spam-tuple) for a single
+        gate string.
+
+        Parameters
+        ----------
+        spamTuple : (rho_label, compiled_effect_label)
+            Specifies the prep and POVM effect used to compute the probability.
+
+        gatestring : GateString or tuple
+            A tuple-like object of *compiled* gates (e.g. may include
+            instrument elements like 'Imyinst_0')
+
+        clipTo : 2-tuple
+          (min,max) to clip returned probability to if not None.
+          Only relevant when prMxToFill is not None.
+
+        bScale : bool, optional
+          Unused.  Present to match function signature of other calculators.
+
+        Returns
+        -------
+        probability: float
         """
         poly = self.pr_as_poly(spamTuple, gatestring, comm=None, memLimit=None)
         p = _np.real_if_close(poly.evaluate(self.paramvec))

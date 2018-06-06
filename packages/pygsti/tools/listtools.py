@@ -156,8 +156,23 @@ def find_replace_tuple_list(list_of_tuples,aliasDict):
 
 
 def sorted_partitions(n):
-    """ TODO: docstring
-    Iterator over all sorted (decreasing) partitions of integer n """
+    """
+    Iterate over all sorted (decreasing) partitions of integer `n`.
+
+    A partition of `n` here is defined as a list of one or more non-zero
+    integers which sum to `n`.  Sorted partitions (those iterated over here)
+    have their integers in decreasing order.
+
+    Parameters
+    ----------
+    n : int
+        The number to partition.
+
+    Returns
+    -------
+    iterator
+        Iterates over arrays of descending integers (sorted partitions).
+    """
 
     if n == 0: #special case
         yield _np.zeros(0,'i'); return
@@ -198,7 +213,23 @@ def sorted_partitions(n):
         k += 1
 
 def partitions(n):
-    """ TODO: docstring Interator over all partitions of integer n """
+    """
+    Iterate over all partitions of integer `n`.
+
+    A partition of `n` here is defined as a list of one or more non-zero
+    integers which sum to `n`.  Every partition is iterated over exacty 
+    once - there are no duplicates/repetitions.
+
+    Parameters
+    ----------
+    n : int
+        The number to partition.
+
+    Returns
+    -------
+    iterator
+        Iterates over arrays of integers (partitions).
+    """
     for p in sorted_partitions(n):
         previous = tuple()
         for pp in _itertools.permutations(p[::-1]): # flip p so it's in *ascending* order
@@ -209,7 +240,30 @@ def partitions(n):
 
 
 def partition_into(n, nbins):
-    """ Interator over all partitions of integer n into `nbins` bins """
+    """
+    Iterate over all partitions of integer `n` into `nbins` bins.
+
+    Here, unlike in :function:`partition`, a "partition" is allowed to contain
+    zeros.  For example, (4,1,0) is a valid partition of 5 using 3 bins.  This
+    function fixes the number of bins and iterates over all possible length-
+    `nbins` partitions while allowing zeros.  This is equivalent to iterating
+    over all usual partitions of length at most `nbins` and inserting zeros into
+    all possible places for partitions of length less than `nbins`.
+
+    Parameters
+    ----------
+    n : int
+        The number to partition.
+
+    nbins : int
+        The fixed number of bins, equal to the length of all the 
+        partitions that are iterated over.
+
+    Returns
+    -------
+    iterator
+        Iterates over arrays of integers (partitions).
+    """
     if n == 0:
         a = _np.zeros(nbins,'i')
         yield tuple(a)
@@ -237,12 +291,15 @@ def partition_into(n, nbins):
             a[i] = 0
 
     else:
-        for p in partition_into_slow(n, nbins):
+        for p in _partition_into_slow(n, nbins):
             yield p
 
                 
-def partition_into_slow(n, nbins):
-    """ Interator over all partitions of integer n into `nbins` bins """
+def _partition_into_slow(n, nbins):
+    """
+    Helper function for `partition_into` that performs the same task for
+    a general number `n`.
+    """
     for p in sorted_partitions(n):
         if len(p) > nbins: continue # don't include partitions of length > nbins
         previous = tuple()
@@ -256,9 +313,17 @@ def partition_into_slow(n, nbins):
 
 def incd_product(*args):
     """ 
-    Like itertools product but returns the first modified index (which was
+    Like `itertools.product` but returns the first modified index (which was
     incremented) along with the product tuple itself.
-    TODO: docstring
+
+    Parameters
+    ----------
+    *args : iterables
+        Any number of iterable things that we're taking the product of.
+
+    Returns
+    -------
+    iterator over tuples
     """
     lists = [list(a) for a in args] # so we can get new iterators to each argument
     iters = [iter(l) for l in lists]

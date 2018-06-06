@@ -17,15 +17,7 @@ import time as _time #DEBUG TIMERS
 
 class TermEvalTree(EvalTree):
     """
-    An Evaluation Tree.  Instances of this class specify how to
-      perform bulk GateSet operations.
-
-    EvalTree instances create and store the decomposition of a list
-      of gate strings into a sequence of 2-term products of smaller
-      strings.  Ideally, this sequence would prescribe the way to
-      obtain the entire list of gate strings, starting with just the
-      single gates, using the fewest number of multiplications, but
-      this optimality is not guaranteed.
+    An Evaluation Tree for term-based calcualtions.
     """
     def __init__(self, items=[]):
         """ Create a new, empty, evaluation tree. """
@@ -33,32 +25,31 @@ class TermEvalTree(EvalTree):
 
     def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1, maxCacheSize=None):
         """
-          TODO: docstring -- and other tree's initialize methods?
-          Initialize an evaluation tree using a set of gate strings.
-          This function must be called before using an EvalTree.
+        Initialize an evaluation tree using a set of complied gate strings.
+        This function must be called before using this EvalTree.
 
-          Parameters
-          ----------
-          gateLabels : list of strings
-              A list of all the single gate labels to
-              be stored at the beginning of the tree.  This
-              list must include all the gate labels contained
-              in the elements of gatestring_list.
+        Parameters
+        ----------
+        gateLabels : list of strings
+            A list of all the single gate labels to
+            be stored at the beginning of the tree.  This
+            list must include all the gate labels contained
+            in the elements of gatestring_list.
 
-          gatestring_list : list of (tuples or GateStrings)
-              A list of tuples of gate labels or GateString
-              objects, specifying the gate strings that
-              should be present in the evaluation tree.
+        gatestring_list : list of (tuples or GateStrings)
+            A list of tuples of gate labels or GateString
+            objects, specifying the gate strings that
+            should be present in the evaluation tree.
 
-          numSubTreeComms : int, optional
-              The number of processor groups (communicators)
-              to divide the subtrees of this EvalTree among
-              when calling `distribute`.  By default, the
-              communicator is not divided.
+        numSubTreeComms : int, optional
+            The number of processor groups (communicators)
+            to divide the subtrees of this EvalTree among
+            when calling `distribute`.  By default, the
+            communicator is not divided.
 
-          Returns
-          -------
-          None
+        Returns
+        -------
+        None
         """
         #tStart = _time.time() #DEBUG TIMER
         self.gateLabels = gateLabels
@@ -403,6 +394,37 @@ class TermEvalTree(EvalTree):
         return cpy
 
     def get_raw_polys(self, calc, rholabel, elabels, comm):
+        """
+        Compute the polynomials which evaluate to the probabilities this tree 
+        directs the computation for.  This routine constructs and caches a 
+        list of the polynomials for all the gate sequences sandwiched between
+        a state preparation and one or more POVM effects.
+
+        Parameters
+        ----------
+        calc : GateTermCalc
+            A calculator object used to actually construct the polynomials (the
+            evaluation tree just *directs* this computation and acts as a cache
+            - the actual computation of the polynomials involves forward
+            simulation, which is the purview of the calculator class).
+
+        rholabel : Label
+            The (compiled) state preparation label.
+
+        elabels : list
+            A list of (compiled) POVM effect labels.
+
+        comm : mpi4py.MPI.Comm
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        Returns
+        -------
+        list
+            A list of `len(elabels)` lists.  Each sub-list holds a
+            :class:`Polynomial` object for each (final) gate sequence of this
+            tree.
+        """
         #Check if everything is computed already
         if all([ ((rholabel,elabel) in self.raw_polys) for elabel in elabels]):
             return [self.raw_polys[(rholabel,elabel)] for elabel in elabels]
@@ -428,6 +450,35 @@ class TermEvalTree(EvalTree):
 
     
     def get_p_polys(self, calc, rholabel, elabels, comm):
+        """
+        Get the compact-form polynomials that evaluate to the probabilities
+        corresponding to all this tree's gate sequences sandwiched between
+        `rholabel` and each of the `elabels`.  The result is cached to speed
+        up subsequent calls.
+
+        Parameters
+        ----------
+        calc : GateTermCalc
+            A calculator object for computing the raw polynomials (if necessary)
+
+        rholabel : Label
+            The (compiled) state preparation label.
+
+        elabels : list
+            A list of (compiled) POVM effect labels.
+
+        comm : mpi4py.MPI.Comm
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        Returns
+        -------
+        list
+            A list of `len(elabels)` tuples.  Each tuple is a `(vtape,ctape)`
+            2-tuple containing the concatenated compact-form tapes of all N
+            polynomials for that (rholabel,elabel) pair, where N is the number
+            of gate strings in this tree.
+        """
         #Check if everything is computed already
         if all([ ((rholabel,elabel) in self.p_polys) for elabel in elabels]):
             return [self.p_polys[(rholabel,elabel)] for elabel in elabels]
@@ -447,6 +498,39 @@ class TermEvalTree(EvalTree):
 
 
     def get_dp_polys(self, calc, rholabel, elabels, wrtSlice, comm):
+        """
+        Similar to :method:`get_p_polys` except returns the compact-form
+        polynomials that evaluate to the Jacobian of the probabilities
+        with respect to the parameters given by `wrtSlice`.  The result is
+        cached to speed up subsequent calls.
+
+        Parameters
+        ----------
+        calc : GateTermCalc
+            A calculator object for computing the raw polynomials (if necessary)
+
+        rholabel : Label
+            The (compiled) state preparation label.
+
+        elabels : list
+            A list of (compiled) POVM effect labels.
+
+        wrtSlice : slice
+            The parameter slice to differentiate with respect to.
+
+        comm : mpi4py.MPI.Comm
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        Returns
+        -------
+        list
+            A list of `len(elabels)` tuples.  Each tuple is a `(vtape,ctape)`
+            2-tuple containing the concatenated compact-form tapes of all N*K
+            polynomials for that (rholabel,elabel) pair, where N is the number
+            of gate strings in this tree and K is the number of parameters 
+            we've differentiated with respect to (~`len(wrtSlice)`).
+        """
         slcTup = (wrtSlice.start,wrtSlice.stop,wrtSlice.step) \
                  if (wrtSlice is not None) else (None,None,None)
         slcInds = _slct.indices(wrtSlice if (wrtSlice is not None) else slice(0,calc.Np))
@@ -469,6 +553,39 @@ class TermEvalTree(EvalTree):
         return ret
 
     def get_hp_polys(self, calc, rholabel, elabels, wrtSlice1, wrtSlice2, comm):
+        """
+        Similar to :method:`get_p_polys` except returns the compact-form
+        polynomials that evaluate to the Hessian of the probabilities
+        with respect to the parameters given by `wrtSlice1` and `wrtSlice2`.
+        The result is cached to speed up subsequent calls.
+
+        Parameters
+        ----------
+        calc : GateTermCalc
+            A calculator object for computing the raw polynomials (if necessary)
+
+        rholabel : Label
+            The (compiled) state preparation label.
+
+        elabels : list
+            A list of (compiled) POVM effect labels.
+
+        wrtSlice1, wrtSlice2 : slice
+            The parameter slices to differentiate with respect to.
+
+        comm : mpi4py.MPI.Comm
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        Returns
+        -------
+        list
+            A list of `len(elabels)` tuples.  Each tuple is a `(vtape,ctape)`
+            2-tuple containing the concatenated compact-form tapes of all N*K1*K2
+            polynomials for that (rholabel,elabel) pair, where N is the number
+            of gate strings in this tree and K1,K2 are the number of parameters
+            we've differentiated with respect to.
+        """
         slcTup1 = (wrtSlice1.start,wrtSlice1.stop,wrtSlice1.step) \
                  if (wrtSlice1 is not None) else (None,None,None)
         slcTup2 = (wrtSlice2.start,wrtSlice2.stop,wrtSlice2.step) \

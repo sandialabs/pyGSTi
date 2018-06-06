@@ -20,7 +20,25 @@ except ImportError:
     from . import replib
 
 
-# TODO: docstring - for this entire module!
+#Notes regarding literature:
+# Hostens, Dehaene, De Moor "Stabilizer states and Clifford operations for systems of arbitrary dimensions, and modular arithmetic" (arXiv:quant-ph/0408190)
+#  - shows how to encode/manipulate cliffords and stabilizer states for qudits
+#  - this is *exactly* the representation that we use, and formulas in this paper are
+#     identical to the ones used in pyGSTi. (uses "11 = -iY" and mod4 phase vectors)
+# Jeroen Dehaene and Bart De Moor "The Clifford group, stabilizer states, and linear and quadratic operations over GF(2)" (arXiv:quant-ph/0304125v1)
+#  - shows how to encode/manipulate cliffords and stabilizer states for qubits in ptic
+#  - uses bit (mod2) not mod 4 phase vectors, unlike what we do now, but may be useful
+# Aaronson & Gottesman "Improved Simulation of Stabilizer Circuits" (arXiv:quant-ph/0406196)
+#  - explains and implements anti-stabilizer for faster ops, but no stabilizer frames.
+#  - explains how to get *magnitude* of inner product between two stabilizer states, but this is
+#     all you can do without frames.
+#  - uses "11 = Y" convention for Pauli encoding that is *different* than what we use here, so
+#     there are modifications because of that.    
+# Garcia & Markov & Cross "Efficient Inner-product Algorithm for Stabilizer States" (arXiv:1210.6646v3) 2013
+#  - gives good algorithm descriptions for stabilizer frames
+# Garcia & Markov "Simulation of Quantum Circuits via Stabilizer Frames" (arXiv:1712.03554) 2017
+#  - also useful for understanding stabilizer frames.
+
 class StabilizerFrame(object):
     """ 
     Encapsulates a stabilizer frame (linear combo of
@@ -34,6 +52,23 @@ class StabilizerFrame(object):
 
     @classmethod
     def from_zvals(cls, nqubits=None, zvals=None):
+        """
+        Create a StabilizerFrame for a computational basis state.
+        
+        Parameters
+        ----------
+        nqubits : int, optional
+            The number of qubits.  If None, inferred from the length of `zvals`.
+        
+        zvals : iterable, optional
+            An iterable over anything that can be cast as True/False
+            to indicate the 0/1 value of each qubit in the Z basis.
+            If None, the all-zeros state is created.
+        
+        Returns
+        -------
+        StabilizerFrame
+        """
         if nqubits is None and zvals is None:
             raise ValueError("Must specify one of `nqubits` or `zvals`")
 
@@ -50,6 +85,34 @@ class StabilizerFrame(object):
 
 
     def __init__(self, state_s, state_ps=None, amps=None):
+        """
+        Initialize a new StabilizerFrame object.
+
+        Parameters
+        ----------
+        state_s : numpy.ndarray
+            A 2n x 2n binary matrix, where n is the number of qubits. The
+            first n columns specify stabilizer elements and the latter n
+            colunns specify anti-stabilizer elements.  In each column, bits
+            (i,i+n) encode a Pauli on the i-th qubit: 00 = I, 10 = X, 01 = Z,
+            11 = -iY. (Note the -iY is different from some representations
+            in the literature which encode 11 = Y.)
+
+        state_ps : numpy.ndarray, optional
+            A mod-4 array of shape (k,2n) where n is the number of qubits
+            and k is the number of components in the stabilizer frame.  Each
+            row of `state_ps` is the  phase vector for the corresponding to 
+            to an amplitude in `amps`.  A phase vector encodes the overall phase
+            of each of the stabilizer and anti-stabilizer elements (the columns
+            of `state_s`) by specyfing the number of 'i' factors (0 to 3).  If
+            None, then no phase vectors are stored.
+
+        amps : numpy.ndarray, optional
+            The (complex) amplitudes for each stabilizer-state component of the
+            frame.  The length of this 1D array must equal 'k', the first
+            dimension of `state_ps`.  `amps` should be None when and only when 
+            `state_ps` is None, corresponding to the case of zero components.
+        """
         self.n = state_s.shape[0] // 2
         assert(state_s.shape == (2*self.n,2*self.n))
 
@@ -95,18 +158,49 @@ class StabilizerFrame(object):
                                  _np.ascontiguousarray(self.a,complex))
 
     def copy(self):
+        """
+        Copy this stabilizer frame.  Note that this also copies 
+        "view filters" setup via `push_view` calls.
+
+        Returns
+        -------
+        StabilizerFrame
+        """
         cpy = StabilizerFrame(self.s.copy(), [p.copy() for p in self.ps],
                               self.a.copy()) # NOT a view
         cpy.view_filters = self.view_filters[:]
         return cpy
     
     def push_view(self, qubit_filter):
-        """ Applies a filter to the action of `clifford_update`.
+        """ 
+        Applies a filter to the action of `clifford_update`.
+
+        After calling `push_view`, the stabilizer frame looks to some
+        extent as though it were only a frame on the subset of qubits
+        given by `qubit_fitler`.  In particular, calls to `clifford_update`
+        should specify clifford operations that act only on the filtered
+        qubits.  Furthermore, views can be nested.  For example, if on a frame
+        starting with 10 qubits (labeled 0 to 9) push_view([3,4,5,6]) and 
+        then push_view([0,2]) are called, the current "view" will be of the
+        original qubits 3 and 5.
+
+        This is useful for applying "embedded" gates (those acting on just
+        a subset of the state space).
+
+        Parameters
+        ----------
+        qubit_filter : list
+            A list of qubit indices to view, relative to the current view.
+
+        Returns
+        -------
+        None
         """
         self.view_filters.append(qubit_filter)
 
     def pop_view(self):
-        """ Pops the last applied filter to the action of `clifford_update`.
+        """ 
+        Removes the last-applied (via :method:`push_view`) view filter.
         """
         return self.view_filters.pop()
         
@@ -117,7 +211,7 @@ class StabilizerFrame(object):
         return self.n # == (self.s.shape[0] // 2)
     
     def _colsum(self,i,j):
-        """ Col_i = Col_j * Col_i TODO: docstring """
+        """ Col_i = Col_j * Col_i where '*' is group action"""
         n,s = self.n,self.s
         for p in self.ps:
             p[i] = (p[i] + p[j] + 2*float(_np.dot(s[:,i].T,_np.dot(self.u,s[:,j])))) % 4
@@ -128,7 +222,7 @@ class StabilizerFrame(object):
         return
 
     def _colswap(self,i,j):
-        """ Swaps Col_i & Col_j TODO: docstring """
+        """ Swaps Col_i & Col_j  """
         temp = self.s[:,i].copy()
         self.s[:,i] = self.s[:,j]
         self.s[:,j] = temp
@@ -138,7 +232,8 @@ class StabilizerFrame(object):
 
     def _rref(self):
         """ Update self.s and self.ps to be in reduced/canonical form
-            Based on arXiv: 1210.6646v3 "Efficient Inner-product Algorithm for Stabilizer States" """
+            Based on arXiv: 1210.6646v3 "Efficient Inner-product Algorithm for Stabilizer States"
+        """
         n = self.n
 
         #Pass1: form X-block (of *columns*)
@@ -172,11 +267,19 @@ class StabilizerFrame(object):
         return
 
     def _canonical_amplitudes(self, ip, target=None, qs_to_sample=None):
-        """ extracts one or more canonical amplitudes from the
-            ip-th stabilizer state: one if `target` is specified, 
-            otherwise a full set of values for the qubit indices in
-            `qs_to_sample` (which, if it's the empty tuple, means
-            that only one -- most convenient -- amplitude needs to be returned."""
+        """
+        Canonical amplitudes are the ones that we assign to the components of a
+        stabilizer state even though they're not actually specified by the
+        stabilizer group -- these serve as an arbitrary baseline so that we
+        can keep track of how amplitudes change by keeping track of amplitudes
+        *relative* to these fixed "canonical" amplitudes.
+
+        Extracts one or more canonical amplitudes from the
+        ip-th stabilizer state: one if `target` is specified, 
+        otherwise a full set of values for the qubit indices in
+        `qs_to_sample` (which, if it's the empty tuple, means
+        that only one -- most convenient -- amplitude needs to be returned.
+        """
         self._rref() # ensure we're in reduced row echelon form
         n = self.n
         amplitudes = _collections.OrderedDict()
@@ -293,8 +396,8 @@ class StabilizerFrame(object):
 
         # Stage2: move through X-block processing existing amplitudes
         # (or processing only to move toward a target state?)
-
         def apply_xgen(igen, pgen, zvals_to_acton, ampl):
+            """ Apply a given X-block generator """
             result = _np.array(zvals_to_acton,int); new_amp = -ampl if (pgen//2 == 1) else ampl
             for j in range(n): # for each element (literal) in generator
                 if self.s[j,igen] == 1: # X or Y
@@ -441,12 +544,30 @@ class StabilizerFrame(object):
             self.ps[i] = (self.ps[i] + vec1 + vec2) % 4
 
     def get_state_str(self):
-        """ Returns a string representing the full ip-th stabilizer state (w/global phase) """
+        """ 
+        Get a string representing the full ip-th stabilizer state (w/global phase)
+
+        Returns
+        -------
+        str
+        """
         return "\n".join([ "%s |%s>" % (str(amp),"".join(map(str,zvals)))
                            for zvals,amp in self.extract_all_amplitudes().items()])
 
     def extract_all_amplitudes(self):
-        """ Return a dictionary of the *full* amplitudes of each present computational basis state """
+        """ 
+        Get a dictionary of the *full* amplitudes of each present
+        computational basis state.
+
+        This may take a while for many-qubit states, as it requires 
+        getting 2^(num_qubits) amplitudes.
+
+        Returns
+        -------
+        dict
+            Keys are tuples of z-values specifying the different computational
+            basis states.  Values are the complex amplitudes.
+        """
         amps = _collections.OrderedDict()
         for ip in range(len(self.ps)):
             g_amp = self.a[ip] #global amplitude
@@ -459,7 +580,14 @@ class StabilizerFrame(object):
         return amps
 
     def to_statevec(self):
-        """ Return a dense length-2^nqubits state vector of amplitudes"""
+        """ 
+        Convert this stabilizer frame to dense length-2^(num_qubits) 
+        complex state vector of amplitudes.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         ret = _np.empty(2**self.n, complex)
         amps = self.extract_all_amplitudes()
         for k,zvals in enumerate(_itertools.product(*([[0,1]]*self.n))):
@@ -468,15 +596,54 @@ class StabilizerFrame(object):
 
     
     def extract_amplitude(self, zvals):
-        """ Return the *full* amplitude of a given computational basis state """
+        """ 
+        Get the *full* (not just "canonical") amplitude of a given
+        computational basis state.
+
+        Parameters
+        ----------
+        zvals : numpy.ndarray
+            An array of 0/1 elements specifying the desired basis state.
+
+        Returns
+        -------
+        complex
+        """
         ampl = 0
         for ip,a in enumerate(self.a):
             ampl += a * self._canonical_amplitude(ip, zvals)
         return ampl
 
     def clifford_update(self, smatrix, svector, Umx, qubit_filter=None):
-        """ Update this state by the action of a Clifford operation,
-            given in the usual symplectic representation. """
+        """ 
+        Update this stabilizer frame by the action of a Clifford operation,
+        given in the usual symplectic representation.
+
+        If there are any active views (from calling :method:`push_view`) and/or
+        if `qubit_filter` is not None, then `smatrix`, `svector`, and `Umx`
+        should be sized for just the number of qubits in the current view.
+        
+        Parameters
+        ----------
+        smatrix, svector : numpy.ndarray
+            Symplectic matrix and phase vector arrays of shape (2n,2n) and (2n,)
+            respectively, where n is the number of qubits (in the current view
+            if applicable).
+
+        Umx : numpy.ndarray
+            The dense unitary representation of the Clifford action, which is 
+            needed in order to track the global phase of the frame (state).
+            This is a complex matrix of shape (2^n,2^n), where n is the number of
+            qubits (in the current view if applicable).
+
+        qubit_filter : list, optional
+            An additional view filter to apply just for this function call (i.e.
+            it is not stored on a stack as it is for :method:`push_view`.
+
+        Returns
+        -------
+        None
+        """
         vs = (_np.array([1,0],complex), _np.array([0,1],complex)) # (v0,v1)
 
         debug = False
@@ -539,11 +706,33 @@ class StabilizerFrame(object):
                     
 
     def measurement_probability(self, zvals, qubit_filter=None, return_state=False, check=True):
-        # TODO: change default check=False !!!
-        """ TODO: docstring - note that state_sp_tuple is modified and possibly returned
-        zvals = measurement outcomes
-        allows a subset of qubits to be measured -- len(zvals) == len(qubit_filter)
-        if qubit_filter is None, then assume *all* qubits measured and len(zvals) == nqubits
+        # TODO docstring: change default check=False !!!
+        """
+        Extract the probability of obtaining a given
+        computation-basis-measurement outcome.
+
+        Parameters
+        ----------
+        zvals : numpy.ndarray
+            An array of 0/1 elements specifying the computational basis outcomes.
+
+        qubit_filter : list, optional
+            A list specifying a subset of the qubits to measure. `len(zvals)`
+            should always equal `len(qubit_filter)`.  If None, then all qubits
+            are measured.
+            **Currently unsupported.**
+
+        return_state : bool, optional
+            Whether the post-measurement state (frame) should be returned.
+            **Currently unsupported.**
+
+        check : bool, optional
+            Whether to perform internal self-consistency checks (for debugging,
+            makes function run more slowly).
+
+        Returns
+        -------
+        float
         """
 
         if qubit_filter is not None or return_state != False:

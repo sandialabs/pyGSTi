@@ -214,7 +214,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
 
     assert(parameterization in ("H+S","H+S terms","H+S clifford terms"))
     if sim_type == "auto":
-        if parameterization == "H+S clifford terms": sim_type = "termorder:1"
+        if parameterization in ("H+S terms", "H+S clifford terms"): sim_type = "termorder:1"
         else: sim_type = "map" if nQubits > 2 else "matrix"
 
     assert(sim_type in ("matrix","map") or sim_type.startswith("termorder"))

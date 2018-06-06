@@ -56,26 +56,40 @@ class GateSet(object):
 
     def __init__(self, default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 povm_prefix="M", instrument_prefix="I", sim_type="matrix"):
+                 povm_prefix="M", instrument_prefix="I", sim_type="auto"):
         """
-        Initialize a gate set. TODO: docstring -- at least add sim_type!
+        Initialize a gate set.
 
         Parameters
         ----------
-        default_param : {"full", "TP", "static", "clifford"}, optional
+        default_param : {"full", "TP", "CPTP", etc.}, optional
             Specifies the default gate and SPAM vector parameterization type.
-            "full" : by default gates and vectors are fully parameterized.
-            "TP" : by default the first row of gates and the first element of
-            vectors is not parameterized and fixed so gate set is trace-
-            preserving.
-            "static" : by default gates and vectors are not parameterized.
-            "clifford" : by default gates are stored as Clifford symplectics.
+            Can be any value allowed by :method:`set_all_parameterizations`,
+            which also gives a description of each parameterization type.
 
         prep_prefix, effect_prefix, gate_prefix,
         povm_prefix, instrument_prefix : string, optional
             Key prefixes designating state preparations, POVM effects,
             gates, POVM, and instruments respectively.  These prefixes allow
             the GateSet to determine what type of object a key corresponds to.
+
+        sim_type : {"auto", "matrix", "map", "termorder:<X>"}
+            The type of gate sequence / circuit simulation used to compute any
+            requested probabilities, e.g. from :method:`probs` or 
+            :method:`bulk_probs`.  The default value of `"auto"` automatically
+            selects the simulation type, and is usually what you want. Allowed
+            values are:
+        
+            - "matrix" : gate_matrix-gate_matrix products are computed and
+              cached to get composite gates which can then quickly simulate
+              a circuit for any preparation and outcome.  High memory demand;
+              best for a small number of (1 or 2) qubits.
+            - "map" : gate_matrix-state_vector products are repeatedly computed
+              to simulate circuits.  Slower for a small number of qubits, but
+              faster and more memory efficient for higher numbers of qubits (3+).
+            - "termorder:<X>" : Use Taylor expansions of gates in error rates
+              to compute probabilities out to some maximum order <X> (an
+              integer) in these rates.
         """
         assert(default_param in ('full','TP','CPTP','H+S','S','static',
                                          'H+S terms','clifford','H+S clifford terms'))
@@ -105,7 +119,13 @@ class GateSet(object):
         self.gates = _ld.OrderedMemberDict(self, default_param, gate_prefix, "gate")
         self.instruments = _ld.OrderedMemberDict(self, default_param, instrument_prefix, "instrument")
 
-        self.set_simtype(sim_type)
+        if sim_type != "auto":
+            self.set_simtype(sim_type)
+        else:
+            #defer setting sim_type until _dim is set (via _check_dim in labeldicts.py)
+            self._calcClass = None
+            self._sim_type = sim_type
+            self._sim_args = []
         
         self._default_gauge_group = None
         self._paramvec = _np.zeros(0, 'd')
@@ -115,6 +135,15 @@ class GateSet(object):
 
     def set_simtype(self, sim_type):
         #Calculator selection based on simulation type
+        
+        if sim_type == "auto":
+            default_param = self.gates.default_param # assume the same for other dicts
+            if default_param in ("H+S terms","H+S clifford terms"):
+                sim_type = "termorder:1"
+            else:
+                d = self._dim if (self._dim is not None) else 0
+                sim_type = "matrix" if self.dim <= 16 else "map"
+        
         simtype_and_args = sim_type.split(":")
         sim_type = simtype_and_args[0]
         if sim_type == "matrix":      c = _gatematrixcalc.GateMatrixCalc
@@ -128,7 +157,25 @@ class GateSet(object):
         
 
     def _embedGate(self, gateTargetLabels, gateVal):
-        """ TODO: docstring """
+        """ 
+        Called by OrderedMemberDict._auto_embed to create an embedded-gate
+        object that embeds `gateVal` into the sub-space of
+        `self.stateSpaceLabels` given by `gateTargetLabels`.
+
+        Parameters
+        ----------
+        gateTargetLabels : list
+            A list of `gateVal`'s target state space labels.
+
+        gateVal : Gate
+            The gate object to embed.  Note this should be a legitimate
+            Gate-derived object and not just a numpy array.
+
+        Returns
+        -------
+        Gate
+            A gate of the full gate set dimension.
+        """
         if self.dim is None:
             raise ValueError("Must set gateset dimension before adding auto-embedded gates.")
         if self.stateSpaceLabels is None:
@@ -452,7 +499,7 @@ class GateSet(object):
             - "static unitary" : no parameters; convert superops to unitaries
             - "H+S terms" : like H+S, but support "svterm" evolution type
             - "H+S clifford terms" : like H+S, but support "cterm" evo. type
-            - "clifford" : no parameters; convert unitaries to cliffords
+            - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
 
         extra : dict, optional
             For `"H+S terms"` type, this may specify a dictionary 

@@ -13,13 +13,38 @@ except ImportError:
     from . import replib
 
 
-
 class Polynomial(dict):
-    """ Encapsulates a polynomial """
+    """ 
+    Encapsulates a polynomial as a subclass of the standard Python dict.
+
+    Variables are represented by integer indices, e.g. "2" means "x_2".
+    Keys are tuples of variable indices and values are numerical 
+    coefficients (floating point or complex numbers).  To specify a variable
+    to some power, its index is repeated in the key-tuple.
+
+    E.g. x_0^2 + 3*x_1 + 4 is stored as {(0,0): 1.0, (1,): 3.0, (): 4.0}
+    """
 
     @classmethod
     def fromrep(cls, rep):
-        """ TODO docstring """
+        """
+        Creates a Polynomial from a "representation" (essentially a
+        lite-version) of a Polynomial.
+
+        Note: usually we only need to convert from full-featured Python objects
+        to the lighter-weight "representation" objects.  Polynomials are an
+        exception, since as the results of probability computations they need 
+        to be converted back from "representation-form" to "full-form".
+
+        Parameters
+        ----------
+        rep : PolyRep
+            A polynomial representation.
+
+        Returns
+        -------
+        Polynomial
+        """
         max_num_vars = rep.max_num_vars  # one of the few/only cases where a rep
         max_order = rep.max_order        # needs to expose some python properties
 
@@ -38,14 +63,44 @@ class Polynomial(dict):
 
     
     def __init__(self, coeffs=None):
-        """ TODO: docstring - coeffs is a dict of coefficients w/keys == tuples
-             of integer variable indices.  E.g. (1,1) means "variable1 squared"
+        """
+        Initializes a new Polynomial object (a subclass of dict).
+
+        Internally (as a dict) a Polynomial represents variables by integer
+        indices, e.g. "2" means "x_2".  Keys are tuples of variable indices and
+        values are numerical coefficients (floating point or complex numbers).
+        A variable to a power > 1 has its index repeated in the key-tuple.
+
+        E.g. x_0^2 + 3*x_1 + 4 is stored as `{(0,0): 1.0, (1,): 3.0, (): 4.0}`
+
+        Parameters
+        ----------
+        coeffs : dict
+            A dictionary of coefficients.  Keys are tuples of integers that 
+            specify the polynomial term the coefficient value multiplies
+            (see above). If None, the zero polynomial (no terms) is created.
         """
         super(Polynomial,self).__init__()
         if coeffs is not None:
             self.update(coeffs)
             
     def deriv(self, wrtParam):
+        """
+        Take the derivative of this Polynomial with respect to a single
+        variable/parameter.  The results is another Polynomial.
+
+        E.g. deriv(x_2^3 + 3*x_1, wrtParam=2) = 3x^2
+
+        Parameters
+        ----------
+        wrtParam : int
+            The variable index to differentiate with respect to. 
+            E.g. "4" means "differentiate w.r.t. x_4".
+
+        Returns
+        -------
+        Polynomial
+        """
         dcoeffs = {}
         for ivar, coeff in self.items():
             cnt = float(ivar.count(wrtParam))
@@ -56,18 +111,47 @@ class Polynomial(dict):
 
         return Polynomial(dcoeffs)
 
-    def get_max_order(self):
-        return max([len(k) for k in self.keys()])
+    def get_degree(self):
+        """
+        Return the largest sum-of-exponents for any term (monomial) within this
+        polynomial. E.g. for x_2^3 + x_1^2*x_0^2 has degree 4.
+        """
+        return 0 if len(self)==0 else max([len(k) for k in self.keys()])
 
     def evaluate(self, variable_values):
-        """ TODO: docstring -- and make this function smarter (Russian peasant) """
+        """ 
+        Evaluate this polynomial for a given set of variable values.
+
+        Parameters
+        ----------
+        variable_values : array-like
+            An object that can be indexed so that `variable_values[i]` gives the
+            numerical value for i-th variable (x_i).
+
+        Returns
+        -------
+        float or complex
+            Depending on the types of the coefficients and `variable_values`.
+        """
+        #FUTURE: make this function smarter (Russian peasant)
         ret = 0
         for ivar,coeff in self.items():
             ret += coeff * _np.product( [variable_values[i] for i in ivar] )
         return ret
 
     def compact(self):
-        """ TODO docstring Returns compact representation of (vtape, ctape) 1D nupy arrays """
+        """
+        Generate a compact form of this polynomial designed for fast evaluation.
+
+        The resulting "tapes" can be evaluated using 
+        :function:`bulk_eval_compact_polys`.
+
+        Returns
+        -------
+        vtape, ctape : numpy.ndarray
+            These two 1D arrays specify an efficient means for evaluating this
+            polynomial.
+        """
         iscomplex = any([ abs(_np.imag(x)) > 1e-12 for x in self.values() ])
         nTerms = len(self)
         nVarIndices = sum(map(len,self.keys()))
@@ -85,16 +169,48 @@ class Polynomial(dict):
         return vtape, ctape
 
     def copy(self):
+        """
+        Returns a copy of this polynomial.
+        """
         return Polynomial(self)
 
     def map_indices(self, mapfn):
-        """ TODO: docstring - mapfn should map old->new variable-index-tuples """
+        """
+        Performs a bulk find & replace on this polynomial's variable indices.
+
+        This is useful when the variable indices have external significance
+        (like being the indices of a gate's parameters) and one want to convert
+        to another set of indices (like a parent gate set's parameters).
+
+        Parameters
+        ----------
+        mapfn : function
+            A function that takes as input an "old" variable-index-tuple 
+            (a key of this Polynomial) and returns the updated "new"
+            variable-index-tuple.
+
+        Returns
+        -------
+        None
+        """
         new_items = { mapfn(k): v for k,v in self.items() }
         self.clear()
         self.update(new_items)
 
     def mult(self,x):
-        """ Does self * x where x is a polynomial """
+        """ 
+        Multiplies this polynomial by another polynomial `x`.
+
+        Parameters
+        ----------
+        x : Polynomial
+            The polynomial to multiply by.
+
+        Returns
+        -------
+        Polynomial
+             The polynomial representing self * x.
+        """
         newpoly = Polynomial()
         for k1,v1 in self.items():
             for k2,v2 in x.items():
@@ -104,11 +220,35 @@ class Polynomial(dict):
         return newpoly
 
     def scale(self, x):
+        """
+        Scale this polynomial by `x` (multiply all coefficients by `x`).
+
+        Parameters
+        ----------
+        x : float or complex
+            The value to scale by.
+
+        Returns
+        -------
+        None
+        """
         # assume a scalar that can multiply values
         for k in tuple(self.keys()): # I think the tuple() might speed things up (why?)
             self[k] *= x
 
     def scalar_mult(self, x):
+        """
+        Multiplies this polynomial by a scalar `x`.
+        
+        Parameters
+        ----------
+        x : float or complex
+            The value to multiply by.
+
+        Returns
+        -------
+        Polynomial
+        """
         newpoly = self.copy()
         newpoly.scale(x)
         return newpoly
@@ -123,11 +263,12 @@ class Polynomial(dict):
         termstrs = []
         sorted_keys = sorted(list(self.keys()))
         for k in sorted_keys:
-            varstr = ""; last_i = None; n=0
+            varstr = ""; last_i = None; n=1
             for i in sorted(k):
                 if i == last_i: n += 1
                 elif last_i is not None:
                     varstr += "x%d%s" % (last_i, ("^%d" % n) if n > 1 else "")
+                    n = 1
                 last_i = i
             if last_i is not None:
                 varstr += "x%d%s" % (last_i, ("^%d" % n) if n > 1 else "")
@@ -201,10 +342,31 @@ class Polynomial(dict):
         return self.copy()
 
     def torep(self, max_order=None, max_num_vars=None):
-        """ TODO: docstring """
+        """
+        Construct a representation of this polynomial.
+
+        "Representations" are lightweight versions of objects used to improve
+        the efficiency of intensely computational tasks.  Note that Polynomial
+        representations must have the same `max_order` and `max_num_vars` in
+        order to interact with each other (add, multiply, etc.).
+        
+        Parameters
+        ----------
+        max_order : int, optional
+            The maximum order (degree) terms are allowed to have.  If None,
+            then it is taken as the current degree of this polynomial.
+        
+        max_num_vars : int, optional
+            The maximum number of variables the represenatation is allowed to
+            have (x_0 to x_(`max_num_vars-1`)).  This sets the maximum allowed
+            variable index within the representation.
+
+        Returns
+        -------
+        PolyRep
+        """
         # Set max_order (determines based on coeffs if necessary)
-        default_max_order = 0 if len(self) == 0 else \
-                            max([ len(k) for k in self.keys()])
+        default_max_order = self.get_degree()
         if max_order is None:
             max_order = default_max_order
         else:
@@ -409,6 +571,31 @@ class Polynomial(dict):
 
 
 def bulk_eval_compact_polys(compact_poly_tapes, paramvec, dest_shape):
+    """
+    Evaluate many compact polynomial forms at a given set of variable values.
+
+    Parameters
+    ----------
+    compact_poly_tapes : tuple
+        A (vtape, ctape) 2-tuple specifying "variable" and "coefficient" 1D
+        numpy arrays to evaluate.  These "tapes" can be generate by
+        concatenating the tapes of individual polynomials returned by
+        :method:`Polynomial.compact`.
+
+    paramvec : array-like
+        An object that can be indexed so that `paramvec[i]` gives the
+        numerical value to substitute for i-th polynomial variable (x_i).
+
+    dest_shape : tuple
+        The shape of the final array of evaluated polynomials.  The resulting
+        1D array of evaluated polynomials is reshaped accordingly.
+    
+    Returns
+    -------
+    numpy.ndarray
+        An array of the same type as the coefficient tape, with shape given
+        by `dest_shape`.
+    """
     vtape, ctape = compact_poly_tapes
     result = _np.empty(dest_shape,ctape.dtype) # auto-determine type?
     res = result.flat # for 1D access

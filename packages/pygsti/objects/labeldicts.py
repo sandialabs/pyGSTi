@@ -126,6 +126,8 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         if self.parent is None: return
         if self.parent.dim is None:
             self.parent._dim = dim
+            if self.parent._sim_type == "auto":
+                self.parent.set_simtype("auto") # run deferred auto-simtype now that _dim is set
         elif self.parent.dim != dim:
             raise ValueError("Cannot add object with dimension " +
                              "%s to gateset of dimension %d"
@@ -343,8 +345,31 @@ class StateSpaceLabels(object):
         Parameters
         ----------
         labelList : str or int or iterable
+            Most generally, this can be a list of tuples, where each tuple
+            contains the state-space labels (which can be strings or integers)
+            for a single "tensor product block" formed by taking the tensor
+            product of the spaces asociated with the labels.  The full state
+            space is the direct sum of all the tensor product blocks.
+            E.g. `[('Q0','Q1'), ('Q2',)]`.
+            
+            If just an iterable of labels is given, e.g. `('Q0','Q1')`, it is
+            assumed to specify the first and only tensor product block.
 
-        TODO: docstring
+            If a single state space label is given, e.g. `'Q2'`, then it is
+            assumed to completely specify the first and only tensor product
+            block.
+
+        dims : int or iterable, optional
+            The dimension of each state space label as an integer, tuple of
+            integers, or list or tuples of integers to match the structure
+            of `labelList` (i.e., if `labelList=('Q0','Q1')` then `dims` should
+            be a tuple of 2 integers).  Values specify state-space dimensions: 2
+            for a qubit, 3 for a qutrit, etc.  If None, then the dimensions are
+            inferred, if possible, from the following naming rules:
+        
+            - if the label starts with 'L', dim=1 (a single Level)
+            - if the label starts with 'Q' OR is an int, dim=2 (a Qubit)
+            - if the label starts with 'T', dim=3 (a quTrit)
         """
 
         #Allow initialization via another StateSpaceLabels object
@@ -407,7 +432,19 @@ class StateSpaceLabels(object):
         self.dim = _Dim(tpb_dims) #Note: access tensor-prod-block dims via self.dim.blockDims
 
     def product_dim(self, labels):
-        """ TODO: docstring """
+        """
+        Computes the product of the state-space dimensions associated with each
+        label in `labels`.
+
+        Parameters
+        ----------
+        labels : list
+            A list of state space labels (strings or integers).
+
+        Returns
+        -------
+        int
+        """
         return int( _np.product([self.labeldims[l] for l in labels]) )
 
     def __str__(self):

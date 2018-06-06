@@ -21,33 +21,102 @@ from .qubitgraph import QubitGraph as _QubitGraph
 
 
 class CompilationError(Exception):
+    """ A compilation error, raised by :class:`CompilationLibrary` """
     pass
                 
 class CompilationLibrary(_collections.OrderedDict):
+    """
+    An collection of compilations for gates. Essentially an ordered dictionary
+    whose keys are gate labels (:class:`Label` objects) and whose values are
+    gate sequences (:class:`Circuit` objects).  A `CompilationLibrary` holds a
+    :class:`GateSet` which specifies the "native" gates that all compilations
+    are made up of.  Currently, this gate set should only contain Clifford
+    gates, so that its `get_clifford_symplectic_reps` method gives
+    representations for all of its gates.  
+
+    Compilations can be either "local" or "non-local". A local compilation
+    ony uses gates that act on its target qubits.  All 1-qubit gates can be
+    local.  A non-local compilation uses qubits outside the set of target
+    qubits (e.g. a CNOT between two qubits between which there is no native
+    CNOT).  Currently, non-local compilations can only be constructed for
+    the CNOT gate.
+
+    To speed up the creation of local compilations, a `CompilationLibrary`
+    stores "template" compilations, which specify how to construct a
+    compilation for some k-qubit gate on qubits labeled 0 to k-1.  When creating
+    a compilation for a gate, a template is used if a suitable one can be found;
+    otherwise a new template is created and then used.
+
+    Compilation libraries are most often used within a :class:`ProcessorSpec`
+    object.
+    """
     
     def __init__(self, clifford_gateset, ctyp="absolute", items=[]):
         """
-        An object to store compilations for gates. Currently it is a 
-        bit hacky, but I think it is probably useful to have an object 
-        for this so that we can use it to develop a standard and elegant
-        method to represent compilations. Ultimately, this should probably
-        store circuits that map from gateset elements to gateset elements. 
-        But, I'm not sure how best to go about doing this.
+        Create a new CompilationLibrary.
+
+        Parameters
+        ----------
+        clifford_gateset : GateSet
+            The gate set of "native" Clifford gates which all compilations in
+            this library are composed from.
         
-        This object should perhaps live inside a gateset/devicespec. Because
-        essentially all functionality requires a gateset + some of them are handed
-        extra bits from the device spec (but those are bits that can be easily 
-        regenerated).
+        ctyp : {"absolute","paulieq"}
+            The "compilation type" for this library.  If `"absolute"`, then 
+            compilations must match the gate operation being compiled exactly.
+            If `"paulieq"`, then compilations only need to match the desired 
+            gate operation up to a Paui operation (sometimes useful within
+            Randomized Benchmarking).
         """
         self.gateset = clifford_gateset # gateset of (all Clifford) gates to compile requested gates into
-        self.ctype = ctyp
-        self.templates = _collections.defaultdict(list)
+        self.ctype = ctyp # "absolute" or "paulieq"
+        self.templates = _collections.defaultdict(list) # keys=gate names (strs); vals=tuples of Labels
         self.connectivity = {} # QubitGraphs for gates currently compiled in library (key=gate_name)                        
         super(CompilationLibrary,self).__init__(items)
 
 
     def add_local_compilation_of(self, gatelabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):
+        """
+        Adds a new local compilation of `gatelabel`.  
 
+        An existing template is used if one is available, otherwise a new
+        template is created using an iterative procedure. Raises
+        :class:`CompilationError` when no compilation can be found.
+
+        Parameters
+        ----------
+        gatelabel : Label
+            The label of the gate to compile.  If `gatelabel.name` is a
+            recognized standard Clifford name (e.g. 'H', 'P', 'X', 'CNOT')
+            then no further information is needed.  Otherwise, you must specify
+            either (or both) of `unitary` or `srep`.
+
+        unitary : numpy.ndarray, optional
+            The unitary action of the gate being compiled.  If, as is typical,
+            you're compiling using Clifford gates, then this unitary should
+            correspond to a Clifford operation.  If you specify `unitary`, 
+            you don't need to specify `srep` - it is computed automatically.
+
+        srep : tuple, optional
+            The `(smatrix, svector)` tuple giving the symplectic representation
+            of the gate being compiled.
+
+        max_iterations : int, optional
+            The maximum number of iterations for the iterative compilation 
+            algorithm.
+
+        force : bool, optional
+            If True, then a compilation is recomputed even if `gatelabel`
+            already exists in this `CompilationLibrary`.  Otherwise 
+            compilations are only computed when they are *not* present.
+            
+        verbosity : int, optional
+            An integer >= 0 specifying how much detail to send to stdout.
+
+        Returns
+        -------
+        None
+        """
         # Template compilations always use integer qubit labels: 0 to N
         #  where N is the number of qubits in the template's overall label
         #  (i.e. its key in self.templates)
@@ -117,7 +186,43 @@ class CompilationLibrary(_collections.OrderedDict):
     def add_clifford_compilation_template(self, gate_name, nqubits, unitary, srep,
                                           available_glabels, available_sreps,
                                           verbosity=1, max_iterations=10):
+        """
+        Adds a new compilation template for `gate_name`.  
 
+        Parameters
+        ----------
+        gate_name : str
+            The gate name to create a compilation for.  If it is
+            recognized standard Clifford name (e.g. 'H', 'P', 'X', 'CNOT')
+            then `unitary` and `srep` can be None. Otherwise, you must specify
+            either (or both) of `unitary` or `srep`.
+
+        nqubits : int
+            The number of qubits this gate acts upon.
+
+        unitary : numpy.ndarray
+            The unitary action of the gate being templated.  If, as is typical,
+            you're compiling using Clifford gates, then this unitary should
+            correspond to a Clifford operation.  If you specify `unitary`, 
+            you don't need to specify `srep` - it is computed automatically.
+
+        srep : tuple, optional
+            The `(smatrix, svector)` tuple giving the symplectic representation
+            of the gate being templated.
+
+        verbosity : int, optional
+            An integer >= 0 specifying how much detail to send to stdout.
+
+        max_iterations : int, optional
+            The maximum number of iterations for the iterative 
+            template compilation-finding algorithm.
+
+        Returns
+        -------
+        tuple
+            A tuple of the gate labels (essentially a gate string) specifying
+            the template compilation that was generated.
+        """
         #Get the total number of qubits in the 
         #WRONG? nQ = int(round(np.log2(self.gateset.dim))) # assumes *unitary* mode (OK?)
         
@@ -199,8 +304,6 @@ class CompilationLibrary(_collections.OrderedDict):
             # Look to see if we have found a compilation
             for seq,(s,p) in obtained_sreps.items():    
                 if _np.array_equal(smatrix,s):
-                    compilation = seq
-                    
                     if self.ctype == 'paulieq' or \
                        (self.ctype == 'absolute' and  _np.array_equal(svector,p)):
                         candidates.append(seq)
@@ -263,7 +366,19 @@ class CompilationLibrary(_collections.OrderedDict):
 
         
     def compute_connectivity_of(self, gate_name):
-        """ TODO: docstring """
+        """
+        Compuate the connectivity (the nearest-neighbor links) for `gate_name`
+        using the (compiled) gates available this library.  The result, a 
+        :class:`QubitGraph`, is stored in `self.connectivity[gate_name]`.
+
+        Parameters
+        ----------
+        gate_name : str
+        
+        Returns
+        -------
+        None
+        """
         nQ = int(round(_np.log2(self.gateset.dim))) # assumes *unitary* mode (OK?)
         qubit_labels = self.gateset.stateSpaceLabels.labels[0]
         d = { qlbl: i for i,qlbl in enumerate(qubit_labels) }
@@ -280,25 +395,36 @@ class CompilationLibrary(_collections.OrderedDict):
 
 
     def add_nonlocal_compilation_of(self, gatelabel, force=False, verbosity=1, check=True):
-        """ TODO: docstring
+        """
+        Add a potentially non-local compilation of `gatelabel` to this library.
 
-        This method generates a compilation for CNOT, up to arbitrary Pauli gates, between a
-        pair of unconnected qubits. This function converts this CNOT into a circuit of CNOT
-        gates between connected qubits, using a fixed circuit form. This compilation is not 
-        optimal in at least some circumstances.
+        This method currently only generates a compilation for a non-local CNOT,
+        up to arbitrary Pauli gates, between a pair of unconnected qubits. It
+        converts this CNOT into a circuit of CNOT gates between connected qubits,
+        using a fixed circuit form. This compilation is not optimal in at least
+        some circumstances.
         
         Parameters
         ----------
-        q1 : int
-            The control qubit label
-            
-        q2 : int
-            The target qubit label
-            
-        verbosity : int, optional
-            The amount of print-to-screen.        
-        """
+        gatelabel : Label
+            The label of the gate to compile.  Currently, `gatelabel.name` must
+            equal `"CNOT"`.
 
+        force : bool, optional
+            If True, then a compilation is recomputed even if `gatelabel`
+            already exists in this `CompilationLibrary`.  Otherwise 
+            compilations are only computed when they are *not* present.
+
+        verbosity : int, optional
+            An integer >= 0 specifying how much detail to send to stdout.
+
+        check : bool, optional
+            Whether to perform internal consistency checks.
+
+        Returns
+        -------
+        None
+        """
         if not force and gatelabel in self:
             return #don't re-compute unless we're told to
 

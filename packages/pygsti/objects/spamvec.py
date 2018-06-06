@@ -367,7 +367,33 @@ class SPAMVec(_gatesetmember.GateSetMember):
 
             
     def get_order_terms(self, order):
-        """ TODO: docstring """
+        """ 
+        Get the `order`-th order Taylor-expansion terms of this SPAM vector.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that it is a state
+        preparation followed by or POVM effect preceded by actions on a
+        density matrix `rho` of the form:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the 
+        SPAMVec's parameters, where the polynomial's variable indices index the
+        *global* parameters of the SPAMVec's parent (usually a :class:`GateSet`)
+        , not the SPAMVec's local parameter array (i.e. that returned from
+        `to_vector`).
+
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        Returns
+        -------
+        list
+            A list of :class:`RankOneTerm` objects.
+        """
         raise NotImplementedError("get_order_terms(...) not implemented for %s objects!" % self.__class__.__name__)
 
     
@@ -1687,7 +1713,7 @@ class TensorProdSPAMVec(SPAMVec):
 
     @property
     def outcomes(self): #DEPRECATED REPS! - can use torep() now...
-        """ TODO: docstring - to mimic StabilizerEffectVec """
+        """ To mimic StabilizerEffectVec DEPRECATED """
         assert(self._evotype == "stabilizer"), \
             "'outcomes' property is only valid for the 'stabilizer' evolution type"
         out = list(_itertools.chain(*[f.outcomes for f in self.factors]))
@@ -1696,7 +1722,33 @@ class TensorProdSPAMVec(SPAMVec):
         
 
     def get_order_terms(self, order):
-        """ TODO: docstring """
+        """ 
+        Get the `order`-th order Taylor-expansion terms of this SPAM vector.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that it is a state
+        preparation followed by or POVM effect preceded by actions on a
+        density matrix `rho` of the form:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the 
+        SPAMVec's parameters, where the polynomial's variable indices index the
+        *global* parameters of the SPAMVec's parent (usually a :class:`GateSet`)
+        , not the SPAMVec's local parameter array (i.e. that returned from
+        `to_vector`).
+
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        Returns
+        -------
+        list
+            A list of :class:`RankOneTerm` objects.
+        """
         if self._evotype == "svterm": tt = "dense"
         elif self._evotype == "cterm": tt = "clifford"
         else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
@@ -2029,9 +2081,67 @@ class LindbladParameterizedSPAMVec(SPAMVec):
                          ham_basis="pp", nonham_basis="pp", cptp=True,
                          nonham_diagonal_only=False, truncate=True, mxBasis="pp",
                          evotype="densitymx"):
-        """ TODO: docstring - creates a Lindblad-parameterized spamvec from a pure vec
-            and a basis which specifies how to decompose (project) the vec's
-            error generator.
+        """ 
+        Creates a Lindblad-parameterized spamvec from a state vector and a basis
+        which specifies how to decompose (project) the vector's error generator.
+
+        spamVec : SPAMVec
+            the SPAM vector to initialize from.  The error generator that
+            tranforms `pureVec` into `spamVec` is forms the parameterization
+            of the returned LindbladParameterizedSPAMVec.
+            
+        pureVec : numpy array or SPAMVec
+            An array or SPAMVec in the *full* density-matrix space (this
+            vector will have the same dimension as `spamVec` - 4 in the case
+            of a single qubit) which represents a pure-state preparation or
+            projection.  This is used as the "base" preparation/projection
+            when computing the error generator that will be parameterized.
+            Note that this argument must be specified, as there is no natural
+            default value (like the identity in the case of gates).
+
+        typ : {"prep","effect"}
+            Whether this is a state preparation or POVM effect vector.
+
+        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Hamiltonian-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Stochastic-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        cptp : bool, optional
+            Whether or not the new gate should be constrained to CPTP.
+            (if True, see behavior or `truncate`).
+
+        nonham_diagonal_only : boolean, optional
+            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
+            included in the parameterization.
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to preserve CPTP (when necessary).  If False, then an 
+            error is thrown when `cptp == True` and when Lindblad projections
+            result in a non-positive-definite matrix of non-Hamiltonian term
+            coefficients.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        evotype : {"densitymx","svterm","cterm"}
+            The evolution type of the spamvec being constructed.  `"densitymx"` is
+            usual Lioville density-matrix-vector propagation via matrix-vector
+            products.  `"svterm"` denotes state-vector term-based evolution
+            (spamvec is obtained by evaluating the rank-1 terms up to
+            some order).  `"cterm"` is similar but stabilizer states.
+
+        Returns
+        -------
+        LindbladParameterizedSPAMVec
         """
         #Compute a (errgen, pureVec) pair from the given
         # (spamVec, pureVec) pair.
@@ -2078,7 +2188,69 @@ class LindbladParameterizedSPAMVec(SPAMVec):
     def from_error_generator(cls, pureVec, errgen, typ, ham_basis="pp", nonham_basis="pp", cptp=True,
                              nonham_diagonal_only=False, truncate=True, mxBasis="pp", evotype="densitymx"):
         """
-        TODO: docstring (similar to other Lindblad gates above)
+        Create a Lindblad-parameterized spamvec from an error generator and a
+        basis which specifies how to decompose (project) the error generator.
+
+        Parameters
+        ----------
+        pureVec : numpy array or SPAMVec
+            An array or SPAMVec in the *full* density-matrix space (this
+            vector will have dimension 4 in the case of a single qubit) which
+            represents a pure-state preparation or projection.  This is used as
+            the "base" preparation or projection that is followed or preceded
+            by, respectively, the action of `errgen`.
+            
+        errgen : numpy array or SciPy sparse matrix
+            a square 2D array that gives the full error generator `L` such 
+            that the spamvec is `exp(L)*pureVec` in the case of state
+            preparations and `pureVec*exp(L)` in the case of POVM effects. The
+            projections of this quantity onto the `ham_basis` and `nonham_basis`
+            are closely related to the parameters of the spamvec (they may not
+            be exactly equal if, e.g `cptp=True`).
+
+        typ : {"prep","effect"}
+            Whether this is a state preparation or POVM effect vector.
+
+        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Hamiltonian-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Stochastic-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        cptp : bool, optional
+            Whether or not the new gate should be constrained to CPTP.
+            (if True, see behavior or `truncate`).
+
+        nonham_diagonal_only : boolean, optional
+            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
+            included in the parameterization.
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to preserve CPTP (when necessary).  If False, then an 
+            error is thrown when `cptp == True` and when Lindblad projections
+            result in a non-positive-definite matrix of non-Hamiltonian term
+            coefficients.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        evotype : {"densitymx","svterm","cterm"}
+            The evolution type of the spamvec being constructed.  `"densitymx"` is
+            usual Lioville density-matrix-vector propagation via matrix-vector
+            products.  `"svterm"` denotes state-vector term-based evolution
+            (spamvec is obtained by evaluating the rank-1 terms up to
+            some order).  `"cterm"` is similar but stabilizer states.
+
+        Returns
+        -------
+        LindbladParameterizedGateMap                
         """
         from .gate import LindbladParameterizedGateMap as _LPGMap
         errmap = _LPGMap.from_error_generator(
@@ -2093,12 +2265,69 @@ class LindbladParameterizedSPAMVec(SPAMVec):
                             cptp=True, nonham_diagonal_only=False, truncate=True,
                             mxBasis="pp", evotype="densitymx"):
         """
-        TODO: docstring
-        Ltermdict keys are (termType, basisLabel(s)); values are floating point coeffs (error rates)
-        basisdict keys are string/int basis element "names"; values are numpy matrices or an "embedded matrix",
-                i.e. a *list* of (matrix, state_space_label) elements -- e.g. [(sigmaX,'Q1'), (sigmaY,'Q4')]
-         -- maybe let keys be tuples of (basisname, state_space_label) e.g. (('X','Q1'),('Y','Q4')) -- and maybe allow ('XY','Q1','Q4')
-                 format when can assume single-letter labels.
+        Create a Lindblad-parameterized spamvec with a given set of Lindblad terms.
+
+        Parameters
+        ----------
+        pureVec : numpy array or SPAMVec
+            An array or SPAMVec in the *full* density-matrix space (this
+            vector will have dimension 4 in the case of a single qubit) which
+            represents a pure-state preparation or projection.  This is used as
+            the "base" preparation or projection that is followed or preceded
+            by, respectively, the parameterized Lindblad-form error generator.
+
+        Ltermdict : dict
+            A dictionary specifying which Linblad terms are present in the 
+            parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` can be `"H"` (Hamiltonian) or `"S"`
+            (Stochastic).  Hamiltonian terms always have a single basis label 
+            (so key is a 2-tuple) whereas Stochastic tuples with 1 basis label
+            indicate a *diagonal* term, and are the only types of terms allowed
+            when `nonham_diagonal_only=True`.  Otherwise, Stochastic term tuples
+            can include 2 basis labels to specify "off-diagonal" non-Hamiltonian
+            Lindblad terms.  Basis labels can be strings or integers.  Values
+            are floating point coefficients (error rates).
+
+        typ : {"prep","effect"}
+            Whether this is a state preparation or POVM effect vector.
+
+        basisdict : dict, optional
+            A dictionary mapping the basis labels (strings or ints) used in the
+            keys of `Ltermdict` to basis matrices (numpy arrays or Scipy sparse
+            matrices).
+
+        cptp : bool, optional
+            Whether or not the new gate should be constrained to CPTP.
+            (if True, see behavior or `truncate`).
+
+        nonham_diagonal_only : boolean or "auto", optional
+            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
+            included in the parameterization.  The default "auto" determines
+            whether off-diagonal terms are allowed by whether any are given 
+            in `Ltermdict`.
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to preserve CPTP (when necessary).  If False, then an 
+            error is thrown when `cptp == True` and when Lindblad projections
+            result in a non-positive-definite matrix of non-Hamiltonian term
+            coefficients.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        evotype : {"densitymx","svterm","cterm"}
+            The evolution type of the spamvec being constructed.  `"densitymx"` is
+            usual Lioville density-matrix-vector propagation via matrix-vector
+            products.  `"svterm"` denotes state-vector term-based evolution
+            (spamvec is obtained by evaluating the rank-1 terms up to
+            some order).  `"cterm"` is similar but stabilizer states.
+
+        Returns
+        -------
+        LindbladParameterizedGateMap                
         """
         #Need a dimension for error map construction (basisdict could be completely empty)
         try: d2 = pureVec.dim
@@ -2115,7 +2344,28 @@ class LindbladParameterizedSPAMVec(SPAMVec):
     def __init__(self, pureVec, errormap, typ):
         """
         Initialize a LindbladParameterizedSPAMVec object.
-        TODO: docstring
+
+        Essentially a pure state preparation or projection that is followed
+        or preceded by, respectively, the action of LindbladParameterizedGate.
+
+        Parameters
+        ----------
+        pureVec : numpy array or SPAMVec
+            An array or SPAMVec in the *full* density-matrix space (this
+            vector will have dimension 4 in the case of a single qubit) which
+            represents a pure-state preparation or projection.  This is used as
+            the "base" preparation or projection that is followed or preceded
+            by, respectively, the parameterized Lindblad-form error generator.
+
+        errormap : LindbladParameterizedGateMap
+            The error generator action and parameterization, encapsulated in
+            a :class:`LindbladParameterizedGateMap` object.  (This argument is
+            *not* copied, to allow LindbladParameterizedSPAMVecs to share error
+            generator parameters with other gates and spam vectors.)
+
+        typ : {"prep","effect"}
+            Whether this is a state preparation or POVM effect vector.
+
         """
         evotype = errormap._evotype
         assert(evotype in ("densitymx","svterm","cterm")), \
@@ -2188,8 +2438,33 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
     
     def get_order_terms(self, order):
-        """ TODO: docstring """
-        
+        """ 
+        Get the `order`-th order Taylor-expansion terms of this SPAM vector.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that it is a state
+        preparation followed by or POVM effect preceded by actions on a
+        density matrix `rho` of the form:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the 
+        SPAMVec's parameters, where the polynomial's variable indices index the
+        *global* parameters of the SPAMVec's parent (usually a :class:`GateSet`)
+        , not the SPAMVec's local parameter array (i.e. that returned from
+        `to_vector`).
+
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        Returns
+        -------
+        list
+            A list of :class:`RankOneTerm` objects.
+        """
         if order not in self.terms:
             if self._evotype == "svterm": tt = "dense"
             elif self._evotype == "cterm": tt = "clifford"
@@ -2250,12 +2525,29 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
 class StabilizerSPAMVec(SPAMVec):
     """
-    TODO: docstring
+    A stabilizer state preparation represented internally using a compact
+    representation of its stabilizer group.
     """
 
     @classmethod
     def from_dense_purevec(cls, purevec):
-        """ TODO: docstring - purevec is a complex state-vector"""
+        """
+        Create a new StabilizerSPAMVec from a pure-state vector.
+
+        Currently, purevec must be a single computational basis state (it 
+        cannot be a superpostion of multiple of them).
+
+        Parameters
+        ----------
+        purevec : numpy.ndarray
+            A complex-valued state vector specifying a pure state in the
+            standard computational basis.  This vector has length 2^n for 
+            n qubits.
+
+        Returns
+        -------
+        StabilizerSPAMVec
+        """
         nqubits = int(round(_np.log2(len(purevec))))
         v = (_np.array([1,0],'d'), _np.array([0,1],'d')) # (v0,v1)
         for zvals in _itertools.product(*([(0,1)]*nqubits)):
@@ -2293,6 +2585,16 @@ class StabilizerSPAMVec(SPAMVec):
         return self.sframe # a more C-native type in the future?
 
     def torep(self, typ, outvec=None):
+        """
+        Return a "representation" object for this SPAMVec.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        SBStateRep
+        """
         # changes to_statevec/to_dmvec -> todense, and have
         return self.sframe.torep()
 
@@ -2401,7 +2703,7 @@ class StabilizerEffectVec(SPAMVec):
         
     @property
     def outcomes(self):
-        """ TODO: docstring """
+        """ The 0/1 outcomes identifying this effect within its StabilizerZPOVM """
         return self._outcomes
 
     def __str__(self):

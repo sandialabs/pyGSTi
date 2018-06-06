@@ -809,7 +809,7 @@ class Circuit(_gstr.GateString):
     
     def shift_1q_gates_forward(self):
         """
-        TODO: docstring
+        TODO: docstring (TIM)
         """               
         flag = False
         
@@ -837,7 +837,7 @@ class Circuit(_gstr.GateString):
     
     def shift_2q_gates_forward(self):
         """
-        TODO: docstring
+        TODO: docstring (TIM)
         """                
         flag = False
         
@@ -871,7 +871,7 @@ class Circuit(_gstr.GateString):
     
     def delete_idle_layers(self):
         """
-        TODO: docstring
+        TODO: docstring (TIM)
         """        
         flag = False
         
@@ -894,7 +894,7 @@ class Circuit(_gstr.GateString):
     
     def compress_depth(self,gate_relations_1q=None,max_iterations=10000,verbosity=1):
         """
-        TODO: docstring
+        TODO: docstring (TIM)
         """        
     
         if verbosity > 0:

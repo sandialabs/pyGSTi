@@ -11,10 +11,36 @@ import collections as _collections
 from scipy.sparse.csgraph import floyd_warshall as _fw
 
 class QubitGraph(object):
-    """ Graph data structure TODO: docstrings for whole module!"""
+    """
+    A directed or undirected graph data structure used to represent geometrical
+    layouts of qubits or qubit gates.
+
+    Qubits are nodes in the graph (and can be labeled), and edges represent the
+    ability to perform one or more types of gates between qubits (equivalent,
+    usually, to geometrical proximity).
+    """
 
     @classmethod
     def common_graph(cls, nQubits=0, geometry="line", directed=True):
+        """
+        Create a QubitGraph that is one of several standard types of graphs.
+
+        Parameters
+        ----------
+        nQubits : int, optional
+            The number of qubits (nodes in the graph).
+
+        geometry : {"line","ring","grid","torus"}
+            The type of graph.  What these correspond to
+            should be self-evident.
+
+        directed : bool, optional
+            Whether the graph is directed or undirected.
+
+        Returns
+        -------
+        QubitGraph
+        """
         edges = []
         if nQubits >= 2: 
             if geometry in ("line","ring"):
@@ -44,6 +70,31 @@ class QubitGraph(object):
         
     
     def __init__(self, qubit_labels, initial_connectivity=None, initial_edges=None, directed=True):
+        """
+        Initialize a new QubitGraph.
+
+        Can specify at most one of `initial_connectivity` and `initial_edges`.
+
+        Parameters
+        ----------
+        qubit_labels : list
+            A list of string or integer labels of the qubits.  The length of
+            this list equals the number of qubits (nodes) in the graph.
+
+        initial_connectivity : numpy.ndarray, optional
+            A (nqubits, nqubits) boolean array giving the initial connectivity
+            of the graph.  That is, if there's an edge from qubit `i` to `j`,
+            then `initial_connectivity[i,j]=True` (integer indices of qubit
+            labels are given by their position in `qubit_labels`).  When
+            `directed=False`, only the upper triangle is used.  
+
+        initial_edges : list
+            A list of `(qubit_label1, qubit_label2)` 2-tuples specifying which
+            edges are initially present.
+
+        directed : bool, optional
+            Whether the graph is directed or undirected.
+        """
         self.nqubits = len(qubit_labels)
         self.directed = directed
 
@@ -88,18 +139,44 @@ class QubitGraph(object):
 
     def get_node_names(self):
         """ 
-        Returns a tuple of node labels (correponding to integer indices where
-        appropriate, e.g. for :method:`shortest_path_distance_matrix`)
+        Returns a tuple of node labels (correponding to integer indices
+        where appropriate, e.g. for :method:`shortest_path_distance_matrix`)
+
+        Returns
+        -------
+        tuple
         """
         return tuple(self._nodeinds.keys())
         
     def add_edges(self, edges):
-        """ Add connections (list of tuple pairs) to graph """
+        """ 
+        Add edges (list of tuple pairs) to graph.
+
+        Parameters
+        ----------
+        edges : list
+            A list of `(qubit_label1, qubit_label2)` 2-tuples.
+
+        Returns
+        -------
+        None
+        """
         for node1, node2 in edges:
             self.add_edge(node1, node2)
 
     def add_edge(self, node1, node2):
-        """ Add connection between node1 and node2 """
+        """ 
+        Add an edge between the qubits labeled by `node1` and `node2`.
+
+        Parameters
+        ----------
+        node1,node2 : object
+            Qubit (node) labels - typically strings or integers.
+
+        Returns
+        -------
+        None
+        """
         i,j = self._nodeinds[node1], self._nodeinds[node2]
         assert(i != j), "Cannot add an edge from a node to itself!"
         if not self.directed and i > j: # undirected => only fill upper triangle (i < j)
@@ -108,6 +185,17 @@ class QubitGraph(object):
         self._dirty = True
         
     def edges(self):
+        """
+        Get a list of the edges in this graph as 2-tuples of node/qubit labels).
+        
+        When undirected, the index of the 2-tuple's first label will always be
+        less than its second.  The edges are sorted (by label *index*) in
+        ascending order.
+
+        Returns
+        -------
+        list
+        """
         ret = set()
         for ilbl,i in self._nodeinds.items():
             for jlbl,j in self._nodeinds.items():
@@ -117,9 +205,23 @@ class QubitGraph(object):
     
     def radius(self, base_nodes, max_hops):
         """ 
-        Returns a (sorted) array of node labels that can be reached
+        Get a (sorted) array of node labels that can be reached
         from traversing at most `max_hops` edges starting
         from a node (vertex) in base_nodes.
+
+        Parameters
+        ----------
+        base_nodes : iterable
+            A list of node/qubit labels giving the possible starting locations.
+
+        max_hops : int
+            The maximum number of hops (see above).
+
+        Returns
+        -------
+        list
+            A list of the node labels reachable from `base_nodes` in at most
+            `max_hops` edge traversals.
         """
         ret = set()
         assert(max_hops >= 0)
@@ -137,50 +239,123 @@ class QubitGraph(object):
         return sorted(list(ret))
 
     def connected_combos(self, possible_nodes, size):
+        """
+        Computes the number of different connected subsets of `possible_nodes`
+        containing `size` nodes.
+
+        Parameters
+        ----------
+        possible_nodes : list
+            A list of node (qubit) labels.
+
+        size : int
+            The size of the connected subsets being sought (counted).
+
+        Returns
+        -------
+        int
+        """
         count = 0
         for selected_nodes in _itertools.combinations(possible_nodes, size):
             if self.are_glob_connected(selected_nodes): count += 1
         return count
 
     def _indices_connected(self,i,j):
+        """ Whether nodes *indexed* by i and j are directly connected """
         if self.directed or i <= j:
             return bool(self._connectivity[i,j])
         else: # graph is NOT directed and i > j, so check for j->i link
             return bool(self._connectivity[j,i])
 
     def is_connected(self, node1, node2):
-        """ Is node1 connected to node2 (does there exist a path between them) """
+        """ 
+        Is `node1` connected to `node2` (does there exist a path of any length
+        between them?)
+
+        Parameters
+        ----------
+        node1, node2 : object
+            The node (qubit) labels to check.
+        
+        Returns
+        -------
+        bool
+        """
         i,j = self._nodeinds[node1], self._nodeinds[node2]
         self._refresh_dists_and_predecessors()
         return self._predecessors[i,j] >= 0
         
     def is_directly_connected(self, node1, node2):
-        """ Is node1 directly connected to node2 """
+        """ 
+        Is `node1` *directly* connected to `node2` (does there exist an edge
+        between them?)
+
+        Parameters
+        ----------
+        node1, node2 : object
+            The node (qubit) labels to check.
+        
+        Returns
+        -------
+        bool
+        """
         i,j = self._nodeinds[node1], self._nodeinds[node2]
         return self._indices_connected(i,j)
 
     def are_glob_connected(self, nodes):
         """
-        Are all the nodes in `indices` connected to at least
-        one other node in `indices`?
+        Does there exist a path from every node in `nodes`
+        to every other node in `nodes`.  That is, do these
+        nodes form a connected set?
+
+        Parameters
+        ----------
+        nodes : list
+            A list of node (qubit) labels.
+        
+        Returns
+        -------
+        bool
         """
         if len(nodes) < 2: return True # 0 or 1 nodes are "connected"        
 
         for node in nodes: #check
             if node not in self._nodeinds: return False
 
-        glob = set()
-        def add_to_glob(node):
+        def add_to_glob(glob,node):
             glob.add(node)
             i = self._nodeinds[node]
             for jlbl,j in self._nodeinds.items():
                 if self._indices_connected(i,j) and jlbl not in glob:
-                    add_to_glob(jlbl)
-        
-        add_to_glob(nodes[0])
-        return bool(glob == set(nodes))
+                    add_to_glob(glob,jlbl)
+            
+        if not self.directed:
+            # then just check that we can get from nodes[0] to all the others:
+            glob = set(); add_to_glob(glob,nodes[0])
+            return bool(glob == set(nodes))
+        else:
+            # we need to check that, starting at *any* initial node, we can
+            # reach all the others:
+            for node in nodes:
+                glob = set(); add_to_glob(glob,node)
+                if not bool(glob == set(nodes)): return False
+            return True
+            
 
     def shortest_path(self, node1, node2):
+        """
+        Get the shortest path between two nodes (qubits).
+
+        Parameters
+        ----------
+        node1, node2 : object
+            Node (qubit) labels, usually integers or strings.
+        
+        Returns
+        -------
+        list
+            A list of the node labels to traverse.
+        """
         i,j = self._nodeinds[node1], self._nodeinds[node2]
         self._refresh_dists_and_predecessors()
         node_labels = tuple(self._nodeinds.keys()) # relies on fact that
@@ -203,29 +378,73 @@ class QubitGraph(object):
 
 
     def shortest_path_edges(self, node1, node2):
-        """ Like shortest_path, but returns a list of (nodeA,nodeB) tuples,
-            where the first tuple's nodeA == `node1` and the final tuple's
-            nodeB == `node2`.
+        """ 
+        Like :method:`shortest_path`, but returns a list of (nodeA,nodeB)
+        tuples, where the first tuple's nodeA == `node1` and the final tuple's
+        nodeB == `node2`.
+
+        Parameters
+        ----------
+        node1, node2 : object
+            Node (qubit) labels, usually integers or strings.
+        
+        Returns
+        -------
+        list
+            A list of the edges (2-tuples of node labels) to traverse.
         """
         path = self.shortest_path(node1,node2)
         return [ (path[i],path[i+1]) for i in range(len(path)-1)]
 
     def shortest_path_intersect(self, node1, node2, nodesToIntersect):
-        """ Returns whether the shortest path between `node1` and `node2`
-            contains any of the nodes in `nodesToIntersect`
+        """ 
+        Determine  whether the shortest path between `node1` and `node2`
+        contains any of the nodes in `nodesToIntersect`.
+
+        Parameters
+        ----------
+        node1, node2 : object
+            Node (qubit) labels, usually integers or strings.
+
+        nodesToIntersect : list
+            A list of node labels.
+        
+        Returns
+        -------
+        bool
+            True if the shortest path intersects any node in `nodeToIntersect`.
         """
         path_set = set(self.shortest_path(node1,node2))
         return len(path_set.intersection(nodesToIntersect)) > 0
     
     def shortest_path_distance(self, node1, node2):
+        """
+        Get the distance of the shortest path between `node1` and `node2`.
+
+        Parameters
+        ----------
+        node1, node2 : object
+            Node (qubit) labels, usually integers or strings.
+        
+        Returns
+        -------
+        int
+        """
         i,j = self._nodeinds[node1], self._nodeinds[node2]
         self._refresh_dists_and_predecessors()
         return self._distance_matrix[i,j]
 
     def shortest_path_distance_matrix(self):
         """ 
-        Returns a distance of shortest path distances, indexed by the
-        integer-index of each node label (as specified to __init__).
+        Returns a matrix of shortest path distances, indexed by the
+        integer-index of each node label (as specified to __init__).  The list
+        of index-ordered node labels is given by :method:`get_node_names`.
+
+        Returns
+        -------
+        numpy.ndarray
+            A boolean array of shape (n,n) where n is the number of nodes in
+            this graph.
         """
         i,j = self._nodeinds[node1], self._nodeinds[node2]
         self._refresh_dists_and_predecessors()

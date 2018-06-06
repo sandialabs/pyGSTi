@@ -484,7 +484,31 @@ class Gate(_gatesetmember.GateSetMember):
         return _np.dot(self.todense().conjugate().T, state)
 
     def get_order_terms(self, order):
-        """ TODO: docstring """
+        """ 
+        Get the `order`-th order Taylor-expansion terms of this gate.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the gate's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the gate's parent (usually a :class:`GateSet`), not the 
+        gate's local parameter array (i.e. that returned from `to_vector`).
+
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        Returns
+        -------
+        list
+            A list of :class:`RankOneTerm` objects.
+        """
         raise NotImplementedError("get_order_terms(...) not implemented for %s objects!" % self.__class__.__name__)
 
     def frobeniusdist2(self, otherGate, transform=None, inv_transform=None):
@@ -1874,15 +1898,78 @@ class EigenvalueParameterizedGate(GateMatrix):
     
 
 class LindbladParameterizedGateMap(Gate):
+    """
+    A gate parameterized by the coefficients of Lindblad-like terms, which are
+    exponentiated to give the gate action.
+    """
 
     @classmethod
     def from_gate_matrix(cls, gateMatrix, unitaryPostfactor=None,
                          ham_basis="pp", nonham_basis="pp", cptp=True,
                          nonham_diagonal_only=False, truncate=True, mxBasis="pp",
                          evotype="densitymx"):
-        """ TODO: docstring - creates a Lindblad-parameterized gate from a matrix
-            and a basis which specifies how to decompose (project) the gate's
-            error generator.
+        """
+        Creates a Lindblad-parameterized gate from a matrix and a basis which
+        specifies how to decompose (project) the gate's error generator.
+
+        gateMatrix : numpy array or SciPy sparse matrix
+            a square 2D array that gives the raw gate matrix, assumed to
+            be in the `mxBasis` basis, to parameterize.  The shape of this
+            array sets the dimension of the gate. If None, then it is assumed
+            equal to `unitaryPostfactor` (which cannot also be None). The
+            quantity `gateMatrix inv(unitaryPostfactor)` is parameterized via
+            projection onto the Lindblad terms.
+            
+        unitaryPostfactor : numpy array or SciPy sparse matrix, optional
+            a square 2D array of the same size of `gateMatrix` (if
+            not None).  This matrix specifies a part of the gate action 
+            to remove before parameterization via Lindblad projections.
+            Typically, this is a target (desired) gate operation such 
+            that only the erroneous part of the gate (i.e. the gate 
+            relative to the target), which should be close to the identity,
+            is parameterized.  If none, the identity is used by default.
+
+        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Hamiltonian-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Stochastic-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        cptp : bool, optional
+            Whether or not the new gate should be constrained to CPTP.
+            (if True, see behavior or `truncate`).
+
+        nonham_diagonal_only : boolean, optional
+            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
+            included in the parameterization.
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to preserve CPTP (when necessary).  If False, then an 
+            error is thrown when `cptp == True` and when Lindblad projections
+            result in a non-positive-definite matrix of non-Hamiltonian term
+            coefficients.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        evotype : {"densitymx","svterm","cterm"}
+            The evolution type of the gate being constructed.  `"densitymx"` is
+            usual Lioville density-matrix-vector propagation via matrix-vector
+            products.  `"svterm"` denotes state-vector term-based evolution
+            (action of gate is obtained by evaluating the rank-1 terms up to
+            some order).  `"cterm"` is similar but uses Clifford gate action
+            on stabilizer states.
+
+        Returns
+        -------
+        LindbladParameterizedGateMap        
         """
         
         #Compute a (errgen, unitaryPostfactor) pair from the given
@@ -1926,9 +2013,67 @@ class LindbladParameterizedGateMap(Gate):
                              cptp=True, nonham_diagonal_only=False,
                              truncate=True, mxBasis="pp", evotype="densitymx"):
         """
-        TODO: docstring - creates a Lindblad-parameterized gate from an error
-            generator and a basis which specifies how to decompose (project) the
-            error generator.
+        Create a Lindblad-parameterized gate from an error generator and a
+        basis which specifies how to decompose (project) the error generator.
+            
+        unitaryPostfactor : numpy array or SciPy sparse matrix or int
+            a square 2D array which specifies a part of the gate action 
+            to remove before parameterization via Lindblad projections.
+            While this is termed a "post-factor" because it occurs to the
+            right of the exponentiated Lindblad terms, this means it is applied
+            to a state *before* the Lindblad terms (which usually represent
+            gate errors).  Typically, this is a target (desired) gate operation.
+            If None, then the identity is assumed.
+
+        errgen : numpy array or SciPy sparse matrix
+            a square 2D array that gives the full error generator `L` such 
+            that the gate action is `exp(L)*unitaryPostFactor`.  The shape of
+            this array sets the dimension of the gate. The projections of this
+            quantity onto the `ham_basis` and `nonham_basis` are closely related
+            to the parameters of the gate (they may not be exactly equal if,
+            e.g `cptp=True`).
+
+        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Hamiltonian-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Stochastic-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        cptp : bool, optional
+            Whether or not the new gate should be constrained to CPTP.
+            (if True, see behavior or `truncate`).
+
+        nonham_diagonal_only : boolean, optional
+            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
+            included in the parameterization.
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to preserve CPTP (when necessary).  If False, then an 
+            error is thrown when `cptp == True` and when Lindblad projections
+            result in a non-positive-definite matrix of non-Hamiltonian term
+            coefficients.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        evotype : {"densitymx","svterm","cterm"}
+            The evolution type of the gate being constructed.  `"densitymx"` is
+            usual Lioville density-matrix-vector propagation via matrix-vector
+            products.  `"svterm"` denotes state-vector term-based evolution
+            (action of gate is obtained by evaluating the rank-1 terms up to
+            some order).  `"cterm"` is similar but uses Clifford gate action
+            on stabilizer states.
+
+        Returns
+        -------
+        LindbladParameterizedGateMap                
         """
 
         d2 = errgen.shape[0]
@@ -1983,14 +2128,83 @@ class LindbladParameterizedGateMap(Gate):
                  cptp=True, nonham_diagonal_only="auto",
                  truncate=True, mxBasis="pp", evotype="densitymx"):
         """
-        TODO: docstring
-        Ltermdict keys are (termType, basisLabel(s)); values are floating point coeffs (error rates)
-        basisdict keys are string/int basis element "names"; values are numpy matrices or an "embedded matrix",
-                i.e. a *list* of (matrix, state_space_label) elements -- e.g. [(sigmaX,'Q1'), (sigmaY,'Q4')]
-         -- maybe let keys be tuples of (basisname, state_space_label) e.g. (('X','Q1'),('Y','Q4')) -- and maybe allow ('XY','Q1','Q4')
-                 format when can assume single-letter labels.
+        Create a new LinbladParameterizedMap based on a set of Lindblad terms.
+
+        Note that if you want to construct a LinbladParameterizedMap from a
+        gate error generator or a gate matrix, you can use the 
+        :method:`from_error_generator` and :method:`from_gate_matrix` class
+        methods and save youself some time and effort.
+
+        Parameters
+        ----------
+        unitaryPostfactor : numpy array or SciPy sparse matrix or int
+            a square 2D array which specifies a part of the gate action 
+            to remove before parameterization via Lindblad projections.
+            While this is termed a "post-factor" because it occurs to the
+            right of the exponentiated Lindblad terms, this means it is applied
+            to a state *before* the Lindblad terms (which usually represent
+            gate errors).  Typically, this is a target (desired) gate operation.
+            This argument is needed at the very least to specify the dimension 
+            of the gate, and if this post-factor is just the identity you can
+            simply pass the integer dimension as `unitaryPostfactor` instead of
+            a matrix.
+
+        Ltermdict : dict
+            A dictionary specifying which Linblad terms are present in the gate
+            parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` can be `"H"` (Hamiltonian) or `"S"`
+            (Stochastic).  Hamiltonian terms always have a single basis label 
+            (so key is a 2-tuple) whereas Stochastic tuples with 1 basis label
+            indicate a *diagonal* term, and are the only types of terms allowed
+            when `nonham_diagonal_only=True`.  Otherwise, Stochastic term tuples
+            can include 2 basis labels to specify "off-diagonal" non-Hamiltonian
+            Lindblad terms.  Basis labels can be strings or integers.  Values
+            are floating point coefficients (error rates).
+
+        basisdict : dict, optional
+            A dictionary mapping the basis labels (strings or ints) used in the
+            keys of `Ltermdict` to basis matrices (numpy arrays or Scipy sparse
+            matrices).
+
+        cptp : bool, optional
+            Whether or not the new gate should be constrained to CPTP.
+            (if True, see behavior or `truncate`).
+
+        nonham_diagonal_only : boolean or "auto", optional
+            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
+            included in the parameterization.  The default "auto" determines
+            whether off-diagonal terms are allowed by whether any are given 
+            in `Ltermdict`.
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to preserve CPTP (when necessary).  If False, then an 
+            error is thrown when `cptp == True` and when Lindblad projections
+            result in a non-positive-definite matrix of non-Hamiltonian term
+            coefficients.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        evotype : {"densitymx","svterm","cterm"}
+            The evolution type of the gate being constructed.  `"densitymx"` is
+            usual Lioville density-matrix-vector propagation via matrix-vector
+            products.  `"svterm"` denotes state-vector term-based evolution
+            (action of gate is obtained by evaluating the rank-1 terms up to
+            some order).  `"cterm"` is similar but uses Clifford gate action
+            on stabilizer states.
         """
 
+        #FUTURE:
+        # - maybe allow basisdict values to specify an "embedded matrix" w/a tuple like
+        #  e.g. a *list* of (matrix, state_space_label) elements -- e.g. [(sigmaX,'Q1'), (sigmaY,'Q4')]
+        # - maybe let keys be tuples of (basisname, state_space_label) e.g. (('X','Q1'),('Y','Q4')) -- and
+        # maybe allow ('XY','Q1','Q4')? format when can assume single-letter labels.
+        # - could add standard basis dict items so labels like "X", "XY", etc. are understood?
+
+        
         # Extract superop dimension from 'unitaryPostfactor'
         # (which can just be an integer dimension)
         if isinstance(unitaryPostfactor,_numbers.Integral): 
@@ -2508,7 +2722,31 @@ class LindbladParameterizedGateMap(Gate):
 
         
     def get_order_terms(self, order):
-        """ TODO: docstring """
+        """ 
+        Get the `order`-th order Taylor-expansion terms of this gate.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the gate's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the gate's parent (usually a :class:`GateSet`), not the 
+        gate's local parameter array (i.e. that returned from `to_vector`).
+
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        Returns
+        -------
+        list
+            A list of :class:`RankOneTerm` objects.
+        """
 
         def _compose_poly_indices(terms):
             for term in terms:
@@ -2669,45 +2907,52 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                  cptp=True, nonham_diagonal_only="auto",
                  truncate=True, mxBasis="pp", evotype="densitymx"):
         """
-        TODO: fix this docstring
-        Initialize a LindbladParameterizedGate object.
+        Create a new LinbladParameterizedGate based on a set of Lindblad terms.
+
+        Note that if you want to construct a LinbladParameterizedGate from a
+        gate error generator or a gate matrix, you can use the 
+        :method:`from_error_generator` and :method:`from_gate_matrix` class
+        methods and save youself some time and effort.
 
         Parameters
         ----------
-        gateMatrix : numpy array
-            a square 2D numpy array that gives the raw gate matrix, assumed to
-            be in the `mxBasis` basis, to parameterize.  The shape of this
-            array sets the dimension of the gate. If None, then it is assumed
-            equal to `unitaryPostfactor` (which cannot also be None). The
-            quantity `gateMatrix inv(unitaryPostfactor)` is parameterized via
-            projection onto the Lindblad terms.
-            
-        unitaryPostfactor : numpy array, optional
-            a square 2D numpy array of the same size of `gateMatrix` (if
-            not None).  This matrix specifies a part of the gate action 
+        unitaryPostfactor : numpy array or int
+            a square 2D array which specifies a part of the gate action 
             to remove before parameterization via Lindblad projections.
-            Typically, this is a target (desired) gate operation such 
-            that only the erroneous part of the gate (i.e. the gate 
-            relative to the target), which should be close to the identity,
-            is parameterized.  If none, the identity is used by default.
+            While this is termed a "post-factor" because it occurs to the
+            right of the exponentiated Lindblad terms, this means it is applied
+            to a state *before* the Lindblad terms (which usually represent
+            gate errors).  Typically, this is a target (desired) gate operation.
+            This argument is needed at the very least to specify the dimension 
+            of the gate, and if this post-factor is just the identity you can
+            simply pass the integer dimension as `unitaryPostfactor` instead of
+            a matrix.
 
-        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the Stochastic-type lindblad error
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+        Ltermdict : dict
+            A dictionary specifying which Linblad terms are present in the gate
+            parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` can be `"H"` (Hamiltonian) or `"S"`
+            (Stochastic).  Hamiltonian terms always have a single basis label 
+            (so key is a 2-tuple) whereas Stochastic tuples with 1 basis label
+            indicate a *diagonal* term, and are the only types of terms allowed
+            when `nonham_diagonal_only=True`.  Otherwise, Stochastic term tuples
+            can include 2 basis labels to specify "off-diagonal" non-Hamiltonian
+            Lindblad terms.  Basis labels can be strings or integers.  Values
+            are floating point coefficients (error rates).
 
-        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the Stochastic-type lindblad error
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+        basisdict : dict, optional
+            A dictionary mapping the basis labels (strings or ints) used in the
+            keys of `Ltermdict` to basis matrices (numpy arrays).
 
         cptp : bool, optional
             Whether or not the new gate should be constrained to CPTP.
             (if True, see behavior or `truncate`).
 
-        nonham_diagonal_only : boolean, optional
+        nonham_diagonal_only : boolean or "auto", optional
             If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
-            included in the parameterization.
+            included in the parameterization.  The default "auto" determines
+            whether off-diagonal terms are allowed by whether any are given 
+            in `Ltermdict`.
 
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
@@ -2720,6 +2965,11 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             The source and destination basis, respectively.  Allowed
             values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt) (or a custom basis object).
+
+        evotype : {"densitymx"}
+            The evolution type of the gate being constructed.  Currently,
+            only `"densitymx"` (Lioville density-matrix vector) is supported.
+            For more options, see :class:`LindbladParameterizedMap`.
         """
         assert(evotype == "densitymx"), \
             "LindbladParameterizedGate objects can only be used for the 'densitymx' evolution type"
@@ -4379,7 +4629,31 @@ class EmbeddedGateMap(Gate):
 
     
     def get_order_terms(self, order):
-        """ TODO: docstring """
+        """ 
+        Get the `order`-th order Taylor-expansion terms of this gate.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the gate's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the gate's parent (usually a :class:`GateSet`), not the 
+        gate's local parameter array (i.e. that returned from `to_vector`).
+
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        Returns
+        -------
+        list
+            A list of :class:`RankOneTerm` objects.
+        """
         return [ _term.embed_term(t, self.stateSpaceLabels,
                                   self.targetLabels, self.basisdim)
                  for t in self.embedded_gate.get_order_terms(order) ]
@@ -4689,11 +4963,25 @@ class CliffordGate(Gate):
     
     def __init__(self, unitary, symplecticrep=None):
         """
-        Creates a new CliffordGate
-        TODO: docstring
+        Creates a new CliffordGate from a unitary operation.
+
+        Note: while the clifford gate is held internally in a symplectic
+        representation, it is also be stored as a unitary (so the `unitary`
+        argument is required) for keeping track of global phases when updating
+        stabilizer frames.
+
+        If a non-Clifford unitary is specified, then a ValueError is raised.
 
         Parameters
         ----------
+        unitary : numpy.ndarray
+            The unitary action of the clifford gate.
+
+        symplecticrep : tuple, optional
+            A (symplectic matrix, phase vector) 2-tuple specifying the pre-
+            computed symplectic representation of `unitary`.  If None, then
+            this representation is computed automatically from `unitary`.
+
         """
         #self.superop = superop
         self.unitary = unitary
@@ -4735,7 +5023,7 @@ class CliffordGate(Gate):
 
 
     def acton(self, state):
-        """ Act this gate map on an input state TODO: docstring """
+        """ Act this gate matrix on an input state """
         state = state.copy() # needed?
         state.clifford_update(self.smatrix, self.svector, self.unitary)
         return state

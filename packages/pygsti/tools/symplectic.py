@@ -64,7 +64,6 @@ def symplectic_form(n,convention='standard'):
 
 def change_symplectic_form_convention(s,outconvention='standard'):
     """
-    TODO: docstring -- Parameters section needs updating at least
     Maps the input symplectic matrix between the 'standard' and 'directsum'
     symplectic form conventions. That is, if the input is a symplectic matrix
     with respect to the 'directsum' convention and outconvention ='standard' the 
@@ -76,10 +75,8 @@ def change_symplectic_form_convention(s,outconvention='standard'):
     
     Parameters
     ----------
-    n : int
-        The number of qubits the symplectic form should be constructed for. That
-        is, the function creates a 2n x 2n matrix that is a sympletic form
-        over the finite field of the integers modulo 2.
+    s : numpy.ndarray
+        The input symplectic matrix.
         
     outconvention : str, optional
         Can be either 'standard' or 'directsum', which correspond to two different
@@ -90,8 +87,7 @@ def change_symplectic_form_convention(s,outconvention='standard'):
     Returns
     -------
     numpy array
-        The specified symplectic form.
-        
+        The matrix `s` converted to `outconvention`.
     """
     n = _np.shape(s)[0]//2 
        
@@ -359,17 +355,36 @@ def compose_cliffords(s1,p1,s2,p2):
 
 
 def symplectic_kronecker(sp_factors):
-    """ TODO: docstring: returns a single s,p symplectic rep that
-        represents the tensor/kronecker product of the gates 
-        represented by each (s,p) element of `sp_factors` -- works
-        for clifford operators AND also stabilizer states."""
+    """ 
+    Construct a single `(s,p)` symplectic (or stabilizer) representation that
+    corresponds to the tensor (kronecker) product of the objects represented
+    by each `(s,p)` element of `sp_factors`.
+
+    This is performed by inserting each factor's `s` and `p` elements into the 
+    appropriate places of the final (large) `s` and `p` arrays.  This operation
+    works for combining Clifford operations AND also stabilizer states.
+
+    Parameters
+    ----------
+    sp_factors : iterable
+        A list of `(s,p)` symplectic (or stabilizer) representation factors.
+
+    Returns
+    -------
+    s : numpy.ndarray
+        An array of shape (2n,2n) where n is the *total* number of qubits (the
+        sum of the number of qubits in each `sp_factors` element).
+    
+    p : numpy.ndarray
+        A 1D array of length 2n.
+    """
     nlist = [ len(p)//2 for s,p in sp_factors] # number of qubits per factor
     n = sum(nlist) #total number of qubits
             
     sout = _np.zeros((2*n,2*n),int)
     pout = _np.zeros(2*n,int)
     k = 0 # current qubit index
-    for i,((s,p),nq) in enumerate(zip(sp_factors,nlist)):
+    for (s,p),nq in zip(sp_factors,nlist):
         assert(s.shape == (2*nq,2*nq))
         sout[k:k+nq    ,k:k+nq]     = s[0:nq,0:nq]
         sout[k:k+nq    ,n+k:n+k+nq] = s[0:nq,nq:2*nq]
@@ -384,8 +399,28 @@ def symplectic_kronecker(sp_factors):
 
 
 def prep_stabilizer_state(nqubits, zvals=None):
-    """ TODO: docstring: zvals can be iterable over anything True/False
-    to indicate 0/1 value of qubit """
+    """
+    Contruct the `(s,p)` stabilizer representation for a computational 
+    basis state given by `zvals`.
+
+    Parameters
+    ----------
+    nqubits : int 
+        Number of qubits
+
+    zvals : iterable, optional
+        An iterable over anything that can be cast as True/False
+        to indicate the 0/1 value of each qubit in the Z basis.
+        If None, the all-zeros state is created.  If None, then
+        all zeros is assumed.
+    
+    Returns
+    -------
+    s,p : numpy.ndarray
+        The stabilizer "matrix" and phase vector corresponding to the desired
+        state.  `s` has shape (2n,2n) (it includes antistabilizers) and `p`
+        has shape 2n, where n equals `nqubits`.
+    """
     n = nqubits
     s = _np.fliplr(_np.identity(2*n,int)) # flip b/c stab cols are *first*
     p = _np.zeros(2*n,int)
@@ -552,9 +587,10 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
         assert(icount == 2) # should never get 1 or 3 (low bit should always be 0)
         return (0.0, 1.0, state_s, state_s, state_p, state_p)
 
-    
+
+#OLD TODO REMOVE
 #def colsum_g(x1,z1,x2,z2):
-#    """ TODO: docstring -- see PRA -- but different b/c 11 := XZ = -iY here, but 11 := Y in PRA
+#    """ TODO: -- see PRA -- but different b/c 11 := XZ = -iY here, but 11 := Y in PRA
 #        (and this fn calcs the power of i when paulis rep'd by x1z1 and x2z2 are multiplied)  """
 #    i2 = 3 if (x2==1 and z2==1) else 0 # "intrinsic" to qubit 2
 #    
@@ -569,7 +605,30 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
 #            return 3+z2-x2+i2
     
 def colsum(i,j,s,p,n):
-    """ TODO: docstring """
+    """ 
+    A helper routine used for manipulating stabilizer state representations.
+    Updates the `i`-th stabilizer generator (column of `s` and element of `p`)
+    with the group-action product of the `j`-th and the `i`-th generators, i.e.
+
+    generator[i] -> generator[j] + generator[i]
+
+    Parameters
+    ----------
+    i,j : int
+        Column indices (see above).
+
+    s,p : numpy.ndarray
+        The generator matrix and phase vector of the stabilizer representation
+        being acted upon.
+
+    n : int
+        The number of qubits.  `s` must be shape (2n,2n) and `p` must be
+        length 2n.
+
+    Returns
+    -------
+    None
+    """
     #OLD: according to Aaronson convention (not what we use)
     ##Note: need to divide p-vals by 2 to access high-bit
     #test = 2*(p[i]//2 + p[j]//2) + sum(
@@ -589,6 +648,36 @@ def colsum(i,j,s,p,n):
     return
 
 def colsum_acc(acc_s,acc_p,j,s,p,n):
+    """ 
+    A helper routine used for manipulating stabilizer state representations.
+    Similar to :function:`colsum` except a separate "accumulator" column is 
+    used instead of the `i`-th column of `s` and element of `p`. I.e., this
+    performs:
+
+    acc[0] -> generator[j] + acc[0]
+
+    Parameters
+    ----------
+    acc_s, acc_p : numpy.ndarray
+        The "accumulator" generator.  `acc_s` is shape (2n,1) and `acc_p` is
+        length 1.
+
+    j : int
+        Index of the stabilizer generator being accumulated (see above).
+
+    s,p : numpy.ndarray
+        The generator matrix and phase vector of the stabilizer representation
+        being acted upon.
+
+    n : int
+        The number of qubits.  `s` must be shape (2n,2n) and `p` must be
+        length 2n.
+
+    Returns
+    -------
+    None
+    """
+
     ##Note: need to divide p-vals by 2 to access high-bit
     #test = 2*(acc_p[0]//2 + p[j]//2) + sum(
     #    [colsum_g(s[k,j], s[k+n,j], acc_s[k], acc_s[k+n]) for k in range(n)] )
@@ -610,26 +699,53 @@ def colsum_acc(acc_s,acc_p,j,s,p,n):
 
 def stabilizer_measurement_prob(state_sp_tuple, moutcomes, qubit_filter=None,
                                 return_state=False):
-        """ TODO: docstring - note that state_sp_tuple is modified and possibly returned
-        moutcomes = measurement outcomes
-        allows a subset of qubits to be measured -- len(moutcomes) == len(qubit_filter)
-        if qubit_filter is None, then assume *all* qubits measureed and len(moutcomes) == nqubits
-        """
-        state_s, state_p = state_sp_tuple # should be a StabilizerState.todense() "object"
+    """
+    Compute the probability of a given outcome when measuring some or all of the
+    qubits in a stabilizer state.  Returns this probability, optionally along
+    with the updated (post-measurement) stabilizer state.
+
+    Parameters
+    ----------
+    state_sp_tuple : tuple
+        A `(s,p)` tuple giving the stabilizer state to measure.
+    
+    moutcomes : array-like
+        The z-values identifying which measurement outcome (a computational
+        basis state) to compute the probability for.
+
+    qubit_filter : iterable, optional
+        If not None, a list of qubit indices which are measured.  
+        `len(qubit_filter)` should always equal `len(moutcomes)`. If None, then
+        assume *all* qubits are measured (`len(moutcomes)` == num_qubits).
+
+    return_state : bool, optional
+        Whether the post-measurement (w/outcome `moutcomes`) state is also
+        returned.
+
+    Returns
+    -------
+    p : float
+        The probability of the given measurement outcome.
+
+    state_s,state_p : numpy.ndarray
+        Only returned when `return_state=True`.  The post-measurement stabilizer
+        state representation (an updated version of `state_sp_tuple`).
+    """
+    state_s, state_p = state_sp_tuple # should be a StabilizerState.todense() "object"
+    
+    p = 1
+    if qubit_filter is None: # len(moutcomes) == nQubits
+        qubit_filter = range(len(moutcomes)) 
         
-        p = 1
-        if qubit_filter is None: # len(moutcomes) == nQubits
-            qubit_filter = range(len(moutcomes)) 
+    for i,outcm in zip(qubit_filter,moutcomes): 
+        p0,p1,ss0,ss1,sp0,sp1 = pauli_z_measurement(state_s, state_p, i)
+        # could cache these results in a FUTURE _stabilizer_measurement_probs function?
+        if outcm == 0:
+            p *= p0; state_s, state_p = ss0, sp0
+        else:
+            p *= p1; state_s, state_p = ss1, sp1
             
-        for i,outcm in zip(qubit_filter,moutcomes): 
-            p0,p1,ss0,ss1,sp0,sp1 = pauli_z_measurement(state_s, state_p, i)
-            # could cache these results in a FUTURE _stabilizer_measurement_probs function?
-            if outcm == 0:
-                p *= p0; state_s, state_p = ss0, sp0
-            else:
-                p *= p1; state_s, state_p = ss1, sp1
-                
-        return (p, state_s, state_p) if return_state else p
+    return (p, state_s, state_p) if return_state else p
 
 
 def embed_clifford(s,p,qubit_inds,n):
@@ -883,7 +999,7 @@ def clifford_layer_in_symplectic_rep(layer, n, srep_dict=None):
 def single_qubit_clifford_symplectic_group_relations():
     
     #
-    # Todo : docstring, and think about whether this function does what we want or not.
+    # TODO : docstring (TIM), and think about whether this function does what we want or not.
     #
     group_relations = {}
     
@@ -946,7 +1062,7 @@ def unitary_to_symplectic_1Q(u,flagnonclifford=True):
         standard sense.
 
     flagnonclifford : bool, opt
-        If True, an error is raised when the input unitary is not a Clifford gate.
+        If True, a ValueError is raised when the input unitary is not a Clifford gate.
         If False, when the unitary is not a Clifford the returned s and p are
         None.
 
@@ -990,8 +1106,8 @@ def unitary_to_symplectic_1Q(u,flagnonclifford=True):
 
     valid_clifford = check_valid_clifford(s,p)
     
-    if flagnonclifford:
-        assert(valid_clifford), "Input unitary is not a Clifford with respect to the standard basis!"
+    if flagnonclifford and not valid_clifford:
+        raise ValueError("Input unitary is not a Clifford with respect to the standard basis!")
     
     else:
         if not valid_clifford:
@@ -1015,7 +1131,7 @@ def unitary_to_symplectic_2Q(u,flagnonclifford=True):
         standard sense.
 
     flagnonclifford : bool, opt
-        If True, an error is raised when the input unitary is not a Clifford gate.
+        If True, n ValueError is raised when the input unitary is not a Clifford gate.
         If False, when the unitary is not a Clifford the returned s and p are
         None.
 
@@ -1070,8 +1186,8 @@ def unitary_to_symplectic_2Q(u,flagnonclifford=True):
     
     valid_clifford = check_valid_clifford(s,p)
     
-    if flagnonclifford:
-        assert(valid_clifford), "Input unitary is not a Clifford with respect to the standard basis!"
+    if flagnonclifford and not valid_clifford:
+        raise ValueError("Input unitary is not a Clifford with respect to the standard basis!")
     
     else:
         if not valid_clifford:
@@ -1094,7 +1210,7 @@ def unitary_to_symplectic(u,flagnonclifford=True):
         Clifford gate in the standard sense.
 
     flagnonclifford : bool, opt
-        If True, an error is raised when the input unitary is not a Clifford gate.
+        If True, a ValueError is raised when the input unitary is not a Clifford gate.
         If False, when the unitary is not a Clifford the returned s and p are
         None.
 
@@ -1518,7 +1634,7 @@ def random_symplectic_index(n):
 
 def symplectic_action(m, glabel, qlist, optype='row'):
     """
-    Todo: docstring
+    TODO: docstring (TIM)
     
     """
     assert(optype == 'row' or optype == 'column'), "optype must be 'row' or 'column'."

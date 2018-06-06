@@ -471,7 +471,9 @@ class GateMapCalc(GateCalc):
         #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
 
         #CHECK
-        assert(_np.linalg.norm(dpr_cache-dpr_cache2) < 1e-6)
+        #assert(_np.linalg.norm(dpr_cache-dpr_cache2) < 1e-6)
+        if _np.linalg.norm(dpr_cache-dpr_cache2) > 1e-6:
+            print("DPR_CACHE MISMATCH: ", _np.linalg.norm(dpr_cache-dpr_cache2), " shape=",dpr_cache.shape)
 
         return dpr_cache
 

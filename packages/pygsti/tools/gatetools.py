@@ -855,7 +855,6 @@ def process_mx_to_unitary(superop):
 
 def spam_error_generator(spamvec, target_spamvec, mxBasis, typ="logGTi"):
     """
-    TODO: docstring - fix this!
     Construct an error generator from a SPAM vector and it's target.
 
     Computes the value of the error generator given by
@@ -863,13 +862,16 @@ def spam_error_generator(spamvec, target_spamvec, mxBasis, typ="logGTi"):
     element-wise.  This results in a (non-unique) error generator matrix
     `E` such that `spamvec = exp(E) * target_spamvec`.
 
+    Note: This is currently of very limited use, as the above algorithm fails
+    whenever `target_spamvec` has zero elements where `spamvec` doesn't.
+
     Parameters
     ----------
-    gate : ndarray
-      The gate matrix
+    spamvec : ndarray
+      The SPAM vector.
 
-    target_gate : ndarray
-      The target gate matrix
+    target_spamvec : ndarray
+      The target SPAM vector.
 
     mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The source and destination basis, respectively.  Allowed
@@ -1454,12 +1456,12 @@ def lindblad_errgen_projections(errgen, ham_basis,
       The error generator matrix to project.
 
     ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-        The basis is used to construct the Stochastic-type lindblad error
+        The basis used to construct the Hamiltonian-type lindblad error
         Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
     other_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-        The basis is used to construct the Stochastic-type lindblad error
+        The basis used to construct the Stochastic-type lindblad error
         Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt), list of numpy arrays, or a custom basis object.
       
@@ -1651,7 +1653,54 @@ def lindblad_errgen_projections(errgen, ham_basis,
 
 def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
                                   other_diagonal_only=False):
-    """ TODO: docstring """
+    """
+    Converts the projections of an error generator onto basis elements into
+    the Lindblad-term and basis dictionaries used to individually specify 
+    Lindblad terms.
+
+    Parameters
+    ----------
+    hamProjs : numpy.ndarray
+        An array of length d-1, where d is the dimension of the projected error
+        generator, giving the projections onto the Hamiltonian-type Lindblad
+        terms.
+
+    otherProjs : numpy.ndarray
+        An array of shape (d-1,d-1), where d is the dimension of the projected
+        error generator, giving the projections onto the Stochastic-type (or,
+        more accurately, the non-Hamiltonian-type) Lindblad terms.
+
+    ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis used to construct `hamProjs`.  Allowed values are Matrix-unit
+        (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt), list of
+        numpy arrays, or a custom basis object.
+
+    other_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis used to construct `otherProjs`.  Allowed values are
+        Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt),
+        list of numpy arrays, or a custom basis object.
+
+    other_diagonal_only : bool, optional
+        Whether `otherProjs` includes all or only the diagonal elements of a
+        full Lindblad expansion.
+
+    Returns
+    -------
+    Ltermdict : dict
+        Keys are `(termType, basisLabel1, <basisLabel2>)`
+        tuples, where `termType` is `"H"` (Hamiltonian) or `"S"`
+        (Stochastic).  Hamiltonian terms always have a single basis label 
+        (so key is a 2-tuple) whereas Stochastic tuples have 1 basis label
+        to indicate a *diagonal* term and otherwise have 2 basis labels to
+        specify off-diagonal non-Hamiltonian Lindblad terms.  Basis labels
+        are integers starting at 0.  Values are complex coefficients (the 
+        projections).
+
+    basisdict : dict
+        A dictionary mapping the integer basis labels used in the
+        keys of `Ltermdict` to basis matrices (elements of `ham_basis` and
+        `other_basis`).
+    """
 
     # Make None => length-0 arrays so iteration code works below (when basis is None)
     if hamProjs is None: hamProjs = _np.empty(0,'d') 
@@ -1710,7 +1759,69 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
 
 
 def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal_only=False):
-    """ TODO: docstring - note: basisdim is required for case thwn basisdict is empty """
+    """
+    Convert a set of Lindblad terms into a dense matrix/grid of projections.
+
+    Essentially the inverse of :function:`projections_to_lindblad_terms`.
+
+    Parameters
+    ----------
+    Ltermdict : dict
+        A dictionary specifying which Linblad terms are present in the gate
+        parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
+        tuples, where `termType` can be `"H"` (Hamiltonian) or `"S"`
+        (Stochastic).  Hamiltonian terms always have a single basis label 
+        (so key is a 2-tuple) whereas Stochastic tuples with 1 basis label
+        indicate a *diagonal* term, and are the only types of terms allowed
+        when `other_diagonal_only=True`.  Otherwise, Stochastic term tuples
+        can include 2 basis labels to specify "off-diagonal" non-Hamiltonian
+        Lindblad terms.  Basis labels can be strings or integers.  Values
+        are floating point coefficients (error rates).
+
+    basisdict : dict
+        A dictionary mapping the basis labels (strings or ints) used in the
+        keys of `Ltermdict` to basis matrices (numpy arrays or Scipy sparse
+        matrices).
+
+    basisdim : int
+        The dimension of the basis elements (2 for single-qubit).  Required
+        for the case when `basisdict` is empty.
+
+    other_diagonal_only : boolean, optional
+        If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
+        allowed in `Ltermdict`.
+
+    Returns
+    -------
+    hamProjs : numpy.ndarray
+        An array of length `basisdim^2-1`, giving the projections onto a 
+        full set of the Hamiltonian-type Lindblad terms (onto each element of
+        `ham_basis`).
+
+    otherProjs : numpy.ndarray
+        An array of shape (d-1,d-1), where d=`basisdim^2`, giving the
+        projections onto a full set of Stochastic-type (or more accurately,
+        non-Hamiltonian-type) Lindblad terms.
+
+    ham_basis: Basis
+        The basis used to construct `hamProjs`.
+
+    other_basis : Basis
+        The basis used to construct `otherProjs`.
+
+    hamBasisIndices : OrderedDict
+        A dictionary mapping the some or all of the basis labels of `basisdict`
+        to the integers 0 to `len(ham_basis)`.  These are indices into
+        `hamProjs`, giving the projection associated with each Hamiltonian 
+        basis element.
+
+    otherBasisIndices : OrderedDict
+        A dictionary mapping the some or all of the basis labels of `basisdict`
+        to the integers 0 to `len(other_basis)`.  These are row and column
+        indices into `otherProjs`, giving the projection associated with each
+        pair of "other" basis elements (or single basis element if
+        `other_diagonal_only=True`).
+    """
 
     d = basisdim
 
@@ -1788,7 +1899,50 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
 
 def lindblad_projections_to_paramvals(hamProjs, otherProjs, cptp=True,
                                       other_diagonal_only=False, truncate=True):
-    """ TODO: docstring """
+    """
+    Construct the array of Lindblad-gate parameter values from the separate 
+    arrays of Hamiltonian and non-Hamiltonian Lindblad-term projections.
+
+    When `cptp=True`, this function handles parameterizing the projections 
+    to that for (real) parameter values correspond to projections for a valid
+    CPTP gate (e.g. by parameterizing the Cholesky decomposition of `otherProjs`
+    instead of otherProjs itself).  This function is closely related to
+    implementation details of the LindbladParameterizedGateMap class.
+
+    Parameters
+    ----------
+    hamProjs : numpy.ndarray
+        An array of length d-1, where d is the gate dimension, giving the
+        projections onto a full set of the Hamiltonian-type Lindblad terms.
+
+    otherProjs : numpy.ndarray
+        An array of shape (d-1,d-1) or (d-1,) where d is the gate dimension,
+        giving the projections onto a full set of non-Hamiltonian-type Lindblad
+        terms.  See `other_diagonal_only` below.
+
+    cptp : bool, optional
+        Whether or not the parameterization should be setup with a CPTP
+        constraint (see above). If True, see behavior or `truncate`.
+
+    other_diagonal_only : boolean, optional
+        If True, only *diagonal* non-Hamiltonain terms are given by 
+        `otherProjs`, which is then expected bo be a 1D array of length
+        d-1.
+
+    truncate : bool, optional
+        Whether to truncate the projections onto the Lindblad terms in
+        order to preserve CPTP (when necessary).  If False, then an 
+        error is thrown when `cptp == True` and when the given `otherProjs`
+        result in a non-positive-definite matrix of non-Hamiltonian term
+        coefficients.
+
+    Returns
+    -------
+    numpy.ndarray
+        A 1D array of real parameter values consisting of d-1 Hamiltonian 
+        values followed by either (d-1)^2 or just d-1 non-Hamiltonian
+        values (the latter when `other_diagonal_only=True`).
+    """
     if hamProjs is not None:
         assert(_np.isclose(_np.linalg.norm(hamProjs.imag),0)), \
             "Hamiltoian projections (coefficients) are not all real!"
