@@ -20,7 +20,7 @@ from .gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 
 #A flag to enable fast-loading of old results files (should
 # only be changed by experts)
-_SHORTCUT_OLD_RESULTS_LOAD = False        
+_SHORTCUT_OLD_RESULTS_LOAD = False
 
 class Results(object):
     """
@@ -69,10 +69,10 @@ class Results(object):
                             "  Usually you don't want to do this."))
         self.dataset = dataset
 
-        
+
     def init_gatestrings(self, structsByIter):
         """
-        Initialize the common set gate sequences used to form the 
+        Initialize the common set gate sequences used to form the
         estimates of this Results object.
 
         There is one such set per GST iteration (if a non-iterative
@@ -82,8 +82,8 @@ class Results(object):
         ----------
         structsByIter : list
             The gate strings used at each iteration. Ideally, elements are
-            `LsGermsStruct` objects, which contain the structure needed to 
-            create color box plots in reports.  Elements may also be 
+            `LsGermsStruct` objects, which contain the structure needed to
+            create color box plots in reports.  Elements may also be
             unstructured lists of gate sequences (but this may limit
             the amount of data visualization one can perform later).
 
@@ -94,7 +94,7 @@ class Results(object):
         if len(self.gatestring_structs) > 0:
             _warnings.warn(("Re-initializing the gate sequences of a Results"
                             " object!  Usually you don't want to do this."))
-        
+
         #Set gatestring structures
         self.gatestring_structs['iteration'] = []
         for gss in structsByIter:
@@ -107,7 +107,7 @@ class Results(object):
             else:
                 raise ValueError("Unknown type of gate string specifier: %s"
                                  % str(type(gss)))
-                
+
         self.gatestring_structs['final'] = \
                 self.gatestring_structs['iteration'][-1]
 
@@ -117,11 +117,11 @@ class Results(object):
         self.gatestring_lists['final'] = self.gatestring_lists['iteration'][-1]
         self.gatestring_lists['all'] = _tools.remove_duplicates(
             list(_itertools.chain(*self.gatestring_lists['iteration'])) )
-        
+
         running_lst = []; delta_lsts = []
         for lst in self.gatestring_lists['iteration']:
             delta_lst = [ x for x in lst if (x not in running_lst) ]
-            delta_lsts.append(delta_lst); running_lst.extend(delta_lst) 
+            delta_lsts.append(delta_lst); running_lst.extend(delta_lst)
         self.gatestring_lists['iteration delta'] = delta_lsts # *added* at each iteration
 
         #Set "Ls and germs" info: gives particular structure
@@ -171,17 +171,17 @@ class Results(object):
                                    + " want to do this.")
                 self.estimates[estimate_key] = results.estimates[estimate_key]
 
-                
+
     def rename_estimate(self, old_name, new_name):
         """
-        Rename an estimate in this Results object.  Ordering of estimates is 
+        Rename an estimate in this Results object.  Ordering of estimates is
         not changed.
 
         Parameters
         ----------
         old_name : str
             The labels of the estimate to be renamed
-        
+
         new_name : str
             The new name for the estimate.
 
@@ -203,30 +203,30 @@ class Results(object):
         else:
             #Python2.7: Manipulate internals of OrderedDict to change a key while preserving order
             PREV = 0; NEXT = 1 # ~enumerated
-    
+
             #Unneeded, since root will be manipulated by link_prev or link_next below if needed
             #root = self.estimates._OrderedDict__root # [prev,next,value] element - the
             #  # root of the OrdereDict's circularly-linked list whose next member points
             #  # to the first element of the list.
             #first = root[NEXT] # first [prev,next,val] element of circularly linked list.
-    
+
             old_element = self.estimates._OrderedDict__map[old_name]
             link_prev, link_next, _ = old_element # ('_' == old_name)
             new_element = [link_prev,link_next,new_name]
-    
+
             #Replace element in circularly linked list (w/"root" sentinel element)
             link_prev[NEXT] = new_element
             link_next[PREV] = new_element
-    
+
             #Replace element in map
             del self.estimates._OrderedDict__map[old_name]
             self.estimates._OrderedDict__map[new_name] = new_element
-    
+
             #Replace values in underlying dict
             value = dict.__getitem__(self.estimates, old_name)
-            dict.__setitem__(self.estimates, new_name, value)        
+            dict.__setitem__(self.estimates, new_name, value)
 
-                
+
     def add_estimate(self, targetGateset, seedGateset, gatesetsByIter,
                      parameters, estimate_key='default'):
         """
@@ -303,7 +303,7 @@ class Results(object):
             of these keys will correspond to trivial gauge optimizations,
             as the model gate set is assumed to be fixed and to have no
             gauge degrees of freedom.  The special value "auto" creates
-            gauge-optimized estimates for all the gauge optimization labels 
+            gauge-optimized estimates for all the gauge optimization labels
             currently in this `Results` object.
 
         Returns
@@ -360,7 +360,7 @@ class Results(object):
                         '_gaugeGroupEl': trivialEl }
             est.add_gaugeoptimized(goparams, modelGateset, gokey)
 
-        
+
     def view(self, estimate_keys, gaugeopt_keys=None):
         """
         Creates a shallow copy of this Results object containing only the
@@ -373,7 +373,7 @@ class Results(object):
 
         gaugeopt_keys : str or list, optional
             Either a single string-value gauge-optimization key or a list of
-            such keys.  If `None`, then all gauge-optimization keys are 
+            such keys.  If `None`, then all gauge-optimization keys are
             retained.
 
         Returns
@@ -390,7 +390,7 @@ class Results(object):
         for ky in estimate_keys:
             if ky in self.estimates:
                 view.estimates[ky] = self.estimates[ky].view(gaugeopt_keys,view)
-        
+
         return view
 
 
@@ -415,7 +415,7 @@ class Results(object):
                   " are not imported. Please re-save (or re-pickle) this upgraded object"
                   " to avoid seeing this message, or re-run the analysis leading to"
                   " these results to create a new current-version Results object.")
-            
+
             params = _collections.OrderedDict()
             goparams = _collections.OrderedDict()
             for k,v in stateDict['parameters'].items():
@@ -437,7 +437,7 @@ class Results(object):
                     maxLengthList = stateDict['parameters']['max length list']
                     if maxLengthList[0] == 0:
                         maxLengthList = maxLengthList[1:] #Fine; includeLGST is always True below
-                
+
                     structs = _make_lsgst_structs(stateDict['gatesets']['target'].gates.keys(),
                                                         prepStrs, effectStrs, germs, maxLengthList,
                                                         fidPairs, truncScheme="whole germ powers",
@@ -450,7 +450,7 @@ class Results(object):
                         unindexed_gss = _LsGermsStructure([],[],[],[],None)
                         unindexed_gss.add_unindexed(lst)
                         structs.append(unindexed_gss)
-                        
+
                 gstrStructs['iteration'] = structs
                 gstrStructs['final'] = structs[-1]
 
@@ -471,7 +471,7 @@ class Results(object):
                                 gatesets['iteration estimates'], params)
             if 'go0' in gatesets:
                 estimate.add_gaugeoptimized(goparams.get('go0',{}), gatesets['go0'])
-                
+
             filteredDict = {
                 'dataset': stateDict['dataset'],
                 'gatestring_lists': gstrLists,
@@ -484,7 +484,7 @@ class Results(object):
             self.__dict__.update(stateDict)
             for est in self.estimates.values():
                 est.set_parent(self)
-                
+
 
     def __str__(self):
         s  = "----------------------------------------------------------\n"
@@ -582,7 +582,7 @@ class Results(object):
 
 def enable_old_python_results_unpickling():
     """ Perform some monkeying so that old results pickle files can load. """
-    
+
     #Define empty ResultCache class in resultcache module to enable loading old Results pickles
     import sys as _sys
     from .labeldicts import OrderedMemberDict as _OMD
@@ -613,7 +613,7 @@ def enable_old_python_results_unpickling():
     class dummy_OrderedSPAMLabelDict(_collections.OrderedDict):
         def __init__(self, remainderLabel, items=[]):
             super(dummy_OrderedSPAMLabelDict,self).__init__(items)
-            
+
 
     #Classes
     _sys.modules[__name__].ResultOptions = dummy_ResultOptions
@@ -621,7 +621,7 @@ def enable_old_python_results_unpickling():
     _sys.modules['pygsti.objects.labeldicts'].OrderedGateDict = dummy_OrderedGateDict
     _sys.modules['pygsti.objects.labeldicts'].OrderedSPAMVecDict = dummy_OrderedSPAMVecDict
     _sys.modules['pygsti.objects.labeldicts'].OrderedSPAMLabelDict = dummy_OrderedSPAMLabelDict
-    
+
     #Modules
     _sys.modules['pygsti.tools.basis'] = _basis
     _sys.modules['pygsti.tools.dim'] = _dim
@@ -633,14 +633,14 @@ def enable_old_python_results_unpickling():
 
 def disable_old_python_results_unpickling():
     import sys as _sys
-    
+
     #Classes
     del _sys.modules[__name__].ResultOptions
     del _sys.modules[__name__].Estimate
     del _sys.modules['pygsti.objects.labeldicts'].OrderedGateDict
     del _sys.modules['pygsti.objects.labeldicts'].OrderedSPAMVecDict
     del _sys.modules['pygsti.objects.labeldicts'].OrderedSPAMLabelDict
-    
+
     #Modules
     del _sys.modules['pygsti.tools.basis']
     del _sys.modules['pygsti.tools.dim']

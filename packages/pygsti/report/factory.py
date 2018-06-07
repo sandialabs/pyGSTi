@@ -32,12 +32,12 @@ from .notebook import Notebook as _Notebook
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
-        
+
 def _errgen_formula(errgen_type, typ):
     assert(typ in ('html','latex'))
 
     notDuringTxt = """This is <em>not</em> the Lindblad-type generator that would produce this noise if it acted continuously <em>during</em> the gate (i.e., simultaneously with a Hamiltonian that generates the ideal gate).  This choice is explicit; the authors of pyGSTi are concerned that reporting the continuous-time-generator would encourage a false sense of understanding the physics behind the noise, which is explicitly invalid if the gates were produced by anything other than a simple pulse."""
-    
+
     if errgen_type == "logTiG": # G = T*exp(L) (pre-error)
         gen = '<span class="math">G = G_0 e^{\mathbb{L}}</span>'
         desc = ('<em>pre-gate</em> generator, so it answers the question '
@@ -57,7 +57,7 @@ def _errgen_formula(errgen_type, typ):
                 ' producing the noise.')
     else:
         gen = desc = "???"
-    
+
     if typ == "latex": #minor modifications for latex version
         gen = gen.replace('<span class="math">','$')
         gen = gen.replace('</span>','$')
@@ -67,7 +67,7 @@ def _errgen_formula(errgen_type, typ):
     return gen, desc
 
 def _add_new_labels(running_lbls, current_lbls):
-    """ 
+    """
     Simple routine to add current-labels to a list of
     running-labels without introducing duplicates and
     preserving order as best we can.
@@ -81,14 +81,14 @@ def _add_new_labels(running_lbls, current_lbls):
     return running_lbls
 
 def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
-    """ 
+    """
     Like _add_new_labels but perform robust-suffix processing.
 
     In particular, if `combine_robust == True` then do not add
     labels which have a ".robust" counterpart.
     """
     current_lbls = list(estimates.keys())
-    
+
     def _add_lbl(lst, lbl):
         if combine_robust and any([(lbl+suffix in current_lbls)
                                    for suffix in ROBUST_SUFFIX_LIST]):
@@ -97,7 +97,7 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
 
     if running_lbls is None:
         running_lbls = []
-        
+
     if running_lbls != current_lbls:
         for lbl in current_lbls:
             if lbl not in running_lbls:
@@ -118,12 +118,12 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
 #        gs = estimates[lbl_robust].gatesets[gs_lbl]
 #        if estimates[est_lbl].gatesets[gs_lbl].frobeniusdist(gs) > 1e-8:
 #            return False #gateset mismatch!
-#        
+#
 #    return True
 
 def _get_viewable_crf(est, est_lbl, gs_lbl, verbosity=0):
     printer = _VerbosityPrinter.build_printer(verbosity)
-    
+
     if est.has_confidence_region_factory(gs_lbl, 'final'):
         crf = est.get_confidence_region_factory(gs_lbl,'final')
         if crf.can_construct_views():
@@ -139,22 +139,22 @@ def _get_viewable_crf(est, est_lbl, gs_lbl, verbosity=0):
             ("Note: no factory to compute confidence "
              "intervals for the '{estlbl}.{gslbl}' gate set."
             ).format(estlbl=est_lbl,gslbl=gs_lbl))
-                
+
     return None
 
 
 
 def create_offline_zip(outputDir="."):
-    """ 
+    """
     Creates a zip file containing the a directory ("offline") of files
-    need to display "offline" reports (generated with `connected=False`).  
+    need to display "offline" reports (generated with `connected=False`).
 
     For offline reports to display, the "offline" folder must be placed
     in the same directory as the report's HTML file.  This function can
     be used to easily obtain a copy of the offline folder for the purpose
     of sharing offline reports with other people.  If you're just creating
     your own offline reports using pyGSTi, the offline folder is
-    automatically copied into it's proper position - so you don't need 
+    automatically copied into it's proper position - so you don't need
     to call this function.
 
     Parameters
@@ -170,7 +170,7 @@ def create_offline_zip(outputDir="."):
                                 "templates")
 
     zipFName = _os.path.join(outputDir, "offline.zip")
-    zipHandle = _zipfile.ZipFile(zipFName, 'w', _zipfile.ZIP_DEFLATED)    
+    zipHandle = _zipfile.ZipFile(zipFName, 'w', _zipfile.ZIP_DEFLATED)
     for root, _, files in _os.walk(_os.path.join(templatePath,"offline")):
         for f in files:
             fullPath = _os.path.join(root, f)
@@ -182,7 +182,7 @@ def _set_toggles(results_dict, brevity, combine_robust):
     # ColorBoxPlots below by checking whether any estimate has "weights"
     # parameter (a dict) with > 0 entries.
     toggles = { }
-    
+
     toggles["ShowScaling"] = False
     for res in results_dict.values():
         for est in res.estimates.values():
@@ -197,7 +197,7 @@ def _set_toggles(results_dict, brevity, combine_robust):
 
     toggles['CombineRobust'] = bool(combine_robust)
     return toggles
-    
+
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
                                nmthreshold, printer, fmt,
                                combine_robust):
@@ -209,15 +209,15 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
         dataset_labels = list(results_dict.keys())
     else:
         dataset_labels = sorted(list(results_dict.keys()))
-        
+
     est_labels = None
     gauge_opt_labels = None
-    Ls = None        
+    Ls = None
 
     for results in results_dict.values():
         est_labels = _add_new_estimate_labels(est_labels, results.estimates,
                                               combine_robust)
-        Ls = _add_new_labels(Ls, results.gatestring_structs['final'].Ls)    
+        Ls = _add_new_labels(Ls, results.gatestring_structs['final'].Ls)
         for est in results.estimates.values():
             gauge_opt_labels = _add_new_labels(gauge_opt_labels,
                                                list(est.goparameters.keys()))
@@ -228,12 +228,12 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     else:
         swLs = Ls #switch over all Ls
 
-    
+
     multidataset = bool(len(dataset_labels) > 1)
     multiest = bool(len(est_labels) > 1)
     multiGO = bool(len(gauge_opt_labels) > 1)
     #multiL = bool(len(swLs) > 1)
-            
+
     switchBd = ws.Switchboard(
         ["Dataset","Estimate","Gauge-Opt","max(L)"],
         [dataset_labels, est_labels, gauge_opt_labels, list(map(str,swLs))],
@@ -248,7 +248,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("germs",(0,))
 
     switchBd.add("eff_ds",(0,1))
-    switchBd.add("modvi_ds",(0,1))    
+    switchBd.add("modvi_ds",(0,1))
     switchBd.add("scaledSubMxsDict",(0,1))
     switchBd.add("gsTarget",(0,1))
     switchBd.add("params",(0,1))
@@ -282,7 +282,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
     for d,dslbl in enumerate(dataset_labels):
         results = results_dict[dslbl]
-        
+
         switchBd.ds[d] = results.dataset
         switchBd.prepStrs[d] = results.gatestring_lists['prep fiducials']
         switchBd.effectStrs[d] = results.gatestring_lists['effect fiducials']
@@ -296,7 +296,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 k = results.gatestring_structs['final'].Ls.index(L)
                 switchBd.gss[d,iL] = results.gatestring_structs['iteration'][k]
         switchBd.gssAllL[d] = results.gatestring_structs['iteration']
-        
+
         for i,lbl in enumerate(est_labels):
             est = results.estimates.get(lbl,None)
             if est is None: continue
@@ -331,7 +331,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 if _get_viewable_crf(est, lbl, GIRepLbl) is None:
                     for l in gauge_opt_labels:
                         if _get_viewable_crf(est, lbl, l) is not None:
-                            GIRepLbl = l; break                            
+                            GIRepLbl = l; break
 
             # NOTE on modvi_ds (the dataset used in model violation plots)
             # if combine_robust is True, modvi_ds is the unscaled dataset.
@@ -369,12 +369,12 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
             if confidenceLevel is not None:
                 misfit_sigma = est.misfit_sigma(use_accurate_Np=True)
-                
+
                 for il,l in enumerate(gauge_opt_labels):
                     if l in est.gatesets:
                         switchBd.cri[d,i,il] = None #default
                         crf = _get_viewable_crf(est, lbl, l, printer-2)
-                        
+
                         if crf is not None:
                             #Check whether we should use non-Markovian error bars:
                             # If fit is bad, check if any reduced fits were computed
@@ -407,7 +407,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             switchBd.gsFinalGrid[i] = [
                 (results_list[0].estimates[el].gatesets.get(gokey,None)
                    if el in results_list[0].estimates else None) for el in est_labels ]
-            
+
     if multidataset:
         switchBd.add_unswitched('gsTargetGrid', [
             [ (res.estimates[el].gatesets.get('target',None)
@@ -419,7 +419,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
              if el in results_list[0].estimates else None) for el in est_labels])
 
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs
-                                
+
 
 def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
                                       dataset_labels, est_labels):
@@ -466,11 +466,11 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
 
 
 def create_general_report(results, filename, title="auto",
-                          confidenceLevel=None,                          
+                          confidenceLevel=None,
                           linlogPercentile=5, errgen_type="logGTi",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
-                          cachefile=None, brief=False, connected=False, 
+                          cachefile=None, brief=False, connected=False,
                           link_to=None, resizable=True, autosize='initial',
                           verbosity=1):
     """ DEPRECATED: use pygsti.report.create_standard_report(...) """
@@ -480,7 +480,7 @@ def create_general_report(results, filename, title="auto",
              '  be removed completely soon.  Please update this call with:\n'
              '  pygsti.report.create_standard_report(...)\n'))
 
-    
+
 def create_standard_report(results, filename, title="auto",
                             confidenceLevel=None, comm=None, ws=None,
                             auto_open=False, link_to=None, brevity=0,
@@ -493,7 +493,7 @@ def create_standard_report(results, filename, title="auto",
     in ".pdf" or not.  In the richer HTML-mode, switches (drop-down boxes,
     buttons, etc.) allow the viewer to choose which estimate is displayed.  The
     estimates in multiple :class:`Results` objects can be viewed by providing
-    a dictionary of `Results` objects as the `results` argument.  Note that 
+    a dictionary of `Results` objects as the `results` argument.  Note that
     when comparing many estimates it is often more convenient to view the report
     generated by :func:`create_comparison_report`, which is organized for this
     purpose.
@@ -501,13 +501,13 @@ def create_standard_report(results, filename, title="auto",
     In PDF-mode this interactivity is not possible and so `results` may contain
     just a *single* estimate.  The chief advantage of this more limited mode
     is that is produces a highly-portable and self-contained PDF file.
-    
+
 
     Parameters
     ----------
     results : Results
         An object which represents the set of results from one *or more* GST
-        estimation runs, typically obtained from running 
+        estimation runs, typically obtained from running
         :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`, OR a
         dictionary of such objects, representing multiple GST runs to be
         compared (typically all with *different* data sets). The keys of this
@@ -543,8 +543,8 @@ def create_standard_report(results, filename, title="auto",
         has been generated.
 
     link_to : list, optional
-        If not None, a list of one or more items from the set 
-        {"tex", "pdf", "pkl"} indicating whether or not to 
+        If not None, a list of one or more items from the set
+        {"tex", "pdf", "pkl"} indicating whether or not to
         create and include links to Latex, PDF, and Python pickle
         files, respectively.  "tex" creates latex source files for
         tables; "pdf" renders PDFs of tables and plots ; "pkl" creates
@@ -564,7 +564,7 @@ def create_standard_report(results, filename, title="auto",
     advancedOptions : dict, optional
         A dictionary of advanced options for which the default values aer usually
         are fine.  Here are the possible keys of `advancedOptions`:
-    
+
         - connected : bool, optional
             Whether output HTML should assume an active internet connection.  If
             True, then the resulting HTML file size will be reduced because it
@@ -577,33 +577,33 @@ def create_standard_report(results, filename, title="auto",
         - linlogPercentile : float, optional
             Specifies the colorscale transition point for any logL or chi2 color
             box plots.  The lower `(100 - linlogPercentile)` percentile of the
-            expected chi2 distribution is shown in a linear grayscale, and the 
+            expected chi2 distribution is shown in a linear grayscale, and the
             top `linlogPercentile` is shown on a logarithmic colored scale.
 
         - errgen_type: {"logG-logT", "logTiG", "logGTi"}
             The type of error generator to compute.  Allowed values are:
-            
+
             - "logG-logT" : errgen = log(gate) - log(target_gate)
             - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
             - "logGTi" : errgen = log( dot(gate, inv(target_gate)) )
-    
+
         - nmthreshold : float, optional
             The threshold, in units of standard deviations, that triggers the
             usage of non-Markovian error bars.  If None, then non-Markovian
             error bars are never computed.
-    
+
         - precision : int or dict, optional
             The amount of precision to display.  A dictionary with keys
-            "polar", "sci", and "normal" can separately specify the 
-            precision for complex angles, numbers in scientific notation, and 
+            "polar", "sci", and "normal" can separately specify the
+            precision for complex angles, numbers in scientific notation, and
             everything else, respectively.  If an integer is given, it this
             same value is taken for all precision types.  If None, then
             `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
-    
+
         - resizable : bool, optional
-            Whether plots and tables are made with resize handles and can be 
+            Whether plots and tables are made with resize handles and can be
             resized within the report.
-    
+
         - autosize : {'none', 'initial', 'continual'}
             Whether tables and plots should be resized, either initially --
             i.e. just upon first rendering (`"initial"`) -- or whenever
@@ -619,11 +619,11 @@ def create_standard_report(results, filename, title="auto",
             (when applicable). Defaults to '1'.  Smaller values mean more
             tables will get confidence intervals (and reports will take longer
             to generate).
-    
+
 
     verbosity : int, optional
        How much detail to send to stdout.
-    
+
 
     Returns
     -------
@@ -658,7 +658,7 @@ def create_standard_report(results, filename, title="auto",
                           " specifying an int here because in older versions of pyGSTi"
                           " the third argument to create_general_report was the"
                           " confidence interval - please note the updated function signature"))
-    
+
     if title is None or title == "auto":
         autoname = _autotitle.generate_name()
         title = "GST Report for " + autoname
@@ -689,7 +689,7 @@ def create_standard_report(results, filename, title="auto",
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
     qtys['linlg_pcntle_inv'] = "%d" % (100 - int(round(linlogPercentile)))
     qtys['errorgenformula'], qtys['errorgendescription'] = _errgen_formula(errgen_type, fmt)
-    
+
     pdfInfo = [('Author','pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__)]
     qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
@@ -715,7 +715,7 @@ def create_standard_report(results, filename, title="auto",
 
     # Generate Tables
     printer.log("*** Generating tables ***")
-        
+
     if confidenceLevel is not None:
         #TODO: make plain text fields which update based on switchboards?
         for some_cri in switchBd.cri.flat: #can have only some confidence regions
@@ -755,7 +755,7 @@ def create_standard_report(results, filename, title="auto",
     # 2: Input & Meta reference tables disappear at brevity=2
     # 3: Germ estimate tables disappear at brevity=3
     # 4: Everything but summary figs disappear at brevity=4
-    
+
     addqty(2,'targetSpamBriefTable', ws.SpamTable, gsTgt, None, display_as='boxes', includeHSVec=False)
     addqty(2,'targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
     addqty(2,'datasetOverviewTable', ws.DataSetOverviewTable, ds)
@@ -787,17 +787,17 @@ def create_standard_report(results, filename, title="auto",
            virtual_gates=germs)
     #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri(1), display=('rel','log-rel'))
     addqty(4,'bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
-    addqty(4,'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1), 
+    addqty(4,'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
                                         display=('inf','agi','trace','diamond','nuinf','nuagi'))
     addqty(3,'bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(0),
-                                        display=('inf','trace','nuinf'), virtual_gates=germs)        
-    addqty(4,'bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsGIRep, gsTgt, criGIRep(1), 
+                                        display=('inf','trace','nuinf'), virtual_gates=germs)
+    addqty(4,'bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsGIRep, gsTgt, criGIRep(1),
                                         display=('evinf','evagi','evnuinf','evnuagi','evdiamond','evnudiamond'))
     addqty(3,'bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, criGIRep(0),
                                         display=('evdiamond','evnudiamond'), virtual_gates=germs)
     addqty(A,'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
                                          display=('inf','trace','diamond','evinf','evdiamond'))
-    
+
     addqty(4,'bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri(1), ("errgen","H","S","A"),
                                                            "boxes", errgen_type)
     addqty(2,'metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
@@ -840,18 +840,18 @@ def create_standard_report(results, filename, title="auto",
     addqty(2,'effectStrListTable', ws.GatestringTable, effectStrs,"Measurement Fiducials")
     addqty(1,'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
     addqty(2,'germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
-    addqty(4,'progressTable', ws.FitComparisonTable, 
+    addqty(4,'progressTable', ws.FitComparisonTable,
            Ls, gssAllL, switchBd.gsAllL_modvi, ds, switchBd.objective_modvi, 'L')
-    
+
     # Generate plots
     printer.log("*** Generating plots ***")
 
     addqty(4,'gramBarPlot', ws.GramMatrixBarPlot, ds,gsTgt,10,strs)
 
 
-    addqty(4,'progressBarPlot', ws.FitComparisonBarPlot, 
+    addqty(4,'progressBarPlot', ws.FitComparisonBarPlot,
            Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L')
-    addqty(A,'progressBarPlot_sum', ws.FitComparisonBarPlot, 
+    addqty(A,'progressBarPlot_sum', ws.FitComparisonBarPlot,
            Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L') #just duplicate for now
 
     # Don't display "Target" in model violation summary, as it's often
@@ -863,21 +863,21 @@ def create_standard_report(results, filename, title="auto",
     grid_objective = switchBd.objective_modvi[0,0] #just take first one for now
     def na_to_none(x):
         return None if isinstance(x, _ws.NotApplicable) else x
-    
+
     if multidataset:
         dsGrid = [ [ na_to_none(switchBd.modvi_ds[d,i]) for i in est_inds_mt]
                    for d in range(Nd)]
         gssGrid = [ [na_to_none(switchBd.gssFinal[i])]*Ne for i in range(Nd) ]
         gsGrid = [ [ na_to_none(switchBd.gsL_modvi[d,i,-1]) for i in est_inds_mt]
                    for d in range(Nd)]
-        addqty(A,'finalFitComparePlot', ws.FitComparisonBoxPlot, 
-               est_lbls_mt, dataset_labels, 
+        addqty(A,'finalFitComparePlot', ws.FitComparisonBoxPlot,
+               est_lbls_mt, dataset_labels,
                gssGrid, gsGrid, dsGrid, grid_objective)
     else:
         dsGrid = [ na_to_none(switchBd.modvi_ds[0,i]) for i in est_inds_mt ]
         gssGrid =[ na_to_none(switchBd.gssFinal[0])]*Ne
         gsGrid = [ na_to_none(switchBd.gsL_modvi[0,i,-1]) for i in est_inds_mt]
-        addqty(A,'finalFitComparePlot', ws.FitComparisonBarPlot, 
+        addqty(A,'finalFitComparePlot', ws.FitComparisonBarPlot,
                est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, 'Estimate')
 
     addqty(1,'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
@@ -912,10 +912,10 @@ def create_standard_report(results, filename, title="auto",
         # Note that 'eff_ds' is NA for estimates that have no scaling, so that
         # duplicate plots (for estiamtes without scaling) are avoided.
 
-        addqty(4,'progressTable_scl', ws.FitComparisonTable, 
+        addqty(4,'progressTable_scl', ws.FitComparisonTable,
                Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
 
-        addqty(4,'progressBarPlot_scl', ws.FitComparisonBarPlot, 
+        addqty(4,'progressBarPlot_scl', ws.FitComparisonBarPlot,
                Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L') # robust-scaled version
 
         #Not pagniated currently... just set to same full plot
@@ -939,9 +939,9 @@ def create_standard_report(results, filename, title="auto",
 
     #Note: this is the only plot that uses eff_ds (and is on robust-scaling
     #  page) that is created when combine_robust == False
-    addqty(1,'dataScalingColorBoxPlot', ws.ColorBoxPlot, 
+    addqty(1,'dataScalingColorBoxPlot', ws.ColorBoxPlot,
            "scaling", switchBd.gssFinal, eff_ds, None,
-           submatrices=switchBd.scaledSubMxsDict)    
+           submatrices=switchBd.scaledSubMxsDict)
 
 
     if multidataset:
@@ -963,13 +963,13 @@ def create_standard_report(results, filename, title="auto",
             dscmp_switchBd.add("dscmp",(0,1))
             dscmp_switchBd.add("dscmp_gss",(0,))
             dscmp_switchBd.add("refds",(0,))
-    
+
             for d1, dslbl1 in enumerate(dataset_labels):
                 dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
                 dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset #only used for #of spam labels below
-    
+
             dsComp = dict()
-            all_dsComps = dict()        
+            all_dsComps = dict()
             indices = []
             for i in range(len(dataset_labels)):
                 for j in range(len(dataset_labels)):
@@ -982,7 +982,7 @@ def create_standard_report(results, filename, title="auto",
                         d1, d2 = k
                         dslbl1 = dataset_labels[d1]
                         dslbl2 = dataset_labels[d2]
-    
+
                         ds1 = results_dict[dslbl1].dataset
                         ds2 = results_dict[dslbl2].dataset
                         dsComp[(d1, d2)] = _DataComparator(
@@ -1000,9 +1000,9 @@ def create_standard_report(results, filename, title="auto",
                     dslbl2 = dataset_labels[d2]
                     ds1 = results_dict[dslbl1].dataset
                     ds2 = results_dict[dslbl2].dataset
-                    all_dsComps[(d1,d2)] =  _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])                
+                    all_dsComps[(d1,d2)] =  _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])
                     dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1,d2)]
-            
+
             qtys['dscmpSwitchboard'] = dscmp_switchBd
             addqty(4,'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
             #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
@@ -1029,7 +1029,7 @@ def create_standard_report(results, filename, title="auto",
                     qtys, templateDir, filename, auto_open, precision, link_to,
                     connected=connected, toggles=toggles, renderMath=renderMath,
                     resizable=resizable, autosize=autosize, verbosity=printer)
-                
+
             elif fmt == "latex":
                 templateFile = "standard_pdf_report.tex"
                 base = _os.path.splitext(filename)[0] # no extension
@@ -1045,16 +1045,16 @@ def create_standard_report(results, filename, title="auto",
             else:
                 raise ValueError("Unrecognized format: %s" % fmt)
 
-            #SmartCache.global_status(printer)            
+            #SmartCache.global_status(printer)
     else:
         printer.log("*** NOT Merging into template file (filename is None) ***")
     printer.log("*** Report Generation Complete!  Total time %gs ***" % (_time.time()-tStart))
-        
+
     return ws
 
 
 def create_report_notebook(results, filename, title="auto",
-                           confidenceLevel=None,    
+                           confidenceLevel=None,
                            auto_open=False, connected=False, verbosity=0):
     """
     Create a "report notebook": a Jupyter ipython notebook file which, when its
@@ -1064,14 +1064,14 @@ def create_report_notebook(results, filename, title="auto",
     A notebook report allows the user to interact more flexibly with the data
     underlying the figures, and to easily generate customized variants on the
     figures.  As such, this type of report will be most useful for experts
-    who want to tinker with the standard analysis presented in the static 
+    who want to tinker with the standard analysis presented in the static
     HTML or LaTeX format reports.
 
     Parameters
     ----------
     results : Results
         An object which represents the set of results from one *or more* GST
-        estimation runs, typically obtained from running 
+        estimation runs, typically obtained from running
         :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`, OR a
         dictionary of such objects, representing multiple GST runs to be
         compared (typically all with *different* data sets). The keys of this
@@ -1080,7 +1080,7 @@ def create_report_notebook(results, filename, title="auto",
 
     filename : string, optional
        The output filename where the report file(s) will be saved.  Must end
-       in ".ipynb". 
+       in ".ipynb".
 
     title : string, optional
        The title of the report.  "auto" causes a random title to be
@@ -1102,7 +1102,7 @@ def create_report_notebook(results, filename, title="auto",
 
     verbosity : int, optional
        How much detail to send to stdout.
-    
+
 
     Returns
     -------
@@ -1113,7 +1113,7 @@ def create_report_notebook(results, filename, title="auto",
                                  "templates","report_notebook")
     assert(_os.path.splitext(filename)[1] == '.ipynb'), 'Output file extension must be .ipynb'
     outputDir = _os.path.dirname(filename)
-    
+
     #Copy offline directory into position
     if not connected:
         _merge.rsync_offline_dir(outputDir)
@@ -1146,7 +1146,7 @@ def create_report_notebook(results, filename, title="auto",
         dsKeys = list(results.keys())
         results = results[dsKeys[0]]
           #Note: `results` is always a single Results obj from here down
-          
+
         nb.add_code("""\
         #Load results dictionary
         with open('{infile}', 'rb') as infile:
@@ -1221,13 +1221,13 @@ def create_report_notebook(results, filename, title="auto",
             region_type = "normal" if confidenceLevel >= 0 else "non-markovian"
             cri = crfactory.view(abs(confidenceLevel), region_type)\
     """.format(goLabel=goLabels[0], CL=confidenceLevel))
-            
+
     nb.add_code("""\
         from pygsti.report import Workspace
         ws = Workspace()
         ws.init_notebook_mode(connected={conn}, autodisplay=True)\
         """.format(conn=str(connected)))
-    
+
     nb.add_notebook_text_files([
         _os.path.join(templatePath,'summary.txt'),
         _os.path.join(templatePath,'goodness.txt'),
@@ -1239,7 +1239,7 @@ def create_report_notebook(results, filename, title="auto",
         nb.add_markdown( ('# Dataset comparisons\n'
                           'This report contains information for more than one data set.'
                           'This page shows comparisons between different data sets.') )
-        
+
         nb.add_code("""\
         dslbl1 = '{dsLbl1}'
         dslbl2 = '{dsLbl2}'
@@ -1317,11 +1317,11 @@ def find_std_clifford_compilation(gateset, verbosity=0):
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.
 #        gateLabels = list(gateset.gates.keys())  # gate labels
 #        basis = gateset.basis
-#    
+#
 #        if basis.name != targetGateset.basis.name:
 #            raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
 #                                 % (basis.name, targetGateset.basis.name))
-#    
+#
 #        #Do computation first
 #        # Note: set to "full" parameterization so we can set the gates below
 #        #  regardless of what to fo parameterization the original gateset had.
@@ -1334,7 +1334,7 @@ def find_std_clifford_compilation(gateset, verbosity=0):
 #        for gl in gateLabels:
 #            gate = gateset.gates[gl]
 #            targetGate = targetGateset.gates[gl]
-#    
+#
 #            errgen = _tools.error_generator(gate, targetGate, genType)
 #            hamProj, hamGens = _tools.std_errgen_projections(
 #                errgen, "hamiltonian", basis.name, basis, True)
@@ -1345,16 +1345,16 @@ def find_std_clifford_compilation(gateset, verbosity=0):
 #                    errgen, basis, basis, basis, normalize=False,
 #                    return_generators=True)
 #                #Note: return values *can* be None if an empty/None basis is given
-#    
+#
 #            ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
 #            sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
 #            lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
 #                _np.einsum('ij,ijkl', OProj, OGens)
-#    
+#
 #            ham_error_gen = _tools.change_basis(ham_error_gen,"std",basis)
 #            sto_error_gen = _tools.change_basis(sto_error_gen,"std",basis)
 #            lnd_error_gen = _tools.change_basis(lnd_error_gen,"std",basis)
-#    
+#
 #            gsH.gates[gl]  = _tools.gate_from_error_generator(
 #                ham_error_gen, targetGate, genType)
 #            gsS.gates[gl]  = _tools.gate_from_error_generator(
@@ -1365,33 +1365,33 @@ def find_std_clifford_compilation(gateset, verbosity=0):
 #                lnd_error_gen, targetGate, genType)
 #
 #            #CPTP projection
-#    
+#
 #            #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,
 #            # but this doesn't always return the gate to being CPTP (maybe b/c of normalization)...
 #            #sto_error_gen_cp = _np.einsum('i,ijk', stoProj.clip(None,0), stoGens) #only negative stochastic projections OK
 #            #sto_error_gen_cp = _tools.std_to_pp(sto_error_gen_cp)
 #            #gsHSCP.gates[gl] = _tools.gate_from_error_generator(
 #            #    ham_error_gen, targetGate, genType) #+sto_error_gen_cp
-#    
+#
 #            evals,U = _np.linalg.eig(OProj)
 #            pos_evals = evals.clip(0,1e100) #clip negative eigenvalues to 0
 #            OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U))) #OProj_cp is now a pos-def matrix
 #            lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
 #                _np.einsum('ij,ijkl', OProj_cp, OGens)
 #            lnd_error_gen_cp = _tools.change_basis(lnd_error_gen_cp,"std",basis)
-#    
+#
 #            gsLNDCP.gates[gl] = _tools.gate_from_error_generator(
 #                lnd_error_gen_cp, targetGate, genType)
-#    
+#
 #            Np_H += len(hamProj)
 #            Np_S += len(stoProj)
 #            Np_HS += len(hamProj) + len(stoProj)
 #            Np_LND += HProj.size + OProj.size
-#    
+#
 #        #DEBUG!!!
 #        #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_evals(gateset))
 #        #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_evals(gsLNDCP))
-#    
+#
 #        #Check for CPTP where expected
 #        #assert(_tools.sum_of_negative_choi_evals(gsHSCP) < 1e-6)
 #        assert(_tools.sum_of_negative_choi_evals(gsLNDCP) < 1e-6)
@@ -1401,4 +1401,4 @@ def find_std_clifford_compilation(gateset, verbosity=0):
 #        gatesetTyps = ("Full","H + S","H","S","LND","CPTP","LND CPTP","H + S CPTP")
 #        Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND, Nng, Np_LND, Np_HS)
 
-    
+

@@ -64,15 +64,15 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
         List of the germ gate strings.
 
     maxLengthList : list of ints
-        List of maximum lengths. A zero value in this list has special 
+        List of maximum lengths. A zero value in this list has special
         meaning, and corresponds to the LGST sequences.
 
     fidPairs : list of 2-tuples or dict, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
-        to be used in the gate string lists.  If a list, each element of 
-        fidPairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each 
-        indexing a string within prepStrs and effectStrs, respectively, so 
-        that prepStr = prepStrs[iPrepStr] and effectStr = 
+        to be used in the gate string lists.  If a list, each element of
+        fidPairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
+        indexing a string within prepStrs and effectStrs, respectively, so
+        that prepStr = prepStrs[iPrepStr] and effectStr =
         effectStrs[iEffectStr].  If a dictionary, keys are germs (elements
         of germList) and values are lists of 2-tuples specifying the pairs
         to use for that germ.
@@ -112,8 +112,8 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
 
     includeLGST : boolean, optional
         If true, then the starting list (only applicable when
-        `nest == True`) is the list of LGST strings rather than the 
-        empty list.  This means that when `nest == True`, the LGST 
+        `nest == True`) is the list of LGST strings rather than the
+        empty list.  This means that when `nest == True`, the LGST
         sequences will be included in all the lists.
 
     germLengthLimits : dict, optional
@@ -156,7 +156,7 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
     else: rndm = None
 
     if isinstance(fidPairs, dict) or hasattr(fidPairs, "keys"):
-        fiducialPairs = { germ: [ (prepStrs[i],effectStrs[j]) 
+        fiducialPairs = { germ: [ (prepStrs[i],effectStrs[j])
                                   for (i,j) in fidPairs[germ] ]
                           for germ in germList }
         fidPairDict = fidPairs
@@ -173,7 +173,7 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
     #running list of all strings so far (LGST strings or empty)
     lsgst_list = lgst_list[:] if includeLGST else _gsc.gatestring_list([ () ])
     lsgst_listOfLists = [ ] # list of lists to return
-    
+
     Rfn = _getTruncFunction(truncScheme)
 
     for maxLen in maxLengthList:
@@ -181,15 +181,15 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
         lst = []
         if maxLen == 0:
             #Special LGST case
-            lst += lgst_list[:] 
+            lst += lgst_list[:]
         else:
             #Typical case of germs repeated to maxLen using Rfn
             for germ in germList:
                 if maxLen > germLengthLimits.get(germ,1e100): continue
-                
+
                 if rndm is None:
                     fiducialPairsThisIter = fiducialPairs[germ]
-    
+
                 elif fidPairDict is not None:
                     pair_indx_tups = fidPairDict[germ]
                     remainingPairs = [ (prepStrs[i],effectStrs[j])
@@ -201,18 +201,18 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
                     nPairsToChoose = max(0,min(nPairsToChoose,nPairsRemaining))
                     assert(0 <= nPairsToChoose <= nPairsRemaining)
                     # FUTURE: issue warnings when clipping nPairsToChoose?
-    
+
                     fiducialPairsThisIter = fiducialPairs[germ] + \
                         [ remainingPairs[k] for k in
                           sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
                                              replace=False))]
-    
+
                 else: # rndm is not None and fidPairDict is None
                     assert(nPairsToKeep <= nPairs) # keepFraction must be <= 1.0
                     fiducialPairsThisIter = \
                         [ fiducialPairs[germ][k] for k in
                           sorted(rndm.choice(nPairs,nPairsToKeep,replace=False))]
-    
+
                 lst += _gsc.create_gatestring_list("f[0]+R(germ,N)+f[1]",
                                                   f=fiducialPairsThisIter,
                                                   germ=germ, N=maxLen,
@@ -276,15 +276,15 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         List of the germ gate strings.
 
     maxLengthList : list of ints
-        List of maximum lengths. A zero value in this list has special 
+        List of maximum lengths. A zero value in this list has special
         meaning, and corresponds to the LGST sequences.
 
     fidPairs : list of 2-tuples or dict, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
-        to be used in the gate string lists.  If a list, each element of 
-        fidPairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each 
-        indexing a string within prepStrs and effectStrs, respectively, so 
-        that prepStr = prepStrs[iPrepStr] and effectStr = 
+        to be used in the gate string lists.  If a list, each element of
+        fidPairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
+        indexing a string within prepStrs and effectStrs, respectively, so
+        that prepStr = prepStrs[iPrepStr] and effectStr =
         effectStrs[iEffectStr].  If a dictionary, keys are germs (elements
         of germList) and values are lists of 2-tuples specifying the pairs
         to use for that germ.
@@ -324,8 +324,8 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
 
     includeLGST : boolean, optional
         If true, then the starting list (only applicable when
-        `nest == True`) is the list of LGST strings rather than the 
-        empty list.  This means that when `nest == True`, the LGST 
+        `nest == True`) is the list of LGST strings rather than the
+        empty list.  This means that when `nest == True`, the LGST
         sequences will be included in all the lists.
 
     gateLabelAliases : dictionary, optional
@@ -337,7 +337,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
 
     sequenceRules : list, optional
         A list of `(find,replace)` 2-tuples which specify string replacement
-        rules.  Both `find` and `replace` are tuples of gate labels 
+        rules.  Both `find` and `replace` are tuples of gate labels
         (or `GateString` objects).
 
     dscheck : DataSet, optional
@@ -373,7 +373,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
 
     printer = _VerbosityPrinter.build_printer(verbosity)
     if germLengthLimits is None: germLengthLimits = {}
-    
+
     if nest == True and includeLGST == True and len(maxLengthList)>0 and maxLengthList[0] == 0:
         _warnings.warn("Setting the first element of a max-length list to zero"
                        + " to ensure the inclusion of LGST sequences has been"
@@ -406,7 +406,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
             fidPairDict = { germ:fidPairs for germ in germList }
         else:
             fidPairDict = None
-    
+
     truncFn = _getTruncFunction(truncScheme)
 
     empty_germ = _GateString( (), "{}" )
@@ -418,11 +418,11 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
                                     sequenceRules)
 
     missing_lgst = []
-    
+
     if includeLGST and len(maxLengthList) == 0:
         #Add *all* LGST sequences as unstructured if we don't add them below
         missing_lgst = running_gss.add_unindexed(lgst_list, dscheck)
-    
+
     lsgst_listOfStructs = [ ] # list of gate string structures to return
     missing_list = []
     totStrs = len(running_gss.allstrs)
@@ -445,20 +445,20 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
                 missing_list.extend( gss.add_plaquette(empty_germ, maxLen, empty_germ,
                                                        allPossiblePairs, dscheck) )
                 missing_lgst = gss.add_unindexed(lgst_list, dscheck) # only adds those not already present
-            
+
             #Typical case of germs repeated to maxLen using Rfn
             for germ in germList:
                 if germ == empty_germ: continue #handled specially above
                 if maxLen > germLengthLimits.get(germ,1e100): continue
                 germ_power = truncFn(germ,maxLen)
-                
+
                 if rndm is None:
                     if fidPairDict is not None:
                         fiducialPairsThisIter = fidPairDict.get(
                             germ,allPossiblePairs)
                     else:
                         fiducialPairsThisIter = allPossiblePairs
-    
+
                 elif fidPairDict is not None:
                     pair_indx_tups = fidPairDict.get(germ,allPossiblePairs)
                     remainingPairs = [ (i,j)
@@ -470,12 +470,12 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
                     nPairsToChoose = max(0,min(nPairsToChoose,nPairsRemaining))
                     assert(0 <= nPairsToChoose <= nPairsRemaining)
                     # FUTURE: issue warnings when clipping nPairsToChoose?
-    
+
                     fiducialPairsThisIter = fidPairDict[germ] + \
                         [ remainingPairs[k] for k in
                           sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
                                              replace=False))]
-    
+
                 else: # rndm is not None and fidPairDict is None
                     assert(nPairsToKeep <= nPairs) # keepFraction must be <= 1.0
                     fiducialPairsThisIter = \
@@ -492,7 +492,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
 
     if nest: #then totStrs computation about overcounts -- just take string count of final stage
         totStrs = len(running_gss.allstrs)
-        
+
     printer.log("--- Gate Sequence Creation ---", 1)
     printer.log(" %d sequences created" % totStrs,2)
     if dscheck:
@@ -510,7 +510,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
             pass
         else:
             raise ValueError("Invalid `actionIfMissing` argument: %s" % actionIfMissing)
-        
+
 
     for i,struct in enumerate(lsgst_listOfStructs):
         if nest:
@@ -559,10 +559,10 @@ def make_lsgst_experiment_list(gateLabelSrc, prepStrs, effectStrs, germList,
 
     fidPairs : list of 2-tuples, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
-        to be used in the gate string lists.  If a list, each element of 
-        fidPairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each 
-        indexing a string within prepStrs and effectStrs, respectively, so 
-        that prepStr = prepStrs[iPrepStr] and effectStr = 
+        to be used in the gate string lists.  If a list, each element of
+        fidPairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each
+        indexing a string within prepStrs and effectStrs, respectively, so
+        that prepStr = prepStrs[iPrepStr] and effectStr =
         effectStrs[iEffectStr].  If a dictionary, keys are germs (elements
         of germList) and values are lists of 2-tuples specifying the pairs
         to use for that germ.
@@ -646,7 +646,7 @@ def make_elgst_lists(gateLabelSrc, germList, maxLengthList,
         List of the germ gate strings.
 
     maxLengthList : list of ints
-        List of maximum lengths. A zero value in this list has special 
+        List of maximum lengths. A zero value in this list has special
         meaning, and corresponds to the length-1 gate label strings.
 
     truncScheme : str, optional
@@ -695,17 +695,17 @@ def make_elgst_lists(gateLabelSrc, germList, maxLengthList,
     #running list of all strings so far (length-1 strs or empty)
     elgst_list = singleGates[:] if includeLGST else _gsc.gatestring_list([()])
     elgst_listOfLists = [ ] # list of lists to return
-    
+
     Rfn = _getTruncFunction(truncScheme)
 
     for maxLen in maxLengthList:
         if maxLen == 0:
             #Special length-1 string case
-            lst = singleGates[:] 
+            lst = singleGates[:]
         else:
             #Typical case of germs repeated to maxLen using Rfn
             lst = _gsc.create_gatestring_list("R(germ,N)", germ=germList, N=maxLen, R=Rfn)
-            
+
         if nest:
             elgst_list += lst #add new strings to running list
             elgst_listOfLists.append( _lt.remove_duplicates(singleGates + elgst_list) )
@@ -742,7 +742,7 @@ def make_elgst_experiment_list(gateLabelSrc, germList, maxLengthList,
         List of the germ gate strings.
 
     maxLengthList : list of ints
-        List of maximum lengths. A zero value in this list has special 
+        List of maximum lengths. A zero value in this list has special
         meaning, and corresponds to the length-1 gate label strings.
 
     truncScheme : str, optional

@@ -17,7 +17,7 @@ class GatestringPlaquette(object):
     whose rows and columns correspdond to measurement and preparation
     fiducial sequences.
     """
-    
+
     def __init__(self, base, rows, cols, elements, aliases):
         """
         Create a new GatestringPlaquette.
@@ -36,7 +36,7 @@ class GatestringPlaquette(object):
             indices and `s` is the corresponding `GateString`.
 
         aliases : dict
-            A dictionary of gate label aliases that is carried along 
+            A dictionary of gate label aliases that is carried along
             for calls to :func:`expand_aliases`.
         """
         self.base = base
@@ -74,10 +74,10 @@ class GatestringPlaquette(object):
         for i,j,s in self.elements:
             s2 = s if (self.aliases is None) else \
                  _lt.find_replace_tuple(s,self.aliases)
-            
+
             if dsFilter is None or s2 in dsFilter:
                 new_elements.append((i,j,s2))
-            
+
         ret = GatestringPlaquette(self.base, self.rows, self.cols,
                                    new_elements, None)
         if gatestring_compiler is not None:
@@ -111,7 +111,7 @@ class GatestringPlaquette(object):
             "Plaquette must be compiled first!"
         for k,(i,j,s) in enumerate(self.elements):
             yield i,j,s,self._elementIndicesByStr[k],self._outcomesByStr[k]
-            
+
     def __iter__(self):
         for i,j,s in self.elements:
             yield i,j,s
@@ -123,18 +123,18 @@ class GatestringPlaquette(object):
     def copy(self):
         """
         Returns a copy of this `GatestringPlaquette`.
-        """        
+        """
         aliases = _copy.deepcopy(self.aliases) if (self.aliases is not None) \
                   else None
         return GatestringPlaquette(self.base, self.rows, self.cols,
                                    self.elements[:], aliases)
 
-    
+
 class GatestringStructure(object):
     """
     Encapsulates a set of gate sequences, along with an associated structure.
 
-    By "structure", we mean the ability to index the gate sequences by a 
+    By "structure", we mean the ability to index the gate sequences by a
     4-tuple (x, y, minor_x, minor_y) for displaying in nested color box plots,
     along with any aliases.
     """
@@ -156,7 +156,7 @@ class GatestringStructure(object):
     def minor_yvals(self):
         """ Returns a list of the minor y-values"""
         raise NotImplementedError("Derived class must implement this.")
-    
+
     def get_plaquette(self,x,y):
         """
         Returns a the plaquette at `(x,y)`.
@@ -172,7 +172,7 @@ class GatestringStructure(object):
         GatestringPlaquette
         """
         raise NotImplementedError("Derived class must implement this.")
-    
+
     def create_plaquette(self, baseStr):
         """
         Creates a the plaquette for the given base string.
@@ -191,7 +191,7 @@ class GatestringStructure(object):
         """Lists the x-values which have at least one non-empty plaquette"""
         return [ x for x in self.xvals() if any([ len(self.get_plaquette(x,y)) > 0
                                                   for y in self.yvals()]) ]
-    
+
     def used_yvals(self):
         """Lists the y-values which have at least one non-empty plaquette"""
         return [ y for y in self.yvals() if any([ len(self.get_plaquette(x,y)) > 0
@@ -199,7 +199,7 @@ class GatestringStructure(object):
 
     def plaquette_rows_cols(self):
         """
-        Return the number of rows and columns contained in each plaquette of 
+        Return the number of rows and columns contained in each plaquette of
         this GateStringStructure.
 
         Returns
@@ -208,7 +208,7 @@ class GatestringStructure(object):
         """
         return len(self.minor_yvals()), len(self.minor_xvals())
 
-    
+
     def get_basestrings(self):
         """Lists the base strings (without duplicates) of all the plaquettes"""
         baseStrs = set()
@@ -235,7 +235,7 @@ class GatestringStructure(object):
                 p = self.get_plaquette(x,y)
                 if p is not None:
                     p.compile_gatestrings(gateset)
-    
+
 
 class LsGermsStructure(GatestringStructure):
     """
@@ -266,7 +266,7 @@ class LsGermsStructure(GatestringStructure):
 
         sequenceRules : list, optional
             A list of `(find,replace)` 2-tuples which specify string replacement
-            rules.  Both `find` and `replace` are tuples of gate labels 
+            rules.  Both `find` and `replace` are tuples of gate labels
             (or `GateString` objects).
         """
         self.Ls = Ls[:]
@@ -286,15 +286,15 @@ class LsGermsStructure(GatestringStructure):
     def xvals(self):
         """ Returns a list of the x-values"""
         return self.Ls
-    
+
     def yvals(self):
         """ Returns a list of the y-values"""
         return self.germs
-    
+
     def minor_xvals(self):
         """ Returns a list of the minor x-values"""
         return self.prepStrs
-    
+
     def minor_yvals(self):
         """ Returns a list of the minor y-values"""
         return self.effectStrs
@@ -319,10 +319,10 @@ class LsGermsStructure(GatestringStructure):
             can be used to mean all pairs.
 
         dsfilter : DataSet, optional
-            If not None, check that this data set contains all of the 
+            If not None, check that this data set contains all of the
             gate strings being added.  If dscheck does not contain a gate
             sequence, it is *not* added.
-        
+
         Returns
         -------
         missing : list
@@ -365,7 +365,7 @@ class LsGermsStructure(GatestringStructure):
 
         return missing_list
 
-        
+
     def add_unindexed(self, gsList, dsfilter=None):
         """
         Adds unstructured gate strings (not in any plaquette).
@@ -376,7 +376,7 @@ class LsGermsStructure(GatestringStructure):
             The gate strings to add.
 
         dsfilter : DataSet, optional
-            If not None, check that this data set contains all of the 
+            If not None, check that this data set contains all of the
             gate strings being added.  If dscheck does not contain a gate
             sequence, it is *not* added.
 
@@ -387,7 +387,7 @@ class LsGermsStructure(GatestringStructure):
             and therefore not added.
         """
         from ..construction import gatestringconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
-        
+
         missing_list = []
         for gatestr in gsList:
             if gatestr not in self.allstrs:
@@ -406,7 +406,7 @@ class LsGermsStructure(GatestringStructure):
         #placeholder in case there's some additional init we need to do.
         pass
 
-    
+
     def get_plaquette(self, L, germ, onlyfirst=True):
         """
         Returns a the plaquette at `(L,germ)`.
@@ -421,9 +421,9 @@ class LsGermsStructure(GatestringStructure):
 
         onlyfirst : bool, optional
             If True, then when multiple plaquettes have been added with the
-            same base string, only the *first* added plaquette will be 
+            same base string, only the *first* added plaquette will be
             returned normally.  Requests for the other plaquettes will be
-            given an empty plaquette.  This behavior is useful for color 
+            given an empty plaquette.  This behavior is useful for color
             box plots where we wish to avoid duplicated data.
 
         Returns
@@ -434,7 +434,7 @@ class LsGermsStructure(GatestringStructure):
             p =  self.create_plaquette(None,[]) # no elements
             p.compile_gatestrings(None) # just marks as "compiled"
             return p
-        
+
         if not onlyfirst or (L,germ) in self._firsts:
             return self._plaquettes[(L,germ)]
         else:
@@ -474,13 +474,13 @@ class LsGermsStructure(GatestringStructure):
 
         elements = [ (j,i,self.prepStrs[i] + baseStr + self.effectStrs[j])
                      for i,j in fidpairs ] #note preps are *cols* not rows
-        
+
         return GatestringPlaquette(baseStr, len(self.effectStrs),
                             len(self.prepStrs), elements, self.aliases)
 
     def plaquette_rows_cols(self):
         """
-        Return the number of rows and columns contained in each plaquette of 
+        Return the number of rows and columns contained in each plaquette of
         this LsGermsStructure.
 
         Returns
