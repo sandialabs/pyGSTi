@@ -75,13 +75,13 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     #Aggregate over outcomes:
     # v[iElement] contains all chi2 contributions - now aggregate over outcomes
     # terms[iGateString] wiil contain chi2 contributions for each original gate
-    # string (aggregated over outcomes)    
+    # string (aggregated over outcomes)
     nGateStrings = len(gateStrings)
     terms = _np.empty(nGateStrings , 'd')
     for i in range(nGateStrings):
         terms[i] = _np.sum( v[lookup[i]], axis=0 )
     return terms
-    
+
 
 
 def chi2(gateset, dataset, gateStrings=None,
