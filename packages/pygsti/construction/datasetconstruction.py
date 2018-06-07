@@ -16,6 +16,8 @@ from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
 from . import gatestringconstruction as _gstrc
 
+from pprint import pprint
+
 def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                        sampleError="none", seed=None, randState=None,
                        aliasDict=None, collisionAction="aggregate", comm=None):
@@ -88,7 +90,8 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
        A static data set filled with counts for the specified gate strings.
 
     """
-    TOL = 1e-10
+    NTOL = 10
+    TOL = 1 / (10**-NTOL)
 
     if isinstance(gatesetOrDataset, _ds.DataSet):
         dsGen = gatesetOrDataset
@@ -143,29 +146,17 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                 if psum < 1-TOL:
                     adjusted = True
                     _warnings.warn("Adjusting sum(probs) < 1 to 1")
-                # The following while loop is needed if the data generating gateset
-                # is bad enough that one loop over the probabilities is not enough
+
+                # A cleaner probability cleanup.. lol
                 OVERTOL  = 1.0 + TOL
                 UNDERTOL = 1.0 - TOL
                 normalized = lambda : UNDERTOL <= sum(ps.values()) <= OVERTOL
-                while not normalized():
-                    if psum > 1:
-                        extra_p = (psum-1.0) * OVERTOL
-                        for lbl in ps:
-                            if extra_p > 0:
-                                x = min(ps[lbl],extra_p)
-                                ps[lbl] -= x; extra_p -= x
-                            else: break
-                    elif psum < 1:
-                        needed_p = abs((psum-1.0) * UNDERTOL)
-                        for lbl in ps:
-                            if needed_p > 0:
-                                x = min(ps[lbl], needed_p)
-                                ps[lbl] += x # ADD here rather than subtract
-                                needed_p -= x
-                            else: break
-                    psum = sum(ps.values())
-                assert normalized(), 'psum={}'.format(psum)
+                if not normalized():
+                    m = max(ps.values())
+                    ps = {lbl : round(p/m, NTOL) for lbl, p in ps.items()}
+                    print(sum(ps.values()))
+
+                assert normalized(), 'psum={}'.format(sum(ps.values()))
                 if adjusted:
                     _warnings.warn('Adjustment finished')
 
