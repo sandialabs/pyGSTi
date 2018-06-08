@@ -302,7 +302,7 @@ def mx_to_string(m, width=9, prec=4):
     if _np.max(abs(_np.imag(m))) > tol:
         return mx_to_string_complex(m, width, width, prec)
 
-    if len(m.shape) == 1: m = m[None,:] # so it works w/vectors too
+    if len(m.shape) == 1: m = _np.array(m)[None,:] # so it works w/vectors too
     for i in range(m.shape[0]):
         for j in range(m.shape[1]):
             if abs(m[i,j]) < tol: s += '{0: {w}.0f}'.format(0,w=width)

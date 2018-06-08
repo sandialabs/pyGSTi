@@ -146,7 +146,7 @@ class SpamTable(WorkspaceTable):
 
         for povmlbl in povmLabels:
             for lbl in gatesets[0].povms[povmlbl].keys():
-                povmAndELbl = povmlbl + ":" + lbl # format for GateSetFunction objs
+                povmAndELbl = str(povmlbl) + ":" + lbl # format for GateSetFunction objs
                 rowData = [lbl] if (len(povmLabels) == 1) else [povmAndELbl] #show POVM name if there's more than one of them
                 rowFormatters = ['Effect']
     
@@ -250,7 +250,7 @@ class SpamParametersTable(WorkspaceTable):
         
             for ii,prepLabel in enumerate(gateset.preps.keys()): # ii enumerates rhoLabels to index DPs
                 prefix = gstitle + " " if len(gstitle) else ""
-                rowData = [prefix + prepLabel]
+                rowData = [prefix + str(prepLabel)]
                 for jj,_ in enumerate(effectLbls): # jj enumerates eLabels to index DPs
                     if cri is None:
                         rowData.append((DPs[ii,jj],None))
@@ -1103,6 +1103,7 @@ class GateDecompTable(WorkspaceTable):
             gateset, targetGateset), confidenceRegionInfo)
 
         for gl in gateLabels:
+            gl = str(gl) # Label -> str for decomp-dict keys
             axis, axisEB = decomp[gl + ' axis'].get_value_and_err_bar()
             axisFig = _wp.ProjectionsBoxPlot(self.ws, axis, gateset.basis.name, -1.0,1.0,
                                              boxLabels=True, EBmatrix=axisEB)
@@ -1112,6 +1113,7 @@ class GateDecompTable(WorkspaceTable):
                        decomp[gl + ' log inexactness'] ]
 
             for gl_other in gateLabels:
+                gl_other = str(gl_other)
                 rotnAngle = decomp[gl + ' angle'].get_value()
                 rotnAngle_other = decomp[gl_other + ' angle'].get_value()
     
@@ -1225,7 +1227,7 @@ class old_RotationAxisTable(WorkspaceTable):
         latex_head =  "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * nCols + "|")
         latex_head += "\\multirow{2}{*}{Gate} & \\multirow{2}{*}{Angle} & " + \
                       "\\multicolumn{%d}{c|}{Angle between Rotation Axes} \\\\ \cline{3-%d}\n" % (len(gateLabels),nCols)
-        latex_head += " & & %s \\\\ \hline\n" % (" & ".join(gateLabels))
+        latex_head += " & & %s \\\\ \hline\n" % (" & ".join(map(str,gateLabels)))
     
         table = _ReportTable(colHeadings, formatters,
                              customHeader={'latex': latex_head}, confidenceRegionInfo=confidenceRegionInfo)
@@ -1563,7 +1565,7 @@ class DataSetOverviewTable(WorkspaceTable):
         cntStr = "[%d,%d]" % (minN,maxN) if (minN != maxN) else "%d" % round(minN)
     
         table.addrow(("Number of strings", str(len(dataset))), (None,None))
-        table.addrow(("Gate labels", ", ".join(dataset.get_gate_labels()) ), (None,None))
+        table.addrow(("Gate labels", ", ".join([str(gl) for gl in dataset.get_gate_labels()]) ), (None,None))
         table.addrow(("Outcome labels",  ", ".join(map(str,dataset.get_outcome_labels())) ), (None,None))
         table.addrow(("Counts per string", cntStr  ), (None,None))
 

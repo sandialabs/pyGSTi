@@ -116,10 +116,10 @@ class TestGateSetConstructionMethods(BaseTestCase):
             build_gate( [2],[('Q0',)], "FooBar(Q0)",b,prm,ue) #bad gate name
         with self.assertRaises(ValueError):
             build_gate( [2],[('A0',)], "I(Q0)",b,prm,ue) #bad state specifier (A0)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(KeyError):
             build_gate( [2],[('Q0','L0')], "I(Q0,A0)",b,prm,ue) #bad label A0
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             build_gate( [4],[('Q0',)], "I(Q0)",b,prm,ue) #state space dim mismatch
         with self.assertRaises(ValueError):
             build_gate( [2,2],[('Q0',),('Q1',)], "CZ(pi,Q0,Q1)",b,prm,ue) # Q0 & Q1 must be in same tensor-prod block of state space
@@ -476,7 +476,7 @@ GAUGEGROUP: Full
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
                                                # invalid state specifier (A0)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             pygsti.construction.build_gateset( [4], [('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
                                                # state space dimension mismatch (4 != 2)
@@ -686,7 +686,7 @@ GAUGEGROUP: Full
             self.assertEqual(gate.get_dimension(), 4)
 
             M = np.asarray(gate) #gate as a matrix
-            if type(gate) == pygsti.obj.LinearlyParameterizedGate:
+            if isinstance(gate, (pygsti.obj.LinearlyParameterizedGate,pygsti.obj.StaticGate)):
                 with self.assertRaises(ValueError):
                     gate.set_value(M)
             else:
@@ -962,7 +962,7 @@ GAUGEGROUP: Full
         parameterToBaseIndicesMap = { 0: [(0,0)], 1: [(1,1)] } #parameterize only the diagonal els
         gate_linear_B = pygsti.obj.LinearlyParameterizedGate(baseMx, paramArray,
                                                              parameterToBaseIndicesMap, real=True)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             pygsti.obj.LinearlyParameterizedGate(baseMx, np.array( [1.0+1j, 1.0] ),
                                                  parameterToBaseIndicesMap, real=True) #must be real
 
@@ -1001,7 +1001,11 @@ GAUGEGROUP: Full
             self.assertEqual(svec.get_dimension(), 4)
 
             v = np.asarray(svec)
-            svec.set_value(svec)
+            if isinstance(svec, pygsti.obj.StaticSPAMVec):
+                with self.assertRaises(ValueError):
+                    svec.set_value(svec)
+            else:
+                svec.set_value(svec)
 
             with self.assertRaises(ValueError):
                 svec.set_value( np.zeros((1,1),'d') ) #bad size

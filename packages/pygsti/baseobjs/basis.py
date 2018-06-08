@@ -125,7 +125,7 @@ class Basis(object):
             if isinstance(dim,_numbers.Integral): dims = [dim]*len(blockDims) # for len=0 case
             elif isinstance(dim,Dim): dims = dim.blockDims
             else: dims = dim # assume dim is a list of ints
-            assert(dims == blockDims),"Dimension mismatch in basis construction: %s != %s" % (str(dims),str(blockDims))
+            assert(list(dims) == blockDims),"Dimension mismatch in basis construction: %s != %s" % (str(dims),str(blockDims))
 
         if labels is None:
             try:

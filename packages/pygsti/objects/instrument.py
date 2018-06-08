@@ -16,7 +16,7 @@ from . import gatesetmember as _gm
 from . import gate as _gate
 
 
-def convert(instrument, toType, basis):
+def convert(instrument, toType, basis, extra=None):
     """
     Convert intrument to a new type of parameterization, potentially
     creating a new object.  Raises ValueError for invalid conversions.
@@ -34,6 +34,9 @@ def convert(instrument, toType, basis):
         The basis for `povm`.  Allowed values are Matrix-unit (std),
         Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
+
+    extra : object, optional
+        Additional information for conversion.
 
     Returns
     -------
@@ -162,8 +165,9 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
         #Python 2.7: remove elements of __dict__ that get initialized by OrderedDict impl
         if '_OrderedDict__root' in dict_to_pickle: del dict_to_pickle['_OrderedDict__root']
         if '_OrderedDict__map' in dict_to_pickle: del dict_to_pickle['_OrderedDict__map']
-        
-        return (Instrument, (None, list(self.items())), dict_to_pickle)
+
+        #Note: must *copy* elements for pickling/copying
+        return (Instrument, (None, [(key,gate.copy()) for key,gate in self.items()]), dict_to_pickle)
 
     def __pygsti_reduce__(self):
         return self.__reduce__()

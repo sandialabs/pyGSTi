@@ -4,7 +4,7 @@ import numpy as np
 import pickle
 
 from  pygsti.objects import GateMatrix
-from  pygsti.objects import GateMap
+#from  pygsti.objects import GateMap
 import pygsti.construction as pc
 import scipy.sparse as sps
 
@@ -41,25 +41,30 @@ class GateTestCase(BaseTestCase):
 
     def test_gate_base(self):
         #check that everything is not implemented
-        gate = pygsti.objects.Gate(4)
+        gate = pygsti.objects.Gate(4,"densitymx")
 
         state = np.zeros( (4,1), 'd' )
         state[0] = state[3] = 1.0
 
-        T = np.array( [ [0,1],
-                        [1,0] ], 'd')
+        T = pygsti.objects.FullGaugeGroupElement(
+            np.array( [ [0,1],
+                        [1,0] ], 'd') )
             
         self.assertEqual( gate.get_dimension(), 4 )
+        self.assertEqual( gate.num_params(), 0) #default is no params
+        v = gate.to_vector()
+        self.assertEqual(len(v),0)
+        gate.from_vector(v)
+        gate.copy()
 
         with self.assertRaises(NotImplementedError):
             gate.acton(state)
-            
         with self.assertRaises(NotImplementedError):
             gate.transform(T)
         with self.assertRaises(NotImplementedError):
             gate.depolarize(0.05)
         with self.assertRaises(NotImplementedError):
-            gate.rotate(0.01,'gm')
+            gate.rotate((0.01,0,0),'gm')
         with self.assertRaises(NotImplementedError):
             gate.frobeniusdist2(gate)
         with self.assertRaises(NotImplementedError):
@@ -68,29 +73,21 @@ class GateTestCase(BaseTestCase):
             gate.jtracedist(gate)
         with self.assertRaises(NotImplementedError):
             gate.diamonddist(gate)
-        with self.assertRaises(NotImplementedError):
-            gate.num_params()
-        with self.assertRaises(NotImplementedError):
-            gate.to_vector()
-        with self.assertRaises(NotImplementedError):
-            gate.from_vector([])
-        with self.assertRaises(NotImplementedError):
-            gate.copy()
 
         s = pickle.dumps(gate)
         gate2 = pickle.loads(s)
 
         
     def test_gate_matrix(self):
-        gate = GateMatrix(np.zeros(2))
+        gate = GateMatrix(np.zeros(2),"densitymx")
 
         gate[:] #calls __getslice__ in python 2.7
-        self.assertTrue(gate.has_nonzero_hessian())
 
-        with self.assertRaises(NotImplementedError):
-            gate.deriv_wrt_params()
-        with self.assertRaises(NotImplementedError):
-            gate.hessian_wrt_params()
+        # default is no params, so can compute deriv & hessian (all zeros)
+        self.assertFalse(gate.has_nonzero_hessian()) 
+        gate.deriv_wrt_params()
+        gate.hessian_wrt_params()
+
         with self.assertRaises(ValueError):
             gate.set_value(np.identity(2))
 
@@ -106,10 +103,11 @@ class GateTestCase(BaseTestCase):
             with self.assertRaises(ValueError):
                 GateMatrix.convert_to_matrix(bad_mx)
 
-                
-    def test_gate_map(self):
-        gatemap = GateMap(dim=4)
-        self.assertEqual(gatemap.size,4**2)
+
+#GateMap removed
+#    def test_gate_map(self):
+#        gatemap = GateMap(dim=4)
+#        self.assertEqual(gatemap.size,4**2)
 
         
     def test_gate_methods(self):
@@ -141,24 +139,24 @@ class GateTestCase(BaseTestCase):
             mx2,includeOffDiagsInDegen2Blocks=False,
             TPconstrainedAndUnital=False) )
         
-        gates_to_test.append( pygsti.objects.LindbladParameterizedGate(
+        gates_to_test.append( pygsti.objects.LindbladParameterizedGate.from_gate_matrix(
             mx,unitaryPostfactor=None,
             ham_basis="pp", nonham_basis="pp", cptp=True,
             nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
 
-        gates_to_test.append( pygsti.objects.LindbladParameterizedGate(
+        gates_to_test.append( pygsti.objects.LindbladParameterizedGate.from_gate_matrix(
             mx,unitaryPostfactor=None,
             ham_basis="pp", nonham_basis="pp", cptp=True,
             nonham_diagonal_only=True, truncate=True, mxBasis="pp") )
 
         ppBasis = pygsti.obj.Basis("pp",2)
-        gates_to_test.append( pygsti.objects.LindbladParameterizedGate(
+        gates_to_test.append( pygsti.objects.LindbladParameterizedGate.from_gate_matrix(
             mx,unitaryPostfactor=mx,
             ham_basis=ppBasis, nonham_basis=ppBasis, cptp=False,
             nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
 
         ppMxs = pygsti.tools.pp_matrices(2)
-        gates_to_test.append( pygsti.objects.LindbladParameterizedGate(
+        gates_to_test.append( pygsti.objects.LindbladParameterizedGate.from_gate_matrix(
             mx,unitaryPostfactor=None,
             ham_basis=ppMxs, nonham_basis=ppMxs, cptp=False,
             nonham_diagonal_only=True, truncate=True, mxBasis="pp") )
@@ -172,18 +170,17 @@ class GateTestCase(BaseTestCase):
         dummyGS.gates['Gcomp'] = compGate # so to/from vector work in tests below
         gates_to_test.append( dummyGS.gates['Gcomp'] )
 
-        embedGate = pygsti.objects.EmbeddedGate( [('Q0',)], ['Q0'], pygsti.objects.FullyParameterizedGate(mx), ppBasis)
+        embedGate = pygsti.objects.EmbeddedGate( [('Q0',)], ['Q0'], pygsti.objects.FullyParameterizedGate(mx))
         dummyGS.gates['Gembed'] = embedGate # so to/from vector work in tests below
         gates_to_test.append( dummyGS.gates['Gembed'] )
 
 
-        with self.assertRaises(AssertionError): #need to truncate... WHY THOUGH?
-            pygsti.objects.LindbladParameterizedGate(
-                mx,unitaryPostfactor=mx,
-                ham_basis=ppBasis, nonham_basis=ppBasis, cptp=False,
-                nonham_diagonal_only=False, truncate=False, mxBasis="pp")
-
-        
+        #with self.assertRaises(AssertionError): #need to truncate... WHY THOUGH?
+        # no need to truncate anymore... (?)
+        pygsti.objects.LindbladParameterizedGate.from_gate_matrix(
+            mx,unitaryPostfactor=mx,
+            ham_basis=ppBasis, nonham_basis=ppBasis, cptp=False,
+            nonham_diagonal_only=False, truncate=False, mxBasis="pp")
 
         for gate in gates_to_test:
             state = np.zeros( (4,1), 'd' )
@@ -202,16 +199,18 @@ class GateTestCase(BaseTestCase):
 
             #test Gate methods
             self.assertEqual( gate.get_dimension(), 4 )
-            gate.acton(state)
+            gate.acton(state.flatten())
             gate.has_nonzero_hessian()
 
             try:
                 gate.transform(T)
+            except NotImplementedError: pass #OK, as this is unallowed for some gate types
             except ValueError: pass #OK, as this is unallowed for some gate types
             
             try:
             #if isinstance(gate, pygsti.obj.LindbladParameterizedGate):
                 gate.transform(T2)
+            except NotImplementedError: pass #OK, as this is unallowed for some gate types
             except ValueError: pass #OK, as this is unallowed for some gate types
 
             try:
@@ -268,6 +267,7 @@ class GateTestCase(BaseTestCase):
             try:
                 cgate = gate.compose(gate)
             except NotImplementedError: pass #Still todo for ComposedGate (and maybe more?)
+            except ValueError: pass #Other gates may just not allow compositions
 
             try:
                 gate.set_value( np.identity(4,'d') )
@@ -295,40 +295,40 @@ class GateTestCase(BaseTestCase):
         #build a list of gates to test
         gates_to_test = []
                 
-        gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap(
+        gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             densemx,unitaryPostfactor=None,
             ham_basis="pp", nonham_basis="pp", cptp=True,
             nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
 
-        gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap(
+        gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             sparsemx,unitaryPostfactor=None,
             ham_basis="pp", nonham_basis="pp", cptp=True,
             nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
 
-        gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap(
+        gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             None,unitaryPostfactor=densemx,
             ham_basis="pp", nonham_basis="pp", cptp=True,
             nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
 
-        gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap(
+        gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             None, unitaryPostfactor=sparsemx,
             ham_basis="pp", nonham_basis="pp", cptp=True,
             nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
 
         ppBasis = pygsti.obj.Basis("pp",2)
-        gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap(
+        gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             densemx,unitaryPostfactor=None,
             ham_basis=ppBasis, nonham_basis=ppBasis, cptp=False,
             nonham_diagonal_only=True, truncate=True, mxBasis="pp") )
 
         ppMxs = pygsti.tools.pp_matrices(2)
-        testGate= pygsti.objects.LindbladParameterizedGateMap(
+        testGate= pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             densemx,unitaryPostfactor=None,
             ham_basis=ppMxs, nonham_basis=ppMxs, cptp=False,
             nonham_diagonal_only=True, truncate=True, mxBasis="pp")
         gates_to_test.append( testGate )
 
-        gates_to_test.append(pygsti.objects.LindbladParameterizedGateMap(
+        gates_to_test.append(pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             densemx,unitaryPostfactor=None,
             ham_basis=None, nonham_basis=ppMxs, cptp=False,
             nonham_diagonal_only=True, truncate=True, mxBasis="pp"))
@@ -337,23 +337,20 @@ class GateTestCase(BaseTestCase):
         dummyGS.gates['Gcomp'] = compGate # so to/from vector work in tests below
         gates_to_test.append( dummyGS.gates['Gcomp'] )
 
-        embedGate = pygsti.objects.EmbeddedGateMap( [('Q0',)], ['Q0'], testGate, ppBasis)
+        embedGate = pygsti.objects.EmbeddedGateMap( [('Q0',)], ['Q0'], testGate)
         dummyGS.gates['Gembed'] = embedGate # so to/from vector work in tests below
         gates_to_test.append( dummyGS.gates['Gembed'] )
 
         dummyGS2 = pygsti.objects.GateSet() # b/c will have different dim from dummyGS
         ppBasis2x2 = pygsti.obj.Basis("pp",(2,2))
-        embedGate2 = pygsti.objects.EmbeddedGateMap( [('Q0',),('Q1',)], ['Q0'], testGate, ppBasis2x2) # 2 blocks
+        embedGate2 = pygsti.objects.EmbeddedGateMap( [('Q0',),('Q1',)], ['Q0'], testGate) # 2 blocks
         dummyGS2.gates['Gembed2'] = embedGate2 # so to/from vector work in tests below
         gates_to_test.append( dummyGS2.gates['Gembed2'] )
 
         with self.assertRaises(ValueError):
-            pygsti.objects.EmbeddedGateMap( [('L0','foobar')], ['Q0'], testGate, ppBasis)
+            pygsti.objects.EmbeddedGateMap( [('L0','foobar')], ['Q0'], testGate)
         with self.assertRaises(ValueError):
-            pygsti.objects.EmbeddedGateMap( [('Q0','Q1')], ['Q0'], testGate, ppBasis) #ppBasis not dim == 4
-        with self.assertRaises(AssertionError):
-            pp4 = pygsti.obj.Basis("pp",4)
-            pygsti.objects.EmbeddedGateMap( [('Q0',),('Q1',)], ['Q0','Q1'], testGate, pp4) #labels correspond to diff blocks            
+            pygsti.objects.EmbeddedGateMap( [('Q0',),('Q1',)], ['Q0','Q1'], testGate) #labels correspond to diff blocks            
 
 
         for gate in gates_to_test:
@@ -373,30 +370,32 @@ class GateTestCase(BaseTestCase):
 
             #test Gate methods
             self.assertTrue( gate.get_dimension() in  (4,8) ) # embedded gate2 has dim==8
-            gate.acton(state)
+            gate.acton(state.flatten())
             if hasattr(gate, '_slow_acton'):
                 gate._slow_acton(state) # for EmbeddedGateMaps
 
-            sparseMx = gate.as_sparse_matrix()
+            sparseMx = gate.tosparse()
 
             try:
                 gate.transform(T)
+            except NotImplementedError: pass #OK, as this is unallowed for some gate types
             except ValueError: pass #OK, as this is unallowed for some gate types
 
             try:
             #if isinstance(gate, pygsti.obj.LindbladParameterizedGateMap):
                 gate.transform(T2)
+            except NotImplementedError: pass #OK, as this is unallowed for some gate types
             except ValueError: pass #OK, as this is unallowed for some gate types
 
             try:
                 gate.depolarize(0.05)
                 gate.depolarize([0.05,0.10,0.15])
-            except AssertionError: pass #OK, as this is unallowed for some gate types
+            except NotImplementedError: pass #OK, as this is unallowed for some gate types
             except ValueError: pass #OK, as this is unallowed for some gate types
 
             try:
                 gate.rotate([0.01,0.02,0.03],'gm')
-            except AssertionError: pass #OK, as this is unallowed for some gate types
+            except NotImplementedError: pass #OK, as this is unallowed for some gate types
             except ValueError: pass #OK, as this is unallowed for some gate types
             
             nP = gate.num_params()
@@ -414,7 +413,7 @@ class GateTestCase(BaseTestCase):
             s = str(gate)
             try:
                 cgate = gate.compose(gate)
-            except AssertionError: pass #OK, as this is unallowed for some gate types
+            except ValueError: pass #OK, as this is unallowed for some gate types
             except NotImplementedError: pass # still a TODO item for some types (ComposedGateMap)
 
     def test_convert(self):
@@ -424,11 +423,10 @@ class GateTestCase(BaseTestCase):
                             [0,0,-1,0]],'d')
 
         basis = pygsti.obj.Basis("pp",2)
-        lndgate = pygsti.objects.LindbladParameterizedGate(
+        lndgate = pygsti.objects.LindbladParameterizedGate.from_gate_matrix(
             densemx,unitaryPostfactor=densemx,
             ham_basis=basis, nonham_basis=basis, cptp=True,
             nonham_diagonal_only=False, truncate=True, mxBasis=basis)
-        
         g = pygsti.objects.gate.convert(lndgate,"CPTP",basis) 
         self.assertTrue(g is lndgate) #should be trivial (no) conversion
 

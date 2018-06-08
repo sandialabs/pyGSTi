@@ -14,6 +14,7 @@ import itertools as _itertools
 
 from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
+from ..baseobjs import label as _lbl
 from . import gatestringconstruction as _gstrc
 
 def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
@@ -106,6 +107,10 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
             else:
                 rndm = randState
 
+        if aliasDict:
+            aliasDict = { _lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
+                          for ky,val in aliasDict.items() } # convert to use Labels
+                
         if gsGen:
             trans_gatestring_list = [ _gstrc.translate_gatestring(s, aliasDict)
                                       for s in gatestring_list ]

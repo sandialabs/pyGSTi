@@ -142,7 +142,7 @@ class GateSet(object):
                 sim_type = "termorder:1"
             else:
                 d = self._dim if (self._dim is not None) else 0
-                sim_type = "matrix" if self.dim <= 16 else "map"
+                sim_type = "matrix" if d <= 16 else "map"
         
         simtype_and_args = sim_type.split(":")
         sim_type = simtype_and_args[0]
@@ -434,7 +434,7 @@ class GateSet(object):
             given the prefix of the label.
         """
         if GateSet._strict:
-            raise KeyError("Strict-mode: invalid key %s" % label)
+            raise KeyError("Strict-mode: invalid key %s" % repr(label))
         
         if not isinstance(label, _Label): label = _Label(label)
         
@@ -590,7 +590,8 @@ class GateSet(object):
             self._rebuild_paramvec()
             
             self._dim = stateDict['_dim']
-            self._calcClass = stateDict.get('_calcClass',_GateMatrixCalc)
+            self._calcClass = stateDict.get('_calcClass',_gatematrixcalc.GateMatrixCalc)
+            self._evotype = "densitymx"
             self._default_gauge_group = stateDict['_default_gauge_group']
             self.basis = stateDict.get('basis', _Basis('unknown', None))
             if self.basis.name == "unknown" and '_basisNameAndDim' in stateDict:
@@ -953,7 +954,7 @@ class GateSet(object):
 
     def _calc(self):
         if not hasattr(self,"_calcClass"): #for backward compatibility
-            self._calcClass = _GateMatrixCalc
+            self._calcClass = _gatematrixcalc.GateMatrixCalc
                         
         compiled_effects = _collections.OrderedDict()
         for povm_lbl,povm in self.povms.items():
@@ -969,7 +970,8 @@ class GateSet(object):
         kwargs = {}
         if self._sim_type in ("termorder","ctermorder"):
             kwargs['max_order'] = int(self._sim_args[0])
-            
+
+        assert(self._calcClass is not None), "Gateset does not have a calculator setup yet!"
         return self._calcClass(self._dim, compiled_gates, self.preps,
                                compiled_effects, self._paramvec, **kwargs)
 
@@ -2960,7 +2962,7 @@ class GateSet(object):
         newGateset._default_gauge_group = self._default_gauge_group #Note: SHALLOW copy
 
         if not hasattr(self,"_calcClass"): #for backward compatibility
-            self._calcClass = _GateMatrixCalc
+            self._calcClass = _gatematrixcalc.GateMatrixCalc
         newGateset._calcClass = self._calcClass
 
         if not hasattr(self,"_sim_type"): #for backward compatibility
@@ -3286,7 +3288,7 @@ class GateSet(object):
 
         new_gateset = GateSet("full", self.preps._prefix, self.effects_prefix,
                               self.gates._prefix, self.povms._prefix,
-                              self.instruments._prefix)
+                              self.instruments._prefix, self._sim_type)
         new_gateset._dim = newDimension
         new_gateset.reset_basis() #FUTURE: maybe user can specify how increase is being done?
 
@@ -3351,7 +3353,8 @@ class GateSet(object):
         assert(newDimension < curDim)
 
         new_gateset = GateSet("full", self.preps._prefix, self.effects_prefix,
-                              self.gates._prefix, self.povms._prefix, self.instruments._prefix)
+                              self.gates._prefix, self.povms._prefix,
+                              self.instruments._prefix, self._sim_type)
         new_gateset._dim = newDimension
         new_gateset.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 

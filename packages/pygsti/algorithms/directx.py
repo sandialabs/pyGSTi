@@ -92,7 +92,7 @@ def gateset_with_lgst_gatestring_estimates(
             gateLabels.append(gateLabel)
     else:
         for gateStr in gateStringsToEstimate:
-            newLabel = 'G'+'.'.join(tuple(gateStr))
+            newLabel = 'G'+'.'.join(map(str,tuple(gateStr)))
             aliases[newLabel] = _tools.find_replace_tuple(gateStr,gateLabelAliases) #use gatestring tuple as label
             gateLabels.append(newLabel)
 

@@ -58,14 +58,23 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
     if len(mx.shape) not in (1, 2):
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
+    #Get `dim` for constructing Basis objects below
     if dimOrBlockDims is None:
-        dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
-        #assert( dimOrBlockDims**2 == mx.shape[0] )
+        if not (isinstance(from_basis,Basis) and isinstance(to_basis,Basis)):
+            #then we need to get dim for construction
+            dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+            assert( dimOrBlockDims**2 == mx.shape[0] )
+            dim = Dim(dimOrBlockDims)
+        else:
+            # we don't need dim - can leave it as None, which is preferable b/c
+            # the int(round()) method above assumes a *single* tensor-prod-block
+            dim = None
+    else:
+        dim = Dim(dimOrBlockDims)
 
     #if either basis is sparse, attempt to construct sparse bases
     try_for_sparse = is_sparse_basis(from_basis) or is_sparse_basis(to_basis)
         
-    dim        = Dim(dimOrBlockDims)
     from_basis = Basis(from_basis, dim, sparse=try_for_sparse)
     to_basis   = Basis(to_basis, dim, sparse=try_for_sparse)
     #TODO: check for 'unknown' basis here and display meaningful warning - otherwise just get 0-dimensional basis...
@@ -157,7 +166,10 @@ def build_basis_pair(mx, from_basis, to_basis):
         from_basis = to_basis.equivalent(from_basis)
     else: # neither or both from_basis & to_basis are Basis objects - so
           # no need to worry about setting sparse flag in construction
-        dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+        if not isinstance(from_basis, Basis): # then *neither* are Basis objs
+            dimOrBlockDims = int(round(_np.sqrt(mx.shape[0]))) # so infer dimension
+        else: dimOrBlockDims = None # not needed and int(round()) only works for
+                                    # the *single* tensor-product-block case
         to_basis = Basis(to_basis, dimOrBlockDims)
         from_basis = Basis(from_basis, dimOrBlockDims)
     return from_basis, to_basis

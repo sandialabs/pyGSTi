@@ -357,7 +357,7 @@ class CompressedGateString(object):
             raise ValueError("CompressedGateStrings can only be created from existing GateString objects")
         self._tup = CompressedGateString.compress_gate_label_tuple(
             gatestring._tup, minLenToCompress, maxPeriodToLookFor)
-        self._str = gatestring._str
+        self.str = gatestring._str
 
     def __getstate__(self):
         return self.__dict__
@@ -378,7 +378,7 @@ class CompressedGateString(object):
         GateString
         """
         tup = CompressedGateString.expand_gate_label_tuple(self._tup)
-        return GateString(tup, self._str, bCheck=False)
+        return GateString(tup, self.str, bCheck=False)
 
     @staticmethod
     def _getNumPeriods(gateString, periodLen):

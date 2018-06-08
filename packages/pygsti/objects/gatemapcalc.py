@@ -198,7 +198,8 @@ class GateMapCalc(GateCalc):
             #a_old = rho.extract_amplitude(E.outcomes)
             # DEBUG print("AMP DEBUG COMP = ",amp,a_old)
             #assert(_np.isclose(amp,a_old)),"New code is giving a different amplitude result!"
-        assert(_np.isclose(p,p_old)),"New code is giving a different result!"
+        if not (_np.isnan(p) and _np.isnan(p_old)):
+            assert(_np.isclose(p,p_old)),"New code is giving a different result!"
         ##print("OLD pr END => ",p_old,"\n\n")
 
         if _np.isnan(p):

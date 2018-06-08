@@ -47,7 +47,7 @@ def generalized_bonferroni_correction(confidence, weights, numtests=None,
     
     """
     weights = _np.array(weights)
-    assert(np.abs(_np.sum(weights) - 1.)<tol), "Invalid weighting! The weights must add up to 1."
+    assert(_np.abs(_np.sum(weights) - 1.)<tol), "Invalid weighting! The weights must add up to 1."
     
     adjusted_confidence = _np.zeros(len(weights),float)
     adjusted_confidence = 1 - (1 - confidence)*weights

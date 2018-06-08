@@ -143,6 +143,9 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
                               " '%s' to a gateset with one of '%s'") %
                              (evotype,self.parent._evotype))
 
+    def __contains__(self, key):
+        if not isinstance(key, _Label): key = _Label(key,None)
+        return super(OrderedMemberDict,self).__contains__(key)
 
     def __getitem__(self, key):
         #if self.parent is not None:
@@ -238,6 +241,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
 
     def __delitem__(self, key):
         """Implements `del self[key]`"""
+        if not isinstance(key, _Label): key = _Label(key,None)
         super(OrderedMemberDict,self).__delitem__(key)
         if self.parent is not None:
             #print("DEBUG: rebuilding paramvec after deleting ", key, " : ", list(self.keys()))

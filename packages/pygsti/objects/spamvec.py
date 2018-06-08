@@ -1916,7 +1916,9 @@ class TensorProdSPAMVec(SPAMVec):
             else: # in effect case, POVM-factors hold global indices (b/c they're meant to be shareable)
                 local_inds = _gatesetmember._decompose_gpindices(
                     self.gpindices, fct.gpindices)
-                
+
+            assert(local_inds is not None), \
+                "Error: gpindices has not been initialized for factor %d - cannot compute derivative!" % i
             derivMx[:,local_inds] += deriv
 
         derivMx.shape = (self.dim, self.num_params()) # necessary?

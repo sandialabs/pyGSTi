@@ -15,7 +15,6 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import matrixtools as _mt
 from ..tools import listtools as _lt
-from .stabilizer import StabilizerFrame as _StabilizerFrame
 
 # DEBUG!!!
 DEBUG_FCOUNT = 0
@@ -456,6 +455,7 @@ class SVGateRep_Composed(SVGateRep):
 # Stabilizer state (SB) propagation wrapper classes
 class SBStateRep(object): 
     def __init__(self, smatrix, pvectors, amps):
+        from .stabilizer import StabilizerFrame as _StabilizerFrame
         self.sframe = _StabilizerFrame(smatrix,pvectors,amps)
           # just rely on StabilizerFrame class to do all the heavy lifting...
           

@@ -6,7 +6,7 @@ from scipy import mod as _mod
 
 from ...algorithms import compileclifford as _comp
 from ...objects import circuit as _cir
-from ...objects import label as _lbl
+from ...baseobjs import label as _lbl
 from ...tools import symplectic as _symp
 
 #from ... import symplectic as _symp

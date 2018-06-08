@@ -151,6 +151,11 @@ class Label(tuple):
     def __gt__(self,x):
         return tuple.__gt__(self,tuple(x))
 
+    def __pygsti_reduce__(self):
+        # Need to tell serialization logic how to create a new Label since it's derived
+        # from the immutable tuple type (so cannot have its state set after creation)
+        return (Label, (self[0],self[1:]), None)
+
     __hash__ = tuple.__hash__ # this is why we derive from tuple - using the
                               # native tuple.__hash__ directly == speed boost
     

@@ -649,7 +649,7 @@ def create_standard_report(results, filename, title="auto",
         fmt = "latex"
     else:
         fmt = "html"
-
+        
     printer.log('*** Creating workspace ***')
     if ws is None: ws = _ws.Workspace(cachefile)
 
@@ -658,7 +658,7 @@ def create_standard_report(results, filename, title="auto",
                           " specifying an int here because in older versions of pyGSTi"
                           " the third argument to create_general_report was the"
                           " confidence interval - please note the updated function signature"))
-    
+
     if title is None or title == "auto":
         autoname = _autotitle.generate_name()
         title = "GST Report for " + autoname

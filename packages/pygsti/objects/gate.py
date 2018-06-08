@@ -229,7 +229,7 @@ def convert(gate, toType, basis, extra=None):
         if extra is None:
             #Try to obtain unitary_post by getting the closest unitary
             if isinstance(gate, LindbladParameterizedGate):
-                unitary_post = gate.unitary_post
+                unitary_post = gate.unitary_postfactor
             elif gate._evotype == "densitymx":
                 J = _jt.fast_jamiolkowski_iso_std(gate.todense(), basis) #Choi mx basis doesn't matter
                 if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
@@ -265,7 +265,7 @@ def convert(gate, toType, basis, extra=None):
         LindbladGateType = LindbladParameterizedGateMap \
                            if toType in ("H+S terms","H+S clifford terms") \
                             else LindbladParameterizedGate
-
+            
         if isinstance(gate, LindbladParameterizedGateMap) and \
            normeq(gate.unitary_postfactor,unitary_post) \
            and beq(ham_basis,gate.ham_basis) and beq(nonham_basis,gate.other_basis) \
@@ -691,7 +691,7 @@ class Gate(_gatesetmember.GateSetMember):
         GateMatrix
         """
         cpy = self.copy()
-        cpy.set_value( _np.dot( self.todense(), otherGate.base) )
+        cpy.set_value( _np.dot( self.todense(), otherGate.todense()) )
         return cpy
 
     
@@ -754,13 +754,13 @@ class Gate(_gatesetmember.GateSetMember):
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
         if not self.has_nonzero_hessian():
-            return _np.zeros(self.size, self.num_params(), self.num_params())
+            return _np.zeros((self.size, self.num_params(), self.num_params()),'d')
 
         # FUTURE: create a finite differencing hessian method?
         raise NotImplementedError("hessian_wrt_params(...) is not implemented for %s objects" % self.__class__.__name__)
 
 
-    #Pickle plumbing
+    ##Pickle plumbing
     def __setstate__(self, state):
         self.__dict__.update(state)
 
@@ -953,6 +953,24 @@ class StaticGate(GateMatrix):
         #    gate_std = _bt.change_basis(gate, basis, 'std')
         #    U = _gt.process_mx_to_unitary(self)
 
+    def compose(self, otherGate):
+        """
+        Create and return a new gate that is the composition of this gate
+        followed by otherGate, which *must be another StaticGate*.
+        (For more general compositions between different types of gates, use
+        the module-level compose function.)  The returned gate's matrix is
+        equal to dot(this, otherGate).
+
+        Parameters
+        ----------
+        otherGate : StaticGate
+            The gate to compose to the right of this one.
+
+        Returns
+        -------
+        StaticGate
+        """
+        return StaticGate(_np.dot( self.base, otherGate.base), self._evotype)
         
 
 class FullyParameterizedGate(GateMatrix):
@@ -2078,7 +2096,7 @@ class LindbladParameterizedGateMap(Gate):
 
         d2 = errgen.shape[0]
         d = int(round(_np.sqrt(d2)))
-        assert(d*d == d2), "Gate dim must be a perfect square"
+        if d*d != d2: raise ValueError("Gate dim must be a perfect square")
 
         if unitaryPostfactor is None:
             unitaryPostfactor = errgen.shape[0] # just set as dimension (for __init__)
@@ -2641,7 +2659,7 @@ class LindbladParameterizedGateMap(Gate):
         """
         Return this gate as a dense matrix.
         """
-        assert(not self.sparse), "todense() not implemented for sparse LindbladParameterizedGateMap objects"
+        if self.sparse: raise NotImplementedError("todense() not implemented for sparse LindbladParameterizedGateMap objects")
         if self.unitary_postfactor is not None:
             dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
         else:
@@ -3270,15 +3288,23 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                 term1 = series2
                 if tr == 3: #one deriv dimension "a"
                     term2 = _np.einsum("ija,jkq->ikaq",series,series)
-                    d2expL = _np.einsum("ikaq,kl,lj->ijaq", term1+term2,
-                                      self.exp_err_gen, self.unitary_postfactor)
+                    if self.unitary_postfactor is None:
+                        d2expL = _np.einsum("ikaq,kj->ijaq", term1+term2,
+                                            self.exp_err_gen)
+                    else:
+                        d2expL = _np.einsum("ikaq,kl,lj->ijaq", term1+term2,
+                                            self.exp_err_gen, self.unitary_postfactor)
                     dO = d2expL.reshape((d2**2,bsO-1,bsO-1))
                     #d2expL.shape = (d2**2,bsO-1,bsO-1); dO = d2expL
 
                 elif tr == 4: #two deriv dimension "ab"
                     term2 = _np.einsum("ijab,jkqr->ikabqr",series,series)
-                    d2expL = _np.einsum("ikabqr,kl,lj->ijabqr", term1+term2,
-                                      self.exp_err_gen, self.unitary_postfactor)
+                    if self.unitary_postfactor is None:
+                        d2expL = _np.einsum("ikabqr,kj->ijabqr", term1+term2,
+                                            self.exp_err_gen)                                                
+                    else:
+                        d2expL = _np.einsum("ikabqr,kl,lj->ijabqr", term1+term2,
+                                            self.exp_err_gen, self.unitary_postfactor)
                     dO = d2expL.reshape((d2**2, (bsO-1)**2, (bsO-1)**2 ))
                     #d2expL.shape = (d2**2, (bsO-1)**2, (bsO-1)**2); dO = d2expL
 
@@ -4591,7 +4617,7 @@ class EmbeddedGateMap(Gate):
     def tosparse(self):
         """ Return the gate as a sparse matrix """
         dmDim, superOpDim, blockDims = self.basisdim
-        embedded_sparse = self.embedded_gate.as_sparse_matrix().tolil()
+        embedded_sparse = self.embedded_gate.tosparse().tolil()
         dim = superOpDim if self._evotype != "statevec" else dmDim
         finalGate = _sps.identity( dim, embedded_sparse.dtype, format='lil' )
 

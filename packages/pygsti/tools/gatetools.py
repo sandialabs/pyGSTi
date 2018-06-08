@@ -1718,14 +1718,13 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
     Ltermdict = _collections.OrderedDict()
     basisdict = _collections.OrderedDict()
     nextLbl = 0
-    def get_basislbl(bmx):
+    def get_basislbl(bmx, nxt_blbl):
         """ Retrieves or creates a basis-element "label" (just an integer) from `basisdict` """
         for l,b in basisdict.items():
-            if _mt.safenorm(b-bmx) < 1e-8: return l
-        blbl = nextLbl
-        basisdict[blbl] = bmx
-        nextLbl += 1
-        return blbl
+            if _mt.safenorm(b-bmx) < 1e-8: return l,nxt_blbl
+        basisdict[nxt_blbl] = bmx
+        nxt_blbl += 1
+        return nxt_blbl-1, nxt_blbl # <assigned basis lbl>, <new next-basis-label>
 
     #Add Hamiltonian error elements
     ham_mxs = ham_basis.get_composite_matrices() #can be sparse
@@ -1740,14 +1739,14 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
     if other_diagonal_only:
         assert(len(other_mxs[1:]) == len(otherProjs))
         for coeff, bmx in zip(otherProjs,other_mxs[1:]): # skip identity
-            blbl = get_basislbl(bmx)
+            blbl,nextLbl = get_basislbl(bmx,nextLbl)
             Ltermdict[('S',blbl)] = coeff
     else:
         assert((len(other_mxs[1:]),len(other_mxs[1:])) == otherProjs.shape)
         for i, bmx1 in enumerate(other_mxs[1:]): # skip identity
-            blbl1 = get_basislbl(bmx1)
+            blbl1,nextLbl = get_basislbl(bmx1,nextLbl)
             for j, bmx2 in enumerate(other_mxs[1:]): # skip identity
-                blbl2 = get_basislbl(bmx2)
+                blbl2,nextLbl = get_basislbl(bmx2,nextLbl)
                 Ltermdict[('S',blbl1,blbl2)] = otherProjs[i,j]
 
     #DEBUG: print("DB: Ltermdict = ",Ltermdict)
@@ -1865,8 +1864,20 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
          else _np.identity(d,'complex')/_np.sqrt(d)
     if len(ham_basis_mxs) > 0: ham_basis_mxs = [Id] + ham_basis_mxs
     if len(other_basis_mxs) > 0: other_basis_mxs = [Id] + other_basis_mxs
-    ham_basis = _Basis(matrices=ham_basis_mxs,dim=d,sparse=sparse)
-    other_basis = _Basis(matrices=other_basis_mxs,dim=d,sparse=sparse)
+
+    #Special check: update basis name to "pp" if we have a Pauli Basis 
+    # (for small d when this isn't too expensive)
+    if d <= 16 and all([_mt.safenorm(b0-b1) < 1e-8 for b0,b1 in
+                        zip(_basis_matrices("pp",d,sparse),ham_basis_mxs)]):
+        ham_name = "pp"
+    else: ham_name = None
+    if d <= 16 and all([_mt.safenorm(b0-b1) < 1e-8 for b0,b1 in
+                        zip(_basis_matrices("pp",d,sparse),other_basis_mxs)]):
+        other_name = "pp"
+    else: other_name = None
+    
+    ham_basis = _Basis(ham_name,matrices=ham_basis_mxs,dim=d,sparse=sparse)
+    other_basis = _Basis(other_name,matrices=other_basis_mxs,dim=d,sparse=sparse)
     bsH, bsO = len(ham_basis), len(other_basis)
 
     #Create projection (term coefficient) arrays - or return None if

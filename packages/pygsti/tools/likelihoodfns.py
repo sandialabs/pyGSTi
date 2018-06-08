@@ -104,7 +104,7 @@ TOL = 1e-20
 def logl_terms(gateset, dataset, gatestring_list=None,
                minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
                poissonPicture=True, check=False, gateLabelAliases=None,
-               evaltree_cache=None):
+               evaltree_cache=None, comm=None):
     """
     The vector of log-likelihood contributions for each gate string, 
     aggregated over outcomes.
@@ -158,7 +158,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     #freqTerm = countVecMx * ( _np.log(freqs_nozeros) - 1.0 )
     #freqTerm[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
 
-    gateset.bulk_fill_probs(probs, evalTree, probClipInterval, check)
+    gateset.bulk_fill_probs(probs, evalTree, probClipInterval, check, comm)
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
     if poissonPicture:
@@ -199,7 +199,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
 def logl(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
          poissonPicture=True, check=False, gateLabelAliases=None,
-         evaltree_cache=None):
+         evaltree_cache=None, comm=None):
     """
     The log-likelihood function.
 
@@ -255,6 +255,10 @@ def logl(gateset, dataset, gatestring_list=None,
         with cached values to speed up subsequent executions of this function
         which use the *same* `gateset` and `gatestring_list`.
 
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
     Returns
     -------
     float
@@ -262,7 +266,7 @@ def logl(gateset, dataset, gatestring_list=None,
     """
     v = logl_terms(gateset, dataset, gatestring_list,
                    minProbClip, probClipInterval, radius,
-                   poissonPicture, check, gateLabelAliases, evaltree_cache)
+                   poissonPicture, check, gateLabelAliases, evaltree_cache, comm)
     return _np.sum(v) # sum over *all* dimensions
 
 

@@ -5,6 +5,7 @@ import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 from pygsti.construction import std1Q_XY
+from pygsti.objects import Label as L
 
 class TestGateStringMethods(BaseTestCase):
     def test_simple(self):
@@ -156,18 +157,19 @@ class TestGateStringMethods(BaseTestCase):
     def test_python_string_conversion(self):
         gs = pygsti.obj.GateString(None, stringRepresentation="Gx^3Gy^2GxGz")
 
-        pystr = gs.to_pythonstr( ('Gx','Gy','Gz') )
+        gate_labels = (L('Gx'),L('Gy'),L('Gz'))
+        pystr = gs.to_pythonstr( gate_labels )
         self.assertEqual( pystr, "AAABBAC" )
 
-        gs2_tup = pygsti.obj.GateString.from_pythonstr( pystr, ('Gx','Gy','Gz') )
+        gs2_tup = pygsti.obj.GateString.from_pythonstr( pystr, gate_labels )
         self.assertEqual( gs2_tup, tuple(gs) )
 
     def test_std_lists_and_structs(self):
-        gateLabels = ['Gx','Gy']
+        gateLabels = [L('Gx'),L('Gy')]
         strs = pygsti.construction.gatestring_list( [('Gx',),('Gy',),('Gx','Gx')] )
         germs = pygsti.construction.gatestring_list( [('Gx','Gy'),('Gy','Gy')] )
         testFidPairs = [(0,1)]
-        testFidPairsDict = { ('Gx','Gy'): [(0,0),(0,1)], ('Gy','Gy'): [(0,0)] }
+        testFidPairsDict = { (L('Gx'),L('Gy')): [(0,0),(0,1)], (L('Gy'),L('Gy')): [(0,0)] }
 
         # LSGST
         maxLens = [1,2]
@@ -382,8 +384,8 @@ class TestGateStringMethods(BaseTestCase):
         list0 = pygsti.construction.translate_gatestring_list(orig_list, None)
         self.assertEqual(list0, orig_list)
         
-        list1 = pygsti.construction.translate_gatestring_list(orig_list, {'Gx': ('Gx2',), 'Gy': ('Gy',)} )
-        list2 = pygsti.construction.translate_gatestring_list(orig_list, {'Gi': ('Gx','Gx','Gx','Gx')} )
+        list1 = pygsti.construction.translate_gatestring_list(orig_list, {L('Gx'): (L('Gx2'),), L('Gy'): (L('Gy'),)} )
+        list2 = pygsti.construction.translate_gatestring_list(orig_list, {L('Gi'): (L('Gx'),L('Gx'),L('Gx'),L('Gx'))} )
         print(list1)
         
         expected_list1 = pygsti.construction.gatestring_list(

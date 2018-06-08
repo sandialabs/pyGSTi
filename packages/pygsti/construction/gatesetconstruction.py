@@ -171,8 +171,8 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
     #Working with a StateSpaceLabels object gives us access to all the info we'll need later
     sslbls = _ld.StateSpaceLabels(stateSpaceLabels)
-    assert(sslbls.dim == basis.dim), \
-        "State space labels dim (%s) != basis dim (%s)" % (sslbls.dim, basis.dim)
+    if sslbls.dim != _Dim(stateSpaceDims):
+        raise ValueError("Dimension mismatch!")
 
     #Store each tensor product block's start index (within the density matrix)
     startIndex = []; M = 0
@@ -627,12 +627,12 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
         if parameterization == "full":
             return _gate.FullyParameterizedGate(
                 _np.real(finalGateInFinalBasis)
-                if finalBasis.real else finalGateInFinalBasis )
+                if finalBasis.real else finalGateInFinalBasis, "densitymx" )
 
         if parameterization == "static":
             return _gate.StaticGate(
                 _np.real(finalGateInFinalBasis)
-                if finalBasis.real else finalGateInFinalBasis )
+                if finalBasis.real else finalGateInFinalBasis, "densitymx" )
 
         if parameterization == "TP":
             if not finalBasis.real:
@@ -1237,7 +1237,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
             
         for inds in availList:
             try:
-                gs[_label.Label(gateName,inds)] = gate # uses automatic-embedding
+                gs.gates[_label.Label(gateName,inds)] = gate # uses automatic-embedding
             except Exception as e:
                 if on_construction_error == 'warn':
                     _warnings.warn("Failed to embed %s gate %s. Dropping it." %
