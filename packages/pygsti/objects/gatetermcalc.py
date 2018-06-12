@@ -31,11 +31,11 @@ try:
 except ImportError:
     from . import replib
 
-#try:
+try:
 #import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
-from . import fastgatecalc as _fastgatecalc
-#except ImportError:
-#    _fastgatecalc = None
+    from . import fastgatecalc as _fastgatecalc
+except ImportError:
+    _fastgatecalc = None
 #_fastgatecalc.test_map("Hi")
 
 DEBUG_FCOUNT = 0
