@@ -12,6 +12,10 @@ from pygsti.objects import Label as L
 
 class RBTestCase(BaseTestCase):
 
+    def test_rb_WAIT_FOR_NEW_RB(self):
+        # A PLACEHOLDER TO STOP AUTOMERGE TO BETA UNTIL NEW RB TESTS ARE ADDED
+        self.assertTrue(False)
+    
     def test_rb_full(self):
         gs_target = std1Q_XYI.gs_target
         clifford_group = rb.std1Q.clifford_group
