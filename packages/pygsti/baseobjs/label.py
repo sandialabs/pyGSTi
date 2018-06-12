@@ -188,6 +188,9 @@ class LabelTup(Label,tuple):
         return tuple.__gt__(self,tuple(x))
 
     def __pygsti_reduce__(self):
+        return self.__reduce__()
+
+    def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelTup, (self[0],self[1:]), None)
@@ -263,6 +266,9 @@ class LabelStr(Label,str):
         return str.__gt__(self,str(x))
     
     def __pygsti_reduce__(self):
+        return self.__reduce__()
+
+    def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelStr, (str(self),), None)
