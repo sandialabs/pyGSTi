@@ -16,22 +16,26 @@ integer :: '0'..'9'+
 real    :: ['+'|'-'] integer [ '.' integer [ 'e' ['+'|'-'] integer ] ]
 reflbl  :: (alpha | digit | '_')+
 
-nop     :: '{}'
-gate    :: 'G' [ lowercase | digit | '_' ]+
-instrmt :: 'I' [ lowercase | digit | '_' ]+
-povm    :: 'M' [ lowercase | digit | '_' ]+
-prep    :: 'rho' [ lowercase | digit | '_' ]+
-strref  :: 'S' '[' reflbl ']'
-slcref  :: strref [ '[' integer ':' integer ']' ]
-expable :: gate | instrmt | slcref | '(' string ')' | nop
-expdstr :: expable [ expop integer ]*
-string  :: expdstr [ [ multop ] expdstr ]*
-pstring :: [ prep ] string
-ppstring:: pstring [ povm ]
+nop       :: '{}'
+gatenm    :: 'G' [ lowercase | digit | '_' ]+ 
+instrmtnm :: 'I' [ lowercase | digit | '_' ]+ 
+povmnm    :: 'M' [ lowercase | digit | '_' ]+
+prepnm    :: 'rho' [ lowercase | digit | '_' ]+
+gate      :: gatenm [':' integer ]*
+instrmt   :: instrmt [':' integer ]*
+povm      :: povm [':' integer ]*
+prep      :: prep [':' integer ]*
+strref    :: 'S' '[' reflbl ']'
+slcref    :: strref [ '[' integer ':' integer ']' ]
+expable   :: gate | instrmt | slcref | '(' string ')' | nop
+expdstr   :: expable [ expop integer ]*
+string    :: expdstr [ [ multop ] expdstr ]*
+pstring   :: [ prep ] string
+ppstring  :: pstring [ povm ]
 """
 
 from ply import lex, yacc
-
+from .label import Label as _Label
 
 class GateStringLexer:
     """ Lexer for matching and interpreting text-format gate sequences """
@@ -57,26 +61,38 @@ class GateStringLexer:
 
     @staticmethod
     def t_GATE(t):
-        r'G[a-z0-9_]+'
-        t.value = t.value,  # make it a tuple
-        return t
+        r'G[a-z0-9_]+(:[a-z0-9_])*'
+        #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
+        parts = t.value.split(':')
+        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
+        t.value = lbl, # make it a tuple
+        return t 
 
     @staticmethod
     def t_INSTRMT(t):
         r'I[a-z0-9_]+'
-        t.value = t.value,  # make it a tuple
+        #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
+        parts = t.value.split(':')
+        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
+        t.value = lbl, # make it a tuple
         return t
 
     @staticmethod
     def t_PREP(t):
         r'rho[a-z0-9_]+'
-        t.value = t.value,  # make it a tuple
+        #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
+        parts = t.value.split(':')
+        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
+        t.value = lbl, # make it a tuple
         return t
 
     @staticmethod
     def t_POVM(t):
         r'M[a-z0-9_]+'
-        t.value = t.value,  # make it a tuple
+        #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
+        parts = t.value.split(':')
+        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
+        t.value = lbl, # make it a tuple
         return t
 
     @staticmethod
@@ -159,6 +175,20 @@ class GateStringParser(object):
     def p_slcref(p):
         '''slcref : strref'''
         p[0] = p[1]
+
+#    @staticmethod
+#    def p_gate_withindex(p):
+#        '''gate : GATENM COLON INTEGER'''
+#        s = () if (p[1].sslbls is None) else p[1].sslbls
+#        p[0] = _Label(p[1].name, s+(p[3],)), # add state-space-label; make a tuple
+#
+#    @staticmethod
+#    def p_gate(p):
+#        '''gate : GATENM'''
+#        p[0] = p[1]
+#
+#HERE
+
 
     @staticmethod
     def p_expable_paren(p):

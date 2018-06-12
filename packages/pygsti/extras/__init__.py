@@ -8,3 +8,6 @@
 from . import rb
 from . import rpe
 from . import drift
+from . import circuit
+# To be deleted once newrb bits are merged into rb, and old rb bits are removed/moved.
+from . import newrb

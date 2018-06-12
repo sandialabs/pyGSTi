@@ -102,8 +102,9 @@ TOL = 1e-20
 
 @smart_cached
 def logl_terms(gateset, dataset, gatestring_list=None,
-         minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
-         poissonPicture=True, check=False, gateLabelAliases=None):
+               minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
+               poissonPicture=True, check=False, gateLabelAliases=None,
+               evaltree_cache=None, comm=None):
     """
     The vector of log-likelihood contributions for each gate string, 
     aggregated over outcomes.
@@ -126,7 +127,19 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     a = radius # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
 
-    evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list)
+    if evaltree_cache and 'evTree' in evaltree_cache:
+        evalTree = evaltree_cache['evTree']
+        lookup = evaltree_cache['lookup']
+        outcomes_lookup = evaltree_cache['outcomes_lookup']
+    else:
+        evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list)
+
+        #Fill cache dict if one was given
+        if evaltree_cache is not None:
+            evaltree_cache['evTree'] = evalTree
+            evaltree_cache['lookup'] = lookup
+            evaltree_cache['outcomes_lookup'] = outcomes_lookup
+        
     nEls = evalTree.num_final_elements()    
     probs = _np.empty( nEls, 'd' )
 
@@ -145,7 +158,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     #freqTerm = countVecMx * ( _np.log(freqs_nozeros) - 1.0 )
     #freqTerm[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
 
-    gateset.bulk_fill_probs(probs, evalTree, probClipInterval, check)
+    gateset.bulk_fill_probs(probs, evalTree, probClipInterval, check, comm)
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
     if poissonPicture:
@@ -185,7 +198,8 @@ def logl_terms(gateset, dataset, gatestring_list=None,
 @smart_cached
 def logl(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
-         poissonPicture=True, check=False, gateLabelAliases=None):
+         poissonPicture=True, check=False, gateLabelAliases=None,
+         evaltree_cache=None, comm=None):
     """
     The log-likelihood function.
 
@@ -235,6 +249,15 @@ def logl(gateset, dataset, gatestring_list=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
+    evaltree_cache : dict, optional
+        A dictionary which server as a cache for the computed EvalTree used
+        in this computation.  If an empty dictionary is supplied, it is filled
+        with cached values to speed up subsequent executions of this function
+        which use the *same* `gateset` and `gatestring_list`.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
 
     Returns
     -------
@@ -243,7 +266,7 @@ def logl(gateset, dataset, gatestring_list=None,
     """
     v = logl_terms(gateset, dataset, gatestring_list,
                    minProbClip, probClipInterval, radius,
-                   poissonPicture, check, gateLabelAliases)
+                   poissonPicture, check, gateLabelAliases, evaltree_cache, comm)
     return _np.sum(v) # sum over *all* dimensions
 
 

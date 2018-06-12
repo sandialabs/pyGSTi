@@ -14,7 +14,7 @@ class SPAMVecTestCase(BaseTestCase):
 
     def setUp(self):
         super(SPAMVecTestCase, self).setUp()
-        self.spamvec = DenseSPAMVec(np.array([1,0]))
+        self.spamvec = DenseSPAMVec(np.array([1,0]),"densitymx")
 
     def test_slice(self):
         self.spamvec[:]
@@ -30,15 +30,21 @@ class SPAMVecTestCase(BaseTestCase):
                 SPAMVec.convert_to_vector(bad_vec)
 
     def test_base_spamvec(self):
-        raw = pygsti.objects.SPAMVec(4)
+        raw = pygsti.objects.SPAMVec(4,"densitymx")
+
+        T = pygsti.objects.FullGaugeGroupElement(
+                np.array( [ [0,1,0,0],
+                            [1,0,0,0],
+                            [0,0,1,0],
+                            [0,0,0,1] ], 'd') )
+
 
         with self.assertRaises(NotImplementedError):
-            raw.toarray()
+            raw.todense()
         with self.assertRaises(NotImplementedError):
-            raw.transform(None,None)
+            raw.transform(T,"prep")
         with self.assertRaises(NotImplementedError):
-            raw.depolarize(None)
-
+            raw.depolarize(0.01)
         with self.assertRaises(ValueError):
             pygsti.objects.SPAMVec.convert_to_vector(0.0) # something with no len()
         
@@ -51,6 +57,10 @@ class SPAMVecTestCase(BaseTestCase):
                                      ('1',pygsti.obj.FullyParameterizedSPAMVec(v_id-v))] )
         compSV = tppovm['1'] #complement POVM
         self.assertTrue(isinstance(compSV,pygsti.obj.ComplementSPAMVec))
+
+        dummyGS = pygsti.objects.GateSet()
+        dummyGS.povms['Mtest'] = povm # so to/from vector work w/tensor prod of povm in tests below
+        assert(povm.gpindices is not None)
         
         vecs = [ pygsti.obj.FullyParameterizedSPAMVec(v),
                  pygsti.obj.TPParameterizedSPAMVec(v_tp),
@@ -108,9 +118,8 @@ class SPAMVecTestCase(BaseTestCase):
                 vec = sv.to_vector()
                 sv2.from_vector(vec)
             except ValueError:
-                assert(isinstance(sv, pygsti.obj.TensorProdSPAMVec)) # OK for TensorProd case
-            except NotImplementedError:
-                pass # Complement spam vec doesn't support to_vector
+                assert(isinstance(sv, (pygsti.obj.TensorProdSPAMVec,pygsti.obj.ComplementSPAMVec)))
+                # OK for TensorProd case and Complement case (when one should *not* call to_vector)
 
             T = pygsti.objects.FullGaugeGroupElement(
                 np.array( [ [0,1],

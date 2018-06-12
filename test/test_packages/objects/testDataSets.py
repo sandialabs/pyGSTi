@@ -133,6 +133,7 @@ class TestDataSetMethods(BaseTestCase):
         #Check degrees of freedom
         ds.get_degrees_of_freedom()
         ds2.get_degrees_of_freedom()
+        print("DEBUG: ds3 = ",ds3.keys())
         ds3.get_degrees_of_freedom()
         ds4.get_degrees_of_freedom()
 
@@ -202,6 +203,9 @@ Gx^4 20 80
             output.write(dataset_txt)
         ds = pygsti.io.load_dataset(temp_files + "/TinyDataset.txt")
         self.assertEqual(ds[()][('0',)], 0)
+        print(ds.gsIndex.keys())
+        print(ds.has_key(('Gx','Gy')))
+        print(('Gx','Gy') in ds.keys())
         self.assertEqual(ds[('Gx','Gy')][('1',)], 60)
 
         dataset_txt2 = \

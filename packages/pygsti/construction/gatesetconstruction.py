@@ -21,8 +21,11 @@ from ..objects import spamvec as _spamvec
 from ..objects import povm as _povm
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
+from ..objects import labeldicts as _ld
+from ..baseobjs import label as _label
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Dim as _Dim
+
 
 #############################################
 # Build gates based on "standard" gate names
@@ -166,24 +169,15 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
     dmDim, _ , _ = _Dim(stateSpaceDims)
     fullOpDim = dmDim**2
 
-    #Store each tensor product blocks start index (within the density matrix), which tensor product block
-    #  each label is in, and check to make sure dimensions match stateSpaceDims
-    tensorBlkIndices = {}; startIndex = []; M = 0
-    assert( len(stateSpaceDims) == len(stateSpaceLabels) )
-    for k, blockDim in enumerate(stateSpaceDims):
-        startIndex.append(M); M += blockDim
+    #Working with a StateSpaceLabels object gives us access to all the info we'll need later
+    sslbls = _ld.StateSpaceLabels(stateSpaceLabels)
+    if sslbls.dim != _Dim(stateSpaceDims):
+        raise ValueError("Dimension mismatch!")
 
-        #Make sure tensor-product interpretation agrees with given dimension
-        tensorBlkDim = 1 #dimension of this coherent block of the *density matrix*
-        for s in stateSpaceLabels[k]:
-            tensorBlkIndices[s] = k
-            if s.startswith('Q'): tensorBlkDim *= 2
-            elif s.startswith('L'): tensorBlkDim *= 1
-            else: raise ValueError("Invalid state space specifier: %s" % s)
-        if tensorBlkDim != blockDim:
-            raise ValueError("State labels %s for tensor product block %d have dimension %d != given dimension %d" \
-                                 % (stateSpaceLabels[k], k, tensorBlkDim, blockDim))
-
+    #Store each tensor product block's start index (within the density matrix)
+    startIndex = []; M = 0
+    for tpb_dim in sslbls.dim.blockDims:
+        startIndex.append(M); M += tpb_dim
 
     #print "DB: dim = ",dim, " dmDim = ",dmDim
     gateInStdBasis = _np.identity( fullOpDim, 'complex' )
@@ -206,20 +200,18 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
         elif gateName in ('X','Y','Z'): #single-qubit gate names
             assert(len(args) == 2) # theta, qubit-index
             theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-            label = args[1].strip(); assert(label.startswith('Q'))
+            label = args[1].strip(); assert(sslbls.labeldims[label] == 2)
 
             if gateName == 'X': ex = -1j * theta*_bt.sigmax/2
             elif gateName == 'Y': ex = -1j * theta*_bt.sigmay/2
             elif gateName == 'Z': ex = -1j * theta*_bt.sigmaz/2
             Ugate = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
 
-            iTensorProdBlk = tensorBlkIndices[label] # index of tensor product block (of state space) this bit label is part of
-            cohBlk = stateSpaceLabels[iTensorProdBlk]
+            iTensorProdBlk = sslbls.tpb_index[label] # index of tensor product block (of state space) this bit label is part of
+            cohBlk = sslbls.labels[iTensorProdBlk]
             basisInds = []
             for l in cohBlk:
-                assert(l[0] in ('L','Q')) #should have been checked above
-                if l.startswith('L'): basisInds.append([0])
-                elif l.startswith('Q'): basisInds.append([0,1])
+                basisInds.append(list(range(sslbls.labeldims[l])))
 
             tensorBlkBasis = list(_itertools.product(*basisInds))
             K = cohBlk.index(label)
@@ -269,15 +261,13 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
             Ugate = _np.identity(4, 'complex'); Ugate[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
 
-            assert(label1.startswith('Q') and label2.startswith('Q'))
-            iTensorProdBlk = tensorBlkIndices[label1] # index of tensor product block (of state space) this bit label is part of
-            assert( iTensorProdBlk == tensorBlkIndices[label2] ) #labels must be members of the same tensor product block
-            cohBlk = stateSpaceLabels[iTensorProdBlk]
+            assert(sslbls.labeldims[label1] == 2 and sslbls.labeldims[label2] == 2)
+            iTensorProdBlk = sslbls.tpb_index[label1] # index of tensor product block (of state space) this bit label is part of
+            assert( iTensorProdBlk == sslbls.tpb_index[label2] ) #labels must be members of the same tensor product block
+            cohBlk = sslbls.labels[iTensorProdBlk]
             basisInds = []
             for l in cohBlk:
-                assert(l[0] in ('L','Q')) #should have been checked above
-                if l.startswith('L'): basisInds.append([0])
-                elif l.startswith('Q'): basisInds.append([0,1])
+                basisInds.append(list(range(sslbls.labeldims[l])))
 
             tensorBlkBasis = list(_itertools.product(*basisInds))
             K1 = cohBlk.index(label1)
@@ -441,24 +431,12 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
     #                      two clevel opts: Flip
     #  each of which is given additional parameters specifying which indices it acts upon
     dmDim, gateDim, blockDims = basis.dim
-    #fullOpDim = dmDim**2
-    #Store each tensor product blocks start index (within the density matrix), which tensor product block
-    #  each label is in, and check to make sure dimensions match stateSpaceDims
-    tensorBlkIndices = {}; startIndex = []; M = 0
-    assert( len(blockDims) == len(stateSpaceLabels) )
-    for k, blockDim in enumerate(blockDims):
-        startIndex.append(M); M += blockDim
-
-        #Make sure tensor-product interpretation agrees with given dimension
-        tensorBlkDim = 1 #dimension of this coherent block of the *density matrix*
-        for s in stateSpaceLabels[k]:
-            tensorBlkIndices[s] = k
-            if s.startswith('Q'): tensorBlkDim *= 2
-            elif s.startswith('L'): tensorBlkDim *= 1
-            else: raise ValueError("Invalid state space specifier: %s" % s)
-        if tensorBlkDim != blockDim:
-            raise ValueError("State labels %s for tensor product block %d have dimension %d != given dimension %d" \
-                                 % (stateSpaceLabels[k], k, tensorBlkDim, blockDim))
+      #fullOpDim = dmDim**2
+    
+    #Working with a StateSpaceLabels object gives us access to all the info we'll need later
+    sslbls = _ld.StateSpaceLabels(stateSpaceLabels)
+    assert(sslbls.dim == basis.dim), \
+        "State space labels dim (%s) != basis dim (%s)" % (sslbls.dim, basis.dim)
 
 
     # ----------------------------------------------------------------------------------------------------------------------------------------
@@ -476,17 +454,15 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
         """ Use the "unitary method" to embed a gate within it's larger Hilbert space """
         # Note: Ugate should be in std basis (really no other basis it could be
         # since gm and pp are only for acting on dm space)
-        iTensorProdBlks = [ tensorBlkIndices[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
+        iTensorProdBlks = [ sslbls.tpb_index[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) > 1:
             raise ValueError("All qubit labels of a multi-qubit gate must correspond to the same tensor-product-block of the state space")
 
         iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
-        tensorProdBlkLabels = stateSpaceLabels[iTensorProdBlk]
+        tensorProdBlkLabels = sslbls.labels[iTensorProdBlk]
         basisInds = [] # list of *state* indices of each component of the tensor product block
         for l in tensorProdBlkLabels:
-            assert(l[0] in ('L','Q')) #should have been checked above
-            if l.startswith('L'): basisInds.append([0])
-            elif l.startswith('Q'): basisInds.append([0,1])
+            basisInds.append( list(range(sslbls.labeldims[l])) ) # e.g. [0,1] for qubits
 
         tensorBlkBasis = list(_itertools.product(*basisInds)) #state-space basis (remember tensor-prod-blocks are in state space)
         N = len(tensorBlkBasis) #size of state space (not density matrix space, which is N**2)
@@ -495,8 +471,7 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
         labelMultipliers = []; stateSpaceDim = 1
         for l in reversed(labels):
             labelMultipliers.append(stateSpaceDim)
-            if l.startswith('L'): stateSpaceDim *= 1 #Warning? - having a gate operate on an L label doesn't really do anything...
-            elif l.startswith('Q'): stateSpaceDim *= 2
+            stateSpaceDim *= sslbls.labeldims[l]
         labelMultipliers.reverse() #reverse back to labels order (labels was reversed in loop above)
         labelMultipliers = _np.array(labelMultipliers,'i') #so we can use _np.dot below
         assert(stateSpaceDim == Ugate.shape[0] == Ugate.shape[1])
@@ -535,7 +510,7 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
         """ Embed "local" gate matrix into gate for larger Hilbert space using
             our standard method """
         #print "DEBUG: embed_gate gatemx = \n", gatemx
-        iTensorProdBlks = [ tensorBlkIndices[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
+        iTensorProdBlks = [  sslbls.tpb_index[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) != 1:
             raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" + \
                              " same tensor-product-block of the state space -- checked previously")
@@ -544,9 +519,7 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
         tensorProdBlkLabels = stateSpaceLabels[iTensorProdBlk]
         basisInds = [] # list of possible *density-matrix-space* indices of each component of the tensor product block
         for l in tensorProdBlkLabels:
-            assert(l[0] in ('L','Q')) #should have already been checked
-            if l.startswith('L'): basisInds.append([0]) # I
-            elif l.startswith('Q'): basisInds.append([0,1,2,3])  # I, X, Y, Z
+            basisInds.append( list(range(sslbls.labeldims[l]**2)) ) # e.g. [0,1,2,3] for qubits (I, X, Y, Z)
 
         tensorBlkEls = list(_itertools.product(*basisInds)) #dm-space basis
         lookup_blkElIndex = { tuple(b):i for i,b in enumerate(tensorBlkEls) } # index within vec(tensor prod blk) of each basis el
@@ -572,8 +545,7 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
             #print "Decomp %d" % indx,
             for l in labels:
                 divisors.append(divisor)
-                if l.startswith('Q'): divisor *= 4
-                elif l.startswith('L'): divisor *= 1
+                divisor *= sslbls.labeldims[l]**2 # E.g. "4" for qubits
             for d in reversed(divisors):
                 ret.append( indx // d )
                 indx = indx % d
@@ -655,12 +627,12 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
         if parameterization == "full":
             return _gate.FullyParameterizedGate(
                 _np.real(finalGateInFinalBasis)
-                if finalBasis.real else finalGateInFinalBasis )
+                if finalBasis.real else finalGateInFinalBasis, "densitymx" )
 
         if parameterization == "static":
             return _gate.StaticGate(
                 _np.real(finalGateInFinalBasis)
-                if finalBasis.real else finalGateInFinalBasis )
+                if finalBasis.real else finalGateInFinalBasis, "densitymx" )
 
         if parameterization == "TP":
             if not finalBasis.real:
@@ -711,11 +683,7 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
 
         if gateName == "I":
             labels = args # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
-            stateSpaceDim = 1
-            for l in labels:
-                if l.startswith('Q'): stateSpaceDim *= 2
-                elif l.startswith('L'): stateSpaceDim *= 1
-                else: raise ValueError("Invalid state space label: %s" % l)
+            stateSpaceDim = sslbls.product_dim(labels)
 
             if unitaryEmbedding:
                 Ugate = _np.identity(stateSpaceDim, 'complex') #complex because in std state space basis
@@ -726,12 +694,7 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
 
         elif gateName == "D":  #like 'I', but only parameterize the diagonal elements - so can be a depolarization-type map
             labels = args # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
-            stateSpaceDim = 1
-            for l in labels:
-                if l.startswith('Q'): stateSpaceDim *= 2
-                elif l.startswith('L'): stateSpaceDim *= 1
-                else: raise ValueError("Invalid state space label: %s" % l) # pragma: no cover
-                      #unreachable (checked above)
+            stateSpaceDim = sslbls.product_dim(labels)
 
             if unitaryEmbedding or parameterization not in ("linear","linearTP"):
                 raise ValueError("'D' gate only makes sense to use when unitaryEmbedding is False and parameterization == 'linear'")
@@ -747,7 +710,8 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
         elif gateName in ('X','Y','Z'): #single-qubit gate names
             assert(len(args) == 2) # theta, qubit-index
             theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-            label = args[1].strip(); assert(label.startswith('Q'))
+            label = args[1].strip()
+            assert(sslbls.labeldims[label] == 2), "%s gate must act on qubits!" % gateName
 
             if gateName == 'X': ex = -1j * theta*_bt.sigmax/2
             elif gateName == 'Y': ex = -1j * theta*_bt.sigmay/2
@@ -768,7 +732,8 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
             sxCoeff = eval( args[1], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
             syCoeff = eval( args[2], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
             szCoeff = eval( args[3], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
-            label = args[4].strip(); assert(label.startswith('Q'))
+            label = args[4].strip()
+            assert(sslbls.labeldims[label] == 2), "%s gate must act on qubits!" % gateName
 
             ex = -1j * theta * ( sxCoeff * _bt.sigmax/2. + syCoeff * _bt.sigmay/2. + szCoeff * _bt.sigmaz/2.)
             Ugate = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
@@ -805,7 +770,9 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
 
             Ugate = _np.identity(4, 'complex'); Ugate[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
 
-            assert(label1.startswith('Q') and label2.startswith('Q'))
+            assert(sslbls.labeldims[label1] == 2 and sslbls.labeldims[label2] == 2), \
+                "%s gate must act on qubits!" % gateName
+            
             if unitaryEmbedding:
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label1,label2)) #Ugate assumed to be in std basis (really the only option)
             else:
@@ -838,7 +805,7 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
             gateTermInFinalBasis = _gate.FullyParameterizedGate(gateMxInFinalBasis)
 
         else: raise ValueError("Invalid gate name: %s" % gateName)
-
+        
         if gateInFinalBasis is None:
             gateInFinalBasis = gateTermInFinalBasis
         else:
@@ -1113,6 +1080,337 @@ def build_alias_gateset(gs_primitives, alias_dict):
           #Creates fully parameterized gates by default...
     return gs_new
 
+
+def build_nqubit_gateset(nQubits, gatedict, availability=None,
+                         parameterization='static', evotype="auto",
+                         sim_type="auto", on_construction_error='raise'):
+    """
+    Creates a n-qubit gateset by embedding the *same* gates from `gatedict`
+    as requested and creating a perfect 0-prep and z-basis POVM.
+
+    The gates in `gatedict` often act on fewer (typically just 1 or 2) than
+    the total `nQubits` qubits, in which case embedded-gate objects are
+    automatically (and repeatedly) created to wrap the lower-dimensional gate.
+    Parameterization of each gate is done once, before any embedding, so that 
+    just a single set of parameters will exist for each low-dimensional gate.
+    
+    Parameters
+    ----------
+    nQubits : int
+        The total number of qubits.
+
+    gatedict : dict
+        A dictionary (an `OrderedDict` if you care about insertion order) which 
+        associates with string-type gate names (e.g. `"Gx"`) :class:`Gate` or
+        `numpy.ndarray` objects.  When the objects may act on fewer than the
+        total number of qubits (determined by their dimension/shape) then they
+        are repeatedly embedded into `nQubits`-qubit gates as specified by
+        `availability`.
+
+    availability : dict, optional
+        If not None, a dictionary whose keys are the same gate names as in
+        `gatedict` and whose values are lists of qubit-label-tuples.  Each
+        qubit-label-tuple must have length equal to the number of qubits
+        the corresponding gate acts upon, and causes that gate to be
+        embedded to act on the specified qubits.  For example,
+        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
+        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
+        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
+        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
+        values of `availability` may take the special values 
+        `"all-permutations"` and `"all-combinations"`, which as their names
+        imply, equate to all possible permutations and combinations of the 
+        appropriate number of qubit labels (deterined by the gate's dimension).
+        If a gate name (a key of `gatedict`) is not present in `availability`,
+        the default is `"all-permutations"`.  If `availability` is None, this is
+        equivalent to the empty dictionary (all gates get `"all-permutations"`).
+
+    parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
+                        "H+S clifford terms", "clifford"}
+        The type of parameterizaton to convert each value in `gatedict` to. See
+        :method:`GateSet.set_all_parameterizations` for more details.
+
+    evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
+        The evolution type.  Often this is determined by the choice of 
+        `parameterization` and can be left as `"auto"`, which prefers
+        `"densitymx"` (full density matrix evolution) when possible. In some
+        cases, however, you may want to specify this manually.  For instance,
+        if you give unitary maps instead of superoperators in `gatedict`
+        you'll want to set this to `"statevec"`.
+
+    sim_type : {"auto", "matrix", "map", "termorder:<N>"} 
+        The simulation method used to compute predicted probabilities for the
+        resulting :class:`GateSet`.  Usually `"auto"` is fine, the default for
+        each `evotype` is usually what you want.  Setting this to something
+        else is expert-level tuning.
+
+    on_construction_error : {'raise','warn',ignore'}
+        What to do when the conversion from a value in `gatedict` to a
+        :class:`Gate` of the type given by `parameterization` fails.
+        Usually you'll want to `"raise"` the error.  In some cases,
+        for example when converting as many gates as you can into
+        `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
+        may be useful.
+
+    Returns
+    -------
+    GateSet
+        A gateset with `"rho0"` prep, `"Mdefault"` POVM, and gates labeled by
+        gate name (keys of `gatedict`) and qubit labels (from within
+        `availability`).  For instance, the gate label for the `"Gx"` gate on
+        qubit 2 might be `Label("Gx",1)`.
+    """
+    if availability is None: availability = {}
+
+    if evotype == "auto": # Note: this same logic is repeated in build_nqubit_standard_gateset
+        if parameterization == "clifford": evotype = "stabilizer"
+        elif parameterization == "H+S terms": evotype = "svterm"
+        elif parameterization == "H+S clifford terms": evotype = "cterm"
+        else: evotype = "densitymx" #everything else
+
+    if evotype in ("densitymx","svterm","cterm"):
+        basis1Q = _Basis("pp",2)
+        v0 = basis_build_vector("0", basis1Q)
+        v1 = basis_build_vector("1", basis1Q)
+    elif evotype == "statevec":
+        basis1Q = None
+        v0 = _np.array([[1],[0]],complex)
+        v1 = _np.array([[0],[1]],complex)
+    else:
+        assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
+        basis1Q = v0 = v1 = None # then we shouldn't use these
+
+    if sim_type == "auto":
+        if evotype == "densitymx":
+            sim_type = "matrix" if nQubits <= 2 else "map"
+        elif evotype == "statevec":
+            sim_type = "matrix" if nQubits <= 4 else "map"
+        elif evotype == "stabilizer":
+            sim_type = "map" # use map as default for stabilizer-type evolutions
+        else: assert(False) # should be unreachable
+
+    gs = _gateset.GateSet(default_param = parameterization, # "full", "TP" or "static", "clifford", ...
+                          sim_type = sim_type)              # "matrix", "map", "termorder:X"
+    gs.stateSpaceLabels = _ld.StateSpaceLabels(tuple(range(nQubits)))
+    gs._evotype = evotype # set this to ensure we create the types of gateset element we expect to.
+
+    #Set "sub-type" as in GateSet.set_all_parameterizations
+    typ = parameterization
+    povmtyp = rtyp = ityp = "TP" if typ in ("CPTP","H+S","S") else typ
+
+    if parameterization == "clifford":
+        # Clifford object construction is different enough we do it separately
+        gs.preps['rho0'] = _spamvec.StabilizerSPAMVec(nQubits) # creates all-0 state by default
+        gs.povms['Mdefault'] = _povm.StabilizerZPOVM(nQubits)
+    else:
+        prep_factors = []; povm_factors = []
+        for i in range(nQubits):
+            prep_factors.append(
+                _spamvec.convert(_spamvec.StaticSPAMVec(v0), rtyp, basis1Q) )
+            povm_factors.append(
+                _povm.convert(_povm.UnconstrainedPOVM( ([
+                    ('0',_spamvec.StaticSPAMVec(v0)),
+                    ('1',_spamvec.StaticSPAMVec(v1))]) ), povmtyp, basis1Q) )
+        
+        gs.preps['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
+        gs.povms['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
+
+    for gateName, gate in gatedict.items():
+        if not isinstance(gate, _gate.Gate):
+            try:
+                gate = _gate.convert(_gate.StaticGate(gate), typ, "pp")
+            except Exception as e:
+                if on_construction_error == 'warn':
+                    _warnings.warn("Failed to create %s gate %s. Dropping it." %
+                                   (parameterization, gateName))
+                if on_construction_error in ('warn','ignore'): continue
+                else: raise e
+
+        gate_nQubits = int(round(_np.log2(gate.dim)/2)) if (evotype in ("densitymx","svterm","cterm")) \
+                       else int(round(_np.log2(gate.dim))) # evotype in ("statevec","stabilizer")
+        
+        availList = availability.get(gateName, 'all-permutations')
+        if availList == 'all-combinations': 
+            availList = list(_itertools.combinations(list(range(nQubits)), gate_nQubits))
+        elif availList == 'all-permutations': 
+            availList = list(_itertools.permutations(list(range(nQubits)), gate_nQubits))
+            
+        for inds in availList:
+            try:
+                gs.gates[_label.Label(gateName,inds)] = gate # uses automatic-embedding
+            except Exception as e:
+                if on_construction_error == 'warn':
+                    _warnings.warn("Failed to embed %s gate %s. Dropping it." %
+                                   (parameterization, str(_label.Label(gateName,inds))))
+                if on_construction_error in ('warn','ignore'): continue
+                else: raise e
+            
+    return gs
+
+
+def get_standard_gate_unitaries():
+    """
+    Constructs and returns a dictionary of unitary matrices describing the
+    action of "standard" gates.  These gates (also the keys of the returned
+    dictionary) are:
+
+    - 'Gi' : the 1Q idle operation
+    - 'Gx','Gy','Gz' : 1Q pi/2 rotations
+    - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
+    - 'Gh' : Hadamard
+    - 'Gp' : phase
+    - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
+
+    Returns
+    -------
+    dict of numpy.ndarray objects.
+    """
+    std_unitaries = {}
+    
+    # The idle gate.
+    std_unitaries['Gi'] = _np.array([[1.,0.],[0.,1.]],complex)
+
+    # Non-idle single qubit gates
+    std_unitaries['Gxpi'] = _np.array([[0.,1.],[1.,0.]],complex)
+    std_unitaries['Gypi'] = _np.array([[0.,-1j],[1j,0.]],complex)
+    std_unitaries['Gzpi'] = _np.array([[1.,0.],[0.,-1.]],complex)
+
+    sigmax = _np.array([[0,1],[1,0]])
+    sigmay = _np.array([[0,-1.0j],[1.0j,0]])
+    sigmaz = _np.array([[1,0],[0,-1]])
+    def Ugate(exp):
+        return _np.array(_spl.expm(-1j * exp/2),complex) # 1j prefactor?
+    
+    std_unitaries['Gx'] = Ugate(_np.pi/2 * sigmax)
+    std_unitaries['Gy'] = Ugate(_np.pi/2 * sigmay)
+    std_unitaries['Gz'] = Ugate(_np.pi/2 * sigmaz)
+
+    
+    H = (1/_np.sqrt(2))*_np.array([[1.,1.],[1.,-1.]],complex) 
+    P = _np.array([[1.,0.],[0.,1j]],complex)
+    
+    std_unitaries['Gh'] =  H  
+    std_unitaries['Gp'] = P
+    std_unitaries['Ghp'] = _np.dot(H,P)
+    std_unitaries['Gph'] = _np.dot(P,H)
+    std_unitaries['Ghph'] = _np.dot(H,_np.dot(P,H))
+ 
+    # Two-qubit gates
+    std_unitaries['Gcphase'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.],[0.,0.,0.,-1.]],complex)
+    std_unitaries['Gcnot'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,0.,1.],[0.,0.,1.,0.]],complex)
+    std_unitaries['Gswap'] = _np.array([[1.,0.,0.,0.],[0.,0.,1.,0.],[0.,1.,0.,0.],[0.,0.,0.,1.]],complex)
+    return std_unitaries
+
+
+def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=None,
+                                  availability=None, parameterization='static',
+                                  evotype="auto", sim_type="auto", on_construction_error='raise'):
+    """
+    Creates a "standard" n-qubit gate set, usually of ideal gates.
+
+    The returned gate set is "standard", in that the following standard gate
+    names may be specified as elements to `gate_names` without the need to
+    supply their corresponding unitaries (as one must when calling
+    :function:`built_nqubit_gateset`):
+
+    - 'Gi' : the 1Q idle operation
+    - 'Gx','Gy','Gz' : 1Q pi/2 rotations
+    - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
+    - 'Gh' : Hadamard
+    - 'Gp' : phase
+    - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
+
+    Furthermore, if additional "non-standard" gates are needed,
+    they are specified by their *unitary* gate action, even if
+    the final gate set propagates density matrices (as opposed
+    to state vectors).  Other than these, this function operates
+    as :function:`built_nqubit_gateset`, returning a `nQubit`-qubit
+    gate set of embedded gates.
+
+    Parameters
+    ----------
+    nQubits : int
+        The total number of qubits.
+
+    gate_names : list
+        I list of string-type gate names (e.g. `"Gx"`) either taken from
+        the list of builtin "standard" gate names given above or from the
+        keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
+        gates that are repeatedly embedded (based on `availability`) to form
+        the resulting gate set.
+
+    nonstd_gate_unitaries : dict, optional 
+        A dictionary of numpy arrays which specifies the unitary gate action
+        of the gate names given by the dictionary's keys.
+
+    availability : dict, optional
+        If not None, a dictionary whose keys are gate names and whose values
+        are lists of qubit-label-tuples.  See :function:`built_nqubit_gateset`
+        for more details.
+
+    parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
+                        "H+S clifford terms", "clifford"}
+        The type of parameterizaton to use for each gate value before it is
+        embedded. See :method:`GateSet.set_all_parameterizations` for more
+        details.
+
+    evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
+        The evolution type.  Often this is determined by the choice of 
+        `parameterization` and can be left as `"auto"`, which prefers
+        `"densitymx"` (full density matrix evolution) when possible. In some
+        cases, however, you may want to specify this manually.  For instance,
+        if you give unitary maps instead of superoperators in `gatedict`
+        you'll want to set this to `"statevec"`.
+
+    sim_type : {"auto", "matrix", "map", "termorder:<N>"} 
+        The simulation method used to compute predicted probabilities for the
+        resulting :class:`GateSet`.  Usually `"auto"` is fine, the default for
+        each `evotype` is usually what you want.  Setting this to something
+        else is expert-level tuning.
+
+    on_construction_error : {'raise','warn',ignore'}
+        What to do when the creation of a gate with the given 
+        `parameterization` fails.  Usually you'll want to `"raise"` the error.
+        In some cases, for example when converting as many gates as you can
+        into `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
+        may be useful.
+
+
+    Returns
+    -------
+    GateSet
+        A gateset with `"rho0"` prep, `"Mdefault"` POVM, and gates labeled by
+        gate name (keys of `gatedict`) and qubit labels (from within
+        `availability`).  For instance, the gate label for the `"Gx"` gate on
+        qubit 2 might be `Label("Gx",1)`.
+    """
+    if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
+    std_unitaries = get_standard_gate_unitaries()
+
+    if evotype == "auto": # same logic as in build_nqubit_gateset
+        if parameterization == "clifford": evotype = "stabilizer"
+        elif parameterization == "H+S terms": evotype = "svterm"
+        elif parameterization == "H+S clifford terms": evotype = "cterm"
+        else: evotype = "densitymx" #everything else
+    
+    gatedict = _collections.OrderedDict()
+    for name in gate_names:
+        #TODO?
+        #if name == "Gi" and availability.get("Gi",None) is None:
+        #    # special global identity construction
+        #    availability['Gi'] = None #all qubits
+        #    gatedict['Gi'] = XXX
+            
+        U = nonstd_gate_unitaries.get(name, std_unitaries.get(name,None))
+        if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+        if evotype in ("densitymx","svterm","cterm"): 
+            gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+        else: #we just store the unitaries
+            assert(evotype in ("statevec","stabilizer")), "Invalid evotype: %s" % evotype
+            gatedict[name] = U
+
+    return build_nqubit_gateset(nQubits,gatedict,availability,parameterization,
+                                evotype,sim_type,on_construction_error)
 
 
 

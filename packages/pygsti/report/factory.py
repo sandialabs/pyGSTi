@@ -649,7 +649,7 @@ def create_standard_report(results, filename, title="auto",
         fmt = "latex"
     else:
         fmt = "html"
-
+        
     printer.log('*** Creating workspace ***')
     if ws is None: ws = _ws.Workspace(cachefile)
 

@@ -302,7 +302,7 @@ def write_gateset(gs,filename,title=None):
                      "text format gate set files.  It will be read in as a"
                      "fully parameterized gate").format(typ=str(type(gate))))
                 typ = "GATE"
-            output.write(typ + ": " + label + '\n')
+            output.write(typ + ": " + str(label) + '\n')
             output.write("LiouvilleMx\n")
             output.write(_tools.mx_to_string(gate, width=16, prec=8) + '\n')
             output.write("\n")
@@ -316,7 +316,7 @@ def write_gateset(gs,filename,title=None):
                      "text format gate set files.  It will be read in as a"
                      "standard Instrument").format(typ=str(type(inst))))
                 typ = "Instrument"
-            output.write(typ + ": " + instLabel + '\n\n')
+            output.write(typ + ": " + str(instLabel) + '\n\n')
 
             for label,gate in inst.items():
                 if isinstance(gate, _objs.FullyParameterizedGate): typ = "IGATE"
@@ -328,7 +328,7 @@ def write_gateset(gs,filename,title=None):
                          "text format gate set files.  It will be read in as a"
                          "fully parameterized gate").format(typ=str(type(gate))))
                     typ = "IGATE"
-                output.write(typ + ": " + label + '\n')
+                output.write(typ + ": " + str(label) + '\n')
                 output.write("LiouvilleMx\n")
                 output.write(_tools.mx_to_string(gate, width=16, prec=8) + '\n')
                 output.write("\n")

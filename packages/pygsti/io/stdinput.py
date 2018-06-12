@@ -727,9 +727,9 @@ def read_gateset(filename):
             ham_basis = proj_basis
             nonham_basis = proj_basis
             nonham_diagonal_only = False; cptp = True; truncate=True
-            gs.gates[cur_label] = _objs.LindbladParameterizedGate(qty, unitary_post, ham_basis,
-                                                                  nonham_basis, cptp, nonham_diagonal_only,
-                                                                  truncate, basis)
+            gs.gates[cur_label] = _objs.LindbladParameterizedGate.from_gate_matrix(
+                qty, unitary_post, ham_basis, nonham_basis,
+                cptp, nonham_diagonal_only, truncate, basis)
         elif cur_typ == "STATIC-GATE":
             gs.gates[cur_label] = _objs.StaticGate(qty)
 

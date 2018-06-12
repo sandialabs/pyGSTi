@@ -119,7 +119,7 @@ class Gate_eigenvalues(_gsf.GateSetFunction):
     """Gate eigenvalues"""
     def __init__(self, gateset, gatelabel):
         self.gatelabel = gatelabel
-        _gsf.GateSetFunction.__init__(self, gateset, ["gate:" + gatelabel])
+        _gsf.GateSetFunction.__init__(self, gateset, ["gate:" + str(gatelabel)])
             
     def evaluate(self, gateset):
         """Evaluate at `gateset`"""
@@ -1014,6 +1014,7 @@ def general_decomposition(gatesetA, gatesetB):
     for gl in gateLabels:
         gate = gatesetA.gates[gl]
         targetGate = gatesetB.gates[gl]
+        gl = str(gl) # Label -> str for decomp-dict keys
 
         target_evals = _np.linalg.eigvals(targetGate)
         if _np.any(_np.isclose(target_evals,-1.0)):
@@ -1048,18 +1049,18 @@ def general_decomposition(gatesetA, gatesetB):
 
     for gl in gateLabels:
         for gl_other in gateLabels:            
-            rotnAngle = decomp[gl + ' angle']
-            rotnAngle_other = decomp[gl_other + ' angle']
+            rotnAngle = decomp[str(gl) + ' angle']
+            rotnAngle_other = decomp[str(gl_other) + ' angle']
 
             if gl == gl_other or abs(rotnAngle) < 1e-4 or abs(rotnAngle_other) < 1e-4:
-                decomp[gl + "," + gl_other + " axis angle"] = 10000.0 #sentinel for irrelevant angle
+                decomp[str(gl) + "," + str(gl_other) + " axis angle"] = 10000.0 #sentinel for irrelevant angle
     
             real_dot = _np.clip(
-                _np.real(_np.dot(decomp[gl + ' axis'].flatten(),
-                                 decomp[gl_other + ' axis'].flatten())),
+                _np.real(_np.dot(decomp[str(gl) + ' axis'].flatten(),
+                                 decomp[str(gl_other) + ' axis'].flatten())),
             -1.0, 1.0)
             angle = _np.arccos( real_dot ) / _np.pi
-            decomp[gl + "," + gl_other + " axis angle"] = angle
+            decomp[str(gl) + "," + str(gl_other) + " axis angle"] = angle
 
     return decomp
 General_decomposition = _gsf.gatesetfn_factory(general_decomposition)

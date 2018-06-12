@@ -31,11 +31,13 @@ from . import povm as _povm
 from . import instrument as _instrument
 from . import labeldicts as _ld
 from . import gaugegroup as _gg
-from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
-#from .gatemapcalc import GateMapCalc as _GateMapCalc
+from . import gatematrixcalc as _gatematrixcalc
+from . import gatemapcalc as _gatemapcalc
+from . import gatetermcalc as _gatetermcalc
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
+from ..baseobjs import Label as _Label
 
 class GateSet(object):
     """
@@ -54,31 +56,49 @@ class GateSet(object):
 
     def __init__(self, default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 povm_prefix="M", instrument_prefix="I"):
+                 povm_prefix="M", instrument_prefix="I", sim_type="auto"):
         """
         Initialize a gate set.
 
         Parameters
         ----------
-        default_param : {"full", "TP", "static"}, optional
+        default_param : {"full", "TP", "CPTP", etc.}, optional
             Specifies the default gate and SPAM vector parameterization type.
-            "full" : by default gates and vectors are fully parameterized.
-            "TP" : by default the first row of gates and the first element of
-            vectors is not parameterized and fixed so gate set is trace-
-            preserving.
-            "static" : by default gates and vectors are not parameterized.
+            Can be any value allowed by :method:`set_all_parameterizations`,
+            which also gives a description of each parameterization type.
 
         prep_prefix, effect_prefix, gate_prefix,
         povm_prefix, instrument_prefix : string, optional
             Key prefixes designating state preparations, POVM effects,
             gates, POVM, and instruments respectively.  These prefixes allow
             the GateSet to determine what type of object a key corresponds to.
+
+        sim_type : {"auto", "matrix", "map", "termorder:<X>"}
+            The type of gate sequence / circuit simulation used to compute any
+            requested probabilities, e.g. from :method:`probs` or 
+            :method:`bulk_probs`.  The default value of `"auto"` automatically
+            selects the simulation type, and is usually what you want. Allowed
+            values are:
+        
+            - "matrix" : gate_matrix-gate_matrix products are computed and
+              cached to get composite gates which can then quickly simulate
+              a circuit for any preparation and outcome.  High memory demand;
+              best for a small number of (1 or 2) qubits.
+            - "map" : gate_matrix-state_vector products are repeatedly computed
+              to simulate circuits.  Slower for a small number of qubits, but
+              faster and more memory efficient for higher numbers of qubits (3+).
+            - "termorder:<X>" : Use Taylor expansions of gates in error rates
+              to compute probabilities out to some maximum order <X> (an
+              integer) in these rates.
         """
-        assert(default_param in ('full','TP','static'))
+        assert(default_param in ('full','TP','CPTP','H+S','S','static',
+                                         'H+S terms','clifford','H+S clifford terms'))
+
         #default_e_param = "full" if default_param == "TP" else default_param
 
         #Gate dimension of this GateSet (None => unset, to be determined)
         self._dim = None
+        self._evotype = None
 
         #Name and dimension (or list of dims) of the *basis*
         # that the gates and SPAM vectors are expressed in.  This
@@ -99,14 +119,82 @@ class GateSet(object):
         self.gates = _ld.OrderedMemberDict(self, default_param, gate_prefix, "gate")
         self.instruments = _ld.OrderedMemberDict(self, default_param, instrument_prefix, "instrument")
 
+        if sim_type != "auto":
+            self.set_simtype(sim_type)
+        else:
+            #defer setting sim_type until _dim is set (via _check_dim in labeldicts.py)
+            self._calcClass = None
+            self._sim_type = sim_type
+            self._sim_args = []
+        
         self._default_gauge_group = None
-        self._calcClass = _GateMatrixCalc
-        #self._calcClass = _GateMapCalc
-
         self._paramvec = _np.zeros(0, 'd')
         self._rebuild_paramvec()
 
         super(GateSet, self).__init__()
+
+    def set_simtype(self, sim_type):
+        #Calculator selection based on simulation type
+        
+        if sim_type == "auto":
+            default_param = self.gates.default_param # assume the same for other dicts
+            if default_param in ("H+S terms","H+S clifford terms"):
+                sim_type = "termorder:1"
+            else:
+                d = self._dim if (self._dim is not None) else 0
+                sim_type = "matrix" if d <= 16 else "map"
+        
+        simtype_and_args = sim_type.split(":")
+        sim_type = simtype_and_args[0]
+        if sim_type == "matrix":      c = _gatematrixcalc.GateMatrixCalc
+        elif sim_type == "map":       c = _gatemapcalc.GateMapCalc
+        elif sim_type == "termorder": c = _gatetermcalc.GateTermCalc
+        else: raise ValueError("Invalid `sim_type` (%s)" % sim_type)
+
+        self._calcClass = c
+        self._sim_type = sim_type
+        self._sim_args = simtype_and_args[1:]
+        
+
+    def _embedGate(self, gateTargetLabels, gateVal):
+        """ 
+        Called by OrderedMemberDict._auto_embed to create an embedded-gate
+        object that embeds `gateVal` into the sub-space of
+        `self.stateSpaceLabels` given by `gateTargetLabels`.
+
+        Parameters
+        ----------
+        gateTargetLabels : list
+            A list of `gateVal`'s target state space labels.
+
+        gateVal : Gate
+            The gate object to embed.  Note this should be a legitimate
+            Gate-derived object and not just a numpy array.
+
+        Returns
+        -------
+        Gate
+            A gate of the full gate set dimension.
+        """
+        if self.dim is None:
+            raise ValueError("Must set gateset dimension before adding auto-embedded gates.")
+        if self.stateSpaceLabels is None:
+            raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
+
+        if gateVal.dim == self.dim:
+            return gateVal # if gate operates on full dimension, no need to embed
+
+        # TODO: REMOVE - I think this is redundant w/case above and less general
+        #if len(self.stateSpaceLabels.labels) == 1 and \
+        #   set(self.stateSpaceLabels.labels[0]) == set(gateTargetLabels):
+        #    return gateVal # if gate operates on *all* the labels, no need to embed
+
+        if self._sim_type == "matrix":
+            return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
+        elif self._sim_type in ("map","termorder"):
+            return _gate.EmbeddedGateMap(self.stateSpaceLabels, gateTargetLabels, gateVal)
+        else:
+            assert(False), "Invalid GateSet sim type == %s" % str(self._sim_type)
 
 
     @property
@@ -202,6 +290,7 @@ class GateSet(object):
         these quantities to "unkown" and None, respectively.
         """
         self.basis = _Basis('unknown', None)
+        self.stateSpaceLabels = None
 
     def get_prep_labels(self):
         """
@@ -345,17 +434,19 @@ class GateSet(object):
             given the prefix of the label.
         """
         if GateSet._strict:
-            raise KeyError("Strict-mode: invalid key %s" % label)
-
-        if label.startswith(self.preps._prefix):
+            raise KeyError("Strict-mode: invalid key %s" % repr(label))
+        
+        if not isinstance(label, _Label): label = _Label(label)
+        
+        if label.name.startswith(self.preps._prefix):
             self.preps[label] = value
-        elif label.startswith(self.povms._prefix):
+        elif label.name.startswith(self.povms._prefix):
             self.povms[label] = value
-        #elif label.startswith(self.effects._prefix):
+        #elif label.name.startswith(self.effects._prefix):
         #    self.effects[label] = value
-        elif label.startswith(self.gates._prefix):
+        elif label.name.startswith(self.gates._prefix):
             self.gates[label] = value
-        elif label.startswith(self.instruments._prefix):
+        elif label.name.startswith(self.instruments._prefix):
             self.instruments[label] = value
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
@@ -372,50 +463,105 @@ class GateSet(object):
         if GateSet._strict:
             raise KeyError("Strict-mode: invalid key %s" % label)
 
-        if label.startswith(self.preps._prefix):
+        if not isinstance(label, _Label): label = _Label(label)
+        
+        if label.name.startswith(self.preps._prefix):
             return self.preps[label]
-        elif label.startswith(self.povms._prefix):
+        elif label.name.startswith(self.povms._prefix):
             return self.povms[label]
-        #elif label.startswith(self.effects._prefix):
+        #elif label.name.startswith(self.effects._prefix):
         #    return self.effects[label]
-        elif label.startswith(self.gates._prefix):
+        elif label.name.startswith(self.gates._prefix):
             return self.gates[label]
-        elif label.startswith(self.instruments._prefix):
+        elif label.name.startswith(self.instruments._prefix):
             return self.instruments[label]
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
-
-    def set_all_parameterizations(self, parameterization_type):
+            
+        
+    def set_all_parameterizations(self, parameterization_type, extra=None):
         """
         Convert all gates and SPAM vectors to a specific parameterization
         type.
 
         Parameters
         ----------
-        parameterization_type : {"full", "TP", "CPTP", "H+S", "S", "static"}
-            The gate and SPAM vector parameterization type:
+        parameterization_type : string
+            The gate and SPAM vector parameterization type.  Allowed
+            values are:
 
+            - "full" : each gate / SPAM element is an independent parameter
+            - "TP" : Trace-Preserving gates and state preps
+            - "CPTP" : Completely-Positive-Trace-Preserving gates
+            - "H+S" : Hamiltonian and Pauli-Stochastic errors only
+            - "S" : Pauli-Stochastic errors only
+            - "static" : no parameters
+            - "static unitary" : no parameters; convert superops to unitaries
+            - "H+S terms" : like H+S, but support "svterm" evolution type
+            - "H+S clifford terms" : like H+S, but support "cterm" evo. type
+            - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
+
+        extra : dict, optional
+            For `"H+S terms"` type, this may specify a dictionary 
+            of unitary gates and pure state vectors to be used
+            as the *ideal* operation of each gate/SPAM vector.
         """
         typ = parameterization_type
-        assert(parameterization_type in ('full','TP','CPTP','H+S','S','static'))
-        rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
-        #rtyp = "CPTP" if typ in ("H+S","S") else typ #TESTING, but CPTP spamvec still unreliable
-        povmtyp = rtyp
-        ityp = "TP" if typ in ("TP","CPTP","H+S","S") else typ
+        assert(parameterization_type in ('full','TP','CPTP','H+S','S','static',
+                                         'H+S terms','clifford','H+S clifford terms',
+                                         'static unitary'))
 
+        povmtyp = rtyp = ityp = "TP" if typ in ("CPTP","H+S","S") else typ
+        #rtyp = "CPTP" if typ in ("H+S","S") else typ #TESTING, but CPTP spamvec still unreliable
+
+        #Update dim and evolution type so that setting converted elements works correctly
+        orig_dim = self.dim
+        orig_evotype = self._evotype
+        if typ in ('full','TP','CPTP','H+S','S','static'):
+            self._evotype = "densitymx"
+            if self._sim_type not in ("matrix","map"):
+                self.set_simtype("matrix" if self.dim <= 16 else "map")
+                
+        elif typ == 'clifford':
+            self._evotype = "stabilizer"
+            self.set_simtype("map")
+            
+        elif typ == 'H+S terms':
+            self._evotype = "svterm"
+            if self._sim_type != "termorder":
+                self.set_simtype("termorder:1")
+            
+        elif typ == 'H+S clifford terms':
+            self._evotype = "cterm"
+            if self._sim_type != "termorder":
+                self.set_simtype("termorder:1")
+            
+        elif typ == 'static unitary': 
+            assert(self._evotype == "densitymx"), \
+                "Can only convert to 'static unitary' from a density-matrix evolution type."
+            self._evotype = "statevec"
+            self._dim = int(round(_np.sqrt(self.dim))) # reduce dimension d -> sqrt(d)
+            if self._sim_type not in ("matrix","map"):
+                self.set_simtype("matrix" if self.dim <= 4 else "map")
+            
         basis = self.basis
+        if extra is None: extra = {}
 
         for lbl,gate in self.gates.items():
-            self.gates[lbl] = _gate.convert(gate, typ, basis)
+            self.gates[lbl] = _gate.convert(gate, typ, basis,
+                                            extra.get(lbl,None))
 
         for lbl,inst in self.instruments.items():
-            self.instruments[lbl] = _instrument.convert(inst, ityp, basis)
+            self.instruments[lbl] = _instrument.convert(inst, ityp, basis,
+                                                        extra.get(lbl,None))
             
         for lbl,vec in self.preps.items():
-            self.preps[lbl] = _sv.convert(vec, rtyp, basis)
+            self.preps[lbl] = _sv.convert(vec, rtyp, basis,
+                                          extra.get(lbl,None))
 
         for lbl,povm in self.povms.items():
-            self.povms[lbl] = _povm.convert(povm, povmtyp, basis)
+            self.povms[lbl] = _povm.convert(povm, povmtyp, basis,
+                                            extra.get(lbl,None))
         
         if typ == 'full': 
             self.default_gauge_group = _gg.FullGaugeGroup(self.dim)
@@ -423,7 +569,7 @@ class GateSet(object):
             self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
         elif typ == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim, basis)
-        else: # typ in ('static','H+S','S')
+        else: # typ in ('static','H+S','S', 'H+S terms')
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.dim)
 
 
@@ -444,7 +590,8 @@ class GateSet(object):
             self._rebuild_paramvec()
             
             self._dim = stateDict['_dim']
-            self._calcClass = stateDict.get('_calcClass',_GateMatrixCalc)
+            self._calcClass = stateDict.get('_calcClass',_gatematrixcalc.GateMatrixCalc)
+            self._evotype = "densitymx"
             self._default_gauge_group = stateDict['_default_gauge_group']
             self.basis = stateDict.get('basis', _Basis('unknown', None))
             if self.basis.name == "unknown" and '_basisNameAndDim' in stateDict:
@@ -599,7 +746,7 @@ class GateSet(object):
             if obj is modified_obj: continue
             if modified_indices.intersection(obj.gpindices_as_array()):
                 obj.from_vector(self._paramvec[obj.gpindices])
-        
+                
     
     def _rebuild_paramvec(self):
         """ Resizes self._paramvec and updates gpindices & parent members as needed,
@@ -656,10 +803,11 @@ class GateSet(object):
                 #Assume all parameters of obj are new independent parameters
                 num_new_params = obj.allocate_gpindices( off, self )
                 objvec = obj.to_vector() #may include more than "new" indices
-                new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off,off+num_new_params))
-                assert(len(objvec[new_local_inds]) == num_new_params)
-                v = _np.insert(v, off, objvec[new_local_inds])
-                #print("objvec len = ",len(objvec), "num_new_params=",num_new_params," gpinds=",obj.gpindices," loc=",new_local_inds)
+                if num_new_params > 0:
+                    new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off,off+num_new_params))
+                    assert(len(objvec[new_local_inds]) == num_new_params)
+                    v = _np.insert(v, off, objvec[new_local_inds])
+                #print("objvec len = ",len(objvec), "num_new_params=",num_new_params," gpinds=",obj.gpindices) #," loc=",new_local_inds)
                 
                 #obj.set_gpindices( slice(off, off+obj.num_params()), self )
                 #shift += obj.num_params()
@@ -806,8 +954,8 @@ class GateSet(object):
 
     def _calc(self):
         if not hasattr(self,"_calcClass"): #for backward compatibility
-            self._calcClass = _GateMatrixCalc
-            
+            self._calcClass = _gatematrixcalc.GateMatrixCalc
+                        
         compiled_effects = _collections.OrderedDict()
         for povm_lbl,povm in self.povms.items():
             for k,e in povm.compile_effects(povm_lbl).items():
@@ -818,9 +966,15 @@ class GateSet(object):
         for inst_lbl,inst in self.instruments.items():
             for k,g in inst.compile_gates(inst_lbl).items():
                 compiled_gates[k] = g
-        
+
+        kwargs = {}
+        if self._sim_type in ("termorder","ctermorder"):
+            kwargs['max_order'] = int(self._sim_args[0])
+
+        assert(self._calcClass is not None), "Gateset does not have a calculator setup yet!"
         return self._calcClass(self._dim, compiled_gates, self.preps,
-                               compiled_effects, self._paramvec)
+                               compiled_effects, self._paramvec, **kwargs)
+
 
     def split_gatestring(self, gatestring, erroron=('prep','povm')):
         """
@@ -920,7 +1074,9 @@ class GateSet(object):
         """
         # gateset.compile -> odict[raw_gstr] = spamTuples, elementIndices, nElements
         # dataset.compile -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
-        # compile all gsplaq strs -> elementIndices[(i,j)], 
+        # compile all gsplaq strs -> elementIndices[(i,j)],
+
+        gatestrings = [ _gs.GateString(gs) for gs in gatestrings ] # cast to GateStrings
 
         #Indexed by raw gate string
         raw_spamTuples_dict = _collections.OrderedDict()  # final
@@ -930,6 +1086,7 @@ class GateSet(object):
         #Indexed by parent index (an integer)
         elIndicesByParent = _collections.OrderedDict() # final
         outcomesByParent = _collections.OrderedDict()  # final
+        elIndsToOutcomesByParent = _collections.OrderedDict()
 
         # Helper dict: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
         spamTupleToOutcome = { None : ("NONE",) } #Dummy label for placeholding (see resolveSPAM below)
@@ -957,7 +1114,7 @@ class GateSet(object):
                              for elbl in self.povms[povm_lbl]]
             return gatestring, spamtups
                     
-        def process(action,s,spamtuples,iParent=None,gate_outcomes=(),start=0):
+        def process(s, spamtuples,elIndsToOutcomes,gate_outcomes=(),start=0):
             """ 
             Implements recursive processing of a string. Separately
             implements two different behaviors:
@@ -971,55 +1128,89 @@ class GateSet(object):
                     #we've found an instrument - recurse!
                     for inst_el_lbl in self.instruments[gate_label]:
                         compiled_el_lbl = gate_label + "_" + inst_el_lbl
-                        process(action, s[0:i] + _gs.GateString((compiled_el_lbl,)) + s[i+1:],
-                                spamtuples, iParent, gate_outcomes + (inst_el_lbl,), i+1)
+                        process(s[0:i] + _gs.GateString((compiled_el_lbl,)) + s[i+1:],
+                                spamtuples, elIndsToOutcomes, gate_outcomes + (inst_el_lbl,), i+1)
                     break
             else: #no instruments -- add "raw" gate string s
                 if s in raw_spamTuples_dict:
-                    assert(gate_outcomes == raw_gateOutcomes_dict[s])
-                    if action == "add":
-                        raw_spamTuples_dict[s] = _lt.remove_duplicates(raw_spamTuples_dict[s] + spamtuples)
-                        # Note: there should only be duplicates if there are duplicates in
-                        # original `gatestring_list` - check this?
-                    elif action == "index":  # fill *ByParent dicts
-                        assert(iParent is not None)
-                        offset = raw_offsets[s]
-                        all_spamtuples = raw_spamTuples_dict[s]
-                        final_outcomes = [ spamTupleToOutcome[x] for x in spamtuples ]
-                        my_spamTuple_indices = [ offset+all_spamtuples.index(x) for x in spamtuples ]
-                        my_outcome_tuples =  [ gate_outcomes + x for x in final_outcomes ]
-                        for i,tup in zip(my_spamTuple_indices,my_outcome_tuples):
-                            if i not in elIndicesByParent[iParent]: #don't duplicate existing indices
-                                elIndicesByParent[iParent].append(i)
-                                outcomesByParent[iParent].append(tup)
-                            else: assert(tup in outcomesByParent) # pragma: no check
-                                    # double-check - could REMOVE for speed in future
+                    assert(gate_outcomes == raw_gateOutcomes_dict[s]) #DEBUG
+                    #if action == "add":
+                    od = raw_spamTuples_dict[s] # ordered dict
+                    for spamtup in spamtuples:
+                        spamtup_indx = od.get(spamtup,None)
+                        if spamtup is None:
+                            # although we've seen this raw string, we haven't
+                            # seen spamtup yet - add it at end
+                            spamtup_indx = len(od)
+                            od[spamtup] = spamtup_indx
+    
+                        #Link the current iParent to this index (even if it was already going to be computed)
+                        outcome_tup = gate_outcomes + spamTupleToOutcome[spamtup]
+                        elIndsToOutcomes[(s,spamtup_indx)] = outcome_tup
+                        
+                    #OLD: raw_spamTuples_dict[s] = _lt.remove_duplicates(raw_spamTuples_dict[s] + spamtuples)
+                    # Note: there should only be duplicates if there are duplicates in
+                    # original `gatestring_list` - check this?
+    
+                    #OLD - "index" case
+                    #elif action == "index":  # fill *ByParent dicts
+                    #    assert(iParent is not None)
+                    #    offset = raw_offsets[s]
+                    #    all_spamtuples = raw_spamTuples_dict[s] # an OrderedDict
+                    #    final_outcomes = [ spamTupleToOutcome[x] for x in spamtuples ]
+                    #    my_spamTuple_indices = [ offset+all_spamtuples[x] for x in spamtuples ]
+                    #    my_outcome_tuples =  [ gate_outcomes + x for x in final_outcomes ]
+                    #    for i,tup in zip(my_spamTuple_indices,my_outcome_tuples):
+                    #        if i not in elIndicesByParent[iParent]: #don't duplicate existing indices
+                    #            elIndicesByParent[iParent][i] = True #just a placeholder; just care about (ordered) keys
+                    #            outcomesByParent[iParent].append(tup)
+                    #        else: assert(tup in outcomesByParent) # pragma: no check
+                    #                # double-check - could REMOVE for speed in future
+                    
                 else:
-                    assert(action == "add") # s should have been added in "add" process!
-                    raw_spamTuples_dict[s] = spamtuples
-                    raw_gateOutcomes_dict[s] = gate_outcomes
+                    # Note: store elements of raw_spamTuples_dict as dicts for
+                    # now, for faster lookup during "index" mode
+                    raw_spamTuples_dict[s] = _collections.OrderedDict([(spamtup,i) for i,spamtup in enumerate(spamtuples)])
+                    raw_gateOutcomes_dict[s] = gate_outcomes #DEBUG
+    
+                    spamTuple_indices = range(len(spamtuples))
+                    outcome_tuples =  [ gate_outcomes + spamTupleToOutcome[x] for x in spamtuples ]
+                    for ist,out_tup in zip(spamTuple_indices,outcome_tuples):
+                        elIndsToOutcomes[(s,ist)] = out_tup
+                          # Note: works even if `i` already exists - doesn't reorder keys then
+    
+                    
 
         #Begin actual processing work:
 
-        # Step1: recursively populate raw_spamTuples_dict and
-        #        raw_gateOutcomes_dict
-        for gstr in gatestrings:
-            gstr, spamtuples = resolveSPAM(gstr)
-            process("add",gstr,spamtuples)  
-
+        # Step1: recursively populate raw_spamTuples_dict,
+        #        raw_gateOutcomes_dict, and elIndsToOutcomesByParent
+        resolved_gatestrings = list(map(resolveSPAM, gatestrings))
+        for iParent,(gstr,spamtuples) in enumerate(resolved_gatestrings):
+            elIndsToOutcomesByParent[iParent] = _collections.OrderedDict()
+            process(gstr,spamtuples, elIndsToOutcomesByParent[iParent])
+            
         # Step2: fill raw_offsets dictionary
         off = 0 
         for raw_str, spamtuples in raw_spamTuples_dict.items():
             raw_offsets[raw_str] = off; off += len(spamtuples)
         nTotElements = off
 
-        # Step3: 2nd round... recursively gather per-parent indices
-        for k,gstr in enumerate(gatestrings):
-            gstr, spamtuples = resolveSPAM(gstr)
-            elIndicesByParent[k] = []
-            outcomesByParent[k] = []
-            process("index",gstr,spamtuples,k)
-            elIndicesByParent[k] = _slct.list_to_slice(elIndicesByParent[k], array_ok=True)
+        # Step3: split elIndsToOutcomesByParent into
+        #        elIndicesByParent and outcomesByParent
+        for iParent,elIndsToOutcomes in elIndsToOutcomesByParent.items():
+            elIndicesByParent[iParent] = []
+            outcomesByParent[iParent] = []
+            for (raw_str,rel_spamtup_indx),outcomes in elIndsToOutcomes.items():
+                elIndicesByParent[iParent].append( raw_offsets[raw_str]+rel_spamtup_indx )
+                outcomesByParent[iParent].append( outcomes )
+            elIndicesByParent[iParent] = _slct.list_to_slice(elIndicesByParent[iParent], array_ok=True)
+        
+        #Step3b: convert elements of raw_spamTuples_dict from OrderedDicts
+        # to lists not that we don't need to use them for lookups anymore.
+        for s in list(raw_spamTuples_dict.keys()):
+            raw_spamTuples_dict[s] = list(raw_spamTuples_dict[s].keys())
+            
 
         #Step4: change lists/slices -> index arrays for user convenience
         elIndicesByParent = _collections.OrderedDict(
@@ -1027,14 +1218,14 @@ class GateSet(object):
               for k,v in elIndicesByParent.items()] )
 
         
-        #DEBUG: SANITY CHECK
-        if len(gatestrings) > 1:
-            for k,gstr in enumerate(gatestrings):
-                _,outcomes_k = self.compile_gatestring(gstr)
-                nIndices = _slct.length(elIndicesByParent[k]) if isinstance(elIndicesByParent[k], slice) \
-                              else len(elIndicesByParent[k])
-                assert(len(outcomes_k) == nIndices)
-                assert(outcomes_k == outcomesByParent[k])
+        ##DEBUG: SANITY CHECK
+        #if len(gatestrings) > 1:
+        #    for k,gstr in enumerate(gatestrings):
+        #        _,outcomes_k = self.compile_gatestring(gstr)
+        #        nIndices = _slct.length(elIndicesByParent[k]) if isinstance(elIndicesByParent[k], slice) \
+        #                      else len(elIndicesByParent[k])
+        #        assert(len(outcomes_k) == nIndices)
+        #        assert(outcomes_k == outcomesByParent[k])
 
         #print("GateSet.compile debug:")
         #print("input = ",gatestrings)
@@ -1106,6 +1297,7 @@ class GateSet(object):
             is to allow a trace or other linear operation to be done
             prior to the scaling.
         """
+        gatestring = _gs.GateString(gatestring) # cast to GateString
         return self._calc().product(gatestring, bScale)
 
 
@@ -1140,6 +1332,7 @@ class GateSet(object):
               and deriv[i,j] holds the derivative of the i-th entry of the flattened
               product with respect to the j-th gateset parameter.
         """
+        gatestring = _gs.GateString(gatestring) # cast to GateString
         return self._calc().dproduct(gatestring, flat)
 
 
@@ -1174,6 +1367,7 @@ class GateSet(object):
               and hessian[i,j,k] holds the derivative of the i-th entry of the flattened
               product with respect to the k-th then k-th gateset parameters.
         """
+        gatestring = _gs.GateString(gatestring) # cast to GateString
         return self._calc().hproduct(gatestring, flat)
 
 
@@ -1700,8 +1894,22 @@ class GateSet(object):
 
         Returns
         -------
-        EvalTree
+        evt : EvalTree
             An evaluation tree object.
+
+        elIndices : collections.OrderedDict
+            A dictionary whose keys are integer indices into `gatestring_list` and
+            whose values are slices and/or integer-arrays into the space/axis of
+            final elements returned by the 'bulk fill' routines.  Thus, to get the
+            final elements corresponding to `gatestrings[i]`, use
+            `filledArray[ elIndices[i] ]`.
+
+        outcomes : collections.OrderedDict
+            A dictionary whose keys are integer indices into `gatestring_list` and
+            whose values are lists of outcome labels (an outcome label is a tuple
+            of POVM-effect and/or instrument-element labels).  Thus, to obtain
+            what outcomes the i-th gate strings's final elements 
+            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         """
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
@@ -1710,7 +1918,7 @@ class GateSet(object):
         for inst_lbl,inst in self.instruments.items():
             compiled_gate_labels.extend(list(inst.compile_gates(inst_lbl).keys()))
 
-        compiled_gatestrings, lookup, outcome_lookup, nEls = \
+        compiled_gatestrings, elIndices, outcomes, nEls = \
                             self.compile_gatestrings(gatestring_list)
             
         evalTree = self._calc().construct_evaltree()
@@ -1721,25 +1929,25 @@ class GateSet(object):
                     (len(gatestring_list),_time.time()-tm)); tm = _time.time()
 
         if maxTreeSize is not None:
-            lookup = evalTree.split(lookup, maxTreeSize, None, printer) # won't split if unnecessary
+            elIndices = evalTree.split(elIndices, maxTreeSize, None, printer) # won't split if unnecessary
 
         if minSubtrees is not None:
             if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
                 evalTree.original_index_lookup = None # reset this so we can re-split TODO: cleaner
-                lookup = evalTree.split(lookup, None, minSubtrees, printer)
+                elIndices = evalTree.split(elIndices, None, minSubtrees, printer)
                 if maxTreeSize is not None and \
                         any([ len(sub)>maxTreeSize for sub in evalTree.get_sub_trees()]):
                     _warnings.warn("Could not create a tree with minSubtrees=%d" % minSubtrees
                                    + " and maxTreeSize=%d" % maxTreeSize)
                     evalTree.original_index_lookup = None # reset this so we can re-split TODO: cleaner
-                    lookup = evalTree.split(lookup, maxTreeSize, None) # fall back to split for max size
+                    elIndices = evalTree.split(elIndices, maxTreeSize, None) # fall back to split for max size
         
         if maxTreeSize is not None or minSubtrees is not None:
             printer.log("bulk_evaltree: split tree (%d subtrees) in %.0fs" 
                         % (len(evalTree.get_sub_trees()),_time.time()-tm))
 
         assert(evalTree.num_final_elements() == nEls)
-        return evalTree, lookup, outcome_lookup
+        return evalTree, elIndices, outcomes
 
 
     def bulk_product(self, evalTree, bScale=False, comm=None):
@@ -2143,6 +2351,7 @@ class GateSet(object):
             `(outcome, p)` tuples, where `outcome` is a tuple of labels
             and `p` is the corresponding probability.
         """
+        gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         return self._calc().bulk_probs(gatestring_list, evalTree, elIndices,
                                        outcomes, clipTo, check, comm)
@@ -2197,6 +2406,7 @@ class GateSet(object):
             if False, then `p` is not included in the tuples (so they're just
             `(outcome, dp)`).
         """
+        gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         return self._calc().bulk_dprobs(gatestring_list, evalTree, elIndices,
                                         outcomes, returnPr,clipTo,
@@ -2256,6 +2466,7 @@ class GateSet(object):
             If `returnPr` if False, then `p` is not included in the tuples.
             If `returnDeriv` if False, then `dp` is not included in the tuples.
         """
+        gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         return self._calc().bulk_hprobs(gatestring_list, evalTree, elIndices,
                                         outcomes, returnPr, returnDeriv,
@@ -2735,6 +2946,7 @@ class GateSet(object):
         if GateSet._pcheck: self._check_paramvec()
         
         newGateset = GateSet()
+        newGateset._evotype = self._evotype
         newGateset.preps = self.preps.copy(newGateset)
         newGateset.povms = self.povms.copy(newGateset)
         #newGateset.effects = self.effects.copy(newGateset)
@@ -2750,12 +2962,19 @@ class GateSet(object):
         newGateset._default_gauge_group = self._default_gauge_group #Note: SHALLOW copy
 
         if not hasattr(self,"_calcClass"): #for backward compatibility
-            self._calcClass = _GateMatrixCalc
+            self._calcClass = _gatematrixcalc.GateMatrixCalc
         newGateset._calcClass = self._calcClass
+
+        if not hasattr(self,"_sim_type"): #for backward compatibility
+            self._sim_type = "dmmatrix"
+            self._sim_args = []
+        newGateset._sim_type = self._sim_type
+        newGateset._sim_args = self._sim_args
 
         if not hasattr(self,"basis") and hasattr(self,'_basisNameAndDim'): #for backward compatibility
             self.basis = _Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
         newGateset.basis = self.basis.copy()
+        newGateset.stateSpaceLabels = self.stateSpaceLabels # TODO: copy()?
         if GateSet._pcheck: self._check_paramvec()
         
         return newGateset
@@ -2763,13 +2982,13 @@ class GateSet(object):
     def __str__(self):
         s = ""
         for lbl,vec in self.preps.items():
-            s += "%s = " % lbl + _mt.mx_to_string(_np.transpose(vec)) + "\n"
+            s += "%s = " % lbl + str(vec) + "\n"
         s += "\n"
         for lbl,povm in self.povms.items():
             s += "%s = " % lbl + str(povm) + "\n"
         s += "\n"
         for lbl,gate in self.gates.items():
-            s += "%s = \n" % lbl + _mt.mx_to_string(gate) + "\n\n"
+            s += "%s = \n" % lbl + str(gate) + "\n\n"
         for lbl,inst in self.instruments.items():
             s += "%s = " % lbl + str(inst) + "\n"
         s += "\n"
@@ -3069,7 +3288,7 @@ class GateSet(object):
 
         new_gateset = GateSet("full", self.preps._prefix, self.effects_prefix,
                               self.gates._prefix, self.povms._prefix,
-                              self.instruments._prefix)
+                              self.instruments._prefix, self._sim_type)
         new_gateset._dim = newDimension
         new_gateset.reset_basis() #FUTURE: maybe user can specify how increase is being done?
 
@@ -3134,7 +3353,8 @@ class GateSet(object):
         assert(newDimension < curDim)
 
         new_gateset = GateSet("full", self.preps._prefix, self.effects_prefix,
-                              self.gates._prefix, self.povms._prefix, self.instruments._prefix)
+                              self.gates._prefix, self.povms._prefix,
+                              self.instruments._prefix, self._sim_type)
         new_gateset._dim = newDimension
         new_gateset.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 
@@ -3204,6 +3424,55 @@ class GateSet(object):
 
         #Note: does not alter intruments!
         return kicked_gs
+
+
+    def get_clifford_symplectic_reps(self, gatelabel_filter=None):
+        """
+        Constructs a dictionary of the symplectic representations for all
+        the Clifford gates in this gateset.  Non-:class:`CliffordGate` gates
+        will be ignored and their entries omitted from the returned dictionary.
+
+        Parameters
+        ----------
+        gatelabel_filter : iterable, optional
+            A list, tuple, or set of gate labels whose symplectic
+            representations should be returned (if they exist).
+
+        Returns
+        -------
+        dict
+            keys are gate labels and/or just the root names of gates
+            (without any state space indices/labels).  Values are
+            `(symplectic_matrix, phase_vector)` tuples.
+        """
+        gfilter = set(gatelabel_filter) if gatelabel_filter is not None \
+                  else None
+
+        srep_dict = {}
+        for gl,gate in self.gates.items():
+            if (gfilter is not None) and (gl not in gfilter): continue
+            
+            if isinstance(gate, _gate.EmbeddedCliffordGate):
+                assert(isinstance(gate.embedded_gate, _gate.CliffordGate)), \
+                    "EmbeddedClifforGate contains a non-CliffordGate!"
+                lbl = gl.name # strip state space labels off since this is a
+                              # symplectic rep for the *embedded* gate
+                srep = (gate.embedded_gate.smatrix,gate.embedded_gate.svector)
+            elif isinstance(gate, _gate.CliffordGate):
+                lbl = gl # keep the entire gate label
+                srep = (gate.smatrix,gate.gate.svector)
+            else:
+                lbl = srep = None
+
+            if srep:
+                if lbl in srep_dict:
+                    assert(srep == srep_dict[lbl]), \
+                        "Inconsistent symplectic reps for %s label!" % lbl
+                else:
+                    srep_dict[lbl] = srep
+
+        return srep_dict
+
 
 
     def print_info(self):

@@ -302,7 +302,7 @@ def mx_to_string(m, width=9, prec=4):
     if _np.max(abs(_np.imag(m))) > tol:
         return mx_to_string_complex(m, width, width, prec)
 
-    if len(m.shape) == 1: m = m[None,:] # so it works w/vectors too
+    if len(m.shape) == 1: m = _np.array(m)[None,:] # so it works w/vectors too
     for i in range(m.shape[0]):
         for j in range(m.shape[1]):
             if abs(m[i,j]) < tol: s += '{0: {w}.0f}'.format(0,w=width)
@@ -894,6 +894,102 @@ def safenorm(A, part=None):
     else:
         return _np.linalg.norm(takepart(A))
     # could also use _spsl.norm(A)
+
+
+def get_csr_sum_indices(csr_matrices):
+    """ 
+    Precomputes the indices needed to sum a set of CSR sparse matrices.
+
+    Computes the index-arrays needed for use in :method:`csr_sum`,
+    along with the index pointer and column-indices arrays for constructing
+    a "template" CSR matrix to be the destination of `csr_sum`.
+
+    Parameters
+    ----------
+    csr_matrices : list
+        The SciPy CSR matrices to be summed.
+
+    Returns
+    -------
+    ind_arrays : list
+        A list of numpy arrays giving the destination data-array indices
+        of each element of `csr_matrices`.
+    indptr, indices : numpy.ndarray
+        The row-pointer and column-indices arrays specifying the sparsity 
+        structure of a the destination CSR matrix.
+    N : int
+        The dimension of the destination matrix (and of each member of
+        `csr_matrices`)
+    """
+    if len(csr_matrices) == 0: return []
+    
+    N = csr_matrices[0].shape[0]
+    for mx in csr_matrices:
+        assert(mx.shape == (N,N)), "Matrices must have the same square shape!"
+        
+    indptr = [0]
+    indices = []
+    csr_sum_array = [ list() for mx in csr_matrices ]
+
+    #FUTURE sort column indices
+    
+    for iRow in range(N):
+        dataInds = {} #keys = column indices, values = data indices (for data in current row)
+            
+        for iMx,mx in enumerate(csr_matrices):
+            for i in range(mx.indptr[iRow],mx.indptr[iRow+1]):
+                iCol = mx.indices[i]
+                if iCol not in dataInds: #add a new element to final mx
+                    indices.append(iCol)
+                    dataInds[iCol] = len(indices)-1 #marks the final data index for this column
+                csr_sum_array[iMx].append(dataInds[iCol])
+        indptr.append( len(indices) )
+
+    #convert lists -> arrays
+    csr_sum_array = [ _np.array(lst,'i') for lst in csr_sum_array ]
+    indptr = _np.array( indptr )
+    indices = _np.array( indices )
+
+    return csr_sum_array, indptr, indices, N
+
+
+    
+def csr_sum(data, coeffs, csr_mxs, csr_sum_indices):
+    """ 
+    Accelerated summation of several CSR-format sparse matrices.
+
+    :method:`get_csr_sum_indices` precomputes the necessary indices for
+    summing directly into the data-array of a destination CSR sparse matrix.
+    If `data` is the data-array of matrix `D` (for "destination"), then this
+    method performs:
+
+    `D += sum_i( coeff[i] * csr_mxs[i] )`
+
+    Note that `D` is not returned; the sum is done internally into D's
+    data-array.
+
+    Parameters
+    ----------
+    data : numpy.ndarray
+        The data-array of the destination CSR-matrix.
+
+    coeffs : iterable
+        The weight coefficients which multiply each summed matrix.
+
+    csr_mxs : iterable
+        A list of CSR matrix objects whose data-array is given by
+        `obj.data` (e.g. a SciPy CSR sparse matrix).
+
+    csr_sum_indices : list
+        A list of precomputed index arrays as returned by
+        :method:`get_csr_sum_indices`.
+
+    Returns
+    -------
+    None
+    """
+    for coeff,mx,inds in zip(coeffs, csr_mxs, csr_sum_indices):
+        data[inds] += coeff*mx.data
 
 
 def expm_multiply_prep(A, tol=EXPM_DEFAULT_TOL):

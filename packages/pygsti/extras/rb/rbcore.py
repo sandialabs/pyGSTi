@@ -48,7 +48,7 @@ def create_random_gatestring(m, group_or_gateset, inverse = True,
         must form a group if this is true. If it is true then the sequence
         returned is length m+1 (2m+1) if interleaved is False (True).
         
-    interleaved: Str, optional
+    interleaved: Label, optional
         If not None, then a gatelabel string. When a gatelabel string is provided,
         every random gate is followed by this gate. So the returned sequence is of
         length 2m+1 (2m) if inverse is True (False).
@@ -90,6 +90,9 @@ def create_random_gatestring(m, group_or_gateset, inverse = True,
         rndm = _rndm.RandomState(seed) # ok if seed is None
     else:
         rndm = randState
+
+    if interleaved:
+        interleaved = _objs.Label(interleaved) # make sure this is a Label
         
     if (inverse) and (not group_inverse_only):
         if gateset:

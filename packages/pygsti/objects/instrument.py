@@ -16,17 +16,45 @@ from . import gatesetmember as _gm
 from . import gate as _gate
 
 
-def convert(instrument, typ, basis):
-    if typ == "TP":
+def convert(instrument, toType, basis, extra=None):
+    """
+    Convert intrument to a new type of parameterization, potentially
+    creating a new object.  Raises ValueError for invalid conversions.
+
+    Parameters
+    ----------
+    instrument : Instrument
+        Instrument to convert
+
+    toType : {"full","TP","static","static unitary"}
+        The type of parameterizaton to convert to.  See 
+        :method:`GateSet.set_all_parameterizations` for more details.
+
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis for `povm`.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
+
+    extra : object, optional
+        Additional information for conversion.
+
+    Returns
+    -------
+    Instrument
+       The converted instrument, usually a distinct
+       object from the object passed as input.
+    """
+
+    if toType == "TP":
         if isinstance(instrument, TPInstrument):
             return instrument
         else:
             return TPInstrument(list(instrument.items()))
-    elif typ in ("full","static"):
-        gate_list = [(k,_gate.convert(g,typ,basis)) for k,g in instrument.items()]
+    elif toType in ("full","static","static unitary"):
+        gate_list = [(k,_gate.convert(g,toType,basis)) for k,g in instrument.items()]
         return Instrument(gate_list)
     else:
-        raise ValueError("Cannot convert an instrument to type %s" % typ)
+        raise ValueError("Cannot convert an instrument to type %s" % toType)
 
 
 class Instrument(_gm.GateSetMember, _collections.OrderedDict):
@@ -42,7 +70,7 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
 
         Parameters
         ----------
-        gates : dict of Gate objects
+        gate_matrices : dict of Gate objects
             A dict (or list of key,value pairs) of the gates.
         """
         self._readonly = False #until init is done
@@ -50,6 +78,7 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
             assert(gate_matrices is None), "`items` was given when gate_matrices != None"
 
         dim = None
+        evotype = None
         
         if gate_matrices is not None:
             if isinstance(gate_matrices,dict):
@@ -63,12 +92,20 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
             for k,v in matrix_list:
                 gate = v if isinstance(v, _gate.Gate) else \
                        _gate.FullyParameterizedGate(v)
+
+                if evotype is None: evotype = gate._evotype
+                else: assert(evotype == gate._evotype), \
+                    "All instrument gates must have the same evolution type"
+
                 if dim is None: dim = gate.dim
-                assert(dim == gate.dim),"All gates must have the same dimension!"
+                assert(dim == gate.dim),"All instrument gates must have the same dimension!"
                 items.append( (k,gate) )
 
+        if evotype is None:
+            evotype = "densitymx" # default (if no instrument gates)
+
         _collections.OrderedDict.__init__(self, items)
-        _gm.GateSetMember.__init__(self, dim)
+        _gm.GateSetMember.__init__(self, dim, evotype)
         self._paramvec = self._build_paramvec()
         self._readonly = True
 
@@ -128,8 +165,9 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
         #Python 2.7: remove elements of __dict__ that get initialized by OrderedDict impl
         if '_OrderedDict__root' in dict_to_pickle: del dict_to_pickle['_OrderedDict__root']
         if '_OrderedDict__map' in dict_to_pickle: del dict_to_pickle['_OrderedDict__map']
-        
-        return (Instrument, (None, list(self.items())), dict_to_pickle)
+
+        #Note: must *copy* elements for pickling/copying
+        return (Instrument, (None, [(key,gate.copy()) for key,gate in self.items()]), dict_to_pickle)
 
     def __pygsti_reduce__(self):
         return self.__reduce__()
@@ -294,19 +332,6 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
             self._paramvec[gate.gpindices] = gate.to_vector()
         self.dirty = True
 
-        
-    def copy(self, parent=None):
-        """
-        Copy this Instrument.
-
-        Returns
-        -------
-        Instrument
-            A copy of this Instrument
-        """
-        copied_items = [ (k,v.copy()) for k,v in self.items() ]
-        return self._copy_gpindices( Instrument(copied_items), parent)
-
     def __str__(self):
         s = "Instrument with elements:\n"
         for lbl,element in self.items():
@@ -399,7 +424,7 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
 
 
         _collections.OrderedDict.__init__(self,items)
-        _gm.GateSetMember.__init__(self,dim)
+        _gm.GateSetMember.__init__(self,dim,"densitymx")
         self._readonly = True
 
     def __setitem__(self, key, value):
@@ -594,18 +619,6 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
         self.dirty = True
 
         
-    def copy(self, parent=None):
-        """
-        Copy this Instrument.
-
-        Returns
-        -------
-        Instrument
-            A copy of this Instrument
-        """
-        #Note: items will get copied in constructor, so we don't need to here.
-        return self._copy_gpindices( TPInstrument( list(self.items()) ), parent)
-
     def __str__(self):
         s = "TPInstrument with elements:\n"
         for lbl,element in self.items():
