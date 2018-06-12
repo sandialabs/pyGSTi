@@ -225,7 +225,8 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     # noise can be either a seed or a random array that is long enough to use
 
     printer = _VerbosityPrinter.build_printer(verbosity)
-    printer.log("Creating a %d-qubit %s gateset" % (nQubits,geometry))
+    geometry_name = "custom" if isinstance(geometry, _objs.QubitGraph) else geometry
+    printer.log("Creating a %d-qubit %s gateset" % (nQubits,geometry_name))
 
     gs = _objs.GateSet(sim_type=sim_type, default_param=parameterization) # no preps/POVMs
     gs.stateSpaceLabels = _StateSpaceLabels(list(range(nQubits))) #TODO: better way of setting this... (__init__?)
@@ -247,12 +248,23 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     #    effectLabels=eLbls, effectExpressions=eExprs)
     printer.log("Created initial gateset")
 
-    qubitGraph = _objs.QubitGraph.common_graph(nQubits, geometry)
+    if isinstance(geometry, _objs.QubitGraph):
+        qubitGraph = geometry
+    else:
+        qubitGraph = _objs.QubitGraph.common_graph(nQubits, geometry)
     printer.log("Created qubit graph:\n"+str(qubitGraph))
 
-    printer.log("Creating Idle:")
-    gs.gates[_Lbl('Gi')] = build_nqn_global_idle(qubitGraph, maxIdleWeight, sparse,
-                                        sim_type, parameterization, printer-1)
+    if maxIdleWeight > 0:
+        printer.log("Creating Idle:")
+        gs.gates[_Lbl('Gi')] = build_nqn_global_idle(qubitGraph, maxIdleWeight, sparse,
+                                                     sim_type, parameterization, printer-1)
+        idleOP = gs.gates['Gi']
+    else:
+        gs._dim = 4**nQubits # TODO: make a set_dim that does this (and is used in labeldicts.py)
+        if gs._sim_type == "auto":
+            gs.set_simtype("auto") # run deferred auto-simtype now that _dim is set
+
+        idleOP = False
 
     #1Q gates: X(pi/2) & Y(pi/2) on each qubit
     Gx = std1Q_XY.gs_target.gates['Gx']
@@ -263,14 +275,14 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         printer.log("Creating 1Q X(pi/2) gate on qubit %d!!" % i)
         gs.gates[_Lbl("Gx",i)] = build_nqn_composed_gate(
             Gx, (i,), qubitGraph, weight_maxhops_tuples_1Q,
-            idle_noise=gs.gates['Gi'], loc_noise_type="manylittle",
+            idle_noise=idleOP, loc_noise_type="manylittle",
             sparse=sparse, sim_type=sim_type, parameterization=parameterization,
             verbosity=printer-1)
 
         printer.log("Creating 1Q Y(pi/2) gate on qubit %d!!" % i)
         gs.gates[_Lbl("Gy",i)] = build_nqn_composed_gate(
             Gy, (i,), qubitGraph, weight_maxhops_tuples_1Q,
-            idle_noise=gs.gates['Gi'], loc_noise_type="manylittle",
+            idle_noise=idleOP, loc_noise_type="manylittle",
             sparse=sparse, sim_type=sim_type, parameterization=parameterization,
             verbosity=printer-1)
         
@@ -282,7 +294,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         printer.log("Creating CNOT gate between qubits %d and %d!!" % (i,j))
         gs.gates[_Lbl("Gcnot",(i,j))] = build_nqn_composed_gate(
             Gcnot, (i,j), qubitGraph, weight_maxhops_tuples_2Q,
-            idle_noise=gs.gates['Gi'], loc_noise_type="manylittle",
+            idle_noise=idleOP, loc_noise_type="manylittle",
             sparse=sparse, sim_type=sim_type, parameterization=parameterization,
             verbosity=printer-1)
 
