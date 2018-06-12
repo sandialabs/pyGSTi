@@ -15,6 +15,65 @@ from ...tools import symplectic as _symp
 
 # Todo : make these methods work when the qubits have labels other than integers on 0,...,n-1.
 
+
+def sample_circuit_layer_by_pairings(pspec, onequbit_gatenames=None, twoqubit_gatenames=None, 
+                                     twoqubit_probability=0.5):   
+    """
+    A circuit layer sampler than pairs up qubits and then implements a two-qubit gate on them
+    with the specified probability. Note that this function currently only works with all-to-all
+    connectivity, but it does *not* check for this.
+    
+    """    
+    n = pspec.number_of_qubits
+        
+    if (onequbit_gatenames is None) or (twoqubit_gatenames is None):
+    
+        onequbit_gatenames = []
+        twoqubit_gatenames = []
+
+        gatenames = list(pspec.models['clifford'].gates.keys())
+
+        for gate in pspec.models['clifford'].gates:
+
+            if gate.number_of_qubits == 1 and gate.name not in onequbit_gatenames:
+                onequbit_gatenames.append(gate.name)
+            if gate.number_of_qubits == 2 and gate.name not in twoqubit_gatenames:
+                twoqubit_gatenames.append(gate.name)
+                
+    qubits = list(range(n))
+    sampled_layer = []
+    num_onequbit_gatenames = len(onequbit_gatenames)
+    num_twoqubit_gatenames = len(twoqubit_gatenames)
+    
+    # If there is an odd number of qubits, begin by picking one to have a 1-qubit gate.
+    if n % 2 != 0:
+        q = qubits[np.random.randint(0,n)]
+        name = onequbit_gatenames[_np.random.randint(0,num_onequbit_gatenames)]
+        del qubits[q]       
+        sampled_layer.append(_lbl.Label(name,q))
+    
+    for i in range(n//2):
+        
+        # Pick two of the remaining qubits
+        index = _np.random.randint(0,len(qubits))
+        q1 = qubits[index]
+        del qubits[index] 
+        index = _np.random.randint(0,len(qubits))
+        q2 = qubits[index]
+        del qubits[index] 
+        
+        if _np.random.binomial(1,twoqubit_probability) == 1:
+            name = twoqubit_gatenames[_np.random.randint(0,num_twoqubit_gatenames)]
+            sampled_layer.append(_lbl.Label(name,(q1,q2)))
+        else:
+            name1 = onequbit_gatenames[_np.random.randint(0,num_onequbit_gatenames)]
+            name2 = onequbit_gatenames[_np.random.randint(0,num_onequbit_gatenames)]
+            sampled_layer.append(_lbl.Label(name1,q1))
+            sampled_layer.append(_lbl.Label(name2,q2))                     
+    
+    return sampled_layer
+
+
 def sample_circuit_layer_by_2Qweighting(pspec,gates1Q=None,gates2Q=None,two_qubit_weighting=0.5):
 
     
@@ -206,6 +265,26 @@ def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args=[0.
             for gate in pspec.models['clifford'].gates:
                 if gate.number_of_qubits == 2:
                     sectors.append([gate,])
+                    
+    elif sampler == 'pairing':
+    
+    
+        twoqubit_probability= sampler_args[0]
+        #
+        # Todo: this currently doesn't use a list of one-qubit gates specified for
+        # sampling over. That should probably be fixed.
+        #
+        onequbit_gatenames = []
+        twoqubit_gatenames = []
+
+        gatenames = list(pspec.models['clifford'].gates.keys())
+
+        for gate in pspec.models['clifford'].gates:
+
+            if gate.number_of_qubits == 1 and gate.name not in onequbit_gatenames:
+                onequbit_gatenames.append(gate.name)
+            if gate.number_of_qubits == 2 and gate.name not in twoqubit_gatenames:
+                twoqubit_gatenames.append(gate.name)
                        
     circuit = _cir.Circuit(gatestring=[],num_lines=pspec.number_of_qubits)
     
@@ -220,6 +299,12 @@ def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args=[0.
             elif sampler == 'sectors':
                 layer = sample_circuit_layer_by_sectors(pspec, sectors=sectors, two_qubit_prob=twoqubitprob,
                                                        singlequbitgates=singlequbitgates)
+                
+            elif sampler == 'pairing':
+                layer = sample_circuit_layer_by_pairings(pspec, onequbit_gatenames=onequbit_gatenames,
+                                                         twoqubit_gatenames=twoqubit_gatenames,
+                                                         twoqubit_probability=twoqubit_probability)
+                
             else:
                 layer = sampler(pspec, length, sampler_args)
             
@@ -241,6 +326,9 @@ def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args=[0.
             
                     elif sampler == 'sectors':
                         layer = sample_circuit_layer_by_sectors(pspec, sectors=sectors, two_qubit_prob=twoqubitprob)
+                    elif sampler == 'pairings':
+                        assert(False), "This funcationality is not yet included!"
+                    
                     else:
                         layer = sampler(pspec, length, sampler_args)
                         

@@ -158,7 +158,20 @@ class ProcessorSpec(object):
             raise ValueError("Cannot create standard compilations without a 'clifford' model")
         library = _CompilationLibrary(self.models['clifford'], compile_type) # empty library to fill
         desc = descs[compile_type]
-            
+        
+        if compile_type == 'paulieq':
+            #print('Adding in the standard CNOT compilations')
+            if 'Gcnot' in self.root_gate_names:
+                library.templates['CNOT'] = [(_Label('Gcnot',(0,1)),)]
+                if 'Gh' in self.root_gate_names:
+                    library.templates['CNOT'].append((_Label('Gh', 0),_Label('Gh', 1),_Label('Gcnot', (1, 0)), _Label('Gh', 0),_Label('Gh', 1)))
+                else:
+                    for gate in self.models['clifford'].gates:
+                        if _np.array_equal(self.models['clifford'][gate].embedded_gate.smatrix,_np.array([[0,1],[1,0]])):
+                            library.templates['CNOT'].append((_Label(gate.name, 0),_Label(gate.name, 1),_Label('Gcnot', (1, 0)), _Label(gate.name, 0),_Label(gate.name, 1)))
+                            #print('Hadamard or an equivalent gate found! It is ' + gate.name)
+                            break
+                    
         #Stage1:
         # Compile 1Q gates "locally" - i.e., out of native gates which act only
         #  on the target qubit of the gate being compiled.
