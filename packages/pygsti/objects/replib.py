@@ -94,7 +94,7 @@ class DMEffectRep_TensorProd(DMEffectRep):
         return _np.dot(Edense,state.data) # not vdot b/c data is *real* 
     
 
-class DMGateRep:
+class DMGateRep(object):
     def __init__(self,dim):
         self.dim = dim
     def acton(self, state):
@@ -330,7 +330,7 @@ class SVEffectRep_TensorProd(SVEffectRep):
         return _np.vdot(Edense,state.data)
     
 
-class SVGateRep:
+class SVGateRep(object):
     def __init__(self,dim):
         self.dim = dim
     def acton(self, state):
@@ -480,7 +480,7 @@ class SBEffectRep(object):
 
 
 
-class SBGateRep:
+class SBGateRep(object):
     def __init__(self, n):
         self.n = n # number of qubits
     def acton(self, state):
