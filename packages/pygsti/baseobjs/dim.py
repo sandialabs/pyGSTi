@@ -96,3 +96,6 @@ class Dim(object):
     def __eq__(self, other):
         return bool((self.dmDim == other.dmDim) and (self.gateDim == other.gateDim)
                     and (self.blockDims == other.blockDims))
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
