@@ -123,6 +123,27 @@ class GateString(object):
         """ The Python string representation of this GateString."""
         self._str = value
 
+    def map_state_space_labels(self, mapper):
+        """
+        Return a copy of this gate string with all of the state-space-labels
+        (often just qubit labels) updated according to a mapping function.
+
+        For example, calling this function with `mapper = {0: 1, 1: 3}`
+        on the string "Gx:0Gy:1Gx:1" would return "Gx:1Gy:3Gx:3".
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing state-space-label values
+            and whose value are the new labels, or a function which takes a
+            single (existing label) argument and returns a new label.
+
+        Returns
+        -------
+        GateString
+        """
+        return GateString( [l.map_state_space_labels(mapper) for l in self.tup] )
+
             
     #Conversion routines for evalTree usage -- TODO: make these member functions
     def to_pythonstr(self,gateLabels):
