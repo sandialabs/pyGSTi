@@ -218,13 +218,20 @@ class QubitGraph(object):
         self._dirty = True
 
         
-    def edges(self):
+    def edges(self, double_for_undirected=False):
         """
         Get a list of the edges in this graph as 2-tuples of node/qubit labels).
         
         When undirected, the index of the 2-tuple's first label will always be
-        less than its second.  The edges are sorted (by label *index*) in
-        ascending order.
+        less than its second unless `double_for_undirected == True`, in which 
+        case both directed edges are included.  The edges are sorted (by label
+        *index*) in ascending order.
+
+        Parameters
+        ----------
+        double_for_undirected : bool, optional
+            Whether, for the case of an undirected graph, two 2-tuples, giving
+            both edge directions, should be included in the returned list.
 
         Returns
         -------
@@ -233,8 +240,10 @@ class QubitGraph(object):
         ret = set()
         for ilbl,i in self._nodeinds.items():
             for jlbl,j in self._nodeinds.items():
-                if self._connectivity[i,j]: 
-                    ret.add( (ilbl,jlbl) ) # i < j when undirected 
+                if self._connectivity[i,j]:
+                    ret.add( (ilbl,jlbl) ) # i < j when undirected
+                    if (not self.directed) and double_for_undirected:
+                        ret.add( (jlbl,ilbl) )
         return sorted(list(ret))
     
     def radius(self, base_nodes, max_hops):
@@ -526,6 +535,6 @@ class QubitGraph(object):
 
     def __str__(self):
         dirstr = "Directed" if self.directed else "Undirected"
-        s = dirstr + ' Qubit Graph w/%d qubits.  Nodes = ' + str(self._nodeinds) + '\n'
+        s = dirstr + ' Qubit Graph w/%d qubits.  Nodes = %s\n' % (self.nqubits,str(self._nodeinds))
         s += ' Edges = ' + str(self.edges()) + '\n'
         return s

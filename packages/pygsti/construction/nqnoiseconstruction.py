@@ -135,11 +135,14 @@ def nparams_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0
 
 
 
-def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
+def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
+                          maxIdleWeight=1, maxhops=0,
                           extraWeight1Hops=0, extraGateWeight=0, sparse=False,
                           gateNoise=None, prepNoise=None, povmNoise=None,
-                          sim_type="matrix", parameterization="H+S", verbosity=0): #, debug=False):
+                          sim_type="matrix", parameterization="H+S",
+                          return_clouds=False, verbosity=0): #, debug=False):
     """ 
+    TODO: docstring (cnot_edges)
     Create a noisy n-qubit gateset using a low-weight and geometrically local
     error model with a common idle gate.  
 
@@ -208,6 +211,11 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         using a path-integral approach designed for larger numbers of qubits,
         and are considered expert options.
 
+    return_clouds : bool, optional
+        Whether to return a dictionary of "cloud" objects, used for constructing
+        the gate sequences necessary for probing the returned GateSet's
+        parameters.  Used primarily internally within pyGSTi.
+
     verbosity : int, optional
         An integer >= 0 dictating how must output to send to stdout.
 
@@ -258,6 +266,9 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         qubitGraph = _objs.QubitGraph.common_graph(nQubits, geometry, directed=False)
         printer.log("Created qubit graph:\n"+str(qubitGraph))
 
+    if cnot_edges is None:
+        cnot_edges = qubitGraph.edges(double_for_undirected=True)
+
     if maxIdleWeight > 0:
         printer.log("Creating Idle:")
         gs.gates[_Lbl('Gi')] = build_nqn_global_idle(qubitGraph, maxIdleWeight, sparse,
@@ -270,12 +281,19 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
 
         idleOP = False
 
+    # a dictionary of "cloud" objects
+    # keys = (target_qubit_indices, cloud_qubit_indices) tuples
+    # values = list of gate-labels giving the gates associated with that cloud (necessary?)
+    clouds = _collections.OrderedDict()
+        
     #1Q gates: X(pi/2) & Y(pi/2) on each qubit
     Gx = std1Q_XY.gs_target.gates['Gx']
     Gy = std1Q_XY.gs_target.gates['Gy'] 
     weight_maxhops_tuples_1Q = [(1,maxhops+extraWeight1Hops)] + \
                                [ (1+x,maxhops) for x in range(1,extraGateWeight+1) ]
-    for i in range(nQubits):
+    cloud_maxhops = max( [mx for wt,mx in weight_maxhops_tuples_1Q] ) # max of max-hops
+    
+    for i in range(nQubits):        
         printer.log("Creating 1Q X(pi/2) gate on qubit %d!!" % i)
         gs.gates[_Lbl("Gx",i)] = build_nqn_composed_gate(
             Gx, (i,), qubitGraph, weight_maxhops_tuples_1Q,
@@ -289,18 +307,28 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
             idle_noise=idleOP, loc_noise_type="manylittle",
             sparse=sparse, sim_type=sim_type, parameterization=parameterization,
             verbosity=printer-1)
+
+        cloud_inds = tuple(qubitGraph.radius((i,), cloud_maxhops))
+        cloud_key = ( (i,), tuple(sorted(cloud_inds)) ) # (sets are unhashable)
+        if cloud_key not in clouds: clouds[cloud_key] = []
+        clouds[cloud_key].extend([_Lbl("Gx",i),_Lbl("Gy",i)])
         
     #2Q gates: CNOT gates along each graph edge
     Gcnot = std2Q_XYICNOT.gs_target.gates['Gcnot']
     weight_maxhops_tuples_2Q = [(1,maxhops+extraWeight1Hops),(2,maxhops)] + \
                                [ (2+x,maxhops) for x in range(1,extraGateWeight+1) ]
-    for i,j in qubitGraph.edges(): #note: all edges have i<j so "control" of CNOT is always lower index (arbitrary)
+    cloud_maxhops = max( [mx for wt,mx in weight_maxhops_tuples_2Q] ) # max of max-hops
+    for i,j in cnot_edges:
         printer.log("Creating CNOT gate between qubits %d and %d!!" % (i,j))
         gs.gates[_Lbl("Gcnot",(i,j))] = build_nqn_composed_gate(
             Gcnot, (i,j), qubitGraph, weight_maxhops_tuples_2Q,
             idle_noise=idleOP, loc_noise_type="manylittle",
             sparse=sparse, sim_type=sim_type, parameterization=parameterization,
             verbosity=printer-1)
+        cloud_inds = tuple(qubitGraph.radius((i,j), cloud_maxhops))
+        cloud_key = (tuple(sorted([i,j])), tuple(sorted(cloud_inds)))
+        if cloud_key not in clouds: clouds[cloud_key] = []
+        clouds[cloud_key].append(_Lbl("Gcnot",(i,j)))
 
 
     #Insert noise on gates
@@ -388,9 +416,10 @@ def build_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     #        depolAmts = povmNoise[0:nQubits]
     #    for amt,povm in zip(depolAmts,factorPOVMs): povm.depolarize(amt) 
     #gs.povms['Mdefault'] = pygsti.obj.TensorProdPOVM( factorPOVMs )
-        
-    printer.log("DONE! - returning GateSet with dim=%d and gates=%s" % (gs.dim, list(gs.gates.keys())))
-    return gs
+    
+    #HERE - just return cloud keys
+    printer.log("DONE! - returning GateSet with dim=%d and gates=%s" % (gs.dim, list(gs.gates.keys())))    
+    return (gs, clouds) if return_clouds else gs
     
 
 def _get_Lindblad_factory(sim_type, parameterization):
@@ -1274,53 +1303,60 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
     _lt.remove_duplicates_in_place(final_fidpairs)    
     return final_fidpairs
     
-def tile_cloud_fidpairs(gatename_fidpair_lists, germPower, L, germ, cloudbank):
+def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, template_germ, clouds):
     """
     TODO: docstring
     """    
     #Note: assume fidpairs and germPower are for the qubits in the cloudbank[0] cloud
-    base_cloud = cloudbank[0]
-    unused_clouds = list(cloudbank)
-    base_qubits = base_cloud['qubits']
-    base_qubit_index = { ql: i for i,ql in enumerate(base_qubits) } # keys = qubit labels
+    #base_cloud = cloudbank[0]
+
+    #base_qubits = base_cloud['qubits']
+    #base_qubit_index = { ql: i for i,ql in enumerate(base_qubits) } # keys = qubit labels
+
+    unused_clouds = list(clouds)
     sequences = []
     germs = []
     
     while(len(unused_clouds) > 0):
         
         #figure out what clouds can be processed in parallel
-        parallel_clouds = [unused_clouds[0]]
-        parallel_qubits = set(unused_clouds[0]['qubits']) # qubits used by parallel_clouds
+        first_unused = unused_clouds[0] # a cloud_dict, template_to_cloud_map tuple
+        parallel_clouds = [first_unused]
+        parallel_qubits = set(first_unused[0]['qubits']) # qubits used by parallel_clouds
         del unused_clouds[0]
         
         to_delete = []
         for i,cloud in enumerate(unused_clouds):
-            if len(parallel_qubits.intersection(cloud['qubits'])) == 0:
-                parallel_qubits.update(cloud['qubits'])
+            if len(parallel_qubits.intersection(cloud[0]['qubits'])) == 0:
+                parallel_qubits.update(cloud[0]['qubits'])
                 parallel_clouds.append(cloud)
                 to_delete.append(i)
         for i in reversed(to_delete):
             del unused_clouds[i]
             
         #Create gate sequence "info-tuples" by processing in parallel the
-        # list of parallel_clouds 
-        for gatename_fidpair_list in gatename_fidpair_lists:
+        # list of parallel_clouds
+        
+        for template_gatename_fidpair_list in template_gatename_fidpair_lists:
             prepStr = []
             measStr = []
             germStr = []
             germPowerStr = []
             for cloud in parallel_clouds:
-                for base_ql_index,cloud_ql in enumerate(cloud['qubits']):
-                    prep,meas = gatename_fidpair_list[base_ql_index] # gate-name lists
+                cloud_dict, template_to_cloud_map = cloud
+                cloud_to_template_map = { c:t for t,c in template_to_cloud_map.items() }
+                
+                germ = template_germ.map_state_space_labels(template_to_cloud_map)
+                germPower = template_germPower.map_state_space_labels(template_to_cloud_map)
+
+                for cloud_ql in cloud_dict['qubits']:
+                    prep,meas = template_gatename_fidpair_list[cloud_to_template_map[cloud_ql]] # gate-name lists
                     prepStr.extend( [_Lbl(name,cloud_ql) for name in prep] )
                     measStr.extend( [_Lbl(name,cloud_ql) for name in meas] )
+
+                germStr.extend( list(germ) )
+                germPowerStr.extend( list(germPower) )
                 
-                germStr.extend([ _Lbl(gl.name,
-                                [ cloud['qubits'][base_qubit_index[ql]] for ql in gl.sslbls] )
-                                for gl in germ ] )
-                germPowerStr.extend([ _Lbl(gl.name,
-                                    [ cloud['qubits'][base_qubit_index[ql]] for ql in gl.sslbls] )
-                                    for gl in germPower ] ) 
             germs.append( _objs.GateString(germStr) )
             sequences.append( (_objs.GateString(prepStr + germPowerStr + measStr), L, germs[-1], "XX", "XX") )
               # gatestring, L, germ, prepFidIndex, measFidIndex??
@@ -1407,7 +1443,7 @@ def get_candidates_for_core(gateset, core_qubits, candidate_counts, seedStart): 
     candidate_germs = [ g for g in candidate_germs if any([(gl in g) for gl in full_core_list]) ] # filter?
     return candidate_germs
 
-def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWeight=1, maxhops=0,
+def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWeight=1, maxhops=0,
                             extraWeight1Hops=0, extraGateWeight=0, sparse=False, verbosity=0,
                             cache=None):
     """ 
@@ -1419,17 +1455,14 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
         the indices of all the qubits in the cloud and the subset of "core" qubits 
     
     """
-    
+
+    #OLD - move & update TODO?:
     # e.g. in a chain of 5 qubits clouds could be:
     # [{'qubits': [0,1,2], 'core': [1]}, {'qubits': [1,2,3], 'core': [2]}, ... ] OR
     # [{'qubits': [0,1,2,3], 'core': [1,2]}, ...]  -- then do candidate germ selection
     #  on the *first* could in the set of "equivalent" clouds and tiling does find/replace to other clouds,
     #  eventually allowing overlapping non-cores, but at first just keep parallel clouds disjoint.
     #base_clouds = XXX # an arg, or from qubitGraph eventually?
-    
-    #Maybe something like this: ??
-    #core_qubits, cloud_qubits = get_cloudbanks(qubitGraph, maxhops,
-    #                                           extraWeight1Hops, extraGateWeight) # get the "local" qubits of candidate_germ
 
     if cache is None: cache = {}
     if 'Idle gatename fidpair lists' not in cache:
@@ -1446,13 +1479,16 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
         qubitGraph = _objs.QubitGraph.common_graph(nQubits, geometry, directed=False)
         printer.log("Created qubit graph:\n"+str(qubitGraph))
 
-    gateset = build_nqnoise_gateset(nQubits, qubitGraph, maxIdleWeight, maxhops,
-                                    extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
-                                    sim_type="termorder:1", parameterization="H+S terms")
-    ideal_gateset = build_nqnoise_gateset(nQubits, qubitGraph, 0, 0,
+    gateset, clouds = build_nqnoise_gateset(
+        nQubits, qubitGraph, cnot_edges, maxIdleWeight, maxhops,
+        extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
+        sim_type="termorder:1", parameterization="H+S terms", return_clouds=True)
+    #print("DB: GATES = ",gateset.gates.keys())
+    #print("DB: CLOUDS = ",clouds)
+    
+    ideal_gateset = build_nqnoise_gateset(nQubits, qubitGraph, cnot_edges, 0, 0,
                                           0, 0, False, verbosity=printer-5,
                                           sim_type="map", parameterization="H+S") # for testing for synthetic idles
-    #print("DB: gateset stayte space labels = ", gateset.stateSpaceLabels)
     
     Np = gateset.num_params()
     idleGateStr = _objs.GateString(("Gi",))
@@ -1460,16 +1496,11 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
     prepLbl = _Lbl("rho0")
     effectLbls = [ _Lbl("Mdefault_%s" % l) for l in gateset.povms['Mdefault'].keys()]
 
-    #OLD
-    #geometry_name = geometry.name if isinstance(geometry, _objs.QubitGraph) else geometry
-    #gateset_id_tup = ("NQ_XYCNOT", nQubits, geometry_name, maxIdleWeight, maxhops,
-    #                  extraWeight1Hops, extraGateWeight)
-        
     # create a gateset with maxIdleWeight qubits that includes all
     # the errors of the acrtual n-qubit gateset...
-    #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line')
+    #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line'; no CNOTs)
     printer.log("Creating \"idle error\" gateset on %d qubits" % maxIdleWeight)
-    idle_gateset = build_nqnoise_gateset(maxIdleWeight, 'line', maxIdleWeight, maxhops,
+    idle_gateset = build_nqnoise_gateset(maxIdleWeight, 'line', [], maxIdleWeight, maxhops,
                                          extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
                                          sim_type="termorder:1", parameterization="H+S terms")
 
@@ -1497,7 +1528,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
         if maxSyntheticIdleWt not in cache['Idle gatename fidpair lists']:
             printer.log("Getting sequences needed for max-weight=%d errors" % maxSyntheticIdleWt)
             printer.log(" on the idle gate (for %d-Q synthetic idles)" % gateWt)
-            sidle_gateset = build_nqnoise_gateset(maxSyntheticIdleWt, 'line', maxIdleWeight, maxhops,
+            sidle_gateset = build_nqnoise_gateset(maxSyntheticIdleWt, 'line', [], maxIdleWeight, maxhops,
                                                   extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
                                                   sim_type="termorder:1", parameterization="H+S terms")
             _, _, idle_gatename_fidpair_lists = find_amped_polys_for_syntheticidle(
@@ -1531,23 +1562,20 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
     printer.log("Idle gate has %d (amplified) params; Spam has %d (unamplifiable) params; %d gate params left" %
                (Gi_nparams, SPAM_nparams, Np_to_amplify))
 
-    #OLD
-    ##ASSUME: that the gateset is constructed such that SPAM and Gi params are first (and independent from)
-    ## "pure gate" params, so we can get offset to the "pure gate" params by looking at the max Gi param index+1
-    #gate_param_offset = max(_slct.as_array(gateset.gates['Gi'].gpindices))+1
-    #Ngp = Np - gate_param_offset # number of "pure gate" params that we want to amplify
-    #wrtParams = slice(gate_param_offset,Np) # the parameters we want to amplify (diff with respect to)
-    #J = _np.empty( (0,Ngp), 'complex'); Jrank = 0
-    ##print("DB: Ngp = ",Ngp," offset = ",gate_param_offset)
-    
     printer.log("Beginning search for non-idle germs & fiducial pairs")
-    for icb,cloudbank in enumerate(cloudbanks):
-        
-        # different "clouds" - each consisting of a set of representative "cloud" &"core" qubits
-        # - AND how this cloud can be repeated?
-        base_cloud = cloudbank[0] # pick the first as the representative one
-        core_qubits = base_cloud['core']
-        cloud_qubits = base_cloud['qubits']
+
+    #TODO REMOVE
+    #OLD for icb,cloudbank in enumerate(cloudbanks):
+    #    
+    #    # different "clouds" - each consisting of a set of representative "cloud" &"core" qubits
+    #    # - AND how this cloud can be repeated?
+    #    base_cloud = cloudbank[0] # pick the first as the representative one
+    #    core_qubits = base_cloud['core']
+    #    cloud_qubits = base_cloud['qubits']
+
+    cloudbanks = _collections.OrderedDict()
+    for icloud,(core_qubits,cloud_qubits) in enumerate(clouds):
+        base_cloud = {'core': core_qubits, 'qubits': cloud_qubits} #maybe unnecessary - historical for below
 
         # Collect "pure gate" params of gates that *exactly* on (just and only) the core_qubits;
         # these are the parameters we want this cloud to amplify.  If all the gates which act on
@@ -1571,9 +1599,8 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
                 
         J = _np.empty( (0,Ngp), 'complex'); Jrank = 0
         
-        printer.log("Cloudbank %d of %d: base qubits = %s, core = %s, params(single-cloud,total-bank)= %d,%d" % 
-                    (icb+1,len(cloudbanks),str(cloud_qubits), str(core_qubits), Ngp, Ngp*len(cloudbank)),2)
-
+        printer.log("Cloud %d of %d: qubits = %s, core = %s, nparams = %d" % 
+                    (icloud+1,len(clouds),str(cloud_qubits), str(core_qubits), Ngp),2)
 
         # cache struture:
         #  'Idle gatename fidpair lists' - dict w/keys = ints == max-idle-weights
@@ -1601,11 +1628,6 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
             template_cloud_graph = template_graph.subgraph(list(range(nQubits)))
             core_graph = graph.subgraph(cloud['core'])
             cloud_graph = graph.subgraph(cloud['qubits'])
-            #print("DB MAP CLOUD: ")
-            #print("Core:\n",core_graph)
-            #print("Template core:\n",template_core_graph)
-            #print("Cloud:\n",cloud_graph)
-            #print("Template cloud:\n",template_cloud_graph)
 
             #Make sure each has the same number of gate labels
             if len(template_glabels) != len(gatelabels):
@@ -1613,11 +1635,9 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
 
             # Try to match core qubit labels (via gatelabels & graph)
             for possible_perm in _itertools.permutations( cloud['core'] ):
-                #print("Possible core perm:", possible_perm)
                 # possible_perm is a permutation of cloud's core labels, e.g. ('Q1','Q0','Q2')
                 # such that the ordering gives the mapping from template index/labels 0 to nCore-1
                 possible_template_to_cloud_map = { i:ql for i,ql in enumerate(possible_perm) }
-                #print("T to C map: ",possible_template_to_cloud_map)
 
                 gr = core_graph.copy()
                 for template_edge in template_core_graph.edges():
@@ -1626,7 +1646,6 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
                     if gr.has_edge(edge): # works w/directed & undirected graphs
                         gr.remove_edge(edge[0],edge[1])
                     else:
-                        #print(" X additional edge in template: ",edge)
                         break # missing edge -> possible_perm no good
                 else: # no missing templage edges!
                     if len(gr.edges()) == 0: # and all edges were present - a match so far!
@@ -1635,42 +1654,32 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
                         for template_gl in template_glabels:
                             gl = template_gl.map_state_space_labels(possible_template_to_cloud_map)
                             if gl not in gatelabels:
-                                #print(" X missing gatelabel in template:",gl)
                                 break
                         else:
                             #All gatelabels match (gatelabels can't have extra b/c we know length are the same)
                             core_map = possible_template_to_cloud_map
-                            break #out of possible_perm loop
-                    #else: print(" X Missing edge(s) in template: ",core_edges)
-            else:
-                return None # no core_map found => can't map template
 
-
-            # Try to match non-core qubit labels (via graph)
-            non_core_qubits = [ ql for ql in cloud['qubits'] if (ql not in cloud['core']) ]
-            for possible_perm in _itertools.permutations( non_core_qubits ):
-                #print("Possible non-core perm:", possible_perm)
-                # possible_perm is a permutation of cloud's non-core labels, e.g. ('Q4','Q3')
-                # such that the ordering gives the mapping from template index/labels nCore to nQubits-1
-                possible_template_to_cloud_map = core_map.copy()
-                possible_template_to_cloud_map.update({ i:ql for i,ql in enumerate(possible_perm,start=nCore) })
-                #print("T to C map(2): ",possible_template_to_cloud_map)
-                 # now possible_template_to_cloud_map maps *all* of the qubits
-
-                gr =cloud_graph.copy()
-                for template_edge in template_cloud_graph.edges():
-                    edge = (possible_template_to_cloud_map[template_edge[0]],
-                            possible_template_to_cloud_map[template_edge[1]])
-                    if gr.has_edge(edge): # works w/directed & undirected graphs
-                        gr.remove_edge(edge[0],edge[1])
-                    else:
-                        #print(" XX additional edge in template but not in cloud: ",edge)
-                        break # missing edge -> possible_perm no good
-                else: # no missing templage edges!
-                    if len(gr.edges()) == 0: # and all edges were present - a match!!!
-                        #print("MATCH!!!!")
-                        return possible_template_to_cloud_map
-                    #print(" XX missing edge(s) in template:", edges)
+                            # Try to match non-core qubit labels (via graph)
+                            non_core_qubits = [ ql for ql in cloud['qubits'] if (ql not in cloud['core']) ]
+                            for possible_perm in _itertools.permutations( non_core_qubits ):
+                                # possible_perm is a permutation of cloud's non-core labels, e.g. ('Q4','Q3')
+                                # such that the ordering gives the mapping from template index/labels nCore to nQubits-1
+                                possible_template_to_cloud_map = core_map.copy()
+                                possible_template_to_cloud_map.update({ i:ql for i,ql in enumerate(possible_perm,start=nCore) })
+                                 # now possible_template_to_cloud_map maps *all* of the qubits
+                
+                                gr =cloud_graph.copy()
+                                for template_edge in template_cloud_graph.edges():
+                                    edge = (possible_template_to_cloud_map[template_edge[0]],
+                                            possible_template_to_cloud_map[template_edge[1]])
+                                    if gr.has_edge(edge): # works w/directed & undirected graphs
+                                        gr.remove_edge(edge[0],edge[1])
+                                    else:
+                                        break # missing edge -> possible_perm no good
+                                else: # no missing templage edges!
+                                    if len(gr.edges()) == 0: # and all edges were present - a match!!!
+                                        return possible_template_to_cloud_map
+                    
             return None
 
         def create_cloud_template(cloud, pure_gate_labels, graph):
@@ -1698,7 +1707,6 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
         
         cloud_class_key = get_cloud_key(base_cloud, maxhops, extraWeight1Hops, extraGateWeight)
         cloud_class_templates = cache['Cloud templates'][cloud_class_key]
-        #print("DB: possible templates for ",cloud_class_key," = ",len(cloud_class_templates))
         for cloud_template in cloud_class_templates:
             template_to_cloud_map = map_cloud_template(base_cloud, pure_gate_labels, qubitGraph, cloud_template)
             if template_to_cloud_map is not None: # a cloud template is found!
@@ -1712,6 +1720,19 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
             printer.log("Created a new template for this cloud: %d qubits, gates: %s, map: %s" %
                         (len(base_cloud['qubits']), cloud_template[0], template_to_cloud_map),2)
 
+        #File this cloud under the found/created "cloud template", as these identify classes of
+        # "equivalent" clouds that can be tiled together below
+        if id(cloud_template) not in cloudbanks:
+            printer.log("Created a new cloudbank (%d) for this cloud" % id(cloud_template),2)
+            cloudbanks[id(cloud_template)] = {'template': cloud_template,
+                                              'clouds': [] } # a list of (cloud_dict, template->cloud map) tuples
+        else:
+            printer.log("Adding this cloud to existing cloudbank (%d)" % id(cloud_template),2)
+        cloudbanks[id(cloud_template)]['clouds'].append( (base_cloud,template_to_cloud_map) )
+
+        # *** For the rest of this loop over clouds, we just make sure the identified 
+        #     template supports everything we need (it has germs, and fidpairs for all needed L values)
+        
         cloud_to_template_map = { c:t for t,c in template_to_cloud_map.items() }
         germ_dict = cloud_template[2] # see above structure
         if len(germ_dict) > 0: # germ_dict should always be non-None
@@ -1767,7 +1788,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
                 #J, Jrank, sidle_gatename_fidpair_lists = find_amped_polys_for_syntheticidle(
                 #    cloud_qubits, syntheticIdle, gateset, singleQfiducials, prepLbl, effectLbls, J, Jrank, wrtParams)
                 
-                nNewAmpedDirs = Jrank - old_Jrank  #OLD - not nec. equal to this: len(sidle_gatename_fidpair_lists)
+                nNewAmpedDirs = Jrank - old_Jrank  #OLD: not nec. equal to this: len(sidle_gatename_fidpair_lists)
                 if nNewAmpedDirs > 0: # then there are some "directions" that this germ amplifies that previous ones didn't...
                     printer.log("Germ amplifies %d additional parameters (so %d of %d amplified for this base cloud)" %
                                 (nNewAmpedDirs, Jrank, Ngp), 3) # assume each cloud amplifies an independent set of params
@@ -1821,22 +1842,29 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
                     printer.log(("No additional amplified params: %d consecutive unhelpful germs."
                                  % consecutive_unhelpful_germs), 3)
                     if consecutive_unhelpful_germs == 5: # ??
-                        #print("DB: J = ")
-                        #_gt.print_mx(J[:,24:])
-                        #print("Nullspace = ")
-                        #_gt.print_mx(_mt.nullspace(J[:,24:]))
                         break # next cloudbank
         else:
             printer.log("Fiducials for all L-values are cached!", 3)
 
+
+    for icb,cloudbank in enumerate(cloudbanks.values()):
+        template_glabels, template_graph, germ_dict = cloudbank['template']
+
+        printer.log("Tiling cloudbank %d of %d: %d clouds, template labels = %s, qubits = %s" %
+                    (icb+1,len(cloudbanks),len(cloudbank['clouds']),
+                     str(template_glabels),str(template_graph.nqubits)),2)
+
+        #REMOVE
+        #base_cloud,template_to_cloud_map = cloudbank_dict['clouds'][0]
+        #cloudbanks[id(cloud_template)]['clouds'].append( (base_cloud,template_to_cloud_map) )
+
         # At this point, we have a cloud template w/germ_dict that
         #  supports all the L-values we need.  Now tile to this
         #  cloudbank.
-        printer.log("Tiling sequences for this cloudbank", 2)
         for template_germ,(germ_order,access_cache) in germ_dict.items():
-            germ = template_germ.map_state_space_labels(template_to_cloud_map)
+            #OLD germ = template_germ.map_state_space_labels(template_to_cloud_map)
             
-            printer.log("Tiling for germ = %s" % str(germ), 3)
+            printer.log("Tiling for template germ = %s" % str(template_germ), 3)
             add_germs = True
             for L in maxLengths:
                 reps = _gsc.repeat_count_with_max_length(template_germ,L)
@@ -1844,25 +1872,30 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
                 effective_reps = reps % germ_order
                 template_gatename_fidpair_lists = access_cache[effective_reps]
 
-                template_germPower = template_germ * reps # germ^reps  
-                germPower = template_germPower.map_state_space_labels(template_to_cloud_map)
+                template_germPower = template_germ * reps # germ^reps
+                addl_seqs, addl_germs = tile_cloud_fidpairs(template_gatename_fidpair_lists,
+                                                            template_germPower, L, template_germ,
+                                                            cloudbank['clouds'])
+                
+                #OLD germPower = template_germPower.map_state_space_labels(template_to_cloud_map)
 
-                #Convert template -> cloud gatename fidpair lists
-                gatename_fidpair_lists = []
-                for template_gatename_fidpair_list in template_gatename_fidpair_lists:
-                    gatename_fidpair_lists.append(
-                        [ template_gatename_fidpair_list[cloud_to_template_map[cloud_qubit_lbl]]
-                          for cloud_qubit_lbl in cloud_qubits ] )
-                #E.G if template qubit labels are [0,1,2] , cloud_qubits = [Q3,Q4,Q2] and map is 0->Q4, 1->Q2, 2->Q3
-                # then we need to know what the template *indices* of Q3,Q4,Q2 are.  However, since the templates always
-                # have qubits labeled by just the integers, this is just cloud_to_template[cloud_qubits[i]] (i.e. the
-                # labels are also indices).
+                ##Convert template -> cloud gatename fidpair lists
+                #gatename_fidpair_lists = []
+                #for template_gatename_fidpair_list in template_gatename_fidpair_lists:
+                #    gatename_fidpair_lists.append(
+                #        [ template_gatename_fidpair_list[cloud_to_template_map[cloud_qubit_lbl]]
+                #          for cloud_qubit_lbl in cloud_qubits ] )
+                ##E.G if template qubit labels are [0,1,2] , cloud_qubits = [Q3,Q4,Q2] and map is 0->Q4, 1->Q2, 2->Q3
+                ## then we need to know what the template *indices* of Q3,Q4,Q2 are.  However, since the templates always
+                ## have qubits labeled by just the integers, this is just cloud_to_template[cloud_qubits[i]] (i.e. the
+                ## labels are also indices).
 
-                #Now we have `gatename_fidpair_lists` that describe the needed
-                # fiducial pairs on `cloud_qubits`.
-                # Next, we need to "tile" these sequences so they act on multiple "clouds" in parallel so
-                # we use all the qubits.
-                addl_seqs, addl_germs = tile_cloud_fidpairs(gatename_fidpair_lists, germPower, L, germ, cloudbank)
+                ##Now we have `gatename_fidpair_lists` that describe the needed
+                ## fiducial pairs on `cloud_qubits`.
+                ## Next, we need to "tile" these sequences so they act on multiple "clouds" in parallel so
+                ## we use all the qubits.
+                #addl_seqs, addl_germs = tile_cloud_fidpairs(gatename_fidpair_lists, germPower, L, germ, cloudbank)
+                
                 sequences.extend(addl_seqs)
                 if add_germs: # addl_germs is independent of L - so just add once
                     selected_germs.extend(addl_germs)
@@ -1871,196 +1904,6 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWe
                 printer.log("After tiling L=%d to cloudbank, have %d sequences, %d germs" %
                             (L, len(sequences),len(selected_germs)),4)
                 
-                
-    printer.log("Done: %d sequences, %d germs" % (len(sequences),len(selected_germs)))
-    return sequences, selected_germs
-
-def OLD_create_nqubit_sequences(nQubits, maxLengths, geometry, cloudbanks, maxIdleWeight=1, maxhops=0,
-                            extraWeight1Hops=0, extraGateWeight=0, sparse=False, verbosity=0):
-    """ 
-    TODO: docstring
-
-    cloudbanks == list of "cloudsbanks"
-    cloudbank = list of *equivalent* (by-translation) clouds
-    cloud = dict w/ 'qubits' and 'core' keys that are lists/tuples of integers giving 
-        the indices of all the qubits in the cloud and the subset of "core" qubits 
-    
-    """
-    
-    # e.g. in a chain of 5 qubits clouds could be:
-    # [{'qubits': [0,1,2], 'core': [1]}, {'qubits': [1,2,3], 'core': [2]}, ... ] OR
-    # [{'qubits': [0,1,2,3], 'core': [1,2]}, ...]  -- then do candidate germ selection
-    #  on the *first* could in the set of "equivalent" clouds and tiling does find/replace to other clouds,
-    #  eventually allowing overlapping non-cores, but at first just keep parallel clouds disjoint.
-    #base_clouds = XXX # an arg, or from qubitGraph eventually?
-    
-    #Maybe something like this: ??
-    #core_qubits, cloud_qubits = get_cloudbanks(qubitGraph, maxhops,
-    #                                           extraWeight1Hops, extraGateWeight) # get the "local" qubits of candidate_germ
-    
-    printer = _VerbosityPrinter.build_printer(verbosity)
-    printer.log("Creating full gateset")
-    gateset = build_nqnoise_gateset(nQubits, geometry, maxIdleWeight, maxhops,
-                                    extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
-                                    sim_type="termorder:1", parameterization="H+S terms")
-    ideal_gateset = build_nqnoise_gateset(nQubits, geometry, 0, 0,
-                                          0, 0, False, verbosity=printer-5,
-                                          sim_type="map", parameterization="H+S") # for testing for synthetic idles
-    #print("DB: gateset stayte space labels = ", gateset.stateSpaceLabels)
-    sequences = []
-    
-    Np = gateset.num_params()
-    idleGateStr = _objs.GateString(("Gi",))
-    singleQfiducials = [(), ('Gx',), ('Gy',)] # , ('Gx','Gx')
-    prepLbl = _Lbl("rho0")
-    effectLbls = [ _Lbl("Mdefault_%s" % l) for l in gateset.povms['Mdefault'].keys()]
-
-    #OLD
-    #geometry_name = geometry.name if isinstance(geometry, _objs.QubitGraph) else geometry
-    #gateset_id_tup = ("NQ_XYCNOT", nQubits, geometry_name, maxIdleWeight, maxhops,
-    #                  extraWeight1Hops, extraGateWeight)
-        
-    # create a gateset with maxIdleWeight qubits that includes all
-    # the errors of the acrtual n-qubit gateset...
-    #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line')
-    printer.log("Creating \"idle error\" gateset on %d qubits" % maxIdleWeight)
-    idle_gateset = build_nqnoise_gateset(maxIdleWeight, 'line', maxIdleWeight, maxhops,
-                                         extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
-                                         sim_type="termorder:1", parameterization="H+S terms")
-    
-    #First get "idle germ" sequences since the idle is special
-    printer.log("Getting sequences needed for max-weight=%d errors on the idle gate" % maxIdleWeight)
-    ampedJ, ampedJ_rank, idle_maxwt_gatename_fidpair_lists = find_amped_polys_for_syntheticidle(
-        list(range(maxIdleWeight)), idleGateStr, idle_gateset, singleQfiducials, prepLbl, None)
-        
-    #Since this is the idle, these maxIdleWeight-qubit fidpairs can be "tiled"
-    # to the n-qubits
-    printer.log("%d \"idle template pairs\".  Tiling these to all %d qubits" % 
-                (len(idle_maxwt_gatename_fidpair_lists), nQubits),2)
-    idle_fidpairs = tile_idle_fidpairs(nQubits, idle_maxwt_gatename_fidpair_lists, maxIdleWeight)
-    printer.log("%d idle pairs found" % len(idle_fidpairs),2)
-    
-                
-    # Create idle sequences by sandwiching Gi^L between all idle fiducial pairs
-    selected_germs = [ idleGateStr ]
-    for L in maxLengths:
-        for fidpair in idle_fidpairs:
-            prepFid, measFid = fidpair
-            sequences.append( (prepFid + idleGateStr*L + measFid, L, idleGateStr, "XX", "XX") )
-              # gatestring, L, germ, prepFidIndex, measFidIndex??
-    printer.log("%d idle sequences (for all max-lengths: %s)" % (len(sequences), str(maxLengths)))
-        
-    #Look for and add additional germs to amplify the *rest* of the gateset's parameters
-    Gi_nparams = gateset.gates['Gi'].num_params()
-    SPAM_nparams = sum([obj.num_params() for obj in _itertools.chain(gateset.preps.values(), gateset.povms.values())])
-    Np_to_amplify = gateset.num_params() - Gi_nparams - SPAM_nparams
-    printer.log("Idle gate has %d (amplified) params; Spam has %d (unamplifiable) params; %d gate params left" %
-               (Gi_nparams, SPAM_nparams, Np_to_amplify))
-
-    #OLD
-    ##ASSUME: that the gateset is constructed such that SPAM and Gi params are first (and independent from)
-    ## "pure gate" params, so we can get offset to the "pure gate" params by looking at the max Gi param index+1
-    #gate_param_offset = max(_slct.as_array(gateset.gates['Gi'].gpindices))+1
-    #Ngp = Np - gate_param_offset # number of "pure gate" params that we want to amplify
-    #wrtParams = slice(gate_param_offset,Np) # the parameters we want to amplify (diff with respect to)
-    #J = _np.empty( (0,Ngp), 'complex'); Jrank = 0
-    ##print("DB: Ngp = ",Ngp," offset = ",gate_param_offset)
-    
-    printer.log("Beginning search for non-idle germs & fiducial pairs")
-    for icb,cloudbank in enumerate(cloudbanks):
-        
-        # different "clouds" - each consisting of a set of representative "cloud" &"core" qubits
-        # - AND how this cloud can be repeated?
-        base_cloud = cloudbank[0] # pick the first as the representative one
-        core_qubits = base_cloud['core']
-        cloud_qubits = base_cloud['qubits']
-
-        # Collect "pure gate" params of gates that *exactly* on (just and only) the core_qubits;
-        # these are the parameters we want this cloud to amplify.  If all the gates which act on
-        # the core act on the entire core (when there are no gates that only act on only a part
-        # of the core), then these params will be the *only* ones the choosen germs will amplify.
-        # But, if there are partial-core gates, the germs might amplify some of their parameters
-        # (e.g. Gx:0 params might get amplified when processing a cloud whose core is [0,1]).
-        # This is fine, but we don't demand that such params be amplified, since they *must* be
-        # amplified for another cloud with core exaclty equal to the gate's target qubits (e.g. [0])
-        wrtParams = set()
-        Gi_params = set(_slct.as_array(gateset.gates['Gi'].gpindices))
-        for gl in gateset.gates.keys():
-            if gl.sslbls is None: continue # gates that act on everything (usually just the identity Gi gate)
-            if set(gl.sslbls) == set(core_qubits):
-                wrtParams.update( _slct.as_array(gateset.gates[gl].gpindices) )
-        pure_gate_params = wrtParams - Gi_params # (Gi params don't count)
-        wrtParams = _slct.list_to_slice( sorted(list(pure_gate_params)), array_ok=True )
-        Ngp = _slct.length(wrtParams) # number of "pure gate" params that we want to amplify
-                
-        J = _np.empty( (0,Ngp), 'complex'); Jrank = 0
-        
-        printer.log("Cloudbank %d of %d: base qubits = %s, core = %s, params(single-cloud,total-bank)= %d,%d" % 
-                    (icb+1,len(cloudbanks),str(cloud_qubits), str(core_qubits), Ngp, Ngp*len(cloudbank)),2)
-
-        candidate_counts = {4: 'all upto', 5: 10, 6: 10 } # should be an arg? HARDCODED!
-        candidate_germs = get_candidates_for_core(gateset, core_qubits, candidate_counts, seedStart=1234)
-          # candidate_germs should only use gates with support on *core* qubits?
-          
-        for candidate_germ in candidate_germs:
-            printer.log("Candidate germ: %s" % str(candidate_germ),3)
-
-            #Let's see if we want to add this germ
-            sireps = reps_for_synthetic_idle(ideal_gateset, candidate_germ, nQubits, core_qubits)
-            syntheticIdle = candidate_germ * sireps
-            printer.log("Corresponding synthetic idle: %s" % str(syntheticIdle),3)
-            old_Jrank = Jrank
-            J, Jrank, selected_pairs = find_amped_polys_for_syntheticidle(
-                cloud_qubits, syntheticIdle, gateset, singleQfiducials, prepLbl, effectLbls, J, Jrank, wrtParams)
-            
-            nNewAmpedDirs = Jrank - old_Jrank  #OLD - not nec. equal to this: len(selected_pairs)
-            if nNewAmpedDirs > 0: # then there are some "directions" that this germ amplifies that previous ones didn't...
-                printer.log("Germ amplifies %d additional parameters (so %d of %d amplified for this base cloud)" %
-                            (nNewAmpedDirs, Jrank, Ngp), 3) # assume each cloud amplifies an independent set of params
-                #OLD selected_germs.append(candidate_germ)
-                amped_polyJ = J[-nNewAmpedDirs:, :] # just the rows of the Jacobian corresponding to
-                                                    # the directions we want the current germ to amplify
-                #print("DB: amped_polyJ svals = ",_np.linalg.svd(amped_polyJ, compute_uv=False))
-                
-                #Figure out which fiducial pairs access the amplified directions at each value of L
-                add_germs = True # only add germs on the first L-value (since they won't depend on L) 
-                for L in maxLengths:
-                    # from gatestringconstruction.py
-                    reps = _gsc.repeat_count_with_max_length(candidate_germ,L)
-                    if reps == 0: continue # don't process when we don't use the germ at all...
-                    printer.log("Finding the fiducial pairs needed to amplify %s^%d (L=%d)" %
-                               (str(candidate_germ),reps,L),4)
-                    
-                    germPower = candidate_germ * reps # germ^reps  
-                    gatename_fidpair_lists = get_fidpairs_needed_to_access_amped_polys(
-                        cloud_qubits, core_qubits, germPower, amped_polyJ, selected_pairs,
-                        gateset, singleQfiducials, prepLbl, effectLbls, wrtParams)
-                    printer.log("Found %d fiducial pairs" % len(gatename_fidpair_lists),4)
-                    #Now we have `fidpairs` that are n-qubit fiducial pairs but which only have gates on `cloud_qubits`
-                    # Next, we need to "tile" these sequences so they act on multiple "clouds" in parallel so
-                    # we use all the qubits.
-                    
-                    addl_seqs, addl_germs = tile_cloud_fidpairs(gatename_fidpair_lists, germPower, L, candidate_germ, cloudbank)
-                    sequences.extend(addl_seqs)
-                    if add_germs: # addl_germs is independent of L - so just add once
-                        selected_germs.extend(addl_germs)
-                        add_germs = False
-                        
-                    printer.log("After tiling to cloudbank, have %d sequences, %d germs" % (len(sequences),len(selected_germs)),4)
-                
-                if Jrank == Np: # really this will never happen b/c we'll never amplify SPAM and gauge directions...
-                    break       # instead exit after we haven't seen a germ that amplifies anything new in a while                
-                
-                consecutive_unhelpful_germs = 0
-            else:
-                consecutive_unhelpful_germs += 1
-                printer.log(("No additional amplified params: %d consecutive unhelpful germs." % consecutive_unhelpful_germs), 3)
-                if consecutive_unhelpful_germs == 5: # ??
-                    #print("DB: J = ")
-                    #_gt.print_mx(J[:,24:])
-                    #print("Nullspace = ")
-                    #_gt.print_mx(_mt.nullspace(J[:,24:]))
-                    break # next cloudbank
                 
     printer.log("Done: %d sequences, %d germs" % (len(sequences),len(selected_germs)))
     return sequences, selected_germs
