@@ -1445,7 +1445,7 @@ def get_candidates_for_core(gateset, core_qubits, candidate_counts, seedStart): 
 
 def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWeight=1, maxhops=0,
                             extraWeight1Hops=0, extraGateWeight=0, sparse=False, verbosity=0,
-                            cache=None):
+                            cache=None, idleOnly=False):
     """ 
     TODO: docstring
 
@@ -1518,25 +1518,6 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
         cache['Idle gatename fidpair lists'][maxIdleWeight] = idle_maxwt_gatename_fidpair_lists
 
 
-    #Compute "true-idle" fidpairs for checking synthetic idle errors for 1 & 2Q gates (HARDCODED OK?)
-    # NOTE: this works when ideal gates are cliffords and Gi has same type of errors as gates...
-    weights = set([ len(gl.sslbls) for gl in gateset.gates if (gl.sslbls is not None)])
-    for gateWt in sorted(list(weights)):
-        maxSyntheticIdleWt = (gateWt + extraGateWeight) + (gateWt-1) # gate-error-wt + spreading potential
-        maxSyntheticIdleWt = min(maxSyntheticIdleWt, nQubits)
-
-        if maxSyntheticIdleWt not in cache['Idle gatename fidpair lists']:
-            printer.log("Getting sequences needed for max-weight=%d errors" % maxSyntheticIdleWt)
-            printer.log(" on the idle gate (for %d-Q synthetic idles)" % gateWt)
-            sidle_gateset = build_nqnoise_gateset(maxSyntheticIdleWt, 'line', [], maxIdleWeight, maxhops,
-                                                  extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
-                                                  sim_type="termorder:1", parameterization="H+S terms")
-            _, _, idle_gatename_fidpair_lists = find_amped_polys_for_syntheticidle(
-                list(range(maxSyntheticIdleWt)), idleGateStr, sidle_gateset,
-                singleQfiducials, prepLbl, None, verbosity=printer-1)
-            #idle_gatename_fidpair_lists = [] # DEBUG GRAPH ISO
-            cache['Idle gatename fidpair lists'][maxSyntheticIdleWt] = idle_gatename_fidpair_lists
-        
     #Since this is the idle, these maxIdleWeight-qubit fidpairs can be "tiled"
     # to the n-qubits
     printer.log("%d \"idle template pairs\".  Tiling these to all %d qubits" % 
@@ -1554,6 +1535,27 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
             sequences.append( (prepFid + idleGateStr*L + measFid, L, idleGateStr, "XX", "XX") )
               # gatestring, L, germ, prepFidIndex, measFidIndex??
     printer.log("%d idle sequences (for all max-lengths: %s)" % (len(sequences), str(maxLengths)))
+    if idleOnly: return sequences, selected_germs #END HERE if we just wanted idle-tomography sequences
+
+    
+    #Compute "true-idle" fidpairs for checking synthetic idle errors for 1 & 2Q gates (HARDCODED OK?)
+    # NOTE: this works when ideal gates are cliffords and Gi has same type of errors as gates...
+    weights = set([ len(gl.sslbls) for gl in gateset.gates if (gl.sslbls is not None)])
+    for gateWt in sorted(list(weights)):
+        maxSyntheticIdleWt = (gateWt + extraGateWeight) + (gateWt-1) # gate-error-wt + spreading potential
+        maxSyntheticIdleWt = min(maxSyntheticIdleWt, nQubits)
+
+        if maxSyntheticIdleWt not in cache['Idle gatename fidpair lists']:
+            printer.log("Getting sequences needed for max-weight=%d errors" % maxSyntheticIdleWt)
+            printer.log(" on the idle gate (for %d-Q synthetic idles)" % gateWt)
+            sidle_gateset = build_nqnoise_gateset(maxSyntheticIdleWt, 'line', [], maxIdleWeight, maxhops,
+                                                  extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
+                                                  sim_type="termorder:1", parameterization="H+S terms")
+            _, _, idle_gatename_fidpair_lists = find_amped_polys_for_syntheticidle(
+                list(range(maxSyntheticIdleWt)), idleGateStr, sidle_gateset,
+                singleQfiducials, prepLbl, None, verbosity=printer-1)
+            #idle_gatename_fidpair_lists = [] # DEBUG GRAPH ISO
+            cache['Idle gatename fidpair lists'][maxSyntheticIdleWt] = idle_gatename_fidpair_lists        
         
     #Look for and add additional germs to amplify the *rest* of the gateset's parameters
     Gi_nparams = gateset.gates['Gi'].num_params()
