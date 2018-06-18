@@ -181,7 +181,8 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                 nWeightedSamples = N
 
             counts = {} #don't use an ordered dict here - add_count_dict will sort keys
-            labels = sorted(list(ps.keys())) # "outcome labels" - sort for consistent generation
+            labels = [ol for ol,ps in sorted(list(ps.items()), key=lambda x: x[1]) ]
+              # "outcome labels" - sort by prob for consistent generation
             if sampleError == "binomial":
                 assert(len(labels) == 2)
                 ol0,ol1 = labels[0], labels[1]
@@ -190,10 +191,9 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
 
             elif sampleError == "multinomial":
                 countsArray = rndm.multinomial(nWeightedSamples,
-                        sorted([ps[ol] for ol in labels]), size=1) # well-ordered list of probs
+                        [ps[ol] for ol in labels], size=1) # well-ordered list of probs
                 for i,ol in enumerate(labels):
                     counts[ol] = countsArray[0,i]
-
             else:
                 for outcomeLabel,p in ps.items():
                     pc = _np.clip(p,0,1)
