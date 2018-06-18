@@ -2815,6 +2815,12 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
               #set basis in case of CPTP constraints
 
             evt_cache = {} # get the eval tree that's created so we can reuse it
+            _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
+                                      maxiter, maxfev, tol, cptp_penalty_factor,
+                                      spam_penalty_factor, minProbClip, probClipInterval,
+                                      useFreqWeightedChiSq, 0,printer-1, check,
+                                      check, gatestringWeights, gateLabelAliases,
+                                      memLimit, comm, distributeMethod, profiler, evt_cache)
 
             if alwaysPerformMLE:
                 _, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
@@ -2823,13 +2829,6 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                          minProbClip, probClipInterval, radius,
                                          poissonPicture, printer-1, check, gatestringWeights,
                                          gateLabelAliases, memLimit, comm, distributeMethod, profiler, evt_cache)
-            else:
-                _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
-                                          maxiter, maxfev, tol, cptp_penalty_factor,
-                                          spam_penalty_factor, minProbClip, probClipInterval,
-                                          useFreqWeightedChiSq, 0,printer-1, check,
-                                          check, gatestringWeights, gateLabelAliases,
-                                          memLimit, comm, distributeMethod, profiler, evt_cache)
 
 
             tNxt = _time.time();
