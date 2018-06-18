@@ -1093,6 +1093,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         curMem = _baseobjs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1*(memLimit-persistentMem))
         mlim = memLimit-persistentMem-gthrMem-curMem
+        assert mlim > 0, 'Not enough memory, exiting..'
         printer.log("Memory limit = %.2fGB" % (memLimit*C))
         printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
                     (curMem*C, persistentMem*C, gthrMem*C))
@@ -2280,6 +2281,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         curMem = _baseobjs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1*(memLimit-persistentMem))
         mlim = memLimit-persistentMem-gthrMem-curMem
+        assert mlim > 0, 'Not enough memory, exiting..'
         printer.log("Memory: limit = %.2fGB" % (memLimit*C) +
                     "(cur, persist, gthr = %.2f, %.2f, %.2f GB)" %
                     (curMem*C, persistentMem*C, gthrMem*C))
