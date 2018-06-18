@@ -15,6 +15,7 @@ from .profiler import DummyProfiler
 from .protectedarray import ProtectedArray
 from .gatestringparser import GateStringParser
 from .verbosityprinter import VerbosityPrinter
+from .label import Label
 
 from .basis import Basis
 from .parameterized import parameterized

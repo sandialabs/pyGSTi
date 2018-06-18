@@ -95,7 +95,7 @@ class MapEvalTree(EvalTree):
         #print("SORTED"); print("\n".join(map(str,sorted_strs)))
 
 
-        #PASS1: figure out what's work keeping in the cache:
+        #PASS1: figure out what's worth keeping in the cache:
         curCacheSize = 0
         cacheIndices = [] #indices into gatestring_list/self of the strings to cache
         dummy_self = [None]*self.num_final_strs; cache_hits = {}

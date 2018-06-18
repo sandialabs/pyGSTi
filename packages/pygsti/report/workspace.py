@@ -256,7 +256,7 @@ class Workspace(object):
 
         self.Switchboard = makefactory(Switchboard)
         self.NotApplicable = makefactory(NotApplicable)
-
+        
         #Tables
           # Gate sequences
         self.GatestringTable = makefactory(_wt.GatestringTable)

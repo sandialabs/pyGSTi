@@ -18,9 +18,9 @@ from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
+from ..baseobjs import Label as _Label
 from .matrixevaltree import MatrixEvalTree as _MatrixEvalTree
 from .gatecalc import GateCalc
-
 _dummy_profiler = _DummyProfiler()
 
 # Smallness tolerances, used internally for conditional scaling required
@@ -67,6 +67,9 @@ class GateMatrixCalc(GateCalc):
         """
         super(GateMatrixCalc, self).__init__(
             dim, gates, preps, effects, paramvec)
+        if self.evotype not in ("statevec","densitymx"):
+            raise ValueError(("Evolution type %s is incompatbile with "
+                              "matrix-based calculations" % self.evotype))
 
     def copy(self):
         """ Return a shallow copy of this GateMatrixCalc """
@@ -529,7 +532,10 @@ class GateMatrixCalc(GateCalc):
         if bUseScaling:
             old_err = _np.seterr(over='ignore')
             G,scale = self.product(gatestring, True)
-            p = float(_np.dot(E, _np.dot(G, rho)) * scale) # probability, with scaling applied (may generate overflow, but OK)
+            if self.evotype == "statevec":
+                p =  float(abs(_np.dot(E, _np.dot(G, rho)) * scale)**2)
+            else: # evotype == "densitymx"
+                p = float(_np.dot(E, _np.dot(G, rho)) * scale) # probability, with scaling applied (may generate overflow, but OK)
 
             #DEBUG: catch warnings to make sure correct (inf if value is large) evaluation occurs when there's a warning
             #bPrint = False
@@ -543,7 +549,11 @@ class GateMatrixCalc(GateCalc):
 
         else: #no scaling -- faster but susceptible to overflow
             G = self.product(gatestring, False)
-            p = float(_np.dot(E, _np.dot(G, rho) ))
+            if self.evotype == "statevec":
+                p =  float(abs(_np.dot(E, _np.dot(G, rho)))**2)
+            else: # evotype == "densitymx"
+                p = float(_np.dot(E, _np.dot(G, rho)))
+
 
         if _np.isnan(p):
             if len(gatestring) < 10:
@@ -598,6 +608,14 @@ class GateMatrixCalc(GateCalc):
         probability : float
             only returned if returnPr == True.
         """
+        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
+          # To support unitary evolution we need to:
+          # - alter product, dproduct, etc. to allow for *complex* derivatives, since matrices can be complex
+          # - update probability-derivative computations: dpr/dx -> d|pr|^2/dx = d(pr*pr.C)/dx = dpr/dx*pr.C + pr*dpr/dx.C
+          #    = 2 Re(dpr/dx*pr.C) , where dpr/dx is the usual density-matrix-mode probability
+          # (TODO in FUTURE)
+          
+        
         #  pr = Tr( |rho><E| * prod ) = sum E_k prod_kl rho_l
         #  dpr/d(gateLabel)_ij = sum E_k [dprod/d(gateLabel)_ij]_kl rho_l
         #  dpr/d(rho)_i = sum E_k prod_ki
@@ -679,6 +697,7 @@ class GateMatrixCalc(GateCalc):
         probability : float
             only returned if returnPr == True.
         """
+        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
         
         #  pr = Tr( |rho><E| * prod ) = sum E_k prod_kl rho_l
         #  d2pr/d(gateLabel1)_mn d(gateLabel2)_ij = sum E_k [dprod/d(gateLabel1)_mn d(gateLabel2)_ij]_kl rho_l
@@ -1591,10 +1610,10 @@ class GateMatrixCalc(GateCalc):
 
     def _rhoE_from_spamTuple(self, spamTuple):
         assert( len(spamTuple) == 2 )
-        if _compat.isstr(spamTuple[0]):
+        if isinstance(spamTuple[0],_Label):
             rholabel,elabel = spamTuple
-            rho = self.preps[rholabel].toarray()
-            E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray()))
+            rho = self.preps[rholabel].todense()[:,None] # This calculator uses the convention that rho has shape (N,1)
+            E   = _np.conjugate(_np.transpose(self.effects[elabel].todense()[:,None])) # convention: E has shape (1,N)
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
@@ -1603,6 +1622,8 @@ class GateMatrixCalc(GateCalc):
         return rho,E
 
     def _probs_from_rhoE(self, rho, E, Gs, scaleVals):
+        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
+        
         #Compute probability and save in return array
         # want vp[iFinal] = float(dot(E, dot(G, rho)))
         #  vp[i] = sum_k,l E[0,k] Gs[i,k,l] rho[l,0] * scaleVals[i]
@@ -1614,6 +1635,8 @@ class GateMatrixCalc(GateCalc):
 
 
     def _dprobs_from_rhoE(self, spamTuple, rho, E, Gs, dGs, scaleVals, wrtSlice=None):
+        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
+        
         rholabel,elabel = spamTuple
         rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
         EVec = self.effects[elabel]   # arrays, these are SPAMVecs
@@ -1719,6 +1742,8 @@ class GateMatrixCalc(GateCalc):
 
     def _hprobs_from_rhoE(self, spamTuple, rho, E, Gs, dGs1, dGs2, hGs, scaleVals,
                           wrtSlice1=None, wrtSlice2=None):
+        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
+        
         rholabel,elabel = spamTuple
         rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
         EVec = self.effects[elabel]   # arrays, these are SPAMVecs

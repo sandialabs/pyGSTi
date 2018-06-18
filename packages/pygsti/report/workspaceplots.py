@@ -1283,7 +1283,7 @@ class BoxKeyPlot(WorkspacePlot):
             """filter to latex-ify gate strings.  Later add filter as a possible parameter"""
             formatted_vals = []
             for val in vals:
-                if isinstance(val, (tuple,_objs.GateString)) and all([_tools.isstr(el) for el in val]):
+                if isinstance(val, (tuple,_objs.GateString)) and all([isinstance(el,_objs.Label) for el in val]):
                     if len(val) == 0:
                         #formatted_vals.append(r"$\{\}$")
                         formatted_vals.append(r"{}")

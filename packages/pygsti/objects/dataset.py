@@ -492,7 +492,9 @@ class DataSet(object):
         #   values = slices into oli, time, & rep arrays (static case) or
         #            integer list indices (non-static case)
         if gateStringIndices is not None:
-            self.gsIndex = gateStringIndices
+            self.gsIndex = _OrderedDict( [(gs if isinstance(gs,_gs.GateString) else _gs.GateString(gs),i)
+                                          for gs,i in gateStringIndices.items()] )
+                                         #convert keys to GateStrings if necessary
         elif not bStatic:
             if gateStrings is not None:
                 dictData = [ (gs if isinstance(gs,_gs.GateString) else _gs.GateString(gs),i) \
@@ -594,7 +596,7 @@ class DataSet(object):
         return len(self.gsIndex)
   
     def __contains__(self, gatestring):
-        return gatestring in self.gsIndex
+        return self.has_key(gatestring)
   
     def __hash__(self):
         if self.uuid is not None:
@@ -627,6 +629,13 @@ class DataSet(object):
         -------
         DataSetRow
         """
+
+        #Convert to gatestring - needed for occurrence > 0 case and
+        # because name-only Labels still don't hash the same as strings
+        # so key lookups need to be done at least with tuples of Labels.
+        if not isinstance(gatestring,_gs.GateString):
+            gatestring = _gs.GateString(gatestring)
+            
         if occurrence > 0: 
             gatestring = gatestring + _gs.GateString(("#%d" % occurrence,))
 
@@ -654,6 +663,9 @@ class DataSet(object):
             0-based occurrence index, specifying which occurrence of
             a repeated gate sequence to extract data for.
         """
+        if not isinstance(gatestring,_gs.GateString):
+            gatestring = _gs.GateString(gatestring)
+
         if occurrence > 0: 
             gatestring = _gs.GateString(gatestring) + _gs.GateString(("#%d" % occurrence,))
             
@@ -686,7 +698,8 @@ class DataSet(object):
             counts within this data set.            
         """
         if stripOccurrenceTags and self.collisionAction == "keepseparate":
-            return [ (gs[:-1] if (len(gs)>0 and gs[-1].startswith("#")) else gs) 
+            # Note: assumes keys are GateStrings containing Labels
+            return [ (gs[:-1] if (len(gs)>0 and gs[-1].name.startswith("#")) else gs) 
                      for gs in self.gsIndex.keys() ]
         else:
             return list(self.gsIndex.keys())
@@ -707,6 +720,8 @@ class DataSet(object):
         bool
             whether gatestring was found.
         """
+        if not isinstance(gatestring,_gs.GateString):
+            gatestring = _gs.GateString(gatestring)
         return gatestring in self.gsIndex
 
 
@@ -761,7 +776,7 @@ class DataSet(object):
         gateLabels = [ ] 
         for gateLabelString in self:
             for gateLabel in gateLabelString:
-                if not prefix or gateLabel.startswith(prefix):
+                if not prefix or gateLabel.name.startswith(prefix):
                     if gateLabel not in gateLabels: gateLabels.append(gateLabel)
         return gateLabels
 
@@ -1124,7 +1139,8 @@ class DataSet(object):
                                     outcomeLabelIndices=self.olIndex, bStatic=True) #don't copy counts, just reference
         else:
             trunc_dataset = DataSet(outcomeLabels=self.get_outcome_labels())
-            for gateString in _lt.remove_duplicates(listOfGateStringsToKeep):
+            for gs in _lt.remove_duplicates(listOfGateStringsToKeep):
+                gateString = gs if isinstance(gs, _gs.GateString) else _gs.GateString(gs)
                 if gateString in self.gsIndex:
                     gateStringIndx = self.gsIndex[gateString]
                     repData = self.repData[ gateStringIndx ].copy() if (self.repData is not None) else None

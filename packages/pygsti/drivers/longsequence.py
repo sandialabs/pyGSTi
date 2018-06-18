@@ -580,8 +580,9 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         profiler=profiler,
         comm=comm, distributeMethod=advancedOptions.get(
             'distributeMethod',"default"),
-        check=advancedOptions.get('check',False) )
-
+        check=advancedOptions.get('check',False),
+        evaltree_cache={} )
+    
     if objective == "chi2":
         args['useFreqWeightedChiSq'] = advancedOptions.get(
             'useFreqWeightedChiSq',False)
@@ -635,7 +636,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     return _post_opt_processing('do_long_sequence_gst', ds, gs_target, gs_start,
                                 lsgstLists, parameters, args, gs_lsgst_list,
                                 gaugeOptParams, advancedOptions, comm, memLimit,
-                                output_pkl, printer, profiler)
+                                output_pkl, printer, profiler, args['evaltree_cache'])
 
 
 def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
@@ -1137,7 +1138,7 @@ def _get_lsgst_lists(dschk, gs_target, prepStrs, effectStrs, germs,
 def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                          parameters, opt_args, gs_lsgst_list, gaugeOptParams,
                          advancedOptions, comm, memLimit, output_pkl, verbosity,
-                         profiler):
+                         profiler, evaltree_cache=None):
     """
     Performs all of the post-optimization processing common to
     do_long_sequence_gst and do_model_evaluation.
@@ -1187,7 +1188,7 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
         _, gaugeEl, go_gs_final = _alg.gaugeopt_to_target(**gaugeOptParams)
         gaugeOptParams['_gaugeGroupEl'] = gaugeEl #store gaugeopt el
         ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final,
-                                                 None, comm, printer-1)
+                                                 None, comm, printer-1)        
 
         tNxt = _time.time()
         profiler.add_time('%s: gauge optimization' % callerName,tRef); tRef=tNxt
@@ -1197,7 +1198,7 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                  for l in lsgstLists ]
     objective = advancedOptions.get('objective', 'logl')
     badFitThreshold = advancedOptions.get('badFitThreshold',DEFAULT_BAD_FIT_THRESHOLD)
-    if ret.estimates[estlbl].misfit_sigma() > badFitThreshold:
+    if ret.estimates[estlbl].misfit_sigma(evaltree_cache=evaltree_cache) > badFitThreshold:
         onBadFit = advancedOptions.get('onBadFit',["Robust+"]) # empty list => 'do nothing'
         if len(onBadFit) > 0 and parameters.get('weights',None) is None:
 
@@ -1270,9 +1271,10 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                 if reopt and (opt_args is not None):
                     #convert weights dict to an array for do_XXX methods below
                     gsWeightsArray = _np.ones( len(rawLists[-1]), 'd')
+                    gsindx = { gatestr:i for i,gatestr in enumerate(rawLists[-1]) }
                     for gatestr, weight in gsWeights.items():
-                        gsWeightsArray[ rawLists[-1].index(gatestr) ] = weight
-
+                        gsWeightsArray[ gsindx[gatestr] ] = weight
+                    
                     reopt_args = dict(dataset=ds,
                                       startGateset=gs_lsgst_list[-1],
                                       gateStringsToUse=rawLists[-1],

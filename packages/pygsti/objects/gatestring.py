@@ -7,13 +7,17 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
-import uuid  as _uuid
+#import uuid  as _uuid
 from ..tools import compattools as _compat
 from ..baseobjs import GateStringParser as _GateStringParser
+from ..baseobjs import Label as _Label
+
+import os,inspect
+debug_record = {}
 
 def _gateSeqToStr(seq):
     if len(seq) == 0: return "{}" #special case of empty gate string
-    return ''.join(seq)
+    return ''.join(map(str,seq))
 
 class GateString(object):
     """
@@ -51,7 +55,16 @@ class GateString(object):
             A dictionary with keys == labels and values == tuples of gate labels
             which can be used for substitutions using the S<label> syntax.
         """
-        self.uuid = _uuid.uuid4()
+        #self.uuid = _uuid.uuid4()
+        
+        #caller = inspect.getframeinfo(inspect.currentframe().f_back)
+        #ky = "%s:%s:%d" % (caller[2],os.path.basename(caller[0]),caller[1])
+        #debug_record[ky] = debug_record.get(ky, 0) + 1
+
+        def convert_to_label(l):
+            if isinstance(l, _Label): return l
+            elif _compat.isstr(l): return _Label(l,None)
+            else: return _Label(l[0],l[1:]) #assume label is an iterable of (name, stateSpcLbl0, stateSpcLbl1, ...)
 
         if tupleOfGateLabels is None and stringRepresentation is None:
             raise ValueError("tupleOfGateLabels and stringRepresentation cannot both be None");
@@ -59,10 +72,9 @@ class GateString(object):
         if tupleOfGateLabels is None or (bCheck and stringRepresentation is not None):
             gsparser = _GateStringParser()
             gsparser.lookup = lookup
-            chkTuple = gsparser.parse(stringRepresentation)
-
-            if tupleOfGateLabels is None: tupleOfGateLabels = chkTuple
-            elif tuple(tupleOfGateLabels) != chkTuple:
+            chk = gsparser.parse(stringRepresentation) # tuple of Labels
+            if tupleOfGateLabels is None: tupleOfGateLabels = chk
+            elif tuple(map(convert_to_label,tupleOfGateLabels)) != chk:
                 raise ValueError("Error intializing GateString: " +
                             " tuple and string do not match: %s != %s"
                              % (tuple(tupleOfGateLabels),stringRepresentation))
@@ -71,17 +83,47 @@ class GateString(object):
         if isinstance(tupleOfGateLabels, GateString):
             self._tup = tupleOfGateLabels.tup
             if stringRepresentation is None:
-                self.str = tupleOfGateLabels.str
+                self._str = tupleOfGateLabels.str
             else:
-                self.str = stringRepresentation
+                self._str = stringRepresentation
 
         else:
-            if stringRepresentation is None:
-                stringRepresentation = _gateSeqToStr( tupleOfGateLabels )
+            #If we weren't given a GateString, convert all the elements of the tuple
+            # to Labels.  Note that this post-processer parser output too, since the
+            # parser returns a *tuple* not a GateString
+            tupleOfGateLabels = tuple(map(convert_to_label,tupleOfGateLabels))
+
+            #Note: now it's OK to have _str == None, as str is build on demand
+            # In the past we did: if stringRepresentation is None:
+            #    stringRepresentation = _gateSeqToStr( tupleOfGateLabels )
 
             self._tup = tuple(tupleOfGateLabels)
-            self.str = str(stringRepresentation)
+            self._str = str(stringRepresentation) \
+                        if (stringRepresentation is not None) else None
 
+    @property
+    def tup(self):
+        """ This GateString as a standard Python tuple of Labels."""
+        return self._tup
+
+    @tup.setter
+    def tup(self, value):
+        """ This GateString as a standard Python tuple of Labels."""
+        self._tup = value
+
+    @property
+    def str(self):
+        """ The Python string representation of this GateString."""
+        if self._str is None:
+            self._str = _gateSeqToStr(self.tup)
+        return self._str
+
+    @str.setter
+    def str(self, value):
+        """ The Python string representation of this GateString."""
+        self._str = value
+
+            
     #Conversion routines for evalTree usage -- TODO: make these member functions
     def to_pythonstr(self,gateLabels):
         """
@@ -110,7 +152,7 @@ class GateString(object):
         for gateLabel in gateLabels:
             translateDict[gateLabel] = c
             c = chr(ord(c) + 1)
-        return "".join([ translateDict[gateLabel] for gateLabel in self._tup ])
+        return "".join([ translateDict[gateLabel] for gateLabel in self.tup ])
 
     @classmethod
     def from_pythonstr(cls,pythonString,gateLabels):
@@ -148,56 +190,56 @@ class GateString(object):
         return self.str
 
     def __len__(self):
-        return len(self._tup)
+        return len(self.tup)
 
     def __repr__(self):
         return "GateString(%s)" % self.str
 
     def __iter__(self):
-        return self._tup.__iter__()
+        return self.tup.__iter__()
 
     def __add__(self,x):
         if not isinstance(x, GateString):
             raise ValueError("Can only add GateStrings objects to other GateString objects")
         if self.str != "{}":
-            s = (self.str + x.str) if x.str != "{}" else self.str
+            s = (self.str + x._str) if x.str != "{}" else self.str
         else: s = x.str
-        return GateString(self._tup + x.tup, s, bCheck=False)
+        return GateString(self.tup + x.tup, s, bCheck=False)
 
     def __mul__(self,x):
         assert( (_compat.isint(x) or _np.issubdtype(x,int)) and x >= 0)
         if x > 1: s = "(%s)^%d" % (self.str,x)
         elif x == 1: s = "(%s)" % self.str
         else: s = "{}"
-        return GateString(self._tup * x, s, bCheck=False)
+        return GateString(self.tup * x, s, bCheck=False)
 
     def __pow__(self,x): #same as __mul__()
         return self.__mul__(x)
 
     def __eq__(self,x):
         if x is None: return False
-        return self._tup == tuple(x) #better than x.tup since x can be a tuple
+        return self.tup == tuple(x) #better than x._tup since x can be a tuple
 
     def __lt__(self,x):
-        return self._tup.__lt__(tuple(x))
+        return self.tup.__lt__(tuple(x))
 
     def __gt__(self,x):
-        return self._tup.__gt__(tuple(x))
+        return self.tup.__gt__(tuple(x))
 
     def __hash__(self):
-        return hash(self._tup)
+        return hash(self.tup)
         #return hash(self.uuid)
 
     def __copy__(self):
-        return GateString( self._tup, self.str, bCheck=False)
+        return GateString( self.tup, self.str, bCheck=False)
 
     #def __deepcopy__(self, memo):
-    #    return GateString( self._tup, self.str, bCheck=False)
+    #    return GateString( self._tup, self._str, bCheck=False)
 
     def __getitem__(self, key):
         if isinstance( key, slice ):
-            return GateString( self._tup.__getitem__(key) )
-        return self._tup.__getitem__(key)
+            return GateString( self.tup.__getitem__(key) )
+        return self.tup.__getitem__(key)
 
     def __setitem__(self, key, value):
         raise ValueError("Cannot set elements of GateString tuple (they're read-only)")
@@ -208,15 +250,10 @@ class GateString(object):
     def __setstate__(self, state_dict):
         for k, v in state_dict.items():
             if k == 'tup':                    # backwards compatibility
-                self._tup = state_dict['tup'] # backwards compatibility
+                self.tup = state_dict['tup'] # backwards compatibility
             else:
                 self.__dict__[k] = v
     
-    @property
-    def tup(self):
-        """ This GateString as a standard Python tuple."""
-        return self._tup
-
 
 class WeightedGateString(GateString):
     """
@@ -255,29 +292,29 @@ class WeightedGateString(GateString):
         super(WeightedGateString,self).__init__(tupleOfGateLabels, stringRepresentation, bCheck)
 
     def __repr__(self):
-        return "WeightedGateString(%s,%g)" % (self.str,self.weight)
+        return "WeightedGateString(%s,%g)" % (self._str,self.weight)
 
     def __add__(self,x):
         tmp = super(WeightedGateString,self).__add__(x)
         x_weight = x.weight if type(x) == WeightedGateString else 0.0
-        return WeightedGateString( tmp.tup, tmp.str, self.weight + x_weight, bCheck=False ) #add weights
+        return WeightedGateString( tmp._tup, tmp._str, self.weight + x_weight, bCheck=False ) #add weights
 
     def __radd__(self,x):
         if isinstance(x, GateString):
             tmp = x.__add__(self)
             x_weight = x.weight if type(x) == WeightedGateString else 0.0
-            return WeightedGateString( tmp.tup, tmp.str, x_weight + self.weight, bCheck=False )
+            return WeightedGateString( tmp._tup, tmp._str, x_weight + self.weight, bCheck=False )
         raise ValueError("Can only add GateStrings objects to other GateString objects")
 
     def __mul__(self,x):
         tmp = super(WeightedGateString,self).__mul__(x)
-        return WeightedGateString(tmp.tup, tmp.str, self.weight, bCheck=False) #keep weight
+        return WeightedGateString(tmp._tup, tmp._str, self.weight, bCheck=False) #keep weight
 
     def __copy__(self):
-        return WeightedGateString( self._tup, self.str, self.weight, bCheck=False )
+        return WeightedGateString( self._tup, self._str, self.weight, bCheck=False )
 
 #    def __deepcopy__(self, memo):
-#        return WeightedGateString( self._tup, self.str, self.weight, bCheck=False )
+#        return WeightedGateString( self._tup, self._str, self.weight, bCheck=False )
 
     def __getitem__(self, key):
         if isinstance( key, slice ):
@@ -319,8 +356,8 @@ class CompressedGateString(object):
         if not isinstance(gatestring, GateString):
             raise ValueError("CompressedGateStrings can only be created from existing GateString objects")
         self._tup = CompressedGateString.compress_gate_label_tuple(
-            gatestring.tup, minLenToCompress, maxPeriodToLookFor)
-        self.str = gatestring.str
+            gatestring._tup, minLenToCompress, maxPeriodToLookFor)
+        self.str = gatestring._str
 
     def __getstate__(self):
         return self.__dict__

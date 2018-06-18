@@ -7,6 +7,7 @@ import numpy as np
 import sys, os
 
 from ..testutils import BaseTestCase, temp_files, compare_files
+from pygsti.objects import Label as L
 
 class DirectXTestCase(BaseTestCase):
 
@@ -40,8 +41,8 @@ class DirectXTestCase(BaseTestCase):
 
         gs = directx.gateset_with_lgst_gatestring_estimates(
             self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt, includeTargetGates=False,
-            gateStringLabels=['G0','G1','G2','G3','G4','G5'], svdTruncateTo=4, verbosity=10)
-        self.assertEqual(set(gs.gates.keys()), set(['G0','G1','G2','G3','G4','G5']))
+            gateStringLabels=[L('G0'),L('G1'),L('G2'),L('G3'),L('G4'),L('G5')], svdTruncateTo=4, verbosity=10)
+        self.assertEqual(set(gs.gates.keys()), set([L('G0'),L('G1'),L('G2'),L('G3'),L('G4'),L('G5')]))
 
         aliases = {'Gy2': ('Gy',)}
         gs = directx.gateset_with_lgst_gatestring_estimates(
