@@ -117,6 +117,19 @@ class QubitGraph(object):
         self._dirty = True #because we haven't computed paths yet (no need)
         self._distance_matrix = None
         self._predecessors = None
+
+    def copy(self):
+        """
+        Make a copy of this graph.
+
+        Returns
+        -------
+        QubitGraph
+        """
+        return QubitGraph(list(self._nodeinds.keys()),
+                          initial_connectivity=self._connectivity,
+                          directed=self.directed)
+        
                 
     def _refresh_dists_and_predecessors(self):
         if self._dirty:
@@ -183,14 +196,42 @@ class QubitGraph(object):
             i,j = j,i 
         self._connectivity[i,j] = True
         self._dirty = True
+
+    def remove_edge(self, node1, node2):
+        """ 
+        Add an edge between the qubits labeled by `node1` and `node2`.
+
+        Parameters
+        ----------
+        node1,node2 : object
+            Qubit (node) labels - typically strings or integers.
+
+        Returns
+        -------
+        None
+        """
+        i,j = self._nodeinds[node1], self._nodeinds[node2]
+        if not self.directed and i > j: # undirected => only fill upper triangle (i < j)
+            i,j = j,i
+        assert(self._connectivity[i,j]), "Edge %s->%s doesn't exist!" % (str(node1),str(node2))
+        self._connectivity[i,j] = False
+        self._dirty = True
+
         
-    def edges(self):
+    def edges(self, double_for_undirected=False):
         """
         Get a list of the edges in this graph as 2-tuples of node/qubit labels).
         
         When undirected, the index of the 2-tuple's first label will always be
-        less than its second.  The edges are sorted (by label *index*) in
-        ascending order.
+        less than its second unless `double_for_undirected == True`, in which 
+        case both directed edges are included.  The edges are sorted (by label
+        *index*) in ascending order.
+
+        Parameters
+        ----------
+        double_for_undirected : bool, optional
+            Whether, for the case of an undirected graph, two 2-tuples, giving
+            both edge directions, should be included in the returned list.
 
         Returns
         -------
@@ -199,8 +240,10 @@ class QubitGraph(object):
         ret = set()
         for ilbl,i in self._nodeinds.items():
             for jlbl,j in self._nodeinds.items():
-                if self._connectivity[i,j]: 
-                    ret.add( (ilbl,jlbl) ) # i < j when undirected 
+                if self._connectivity[i,j]:
+                    ret.add( (ilbl,jlbl) ) # i < j when undirected
+                    if (not self.directed) and double_for_undirected:
+                        ret.add( (jlbl,ilbl) )
         return sorted(list(ret))
     
     def radius(self, base_nodes, max_hops):
@@ -284,7 +327,25 @@ class QubitGraph(object):
         i,j = self._nodeinds[node1], self._nodeinds[node2]
         self._refresh_dists_and_predecessors()
         return self._predecessors[i,j] >= 0
-        
+
+
+    def has_edge(self, edge):
+        """
+        Is `edge` an edge in this graph.  Note that if this graph is
+        undirected, either node order in `edge` will return True.
+
+        Parameters
+        ----------
+        edge : tuple
+            (node1,node2) tuple specifying the edge.
+
+        Returns
+        -------
+        bool
+        """
+        return self.is_directly_connected(edge[0],edge[1])
+    
+    
     def is_directly_connected(self, node1, node2):
         """ 
         Is `node1` *directly* connected to `node2` (does there exist an edge
@@ -450,5 +511,30 @@ class QubitGraph(object):
         self._refresh_dists_and_predecessors()
         return self._distance_matrix.copy()
 
+    def subgraph(self, nodes_to_keep, reset_nodes=False):
+        """
+        Return a graph that includes only `nodes_to_keep` and 
+        the edges between them. 
+        TODO: docstring
+        """
+        if reset_nodes:
+            qubit_labels = list(range(len(nodes_to_keep)))
+            labelmap = { old: i for i,old in enumerate(nodes_to_keep) }
+        else:
+            qubit_labels = nodes_to_keep
+
+        edges = []
+        for edge in self.edges():
+            if edge[0] in nodes_to_keep and edge[1] in nodes_to_keep:
+                if reset_nodes:
+                    edges.append( (labelmap[edge[0]],labelmap[edge[1]]) )
+                else:
+                    edges.append( edge )
+
+        return QubitGraph(qubit_labels, initial_edges=edges, directed=self.directed)
+
     def __str__(self):
-        return '{}({})'.format(self.__class__.__name__, str(self._connectivity))
+        dirstr = "Directed" if self.directed else "Undirected"
+        s = dirstr + ' Qubit Graph w/%d qubits.  Nodes = %s\n' % (self.nqubits,str(self._nodeinds))
+        s += ' Edges = ' + str(self.edges()) + '\n'
+        return s

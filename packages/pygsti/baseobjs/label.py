@@ -134,6 +134,32 @@ class LabelTup(Label,tuple):
     def number_of_qubits(self): #Used in Circuit
         return len(self.sslbls) if (self.sslbls is not None) else None
 
+    def map_state_space_labels(self, mapper):
+        """
+        Return a copy of this Label with all of the state-space-labels
+        (often just qubit labels) updated according to a mapping function.
+
+        For example, calling this function with `mapper = {0: 1, 1: 3}`
+        on the Label "Gcnot:0:1" would return "Gcnot:1:3".
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing state-space-label values
+            and whose value are the new labels, or a function which takes a
+            single (existing label) argument and returns a new label.
+
+        Returns
+        -------
+        Label
+        """
+        if isinstance(mapper, dict):
+            mapped_sslbls = [ mapper[sslbl] for sslbl in self.sslbls ]
+        else: # assume mapper is callable
+            mapped_sslbls = [ mapper(sslbl) for sslbl in self.sslbls ]
+        return Label(self.name, mapped_sslbls)
+
+
     #OLD
     #def __iter__(self):
     #    return self.tup.__iter__()
