@@ -9,6 +9,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 from . import analysis as _analysis
 from ... import tools as _tls
 from ... import objects as _objs
+from ... import construction as _cnst
+from ... import algorithms as _algs
 
 import numpy as _np
 import warnings as _warnings
@@ -374,23 +376,23 @@ def L_matrix(gs, gs_target, weights=None):
     """
     if weights is None:
         weights = {}
-        for key in gs_target.gates.keys():
+        for key in list(gs_target.gates.keys()):
             weights[key] = 1.
             
-    normalizer = _np.sum(_np.array([weights[key] for key in gs_target.gates.keys()]))           
-    dim = len(gs_target.gates.keys())
+    normalizer = _np.sum(_np.array([weights[key] for key in list(gs_target.gates.keys())]))           
+    dim = len(list(gs_target.gates.keys()))
     L_matrix = (1 / normalizer) * _np.sum(weights[key]*_np.kron(gs.gates[key].T,
-                 _np.linalg.inv(gs_target.gates[key])) for key in gs_target.gates.keys())
+                 _np.linalg.inv(gs_target.gates[key])) for key in list(gs_target.gates.keys()))
     
     return L_matrix
 
-def R_matrix_predicted_RB_decay_parameter(gs, group, subset_sampling=None, 
-                                          group_to_gateset=None, weights=None, d=None):
+def R_matrix_predicted_RB_decay_parameter(gs, group, group_to_gateset=None, weights=None):
     """
     Returns the second largest eigenvalue of a generalization of the 'R-matrix' [see the 
     `R_matrix` function] introduced in Proctor et al Phys. Rev. Lett. 119, 130502 (2017).
     This number is a prediction of the RB decay parameter for trace-preserving gates and 
-    a variety of forms of RB, including Clifford and direct RB.
+    a variety of forms of RB, including Clifford and direct RB. This function creates a
+    matrix which scales super-exponentially in the number of qubits.
     
     Parameters
     ----------
@@ -437,265 +439,207 @@ def R_matrix_predicted_RB_decay_parameter(gs, group, subset_sampling=None,
         with trace-preserving gates, and in a range of other circumstances.
         
     """ 
-    if d is None: d = int(round(_np.sqrt(gs.dim)))
-    R = R_matrix(gs,group,subset_sampling=subset_sampling,
-                 group_to_gateset=group_to_gateset,weights=weights,d=d)
+    R = R_matrix(gs, group, group_to_gateset=group_to_gateset, weights=weights)
     E = _np.absolute(_np.linalg.eigvals(R))
     E = _np.flipud(_np.sort(E))
     p = E[1]
     return p
 
-def R_matrix(gs, group, subset_sampling=None, group_to_gateset=None,
-             weights=None, d=None):
+def R_matrix(gs, group, group_to_gateset=None, weights=None):
     """
     Constructs a generalization of the 'R-matrix' of Proctor et al Phys. 
-    Rev. Lett. 119, 130502 (2017). This matrix described the *exact* behaviour 
-    of the average surival probablities of RB sequences. This matrix is 
-    super-exponentially large in the number of qubits, but can be constructed 
-    for 1-qubit gatesets.
+    Rev. Lett. 119, 130502 (2017). This matrix described the exact behaviour 
+    of the average success probablities of RB sequences. This matrix is 
+    super-exponentially large in the number of qubits, but can be 
+    constructed for 1-qubit gatesets.
     
     Parameters
     ----------
     gs : Gateset
-        The noisy gateset (e.g., the Cliffords) to calculate the R matrix of. 
-        If subset_sampling is None or group_to_gateset is None, the labels
-        of the gates in gs should be the same as the labels of the group
-        elements in group. For Clifford RB this would be the clifford gateset
-        (perhaps obtained from a primitive gateset and a compilation table).
+        The noisy gateset (e.g., the Cliffords) to calculate the R matrix of.
+        The correpsonding `target` gateset (not required in this function)
+        must be equal to or a subset of (a faithful rep of) the group `group`. 
+        If group_to_gateset is None, the labels of the gates in gs should be 
+        the same as the labels of the corresponding group elements in `group`. 
+        For Clifford RB `gs` should be the clifford gateset; for direct RB 
+        this should be the native gateset.
             
     group : MatrixGroup
-        The group that the 'gs' gateset contains gates from (gs does not
-        need to be the full group, and could be a subset of the group). For
-        Clifford RB, this would be the Clifford group.
-        
-    subset_sampling : list, optional
-        If not None, a list of gate labels from 'gs', for which the R matrix
-        corresponding to random sequences of this subset of gates is to be
-        contructed. Even if this is all of the gates of gs, this list needs to
-        be specified if gs and group are either (1) not labelled the same (and so 
-        group_to_gateset is not None), or (2) gs is a subset of group.
+        The group that the `gs` gateset contains gates from. For Clifford RB
+        or direct RB, this would be the Clifford group.
         
     group_to_gateset : dict, optional
         If not None, a dictionary that maps labels of group elements to labels
-        of gs. Only used if subset_sampling is not None. If subset_sampling is 
-        not None and the gs and group elements have the same labels, this dictionary
-        is not required. Otherwise it is necessary.
+        of gs. This is required if the labels of the gates in `gs` are different
+        from the labels of the corresponding group elements in `group`.
       
     weights : dict, optional
-        If not None, a dictionary of floats, whereby the keys are the gates in gs if
-        subset_sampling is None, the keys are the gates in subset_sampling if
-        subset_sampling is not None, and the values are the unnormalized probabilities 
-        to apply each gate at each stage of the RB protocol. If not None, the values 
-        in weights must all be positive or zero, and they must not all be zero (because, 
-        when divided by their sum, they must be a valid probability distribution). If None, the
-        weighting defaults to an equal weighting on all gates, as used in most RB
-        protocols.
-      
-    d : int, optional
-        The Hilbert space dimension.  If None, then sqrt(gs.dim) is used.
+        If not None, a dictionary of floats, whereby the keys are the gates in gs
+        and the values are the unnormalized probabilities to apply each gate at 
+        for each layer of the RB protocol. If None, the weighting defaults to an 
+        equal weighting on all gates, as used in most RB protocols (e.g., Clifford
+        RB).
     
     Returns
     -------
     R : float
-        A weighted version of the R matrix from arXiv:1702.01853. 
+        A weighted, a subset-sampling generalization of the 'R-matrix' from Proctor 
+        et al Phys. Rev. Lett. 119, 130502 (2017).
         
-    """ 
-    #
-    # This function is currently more complicated than necessary (subset_sampling could
-    # be removed, as this can be achieved via the weights dict). However, as the
-    # function is currently working this has been left for now.
-    #
-    if d is None: d = int(round(_np.sqrt(gs.dim)))
+    """    
+    if group_to_gateset is None:
+        for key in list(gs.gates.keys()):
+            assert(key in group.labels), "Gates labels are not in `group`!"
+    else: 
+        for key in list(gs.gates.keys()):
+            assert(key in group_to_gateset.values()), "Gates labels are not in `group_to_gateset`!"
+    
+    d = int(round(_np.sqrt(gs.dim)))
     group_dim = len(group)
     R_dim = group_dim * d**2
     R = _np.zeros([R_dim,R_dim],float)
     
-    if subset_sampling is None:
-        if weights is None:
-            weights = {}
-            for key in gs.gates.keys():
-                weights[key] = 1.
-        normalizer = _np.sum(_np.array([weights[key] for key in gs.gates.keys()]))
-        for i in range(0,group_dim):
-            for j in range(0,group_dim):
-                label_itoj = group.product([group.get_inv(i),j])
-                for k in range (0,d**2):
-                    for l in range(0,d**2):
-                        R[j*d**2+k,i*d**2+l] = weights[group.labels[label_itoj]]*gs.gates[group.labels[label_itoj]][k,l]
-        R = R/normalizer
-                
-    if subset_sampling is not None:
-        if group_to_gateset is None:
-            for element in subset_sampling:
-                assert(element in gs.gates.keys() and element in group.labels),  "The subset\
-                   of gates should be elements of the gateset and group if group_to_gateset\
-                   not specificed."
-            if weights is None:
-                weights = {}
-                for key in subset_sampling:
-                    weights[key] = 1.
-            normalizer = _np.sum(_np.array([weights[key] for key in subset_sampling]))
-                
-            for i in range(0,group_dim):
-                for j in range(0,group_dim):
-                    label_itoj = group.product([group.get_inv(i),j])
-                    if group.labels[label_itoj] in subset_sampling:
-                        for k in range (0,d**2):
-                            for l in range(0,d**2):
-                                R[j*d**2+k,i*d**2+l] = weights[group.labels[label_itoj]]*gs.gates[group.labels[label_itoj]][k,l]
-            R = R/normalizer
+    if weights is None:
+        weights = {}
+        for key in list(gs.gates.keys()):
+            weights[key] = 1.
         
-        if group_to_gateset is not None:
-            for key in group_to_gateset.keys():
-                assert(key in group.labels), "group_to_gateset dictionary invalid!"
-                assert(group_to_gateset[key] in gs.gates.keys()), "group_to_gateset \
-                dictionary invalid!"
-                
-            if weights is None:
-                weights = {}
-                for key in subset_sampling:
-                    weights[key] = 1.
-            normalizer = _np.sum(_np.array([weights[key] for key in subset_sampling]))
-                    
-            for i in range(0,group_dim):
-                for j in range(0,group_dim):
-                    label_itoj = group.product([group.get_inv(i),j])
-                    if group.labels[label_itoj] in group_to_gateset.keys():
-                        for k in range (0,d**2):
-                            for l in range(0,d**2):
-                                R[j*d**2+k,i*d**2+l] = weights[group_to_gateset[
-                                        group.labels[label_itoj]]]*gs.gates[group_to_gateset[
-                                        group.labels[label_itoj]]][k,l]
-            R = R/normalizer
+    normalizer = _np.sum(_np.array([weights[key] for key in list(gs.gates.keys())]))
+    
+    for i in range(0,group_dim):
+        for j in range(0,group_dim):
+            label_itoj = group.labels[group.product([group.get_inv(i),j])]
+            if group_to_gateset is not None:
+                if label_itoj in group_to_gateset:
+                    gslabel = group_to_gateset[label_itoj]
+                    R[j*d**2:(j+1)*d**2,i*d**2:(i+1)*d**2] = weights[gslabel]*gs.gates[gslabel]
+            else:
+                if label_itoj in list(gs.gates.keys()):
+                    gslabel = label_itoj                
+                    R[j*d**2:(j+1)*d**2,i*d**2:(i+1)*d**2] = weights[gslabel]*gs.gates[gslabel]
             
+    R = R/normalizer
+    
     return R
 
-def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,success_outcomelabel=('0',),
-                  subset_sampling=None,group_to_gateset=None,weights=None,
-                  d=None, compilation=None, twirled=False):
+def exact_RB_ASPs(gs, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),
+                  group_to_gateset=None, weights=None, compilation=None, group_twirled=False):
     """
-    Calculates the exact RB average surival probablilites (ASP), using some
-    simple generalizations of the formula given in Eq (2) and the surrounding 
-    text of arXiv:1702.01853. This formula does not scale well with group size
+    Calculates the exact RB average success probablilites (ASP), using some
+    generalizations of the formula given Proctor et al Phys. Rev. Lett. 119, 
+    130502 (2017). This formula does not scale well with group size
     and qubit number, and for the Clifford group it is likely only practical for 
     a single qubit.
     
     Parameters
     ----------
     gs : Gateset
-        The noisy gateset (e.g., the Cliffords) to calculate the RB survival
-        probabilities for. If subset_sampling is None or group_to_gateset 
-        is None, the labels of the gates in gs should be the same as the 
-        labels of the group elements in group. For Clifford RB this should 
-        be the clifford gateset (perhaps obtained from a primitive gateset 
-        and a compilation table).
+        The noisy gateset (e.g., the Cliffords) to calculate the R matrix of.
+        The correpsonding `target` gateset (not required in this function)
+        must be equal to or a subset of (a faithful rep of) the group `group`. 
+        If group_to_gateset is None, the labels of the gates in gs should be 
+        the same as the labels of the corresponding group elements in `group`. 
+        For Clifford RB `gs` should be the clifford gateset; for direct RB 
+        this should be the native gateset.
             
     group : MatrixGroup
-        The group that the 'gs' gateset contains gates from (gs does not
-        need to be the full group, and could be a subset of the group). For
-        Clifford RB, this would be the Clifford group.
-        
+        The group that the `gs` gateset contains gates from. For Clifford RB
+        or direct RB, this would be the Clifford group.
+      
     m_max : int
-        maximal sequence length of the random gates (not including the
-        inversion gate).
+        The maximal sequence length of the random gates, not including the
+        inversion gate.
         
     m_min : int, optional
-        minimal sequence length. Defaults to the smallest valid value of 1.
+        The minimal sequence length. Defaults to the smallest valid value of 0.
         
     m_step : int, optional
-        step size between sequence lengths
+        The step size between sequence lengths. Defaults to the smallest valid 
+        value of 1.
        
     success_outcomelabel : str or tuple, optional
-        Specifies the outcome label associated with surival
-              
-    subset_sampling : list, optional
-        If not None, a list of gate labels from 'gs'. These are the gates
-        that random applied in the rb sequences. Even if this is all of the 
-        gates of gs, this list needs to be specified if gs and group are either 
-        (1) not labelled the same (and so group_to_gateset is not None), or 
-        (2) gs is a subset of group.
+        The outcome label associated with success.
         
-    group_to_gateset : dict, optional
+   group_to_gateset : dict, optional
         If not None, a dictionary that maps labels of group elements to labels
-        of gs. Only used if subset_sampling is not None. If subset_sampling is 
-        not None and the gs and group elements have the same labels, this dictionary
-        is not required. Otherwise it is necessary.
-                      
-    weights : dict, optional
-        If not None, a dictionary of floats, whereby the keys are the gates in gs if
-        subset_sampling is None, the keys are the gates in subset_sampling if
-        subset_sampling is not None, and the values are the unnormalized probabilities 
-        to apply each gate at each stage of the RB protocol. If not None, the values 
-        in weights must all be positive or zero, and they must not all be zero (because, 
-        when divided by their sum, they must be a valid probability distribution). If None, the
-        weighting defaults to an equal weighting on all gates, as used in most RB
-        protocols.
+        of gs. This is required if the labels of the gates in `gs` are different
+        from the labels of the corresponding group elements in `group`.
       
-    d : int, optional
-        The Hilbert space dimension.  If None, then sqrt(gs.dim) is used.
-        
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates in gs
+        and the values are the unnormalized probabilities to apply each gate at 
+        for each layer of the RB protocol. If None, the weighting defaults to an 
+        equal weighting on all gates, as used in most RB protocols (e.g., Clifford
+        RB).
+
     compilation : dict, optional
-        If subset_sampling is not None and fixed_length_each_m is False this
-        specifies the compilation of group elements into the gates from 
-        subset_sampling in order to apply the final inverse gate.
+        If `gs` is not the full group `group` (with the same labels), then a 
+        compilation for the group elements, used to implement the inversion gate 
+        (and the initial randomgroup element, if `group_twirled` is True). This 
+        is a dictionary with the group labels as keys and a gate sequence of the 
+        elements of `gs` as values.
     
-    twirled : bool, optional
-        If True, the state preparation is followed by a single uniformly random group
-        element. If subset_sampling and weights are None, there is no reason to set 
-        this to True, but otherwise it can significantly change the behaviour of the 
-        RB decay.
+    group_twirled : bool, optional
+        If True, the random sequence starts with a single uniformly random group
+        element before the m random elements of `gs`.
      
     Returns
     -------
     m : float
-        Array of sequence length values that the ASP has been calculated for
+        Array of sequence length values that the ASPs have been calculated for.
         
     P_m : float
         Array containing ASP values for the specified sequence length values.
         
-    """
-    if d is None: d = int(round(_np.sqrt(gs.dim)))
+    """    
+    if compilation is None:
+        for key in list(gs.gates.keys()):
+            assert(key in group.labels), "Gates labels are not in `group`, so `compilation must be specified."
+        for label in group.labels:
+            assert(label in list(gs.gates.keys())), "Some group elements not in `gs`, so `compilation must be specified."
+    
+    d = int(round(_np.sqrt(gs.dim)))
     i_max = _np.floor((m_max - m_min ) / m_step).astype('int')
     m = _np.zeros(1+i_max,int)
     P_m = _np.zeros(1+i_max,float)
     group_dim = len(group)
-    R = R_matrix(gs,group,subset_sampling=subset_sampling,
-                 group_to_gateset=group_to_gateset,weights=weights,d=d)
+    R = R_matrix(gs, group, group_to_gateset=group_to_gateset, weights=weights)
     success_prepLabel = list(gs.preps.keys())[0] #just take first prep
     success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel,tuple) else success_outcomelabel
     extended_E = _np.kron(_tls.column_basis_vector(0,group_dim).T,gs.povms['Mdefault'][success_effectLabel].T)
     extended_rho = _np.kron(_tls.column_basis_vector(0,group_dim),gs.preps[success_prepLabel])
     
-    if subset_sampling is None:
+    if compilation is None:
         extended_E = group_dim*_np.dot(extended_E, R)
-        if twirled is True:  
+        if group_twirled is True:  
             extended_rho = _np.dot(R,extended_rho)
     else:
         full_gateset = _cnst.build_alias_gateset(gs,compilation)
-        R_fullgroup = R_matrix(full_gateset,group,d=d)
+        R_fullgroup = R_matrix(full_gateset,group)
         extended_E = group_dim*_np.dot(extended_E, R_fullgroup)
-        if twirled is True:        
-            extended_rho = _np.dot(R_fullgroup,extended_rho)
-            
-    
+        if group_twirled is True:        
+            extended_rho = _np.dot(R_fullgroup, extended_rho)
+               
     Rstep = _np.linalg.matrix_power(R,m_step)
     Riterate =  _np.linalg.matrix_power(R,m_min)
     for i in range (0,1+i_max):
         m[i] = m_min + i*m_step
         P_m[i] = _np.dot(extended_E,_np.dot(Riterate,extended_rho))
         Riterate = _np.dot(Rstep,Riterate)
+
     return m, P_m
 
-def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_outcomelabel='0',
-                  compilation=None,twirled=False,weights=None,d=None,
-                  gauge_optimize=True,error_bounds=False,norm='diamond'):
+
+def L_matrix_ASPs(gs, gs_target, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),
+                  compilation=None, group_twirled=False, weights=None, gauge_optimize=True, 
+                  return_error_bounds=False, norm='diamond'):
     """
-    Computes RB average survival probablities, as predicted by the 'L' operator
-    theory of arXiv:1702.01853. Within the function, the gs is gauge-optimized to
-    gs_target. This is *not* optimized to the gauge specified in arXiv:1702.01853,
-    but instead performs the standard pyGSTi gauge-optimization (using the frobenius
-    distance). In most cases, this is likely to be a reasonable proxy for the gauge
-    optimization perscribed by arXiv:1702.01853.
+    Computes RB average survival probablities, as predicted by the 'L-matrix'
+    theory of Proctor et al Phys. Rev. Lett. 119, 130502 (2017). Within the function, 
+    the gs is gauge-optimized to gs_target. This is *not* optimized to the gauge specified 
+    by Proctor et al, but instead performs the standard pyGSTi gauge-optimization (using the 
+    frobenius distance). In most cases, this is likely to be a reasonable proxy for the gauge 
+    optimization perscribed by Proctor et al.
     
     Parameters
     ----------
@@ -703,86 +647,75 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_outcomelabel='0',
         The noisy gateset.
            
     gs_target : Gateset
-        Target gateset
+        The target gateset.
         
     m_max : int
-        maximal sequence length of the random gates (so not including the
-        inversion gate).
+        The maximal sequence length of the random gates, not including the inversion gate.
         
     m_min : int, optional
-        minimal sequence length. Defaults to the smallest valid value of 1.
+        The minimal sequence length. Defaults to the smallest valid value of 0.
         
     m_step : int, optional
-        step size between sequence lengths
+        The step size between sequence lengths.
         
     success_outcomelabel : str or tuple, optional
-        Specifies the outcomeM label associated with surival
-               
-   compilation : dict, optional
-       A compilation table that has as keys the elements of a larger gateset, e.g., 
-       the Cliffords, and values as lists of gates from `gs`. If this is specified then
-       it is assumed that this gateset is the set from which the final inversion element
-       is applied, and if `twirled` is False, this is only used to calculate the final
-       error map associated with this inversion. A compilation table is necessary if 
-       `twirled` is True (see below).
-       
-   twirled : bool, optional
-        If True, the state preparation is followed by a single uniformly random group
-        element. How to implement this group element in terms of the elements in `gs`
-        is specified by the `compilation` dictionary, which is required if `twirled`
-        is True. If `gs` is the full group, there is no purpose in this twirl, and
-        hence this twirl option is not supported without a compilation table.
-          
+        The outcome label associated with success.
+
     weights : dict, optional
-        If not None, a dictionary of floats, whereby the keys are the gates in gs if
-        subset_sampling is None, the keys are the gates in subset_sampling if
-        subset_sampling is not None, and the values are the unnormalized probabilities 
-        to apply each gate at each stage of the RB protocol. If not None, the values 
-        in weights must all be positive or zero, and they must not all be zero (because, 
-        when divided by their sum, they must be a valid probability distribution). If None, the
-        weighting defaults to an equal weighting on all gates, as used in most RB
-        protocols.
+        If not None, a dictionary of floats, whereby the keys are the gates in gs
+        and the values are the unnormalized probabilities to apply each gate at 
+        for each layer of the RB protocol. If None, the weighting defaults to an 
+        equal weighting on all gates, as used in most RB protocols (e.g., Clifford
+        RB).
+
+    compilation : dict, optional
+        If `gs` is not the full group, then a compilation for the group elements, 
+        used to implement the inversion gate (and the initial random group element, 
+        if `group_twirled` is True). This is a dictionary with the group labels as
+        keys and a gate sequence of the elements of `gs` as values.
+    
+    group_twirled : bool, optional
+        If True, the random sequence starts with a single uniformly random group
+        element before the m random elements of `gs`.
         
     gauge_optimize : bool, optional
-        Default is True, and if True a gauge-optimization to the target gateset is 
-        implemented before calculating all quantities. If False, no gauge optimization
-        is performed. Whether or not a gauge optimization is performed does not affect
-        the rate of decay but it will generally affect the exact form of the decay. E.g.,
-        if a perfect gateset is given to the function -- but in the "wrong" gauge -- no
+        If True a gauge-optimization to the target gateset is implemented before 
+        calculating all quantities. If False, no gauge optimization is performed. 
+        Whether or not a gauge optimization is performed does not affect the rate of 
+        decay but it will generally affect the exact form of the decay. E.g., if a 
+        perfect gateset is given to the function -- but in the "wrong" gauge -- no
         decay will be observed in the output P_m, but the P_m can be far from 1 (even
         for perfect SPAM) for all m. The gauge optimization is optional, as it is
-        not guaranteed to always improve the accuracy of the reported P_m, although when gauge
-        optimization is performed this limits the possible deviations of the reported
-        P_m from the true P_m.
-      
-    d : int, optional
-        The Hilbert space dimension.  If None, then sqrt(gs.dim) is used.
+        not guaranteed to always improve the accuracy of the reported P_m, although when
+        gauge optimization is performed this limits the possible deviations of the 
+        reported P_m from the true P_m.
         
-    error_bounds : bool, optional
+    return_error_bounds : bool, optional
         Sets whether or not to return error bounds for how far the true ASPs can deviate
         from the values returned by this function.
         
     norm : str, optional
-        The norm used in the error bound calculation. Default is consistent with
-        arXiv:1702.01853.
+        The norm used in the error bound calculation. Either 'diamond' for the diamond
+        norm (the default) or '1to1' for the Hermitian 1 to 1 norm.
     
     Returns
     -------
     m : float
-        Array of sequence length values that the ASP has been calculated for
+        Array of sequence length values that the ASPs have been calculated for.
         
     P_m : float
         Array containing predicted ASP values for the specified sequence length values.
     
-    if error_bounds is True, also returns:
+    if error_bounds is True:
+    
         lower_bound: float
             Array containing lower bounds on the possible ASP values
 
         upper_bound: float
             Array containing upper bounds on the possible ASP values
-    """
-    assert((compilation is None and twirled is True) is False), "twirled cannot be true is compilation is None"   
-    if d is None: d = int(round(_np.sqrt(gs.dim)))
+            
+    """    
+    d = int(round(_np.sqrt(gs.dim)))
         
     if gauge_optimize:
         gs_go = _algs.gaugeopt_to_target(gs,gs_target)
@@ -796,15 +729,15 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_outcomelabel='0',
     if compilation is not None:
         gs_group = _cnst.build_alias_gateset(gs_go,compilation)
         gs_target_group = _cnst.build_alias_gateset(gs_target,compilation)
-        delta = gate_dependence_of_errormaps(gs_group,gs_target_group,norm=norm,d=d)
+        delta = gate_dependence_of_errormaps(gs_group,gs_target_group,norm=norm)
         emaps = errormaps(gs_group,gs_target_group)
         E_eff = _np.dot(gs_go.povms['Mdefault'][success_effectLabel].T,emaps.gates['Gavg'])
         
-        if twirled is True:
+        if group_twirled is True:
             L_group = L_matrix(gs_group,gs_target_group)
         
     if compilation is None:
-        delta = gate_dependence_of_errormaps(gs_go,gs_target,norm=norm,d=d)
+        delta = gate_dependence_of_errormaps(gs_go,gs_target,norm=norm)
         emaps = errormaps(gs_go,gs_target)
         E_eff = _np.dot(gs_go.povms['Mdefault'][success_effectLabel].T,emaps.gates['Gavg'])
     
@@ -818,7 +751,7 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_outcomelabel='0',
     Literate =  _np.linalg.matrix_power(L,m_min)
     for i in range (0,1+i_max):
         m[i] = m_min + i*m_step
-        if twirled:
+        if group_twirled:
             L_m_rdd = _tls.unvec(_np.dot(L_group,_np.dot(Literate,identity_vec)))
         else:
             L_m_rdd = _tls.unvec(_np.dot(Literate,identity_vec))
@@ -827,11 +760,11 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_outcomelabel='0',
         upper_bound[i] = P_m[i] + delta/2
         lower_bound[i] = P_m[i] - delta/2
         if upper_bound[i] > 1:
-            upper_bound[i]=1
+            upper_bound[i]=1.
         if lower_bound[i] < 0:
-            lower_bound[i]=0
-    if error_bounds:    
-        return m, P_m, upper_bound, lower_bound
+            lower_bound[i]=0.
+    if return_error_bounds:    
+        return m, P_m, lower_bound, upper_bound
     else:
         return m, P_m
     
@@ -919,157 +852,77 @@ def gate_dependence_of_errormaps(gs, gs_target, norm='diamond', mxBasis=None):
                                           mxBasis=mxBasis))            
         elif norm=='1to1': 
             gate_dif = error_gs.gates[gate]-error_gs.gates['Gavg']
-            delta.append(norm1to1(gate_dif,n_samples=1000, mxBasis=mxBasis,return_list=False))            
+            delta.append(_tls.norm1to1(gate_dif,n_samples=1000, mxBasis=mxBasis,return_list=False))            
         else:
             raise ValueError("Only diamond or 1to1 norm available.")  
             
     delta_avg = _np.mean(delta)    
     return delta_avg
 
-def Magesan_theory_parameters(gs, gs_target, success_outcomelabel=('0',), 
-                              norm='1to1', d=2):                   
-    """
-    From a given actual and target gateset, computes the parameters
-    of the 'zeroth order' and 'first order' RB theories of Magesan et al PRA 85
-    042311 2012.
-    
-    Parameters
-    ----------
-    gs : GateSet
-        The gateset to compute the parameters for
-    
-    gs_target : GateSet
-       Target gateset.
-        
-    success_outcomelabel : str or tuple, optional
-        The outcome label associated with survival.    
-        
-    norm : str, optional
-        The norm used in the calculation of the error bounds. Defaults to the
-        Hermitian 1-to-1 norm as used in arxiv:1109.6887. Other option is
-        'diamond' which uses the diamond norm to compute the bounds.
-    
-    d : int, optional
-        The dimension.
-    
-    Returns
-    -------
-    Magesan_theory_params : dictionary of floats
-    
-        r : Predicted RB number.
-        p : Predicted RB decay rate.
-        
-        A,B : Predicted SPAM constants in 'zeroth order theory'.
-        Conversion to quanities in PRA 85 042311 2012 is
-        B = A_0, A = B_0.
-        
-        A1, B1, C1 : Predicted SPAM constants in 'first order theory'.
-        Conversion to quanities in PRA 85 042311 2012 is
-        A1 = B_1, 
-        B1 = A_1 - C_1(q/p^(-2) - 1), 
-        C1 = C_1(q/p^(-2) - 1)
-        where the parameter name on the LHS of each equality is that used
-        herein, and the parameter name on the RHS of each equality is that
-        used in PRA 85 042311 2012.
-        
-        delta : measure of gate-depedence of the noise, as defined in 
-        PRA 85 042311 2012 (taking the case of time-independent noise therein).    
-    """
-    Magesan_theory_params = {}
-    Magesan_theory_params['r'] = average_gate_infidelity(gs,gs_target)    
-    Magesan_theory_params['p'] = r_to_p(Magesan_theory_params['r'],d,itype='AGI')
-    Magesan_theory_params['delta'] = gate_dependence_of_errormaps(gs, gs_target,
-                                                                  norm,None,d)
-    error_gs = errormaps(gs, gs_target)   
-       
-    R_list = []
-    Q_list = []
-    for gate in list(gs_target.gates.keys()):
-        R_list.append(_np.dot(_np.dot(error_gs.gates[gate],gs_target.gates[gate]),
-              _np.dot(error_gs.gates['Gavg'],_np.transpose(gs_target.gates[gate]))))
-        Q_list.append(_np.dot(gs_target.gates[gate],
-              _np.dot(error_gs.gates[gate],_np.transpose(gs_target.gates[gate]))))
-    
-    error_gs.gates['GR'] = _np.mean(_np.array([ i for i in R_list]), 
-                                      axis=0, dtype=_np.float64)
-    error_gs.gates['GQ'] = _np.mean(_np.array([ i for i in Q_list]), 
-                                      axis=0, dtype=_np.float64)    
-    error_gs.gates['GQ2'] = _np.dot(error_gs.gates['GQ'],error_gs.gates['Gavg'])
-    
-    error_gs.preps['rhoc_mixed'] = 1./d*_cnst.basis_build_identity_vec(error_gs.basis)
+#def Magesan_theory_predicted_decay(gs, gs_target, mlist, success_outcomelabel=('0',), 
+#                                   norm='1to1', order='zeroth', return_all = False):
+#    
+#    assert(order == 'zeroth' or order == 'first')
+# 
+#    d = int(round(_np.sqrt(gs.dim)))
+#    MTPs = {}
+#    MTPs['r'] = gateset_infidelity(gs,gs_target,itype='AGI')    
+#    MTPs['p'] = _analysis.r_to_p(MTPs['r'],d,rtype='AGI')
+#    MTPs['delta'] = gate_dependence_of_errormaps(gs, gs_target, norm)
+#    error_gs = errormaps(gs, gs_target)   
+#       
+#    R_list = []
+#    Q_list = []
+#    for gate in list(gs_target.gates.keys()):
+#        R_list.append(_np.dot(_np.dot(error_gs.gates[gate],gs_target.gates[gate]),
+#              _np.dot(error_gs.gates['Gavg'],_np.transpose(gs_target.gates[gate]))))
+#        Q_list.append(_np.dot(gs_target.gates[gate],
+#              _np.dot(error_gs.gates[gate],_np.transpose(gs_target.gates[gate]))))
+#    
+#    error_gs.gates['GR'] = _np.mean(_np.array([ i for i in R_list]),axis=0)
+#    error_gs.gates['GQ'] = _np.mean(_np.array([ i for i in Q_list]),axis=0)    
+#    error_gs.gates['GQ2'] = _np.dot(error_gs.gates['GQ'],error_gs.gates['Gavg'])   
+#    error_gs.preps['rhoc_mixed'] = 1./d*_cnst.basis_build_identity_vec(error_gs.basis)#
+#
+#    #Assumes standard POVM labels
+#    povm = _objs.UnconstrainedPOVM( [('0_cm', gs_target.povms['Mdefault']['0']),
+#                                     ('1_cm', gs_target.povms['Mdefault']['1'])] )
+#    ave_error_gsl = _cnst.gatestring_list([('rho0','Gavg'),('rho0','GR'),('rho0','Gavg','GQ')])
+#    data = _cnst.generate_fake_data(error_gs, ave_error_gsl, nSamples=1, sampleError="none")#
 
-    #Assumes standard POVM labels
-    povm = _objs.UnconstrainedPOVM( [('0_cm', gs_target.povms['Mdefault']['0']),
-                                     ('1_cm', gs_target.povms['Mdefault']['1'])] )
-    ave_error_gsl = _cnst.gatestring_list([('rho0','Gavg'),('rho0','GR'),('rho0','Gavg','GQ')])
-    N=1
-    data = _cnst.generate_fake_data(error_gs, ave_error_gsl, N, 
-                                    sampleError="none")
-
-    #TIM: not sure how below code is supposed to work...
-    #if isinstance(success_outcomelabel, tuple):
-    #     = (success_outcomelabel[0] +'_cm',)
-    #else:
-    #    success_outcomelabel_cm = success_outcomelabel +'_cm'
-    success_outcomelabel_cm = success_outcomelabel #Eriks HACK to get code to run...
-    
-    pr_L_p = data[('rho0','Gavg')][success_outcomelabel]
-    pr_L_I = data[('rho0','Gavg')][success_outcomelabel_cm]
-    pr_R_p = data[('rho0','GR')][success_outcomelabel]
-    pr_R_I = data[('rho0','GR')][success_outcomelabel_cm]
-    pr_Q_p = data[('rho0','Gavg','GQ')][success_outcomelabel]
-    p = Magesan_theory_params['p']    
-    B_1 = pr_R_I
-    A_1 = (pr_Q_p/p) - pr_L_p + ((p -1)*pr_L_I/p) \
-                            + ((pr_R_p - pr_R_I)/p)
-    C_1 = pr_L_p - pr_L_I
-    q = average_gate_infidelity(error_gs.gates['GQ2'],_np.identity(d**2,float))
-    q = r_to_p(q,d)
-    
-    Magesan_theory_params['A'] = pr_L_I
-    Magesan_theory_params['B'] = pr_L_p - pr_L_I       
-    Magesan_theory_params['A1'] = B_1
-    Magesan_theory_params['B1'] = A_1 - C_1*(q - 1)/p**2
-    Magesan_theory_params['C1'] = C_1*(q- p**2)/p**2
-
-    return Magesan_theory_params
-            
-def Magesan_systematic_error_bounds(m,delta,order='zeroth'):
-    """
-    Finds an upper bound on the RB average surival probability (ASP) from the 
-    predicted RB ASP of the 'first' or 'zeroth' order models from 
-    Magesan et al PRA 85 042311 2012, using the bounds given therein.
-    
-    Parameters
-    ----------
-    m : float
-        Sequence length, and so it is often an int
-    
-    delta : float
-        The size of the 'delta' parameter for the gate set in question
-      
-    order : str, optional
-        May be 'zeroth or 'first'. The order fitting model for which the
-        error bound should be calcluated.
-    
-    Returns
-    -------
-    sys_eb: float
-        The systematic error bound at sequence length m.
-    
-    """
-    if order == 'zeroth':
-        sys_eb = (delta + 1)**(m+1) - 1
-    
-    elif order == 'first':
-        sys_eb = sys_eb - (m+1)*delta
-    else:
-        raise ValueError("`order` should be 'zeroth' or 'first'.")
-    
-    upper = y + sys_eb
-    upper[upper > 1]=1
-
-    lower = y - sys_eb
-    lower[lower < 0]=0
-       
-    return upper, lower
+#    pr_L_p = data[('rho0','Gavg')][success_outcomelabel]
+#    pr_L_I = data[('rho0','Gavg')][success_outcomelabel_cm]
+#    pr_R_p = data[('rho0','GR')][success_outcomelabel]
+#    pr_R_I = data[('rho0','GR')][success_outcomelabel_cm]
+#    pr_Q_p = data[('rho0','Gavg','GQ')][success_outcomelabel]
+#    p = MTPs['p']    
+#    B_1 = pr_R_I
+#    A_1 = (pr_Q_p/p) - pr_L_p + ((p -1)*pr_L_I/p) + ((pr_R_p - pr_R_I)/p)
+#    C_1 = pr_L_p - pr_L_I
+#    q = average_gate_infidelity(error_gs.gates['GQ2'],_np.identity(d**2,float))
+#    q = _analysis.r_to_p(q,d,rtype='AGI')
+#    
+#    if order  == 'zeroth':
+#        MTPs['A'] = pr_L_I
+#        MTPs['B'] = pr_L_p - pr_L_I  
+#    if order == 'first':
+#        MTPs['A'] = B_1
+#        MTPs['B'] = A_1 - C_1*(q - 1)/p**2
+#        MTPs['C'] = C_1*(q- p**2)/p**2
+#    
+#    if order == 'zeroth':
+#        Pm = MTPs['A'] +  MTPs['B']*MTPs['p']**_np.array(mlist)
+#    if order == 'first':
+#        Pm = MTPs['A'] +  (MTPs['B'] + _np.array(mlist)*MTPs['C'])*MTPs['p']**_np.array(mlist)
+#    
+#   sys_eb = (MTPs['delta'] + 1)**(_np.array(mlist)+1) - 1   
+#    if order == 'first':
+#        sys_eb = sys_eb - (_np.array(mlist)+1)*MTPs['delta']
+#    
+#    upper = Pm + sys_eb
+#    upper[upper > 1]=1.
+#
+#    lower = Pm - sys_eb
+#    lower[lower < 0]=0.
+#
+#   return mlist, Pm, upper, lower, MTPs

@@ -2,6 +2,10 @@
 # Todo -- go through and delete all of this?
 #
 class RBResults(object):
+    
+    def __init__(self):
+
+        self.data = {}
 
     def compute_bootstrap_error_bars(self, gstyp_list = ("clifford",), resamples = 100,
                                     seed=None, randState=None):

@@ -29,7 +29,8 @@ def sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=None,
         s, p = _symp.clifford_layer_in_symplectic_rep(layer,n,srep_dict=srep)                
         paulivector = _np.dot(s,paulivector) % 2  
         
-        layer_paulivector = _np.zeros(2*n,int)
+        # Todo : check this!
+        layer_paulivector = p #_np.zeros(2*n,int)
         
         for q in range(0,n):
             gate = layer[q]
@@ -39,7 +40,7 @@ def sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=None,
                 
                 # Sample a pauli vector for the gate
                 gate_paulivector = _np.zeros(2*n,int)
-                sampledvec = _np.array([list(_np.random.multinomial(1,p)) for p in pauliprobs[gate]]) 
+                sampledvec = _np.array([list(_np.random.multinomial(1,pp)) for pp in pauliprobs[gate]]) 
                 gate_paulivector[:n] = sampledvec[:,1] ^ sampledvec[:,2]
                 gate_paulivector[n:] = sampledvec[:,2] ^ sampledvec[:,3]
                 
@@ -79,6 +80,9 @@ def simulate_prb_circuit_with_pauli_errors(circuit,pspec,pauliprobs,N,
         
         sample = sample_and_compute_effective_pauli_errors(circuit,pspec,pauliprobs,spamprobs=spamprobs)
         
+        #
+        # Todo: This should be [n:] I think?
+        #
         if _np.array_equal(sample[:n],_np.zeros(n,int)):
             
             SP += 1

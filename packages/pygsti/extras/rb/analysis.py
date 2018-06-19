@@ -7,19 +7,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
-#from scipy.optimize import minimize as _minimize
 from scipy.optimize import curve_fit as _curve_fit
+  
 
-#def p_to_r(p,n): 
-#    
-#    return (4**n-1)*(1-p)/4**n
-#
-#def r_to_p(r,n):
-#    
-#    return 1 - (4**n)*r/(4**n-1)   
-
-#Todo: make this work with both r types.
 def p_to_r(p, d, rtype='EI'):
+    # Todo : docstring sort.
     """
     Converts an RB decay rate (p) to the RB error rate (r).
     
