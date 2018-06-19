@@ -600,6 +600,75 @@ def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
 
     return logM
 
+## ------------------------ Erik : Matrix tools that Tim has moved here -----------
+from scipy.linalg import sqrtm as _sqrtm
+import itertools as _ittls
+
+def column_basis_vector(i,dim):
+    """
+    Returns the ith standard basis vector in dimension dim.
+    """
+    output = _np.zeros([dim,1],float)
+    output[i] = 1.
+    return output
+ 
+def vec(matrix_in):
+    """
+    Stacks the columns of a matrix to return a vector
+    """
+    return [b for a in _np.transpose(matrix_in) for b in a]
+
+def unvec(vector_in):
+    """
+    Slices a vector into the columns of a matrix.
+    """
+    dim = int(_np.sqrt(len(vector_in)))
+    return _np.transpose(_np.array(list(
+                zip(*[_ittls.chain(vector_in,
+                            _ittls.repeat(None, dim-1))]*dim))))
+
+def norm1(matr):
+    """
+    Returns the 1 norm of a matrix
+    """
+    return float(_np.real(_np.trace(_sqrtm(_np.dot(matr.conj().T,matr)))))
+
+def random_hermitian(dimension):
+    """
+    Generates a random Hermitian matrix
+    """
+    my_norm = 0.
+    while my_norm < 0.5:
+        dimension = int(dimension)
+        a = _np.random.random(size=[dimension,dimension])
+        b = _np.random.random(size=[dimension,dimension])
+        c = a+1.j*b + (a+1.j*b).conj().T
+        my_norm = norm1(c)
+    return c / my_norm
+
+def norm1to1(operator, n_samples=10000, mxBasis="gm",return_list=False):
+    """
+    Returns the Hermitian 1-to-1 norm of a superoperator represented in
+    the standard basis, calculated via Monte-Carlo sampling. Definition
+    of Hermitian 1-to-1 norm can be found in arxiv:1109.6887.
+    """
+    if mxBasis=='gm':
+        std_operator = change_basis(operator, 'gm', 'std')
+    elif mxBasis=='pp':
+        std_operator = change_basis(operator, 'pp', 'std')
+    elif mxBasis=='std':
+        std_operator = operator
+    else:
+        raise ValueError("mxBasis should be 'gm', 'pp' or 'std'!")
+    
+    rand_dim = int(_np.sqrt(float(len(std_operator))))
+    vals = [ norm1(unvec(_np.dot(std_operator,vec(random_hermitian(rand_dim)))))
+             for n in range(n_samples)]
+    if return_list:
+        return vals
+    else:
+        return max(vals)
+
 
 ## ------------------------ General utility fns -----------------------------------
 

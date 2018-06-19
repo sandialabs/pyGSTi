@@ -385,6 +385,82 @@ def process_fidelity(A, B, mxBasis=None):
     JB = _jam.jamiolkowski_iso(B, mxBasis)
     return fidelity(JA,JB)
 
+def average_gate_fidelity(A ,B, mxBasis=None):
+    """
+    Computes the average gate infidelity (AGI) between two gates. 
+    Average gate fidelity (F_g) is related to entanglement fidelity 
+    (F_p), which is referred to as "process fidelity" in pyGSTi, via: 
+    
+    F_g = (d * F_p + 1)/(1 + d), 
+    
+    where d is the Hilbert space dimension. This formula, and the
+    definition of AGI, can be found in Phys. Lett. A 303 249-252 (2002).
+
+    Parameters
+    ----------
+    A : array or gate
+        The gate to compute the AGI to B of. E.g., an imperfect
+        implementation of B.
+        
+    B : array or gate
+        The gate to compute the AGI to A of. E.g., the target gate
+        corresponding to A.
+
+    mxBasis : {"std","gm","pp"} or Basis object, optional
+        The basis of the matrices.
+
+    Returns
+    ----------
+    AGI : float
+        The AGI of A to B.
+    """
+    d = int(round(_np.sqrt(A.shape[0])))
+    PF = process_fidelity(A,B,mxBasis=mxBasis)
+    AGF = (d*PF + 1)/(1+d)
+    return float(AGF)
+
+def unitarity(A, mxBasis="gm"):
+    """
+    Returns the "unitarity" of a channel, as defined in Wallman et al, 
+    ``Estimating the Coherence of noise'' NJP 17 113020 (2015). The 
+    unitarity is given by (Prop 1 in Wallman et al):
+    
+    u(A) = Tr( A_u^{\dagger} A_u ) / (d^2  - 1), 
+    
+    where A_u is the unital submatrix of A, and d is the dimension of
+    the Hilbert space. When A is written in any basis for which the 
+    first element is the  normalized identity (e.g., the pp or gm 
+    bases), The unital submatrix of A is the matrix obtained when the 
+    top row and left hand column is removed from A. 
+    
+    Parameters
+    ----------
+    A : array or gate
+        The gate for which the unitarity is to be computed. 
+                    
+    mxBasis : {"std","gm","pp"} or a Basis object, optional
+        The basis of the matrix.
+        
+    d : int, optional
+        The dimension of the Hilbert space.
+
+    Returns
+    ----------
+    u : float
+        The unitarity of the gate A.
+        
+    """
+    d = int(round(_np.sqrt(A.shape[0])))
+    basisMxs = basis_matrices(mxBasis, d)
+
+    if _np.allclose( basisMxs[0], _np.identity(d,'d') ):
+        B = A
+    else:
+        B = _bt.change_basis(A, mxBasis, "gm") #everything should be able to be put in the "gm" basis
+    
+    unital = B[1:d**2,1:d**2]
+    u = _np.trace(_np.dot(_np.conj(_np.transpose(unital)),unital)) / (d**2-1)
+    return u
 
 def fidelity_upper_bound(gateMx):
     """
