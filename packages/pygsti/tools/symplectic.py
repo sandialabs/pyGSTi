@@ -863,7 +863,10 @@ def standard_symplectic_representations(gllist=None):
     return srep_dict
 
 
-def composite_clifford_from_clifford_circuit(circuit, srep_dict=None):
+#
+# Todo : update docstring to include pspec
+#
+def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     """
     Returns the symplectic representation of the composite Clifford implemented by 
     the specified Clifford circuit. This uses the formualas derived in Hostens and 
@@ -893,19 +896,22 @@ def composite_clifford_from_clifford_circuit(circuit, srep_dict=None):
     n = circuit.number_of_lines
     depth = circuit.depth()
     
+    if pspec is not None:
+        srep_dict = pspec.models['clifford'].get_clifford_symplectic_reps()
+    
     # The initial action of the circuit before any layers are applied.
     s = _np.identity(2*n,int)
     p = _np.zeros(2*n,int)
     
     for i in range(0,depth):        
         layer = circuit.get_circuit_layer(i)
-        layer_s, layer_p = clifford_layer_in_symplectic_rep(layer, n, srep_dict)
+        layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, srep_dict)
         s, p = compose_cliffords(s, p, layer_s, layer_p)
     
     return s, p
 
 
-def clifford_layer_in_symplectic_rep(layer, n, srep_dict=None):
+def symplectic_rep_of_clifford_layer(layer, n, srep_dict=None):
     """
     Returns the symplectic representation of the n-qubit Clifford implemented by a
     single quantum circuit layer (gates in layer must act on disjoint sets of qubits).

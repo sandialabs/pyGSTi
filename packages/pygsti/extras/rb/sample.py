@@ -8,7 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from ...algorithms import compileclifford as _comp
 from ...objects import circuit as _cir
-from ...objects import label as _lbl
+from ...baseobjs import label as _lbl
 from ...tools import symplectic as _symp
 
 #
@@ -18,12 +18,9 @@ from ... import objects as _objs
 from ... import io as _io
 from ... import tools as _tools
 
-
-import itertools as _itertools
-from numpy import random as _rndm
-
 import numpy as _np
 import copy as _copy
+import itertools as _itertools
 from scipy import mod as _mod
 
 def std_practice_direct_rb_experiment():
@@ -88,20 +85,26 @@ def circuit_layer_by_pairings(pspec, twoQprob=0.5, oneQgatenames='all', twoQgate
     """
     n = pspec.number_of_qubits
     
-    # If the one qubit and two qubit gate names are only specified as 'all', construct them.
-    if (oneQgatenames is 'all') or (twoQgatenames is 'all'):    
-        if oneQgatenames is 'all':
+    # If the one qubit and/or two qubit gate names are only specified as 'all', construct them.
+    if (oneQgatenames == 'all') or (twoQgatenames == 'all'):    
+        if oneQgatenames == 'all':
+            oneQpopulate = True
             oneQgatenames = []
-        if twoQgatenames is 'all':    
+        else:
+            oneQpopulate = False
+        if twoQgatenames == 'all':   
+            twoQpopulate = True
             twoQgatenames = []
+        else:
+            twoQpopulate = False
         
-        gatenames = list(pspec.models[gatesetname].gates.keys())
-        for gate in pspec.models[gatesetname].gates:
-            if oneQgatenames is 'all':
-                if gate.number_of_qubits == 1 and gate.name not in oneQgatenames:
+        gatelist = list(pspec.models[gatesetname].gates.keys())
+        for gate in gatelist:
+            if oneQpopulate:
+                if (gate.number_of_qubits == 1) and (gate.name not in oneQgatenames):
                     oneQgatenames.append(gate.name)
-            if twoQgatenames is 'all': 
-                if gate.number_of_qubits == 2 and gate.name not in twoQgatenames:
+            if twoQpopulate: 
+                if (gate.number_of_qubits == 2) and (gate.name not in twoQgatenames):
                     twoQgatenames.append(gate.name)
     
     # Basic variables required for sampling the circuit layer.
@@ -112,7 +115,7 @@ def circuit_layer_by_pairings(pspec, twoQprob=0.5, oneQgatenames='all', twoQgate
     
     # If there is an odd number of qubits, begin by picking one to have a 1-qubit gate.
     if n % 2 != 0:
-        q = qubits[np.random.randint(0,n)]
+        q = qubits[_np.random.randint(0,n)]
         name = oneQgatenames[_np.random.randint(0,num_oneQgatenames)]
         del qubits[q]       
         sampled_layer.append(_lbl.Label(name,q))
@@ -196,9 +199,10 @@ def circuit_layer_by_Qelimination(pspec, twoQprob=0.5, oneQgates='all', twoQgate
         only one gate acting on each qubit).
         
     """   
-    # If oneQgates is not specified, extract this list from the ProcessorSpec
-    if oneQgates != None:
+    # If oneQgates is specified, use the given list.
+    if oneQgates != 'all':
         oneQgates_available = _copy.copy(oneQgates)    
+    # If oneQgates is not specified, extract this list from the ProcessorSpec
     else:
         oneQgates_available = list(pspec.models[gatesetname].gates.keys())
         d = len(oneQgates_available)    
@@ -206,9 +210,10 @@ def circuit_layer_by_Qelimination(pspec, twoQprob=0.5, oneQgates='all', twoQgate
             if oneQgates_available[d-1-i].number_of_qubits != 1:
                 del oneQgates_available[d-1-i]
     
-    # If twoQgates is not specified, extract this list from the ProcessorSpec
-    if twoQgates != None:
+    # If twoQgates is specified, use the given list.
+    if twoQgates != 'all':
         twoQgates_available = _copy.copy(twoQgates)    
+    # If twoQgates is not specified, extract this list from the ProcessorSpec
     else:
         twoQgates_available = list(pspec.models[gatesetname].gates.keys())
         d = len(twoQgates_available)                                      
@@ -365,8 +370,8 @@ def circuit_layer_by_sectors(pspec, sectors, sectorsprob='uniform', twoQprob=1.0
     if sectorsprob == 'uniform':
         twoqubitgates = sectors[_np.random.randint(0,len(sectors))]            
     else:
-        sectorsprob = sectorsprob/np.sum(sectorsprob)
-        x = list(np.random.multinomial(1,sectorsprob))
+        sectorsprob = sectorsprob/_np.sum(sectorsprob)
+        x = list(_np.random.multinomial(1,sectorsprob))
         twoqubitgates = sectors[x.index(1)]
     
     # Prep the sampling variables
@@ -389,7 +394,7 @@ def circuit_layer_by_sectors(pspec, sectors, sectorsprob='uniform', twoQprob=1.0
         
         # If the 1-qubit gate names are specified, use these.
         if oneQgatenames != 'all':
-            possiblegates = [_lbl(name,(qubit,)) for name in oneQgatenames]
+            possiblegates = [_lbl.Label(name,(qubit,)) for name in oneQgatenames]
         
         # If the 1-qubit gate names are not specified, find the available 1-qubit gates
         else:
@@ -410,7 +415,8 @@ def circuit_layer_by_sectors(pspec, sectors, sectorsprob='uniform', twoQprob=1.0
 
     return sampled_layer
 
-def circuit_layer_of_1Q_gates(pspec, oneQgatenames='all', gatesetname='clifford'):
+def circuit_layer_of_1Q_gates(pspec, oneQgatenames='all', pdist='uniform', 
+                              gatesetname='clifford'):
     """
     Samples a random circuit layer containing only 1-qubit gates. The allowed
     1-qubit gates are specified by `oneQgatenames`, and the 1-qubit gate is
@@ -426,6 +432,14 @@ def circuit_layer_of_1Q_gates(pspec, oneQgatenames='all', gatesetname='clifford'
         a 1-qubit gate to a qubit. If this is 'all', the full set of 1-qubit gate names is 
         extracted from the ProcessorSpec.
         
+    pdist : 'uniform' or list of floats, optional
+        If a list, they are unnormalized probabilities to sample each of the 1-qubit gates
+        in the list `oneQgatenames`. If this is not 'uniform', then oneQgatename` must not
+        be 'all' (it must be a list so that it is unambigious which probability correpsonds
+        to which gate). So if not 'uniform', `pdist` is a list of non-negative floats of the 
+        same length as `oneQgatenames`. If 'uniform', then the uniform distribution over 
+        the gates is used.
+        
     gatesetname : str, optional
         Only used if oneQgatenames is 'all'. Specifies which of the `pspec.models` to use to 
         extract the gateset. The `clifford` default is suitable for Clifford or direct RB,
@@ -440,7 +454,11 @@ def circuit_layer_of_1Q_gates(pspec, oneQgatenames='all', gatesetname='clifford'
     """
     sampled_layer = []
     
+    if type(pdist) == str:
+        assert(pdist == 'uniform'), "If pdist is not a list it must be 'uniform'"
+    
     if oneQgatenames == 'all':
+        assert(pdist == 'uniform'), "If `oneQgatenames` = 'all', pdist must be 'uniform'"
         if gatesetname == 'clifford':
             for i in range(0,pspec.number_of_qubits):
                 try:
@@ -451,187 +469,185 @@ def circuit_layer_of_1Q_gates(pspec, oneQgatenames='all', gatesetname='clifford'
         else:
             raise ValueError("Currently, 'gatesetname' must be 'clifford'")
     
-    else:     
+    else:
+        # A basic check for the validity of pdist.
+        if type(pdist) != str:
+            assert(len(pdist) == len(oneQgatenames)), "The pdist probability distrbution is invalid!"
+        
+        # Find out how many 1-qubit gate names there are
+        num_oneQgatenames = len(oneQgatenames)
+        
+        # Sample a gate for each qubit.
         for i in range(0,pspec.number_of_qubits):
-            sampled_gatename = oneQgatenames[_np.random.randint(0,4)]
+            
+            # If 'uniform', then sample according to the uniform dist.
+            if type(pdist) == str:
+                sampled_gatename = oneQgatenames[_np.random.randint(0,num_oneQgatenames)]
+            # If not 'uniform', then sample according to the user-specified dist.
+            else:
+                pdist = _np.array(pdist)/sum(pdist)
+                x = list(_np.random.multinomial(1,pdist))
+                sampled_gatename = oneQgatenames[x.index(1)]
+            # Add sampled gate to the layer.
             sampled_layer.append(_lbl.Label(sampled_gatename,i))
 
     return sampled_layer
 
-def circuit(pspec, length, sampler='weights', sampler_args=[0.5,'all',None,'single'],
-                              alternatewithlocal = False, localtype = 'primitives'):
+def circuit(pspec, length, sampler='Qelimination', samplerargs=[], addlocal = False, lsargs=[]):
+    """
+    Samples a random circuit of the specified length (or ~ twice this length), using layers 
+    independently sampled according to the specified sampling distribution.
     
-    if sampler == 'weights':
-        twoQprob = sampler_args[0]
-        oneQgatenames = sampler_args[1]
+    Parameters
+    ----------
+    pspec : ProcessorSpec
+       The ProcessorSpec for the device that the circuit is being sampled for. This is always
+       handed to the sampler, as the first argument of the sampler function
+                
+    length : int
+        If `addlocal` is False, this is the length of the sampled circuit. If `addlocal is
+        True the length of the circuits is 2*length+1 with odd-indexed layers sampled according
+        to the sampler specified by `sampler`, and the the zeroth layer + the even-indexed 
+        layers consisting of random 1-qubit gates (with the sampling specified by `lsargs`).
         
-        gates1q = list(pspec.models['clifford'].gates.keys())
-        gates2q = list(pspec.models['clifford'].gates.keys())
-        d = len(gates1q)   
-        for i in range(0,d):
-            
-            if oneQgatenames == 'all':
-                if gates1q[d-1-i].number_of_qubits != 1:
-                    del gates1q[d-1-i]
-            else:
-                if gates1q[d-1-i].name not in oneQgatenames:
-                    del gates1q[d-1-i]
-                    
-            if gates2q[d-1-i].number_of_qubits != 2:
-                 del gates2q[d-1-i]
+    sampler : str or function, optional
+        If a string, this should be one of: {'pairings', 'Qelimination', 'sectors', 'local'}.
+        Except for 'local', this corresponds to sampling layers according to the sampling function 
+        in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+        corresponds to sampling according to rb.sampler.circuit_layer_of_1Q_gates. If this is a
+        function, it should be a function that takes as the first argument a ProcessorSpec, and
+        returns a random circuit layer as a list of gate Label objects. Note that the default
+        'Qelimination' is not necessarily the most useful in-built sampler, but it is the only
+        sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary 
+        connectivity devices.
+    
+    samplerargs : list, optional
+        A list of arguments that are handed to the sampler function, specified by `sampler`.
+        The first argument handed to the sampler is `pspec` and `samplerargs` lists the
+        remaining arguments handed to the sampler.
         
-    elif sampler == 'sectors':
+    addlocal : bool, optional
+        If False, the circuit sampled is of length `length` and each layer is independently
+        sampled according to the sampler specified by `sampler`. If True, the circuit sampled
+        is of length 2*`length`+1 where: the zeroth + all even layers are consisting of 
+        independently random 1-qubit gates (with the sampling specified by `lsargs`); the 
+        odd-indexed layers are independently sampled according to `sampler`. So `length`+1 
+        layers consist only of 1-qubit gates, and `length` layers are sampled according to 
+        `sampler`.
         
-        twoqubitprob = sampler_args[0]
-        oneQgatenames = sampler_args[1]
-        customsectors = sampler_args[2]
-        stdsectors = sampler_args[3]
+    lsargs : list, optional
+        A list of arguments that are handed to the 1-qubit gate layers sampler 
+        rb.sampler.circuit_layer_of_1Q_gates for the alternating 1-qubit-only layers that are
+        included in the circuit if `addlocal` is True. This argument is not used if `addlocal`
+        is false. Note that `pspec` is used as the first, and only required, argument of
+        rb.sampler.circuit_layer_of_1Q_gates. If `lsargs` = [] then all available 1-qubit gates
+        are uniformly sampled from. To uniformly sample from only a subset of the available
+        1-qubit gates (e.g., the Paulis to Pauli-frame-randomize) then `lsargs` should be a
+        1-element list consisting of a list of the relevant gate names (e.g., `lsargs` = ['Gi,
+        'Gxpi, 'Gypi', 'Gzpi']).
         
-        if customsectors is not None:
-            sectors = customsectors
+    Returns
+    -------
+    Circuit
+        A random circuit of length `length` (if not addlocal) or length 2*`length`+1 (if addlocal)
+        with layers independently sampled using the specified sampling distribution.
+        
+    """ 
+    if type(sampler) == str:
+        
+        if sampler == 'pairings':           
+            sampler = circuit_layer_by_pairings
+        elif sampler == 'Qelimination':
+            sampler = circuit_layer_by_Qelimination
+        elif sampler == 'sectors':
+            sampler = circuit_layer_by_sectors
+            assert(len(samplerargs) >= 1), "The samplerargs must at least a 1-element list with the first element the 'sectors' argument of the sectors sampler."
+        elif sampler == 'local':
+            sampler = circuit_layer_of_1Q_gates            
         else:
-            assert(stdsectors == 'single')
-            
-            sectors = []           
-            for gate in pspec.models['clifford'].gates:
-                if gate.number_of_qubits == 2:
-                    sectors.append([gate,])
-                    
-    elif sampler == 'pairing':
+            raise ValueError("Sampler type not understood!")
     
-    
-        twoQprob= sampler_args[0]
-        #
-        # Todo: this currently doesn't use a list of one-qubit gates specified for
-        # sampling over. That should probably be fixed.
-        #
-        oneQgatenames = []
-        twoQgatenames = []
-
-        gatenames = list(pspec.models['clifford'].gates.keys())
-
-        for gate in pspec.models['clifford'].gates:
-
-            if gate.number_of_qubits == 1 and gate.name not in oneQgatenames:
-                oneQgatenames.append(gate.name)
-            if gate.number_of_qubits == 2 and gate.name not in twoQgatenames:
-                twoQgatenames.append(gate.name)
-                       
+    # Initialize an empty circuit, to populate with sampled layers.
     circuit = _cir.Circuit(gatestring=[],num_lines=pspec.number_of_qubits)
     
-    if not alternatewithlocal:
+    # If we are not add layers of random local gates between the layers, sample 'length' layers
+    # according to the sampler `sampler`.
+    if not addlocal:
         for i in range(0,length):
-  
-            if sampler == 'weights':       
-                        
-                layer = sample_circuit_layer_by_2Qweighting(pspec, oneQgates=gates1q, twoQgates=gates2q, 
-                                                            twoQprob=twoQprob)
-            
-            elif sampler == 'sectors':
-                layer = sample_circuit_layer_by_sectors(pspec, sectors=sectors, twoQprob=twoqubitprob,
-                                                       oneQgatenames=oneQgatenames)
-                
-            elif sampler == 'pairing':
-                layer = sample_circuit_layer_by_pairings(pspec, oneQgatenames=oneQgatenames,
-                                                         twoQgatenames=twoQgatenames,
-                                                         twoQprob=twoQprob)
-                
-            else:
-                layer = sampler(pspec, length, sampler_args)
-            
+            layer = sampler(pspec,*samplerargs)
             circuit.insert_layer(layer,0)
             
-    if alternatewithlocal:
-        
-         for i in range(0,2*length+1):
-                
-                # For odd layers, we uniformly sample the specified type of local gates.
+    # If we are adding layers of random local gates between the layers.
+    if addlocal:
+        for i in range(0,2*length+1):
                 local = not bool(i % 2)
+                # For odd layers, we uniformly sample the specified type of local gates.
                 if local:
-                    layer = sample_circuit_layer_of_1Q_gates(pspec, gtype = localtype)
-                
+                    layer = circuit_layer_of_1Q_gates(pspec,*lsargs)                 
                 # For even layers, we sample according to the given distribution
                 else:
-                    if sampler == 'weights':
-                        layer = sample_circuit_layer_by_2Qweighting(pspec,twoQprob=twoQprob)
-            
-                    elif sampler == 'sectors':
-                        layer = sample_circuit_layer_by_sectors(pspec, sectors=sectors, twoQprob=twoqubitprob)
-                    elif sampler == 'pairings':
-                        assert(False), "This funcationality is not yet included!"
-                    
-                    else:
-                        layer = sampler(pspec, length, sampler_args)
-                        
+                    layer = sampler(pspec,*samplerargs)
                 circuit.insert_layer(layer,0)
-    
+                
+    # Make the circuit static.
     circuit.done_editing()
+    
     return circuit
 
 
-def direct_rb_circuit(pspec, length, sampler='weights',sampler_args=[0.5,'all',None,'single'],  
-                         twirled=True, stabilizer=True, compiler_algorithm='GGE', depth_compression=True, 
-                         alternatewithlocal = False, localtype = 'primitives', return_partitioned = False, 
-                       iterations=5,relations=None,prep_measure_pauli_randomize=False,
-                      improved_CNOT_compiler=True, ICC_custom_ordering=None, ICC_std_ordering='connectivity',
-                      ICC_qubitshuffle=False):
-    
+def direct_rb_circuit(pspec, length, sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[],
+                      randomizeout=False, cliffordtwirl=True, conditionaltwirl=True, compilerargs = [],
+                      partioned=False):
+                      
+    # compiler_algorithm='GGE', depth_compression=True, 
+    #    alternatewithlocal = False, localtype = 'primitives', return_partitioned = False, 
+    #  iterations=5,relations=None,prep_measure_pauli_randomize=False,
+    # improved_CNOT_compiler=True, ICC_custom_ordering=None, ICC_std_ordering='connectivity',
+    # ICC_qubitshuffle=False):
     #
     # Todo : allow for pauli-twirling in the prep/measure circuits
     #
-    
-    # Sample random circuit, and find the symplectic matrix / phase vector it implements    
-    random_circuit = sample_primitives_circuit(pspec=pspec, length=length, sampler=sampler,
-                                     sampler_args=sampler_args, alternatewithlocal = alternatewithlocal, 
-                                               localtype = localtype)
-    
-    sreps = pspec.models['clifford'].get_clifford_symplectic_reps()
     n = pspec.number_of_qubits
+    sreps = pspec.models['clifford'].get_clifford_symplectic_reps()
     
-    s_rc, p_rc = _symp.composite_clifford_from_clifford_circuit(random_circuit,srep_dict=sreps)
+    # Sample a random circuit of "native gates".   
+    random_circuit = circuit(pspec=pspec, length=length, sampler=sampler, samplerargs=samplerargs, 
+                             addlocal=addlocal, lsargs=lsargs)   
+    # find the symplectic matrix / phase vector this "native gates" circuit implements.
+    s_rc, p_rc = _symp.symplectic_rep_of_clifford_circuit(random_circuit,srep_dict=sreps)
     
-    if twirled:
-        
+    # If we are clifford twirling, we do an initial random circuit that is either a uniformly random
+    # cliffor or creates a uniformly random stabilizer state from the standard input.
+    if cliffordtwirl:
+        # Sample a uniformly random Clifford.
         s_initial, p_initial = _symp.random_clifford(n)
+        # Find the composite action of this uniformly random clifford and the random circuit.
         s_composite, p_composite = _symp.compose_cliffords(s_initial, p_initial, s_rc, p_rc)
-        
-        if stabilizer:
-            initial_circuit = _comp.stabilizer_state_preparation_circuit(s_initial, p_initial, pspec, 
-                                                                         iterations=iterations,
-                                                                        relations=relations,
-                                                                        pauli_randomize=prep_measure_pauli_randomize,
-                                                                        improved_CNOT_compiler=improved_CNOT_compiler,
-                                                                        ICC_custom_ordering=ICC_custom_ordering,
-                                                                         ICC_std_ordering=ICC_std_ordering,
-                                                                        ICC_qubitshuffle=ICC_qubitshuffle)            
+        # If conditionaltwirl we do a stabilizer prep (a conditional Clifford).
+        if conditionaltwirl:
+            initial_circuit = _comp.stabilizer_state_preparation(s_initial, p_initial, pspec,
+                                                                 *compilerargs)           
+        # If not conditionaltwirl, we do a full random Clifford.
         else:
-            initial_circuit = _comp.compile_clifford(s_initial, p_initial, pspec, 
-                                                           depth_compression=depth_compression, 
-                                                           algorithm=algorithm,
-                                                           prefix_paulis=True,
-                                                             pauli_randomize=prep_measure_pauli_randomize)
+            initial_circuit = _comp.compile_clifford(s_initial, p_initial, pspec, *compilerargs)
         
-        
+    # If we are not Clifford twirling, we just copy the effect of the random circuit as the effect
+    # of the "composite" prep + random circuit (as here the prep circuit is the null circuit).
     else:
         s_composite = _copy.deepcopy(s_rc)
         p_composite = _copy.deepcopy(p_rc)
-        
     
+    # Find the Clifford that inverts the circuit so far.
     s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)
     
-    #
-    # Put something here that allows for a random Pauli at the end of the circuit?
-    #
+    # If we want to randomize the expected output then randomize the p_inverse vector, so that
+    # the final bit of circuit will only invert (or conditionally invert) the preceeding circuit
+    # up to a random Pauli.
+    if randomizeout:
+        print("NOT YET WRITTEN!")
     
-    if stabilizer:
-        inversion_circuit = _comp.stabilizer_measurement_preparation_circuit(s_inverse, p_inverse, pspec, 
-                                                                             iterations=iterations,
-                                                                            relations=relations,
-                                                                             pauli_randomize=prep_measure_pauli_randomize,
-                                                                        improved_CNOT_compiler=improved_CNOT_compiler, 
-                                                                             ICC_custom_ordering=ICC_custom_ordering,
-                                                                         ICC_std_ordering=ICC_std_ordering,
-                                                                            ICC_qubitshuffle=ICC_qubitshuffle)   
+    if conditionaltwirl:
+        inversion_circuit = _comp.stabilizer_measurement(s_inverse, p_inverse, pspec, *compilerargs)   
     else:
         inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, pspec, 
                                                         depth_compression=depth_compression,
@@ -639,7 +655,7 @@ def direct_rb_circuit(pspec, length, sampler='weights',sampler_args=[0.5,'all',N
                                                         prefix_paulis=False,
                                                        pauli_randomize=prep_measure_pauli_randomize)
 
-    if not return_partitioned:
+    if not partitioned:
         
         if twirled:
             full_circuit = _copy.deepcopy(initial_circuit)
@@ -761,7 +777,7 @@ def oneQ_rb_sequence(m, group_or_gateset, inverse=True, random_pauli=False, inte
         group = group_or_gateset
         
     if randState is None:
-        rndm = _rndm.RandomState(seed) # ok if seed is None
+        rndm = _np.random.RandomState(seed) # ok if seed is None
     else:
         rndm = randState
         
@@ -911,7 +927,7 @@ def oneQ_rb_experiment(m_list, K_m, group_or_gateset, inverse=True,
     """
 
     if randState is None:
-        rndm = _rndm.RandomState(seed) # ok if seed is None
+        rndm = _np.random.RandomState(seed) # ok if seed is None
     else:
         rndm = randState
         
