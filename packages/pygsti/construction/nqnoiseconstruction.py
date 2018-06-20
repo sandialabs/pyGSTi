@@ -11,6 +11,7 @@ import itertools as _itertools
 import numpy as _np
 import scipy as _scipy
 import scipy.sparse as _sps
+import warnings as _warnings
 
 from .. import objects as _objs
 from ..tools import basistools as _bt
@@ -915,7 +916,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfi
     #dummy = 0.05*_np.ones(gateset.num_params(),'d') # for evaluating derivs...
     #dummy = 0.05*_np.arange(1,gateset.num_params()+1) # for evaluating derivs...
     #dummy = 0.05*_np.random.random(gateset.num_params())
-    dummy = 0.5*_np.random.random(gateset.num_params()) + 0.5*_np.ones(gateset.num_params(),'d')
+    dummy = 5.0*_np.random.random(gateset.num_params()) + 0.5*_np.ones(gateset.num_params(),'d')
      # expect terms to be either coeff*x or coeff*x^2 - (b/c of latter case don't eval at zero)
     
     #amped_polys = []
@@ -950,6 +951,8 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfi
                 for elbl,p,q in zip(effectLbls,ps,qs):
                     amped = p + -1*q # the amplified poly
                     Jrow = _np.array([[ amped.deriv(iParam).evaluate(dummy) for iParam in _slct.as_array(wrtParams)]])
+                    if _np.linalg.norm(Jrow) < 1e-8: continue  # row of zeros can fool matrix_rank
+                    
                     Jtest = _np.concatenate((J,Jrow),axis=0) 
                     testRank = _np.linalg.matrix_rank(Jtest)
                     #print("find_amped_polys_for_syntheticidle: ",prep,meas,elbl," => rank ",testRank, " (Np=",Np,")")
@@ -1000,7 +1003,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
     #dummy = 0.05*_np.ones(gateset.num_params(),'d') # for evaluating derivs...
     #dummy = 0.05*_np.arange(1,gateset.num_params()+1) # for evaluating derivs...
     #dummy = 0.05*_np.random.random(gateset.num_params())
-    dummy = 0.5*_np.random.random(gateset.num_params()) + 0.5*_np.ones(gateset.num_params(),'d')
+    dummy = 5.0*_np.random.random(gateset.num_params()) + 0.5*_np.ones(gateset.num_params(),'d')
      # expect terms to be either coeff*x or coeff*x^2 - (b/c of latter case don't eval at zero)
     
     #amped_polys = []
@@ -1116,6 +1119,8 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
                 for elbl,p,q in zip(effectLbls,ps,qs):
                     amped = p + -1*q # the amplified poly
                     Jrow = _np.array([[ amped.deriv(iParam).evaluate(dummy) for iParam in _slct.as_array(wrtParams)]])
+                    if _np.linalg.norm(Jrow) < 1e-8: continue  # row of zeros can fool matrix_rank
+                    
                     Jtest = _np.concatenate((J,Jrow),axis=0) 
                     testRank = _np.linalg.matrix_rank(Jtest)
                     #print("find_amped_polys_for_syntheticidle: ",prep,meas,elbl," => rank ",testRank, " (Np=",Np,")")
@@ -1159,7 +1164,7 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
         
     #dummy = 0.05*_np.ones(gateset.num_params(),'d') # for evaluating derivs...
     #dummy = 0.05*_np.arange(1,gateset.num_params()+1) # for evaluating derivs...
-    dummy = 0.5*_np.random.random(gateset.num_params()) + 0.5*_np.ones(gateset.num_params(),'d')
+    dummy = 5.0*_np.random.random(gateset.num_params()) + 0.5*_np.ones(gateset.num_params(),'d')
      # expect terms to be either coeff*x or coeff*x^2 - (b/c of latter case don't eval at zero)
     
     #OLD: selected_fidpairs = []
@@ -1188,76 +1193,101 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
                    len(idle_gatename_fidpair_lists)*(3**(nCore)), nCore,
                    3**(2*nQubits)))
 
+    already_tried = set()
+    cores = [None] + list(_itertools.product(*([singleQfiducials]*nCore) ))
+      # try *no* core insertion at first - leave as idle - before going through them...
 
-    for gfp_list in idle_gatename_fidpair_lists:
-        #print("GFP list = ",gfp_list)
-        prep_noncore = tuple( (gfp_list[i][0] for i in range(nQubits)) ) # just the prep-part
-        meas_noncore = tuple( (gfp_list[i][1] for i in range(nQubits)) ) # just the meas-part
-    #if 1:
-
-        #for prep in _itertools.product(*([singleQfiducials]*nQubits) ):
-        #for prep_core in _itertools.product(*([singleQfiducials]*nCore) ):
-        if 1:
-            prep = prep_noncore
-
-            #construct prep, a gatename-string, from prep_noncore and prep_core
-            #prep = list(prep_noncore)
-            #for i,core_ql in enumerate(core_filter):
-            #    prep[ qubit_filter.index(core_ql) ] = prep_core[i]
-            #prep = tuple(prep)
-
-            prepFid = _objs.GateString(())
-            for i,el in enumerate(prep):
-                prepFid = prepFid + _onqubit(el,qubit_filter[i])
-                
-            #for meas in _itertools.product(*([singleQfiducials]*nQubits) ):
-            for meas_core in _itertools.product(*([singleQfiducials]*nCore) ):
+    for prep_core in cores: # weird loop order b/c we don't expect to need this one
+        if prep_core is not None: # I don't think this *should* happen
+            _warnings.warn(("Idle's prep fiducials only amplify %d of %d"
+                            " directions!  Falling back to vary prep on core")
+                           % (Jrank,Namped))
+            
+        for gfp_list in idle_gatename_fidpair_lists:
+            #print("GFP list = ",gfp_list)
+            prep_noncore = tuple( (gfp_list[i][0] for i in range(nQubits)) ) # just the prep-part
+            meas_noncore = tuple( (gfp_list[i][1] for i in range(nQubits)) ) # just the meas-part
+        #if 1:
     
-                #construct meas, a gatename-string, from meas_noncore and meas_core
-                meas = list(meas_noncore)
-                for i,core_ql in enumerate(core_filter):
-                    meas[ qubit_filter.index(core_ql) ] = meas_core[i]
-                meas = tuple(meas)
-                
-                measFid = _objs.GateString(())
-                for i,el in enumerate(meas):
-                    measFid = measFid + _onqubit(el,qubit_filter[i])
-                #print("CONSIDER: ",prep,"-",meas)
-         
-                gstr = prepFid + germPowerStr + measFid  # should be a GateString
-                ps=gateset._calc().prs_as_polys(prepLbl, effectLbls, gstr)
-                #OLD: Jtest = J
-                added = False
-                for elbl,p in zip(effectLbls,ps):
-                    #print(" POLY = ",p)
-                    #For each fiducial pair (included pre/effect), determine how the
-                    # (polynomial) probability relates to the *amplified* directions 
-                    # (also polynomials - now encoded by a "Jac" row/vec)
-                    prow = _np.array([ p.deriv(iParam).evaluate(dummy) for iParam in _slct.as_array(wrtParams)]) # complex
-                    Jrow = _np.array([[ _np.vdot(prow,amped_row) for amped_row in amped_polyJ]]) # complex
-                    Jtest = _np.concatenate((J,Jrow),axis=0)  
-                    testRank = _np.linalg.matrix_rank(Jtest)
-                    if testRank > Jrank:
-                        #print("ACCESS")
-                        #print("ACCESS: ",prep,meas,testRank, _np.linalg.svd(Jtest, compute_uv=False))
-                        J = Jtest
-                        Jrank = testRank
-                        if not added:
-                            gatename_fidpair_lists.append([ (prep[i],meas[i]) for i in range(nQubits) ])
-                            added = True
-                        #OLD selected_fidpairs.append( (prepFid, measFid) )
-                        if Jrank == Namped: # then we've selected enough pairs to access all of the amplified directions
-                            return gatename_fidpair_lists # (i.e. the rows of `amped_polyJ`)
+            #for prep in _itertools.product(*([singleQfiducials]*nQubits) ):
+            #for prep_core in _itertools.product(*([singleQfiducials]*nCore) ):
+            if 1:
+                if prep_core is None:
+                    prep = prep_noncore # special case where we try to leave it unchanged.
+                else:
+                    # construct prep, a gatename-string, from prep_noncore and prep_core
+                    prep = list(prep_noncore)
+                    for i,core_ql in enumerate(core_filter):
+                        prep[ qubit_filter.index(core_ql) ] = prep_core[i]
+                    prep = tuple(prep)
+    
+                prepFid = _objs.GateString(())
+                for i,el in enumerate(prep):
+                    prepFid = prepFid + _onqubit(el,qubit_filter[i])
+                    
+                #for meas in _itertools.product(*([singleQfiducials]*nQubits) ):
+                #for meas_core in _itertools.product(*([singleQfiducials]*nCore) ):
+                for meas_core in cores:
+
+                    if meas_core is None:
+                        meas = meas_noncore
+                    else:
+                        #construct meas, a gatename-string, from meas_noncore and meas_core
+                        meas = list(meas_noncore)
+                        for i,core_ql in enumerate(core_filter):
+                            meas[ qubit_filter.index(core_ql) ] = meas_core[i]
+                        meas = tuple(meas)
+                    
+                    measFid = _objs.GateString(())
+                    for i,el in enumerate(meas):
+                        measFid = measFid + _onqubit(el,qubit_filter[i])
+                    #print("CONSIDER: ",prep,"-",meas)
+             
+                    gstr = prepFid + germPowerStr + measFid  # should be a GateString
+                    if gstr in already_tried: continue
+                    else: already_tried.add(gstr)
+                    
+                    ps=gateset._calc().prs_as_polys(prepLbl, effectLbls, gstr)
+                    #OLD: Jtest = J
+                    added = False
+                    for elbl,p in zip(effectLbls,ps):
+                        #print(" POLY = ",p)
+                        #For each fiducial pair (included pre/effect), determine how the
+                        # (polynomial) probability relates to the *amplified* directions 
+                        # (also polynomials - now encoded by a "Jac" row/vec)
+                        prow = _np.array([ p.deriv(iParam).evaluate(dummy) for iParam in _slct.as_array(wrtParams)]) # complex
+                        Jrow = _np.array([[ _np.vdot(prow,amped_row) for amped_row in amped_polyJ]]) # complex
+                        if _np.linalg.norm(Jrow) < 1e-8: continue  # row of zeros can fool matrix_rank
+                        
+                        Jtest = _np.concatenate((J,Jrow),axis=0)  
+                        testRank = _np.linalg.matrix_rank(Jtest)
+                        if testRank > Jrank:
+                            #print("ACCESS")
+                            #print("ACCESS: ",prep,meas,testRank, _np.linalg.svd(Jtest, compute_uv=False))
+                            J = Jtest
+                            Jrank = testRank
+                            if not added:
+                                gatename_fidpair_lists.append([ (prep[i],meas[i]) for i in range(nQubits) ])
+                                added = True
+                            #OLD selected_fidpairs.append( (prepFid, measFid) )
+                            if Jrank == Namped: # then we've selected enough pairs to access all of the amplified directions
+                                return gatename_fidpair_lists # (i.e. the rows of `amped_polyJ`)
                         
      
     #DEBUG
     #print("DEBUG: J = ")
-    #_gt.print_mx(J)
+    #_mt.print_mx(J)
+    #print("SVals = ",_np.linalg.svd(J, compute_uv=False))
     #print("Nullspace = ")
     #_gt.print_mx(pygsti.tools.nullspace(J))
+    
     raise ValueError(("Could not find sufficient fiducial pairs to access "
-                      "all the amplified diretions - only %d of %d were accessible")
+                      "all the amplified directions - only %d of %d were accessible")
                      % (Jrank,Namped))
+    #_warnings.warn(("Could not find sufficient fiducial pairs to access "
+    #                  "all the amplified directions - only %d of %d were accessible")
+    #                 % (Jrank,Namped))
+    #return gatename_fidpair_lists # (i.e. the rows of `amped_polyJ`)
     
     
 def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
@@ -1802,6 +1832,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
                     
                     amped_polyJ = J[-nNewAmpedDirs:, :] # just the rows of the Jacobian corresponding to
                                                         # the directions we want the current germ to amplify
+                    #print("DB: amped_polyJ = ",amped_polyJ)
                     #print("DB: amped_polyJ svals = ",_np.linalg.svd(amped_polyJ, compute_uv=False))
                     
                     #Figure out which fiducial pairs access the amplified directions at each value of L
