@@ -113,7 +113,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         if aliasDict:
             aliasDict = { _lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
                           for ky,val in aliasDict.items() } # convert to use Labels
-                
+
         if gsGen:
             trans_gatestring_list = [ _gstrc.translate_gatestring(s, aliasDict)
                                       for s in gatestring_list ]
@@ -181,7 +181,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                 nWeightedSamples = N
 
             counts = {} #don't use an ordered dict here - add_count_dict will sort keys
-            labels = [ol for ol,ps in sorted(list(ps.items()), key=lambda x: x[1]) ]
+            labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1]) ]
               # "outcome labels" - sort by prob for consistent generation
             if sampleError == "binomial":
                 assert(len(labels) == 2)
