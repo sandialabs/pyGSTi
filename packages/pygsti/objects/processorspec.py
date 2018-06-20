@@ -13,6 +13,7 @@ from scipy.sparse.csgraph import floyd_warshall as _fw
 
 from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
+from .qubitgraph import QubitGraph as _QubitGraph
 from ..baseobjs import Label as _Label
 
 class ProcessorSpec(object):
@@ -106,15 +107,14 @@ class ProcessorSpec(object):
         
         if model_name == 'clifford':
             assert(parameterization in ('auto','clifford')), "Clifford model must use 'clifford' parameterizations"
-            assert(sim_type in ('auto','clifford')), "Clifford model must use 'clifford' simulation type"
+            assert(sim_type in ('auto','map')), "Clifford model must use 'map' simulation type"
             model = _cnst.build_nqubit_standard_gateset(
                 self.number_of_qubits, self.root_gate_names,
                 self.nonstd_gate_unitaries, self.availability,
-                parameterization='clifford', sim_type='clifford',
+                parameterization='clifford', sim_type=sim_type,
                 on_construction_error='warn') # *drop* gates that aren't cliffords
 
         elif model_name in ('target','Target','static','TP','full'):
-            sim_type = 'svmap' if (sim_type == 'auto') else sim_type
             param = model_name if (parameterization == 'auto') \
                     else parameterization
             if param in ('target','Target'): param = 'static' # special case for 'target' model
@@ -127,7 +127,6 @@ class ProcessorSpec(object):
         else: # unknown model name, so require parameterization
             if parameterization == 'auto':
                 raise ValueError("Non-std model name '%s' means you must specify `parameterization` argument!" % model_name)
-            sim_type = 'svmap' if (sim_type == 'auto') else sim_type
             model = _cnst.build_nqubit_standard_gateset(
                 self.number_of_qubits, self.root_gate_names,
                 self.nonstd_gate_unitaries, self.availability,
@@ -239,7 +238,7 @@ class ProcessorSpec(object):
         #
         # todo -- I'm not sure whether this makes sense when the graph is directed.
         #
-        distances = qubitgraph.shortest_path_distance_matrix()
+        distances = self.qubitgraph.shortest_path_distance_matrix()
         for i in range(0,self.number_of_qubits):
             self.qubitcosts[i] = _np.sum(distances[i,:])
         

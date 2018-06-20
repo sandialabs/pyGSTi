@@ -3452,7 +3452,7 @@ class GateSet(object):
         for gl,gate in self.gates.items():
             if (gfilter is not None) and (gl not in gfilter): continue
 
-            if isinstance(gate, _gate.EmbeddedCliffordGate):
+            if isinstance(gate, _gate.EmbeddedGateMap):
                 assert(isinstance(gate.embedded_gate, _gate.CliffordGate)), \
                     "EmbeddedClifforGate contains a non-CliffordGate!"
                 lbl = gl.name # strip state space labels off since this is a

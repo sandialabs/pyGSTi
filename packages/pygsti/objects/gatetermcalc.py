@@ -24,7 +24,6 @@ from .termevaltree import TermEvalTree as _TermEvalTree
 from .polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
 from .gatecalc import GateCalc
 from .polynomial import Polynomial as _Polynomial
-#from .polynomial import FastPolynomial as _FastPolynomial TODO REMOVE ALL REFS (DEPRECATED REPS)
 
 try:
     from . import fastreplib as replib
@@ -37,8 +36,6 @@ try:
 except ImportError:
     _fastgatecalc = None
 #_fastgatecalc.test_map("Hi")
-
-DEBUG_FCOUNT = 0
 
 _dummy_profiler = _DummyProfiler()
 
@@ -169,11 +166,6 @@ class GateTermCalc(GateCalc):
         list
             A list of Polynomial objects.
         """
-        #DEPRECATED REPS - just call replib version
-        
-        #print("PRS_AS_POLY gatestring = ",gatestring)
-        
-        #FAST MODE TEST
         fastmode = True
         if self.evotype == "svterm":
             poly_reps = replib.SV_prs_as_polys(self, rholabel, elabels, gatestring, comm, memLimit, fastmode)
@@ -181,244 +173,6 @@ class GateTermCalc(GateCalc):
             poly_reps = replib.SB_prs_as_polys(self, rholabel, elabels, gatestring, comm, memLimit, fastmode)
         prps_fast = [ _Polynomial.fromrep(rep) for rep in poly_reps ]
         return prps_fast
-        #END FAST MODE TEST
-        
-        #print("DB: prs_as_polys(",spamTuple,gatestring,self.max_order,")")
-        rho,Es = self._rhoEs_from_labels(rholabel, elabels)
-
-        #Precomp to fast polys:
-        gate_terms = {}
-        max_poly_vars = self.Np
-        max_poly_order = self.max_order*2
-        for glbl,gate in self.gates.items():
-            gate_terms[glbl] = []
-            
-            for order in range(self.max_order+1):
-                orig_terms = gate.get_order_terms(order)
-                               
-                new_terms = []
-                for term in orig_terms:
-                    t = term.copy()
-                    #t.coeff = _FastPolynomial(term.coeff, max_poly_vars, max_poly_order)
-                    new_terms.append(t)
-                    
-                gate_terms[glbl].append(new_terms)
-        
-        rho_terms = []
-        for order in range(self.max_order+1):
-            orig_terms = rho.get_order_terms(order)
-                               
-            new_terms = []
-            for term in orig_terms:
-                t = term.copy()
-                #t.coeff = _FastPolynomial(term.coeff, max_poly_vars, max_poly_order)
-                new_terms.append(t)
-            rho_terms.append(new_terms)
-        
-        E_terms = []; E_indices = []
-        for order in range(self.max_order+1):
-            cur_terms = []
-            cur_indices = []            
-            for i,E in enumerate(Es):
-                orig_terms = E.get_order_terms(order)
-                               
-                for term in orig_terms:
-                    t = term.copy()
-                    #t.coeff = _FastPolynomial(term.coeff, max_poly_vars, max_poly_order)
-                    cur_terms.append(t)
-                    cur_indices.append(i) # index of effect vector
-            E_terms.append(cur_terms)
-            E_indices.append(cur_indices)
-
-        ##DEBUG!!!
-        #print("-------------- BASE DB gate terms = ")
-        #for glbl,order_terms in gate_terms.items():
-        #    print("GATE ",glbl)
-        #    for i,termlist in enumerate(order_terms):
-        #        print("ORDER %d" % i)
-        #        for term in termlist:
-        #            print("Coeff: ",str(term.coeff))
-                
-        ###Prepare rho and E vecs as much as possible for unitary_sim
-        ##if not self.unitary_evolution:
-        ##    # rho and E should be PureStateSPAMVec objects (density matrices but which encode pure states)
-        ##    rho = rho.pure_state_vec
-        ##    Es = [ E.pure_state_vec.conjugate().T for E in Es ]
-        ##else:
-        ##    # rhoVec unaltered
-        ##    Es = [ E.conjugate().T for E in Es ]
-        #
-        ##if len(gatestring) == 0: #special case - at least for now until SPAM vecs have factors...
-        ##    pLeft = _np.empty(len(Es),complex)  #preallocate space to avoid
-        ##    pLeft = self.unitary_sim_pre(rho,Es, [], comm, memLimit, pLeft) # pre/post doesn't matter
-        ##    return [ _Polynomial( {(): abs(p)**2} ) for p in pLeft ] # poly w/single constant term
-        #
-        #def dict_to_fastpoly(d):
-        #    ret = _FastPolynomial(None, max_poly_vars, max_poly_order)
-        #    ret.update(d)
-        #    return ret
-        #
-        ##Convert gate Label object to integers for faster/easier cython
-        #glmap = { gl: i for i,gl in enumerate(self.gates.keys()) }
-        #cgatestring = tuple( (glmap[gl] for gl in gatestring) )
-        #cgate_terms = { glmap[gl]: val for gl,val in gate_terms.items() }
-        ##HERE - currently: we call obj.get_order_terms -> convert to FastPoly -> pass to below:
-        #prps_fast = _fastgatecalc.fast_prs_as_polys(cgatestring, rho_terms, cgate_terms,
-        #                                            E_terms, E_indices, len(Es), self.max_order,
-        #                                            bool(self.evotype == "cterm")) # returns list of dicts
-        ##return [ dict_to_fastpoly(p) for p in prps_fast ] 
-
-        #print("--------------- BASE CASE -------------")
-        
-        #HERE DEBUG
-        global DEBUG_FCOUNT
-        db_part_cnt = 0
-        db_factor_cnt = 0
-        #print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
-
-        fastmode = True #HERE
-        
-        prps = [None]*len(Es)  # an array in "bulk" mode? or Polynomial in "symbolic" mode?
-        for order in range(self.max_order+1):
-            #print("DB: pr_as_poly order=",order)
-            db_npartitions = 0
-            for p in _lt.partition_into(order, len(gatestring)+2): # +2 for SPAM bookends
-                #factor_lists = [ self.gates[glbl].get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
-                factor_lists = [ rho_terms[p[0]]] + \
-                               [ gate_terms[glbl][pi] for glbl,pi in zip(gatestring,p[1:-1]) ] + \
-                               [ E_terms[p[-1]] ]
-                factor_list_lens = list(map(len,factor_lists))
-                Einds = E_indices[p[-1]] # specifies which E-vec index each of E_terms[p[-1]] corresponds to
-                
-                if any([len(fl)==0 for fl in factor_lists]): continue
-
-                #print("DB partition = ",p, "listlens = ",[len(fl) for fl in factor_lists])
-                if fastmode: # filter factor_lists to matrix-compose all length-1 lists
-                    leftSaved = [None]*(len(factor_lists)-1)  # saved[i] is state after i-th
-                    rightSaved = [None]*(len(factor_lists)-1) # factor has been applied
-                    coeffSaved = [None]*(len(factor_lists)-1)
-                    last_index = len(factor_lists)-1
-                    
-                    for incd,fi in _lt.incd_product(*[range(l) for l in factor_list_lens]):
-                        factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
-                        
-                        if incd == 0: # need to re-evaluate rho vector
-                            rhoVecL = factors[0].pre_ops[0].todense() # or, at least "to the thing that we can acton(...)"
-                            for f in factors[0].pre_ops[1:]:
-                                rhoVecL = f.acton(rhoVecL)
-                            leftSaved[0] = rhoVecL
-
-                            rhoVecR = factors[0].post_ops[0].todense()
-                            for f in factors[0].post_ops[1:]:
-                                rhoVecR = f.acton(rhoVecR)
-                            rightSaved[0] = rhoVecR
-
-                            coeff = factors[0].coeff
-                            coeffSaved[0] = coeff
-                            incd += 1
-                        else:
-                            rhoVecL = leftSaved[incd-1]
-                            rhoVecR = rightSaved[incd-1]
-                            coeff = coeffSaved[incd-1]
-
-                        # propagate left and right states, saving as we go
-                        for i in range(incd,last_index):
-                            for f in factors[i].pre_ops:
-                                rhoVecL = f.acton(rhoVecL)
-                            leftSaved[i] = rhoVecL
-                            
-                            for f in factors[i].post_ops:
-                                rhoVecR = f.acton(rhoVecR)
-                            rightSaved[i] = rhoVecR
-
-                            coeff = coeff.mult(factors[i].coeff)
-                            coeffSaved[i] = coeff
-
-                        # for the last index, no need to save, and need to construct
-                        # and apply effect vector
-                        if self.evotype == "svterm":
-                            EVec = factors[-1].post_ops[0].todense() # TODO USE scratch here
-                            for f in factors[-1].post_ops[1:]: # evaluate effect term to arrive at final EVec
-                                EVec = f.acton(EVec)
-                            pLeft = _np.vdot(EVec,rhoVecL) # complex amplitudes, *not* real probabilities
-    
-                            EVec = factors[-1].pre_ops[0].todense() # TODO USE scratch here
-                            for f in factors[-1].pre_ops[1:]: # evaluate effect term to arrive at final EVec
-                                EVec = f.acton(EVec)
-                            pRight = _np.conjugate(_np.vdot(EVec,rhoVecR)) # complex amplitudes, *not* real probabilities
-                        else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-                            #TODO: compute/cache inverses ahead of time in adjoint_acton so this is *faster*!
-                            for f in reversed(factors[-1].post_ops[1:]):
-                                rhoVecL = f.adjoint_acton(rhoVecL)
-                            E = factors[-1].post_ops[0]
-                            pLeft = rhoVecL.extract_amplitude(E.outcomes)
-
-                            #Same for pre_ops and rhoVecR
-                            #DEBUG print("DB PYTHON right ampl")
-                            #DEBUG print("  - begin: ", rhoVecR.extract_amplitude(E.outcomes))
-                            for f in reversed(factors[-1].pre_ops[1:]):
-                                #DEBUG print( " - state = ", rhoVecR.s)
-                                #DEBUG print( "         = ", rhoVecR.ps)
-                                #DEBUG print( "         = ", rhoVecR.a)
-                                rhoVecR = f.adjoint_acton(rhoVecR)
-                                #DEBUG print("  - action with ", f.smatrix)
-                                #DEBUG print("  - action with ", f.svector)
-                                #DEBUG print("  - action with ", f.unitary)
-                                #DEBUG print("  - prop: ", rhoVecR.extract_amplitude(E.outcomes))
-                                #DEBUG print( " - post state = ", rhoVecR.s)
-                                #DEBUG print( "              = ", rhoVecR.ps)
-                                #DEBUG print( "              = ", rhoVecR.a)
-                            E = factors[-1].pre_ops[0]
-                            pRight = _np.conjugate(rhoVecR.extract_amplitude(E.outcomes))
-
-                        #print("DB PYTHON: final block: pLeft=",pLeft," pRight=",pRight)
-                        coeff = coeff.mult(factors[-1].coeff)
-                        res = coeff.scalar_mult( (pLeft * pRight) )
-                        #print("DB PYTHON: result = ",res)
-                        final_factor_indx = fi[-1]
-                        Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
-                        if prps[Ei] is None: prps[Ei]  = res
-                        else:                prps[Ei] += res
-                        #print("DB PYHON: prps[%d] = " % Ei, prps[Ei])
-                        
-                else: # non-fast mode
-                    last_index = len(factor_lists)-1
-                    for fi in _itertools.product(*[range(l) for l in factor_list_lens]):
-                        #if len(factors) == 0: coeff = _FastPolynomial({(): 1.0}, max_poly_vars, max_poly_order) #never happens TODO REMOVE
-                        factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
-                        coeff = _functools.reduce(lambda x,y: x.mult(y), [f.coeff for f in factors])
-                        pLeft  = self.unitary_sim_pre(factors, comm, memLimit)
-                        pRight = self.unitary_sim_post(factors, comm, memLimit)
-                                 # if not self.unitary_evolution else 1.0
-                        res = coeff.scalar_mult( (pLeft * pRight) )
-                        final_factor_indx = fi[-1]
-                        Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
-                        #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
-                        if prps[Ei] is None:  prps[Ei]  = res
-                        else:                prps[Ei] += res
-                        #print("DB running prps[",Ei,"] =",prps[Ei])
-                    
-                db_nfactors = [len(l) for l in factor_lists]
-                db_totfactors = _np.product(db_nfactors)
-                db_factor_cnt += db_totfactors
-                DEBUG_FCOUNT += db_totfactors
-                db_part_cnt += 1
-                #print("DB: pr_as_poly   partition=",p,"(cnt ",db_part_cnt," with ",db_nfactors," factors (cnt=",db_factor_cnt,")")
-
-        #print("DONE -> FCOUNT=",DEBUG_FCOUNT)
-
-        #CHECK with fast version
-        for slow,fast in zip(prps,prps_fast):
-            #print("Slow: ",slow)
-            #print("Fast: ",fast)            
-            for k,v in slow.items():
-                if abs(v) > 1e-12:
-                    assert(abs(fast[k]-v) < 1e-6)
-            for k,v in fast.items():
-                if abs(v) > 1e-12:
-                    assert(abs(slow[k]-v) < 1e-6)
-        
-        return prps # can be a list of polys
         
 
     def pr_as_poly(self, spamTuple, gatestring, comm=None, memLimit=None):
@@ -449,47 +203,6 @@ class GateTermCalc(GateCalc):
         return self.prs_as_polys(spamTuple[0], [spamTuple[1]], gatestring,
                                  comm, memLimit)[0]
     
-
-    #DEPRECATED REPS
-    def unitary_sim_pre(self, complete_factors, comm, memLimit):
-        rhoVec = complete_factors[0].pre_ops[0].todense() # or, at least "to the thing that we can acton(...)"
-        for f in complete_factors[0].pre_ops[1:]:
-            rhoVec = f.acton(rhoVec)
-        for f in _itertools.chain(*[f.pre_ops for f in complete_factors[1:-1]]):
-            rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
-            
-        if self.evotype == "svterm":
-            EVec = complete_factors[-1].post_ops[0].todense() # TODO USE scratch here
-            for f in complete_factors[-1].post_ops[1:]: # evaluate effect term to arrive at final EVec
-                EVec = f.acton(EVec)
-            return _np.vdot(EVec,rhoVec) # complex amplitudes, *not* real probabilities
-        else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-            for f in reversed(complete_factors[-1].post_ops[1:]):
-                rhoVec = f.adjoint_acton(rhoVec)
-            EVec = complete_factors[-1].post_ops[0]
-            return rhoVec.extract_amplitude(EVec.outcomes)
-
-
-    #DEPRECATED REPS
-    def unitary_sim_post(self, complete_factors, comm, memLimit):
-        rhoVec = complete_factors[0].post_ops[0].todense()
-        for f in complete_factors[0].post_ops[1:]:
-            rhoVec = f.acton(rhoVec)
-        for f in _itertools.chain(*[f.post_ops for f in complete_factors[1:-1]]):
-            rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
-            
-        if self.evotype == "svterm":
-            EVec = complete_factors[-1].pre_ops[0].todense() # TODO USE scratch here
-            for f in complete_factors[-1].pre_ops[1:]: # evaluate effect term to arrive at final EVec
-                EVec = f.acton(EVec)
-            return _np.conjugate(_np.vdot(EVec,rhoVec)) # complex amplitudes, *not* real probabilities
-                # conjugate(... to map what we do: "acting with adjoint ops on a ket"
-                # to what we want to return:   "acting with opt in rev order on a bra"
-        else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-            for f in reversed(complete_factors[-1].pre_ops[1:]):
-                rhoVec = f.adjoint_acton(rhoVec)
-            EVec = complete_factors[-1].pre_ops[0]
-            return _np.conjugate(rhoVec.extract_amplitude(EVec.outcomes)) # conjugate for same reason as above
         
 
     def pr(self, spamTuple, gatestring, clipTo, bScale):

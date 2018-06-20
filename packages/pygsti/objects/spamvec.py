@@ -38,12 +38,6 @@ try:
 except ImportError:
     from . import replib
 
-try:
-    #import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
-    from ..tools import fastcalc as _fastcalc
-except ImportError:
-    _fastcalc = None
-
 IMAG_TOL = 1e-8 #tolerance for imaginary part being considered zero
 
 def optimize_spamvec(vecToOptimize, targetVec):
@@ -1591,25 +1585,14 @@ class TensorProdSPAMVec(SPAMVec):
                 self._fast_kron_array[i][0:factor_dim] = factorPOVMs[i][Elbl].todense()
 
 
-    def todense(self, scratch=None):
+    def todense(self):
         """
         Return this SPAM vector as a (dense) numpy array.  The memory
         in `scratch` maybe used when it is not-None.
         """
         if self._evotype in ("statevec","densitymx"):
             if len(self.factors) == 0: return _np.empty(0,complex if self._evotype == "statevec" else 'd')
-            if scratch is not None and _fastcalc is not None:
-                #DEPRECATED REPS - don't need a fast todense anymore?  or could use "todense" method of Rep object?
-                assert(scratch.shape[0] == self.dim)
-                # use faster kron that avoids memory allocation.
-                # Note: this uses more memory b/c all self.factors.todense() results
-                #  are present in memory at the *same* time - could add a flag to
-                #  disable fast-kron-array when memory is extra tight(?).
-                if self._evotype == "statevec":
-                    _fastcalc.fast_kron_complex(scratch, self._fast_kron_array, self._fast_kron_factordims)
-                else:
-                    _fastcalc.fast_kron(scratch, self._fast_kron_array, self._fast_kron_factordims)
-                return scratch if scratch.ndim == 1 else scratch
+            #NOTE: moved a fast version of todense to replib - could use that if need a fast todense call...
                 
             if self.typ == "prep":
                 ret = self.factors[0].todense() # factors are just other SPAMVecs
@@ -1621,8 +1604,6 @@ class TensorProdSPAMVec(SPAMVec):
                 for i in range(1,len(factorPOVMs)):
                     ret = _np.kron(ret, factorPOVMs[i][self.effectLbls[i]].todense())
     
-            # DEBUG: initial test that fast_kron works...
-            #if scratch is not None: assert(_np.linalg.norm(ret - scratch[:,None]) < 1e-6)
             return ret            
         elif self._evotype == "stabilizer":
             
@@ -1667,18 +1648,18 @@ class TensorProdSPAMVec(SPAMVec):
         if self._evotype == "statevec":
             if self.typ == "prep": # prep-type vectors can be represented as dense effects too
                 if typ == "prep":
-                    return replib.SVStateRep( self.todense(_np.empty(self.dim, complex)) )
+                    return replib.SVStateRep( self.todense() )
                 else:
-                    return replib.SVEffectRep_Dense( self.todense(_np.empty(self.dim, complex)) )
+                    return replib.SVEffectRep_Dense( self.todense() )
             else:
                 return replib.SVEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
                                                      len(self.factors), self._fast_kron_array.shape[1], self.dim)
         elif self._evotype == "densitymx":
             if self.typ == "prep":
                 if typ == "prep":
-                    return replib.DMStateRep( self.todense(_np.empty(self.dim, 'd')) )
+                    return replib.DMStateRep( self.todense() )
                 else:
-                    return replib.DMEffectRep_Dense( self.todense(_np.empty(self.dim, 'd')) )
+                    return replib.DMEffectRep_Dense( self.todense() )
 
             else:
                 return replib.DMEffectRep_TensorProd(self._fast_kron_array, self._fast_kron_factordims,
@@ -1711,14 +1692,15 @@ class TensorProdSPAMVec(SPAMVec):
             raise NotImplementedError("torep() not implemented for %s evolution type" % self._evotype)
 
 
-    @property
-    def outcomes(self): #DEPRECATED REPS! - can use torep() now...
-        """ To mimic StabilizerEffectVec DEPRECATED """
-        assert(self._evotype == "stabilizer"), \
-            "'outcomes' property is only valid for the 'stabilizer' evolution type"
-        out = list(_itertools.chain(*[f.outcomes for f in self.factors]))
-        return _np.array(out, int)
-          #Note: may need to a qubit filter property here and to StabilizerEffectVec...
+    ##TODO: REMOVE
+    #@property
+    #def outcomes(self): #DEPRECATED REPS! - can use torep() now...
+    #    """ To mimic StabilizerEffectVec DEPRECATED """
+    #    assert(self._evotype == "stabilizer"), \
+    #        "'outcomes' property is only valid for the 'stabilizer' evolution type"
+    #    out = list(_itertools.chain(*[f.outcomes for f in self.factors]))
+    #    return _np.array(out, int)
+    #      #Note: may need to a qubit filter property here and to StabilizerEffectVec...
         
 
     def get_order_terms(self, order):
@@ -1771,7 +1753,7 @@ class TensorProdSPAMVec(SPAMVec):
             # (SPAMVec) pre & post op, which can be formed into the new terms'
             # TensorProdSPAMVec ops.
             # - DON'T collapse stabilizer states & clifford ops - can't for POVMs
-            collapsible = bool(self._evotype =="svterm")
+            collapsible = False # bool(self._evotype =="svterm") # need to use reps for collapsing now... TODO?
             
             if collapsible:
                 factor_lists = [ [t.collapse_vec() for t in fterms] for fterms in factor_lists]
