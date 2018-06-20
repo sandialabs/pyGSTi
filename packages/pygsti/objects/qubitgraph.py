@@ -133,7 +133,7 @@ class QubitGraph(object):
                 
     def _refresh_dists_and_predecessors(self):
         if self._dirty:
-            self._distance_matrix, _self.predecessors = _fw(
+            self._distance_matrix, self._predecessors = _fw(
                 self._connectivity,return_predecessors=True, 
                 directed=self.directed, unweighted=False) # TIM - why use unweighted=False?
 
@@ -507,9 +507,25 @@ class QubitGraph(object):
             A boolean array of shape (n,n) where n is the number of nodes in
             this graph.
         """
-        i,j = self._nodeinds[node1], self._nodeinds[node2]
         self._refresh_dists_and_predecessors()
         return self._distance_matrix.copy()
+
+    def shortest_path_predecessor_matrix(self):
+        """ 
+        Returns a matrix of predecessors used to construct the
+        shortest path between two nodes, indexed by the
+        integer-index of each node label (as specified to __init__).  The list
+        of index-ordered node labels is given by :method:`get_node_names`.
+
+        Returns
+        -------
+        numpy.ndarray
+            A boolean array of shape (n,n) where n is the number of nodes in
+            this graph.
+        """
+        self._refresh_dists_and_predecessors()
+        return self._predecessors.copy()
+
 
     def subgraph(self, nodes_to_keep, reset_nodes=False):
         """
