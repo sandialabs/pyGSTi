@@ -292,6 +292,98 @@ def construct_valid_phase_vector(s,pseed):
        
     return pout
 
+def find_postmultipled_pauli(s,p_implemented,p_target):
+    """
+    If some circuit implements the clifford described by the symplectic matrix s and
+    the vector p_implemented, this function returns the Pauli layer that should be
+    appended to this circuit to implement the clifford described by s and the vector 
+    p_target.
+    
+    Parameters
+    ----------
+    s : numpy array
+        The symplectic matrix over the integers mod 2 representing the Clifford
+        implemented by the circuit
+    
+    p_implemented : numpy array
+        The 'phase vector' over the integers mod 4 representing the Clifford
+        implemented by the circuit
+        
+    p_target : numpy array
+        The 'phase vector' over the integers mod 4 that, together with `s` represents
+        the Clifford that you want to implement. Together with `s`, this vector must
+        define a valid Clifford.
+
+    Returns
+    -------
+    list
+        A list that defines a Pauli layer, with the ith element containig one of the
+        4 tuples ('I',i), ('X',i), ('Y',i), ('Z',i).
+        
+    """
+    n = _np.shape(s)[0]//2
+    s_form = symplectic_form(n)
+    vec = _mtx.dotmod2(s,_np.dot(s_form, (p_target - p_implemented)//2))
+    
+    pauli_layer = []
+    for q in range(0,n):
+        if vec[q] == 0 and vec[q+n] == 0:
+            pauli_layer.append(('I',q))
+        elif vec[q] == 0 and vec[q+n] == 1:
+            pauli_layer.append(('Z',q))
+        elif vec[q] == 1 and vec[q+n] == 0:
+            pauli_layer.append(('X',q))
+        elif vec[q] == 1 and vec[q+n] == 1:
+            pauli_layer.append(('Y',q))
+    
+    return pauli_layer
+
+def find_premultipled_pauli(s,p_implemented,p_target):
+    """
+    If some circuit implements the clifford described by the symplectic matrix s and
+    the vector p_implemented, this function returns the Pauli layer that should be
+    prefixed to this circuit to implement the clifford described by s and the vector 
+    p_target.
+    
+    Parameters
+    ----------
+    s : numpy array
+        The symplectic matrix over the integers mod 2 representing the Clifford
+        implemented by the circuit
+    
+    p_implemented : numpy array
+        The 'phase vector' over the integers mod 4 representing the Clifford
+        implemented by the circuit
+        
+    p_target : numpy array
+        The 'phase vector' over the integers mod 4 that, together with `s` represents
+        the Clifford that you want to implement. Together with `s`, this vector must
+        define a valid Clifford.
+
+    Returns
+    -------
+    list
+        A list that defines a Pauli layer, with the ith element containig one of the
+        4 tuples ('I',i), ('X',i), ('Y',i), ('Z',i).
+        
+    """
+    n = _np.shape(s)[0]//2
+    s_form = symplectic_form(n)
+    vec = _mtx.dotmod2(s_form, (p_target - p_implemented)//2)      
+
+    pauli_layer = []
+    for q in range(0,n):
+        if vec[q] == 0 and vec[q+n] == 0:
+            pauli_layer.append(('I',q))
+        elif vec[q] == 0 and vec[q+n] == 1:
+            pauli_layer.append(('Z',q))
+        elif vec[q] == 1 and vec[q+n] == 0:
+            pauli_layer.append(('X',q))
+        elif vec[q] == 1 and vec[q+n] == 1:
+            pauli_layer.append(('Y',q))
+    
+    return pauli_layer
+
 def compose_cliffords(s1,p1,s2,p2):
     """
     Multiplies two cliffords in the symplectic representation. The output corresponds 

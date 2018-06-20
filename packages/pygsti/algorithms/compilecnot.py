@@ -27,13 +27,21 @@ def advanced_cnotcircuit_gaussian_elimination(s):
 
 def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connectivity',
                         qubitshuffle=False):
+    ##
+    #
+    # Tim todo : sort out this function. It's currently a hacky mess b/c of Tim/Erik's
+    # code changes, and it might not always work.
+    #
+    #
     
     assert(qubitshuffle == False), "qubitshuffle set to True is currently not working"
     n = pspec.number_of_qubits
     rowaction_instructionlist = []
     columnaction_instructionlist = []
-    remainingqubits = list(range(n))
+    remaining_qubits = list(range(n))
     sout = mcnot.copy()
+    distances = pspec.qubitgraph.shortest_path_distance_matrix()
+    shortestpathmatrix = pspec.qubitgraph.shortest_path_predecessor_matrix()
     
     if custom_ordering is not None:
         qubitorder = _copy.copy(custom_ordering)
@@ -44,7 +52,7 @@ def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connecti
             # todo : this will not behave as expected if costs are anything other than the
             # qubit connectivity. So fix that
             #
-            costs = _np.array([pspec.qubitcosts[i] for i in range(0,pspec.number_of_qubits)])
+            costs = _np.sum(distances,axis=0)
             qubitorder = []
             for k in range(0,n):
 
@@ -71,15 +79,15 @@ def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connecti
         
         #print('----- ROUND {} ------'.format(k))
         #print(sout)
-        #print('- Remaing qubits are:', remainingqubits)
+        #print('- Remaing qubits are:', remaining_qubits)
         #print('- Qubit scheduled to be eliminated:', i)
         
-        distances_to_qubit_i = pspec.distance[:,i].copy()
+        distances_to_qubit_i = distances[:,i].copy()  
         
         if sout[i,i] == 0:
             #print('- s[{},{}] = 0, so addressing this...'.format(i,i))
             #print(sout)
-            #print(remainingqubits)
+            #print(remaining_qubits)
             found = False
             dis = list(distances_to_qubit_i.copy())
             counter = 0
@@ -87,7 +95,7 @@ def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connecti
                 counter += 1
                 if counter>n:
                     print('Fail!')
-                    #print("Remaining qubits:",remainingqubits)
+                    #print("Remaining qubits:",remaining_qubits)
                     #print(sout)
                     #print(i)
                     #print(k+1)
@@ -95,7 +103,7 @@ def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connecti
                 #print(dis)
                 ii = dis.index(min(dis))
                 dis[ii] = 999999
-                if ii in remainingqubits and ii != i:
+                if ii in remaining_qubits and ii != i:
                     #print('     - Considering using qubit {} to rectify this'.format(ii))
                     # Only do this option if qubitshuffle
                     if sout[ii,ii] == 1 and qubitshuffle:
@@ -138,10 +146,10 @@ def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connecti
         #    #sout[i,i] = 1
         #print(sout)
         
-        #print(remainingqubits)
+        #print(remaining_qubits)
 
 
-        qubits = _copy.copy(remainingqubits)
+        qubits = _copy.copy(remaining_qubits)
         del qubits[qubits.index(i)]
         
 
@@ -181,14 +189,14 @@ def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connecti
                             sout[nextqubit,:] = sout[nextqubit,:] ^ sout[currentqubit,:]
 
                     # Set the farthest qubit s-matrix element to 0 (but don't change the others)
-                    quse = pspec.shortestpath[i,farthest_qubit]
+                    quse = shortestpathmatrix[i,farthest_qubit]
                     #print(quse,i,farthest_qubit)
                     rowaction_instructionlist.append(_Label('CNOT',(quse,farthest_qubit)))
                     sout[farthest_qubit,:] =  sout[quse,:] ^ sout[farthest_qubit,:]
 
                     for nextqubit, currentqubit in reversed(pspec.qubitgraph.shortest_path_edges(i,farthest_qubit)):
                         # EGN: reverse-iter to follow Tim's prior implementation
-                        if currentqubit not in remainingqubits:
+                        if currentqubit not in remaining_qubits:
                             rowaction_instructionlist.append(_Label('CNOT',(nextqubit,currentqubit)))
                             sout[currentqubit,:] = sout[nextqubit,:] ^ sout[currentqubit,:]
 
@@ -197,7 +205,7 @@ def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connecti
                 #currentqubit = i       
                 #while currentqubit != farthest_qubit:
                 #    nextqubit = pspec.shortestpath[farthest_qubit,currentqubit]
-                #    if nextqubit not in remainingqubits:
+                #    if nextqubit not in remaining_qubits:
                 #        includes_eliminated_qubits = True
                 #        #print("  - Resorting to CNOT via SWAPs!!!")
                 #        break
@@ -228,7 +236,7 @@ def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connecti
                 #
                 #        nextqubit = pspec.shortestpath[i,currentqubit]
                 #
-                #        if currentqubit not in remainingqubits:
+                #        if currentqubit not in remaining_qubits:
                 #            rowaction_instructionlist.append(_Label('CNOT',(nextqubit,currentqubit)))
                 #            sout[currentqubit,:] = sout[nextqubit,:] ^ sout[currentqubit,:]
                 #
@@ -259,13 +267,13 @@ def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connecti
                             sout[:,nextqubit] = sout[:,nextqubit] ^ sout[:,currentqubit]
 
                     # Set the farthest qubit s-matrix element to 0 (but don't change the others)
-                    quse = pspec.shortestpath[i,farthest_qubit]
+                    quse = shortestpathmatrix[i,farthest_qubit]
                     columnaction_instructionlist.append(_Label('CNOT',(farthest_qubit,quse)))
                     sout[:,farthest_qubit] =  sout[:,quse] ^ sout[:,farthest_qubit]
 
                     for nextqubit, currentqubit in reversed(pspec.qubitgraph.shortest_path_edges(i,farthest_qubit)):
                         # EGN: reverse-iter to follow Tim's prior implementation
-                        if currentqubit not in remainingqubits:
+                        if currentqubit not in remaining_qubits:
                             columnaction_instructionlist.append(_Label('CNOT',(currentqubit,nextqubit)))
                             sout[:,currentqubit] = sout[:,nextqubit] ^ sout[:,currentqubit]
                             
@@ -275,7 +283,7 @@ def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connecti
                 #currentqubit = i       
                 #while currentqubit != farthest_qubit:
                 #    nextqubit = pspec.shortestpath[farthest_qubit,currentqubit]
-                #    if nextqubit not in remainingqubits:
+                #    if nextqubit not in remaining_qubits:
                 #        includes_eliminated_qubits = True
                 #        #print("  - Resorting to CNOT via SWAPs!!!")
                 #        break
@@ -306,7 +314,7 @@ def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connecti
                 #
                 #        nextqubit = pspec.shortestpath[i,currentqubit]
                 #
-                #        if currentqubit not in remainingqubits:
+                #        if currentqubit not in remaining_qubits:
                 #            columnaction_instructionlist.append(_Label('CNOT',(currentqubit,nextqubit)))
                 #            sout[:,currentqubit] = sout[:,nextqubit] ^ sout[:,currentqubit]
                 #        currentqubit = nextqubit
@@ -329,8 +337,8 @@ def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connecti
 
 
             # Remove from te remaining qubits list
-        #print(remainingqubits)
-        del remainingqubits[remainingqubits.index(i)]
+        #print(remaining_qubits)
+        del remaining_qubits[remaining_qubits.index(i)]
 
         #print(sout)
         #print(len(rowaction_instructionlist),len(columnaction_instructionlist))

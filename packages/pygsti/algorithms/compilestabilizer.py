@@ -15,6 +15,198 @@ from ..tools import symplectic as _symp
 from ..tools import matrixmod2 as _mtx
 
 from . import compilecnot as _cc
+
+#
+# Todo : change to have a algorithms list for the CNOT circuit.
+#
+def compile_stabilizer_state(s, p, pspec, iterations=20, paulirandomize=False, 
+                             improved_CNOT_compiler=True,ICC_custom_ordering=None,
+                                                       ICC_std_ordering='connectivity', ICC_qubitshuffle=False,
+                             relations=None):
+    
+    assert(_symp.check_valid_clifford(s,p)), "The input s and p are not a valid clifford."
+    
+    n = len(s[0,:])//2
+    min_twoqubit_gatecount = _np.inf
+    
+    #Import the single-qubit Cliffords up-to-Pauli algebra
+    gate_relations_1q = _symp.single_qubit_clifford_symplectic_group_relations()
+    
+    failcount = 0
+    i = 0
+    while i < iterations:
+
+        trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s, pspec, returnall=True,                                                                         improved_CNOT_compiler = improved_CNOT_compiler, ICC_custom_ordering=ICC_custom_ordering, ICC_std_ordering=ICC_std_ordering, ICC_qubitshuffle = ICC_qubitshuffle)
+        i += 1
+            #
+            # Todo: work out how much this all makes sense.
+            #
+            # Do the depth-compression *before* changing gate library            
+        trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)            
+        trialcircuit.change_gate_library(pspec.compilations['paulieq'])        
+        twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
+        if twoqubit_gatecount  < min_twoqubit_gatecount :
+            circuit = _copy.deepcopy(trialcircuit)
+            check_circuit = _copy.deepcopy(trialcheck_circuit)
+            min_twoqubit_gatecount = twoqubit_gatecount
+ 
+        assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input ProcessorSpec is not valid or does not contain the neccessary information."
+            
+    if relations is not None:
+        # Do more depth-compression on the chosen circuit. Todo: This should used something already
+        # constructed in DeviceSpec, instead of this ad-hoc method.
+        sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+        sprecompression, junk =  _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
+        circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
+        spostcompression, junk =  _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
+        assert(_np.array_equal(sprecompression,spostcompression)), "The gate relations provided are incorrect!"
+        
+    if paulirandomize:
+        
+        n = pspec.number_of_qubits
+        paulilist = ['I','X','Y','Z']
+        d = circuit.depth()
+        for i in range(1,d+1):
+            pcircuit = _Circuit(gatestring=[_Label(paulilist[_np.random.randint(4)],k) for k in range(n)],num_lines=n)
+            pcircuit.change_gate_library(pspec.compilations['absolute'])
+            circuit.insert_circuit(pcircuit,d-i)
+        
+    #check_circuit.change_gate_library(pspec.compilations['paulieq'])
+    check_circuit.append_circuit(circuit)
+
+    # Add CNOT into the dictionary, in case it isn't there.
+    sreps = pspec.models['clifford'].get_clifford_symplectic_reps()
+    sreps2 = sreps.copy()
+    sreps2['CNOT'] = (_np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int), _np.array([0,0,0,0],int))
+    
+    implemented_s, implemented_p = _symp.symplectic_rep_of_clifford_circuit(circuit, sreps)
+    implemented_scheck, implemented_pcheck = _symp.symplectic_rep_of_clifford_circuit(check_circuit, sreps2)
+    
+    # Find the needed Pauli at the end    
+    paltered = p.copy()
+    paltered[0:n] = _np.zeros(n,int)
+    paltered = _symp.construct_valid_phase_vector(implemented_scheck,paltered)                                                  
+    pauli_layer = _symp.find_postmultipled_pauli(implemented_scheck,implemented_pcheck,paltered)
+            
+    paulicircuit = _Circuit(gatestring=pauli_layer,num_lines=n)
+    paulicircuit.change_gate_library(pspec.compilations['absolute'])
+    circuit.append_circuit(paulicircuit)
+    
+    if not paulirandomize:        
+        circuit.compress_depth(max_iterations=100,verbosity=0)
+    
+    return circuit
+
+#
+# Todo : change to have a algorithms list for the CNOT circuit.
+# Todo : use the symp.postpauli function thing
+#
+def compile_stabilizer_measurement(s,p,pspec,iterations=5,relations=None,paulirandomize=False,
+                                              improved_CNOT_compiler=True,ICC_custom_ordering=None, 
+                                               ICC_std_ordering='connectivity',ICC_qubitshuffle = False):
+    """
+    Compiles a circuit that, when followed by a projection onto <0,0,...|,
+    is equivalent to implementing the Clifford C defined by the pair (s,p) followed by a
+    projection onto <0,0,..|. I.e., it produces a circuit that implements some 
+    Clifford C' such that <0,0,0,...|C = <0,0,0,...|C' for any computational basis state. This
+    could easily be improved to allow for any computational basis state.
+ 
+    """
+    assert(_symp.check_valid_clifford(s,p)), "The input s and p are not a valid clifford."
+
+    n = len(s[0,:])//2
+    sin, pin = _symp.inverse_clifford(s,p)
+    
+    min_twoqubit_gatecount = _np.inf
+    
+    #Import the single-qubit Cliffords up-to-Pauli algebra
+    gate_relations_1q = _symp.single_qubit_clifford_symplectic_group_relations()
+    
+    failcount = 0
+    i = 0
+    # Todo : remove this try-except method once compiler always works.
+    while i < iterations:
+        try:
+            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin, pspec, returnall=True, improved_CNOT_compiler=improved_CNOT_compiler, ICC_custom_ordering=ICC_custom_ordering, ICC_std_ordering=ICC_std_ordering, ICC_qubitshuffle = ICC_qubitshuffle)
+            i += 1
+            trialcircuit.reverse()
+            # Do the depth-compression *after* the circuit is reversed
+            trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
+            trialcircuit.change_gate_library(pspec.compilations['paulieq'])
+            twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
+            if twoqubit_gatecount  < min_twoqubit_gatecount :
+                circuit = _copy.deepcopy(trialcircuit)
+                check_circuit = _copy.deepcopy(trialcheck_circuit)
+                min_twoqubit_gatecount = twoqubit_gatecount
+        except:
+            failcount += 1
+            
+        assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input DeviceSpec is not valid or does not contain the neccessary information."
+         
+    #check_circuit.reverse()
+    #check_circuit.change_gate_library(pspec.compilations['paulieq'])
+
+    if relations is not None:
+        # Do more depth-compression on the chosen circuit. Todo: This should used something already
+        # constructed in DeviceSpec, instead of this ad-hoc method.
+        sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+        sprecompression, junk =  _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
+        circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
+        spostcompression, junk =  _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
+        assert(_np.array_equal(sprecompression,spostcompression)), "Gate relations are incorrect!"
+        
+    if paulirandomize:
+        
+        n = pspec.number_of_qubits
+        paulilist = ['I','X','Y','Z']
+        d = circuit.depth()
+        for i in range(0,d):
+            pcircuit = _Circuit(gatestring=[_Label(paulilist[_np.random.randint(4)],k) for k in range(n)],num_lines=n)
+            pcircuit.change_gate_library(pspec.compilations['absolute'])
+            circuit.insert_circuit(pcircuit,d-i)
+    
+    check_circuit.reverse()
+    #check_circuit.change_gate_library(pspec.compilations['paulieq'])
+    check_circuit.prefix_circuit(circuit)
+
+    sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+    sreps['CNOT'] = (_np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int), _np.array([0,0,0,0],int))
+    
+    implemented_scheck, implemented_pcheck = _symp.symplectic_rep_of_clifford_circuit(check_circuit, sreps)
+    
+    implemented_sin_check, implemented_pin_check =  _symp.inverse_clifford(implemented_scheck, implemented_pcheck) 
+    
+    assert(_np.array_equal(implemented_scheck[0:n,:],s[0:n,:]))
+    
+    # Find the needed Pauli at the start    
+    pinaltered = pin.copy()
+    pinaltered = _symp.construct_valid_phase_vector(implemented_sin_check,pinaltered)      
+    
+    s_form = _symp.symplectic_form(n)
+    vec = _np.dot(implemented_sin_check,_np.dot(s_form, (pinaltered - implemented_pin_check)//2))
+    vec = vec % 2
+    
+    pauli_layer = []
+    for q in range(0,n):
+        if vec[q] == 0 and vec[q+n] == 0:
+            pauli_layer.append(_Label('I',q))
+        elif vec[q] == 0 and vec[q+n] == 1:
+            pauli_layer.append(_Label('Z',q))
+        elif vec[q] == 1 and vec[q+n] == 0:
+            pauli_layer.append(_Label('X',q))
+        elif vec[q] == 1 and vec[q+n] == 1:
+            pauli_layer.append(_Label('Y',q))
+            
+    paulicircuit = _Circuit(gatestring=pauli_layer,num_lines=n)
+    paulicircuit.change_gate_library(pspec.compilations['absolute'])
+    circuit.prefix_circuit(paulicircuit)
+    
+    if not paulirandomize:
+        circuit.compress_depth(max_iterations=10,verbosity=0) 
+    
+    return circuit
+
+
 #
 # Todo: Update to a function that works on all of s, or simplify (with this functinality
 # inside the CNOT-circuit compiler) and put inside the matrix tools .py
@@ -208,208 +400,6 @@ def convert_invertible_to_reduced_echelon_form(matrixin,optype='row',position='u
 #    
 #    if connectivity is 'complete':
 #        connectivity = _np.ones((d,d),int) - _np.identity(d,int)
- 
-def compile_stabilizer_measurement(s,p,pspec,iterations=5,relations=None,pauli_randomize=False,
-                                              improved_CNOT_compiler=True,ICC_custom_ordering=None, 
-                                               ICC_std_ordering='connectivity',ICC_qubitshuffle = False):
-    """
-    Compiles a circuit that, when followed by a projection onto <0,0,...|,
-    is equivalent to implementing the Clifford C defined by the pair (s,p) followed by a
-    projection onto <0,0,..|. I.e., it produces a circuit that implements some 
-    Clifford C' such that <0,0,0,...|C = <0,0,0,...|C' for any computational basis state. This
-    could easily be improved to allow for any computational basis state.
- 
-    """
-    assert(_symp.check_valid_clifford(s,p)), "The input s and p are not a valid clifford."
-
-    n = len(s[0,:])//2
-    sin, pin = _symp.inverse_clifford(s,p)
-    
-    min_twoqubit_gatecount = _np.inf
-    
-    #Import the single-qubit Cliffords up-to-Pauli algebra
-    gate_relations_1q = _symp.single_qubit_clifford_symplectic_group_relations()
-    
-    failcount = 0
-    i = 0
-    # Todo : remove this try-except method once compiler always works.
-    while i < iterations:
-        try:
-            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin, pspec, returnall=True, improved_CNOT_compiler=improved_CNOT_compiler, ICC_custom_ordering=ICC_custom_ordering, ICC_std_ordering=ICC_std_ordering, ICC_qubitshuffle = ICC_qubitshuffle)
-            i += 1
-            trialcircuit.reverse()
-            # Do the depth-compression *after* the circuit is reversed
-            trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
-            trialcircuit.change_gate_library(pspec.compilations['paulieq'])
-            twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
-            if twoqubit_gatecount  < min_twoqubit_gatecount :
-                circuit = _copy.deepcopy(trialcircuit)
-                check_circuit = _copy.deepcopy(trialcheck_circuit)
-                min_twoqubit_gatecount = twoqubit_gatecount
-        except:
-            failcount += 1
-            
-        assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input DeviceSpec is not valid or does not contain the neccessary information."
-         
-    #check_circuit.reverse()
-    #check_circuit.change_gate_library(pspec.compilations['paulieq'])
-
-    if relations is not None:
-        # Do more depth-compression on the chosen circuit. Todo: This should used something already
-        # constructed in DeviceSpec, instead of this ad-hoc method.
-        sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
-        sprecompression, junk =  _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
-        circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
-        spostcompression, junk =  _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
-        assert(_np.array_equal(sprecompression,spostcompression)), "Gate relations are incorrect!"
-        
-    if pauli_randomize:
-        
-        n = pspec.number_of_qubits
-        paulilist = ['I','X','Y','Z']
-        d = circuit.depth()
-        for i in range(0,d):
-            pcircuit = _Circuit(gatestring=[_Label(paulilist[_np.random.randint(4)],k) for k in range(n)],num_lines=n)
-            pcircuit.change_gate_library(pspec.compilations['absolute'])
-            circuit.insert_circuit(pcircuit,d-i)
-    
-    check_circuit.reverse()
-    #check_circuit.change_gate_library(pspec.compilations['paulieq'])
-    check_circuit.prefix_circuit(circuit)
-
-    sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
-    sreps['CNOT'] = (_np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int), _np.array([0,0,0,0],int))
-    
-    implemented_scheck, implemented_pcheck = _symp.symplectic_rep_of_clifford_circuit(check_circuit, sreps)
-    
-    implemented_sin_check, implemented_pin_check =  _symp.inverse_clifford(implemented_scheck, implemented_pcheck) 
-    
-    assert(_np.array_equal(implemented_scheck[0:n,:],s[0:n,:]))
-    
-    # Find the needed Pauli at the start    
-    pinaltered = pin.copy()
-    pinaltered = _symp.construct_valid_phase_vector(implemented_sin_check,pinaltered)      
-    
-    s_form = _symp.symplectic_form(n)
-    vec = _np.dot(implemented_sin_check,_np.dot(s_form, (pinaltered - implemented_pin_check)//2))
-    vec = vec % 2
-    
-    pauli_layer = []
-    for q in range(0,n):
-        if vec[q] == 0 and vec[q+n] == 0:
-            pauli_layer.append(_Label('I',q))
-        elif vec[q] == 0 and vec[q+n] == 1:
-            pauli_layer.append(_Label('Z',q))
-        elif vec[q] == 1 and vec[q+n] == 0:
-            pauli_layer.append(_Label('X',q))
-        elif vec[q] == 1 and vec[q+n] == 1:
-            pauli_layer.append(_Label('Y',q))
-            
-    paulicircuit = _Circuit(gatestring=pauli_layer,num_lines=n)
-    paulicircuit.change_gate_library(pspec.compilations['absolute'])
-    circuit.prefix_circuit(paulicircuit)
-    
-    if not pauli_randomize:
-        circuit.compress_depth(max_iterations=10,verbosity=0) 
-    
-    return circuit
-   
-    
-def compile_stabilizer_state(s,p,pspec,iterations=5,relations=None,pauli_randomize=False,
-                                        improved_CNOT_compiler=True,ICC_custom_ordering=None,
-                                                       ICC_std_ordering='connectivity', ICC_qubitshuffle=False):
-    
-    assert(_symp.check_valid_clifford(s,p)), "The input s and p are not a valid clifford."
-    
-    n = len(s[0,:])//2
-    min_twoqubit_gatecount = _np.inf
-    
-    #Import the single-qubit Cliffords up-to-Pauli algebra
-    gate_relations_1q = _symp.single_qubit_clifford_symplectic_group_relations()
-    
-    failcount = 0
-    i = 0
-    while i < iterations:
-        #try:
-        trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s, pspec, returnall=True,                                                                         improved_CNOT_compiler = improved_CNOT_compiler, ICC_custom_ordering=ICC_custom_ordering, ICC_std_ordering=ICC_std_ordering, ICC_qubitshuffle = ICC_qubitshuffle)
-        i += 1
-            #
-            # Todo: work out how much this all makes sense.
-            #
-            # Do the depth-compression *before* changing gate library            
-        trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)            
-        trialcircuit.change_gate_library(pspec.compilations['paulieq'])        
-        twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
-        if twoqubit_gatecount  < min_twoqubit_gatecount :
-            circuit = _copy.deepcopy(trialcircuit)
-            check_circuit = _copy.deepcopy(trialcheck_circuit)
-            min_twoqubit_gatecount = twoqubit_gatecount
-        #except:
-        #    failcount += 1
-        
-        assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input DeviceSpec is not valid or does not contain the neccessary information."
-            
-    if relations is not None:
-        # Do more depth-compression on the chosen circuit. Todo: This should used something already
-        # constructed in DeviceSpec, instead of this ad-hoc method.
-        sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
-        sprecompression, junk =  _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
-        circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
-        spostcompression, junk =  _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
-        assert(_np.array_equal(sprecompression,spostcompression)), "The gate relations provided are incorrect!"
-        
-    if pauli_randomize:
-        
-        n = pspec.number_of_qubits
-        paulilist = ['I','X','Y','Z']
-        d = circuit.depth()
-        for i in range(1,d+1):
-            pcircuit = _Circuit(gatestring=[_Label(paulilist[_np.random.randint(4)],k) for k in range(n)],num_lines=n)
-            pcircuit.change_gate_library(pspec.compilations['absolute'])
-            circuit.insert_circuit(pcircuit,d-i)
-        
-    #check_circuit.change_gate_library(pspec.compilations['paulieq'])
-    check_circuit.append_circuit(circuit)
-    
-    
-    # Add CNOT into the dictionary, in case it isn't there.
-    sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
-    sreps2 = sreps.copy()
-    sreps2['CNOT'] = (_np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int), _np.array([0,0,0,0],int))
-    
-    implemented_s, implemented_p = _symp.symplectic_rep_of_clifford_circuit(circuit, sreps)
-    implemented_scheck, implemented_pcheck = _symp.symplectic_rep_of_clifford_circuit(check_circuit, sreps2)
-    
-    # Find the needed Pauli at the end
-    s_form = _symp.symplectic_form(n)
-    
-    paltered = p.copy()
-    paltered[0:n] = _np.zeros(n,int)
-    paltered = _symp.construct_valid_phase_vector(implemented_scheck,paltered)                                                  
-    vec = _np.dot(implemented_scheck,_np.dot(s_form, (paltered - implemented_pcheck)//2))
-    vec = vec % 2
-    
-    pauli_layer = []
-    for q in range(0,n):
-        if vec[q] == 0 and vec[q+n] == 0:
-            pauli_layer.append(_Label('I',q))
-        elif vec[q] == 0 and vec[q+n] == 1:
-            pauli_layer.append(_Label('Z',q))
-        elif vec[q] == 1 and vec[q+n] == 0:
-            pauli_layer.append(_Label('X',q))
-        elif vec[q] == 1 and vec[q+n] == 1:
-            pauli_layer.append(_Label('Y',q))
-
-            
-    paulicircuit = _Circuit(gatestring=pauli_layer,num_lines=n)
-    paulicircuit.change_gate_library(pspec.compilations['absolute'])
-    circuit.append_circuit(paulicircuit)
-    
-    if not pauli_randomize:        
-        circuit.compress_depth(max_iterations=100,verbosity=0)
-    
-    return circuit
-   
 
 def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=False,improved_CNOT_compiler=True,
                                                        ICC_custom_ordering=None,

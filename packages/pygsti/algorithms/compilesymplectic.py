@@ -14,11 +14,14 @@ from ..baseobjs import Label as _Label
 from ..tools import symplectic as _symp
 from ..tools import matrixmod2 as _mtx
 
-def compile_symplectic(s, pspec=None, algorithms=['DGGE','RGGE'], costfunction='2QGC', iterations={'RGGE':4},
-                       depth_compression=True, pauli_randomize=False):    
+def compile_symplectic(s, pspec=None, iterations=20, algorithms=['DGGE','RGGE'], costfunction='2QGC',
+                       paulirandomize=False):    
     """
     
-    """                            
+    """ 
+    # Todo : change the iterations methods.
+    # Remove this everywhere
+    depth_compression = True
     circuits = []
     
     if 'DGGE' in algorithms:
@@ -87,7 +90,7 @@ def compile_symplectic(s, pspec=None, algorithms=['DGGE','RGGE'], costfunction='
     else:
         circuit = circuits[0]
         
-    if pauli_randomize:
+    if paulirandomize:
         
         n = pspec.number_of_qubits
         paulilist = ['I','X','Y','Z']
