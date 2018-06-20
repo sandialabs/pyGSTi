@@ -45,13 +45,6 @@ try:
 except ImportError:
     from . import replib
 
-try:
-    #import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
-    from ..tools import fastcalc as _fastcalc
-except ImportError:
-    _fastcalc = None
-
-
 def optimize_gate(gateToOptimize, targetGate):
     """
     Optimize the parameters of gateToOptimize so that the
@@ -475,14 +468,7 @@ class Gate(_gatesetmember.GateSetMember):
         """
         raise NotImplementedError("tosparse(...) not implemented for %s objects!" % self.__class__.__name__)
 
-    def acton(self, state):
-        """ Act this gate matrix on an input state (left-multiply w/matrix) """
-        return _np.dot(self.todense(), state)
-
-    def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
-        return _np.dot(self.todense().conjugate().T, state)
-
+    
     def get_order_terms(self, order):
         """ 
         Get the `order`-th order Taylor-expansion terms of this gate.
@@ -2719,25 +2705,7 @@ class LindbladParameterizedGateMap(Gate):
         else:
             raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
                              (self._evotype, self.__class__.__name__))
-
         
-    def acton(self, state):
-        """ Act this gate map on an input state """
-        if self.unitary_postfactor is not None:
-            state = self.unitary_postfactor.dot(state) #works for sparse or dense matrices
-            
-        if self.sparse:
-            #state = _spsl.expm_multiply( self.err_gen, state) #SLOW
-            state = _mt.expm_multiply_fast(self.err_gen_prep, state) # (N,) -> (N,) shape mapping
-        else:
-            state = _np.dot(self.exp_err_gen, state)
-        return state
-
-    def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
-        # adj( exp(errgen)*U ) = adj(U) * adj(exp(errgen)) ...
-        raise NotImplementedError("No adjoint action implemented for LindbladParameterizedGateMaps")
-
         
     def get_order_terms(self, order):
         """ 
@@ -3714,18 +3682,6 @@ class ComposedGateMap(Gate):
         _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
 
 
-    def acton(self, state):
-        """ Act this gate map on an input state """
-        for gate in self.factorgates:
-            state = gate.acton(state)
-        return state
-
-    def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
-        for gate in reversed(self.factorgates):
-            state = gate.adjoint_acton(state)
-        return state
-
     def tosparse(self):
         """ Return the gate as a sparse matrix """
         mx = self.factorgates[0].tosparse()
@@ -4081,49 +4037,9 @@ class EmbeddedGateMap(Gate):
 
             self.sorted_bili = sorted( list(enumerate(labelIndices)), key=lambda x: x[1])
               # for inserting target-qubit basis indices into list of noop-qubit indices
-
-            
-#HERE TODO - remove stuff below b/c it isn't needed (now REPs take care of fast actions)
-# DEPRECATED REPS
-            
-            #Members for speeding up time-critical functions (e.g. acton)
-            self.nBasisBlocks = len(blockDims) #store this separately for faster
-                                               #shortcuts in common 1-block case
-            #tensorBlkEls_noop = list(_itertools.product(*basisInds_noop)) #dm-space basis for noop-indices only (unneeded)
-            #self.basisInds_noop = basisInds_noop
-            self.basisInds_noop_blankaction = basisInds_noop_blankaction
-            self.actionInds = _np.array(labelIndices,'i')
-            self.basisInds_action = [ basisInds[i] for i in labelIndices ]
-            self.numBasisEls_noop_blankaction = _np.array([len(inds) for inds in self.basisInds_noop_blankaction], 'i')
-            self.numBasisEls_action = _np.array([len(inds) for inds in self.basisInds_action], 'i')
-    
-              # self.noop_incrementers[i] specifies how much the overall vector index
-              #  is incremented when the i-th "component" digit is advanced
-            nParts = len(basisInds) # number of components in "active" tensor block
-            self.noop_incrementers = _np.empty(nParts,'i'); dec = 0
-            for i in range(nParts-1,-1,-1):
-                self.noop_incrementers[i] = self.multipliers[i] - dec
-                dec += (self.numBasisEls_noop_blankaction[i]-1)*self.multipliers[i]
-    
-              # self.baseinds specifies the contribution from the "active
-              #  component" digits to the overall vector index.
-            inds = []
-            for gate_b in _itertools.product(*self.basisInds_action):
-                vec_index = self.offset
-                for i,bInd in zip(self.actionInds,gate_b):
-                    #b[i] = bInd #don't need to do this; just update vec_index:
-                    vec_index += self.multipliers[i]*bInd
-                inds.append(vec_index)
-            self.baseinds = _np.array(inds,'i')
-
-            #print("DB INIT ACTON: ",self.basisInds_noop_blankaction)
-            #print("DB INIT ACTON: ",self.basisInds_action)        
-            #print("DB INIT ACTON: ",self.multipliers)        
-
             
         else: # evotype in ("stabilizer","svterm","cterm"):
-            # term-mode doesn't need any of the following members, which are
-            # just precomputed for faster acton(...) performance.
+            # term-mode doesn't need any of the following members
             self.offset = None
             self.multipliers = None
             self.divisors = None
@@ -4132,20 +4048,6 @@ class EmbeddedGateMap(Gate):
             self.iTensorProdBlk = None
             self.numBasisEls = None
             self.basisInds_noop = None
-
-
-            #TODO REMOVE below vars - not needed DEPRECATED REPS
-            self.nBasisBlocks = None
-            
-            self.basisInds_noop = None
-            self.basisInds_noop_blankaction = None
-            self.actionInds = None
-            self.basisInds_action = None
-            self.numBasisEls_noop_blankaction = None
-            self.numBasisEls_action = None
-
-            self.noop_incrementers = None
-            self.baseinds = None
 
         if evotype == "stabilizer":
             # assert that all state space labels == qubits, since we only know
@@ -4157,7 +4059,7 @@ class EmbeddedGateMap(Gate):
                 assert(len(targetLabels) == len(self.embedded_gate.svector) // 2), \
                     "Inconsistent number of qubits in `targetLabels` and Clifford `embedded_gate`"
 
-            #Cache info to speedup _stabilizer_acton(...) methods:
+            #Cache info to speedup representation's acton(...) methods:
             # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
             qubitLabels = self.stateSpaceLabels.labels[0] 
             self.qubit_indices =  _np.array([ qubitLabels.index(targetLbl)
@@ -4176,78 +4078,13 @@ class EmbeddedGateMap(Gate):
           # ("densitymx","svterm","cterm") all use super-op dimension
         Gate.__init__(self, gateDim, evotype)
         
-        # set self.acton and self.adjoint_acton methods based on evotype
-        # and specifics of self.embedded_gate
-        self._set_acton() 
-
-        
-    def _set_acton(self): #DEPRECATED REPS - and all acton(...) functions
-        """ Set the self.acton() method """
-        #Set self.acton and self.adjoint_action appropriately:
-        # NOTE: there are only several cases of fast adjoint_acton's that
-        #       are implemented so far (FUTURE UPDATE?)
-        
-        if self._evotype in ("svterm","cterm"):
-            return # acton methods should not be called these types
-
-        if self._evotype == "stabilizer":
-            self.acton = self._stabilizer_acton
-            self.adjoint_acton = self._stabilizer_adjoint_acton
-            return
-
-        #If haven't returned yet, evotype is either "statevec" or "densitymx"
-        assert(self._evotype in ("statevec","densitymx"))
-        
-        complex_action = bool(self._evotype == "statevec")
-          # assume "densitymx" evotype means *real* vectors - could change add
-          # some type of "has_complex_action" to Gate objs in the future, but
-          # this seems fine for now.
-
-        if _fastcalc is None:
-            # No Cython support
-            self.acton = self._slow_acton
-            self.adjoint_acton = self._slow_adjoint_acton
-            return
-
-        #We have Cython support - pick the most specific function we can to
-        # maximize speed.
-        if isinstance(self.embedded_gate, LindbladParameterizedGateMap) and \
-             self.embedded_gate.sparse and self.embedded_gate.unitary_postfactor is None:
-            self.acton = self._fast_acton_sp1 if not complex_action \
-                         else self._fast_acton_sp1_complex # "special case #1"
-            self.adjoint_action = self._slow_adjoint_acton if not complex_action \
-                         else self._fast_adjoint_acton_complex # NO SPECIAL case implemented
-        elif isinstance(self.embedded_gate, GateMatrix):
-            self.acton = self._fast_acton_sp2 if not complex_action \
-                         else self._fast_acton_sp2_complex # "special case #2"
-            self.adjoint_action = self._slow_adjoint_acton if not complex_action \
-                         else self._fast_adjoint_acton_sp2_complex # "special case #2"
-
-        else:
-            #DEBUG TO REMOVE
-            #if not isinstance(self.embedded_gate, LindbladParameterizedGateMap):
-            #    print("Can't use special case b/c embedded gate = ",type(self.embedded_gate))
-            #elif not self.embedded_gate.sparse:
-            #    print("Can't use special case b/c embedded Lind. gate is not sparse")
-            #elif self.embedded_gate.unitary_postfactor is not None:
-            #    print("Can't use special case b/c embedded Lind. gate has postfactor")
-            #else:
-            #    print("Can't use special case for some other reason (????)")
-            self.acton = self._fast_acton if not complex_action \
-                         else self._fast_acton_complex
-            self.adjoint_acton = self._slow_adjoint_acton if not complex_action \
-                         else self._fast_adjoint_acton_complex
 
     def __getstate__(self):
         # Don't pickle 'instancemethod' or parent (see gatesetmember implementation)
-        d = _gatesetmember.GateSetMember.__getstate__(self)
-        if 'acton' in d: del d['acton'] # sometimes acton is not set (e.g. term evotypes)
-        return d
+        return _gatesetmember.GateSetMember.__getstate__(self)
     
     def __setstate__(self, d):
         self.__dict__.update(d)
-        self._set_acton()
-        
 
     def allocate_gpindices(self, startingIndex, parent):
         """
@@ -4391,228 +4228,6 @@ class EmbeddedGateMap(Gate):
             return replib.DMGateRep_Embedded(self.embedded_gate.torep(),
                                              self.numBasisEls, self.actionInds, blocksizes,
                                              embeddedDim, nComponents, iActiveBlock, nBlocks, self.dim)
-
-
-    def acton(self, state):
-        """ Act this gate map on an input state """
-        raise NotImplementedError(
-            ("EmbeddedGateMap.acton(...) not intialized, perhaps due to an "
-             "incompatible evolution type %s") % self._evotype) # pragma: no cover
-
-    def adjoint_acton(self, state):
-        """ Act the adjoint of this gate map on an input state """
-        raise NotImplementedError(
-            ("EmbeddedGateMap.adjoint_acton(...) not intialized, perhaps due to an "
-             "incompatible evolution type %s") % self._evotype) # pragma: no cover
-    
-    def _slow_acton(self, state): # DEPRECATED REPS
-        """ Act this gate map on an input state """
-        output_state = _np.zeros( state.shape, state.dtype)
-        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
-        
-        for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
-            vec_index_noop = _np.dot(self.multipliers, tuple(b))
-            inds = []
-            for gate_b in _itertools.product(*self.basisInds_action):
-                vec_index = vec_index_noop
-                for i,bInd in zip(self.actionInds,gate_b):
-                    #b[i] = bInd #don't need to do this; just update vec_index:
-                    vec_index += self.multipliers[i]*bInd
-                inds.append(offset + vec_index)
-            output_state[ inds ] += self.embedded_gate.acton( state[inds] )
-
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state,state)
-
-        assert(output_state.shape == state.shape)
-        return output_state
-
-    def _slow_adjoint_acton(self, state): # DEPRECATED REPS
-        """ Act the adjoint of this gate map on an input state """
-        #NOTE: Same as _slow_acton except uses 'adjoint_acton(...)' below
-        output_state = _np.zeros( state.shape, state.dtype)
-        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
-
-        for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
-            vec_index_noop = _np.dot(self.multipliers, tuple(b))
-            inds = []
-            for gate_b in _itertools.product(*self.basisInds_action):
-                vec_index = vec_index_noop
-                for i,bInd in zip(self.actionInds,gate_b):
-                    #b[i] = bInd #don't need to do this; just update vec_index:
-                    vec_index += self.multipliers[i]*bInd
-                inds.append(offset + vec_index)
-            output_state[ inds ] += self.embedded_gate.adjoint_acton( state[inds] )
-
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state,state)
-
-        assert(output_state.shape == state.shape)
-        return output_state
-
-    def _stabilizer_acton(self, state):
-        """ Act this gate map on an input state """
-        #print("STAB ACTON: ",self.qubit_indices,state.view_filter,type(self.embedded_gate))
-        state = state.copy() # needed?
-        state.push_view(self.qubit_indices)
-        ret = self.embedded_gate.acton(state)
-        state.pop_view(); ret.pop_view()
-        return ret
-    
-    def _stabilizer_adjoint_acton(self, state):
-        """ Act the adjoint of this gate map on an input state """
-        # Note: cliffords are unitary, so adjoint == inverse
-        state = state.copy() # needed?
-        state.push_view(self.qubit_indices)
-        ret = self.embedded_gate.adjoint_acton(state)
-        state.pop_view(); ret.pop_view()
-        return ret
-
-    
-    def _acton_other_blocks_trivially(self, output_state,state):   # DEPRECATED REPS - I think only used in actons...
-        offset = 0
-        _, _, blockDims = self.basisdim # dmDim, gateDim, blockDims
-        for i,blockDim in enumerate(blockDims):
-            blockSize = blockDim**2 if self._evotype != "statevec" else blockDim
-            if i != self.iTensorProdBlk:
-                output_state[offset:offset+blockSize] = state[offset:offset+blockSize] #identity op
-            offset += blockSize
-
-            
-    def _fast_acton_sp1(self, state): # DEPRECATED REPS
-        """ Act this gate map on an input state """
-        output_state = _np.zeros( state.shape, 'd')
-                
-        #FAST Special Case #1 - a sparse LindbladParameterizedGateMap with no unitary postfactor
-        A, mu, m_star, s, eta = self.embedded_gate.err_gen_prep
-        #More of a performance hit than a gain:
-        #  if A.nnz == 0: return state # embedded gate is identity, so entire gate is
-        _fastcalc.embedded_fast_acton_sparse_spc1(A.data, A.indptr, A.indices,
-                                                  mu, m_star, s, _mt.EXPM_DEFAULT_TOL, eta,
-                                                  output_state, state,
-                                                  self.noop_incrementers,
-                                                  self.numBasisEls_noop_blankaction,
-                                                  self.baseinds)
-
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state,state)
-        return output_state
-
-    
-    def _fast_acton_sp2(self, state): # DEPRECATED REPS
-        """ Act this gate map on an input state """
-        output_state = _np.zeros( state.shape, 'd')
-                
-        #FAST Special Case #2 - a GateMatrix-derived gate, so one with a dense representation
-        _fastcalc.embedded_fast_acton_sparse_spc2(self.embedded_gate.base,
-                                                  output_state, state,
-                                                  self.noop_incrementers,
-                                                  self.numBasisEls_noop_blankaction,
-                                                  self.baseinds)
-
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state,state)
-        return output_state
-
-
-    def _fast_acton(self, state): # DEPRECATED REPS
-        """ Act this gate map on an input state """
-        output_state = _np.zeros( state.shape, 'd')
-        _fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
-                                             output_state, state,
-                                             self.noop_incrementers,
-                                             self.numBasisEls_noop_blankaction,
-                                             self.baseinds)
-                                 
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state,state)
-        return output_state
-
-
-    def _fast_acton_sp1_complex(self, state): # DEPRECATED REPS
-        """ Act this gate map on an input state """
-        output_state = _np.zeros( state.shape, complex)
-                
-        #FAST Special Case #1 - a sparse LindbladParameterizedGateMap with no unitary postfactor
-        A, mu, m_star, s, eta = self.embedded_gate.err_gen_prep
-        #More of a performance hit than a gain:
-        #  if A.nnz == 0: return state # embedded gate is identity, so entire gate is
-        _fastcalc.embedded_fast_acton_sparse_spc1_complex(
-            A.data, A.indptr, A.indices,
-            mu, m_star, s, _mt.EXPM_DEFAULT_TOL, eta,
-            output_state, state,
-            self.noop_incrementers,
-            self.numBasisEls_noop_blankaction,
-            self.baseinds)
-
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state,state)
-        return output_state
-
-    
-    def _fast_acton_sp2_complex(self, state): # DEPRECATED REPS
-        """ Act this gate map on an input state """
-        output_state = _np.zeros( state.shape, complex)
-                
-        #FAST Special Case #2 - a GateMatrix-derived gate, so one with a dense representation
-        _fastcalc.embedded_fast_acton_sparse_spc2_complex(
-            self.embedded_gate.base,
-            output_state, state,
-            self.noop_incrementers,
-            self.numBasisEls_noop_blankaction,
-            self.baseinds)
-
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state,state)
-        return output_state
-
-
-    def _fast_acton_complex(self, state): # DEPRECATED REPS
-        """ Act this gate map on an input state """
-        output_state = _np.zeros( state.shape, complex)
-        _fastcalc.embedded_fast_acton_sparse_complex(
-            self.embedded_gate.acton,
-            output_state, state,
-            self.noop_incrementers,
-            self.numBasisEls_noop_blankaction,
-            self.baseinds)
-                                 
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state,state)
-        return output_state
-
-
-    def _fast_adjoint_acton_sp2_complex(self, state): # DEPRECATED REPS
-        """ Act this gate map on an input state """
-        output_state = _np.zeros( state.shape, complex)
-                
-        #FAST Special Case #2 - a GateMatrix-derived gate, so one with a dense representation
-        _fastcalc.embedded_fast_acton_sparse_spc2_complex(
-            self.embedded_gate.base.conjugate().T,
-            output_state, state,
-            self.noop_incrementers,
-            self.numBasisEls_noop_blankaction,
-            self.baseinds)
-
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state,state)
-        return output_state
-
-
-    def _fast_adjoint_acton_complex(self, state): # DEPRECATED REPS
-        """ Act this gate map on an input state """
-        output_state = _np.zeros( state.shape, complex)
-        _fastcalc.embedded_fast_acton_sparse_complex(
-            self.embedded_gate.adjoint_acton,
-            output_state, state,
-            self.noop_incrementers,
-            self.numBasisEls_noop_blankaction,
-            self.baseinds)
-                                 
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state,state)
-        return output_state
-
 
     def tosparse(self):
         """ Return the gate as a sparse matrix """
@@ -5046,23 +4661,6 @@ class CliffordGate(Gate):
                                          _np.ascontiguousarray(invs,'i'),
                                          _np.ascontiguousarray(invp,'i'),
                                          _np.ascontiguousarray(U,complex))
-
-
-    def acton(self, state):
-        """ Act this gate matrix on an input state """
-        state = state.copy() # needed?
-        state.clifford_update(self.smatrix, self.svector, self.unitary)
-        return state
-
-    
-    def adjoint_acton(self, state):
-        """ Act the adjoint of this gate map on an input state """
-        # Note: cliffords are unitary, so adjoint == inverse
-        invs, invp = _symp.inverse_clifford(self.smatrix, self.svector)
-        state = state.copy() # needed? expected?
-        state.clifford_update(invs, invp, self.unitary.conjugate().T)
-        return state
-
 
     def __str__(self):
         """ Return string representation """
