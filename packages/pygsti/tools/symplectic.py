@@ -5,39 +5,36 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-
+from ..baseobjs import Label as _Label
+from . import matrixmod2 as _mtx
 
 import numpy as _np
 import copy as _copy
 import sys
-
-from ..baseobjs import Label as _Label
-
-
 if sys.version_info >= (3,):
     long = int
 
-from . import matrixmod2 as _mtx
-
 def symplectic_form(n,convention='standard'):
     """
-    Creates the relevant symplectic form for the number of 
-    qubits specified.
+    Creates the symplectic form for the number of qubits specified. There are two
+    variants, of the sympletic form over the finite field of the integers modulo 2, 
+    used in pyGSTi. These corresponding to the 'standard' and 'directsum' conventions. 
+    In the case of 'standard', the symplectic form is the 2n x 2n matrix of ((0,1),(1,0)),
+    where '1' and '0' are the identity and all-zeros matrices of size n x n. The 
+    'standard' symplectic form is probably the most commonly used, and it is the 
+    definition used throughout most of the code, including the Clifford compilers. In the
+    case of 'directsum', the symplectic form is the direct sum of n 2x2 bit-flip matrices. 
+    This is only used in pyGSTi for sampling from the symplectic group.
     
     Parameters
     ----------
     n : int
         The number of qubits the symplectic form should be constructed for. That
-        is, the function creates a 2n x 2n matrix that is a sympletic form
-        over the finite field of the integers modulo 2.
+        is, the function creates a 2n x 2n matrix that is a sympletic form 
         
     convention : str, optional
         Can be either 'standard' or 'directsum', which correspond to two different
-        definitions for the symplectic form. In the case of 'standard', the symplectic
-        form is the 2n x 2n matrix of ((0,1),(1,0)), where '1' and '0' are the identity
-        and all-zeros matrices of size n x n. The 'standard' symplectic form is the
-        convention used throughout most of the code. In the case of 'directsum', the
-        symplectic form is the direct sum of n 2x2 bit-flip matrices.
+        definitions for the symplectic form.
 
     Returns
     -------
@@ -55,7 +52,7 @@ def symplectic_form(n,convention='standard'):
         sym_form[0:n,n:nn] = _np.identity(n,int)
                 
     if convention == 'directsum':
-        # This current construction method is perhaps pretty stupid.
+        # This current construction method is pretty stupid.
         for j in range(0,n):
             sym_form[2*j,2*j+1] = 1
             sym_form[2*j+1,2*j] = 1    
@@ -67,11 +64,11 @@ def change_symplectic_form_convention(s,outconvention='standard'):
     Maps the input symplectic matrix between the 'standard' and 'directsum'
     symplectic form conventions. That is, if the input is a symplectic matrix
     with respect to the 'directsum' convention and outconvention ='standard' the 
-    output of this function is the equivalent symplectic matrix in the
-    'standard' symplectic form convention. Similarily, if the input is a 
-    symplectic matrix with respect to the 'standard' convention and 
-    outconvention = 'directsum' the output of this function is the equivalent 
-    symplectic matrix in the 'direcsum' symplectic form convention. 
+    output of this function is the equivalent symplectic matrix in the 'standard' 
+    symplectic form convention. Similarily, if the input is a symplectic matrix 
+    with respect to the 'standard' convention and outconvention = 'directsum' 
+    the output of this function is the equivalent symplectic matrix in the 
+    'directsum' symplectic form convention. 
     
     Parameters
     ----------
@@ -127,8 +124,7 @@ def check_symplectic(m,convention='standard'):
     bool
         A bool specifying whether the matrix is symplectic
         
-    """
-    
+    """   
     n = _np.shape(m)[0]//2
     s_form = symplectic_form(n,convention=convention)  
     conj = _mtx.dotmod2(_np.dot(m,s_form),_np.transpose(m))
@@ -163,7 +159,8 @@ def inverse_symplectic(s):
 
 def inverse_clifford(s,p):
     """
-    Returns the inverse of a Clifford gate in the symplectic representation.
+    Returns the inverse of a Clifford gate in the symplectic representation. This uses
+    the formualas derived in Hostens and De Moor PRA 71, 042315 (2005).
     
     Parameters
     ----------
@@ -218,7 +215,7 @@ def inverse_clifford(s,p):
 def check_valid_clifford(s,p):
     """
     Checks if a symplectic matrix - phase vector pair (s,p) is the symplectic representation of 
-    a Clifford.
+    a Clifford. This usesthe formualas derived in Hostens and De Moor PRA 71, 042315 (2005).
     
     Parameters
     ----------
@@ -233,8 +230,7 @@ def check_valid_clifford(s,p):
     bool
         True if (s,p) is the symplectic representation of some Clifford.
         
-    """ 
-    
+    """     
     # Checks if the matrix s is symplectic, which is the only constraint on s.
     is_symplectic_matrix = check_symplectic(s)
     
@@ -301,7 +297,8 @@ def compose_cliffords(s1,p1,s2,p2):
     Multiplies two cliffords in the symplectic representation. The output corresponds 
     to the symplectic representation of C2 times C1 (i.e., C1 acts first) where s1 
     (s2) and p1 (p2) are the symplectic matrix and phase vector, respectively, for 
-    Clifford C1 (C2).
+    Clifford C1 (C2). This uses the formualas derived in Hostens and De Moor PRA 71, 
+    042315 (2005).
     
     Parameters
     ----------
@@ -869,7 +866,8 @@ def standard_symplectic_representations(gllist=None):
 def composite_clifford_from_clifford_circuit(circuit, srep_dict=None):
     """
     Returns the symplectic representation of the composite Clifford implemented by 
-    the specified Clifford circuit.
+    the specified Clifford circuit. This uses the formualas derived in Hostens and 
+    De Moor PRA 71, 042315 (2005).
     
     Parameters
     ----------
@@ -1259,8 +1257,7 @@ def random_symplectic_matrix(n,convention='standard'):
     s : numpy array
         A uniformly sampled random symplectic matrix.
                
-    """  
-    
+    """      
     index = random_symplectic_index(n)
     s = get_symplectic_matrix(index, n)
     
@@ -1290,8 +1287,7 @@ def random_clifford(n):
     p : numpy array
         The phase vector representating the uniformly sampled random Clifford.    
         
-    """  
-    
+    """     
     s = random_symplectic_matrix(n,convention='standard')
     p = _np.zeros(2*n,int)
             
@@ -1326,311 +1322,6 @@ def random_clifford(n):
     assert(check_valid_clifford(s,p))
     
     return s,p
-
-
-# Below here is code taken from the appendix of "How to efficiently select an arbitrary Clifford 
-# group element",
-# by Robert Koenig and John A. Smolin. It is almost exactly the same as that code, and has only
-# had minor edits to make it work properly. A couple of the basic utility routines from that code
-# have been moved into the matrixtools file.
-
-#
-# Todo : go through the code below and find / removing anything that duplicates other parts of 
-# the code. This code also needs commenting and docstrings need adding. Write tests for all of
-# the functions.
-
-def numberofcliffords(n):
-    """
-    The number of Clifford gates in the n-qubit Clifford group.
-    
-    Parameters
-    ----------
-    n : int 
-        The number of qubits the Clifford group is over.
-    
-    Returns
-    -------
-    long integer
-       The cardinality of the n-qubit Clifford group.
-
-    """  
-    return (long(4)**long(n))*numberofsymplectic(n)
-
-def numberofsymplectic(n): 
-    """
-    The number of elements in the symplectic group S(n).
-    
-    """  
-    x = long(1)
-    for j in range(1,n+1): 
-        x = x*numberofcosets(j)
-        
-    return x
-
-def numberofcosets(n): 
-    # returns the number of different cosets 
-    x= long(2)**long(2*n-1) *((long(2)**long(2*n))-long(1))    
-    #x= _np.power(long(2) ,long(2*n-1))*(_np.power(long(2) ,long(2*n))-long(1))
-    return x
-
-def symplectic_innerproduct(v,w): 
-    """
-    Returns the symplectic inner product of two vectors F_2^(2n), where
-    F_2 is the finite field containing 0 and 1, and n is the 
-    """
-    t=0
-    for i in range(0,_np.size(v)>>1):
-        t+= v[2*i]* w[2*i + 1]
-        t+= w[2*i] * v[2*i + 1]
-    return t%2
-
-def symplectic_transvection(k,v): 
-    """
-    Applies transvection Z k to v
-    
-    """
-    return (v+symplectic_innerproduct(k,v)*k)%2
-
-def int_to_bitstring(i ,n): 
-    """
-    converts integer i to an length n array of bits 
-    """
-    output= _np.zeros (n, dtype='int8')    
-    for j in range(0,n):
-        output [j] = i&1
-        i >>=1
-        
-    return output
-
-def bitstring_to_int(b,nn): 
-    # converts an nn-bit string b to an integer between 0 and 2^nn - 1
-    output = 0
-    tmp = 1
-    
-    for j in range(0,nn):
-        if b[j] == 1: 
-            output = output + tmp
-        tmp = tmp*2 
-        
-    return output
-
-
-
-def find_symplectic_transvection(x,y): 
-# finds h1,h2 such that y = Z h1 Z h2 x 
-# Lemma 2 in the text
-# Note that if only one transvection is required output [1] will be
-# zero and applying the all-zero transvection does nothing.
-
-    output= _np.zeros((2, _np.size(x)),dtype='int8')
-    if _np.array_equal(x,y): 
-        return output
-    if symplectic_innerproduct(x,y) == 1:
-        output[0] = (x + y)%2 
-        return output
-    
-    # Try to find a pair where they are both not 00
-    z= _np.zeros(_np.size(x))
-    for i in range(0,_np.size(x)>>1):
-        ii=2*i
-        if ((x[ii]+x[ii+1]) != 0) and ((y[ii]+y[ii+1]) != 0): # found the pair
-            z[ii] = (x[ii] + y[ii])%2
-            z[ii+1]=(x[ii+1] + y[ii+1])%2
-            if (z[ii]+z[ii+1]) == 0: # they were the same so they added to 00 
-                z[ii+1] = 1
-                if x[ii] != x[ii+1]: 
-                    z[ii] = 1
-            output[0]=(x+z)%2 
-            output[1]=(y+z)%2 
-            return output
-        
-    #Failed to find any such pair, so look for two places where x has 00 and y does not,
-    #and vice versa. First try y==00 and x does not.
-    for i in range(0,_np.size(x)>>1):
-        ii=2*i
-        if ((x[ii]+x[ii+1]) != 0) and ((y[ii]+y[ii+1]) == 0): # found the pair
-            if x[ii]==x[ii+1]: 
-                z[ii+1]=1
-            else:
-                z[ii+1]=x[ii]
-                z[ii]=x[ii+1] 
-            break
-            
-    # finally try x==00 and y does not
-    for i in range(0,_np.size(x)>>1): 
-        ii=2*i
-        if ((x[ii]+x[ii+1]) == 0) and ((y[ii]+y[ii+1]) != 0): # found the pair    
-            if y[ii]==y[ii+1]:
-                z[ii+1] = 1 
-            else:
-                z[ii+1] = y[ii]
-                z[ii] = y[ii+1] 
-            break
-        
-    output[0]=(x+z)%2 
-    output[1]=(y+z)%2 
-    
-    return output
-
-def get_symplectic_matrix(i ,n): 
-    # output symplectic canonical matrix i of size 2nX2n
-    #Note, compared to the text the transpose of the symplectic matrix is returned. 
-    #This is not particularly important since Transpose(g in Sp(2n)) is in Sp(2n)
-    #but it means the program doesnt quite agree with the algorithm in the text.
-    #In python, row ordering of matrices is convenient , so it is used internally , 
-    #but for column ordering is used in the text so that matrix multiplication of 
-    #symplectics will correspond to conjugation by unitaries as conventionally defined Eq. (2). 
-    #We cant just return the transpose every time as this would alternate doing the incorrect 
-    #thing as the algorithm recurses.
-    
-    nn=2*n
-    
-    # step 1
-    s = ((1<<nn) - 1) 
-    k = (i%s) + 1
-    i //= s
-
-    # step 2 
-    f1=int_to_bitstring(k,nn)
-
-    # step 3
-    e1 = _np.zeros(nn,dtype='int8') # define first basis vectors 
-    e1[0] = 1
-    T = find_symplectic_transvection(e1,f1) # use Lemma 2 to compute T 
-
-    # step 4
-    # b[0]=b in the text, b[1]...b[2n-2] are b_3...b_2n in the text
-    bits= int_to_bitstring(i%(1<<(nn-1)),nn-1)
-
-    # step 5
-    eprime= _np.copy(e1)
-    for j in range(2,nn):
-        eprime[j] = bits[j-1] 
-        
-    h0 = symplectic_transvection(T[0] ,eprime) 
-    h0 = symplectic_transvection(T[1] ,h0)
-
-    # step 6
-    if bits[0] == 1: 
-        f1 *= 0
-        
-    #T' from the text will be Z_f1 Z_h0. If f1 has been set to zero it doesnt do anything.
-    #We could now compute f2 as said in the text but step 7 is slightly 
-    # changed and will recompute f1, f2 for us anyway
-
-    # step 7
-    id2 = _np.identity(2,dtype='int8')
-
-    if n != 1:
-        g = _mtx.matrix_directsum(id2 ,get_symplectic_matrix(i>>(nn-1),n-1))
-    else :
-        g = id2
-        
-    for j in range(0,nn):
-        g[j] = symplectic_transvection(T[0], g[j]) 
-        g[j] = symplectic_transvection(T[1], g[j]) 
-        g[j] = symplectic_transvection(h0, g[j]) 
-        g[j] = symplectic_transvection(f1, g[j])
-
-    return g
-
-def get_symplectic_label(gn,n=None): 
-    # produce an index associated with group element gn
-    
-    if n is None:
-        n = _np.shape(gn)[0]//2
-        
-    nn=2*n 
-    
-    # step 1 
-    v = gn[0]
-    w = gn[1]
-    
-    # step 2
-    e1 = _np.zeros(nn,dtype='int8') # define first basis vectors 
-    e1[0] = 1
-    T = find_symplectic_transvection(v,e1) # use Lemma 2 to compute T
-
-    # step 3
-    tw = _np.copy(w) 
-    tw = symplectic_transvection(T[0], tw) 
-    tw = symplectic_transvection(T[1], tw) 
-    b = tw[0]    
-    h0 = _np.zeros(nn, dtype='int8') 
-    h0[0] = 1
-    h0[1] = 0
-    for j in range(2,nn): 
-        h0[j] = tw[j]
-        
-    # step 4
-    bb = _np.zeros (nn-1,dtype='int8') 
-    bb[0] = b
-    for j in range(2,nn): 
-        bb[j-1] = tw[j]
-    zv = bitstring_to_int(v,nn) - 1 
-    zw = bitstring_to_int(bb,nn - 1)
-    cvw = zw*((long(2)**long(2*n))-1) + zv
-
-    #step 5
-    if n == 1:
-        return cvw
-    
-    #step 6 
-    gprime = _np.copy(gn);
-    if b == 0:
-        for j in range(0,nn):
-            gprime[j] = symplectic_transvection(T[1], symplectic_transvection(T[0], gn[j]))
-            gprime[j] = symplectic_transvection(h0, gprime[j])
-            gprime[j] = symplectic_transvection(e1, gprime[j])
-    else:
-        for j in range(0,nn):
-            gprime[j] = symplectic_transvection(T[1], symplectic_transvection(T[0], gn[j])) 
-            gprime[ j]=symplectic_transvection(h0, gprime[j])
-
-    # step 7
-    gnew = gprime[2:nn,2:nn] # take submatrix 
-    gnidx = get_symplectic_label(gnew,n - 1) * numberofcosets(n) + cvw
-    return gnidx
-
-def random_symplectic_index(n):
-                    
-    cardinality = numberofsymplectic(n)       
-    max_integer = 9223372036854775808 # The maximum integer of int64 type
-    
-    def zeros_string(k):       
-        zeros_str = ''        
-        for j in range(0,k):
-            zeros_str += '0'
-        return zeros_str
-        
-    if cardinality <= max_integer:
-        index = _np.random.randint(cardinality)
-
-    else:
-        digits1 = len(str(cardinality))
-        digits2 = len(str(max_integer))-1
-        n = digits1//digits2
-        m = digits1 - n*digits2
-        
-        index = cardinality 
-        while index >= cardinality:        
-            
-            temp = long(0)
-            for i in range(0,n):
-                add = zeros_string(m)
-                sample = _np.random.randint(10**digits2)
-                for j in range(0,i):
-                    add += zeros_string(digits2)
-                add += str(sample)
-                for j in range(i+1,n):
-                    add += zeros_string(digits2)                
-                temp += long(add)
-
-            add = str(_np.random.randint(10**m)) + zeros_string(n*digits2)
-            index = long(add) + temp 
-    
-    return index
-
 
 def symplectic_action(m, glabel, qlist, optype='row'):
     """
@@ -1703,3 +1394,345 @@ def symplectic_action(m, glabel, qlist, optype='row'):
         raise ValueError("Label is not valid or currently supported")
         
     return out
+
+# The code below is taken from the appendix of "How to efficiently select an arbitrary Clifford 
+# group element", by Robert Koenig and John A. Smolin. It is almost exactly the same as that code, 
+# and has only had minor edits to make it work properly. A couple of the basic utility routines 
+# from that code have been moved into the matrixtools file.
+
+def numberofcliffords(n):
+    """
+    The number of Clifford gates in the n-qubit Clifford group. 
+    Code from "How to efficiently select an arbitrary Clifford 
+    group element" by Robert Koenig and John A. Smolin.
+    
+    Parameters
+    ----------
+    n : int 
+        The number of qubits the Clifford group is over.
+    
+    Returns
+    -------
+    long integer
+       The cardinality of the n-qubit Clifford group.
+
+    """  
+    return (long(4)**long(n))*numberofsymplectic(n)
+
+def numberofsymplectic(n): 
+    """
+    The number of elements in the symplectic group S(n) over
+    the 2-element finite field. Code from "How to efficiently
+    select an arbitrary Clifford group element" by Robert Koenig and 
+    John A. Smolin.
+    
+    """  
+    x = long(1)
+    for j in range(1,n+1): 
+        x = x*numberofcosets(j)
+        
+    return x
+
+def numberofcosets(n): 
+    """
+    Returns the number of different cosets for the symplectic group 
+    S(n) over the 2-element finite field. Code from "How to efficiently
+    select an arbitrary Clifford group element" by Robert Koenig and 
+    John A. Smolin.
+    """
+    x= long(2)**long(2*n-1) *((long(2)**long(2*n))-long(1))    
+    return x
+
+def symplectic_innerproduct(v,w): 
+    """
+    Returns the symplectic inner product of two vectors F_2^(2n), where
+    F_2 is the finite field containing 0 and 1, and 2n is the length of
+    the vectors. Code from "How to efficiently select an arbitrary Clifford
+    group element" by Robert Koenig and John A. Smolin.
+    """
+    t=0
+    for i in range(0,_np.size(v)>>1):
+        t+= v[2*i]* w[2*i + 1]
+        t+= w[2*i] * v[2*i + 1]
+    return t%2
+
+def symplectic_transvection(k,v): 
+    """
+    Applies transvection Z k to v. Code from "How to efficiently
+    select an arbitrary Clifford group element by Robert Koenig and 
+    John A. Smolin.
+    
+    """
+    return (v+symplectic_innerproduct(k,v)*k)%2
+
+def int_to_bitstring(i ,n): 
+    """
+    converts integer i to an length n array of bits. Code from "How to 
+    efficiently select an arbitrary Clifford group element by Robert Koenig 
+    and John A. Smolin.
+    
+    """
+    output= _np.zeros (n, dtype='int8')    
+    for j in range(0,n):
+        output [j] = i&1
+        i >>=1
+        
+    return output
+
+def bitstring_to_int(b,nn): 
+    """
+    converts an nn-bit string b to an integer between 0 and 2^nn - 1. Code from
+    "How to efficiently select an arbitrary Clifford group element" by Robert 
+    Koenig and John A. Smolin.
+    
+    """
+    output = 0
+    tmp = 1
+    
+    for j in range(0,nn):
+        if b[j] == 1: 
+            output = output + tmp
+        tmp = tmp*2 
+        
+    return output
+
+
+
+def find_symplectic_transvection(x,y):
+    """
+    A utility function for selecting a random Clifford element. Code from
+    "How to efficiently select an arbitrary Clifford group element" by Robert 
+    Koenig and John A. Smolin.
+    
+    """
+    # finds h1,h2 such that y = Z h1 Z h2 x 
+    # Lemma 2 in the text
+    # Note that if only one transvection is required output [1] will be
+    # zero and applying the all-zero transvection does nothing.
+
+    output= _np.zeros((2, _np.size(x)),dtype='int8')
+    if _np.array_equal(x,y): 
+        return output
+    if symplectic_innerproduct(x,y) == 1:
+        output[0] = (x + y)%2 
+        return output
+    
+    # Try to find a pair where they are both not 00
+    z= _np.zeros(_np.size(x))
+    for i in range(0,_np.size(x)>>1):
+        ii=2*i
+        if ((x[ii]+x[ii+1]) != 0) and ((y[ii]+y[ii+1]) != 0): # found the pair
+            z[ii] = (x[ii] + y[ii])%2
+            z[ii+1]=(x[ii+1] + y[ii+1])%2
+            if (z[ii]+z[ii+1]) == 0: # they were the same so they added to 00 
+                z[ii+1] = 1
+                if x[ii] != x[ii+1]: 
+                    z[ii] = 1
+            output[0]=(x+z)%2 
+            output[1]=(y+z)%2 
+            return output
+        
+    #Failed to find any such pair, so look for two places where x has 00 and y does not,
+    #and vice versa. First try y==00 and x does not.
+    for i in range(0,_np.size(x)>>1):
+        ii=2*i
+        if ((x[ii]+x[ii+1]) != 0) and ((y[ii]+y[ii+1]) == 0): # found the pair
+            if x[ii]==x[ii+1]: 
+                z[ii+1]=1
+            else:
+                z[ii+1]=x[ii]
+                z[ii]=x[ii+1] 
+            break
+            
+    # finally try x==00 and y does not
+    for i in range(0,_np.size(x)>>1): 
+        ii=2*i
+        if ((x[ii]+x[ii+1]) == 0) and ((y[ii]+y[ii+1]) != 0): # found the pair    
+            if y[ii]==y[ii+1]:
+                z[ii+1] = 1 
+            else:
+                z[ii+1] = y[ii]
+                z[ii] = y[ii+1] 
+            break
+        
+    output[0]=(x+z)%2 
+    output[1]=(y+z)%2 
+    
+    return output
+
+def get_symplectic_matrix(i ,n):    
+    """
+    Returns the 2n x 2n symplectic matrix, over the finite field containing 0 and 1,
+    with the "canonical" index `i`. Code from "How to efficiently select an arbitrary 
+    Clifford group element" by Robert Koenig and John A. Smolin.
+    
+    """
+    # output symplectic canonical matrix i of size 2nX2n
+    #Note, compared to the text the transpose of the symplectic matrix is returned. 
+    #This is not particularly important since Transpose(g in Sp(2n)) is in Sp(2n)
+    #but it means the program doesnt quite agree with the algorithm in the text.
+    #In python, row ordering of matrices is convenient , so it is used internally , 
+    #but for column ordering is used in the text so that matrix multiplication of 
+    #symplectics will correspond to conjugation by unitaries as conventionally defined Eq. (2). 
+    #We cant just return the transpose every time as this would alternate doing the incorrect 
+    #thing as the algorithm recurses.
+    
+    nn=2*n
+    
+    # step 1
+    s = ((1<<nn) - 1) 
+    k = (i%s) + 1
+    i //= s
+
+    # step 2 
+    f1=int_to_bitstring(k,nn)
+
+    # step 3
+    e1 = _np.zeros(nn,dtype='int8') # define first basis vectors 
+    e1[0] = 1
+    T = find_symplectic_transvection(e1,f1) # use Lemma 2 to compute T 
+
+    # step 4
+    # b[0]=b in the text, b[1]...b[2n-2] are b_3...b_2n in the text
+    bits= int_to_bitstring(i%(1<<(nn-1)),nn-1)
+
+    # step 5
+    eprime= _np.copy(e1)
+    for j in range(2,nn):
+        eprime[j] = bits[j-1] 
+        
+    h0 = symplectic_transvection(T[0] ,eprime) 
+    h0 = symplectic_transvection(T[1] ,h0)
+
+    # step 6
+    if bits[0] == 1: 
+        f1 *= 0
+        
+    #T' from the text will be Z_f1 Z_h0. If f1 has been set to zero it doesnt do anything.
+    #We could now compute f2 as said in the text but step 7 is slightly 
+    # changed and will recompute f1, f2 for us anyway
+
+    # step 7
+    id2 = _np.identity(2,dtype='int8')
+
+    if n != 1:
+        g = _mtx.matrix_directsum(id2 ,get_symplectic_matrix(i>>(nn-1),n-1))
+    else :
+        g = id2
+        
+    for j in range(0,nn):
+        g[j] = symplectic_transvection(T[0], g[j]) 
+        g[j] = symplectic_transvection(T[1], g[j]) 
+        g[j] = symplectic_transvection(h0, g[j]) 
+        g[j] = symplectic_transvection(f1, g[j])
+
+    return g
+
+def get_symplectic_label(gn,n=None): 
+    """
+    Returns the "canonical" index of 2n x 2n symplectic matrix `gn` over the finite 
+    field containing 0 and 1. Code from "How to efficiently select an arbitrary 
+    Clifford group element" by Robert Koenig and John A. Smolin.
+    
+    """
+    # produce an index associated with group element gn
+    
+    if n is None:
+        n = _np.shape(gn)[0]//2
+        
+    nn=2*n 
+    
+    # step 1 
+    v = gn[0]
+    w = gn[1]
+    
+    # step 2
+    e1 = _np.zeros(nn,dtype='int8') # define first basis vectors 
+    e1[0] = 1
+    T = find_symplectic_transvection(v,e1) # use Lemma 2 to compute T
+
+    # step 3
+    tw = _np.copy(w) 
+    tw = symplectic_transvection(T[0], tw) 
+    tw = symplectic_transvection(T[1], tw) 
+    b = tw[0]    
+    h0 = _np.zeros(nn, dtype='int8') 
+    h0[0] = 1
+    h0[1] = 0
+    for j in range(2,nn): 
+        h0[j] = tw[j]
+        
+    # step 4
+    bb = _np.zeros (nn-1,dtype='int8') 
+    bb[0] = b
+    for j in range(2,nn): 
+        bb[j-1] = tw[j]
+    zv = bitstring_to_int(v,nn) - 1 
+    zw = bitstring_to_int(bb,nn - 1)
+    cvw = zw*((long(2)**long(2*n))-1) + zv
+
+    #step 5
+    if n == 1:
+        return cvw
+    
+    #step 6 
+    gprime = _np.copy(gn);
+    if b == 0:
+        for j in range(0,nn):
+            gprime[j] = symplectic_transvection(T[1], symplectic_transvection(T[0], gn[j]))
+            gprime[j] = symplectic_transvection(h0, gprime[j])
+            gprime[j] = symplectic_transvection(e1, gprime[j])
+    else:
+        for j in range(0,nn):
+            gprime[j] = symplectic_transvection(T[1], symplectic_transvection(T[0], gn[j])) 
+            gprime[ j]=symplectic_transvection(h0, gprime[j])
+
+    # step 7
+    gnew = gprime[2:nn,2:nn] # take submatrix 
+    gnidx = get_symplectic_label(gnew,n - 1) * numberofcosets(n) + cvw
+    return gnidx
+
+def random_symplectic_index(n):
+    """
+    The index of a uniformly random 2n x 2n symplectic matrix over 
+    the finite field containing 0 and 1. Code from "How to efficiently
+    select an arbitrary Clifford group element" by Robert Koenig and 
+    John A. Smolin.
+    
+    """
+    cardinality = numberofsymplectic(n)       
+    max_integer = 9223372036854775808 # The maximum integer of int64 type
+    
+    def zeros_string(k):       
+        zeros_str = ''        
+        for j in range(0,k):
+            zeros_str += '0'
+        return zeros_str
+        
+    if cardinality <= max_integer:
+        index = _np.random.randint(cardinality)
+
+    else:
+        digits1 = len(str(cardinality))
+        digits2 = len(str(max_integer))-1
+        n = digits1//digits2
+        m = digits1 - n*digits2
+        
+        index = cardinality 
+        while index >= cardinality:        
+            
+            temp = long(0)
+            for i in range(0,n):
+                add = zeros_string(m)
+                sample = _np.random.randint(10**digits2)
+                for j in range(0,i):
+                    add += zeros_string(digits2)
+                add += str(sample)
+                for j in range(i+1,n):
+                    add += zeros_string(digits2)                
+                temp += long(add)
+
+            add = str(_np.random.randint(10**m)) + zeros_string(n*digits2)
+            index = long(add) + temp 
+    
+    return index

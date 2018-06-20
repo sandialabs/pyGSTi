@@ -299,12 +299,3 @@ def check_proper_permutation(A):
         if detmod2(b) == 0:
             return False
     return True
-
-#def binmat(stringy):
-#    # Todo: what does this do?
-#    return _np.array(list([[int(x) for x in y] for y in stringy.split(',')]))
-
-#if __name__ == '__main__':
-#    D = random_symmetric_invertable_matrix(20)
-#    L = albert_factor(D)
-#    _np.allclose(D,dotmod2([L,L.T]))
