@@ -69,13 +69,63 @@ class SimpleCompositionAutoGator(AutoGator):
         """
 
         dense = bool(self.parent._sim_type == "matrix") # whether dense matrix gates should be created
+        Composed = _gate.ComposedGate if dense else _gate.ComposedGateMap
         #print("DB: SimpleCompositionAutoGator building gate %s for %s" %
         #      (('matrix' if dense else 'map'), str(gatelabel)) )
         if isinstance(gatelabel, _label.LabelTupTup):
             factor_gates = [ existing_gates[l] for l in gatelabel.components ]
-            ret = _gate.ComposedGate(factor_gates) if dense else _gate.ComposedGateMap(factor_gates)
+            ret = Composed(factor_gates)
             self.parent._init_virtual_obj(ret) # so ret's gpindices get set
             return ret
         else: raise ValueError("Cannot auto-create gate for label %s" % str(gatelabel))
         
     
+class SharedIdleAutoGator(AutoGator):
+    """
+    TODO: docstring
+
+    Assumes each non-idle gate is a ComposedGateMap of the form
+    `Composed([fullTargetOp,fullIdleErr,fullLocalErr])`, and that
+    parallel gates should be combined by composing the target ops
+    and local errors but keeping just a single idle error (which
+    should be the same for all the gates).
+    """
+
+    def __init__(self, parent):
+        super(SimpleCompositionAutoGator,self).__init__(parent)
+
+    def __call__(self, existing_gates, gatelabel):
+        """
+        Create a Gate for `gateLabel` using existing gates.
+
+        Parameters
+        ----------
+        existing_gates : dict
+            A dictionary with keys = gate labels and values = Gate 
+            objects.
+
+        gateLabel : Label
+            The gate label to construct a gate for.
+
+        Returns
+        -------
+        Gate
+        """
+
+        dense = bool(self.parent._sim_type == "matrix") # whether dense matrix gates should be created
+        Composed = _gate.ComposedGate if dense else _gate.ComposedGateMap
+        #print("DB: SharedIdleAutoGator building gate %s for %s" %
+        #      (('matrix' if dense else 'map'), str(gatelabel)) )
+        if isinstance(gatelabel, _label.LabelTupTup):
+            gates = [ existing_gates[l] for l in gatelabel.components ]
+            #each gate in gates is Composed([fullTargetOp,fullIdleErr,fullLocalErr])
+            # so we compose 1st & 3rd factors of parallel gates and keep just a single 2nd factor...
+            
+            targetOp = Composed([g.factorgates[0] for g in gates])
+            idleErr = gates[0].factorgate[1]
+            localErr = Composed([g.factorgates[2] for g in gates])
+            
+            ret = Composed([targetOp,idleErr,localErr])
+            self.parent._init_virtual_obj(ret) # so ret's gpindices get set
+            return ret
+        else: raise ValueError("Cannot auto-create gate for label %s" % str(gatelabel))
