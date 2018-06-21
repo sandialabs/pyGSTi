@@ -1055,40 +1055,41 @@ def symplectic_rep_of_clifford_layer(layer, n, srep_dict=None):
     p = _np.zeros(2*n,int)
 
     for gatelbl in layer:
+        for sub_gl in gatelbl.components:
         
-        # Checks below are commented out as they are very inefficient, so it is probably
-        # better to just allow a key error.
-        #assert(gate.label in list(s_dict.keys())), "Symplectic matrix for some gate labels not provided!"
-        #assert(gate.label in list(p_dict.keys())), "Phase vector for some gate labels not provided!"
-        matrix, phase = sreps[gatelbl.name]
-        
-        assert(gatelbl.number_of_qubits == 1 or gatelbl.number_of_qubits == 2), "Only 1 and 2 qubit gates are allowed!"
-        
-        if gatelbl.number_of_qubits == 1:
+            # Checks below are commented out as they are very inefficient, so it is probably
+            # better to just allow a key error.
+            #assert(gate.label in list(s_dict.keys())), "Symplectic matrix for some gate labels not provided!"
+            #assert(gate.label in list(p_dict.keys())), "Phase vector for some gate labels not provided!"
+            matrix, phase = sreps[sub_gl.name]
             
-            q = gatelbl.qubits[0]
-            s[q,q] = matrix[0,0]
-            s[q,q+n] = matrix[0,1]
-            s[q+n,q] = matrix[1,0]
-            s[q+n,q+n] = matrix[1,1]
-            p[q] = phase[0]
-            p[q+n] = phase[1]
+            assert(sub_gl.number_of_qubits == 1 or sub_gl.number_of_qubits == 2), "Only 1 and 2 qubit gates are allowed!"
             
-        else:
-            
-            q1 = gatelbl.qubits[0]
-            q2 = gatelbl.qubits[1]
-            for i in [0,1]:
-                for j in [0,1]:
-                    s[q1+i*n,q1+j*n] = matrix[0+2*i,0+2*j]
-                    s[q1+i*n,q2+j*n] = matrix[0+2*i,1+2*j]
-                    s[q2+i*n,q1+j*n] = matrix[1+2*i,0+2*j]
-                    s[q2+i*n,q2+j*n] = matrix[1+2*i,1+2*j]
-                    
-            p[q1] = phase[0]
-            p[q2] = phase[1]
-            p[q1+n] = phase[2]
-            p[q2+n] = phase[3]
+            if sub_gl.number_of_qubits == 1:
+                
+                q = sub_gl.qubits[0]
+                s[q,q] = matrix[0,0]
+                s[q,q+n] = matrix[0,1]
+                s[q+n,q] = matrix[1,0]
+                s[q+n,q+n] = matrix[1,1]
+                p[q] = phase[0]
+                p[q+n] = phase[1]
+                
+            else:
+                
+                q1 = sub_gl.qubits[0]
+                q2 = sub_gl.qubits[1]
+                for i in [0,1]:
+                    for j in [0,1]:
+                        s[q1+i*n,q1+j*n] = matrix[0+2*i,0+2*j]
+                        s[q1+i*n,q2+j*n] = matrix[0+2*i,1+2*j]
+                        s[q2+i*n,q1+j*n] = matrix[1+2*i,0+2*j]
+                        s[q2+i*n,q2+j*n] = matrix[1+2*i,1+2*j]
+                        
+                p[q1] = phase[0]
+                p[q2] = phase[1]
+                p[q1+n] = phase[2]
+                p[q2+n] = phase[3]
                 
     return s, p
 

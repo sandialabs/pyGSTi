@@ -167,7 +167,9 @@ class ProcessorSpec(object):
                 else:
                     for gate in self.models['clifford'].gates:
                         if _np.array_equal(self.models['clifford'][gate].embedded_gate.smatrix,_np.array([[0,1],[1,0]])):
-                            library.templates['CNOT'].append((_Label(gate.name, 0),_Label(gate.name, 1),_Label('Gcnot', (1, 0)), _Label(gate.name, 0),_Label(gate.name, 1)))
+                            #Note: use of gate.name assumes that a Hadamard will have a simple (non-"parallel") gate label
+                            library.templates['CNOT'].append( (_Label(gate.name, 0),_Label(gate.name, 1),_Label('Gcnot', (1, 0)),
+                                                               _Label(gate.name, 0),_Label(gate.name, 1)))
                             #print('Hadamard or an equivalent gate found! It is ' + gate.name)
                             break
                     
