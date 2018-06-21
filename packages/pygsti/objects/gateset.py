@@ -34,6 +34,7 @@ from . import gaugegroup as _gg
 from . import gatematrixcalc as _gatematrixcalc
 from . import gatemapcalc as _gatemapcalc
 from . import gatetermcalc as _gatetermcalc
+from . import autogator as _autogator
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
@@ -130,7 +131,7 @@ class GateSet(object):
         self._default_gauge_group = None
         self._paramvec = _np.zeros(0, 'd')
         self._rebuild_paramvec()
-        self._autogator = None
+        self._autogator = _autogator.SimpleCompositionAutoGator(self) # the default
 
         super(GateSet, self).__init__()
 
@@ -593,7 +594,7 @@ class GateSet(object):
             self._dim = stateDict['_dim']
             self._calcClass = stateDict.get('_calcClass',_gatematrixcalc.GateMatrixCalc)
             self._evotype = "densitymx"
-            self._autogator = None
+            self._autogator = None # the default for *old* gatesets
             self._default_gauge_group = stateDict['_default_gauge_group']
             self.basis = stateDict.get('basis', _Basis('unknown', None))
             if self.basis.name == "unknown" and '_basisNameAndDim' in stateDict:
@@ -834,6 +835,25 @@ class GateSet(object):
 
         self._paramvec = v
         #print("DEBUG: Done rebuild: %d params" % len(v))
+
+    def _init_virtual_obj(self, obj):
+        """ 
+        Initializes a "virtual object" - an object (e.g. Gate) that *could* be a
+        member of the GateSet but won't be, as it's just built for temporary
+        use (e.g. the parallel action of several "base" gates).  As such
+        we need to fully initialize its parent and gpindices members so it 
+        knows it belongs to this GateSet BUT it's not allowed to add any new
+        parameters (they'd just be temporary).  It's also assumed that virtual
+        objects don't need to be to/from-vectored as there are already enough
+        real (non-virtual) gates/spamvecs/etc. to accomplish this.
+        """
+        if obj.gpindices is not None:
+            assert(obj.parent is self), "Virtual obj has incorrect parent already set!"
+            return # if parent is already set we assume obj has already been init
+
+        #Assume all parameters of obj are new independent parameters
+        num_new_params = obj.allocate_gpindices(self.num_params(), self)
+        assert(num_new_params == 0),"Virtual object is requesting %d new params!" % num_new_params
 
 
     def to_vector(self):
