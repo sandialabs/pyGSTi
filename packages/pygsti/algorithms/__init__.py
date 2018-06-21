@@ -17,3 +17,4 @@ from .fiducialselection import *
 from .gaugeopt import *
 from .contract import *
 from .compileclifford import *
+from .compilestabilizer import *

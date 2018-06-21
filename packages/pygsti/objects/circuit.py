@@ -573,7 +573,23 @@ class Circuit(_gstr.GateString):
         if depth_compression:            
             self.compress_depth(gate_relations_1q=gate_relations_1q,verbosity=0)
         
-                                                      
+    def relabel_qubits(self,order):
+        """
+        Todo : docstring
+
+            The quantum wire for qubit i becomes
+            the quantum wire for qubit order[i]
+        """
+        original_circuit = _copy.deepcopy(self.line_items)
+        #for i in range(0,circuit.number_of_qubits):
+        #    relabelled_circuit.line_items[order[i]] = circuit.line_items[i]
+
+        depth = self.depth()
+        for i in range(0,self.number_of_lines):
+            for j in range(0,depth):
+                gate = original_circuit[i][j]
+                self.line_items[order[i]][j] = _Label(gate.name,tuple([order[k] for k in gate.qubits]))
+
     def delete_layer(self,j):
         """
         Delete a layer from the circuit.

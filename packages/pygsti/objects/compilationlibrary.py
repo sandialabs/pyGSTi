@@ -237,7 +237,7 @@ class CompilationLibrary(_collections.OrderedDict):
         
         if srep is None:
             template_lbl = _Label(gate_name,tuple(range(nqubits))) # integer ascending qubit labels
-            smatrix, svector = _symp.clifford_layer_in_symplectic_rep([template_lbl],nqubits)
+            smatrix, svector = _symp.symplectic_rep_of_clifford_layer([template_lbl],nqubits)
         else:
             smatrix, svector = srep
                 
@@ -279,7 +279,7 @@ class CompilationLibrary(_collections.OrderedDict):
 
         # Find the symplectic action of all possible circuits of length 1 on the qubits
         for layer in all_layers:
-            obtained_sreps[layer] = _symp.clifford_layer_in_symplectic_rep(
+            obtained_sreps[layer] = _symp.symplectic_rep_of_clifford_layer(
                 layer, nqubits, available_sreps)
 
         #TODO: REMOVE, but above should do this for 1Q case...
@@ -349,7 +349,7 @@ class CompilationLibrary(_collections.OrderedDict):
                 for layer in all_layers:
                         
                     # Calculate the symp rep of this parallel gate
-                    sadd, padd = _symp.clifford_layer_in_symplectic_rep(
+                    sadd, padd = _symp.symplectic_rep_of_clifford_layer(
                         layer, nqubits, available_sreps)
                     key = seq + layer # tuple/GateString concatenation
                         
@@ -511,13 +511,13 @@ class CompilationLibrary(_collections.OrderedDict):
             # Calculate the symplectic matrix implemented by this circuit, to check the compilation
             # is ok, below.
             sreps = self.gateset.get_clifford_symplectic_reps()
-            s, p = _symp.composite_clifford_from_clifford_circuit(circuit,sreps)
+            s, p = _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
             
             # Construct the symplectic rep of CNOT between this pair of qubits, to compare to s.
             nQ = int(round(_np.log2(self.gateset.dim))) # assumes *unitary* mode (OK?)
             iq1 = self.gateset.stateSpaceLabels.labels[0].index(q1) # assumes single tensor-prod term
             iq2 = self.gateset.stateSpaceLabels.labels[0].index(q2) # assumes single tensor-prod term
-            s_cnot, p_cnot = _symp.clifford_layer_in_symplectic_rep([_Label('CNOT',(iq1,iq2)),],nQ)
+            s_cnot, p_cnot = _symp.symplectic_rep_of_clifford_layer([_Label('CNOT',(iq1,iq2)),],nQ)
     
             assert(_np.array_equal(s,s_cnot)), "Compilation has failed!"
             if self.ctype == "absolute":
@@ -826,7 +826,7 @@ class CompilationLibrary(_collections.OrderedDict):
 #        #CNOTsmatrix = std_smatrices['CNOT']
 #        #CNOTsvector = std_svectors['CNOT']
 #        
-#        CNOTsmatrix, CNOTsvector = _symp.clifford_layer_in_symplectic_rep([_cir.Gate('CNOT',(q1,q2)),],
+#        CNOTsmatrix, CNOTsvector = _symp.symplectic_rep_of_clifford_layer([_cir.Gate('CNOT',(q1,q2)),],
 #                                                                          gateset.number_of_qubits)
 #        
 #        
@@ -857,7 +857,7 @@ class CompilationLibrary(_collections.OrderedDict):
 #        
 #        # Find the symplectic action of all possible circuits of length 1 on the two qubits
 #        for layer in all_layers:
-#            s, p =  _symp.clifford_layer_in_symplectic_rep(layer, gateset.number_of_qubits,  
+#            s, p =  _symp.symplectic_rep_of_clifford_layer(layer, gateset.number_of_qubits,  
 #                                                           s_dict=gateset.smatrix, p_dict=gateset.svector)
 #            obtained_s[tuple(layer)] =  s
 #            obtained_p[tuple(layer)] =  p
@@ -937,7 +937,7 @@ class CompilationLibrary(_collections.OrderedDict):
 #                for layer in all_layers:
 #                        
 #                    # Calculate the symp rep of this parallel gate
-#                    sadd, padd = _symp.clifford_layer_in_symplectic_rep(layer, gateset.number_of_qubits,
+#                    sadd, padd = _symp.symplectic_rep_of_clifford_layer(layer, gateset.number_of_qubits,
 #                                                                         s_dict=gateset.smatrix, 
 #                                                                         p_dict=gateset.svector)
 #                        
@@ -1068,11 +1068,11 @@ class CompilationLibrary(_collections.OrderedDict):
 #            
 #            # Calculate the symplectic matrix implemented by this circuit, to check the compilation
 #            # is ok, below.
-#            s, p = _symp.composite_clifford_from_clifford_circuit(circuit, s_dict=gateset.smatrix, 
+#            s, p = _symp.symplectic_rep_of_clifford_circuit(circuit, s_dict=gateset.smatrix, 
 #                                                            p_dict=gateset.svector)
 #            
 #            # Construct the symplectic rep of CNOT between this pair of qubits, to compare to s.
-#            s_cnot, p_cnot = _symp.clifford_layer_in_symplectic_rep([_cir.Gate('CNOT',(q1,q2)),],
+#            s_cnot, p_cnot = _symp.symplectic_rep_of_clifford_layer([_cir.Gate('CNOT',(q1,q2)),],
 #                                                                          gateset.number_of_qubits)
 #
 #
