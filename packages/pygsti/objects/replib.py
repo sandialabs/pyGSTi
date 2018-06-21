@@ -809,7 +809,7 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None): 
     rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
 
     #Get gatereps and ereps now so we don't make unnecessary .torep() calls
-    gatereps = { gl:gate.torep() for gl,gate in calc.gates.items() }
+    gatereps = { gl:calc._getgate(gl).torep() for gl in evalTree.gateLabels }
     ereps = [ E.torep('effect') for E in EVecs ]
 
     #REMOVE?? - want some way to speed tensorprod effect actions...
@@ -850,8 +850,8 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     #Get (extension-type) representation objects
     rhorep = calc.preps[rholabel].torep('prep')
     ereps = [ calc.effects[el].torep('effect') for el in elabels]
-    gate_lookup = { lbl:i for i,lbl in enumerate(calc.gates.keys()) } # gate labels -> ints for faster lookup
-    gatereps = { i:calc.gates[lbl].torep() for lbl,i in gate_lookup.items() }
+    gate_lookup = { lbl:i for i,lbl in enumerate(evalTree.gateLabels) } # gate labels -> ints for faster lookup
+    gatereps = { i:calc._getgate(lbl).torep() for lbl,i in gate_lookup.items() }
     cacheSize = evalTree.cache_size()
     
     # create rho_cache (or use scratch)
@@ -915,9 +915,10 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
     mpo = calc.max_order*2 #max_poly_order
     
     # Construct dict of gate term reps
-    gate_term_reps = { glbl: [ [t.torep(mpo,mpv,"gate") for t in gate.get_order_terms(order)]
+    distinct_gateLabels = sorted(set(gatestring))
+    gate_term_reps = { glbl: [ [t.torep(mpo,mpv,"gate") for t in calc._getgate(glbl).get_order_terms(order)]
                                       for order in range(calc.max_order+1) ]
-                       for glbl,gate in calc.gates.items() }
+                       for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms, but lists
     rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.preps[rholabel].get_order_terms(order)]
@@ -958,7 +959,7 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
         #print("DB: pr_as_poly order=",order)
         db_npartitions = 0
         for p in _lt.partition_into(order, len(gatestring)+2): # +2 for SPAM bookends
-            #factor_lists = [ calc.gates[glbl].get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
+            #factor_lists = [ calc._getgate(glbl).get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
             factor_lists = [ rho_term_reps[p[0]]] + \
                            [ gate_term_reps[glbl][pi] for glbl,pi in zip(gatestring,p[1:-1]) ] + \
                            [ E_term_reps[p[-1]] ]

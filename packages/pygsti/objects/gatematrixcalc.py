@@ -40,7 +40,7 @@ class GateMatrixCalc(GateCalc):
     fundamental operations.
     """
 
-    def __init__(self, dim, gates, preps, effects, paramvec):
+    def __init__(self, dim, gates, preps, effects, paramvec, autogator):
         """
         Construct a new GateMatrixCalc object.
 
@@ -64,9 +64,11 @@ class GateMatrixCalc(GateCalc):
 
         paramvec : ndarray
             The parameter vector of the GateSet.
+
+        autogator : TODO docstring
         """
         super(GateMatrixCalc, self).__init__(
-            dim, gates, preps, effects, paramvec)
+            dim, gates, preps, effects, paramvec, autogator)
         if self.evotype not in ("statevec","densitymx"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "matrix-based calculations" % self.evotype))
@@ -74,7 +76,7 @@ class GateMatrixCalc(GateCalc):
     def copy(self):
         """ Return a shallow copy of this GateMatrixCalc """
         return GateMatrixCalc(self.dim, self.gates, self.preps,
-                              self.effects, self.paramvec)
+                              self.effects, self.paramvec, self.autogator)
         
 
     def product(self, gatestring, bScale=False):
@@ -106,13 +108,14 @@ class GateMatrixCalc(GateCalc):
         """
         if bScale:
             scaledGatesAndExps = {};
-            for (gateLabel,gatemx) in self.gates.items():
-                ng = max(_nla.norm(gatemx),1.0)
-                scaledGatesAndExps[gateLabel] = (gatemx / ng, _np.log(ng))
-
             scale_exp = 0
             G = _np.identity( self.dim )
             for lGate in gatestring:
+                if lGate not in scaledGatesAndExps: #fill "on-demand" b/c can't just iterate through self.gates anymore (autogator)
+                    gatemx = self._getgate(lGate)
+                    ng = max(_nla.norm(gatemx),1.0)
+                    scaledGatesAndExps[lGate] = (gatemx / ng, _np.log(ng))
+                
                 gate, ex = scaledGatesAndExps[lGate]
                 H = _np.dot(gate,G)   # product of gates, starting with identity
                 scale_exp += ex   # scale and keep track of exponent
@@ -130,7 +133,7 @@ class GateMatrixCalc(GateCalc):
         else:
             G = _np.identity( self.dim )
             for lGate in gatestring:
-                G = _np.dot(self.gates[lGate].base,G) #product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
+                G = _np.dot(self._getgate(lGate).base,G) #product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
         
@@ -188,20 +191,20 @@ class GateMatrixCalc(GateCalc):
     def dgate(self, gateLabel, flat=False, wrtFilter=None):
         """ Return the derivative of a length-1 (single-gate) sequence """
         dim = self.dim
-        gate_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, self.gates[gateLabel])
+        gate = self._getgate(gateLabel)
+        gate_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, gate)
 
         # Allocate memory for the final result
         num_deriv_cols =  self.Np if (wrtFilter is None) else len(wrtFilter)
         flattened_dprod = _np.zeros((dim**2, num_deriv_cols),'d')
         
-        gate = self.gates[gateLabel]
         _fas(flattened_dprod, [None,gpindices], 
              gate.deriv_wrt_params(gate_wrtFilter)) # (dim**2, nParams[gateLabel])
 
         if _slct.length(gpindices) > 0: #works for arrays too
             # Compute the derivative of the entire gate string with respect to the 
             # gate's parameters and fill appropriate columns of flattened_dprod.
-            gate = self.gates[gateLabel]
+            #gate = self._getgate[gateLabel] UNNEEDED (I think)
             _fas(flattened_dprod,[None,gpindices],
                 gate.deriv_wrt_params(gate_wrtFilter)) # (dim**2, nParams in wrtFilter for gateLabel)
                 
@@ -214,8 +217,9 @@ class GateMatrixCalc(GateCalc):
         """ Return the hessian of a length-1 (single-gate) sequence """
         dim = self.dim
 
-        gate_wrtFilter1, gpindices1 = self._process_wrtFilter(wrtFilter1, self.gates[gateLabel])
-        gate_wrtFilter2, gpindices2 = self._process_wrtFilter(wrtFilter2, self.gates[gateLabel])
+        gate = self._getgate(gateLabel)
+        gate_wrtFilter1, gpindices1 = self._process_wrtFilter(wrtFilter1, gate)
+        gate_wrtFilter2, gpindices2 = self._process_wrtFilter(wrtFilter2, gate)
 
         # Allocate memory for the final result
         num_deriv_cols1 =  self.Np if (wrtFilter1 is None) else len(wrtFilter1)
@@ -225,7 +229,6 @@ class GateMatrixCalc(GateCalc):
         if _slct.length(gpindices1) > 0 and _slct.length(gpindices2) > 0: #works for arrays too
             # Compute the derivative of the entire gate string with respect to the 
             # gate's parameters and fill appropriate columns of flattened_dprod.
-            gate = self.gates[gateLabel]
             _fas(flattened_hprod, [None,gpindices1,gpindices2],
                 gate.hessian_wrt_params(gate_wrtFilter1, gate_wrtFilter2))
                 
@@ -300,13 +303,13 @@ class GateMatrixCalc(GateCalc):
         leftProds = [ ]
         G = _np.identity( dim ); leftProds.append(G)
         for gateLabel in revGateLabelList:
-            G = _np.dot(G,self.gates[gateLabel].base)
+            G = _np.dot(G,self._getgate(gateLabel).base)
             leftProds.append(G)
 
         rightProdsT = [ ]
         G = _np.identity( dim ); rightProdsT.append( _np.transpose(G) )
         for gateLabel in reversed(revGateLabelList):
-            G = _np.dot(self.gates[gateLabel].base,G)
+            G = _np.dot(self._getgate(gateLabel).base,G)
             rightProdsT.append( _np.transpose(G) )
 
         # Allocate memory for the final result
@@ -316,8 +319,10 @@ class GateMatrixCalc(GateCalc):
         # For each gate label, compute the derivative of the entire gate string
         #  with respect to only that gate's parameters and fill the appropriate
         #  columns of flattened_dprod.
-        for gateLabel,gate in self.gates.items():
-            gate_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, self.gates[gateLabel])
+        uniqueGateLabels = sorted(list(set(revGateLabelList)))
+        for gateLabel in uniqueGateLabels:
+            gate = self._getgate(gateLabel)
+            gate_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, gate)
             dgate_dgateLabel = gate.deriv_wrt_params(gate_wrtFilter)
 
             for (i,gl) in enumerate(revGateLabelList):
@@ -396,12 +401,16 @@ class GateMatrixCalc(GateCalc):
 
         dim = self.dim
 
+        uniqueGateLabels = sorted(list(set(revGateLabelList)))
+        used_gates = _collections.OrderedDict()
+
         #Cache processed parameter filters for multiple uses below
         gpindices1 = {}; gate_wrtFilters1 = {}
         gpindices2 = {}; gate_wrtFilters2 = {}
-        for l,gate in self.gates.items():
-            gate_wrtFilters1[l], gpindices1[l] = self._process_wrtFilter(wrtFilter1, gate)
-            gate_wrtFilters2[l], gpindices2[l] = self._process_wrtFilter(wrtFilter2, gate)
+        for l in uniqueGateLabels:
+            used_gates[l] = self._getgate(l)
+            gate_wrtFilters1[l], gpindices1[l] = self._process_wrtFilter(wrtFilter1, used_gates[l])
+            gate_wrtFilters2[l], gpindices2[l] = self._process_wrtFilter(wrtFilter2, used_gates[l])
         
         #Cache partial products (relatively little mem required)
         prods = {}
@@ -410,25 +419,25 @@ class GateMatrixCalc(GateCalc):
             prods[ (i,i-1) ] = ident #product of no gates
             G = ident
             for (j,gateLabel2) in enumerate(revGateLabelList[i:],start=i): #loop over "ending" gate (>= starting gate)
-                G = _np.dot(G,self.gates[gateLabel2].base)
+                G = _np.dot(G,self._getgate(gateLabel2).base)
                 prods[ (i,j) ] = G
         prods[ (len(revGateLabelList),len(revGateLabelList)-1) ] = ident #product of no gates
 
         #Also Cache gate jacobians (still relatively little mem required)
         dgate_dgateLabel1 = {
             gateLabel: gate.deriv_wrt_params( gate_wrtFilters1[gateLabel] )
-            for gateLabel,gate in self.gates.items() }
+            for gateLabel,gate in used_gates.items() }
         
         if wrtFilter1 == wrtFilter2:
             dgate_dgateLabel2 = dgate_dgateLabel1
         else:
             dgate_dgateLabel2 = {
                 gateLabel: gate.deriv_wrt_params( gate_wrtFilters2[gateLabel] )
-                for gateLabel,gate in self.gates.items() }
+                for gateLabel,gate in used_gates.items() }
 
         #Finally, cache any nonzero gate hessians (memory?)
         hgate_dgateLabels = {}
-        for gateLabel,gate in self.gates.items():
+        for gateLabel,gate in used_gates.items():
             if gate.has_nonzero_hessian():
                 hgate_dgateLabels[gateLabel] = gate.hessian_wrt_params(
                     gate_wrtFilters1[gateLabel], gate_wrtFilters2[gateLabel])
@@ -832,7 +841,7 @@ class GateMatrixCalc(GateCalc):
                 prodCache[i] = _np.identity( dim )
                 # Note: scaleCache[i] = 0.0 from initialization
             else:
-                gate = self.gates[gateLabel].base
+                gate = self._getgate(gateLabel).base
                 nG = max(_nla.norm(gate), 1.0)
                 prodCache[i] = gate / nG
                 scaleCache[i] = _np.log(nG)
@@ -1075,7 +1084,7 @@ class GateMatrixCalc(GateCalc):
         for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
             if gateLabel == "": #special case of empty label == no gate
                 hProdCache[i] = _np.zeros( hessn_shape )
-            elif not self.gates[gateLabel].has_nonzero_hessian():
+            elif not self._getgate(gateLabel).has_nonzero_hessian():
                 #all gate elements are at most linear in params, so
                 # all hessians for single- or zero-gate strings are zero.
                 hProdCache[i] = _np.zeros( hessn_shape )

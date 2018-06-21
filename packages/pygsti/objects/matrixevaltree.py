@@ -30,19 +30,13 @@ class MatrixEvalTree(EvalTree):
         """ Create a new, empty, evaluation tree. """
         super(MatrixEvalTree, self).__init__(items)
 
-    def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1):
+    def initialize(self, compiled_gatestring_list, numSubTreeComms=1):
         """
           Initialize an evaluation tree using a set of gate strings.
           This function must be called before using an EvalTree.
 
           Parameters
           ----------
-          gateLabels : list of strings
-              A list of all the single gate labels to
-              be stored at the beginning of the tree.  This
-              list must include all the gate labels contained
-              in the elements of gatestring_list.
-
           gatestring_list : list of (tuples or GateStrings)
               A list of tuples of gate labels or GateString
               objects, specifying the gate strings that
@@ -59,7 +53,12 @@ class MatrixEvalTree(EvalTree):
           None
         """
         #tStart = _time.time() #DEBUG TIMER
-        self.gateLabels = gateLabels
+
+        # gateLabels : A list of all the length-0 & 1 gate labels to be stored
+        #  at the beginning of the tree.  This list must include all the gate 
+        #  labels contained in the elements of compiled_gatestring_list 
+        #  (including a special empty-string sentinel at the beginning).
+        self.gateLabels = [""] + self._get_gateLabels(compiled_gatestring_list)
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 

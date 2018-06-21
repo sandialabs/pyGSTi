@@ -49,7 +49,7 @@ class GateMapCalc(GateCalc):
     -- parameterizations of gate matrices and SPAM vectors) access to these
     fundamental operations.
     """    
-    def __init__(self, dim, gates, preps, effects, paramvec):
+    def __init__(self, dim, gates, preps, effects, paramvec, autogator):
         """
         Construct a new GateMapCalc object.
 
@@ -73,9 +73,11 @@ class GateMapCalc(GateCalc):
 
         paramvec : ndarray
             The parameter vector of the GateSet.
+
+        autogator : TODO docstring
         """
         super(GateMapCalc, self).__init__(
-            dim, gates, preps, effects, paramvec)
+            dim, gates, preps, effects, paramvec, autogator)
         if self.evotype not in ("statevec","densitymx","stabilizer"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "map-based calculations" % self.evotype))
@@ -84,7 +86,7 @@ class GateMapCalc(GateCalc):
     def copy(self):
         """ Return a shallow copy of this GateMatrixCalc """
         return GateMapCalc(self.dim, self.gates, self.preps,
-                              self.effects, self.paramvec)
+                              self.effects, self.paramvec, self.autogator)
 
 
     #UNUSED TODO REMOVE
@@ -116,31 +118,32 @@ class GateMapCalc(GateCalc):
         #No support for "custom" spamlabel stuff here
         return rho,Es
 
-    def propagate_state(self, rho, gatestring):
-        """ 
-        State propagation by GateMap objects which have 'acton'
-        methods.  This function could easily be overridden to 
-        perform some more sophisticated state propagation
-        (i.e. Monte Carlo) in the future.
-
-        Parameters
-        ----------
-        rho : SPAMVec
-           The spam vector representing the initial state.
-
-        gatestring : GateString or tuple
-           A tuple of labels specifying the gate sequence to apply.
-
-        Returns
-        -------
-        SPAMVec
-        """
-        #from .label import Label #DEBUG
-        #print("INIT: \n",rho) #DEBUG
-        for lbl in gatestring:
-            rho = self.gates[lbl].acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
-            #print("AFTER %s: \n" % str(lbl),rho) #DEBUG HERE
-        return rho
+    #OLD: TODO REMOVE
+    #def propagate_state(self, rho, gatestring):
+    #    """ 
+    #    State propagation by GateMap objects which have 'acton'
+    #    methods.  This function could easily be overridden to 
+    #    perform some more sophisticated state propagation
+    #    (i.e. Monte Carlo) in the future.
+    #
+    #    Parameters
+    #    ----------
+    #    rho : SPAMVec
+    #       The spam vector representing the initial state.
+    #
+    #    gatestring : GateString or tuple
+    #       A tuple of labels specifying the gate sequence to apply.
+    #
+    #    Returns
+    #    -------
+    #    SPAMVec
+    #    """
+    #    #from .label import Label #DEBUG
+    #    #print("INIT: \n",rho) #DEBUG
+    #    for lbl in gatestring:
+    #        rho = self.gates[lbl].acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
+    #        #print("AFTER %s: \n" % str(lbl),rho) #DEBUG HERE
+    #    return rho
 
 
     def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
@@ -174,7 +177,7 @@ class GateMapCalc(GateCalc):
         rholabel,elabel = spamTuple # can't handle custom rho/e -- this seems ok...
         rhorep = self.preps[rholabel].torep('prep')
         erep = self.effects[elabel].torep('effect')
-        rhorep = replib.propagate_staterep(rhorep, [self.gates[gl].torep() for gl in gatestring])
+        rhorep = replib.propagate_staterep(rhorep, [self._getgate(gl).torep() for gl in gatestring])
         p = erep.probability(rhorep) #outcome probability
 
         #OLD DEPRECATED REPS TODO REMOVE
