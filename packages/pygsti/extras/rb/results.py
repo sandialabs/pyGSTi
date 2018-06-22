@@ -1,82 +1,65 @@
-#
-# Todo -- go through and delete all of this?
-#
+""" Encapsulates RB results and dataset objects """
+from __future__ import division, print_function, absolute_import, unicode_literals
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
+#*****************************************************************
+
+import numpy as _np
+
+class RBSummaryDataset(object):
+    """
+    Encapsulates a summary dataset.
+
+    """
+    def __init__(self, n, lengths, successcounts, totalcounts, circuitdepths=None, circuit2Qgcounts=None):
+        
+        self.number_of_qubits = n
+        self.lengths = lengths
+        self.successcounts = successcounts
+        self.totalcounts = totalcounts
+        self.circuitdepths = circuitdepths
+        self.circuit2Qgcounts = circuit2Qgcounts
+        
+        # Create the average success probabilities.
+        ASPs = []
+        SPs = []
+        for i in range(0,len(lengths)):
+            SParray = _np.array(successcounts[i])/_np.array(totalcounts[i])
+            SPs.append(list(SParray))
+            ASPs.append(_np.mean(SParray))        
+        self.ASPs = ASPs
+        
+    def generate_bootstrap(self, finite_sample_error=True):
+
+        for i in range(samples): 
+
+            # A new set of bootstrapped survival probabilities.
+            sampled_scounts = []
+
+            for j in range(len(lengths)):
+
+                sampled_counts.append([])
+                circuits_at_length = len(scounts[j])
+
+                for k in range(circuits_at_length):
+                    sampled_scounts[j].append(SPs[j][_np.random.randint(k_at_length)])
+                if finite_sample_error:   
+                    sampled_scounts[j] = _np.random.binomial(self.data.totalcounts,self.data.SPs)               
+        
+        BStrappeddataset = RBSummaryDataset(self.number_of_qubits, self.lengths, self.successcounts, 
+                                            self.totalcounts, self.circuitdepths, self.circuit2Qgcounts)
+                    
+        return BStrappeddataset
+    
+    def std_analysis():
+        
+        # A wrap-around for ....
+
 class RBResults(object):
     
-    def __init__(self):
+    def __init__(self, data):
 
-        self.data = {}
-
-    def compute_bootstrap_error_bars(self, gstyp_list = ("clifford",), resamples = 100,
-                                    seed=None, randState=None):
-        """
-        Compute error bars on RB fit parameters, including the RB decay rate
-        using a non-parametric bootstrap method.
-
-        Parameters
-        ----------
-        gstyp_list : list, optional
-           A list of gate-label-set values (e.g. "clifford", "primitive")
-           specifying which "per-X" RB values to compute error bars for.
-           The special value "all" can be used to compute error bars for all
-           existing gate-label-sets.
-
-        resamples : int, optional
-            The number of nonparametric bootstrap resamplings
-
-        seed : int or numpy.random.RandomState, optional
-            Seed for random number generator.  A RandomState object to generate
-            samples from, which can be useful if you want reproducible
-            distribution of samples across multiple random function calls but
-            you don't want to bother with manually changing seeds between
-            those calls.
-
-        Returns
-        -------
-        None
-        """
-        #Setup lists to hold items to take stddev of:
-        A_list = []; B_list = []; f_list = []; 
-        if self.fit == 'first order':
-            C_list = []
-
-        #Create bootstrap datasets
-        bootstrapped_dataset_list = []
-        for _ in range(resamples):
-            bootstrapped_dataset_list.append(
-                _drivers.bootstrap.make_bootstrap_dataset(
-                    self.dataset,'nonparametric',seed=seed))
-
-        #Run RB analysis for each dataset
-        gatestrings = self.results['gatestrings']
-        #alias_maps = { k:mp for k,mp in self.alias_maps.items()
-        #               if k in gstyp_list } #only alias maps of requested
-        from .rbcore import do_rb_base as _do_rb_base
-        for dsBootstrap in bootstrapped_dataset_list:
-            resample_results = _do_rb_base(dsBootstrap, gatestrings,
-                                           self.fit, 
-                                           self.fit_parameters_dict,
-                                           self.success_outcomelabel,
-                                           self.d,
-                                           self.weight_data,
-                                           self.pre_avg,
-                                           self.infinite_data,
-                                           self.one_freq_adjust)
-                
-            A_list.append(resample_results.results['A'])
-            B_list.append(resample_results.results['B'])
-            f_list.append(resample_results.results['f'])
-            if self.fit == 'first order':
-                C_list.append(resample_results.results['C'])
-               
-
-        self.results['A_error_BS'] = _np.std(A_list,ddof=1)
-        self.results['B_error_BS'] = _np.std(B_list,ddof=1)
-        self.results['f_error_BS'] = _np.std(f_list,ddof=1)
-        if self.fit == 'first order':
-            self.results['C_error_BS'] = _np.std(C_list,ddof=1)
-
-        self.results['r_error_BS'] = (self.d-1.) / self.d \
-                                         * self.results['f_error_BS']
-
-        print("Bootstrapped error bars computed.  Use print methods to access.")
+        self.data = data
+        self.bootstraps = None

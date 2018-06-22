@@ -19,10 +19,10 @@ from . import compilecnot as _cc
 #
 # Todo : change to have a algorithms list for the CNOT circuit.
 #
+# Todo : change so that the relations are a part of the ProcessorSpec
+# Todo : change so that the function is handed a costfunction
 def compile_stabilizer_state(s, p, pspec, iterations=20, paulirandomize=False, 
-                             improved_CNOT_compiler=True,ICC_custom_ordering=None,
-                                                       ICC_std_ordering='connectivity', ICC_qubitshuffle=False,
-                             relations=None):
+                             algorithm = 'RCACC', aargs = [], relations=None):
     
     assert(_symp.check_valid_clifford(s,p)), "The input s and p are not a valid clifford."
     
@@ -36,18 +36,18 @@ def compile_stabilizer_state(s, p, pspec, iterations=20, paulirandomize=False,
     i = 0
     while i < iterations:
 
-        trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s, pspec, returnall=True,                                                                         improved_CNOT_compiler = improved_CNOT_compiler, ICC_custom_ordering=ICC_custom_ordering, ICC_std_ordering=ICC_std_ordering, ICC_qubitshuffle = ICC_qubitshuffle)
+        tc, tcc = symplectic_as_conditional_clifford_circuit_over_CHP(s, pspec, algorithm, *aargs)
         i += 1
             #
             # Todo: work out how much this all makes sense.
             #
             # Do the depth-compression *before* changing gate library            
-        trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)            
-        trialcircuit.change_gate_library(pspec.compilations['paulieq'])        
-        twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
+        tc.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)            
+        tc.change_gate_library(pspec.compilations['paulieq'])        
+        twoqubit_gatecount = tc.twoqubit_gatecount()
         if twoqubit_gatecount  < min_twoqubit_gatecount :
-            circuit = _copy.deepcopy(trialcircuit)
-            check_circuit = _copy.deepcopy(trialcheck_circuit)
+            circuit = _copy.deepcopy(tc)
+            check_circuit = _copy.deepcopy(tcc)
             min_twoqubit_gatecount = twoqubit_gatecount
  
         assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input ProcessorSpec is not valid or does not contain the neccessary information."
@@ -101,9 +101,8 @@ def compile_stabilizer_state(s, p, pspec, iterations=20, paulirandomize=False,
 # Todo : change to have a algorithms list for the CNOT circuit.
 # Todo : use the symp.postpauli function thing
 #
-def compile_stabilizer_measurement(s,p,pspec,iterations=5,relations=None,paulirandomize=False,
-                                              improved_CNOT_compiler=True,ICC_custom_ordering=None, 
-                                               ICC_std_ordering='connectivity',ICC_qubitshuffle = False):
+def compile_stabilizer_measurement(s, p, pspec, iterations=20, paulirandomize=False,
+                                   algorithm = 'RCACC', aargs = [], relations=None):
     """
     Compiles a circuit that, when followed by a projection onto <0,0,...|,
     is equivalent to implementing the Clifford C defined by the pair (s,p) followed by a
@@ -127,16 +126,16 @@ def compile_stabilizer_measurement(s,p,pspec,iterations=5,relations=None,paulira
     # Todo : remove this try-except method once compiler always works.
     while i < iterations:
         try:
-            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin, pspec, returnall=True, improved_CNOT_compiler=improved_CNOT_compiler, ICC_custom_ordering=ICC_custom_ordering, ICC_std_ordering=ICC_std_ordering, ICC_qubitshuffle = ICC_qubitshuffle)
+            tc, tcc = symplectic_as_conditional_clifford_circuit_over_CHP(sin, pspec, algorithm, *aargs)
             i += 1
-            trialcircuit.reverse()
+            tc.reverse()
             # Do the depth-compression *after* the circuit is reversed
-            trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
-            trialcircuit.change_gate_library(pspec.compilations['paulieq'])
-            twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
+            tc.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
+            tc.change_gate_library(pspec.compilations['paulieq'])
+            twoqubit_gatecount = tc.twoqubit_gatecount()
             if twoqubit_gatecount  < min_twoqubit_gatecount :
-                circuit = _copy.deepcopy(trialcircuit)
-                check_circuit = _copy.deepcopy(trialcheck_circuit)
+                circuit = _copy.deepcopy(tc)
+                check_circuit = _copy.deepcopy(tcc)
                 min_twoqubit_gatecount = twoqubit_gatecount
         except:
             failcount += 1
@@ -181,22 +180,24 @@ def compile_stabilizer_measurement(s,p,pspec,iterations=5,relations=None,paulira
     # Find the needed Pauli at the start    
     pinaltered = pin.copy()
     pinaltered = _symp.construct_valid_phase_vector(implemented_sin_check,pinaltered)      
+    # Unintutively, find_postmultplied is correct here.
+    pauli_layer = _symp.find_postmultipled_pauli(implemented_sin_check,implemented_pin_check,pinaltered)
     
-    s_form = _symp.symplectic_form(n)
-    vec = _np.dot(implemented_sin_check,_np.dot(s_form, (pinaltered - implemented_pin_check)//2))
-    vec = vec % 2
+    #s_form = _symp.symplectic_form(n)
+    #vec = _np.dot(implemented_sin_check,_np.dot(s_form, (pinaltered - implemented_pin_check)//2))
+    #vec = vec % 2
     
-    pauli_layer = []
-    for q in range(0,n):
-        if vec[q] == 0 and vec[q+n] == 0:
-            pauli_layer.append(_Label('I',q))
-        elif vec[q] == 0 and vec[q+n] == 1:
-            pauli_layer.append(_Label('Z',q))
-        elif vec[q] == 1 and vec[q+n] == 0:
-            pauli_layer.append(_Label('X',q))
-        elif vec[q] == 1 and vec[q+n] == 1:
-            pauli_layer.append(_Label('Y',q))
-            
+    #pauli_layer = []
+    #for q in range(0,n):
+    #    if vec[q] == 0 and vec[q+n] == 0:
+    #        pauli_layer.append(_Label('I',q))
+    #    elif vec[q] == 0 and vec[q+n] == 1:
+    #        pauli_layer.append(_Label('Z',q))
+    #    elif vec[q] == 1 and vec[q+n] == 0:
+    #        pauli_layer.append(_Label('X',q))
+    #    elif vec[q] == 1 and vec[q+n] == 1:
+    #        pauli_layer.append(_Label('Y',q))
+          
     paulicircuit = _Circuit(gatestring=pauli_layer,num_lines=n)
     paulicircuit.change_gate_library(pspec.compilations['absolute'])
     circuit.prefix_circuit(paulicircuit)
@@ -206,10 +207,11 @@ def compile_stabilizer_measurement(s,p,pspec,iterations=5,relations=None,paulira
     
     return circuit
 
-
 #
 # Todo: Update to a function that works on all of s, or simplify (with this functinality
 # inside the CNOT-circuit compiler) and put inside the matrix tools .py
+#
+# Todo : this should be in the CNOT compilers part.
 #
 def convert_invertible_to_echelon_form(matrixin, optype='row', position='upper', 
                                        paired_matrix=False, pmatrixin=None):
@@ -396,14 +398,7 @@ def convert_invertible_to_reduced_echelon_form(matrixin,optype='row',position='u
         return matrix, success, instruction_list
 
 
-#def CNOT_circuit_from_Gaussian_elimination(s,connectivity='complete'):
-#    
-#    if connectivity is 'complete':
-#        connectivity = _np.ones((d,d),int) - _np.identity(d,int)
-
-def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=False,improved_CNOT_compiler=True,
-                                                       ICC_custom_ordering=None,
-                                                       ICC_std_ordering='connectivity', ICC_qubitshuffle=False):
+def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None, calg='RCACC', cargs=[]):
     """
     
     """
@@ -613,12 +608,14 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=F
     
     
     
-    if improved_CNOT_compiler:
+    if calg != 'BGE':
         # Let's replace the instructions for 4 with a better CNOT circuit compiler
-        CNOTcircuit = _Circuit(gatestring= instructions4,num_lines=n)
-        CNOTs, CNOTp = _symp.symplectic_rep_of_clifford_circuit(CNOTcircuit)
-        improved_instructions4 = _cc.compile_CNOT_circuit(CNOTs[:n,:n],pspec,custom_ordering=ICC_custom_ordering,
-                                                      std_ordering=ICC_std_ordering,qubitshuffle=ICC_qubitshuffle)
+        CNOtc = _Circuit(gatestring= instructions4,num_lines=n)
+        CNOTs, CNOTp = _symp.symplectic_rep_of_clifford_circuit(CNOtc)
+        if calg == 'RCACC':
+            improved_instructions4 = _cc.compile_CNOT_circuit(CNOTs[:n,:n],pspec,*cargs)
+        else:
+            raise ValueError("calg must be 'BGE' or 'RCAGE'")
         main_instructions =  instructions7 + instructions6 + improved_instructions4 + instructions3 + instructions1
         #print(CNOTs)
         nws, nwp = _symp.symplectic_rep_of_clifford_circuit(_Circuit(gatestring=improved_instructions4,num_lines=n))
@@ -636,9 +633,9 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=F
     scheck, pcheck = _symp.symplectic_rep_of_clifford_circuit(check_circuit)
     assert(_np.array_equal(scheck[:,n:2*n],s[:,n:2*n])), "Compiler has failed!"
 
-    if returnall:
-        #return circuit, check_circuit
-        return circuit, CNOT_pre_circuit
-    else:
-        #return circuit, check_circuit
-        return circuit, CNOT_pre_circuit
+    #if returnall:
+    #    #return circuit, check_circuit
+    return circuit, CNOT_pre_circuit
+    #else:
+    #    #return circuit, check_circuit
+    #    return circuit, CNOT_pre_circuit

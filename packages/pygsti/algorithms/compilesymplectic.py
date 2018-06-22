@@ -14,8 +14,8 @@ from ..baseobjs import Label as _Label
 from ..tools import symplectic as _symp
 from ..tools import matrixmod2 as _mtx
 
-def compile_symplectic(s, pspec=None, iterations=20, algorithms=['DGGE','RGGE'], costfunction='2QGC',
-                       paulirandomize=False):    
+def compile_symplectic(s, pspec=None, iterations=20, algorithms=['DBGGE','RBGGE'], 
+                       costfunction='2QGC', paulirandomize=False, aargs=None):    
     """
     
     """ 
@@ -24,18 +24,16 @@ def compile_symplectic(s, pspec=None, iterations=20, algorithms=['DGGE','RGGE'],
     depth_compression = True
     circuits = []
     
-    if 'DGGE' in algorithms:
+    # Todo : if aargs are specified, pass them to the algorithms.
+    
+    if 'DBGGE' in algorithms:
         
         circuit = ordered_global_gaussian_elimination(s, pspec=pspec, iterations=1, ctype = 'basic', 
                                                depth_compression=depth_compression)
         circuits.append(circuit)      
     
-    if 'RGGE' in algorithms:
-        
-        try:
-            iterations = iterations['RGGE']
-        except:
-            iterations = 4
+    if 'RBGGE' in algorithms:
+
         circuit = randomized_global_gaussian_elimination(s, pspec=pspec, ctype = 'basic',
                                                          costfunction=costfunction, iterations = iterations, 
                                                          depth_compression=depth_compression) 

@@ -6,7 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from ...algorithms import compileclifford as _comp
+from ...algorithms import compileclifford as _cc
+from ...algorithms import compilestabilizer as _cs
 from ...objects import circuit as _cir
 from ...baseobjs import label as _lbl
 from ...tools import symplectic as _symp
@@ -596,8 +597,8 @@ def circuit(pspec, length, sampler='Qelimination', samplerargs=[], addlocal = Fa
 
 
 def direct_rb_circuit(pspec, length, sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[],
-                      randomizeout=False, cliffordtwirl=True, conditionaltwirl=True, compilerargs = [],
-                      partioned=False):
+                      randomizeout=False, cliffordtwirl=True, conditionaltwirl=True, citerations=20,
+                      compilerargs=[], partitioned=False):
                       
     # compiler_algorithm='GGE', depth_compression=True, 
     #    alternatewithlocal = False, localtype = 'primitives', return_partitioned = False, 
@@ -607,14 +608,15 @@ def direct_rb_circuit(pspec, length, sampler='Qelimination', samplerargs=[], add
     #
     # Todo : allow for pauli-twirling in the prep/measure circuits
     #
+    # Todo : add in a custom compiler.
+    #
     n = pspec.number_of_qubits
-    sreps = pspec.models['clifford'].get_clifford_symplectic_reps()
-    
+
     # Sample a random circuit of "native gates".   
     random_circuit = circuit(pspec=pspec, length=length, sampler=sampler, samplerargs=samplerargs, 
                              addlocal=addlocal, lsargs=lsargs)   
     # find the symplectic matrix / phase vector this "native gates" circuit implements.
-    s_rc, p_rc = _symp.symplectic_rep_of_clifford_circuit(random_circuit,srep_dict=sreps)
+    s_rc, p_rc = _symp.symplectic_rep_of_clifford_circuit(random_circuit,pspec=pspec)
     
     # If we are clifford twirling, we do an initial random circuit that is either a uniformly random
     # cliffor or creates a uniformly random stabilizer state from the standard input.
@@ -625,11 +627,12 @@ def direct_rb_circuit(pspec, length, sampler='Qelimination', samplerargs=[], add
         s_composite, p_composite = _symp.compose_cliffords(s_initial, p_initial, s_rc, p_rc)
         # If conditionaltwirl we do a stabilizer prep (a conditional Clifford).
         if conditionaltwirl:
-            initial_circuit = _comp.stabilizer_state_preparation(s_initial, p_initial, pspec,
-                                                                 *compilerargs)           
+            initial_circuit = _cs.compile_stabilizer_state(s_initial, p_initial, pspec, citerations, 
+                                                           *compilerargs)           
         # If not conditionaltwirl, we do a full random Clifford.
         else:
-            initial_circuit = _comp.compile_clifford(s_initial, p_initial, pspec, *compilerargs)
+            initial_circuit = _cc.compile_clifford(s_initial, p_initial, pspec, citerations, 
+                                                     *compilerargs)
         
     # If we are not Clifford twirling, we just copy the effect of the random circuit as the effect
     # of the "composite" prep + random circuit (as here the prep circuit is the null circuit).
@@ -644,73 +647,104 @@ def direct_rb_circuit(pspec, length, sampler='Qelimination', samplerargs=[], add
     # the final bit of circuit will only invert (or conditionally invert) the preceeding circuit
     # up to a random Pauli.
     if randomizeout:
-        print("NOT YET WRITTEN!")
+        p_for_inversion = _symp.random_phase_vector(s_inverse,n)
+    else:
+        p_for_inversion = p_inverse
     
     if conditionaltwirl:
-        inversion_circuit = _comp.stabilizer_measurement(s_inverse, p_inverse, pspec, *compilerargs)   
+        inversion_circuit = _cs.compile_stabilizer_measurement(s_inverse, p_for_inversion, pspec, 
+                                                               citerations,*compilerargs)   
     else:
-        inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, pspec, 
-                                                        depth_compression=depth_compression,
-                                                        algorithm=algorithm,
-                                                        prefix_paulis=False,
-                                                       pauli_randomize=prep_measure_pauli_randomize)
-
-    if not partitioned:
+        inversion_circuit = _cc.compile_clifford(s_inverse, p_for_inversion, pspec, citerations,
+                                                   *compilerargs)
         
-        if twirled:
-            full_circuit = _copy.deepcopy(initial_circuit)
-            full_circuit.append_circuit(random_circuit)
-            full_circuit.append_circuit(inversion_circuit)
-        else:
-            full_circuit = _copy.deepcopy(random_circuit)
-            full_circuit.append_circuit(inversion_circuit)
-         
-        full_circuit.done_editing()        
-        return full_circuit
+    if cliffordtwirl:
+        full_circuit = _copy.deepcopy(initial_circuit)
+        full_circuit.append_circuit(random_circuit)
+        full_circuit.append_circuit(inversion_circuit)
+    else:
+        full_circuit = _copy.deepcopy(random_circuit)
+        full_circuit.append_circuit(inversion_circuit)         
+    full_circuit.done_editing() 
+     
+    # Find the expected outcome of the circuit.
+    s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit,pspec=pspec)
+    assert(_np.array_equal(s_out[:n,n:],_np.zeros((n,n),int)))
+    s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
+    s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
+    idealout = []
+    for q in range(0,n):
+        measurement_out = _symp.pauli_z_measurement(s_outstate, p_outstate, q)
+        bit = measurement_out[1]
+        assert(bit == 0 or bit == 1), "Ideal output is not a computational basis state!"
+        if not randomizeout:
+            assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
+        idealout.append(int(measurement_out[1]))
     
+    if not partitioned:
+        outcircuit = full_circuit
     else:
-        if twirled:
-            initial_circuit.done_editing()
-            inversion_circuit.done_editing()
-            return initial_circuit, random_circuit, inversion_circuit
+        if cliffordtwirl:
+            outcircuit = [initial_circuit, random_circuit, inversion_circuit]
         else:
-            inversion_circuit.done_editing()
-            return random_circuit, inversion_circuit
-        
-def clifford_rb_circuit(pspec, length, algorithms=['DGGE','RGGE'],costfunction='2QGC',
-                       iterations={'RGGE':4}, depth_compression=True, pauli_randomize=False):
-
-    #sreps = pspec.models['clifford'].get_clifford_symplectic_reps()
+            outcircuit = [random_circuit, inversion_circuit]
+    
+    return outcircuit, idealout
+     
+def clifford_rb_circuit(pspec, length, randomizeout=False, citerations=20, compilerargs=[]):
+    """
+    
+    length between 0 and 
+    """
     n = pspec.number_of_qubits
        
+    # Initialize the identity circuit rep.    
     s_composite = _np.identity(2*n,int)
     p_composite = _np.zeros((2*n),int)
-    
+    # Initialize an empty circuit
     full_circuit = _cir.Circuit(gatestring=[],num_lines=n)
     
-    for i in range(0,length):
+    # Sample length+1 Cliffords, compile them, and append them to the current circuit.
+    for i in range(0,length+1):
     
         s, p = _symp.random_clifford(n)
-        circuit = _comp.compile_clifford(s, p, pspec, depth_compression=depth_compression, algorithms=algorithms, 
-                                         costfunction=costfunction, iterations=iterations, prefix_paulis=True,
-                                        pauli_randomize=pauli_randomize)
-        
+        circuit = _cc.compile_clifford(s, p, pspec, iterations=citerations, *compilerargs)       
         # Keeps track of the current composite Clifford
         s_composite, p_composite = _symp.compose_cliffords(s_composite, p_composite, s, p)
         full_circuit.append_circuit(circuit)
-        
     
+    # Find the symplectic rep of the inverse clifford
     s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)
     
-    inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, pspec, depth_compression=depth_compression, 
-                                               algorithms=algorithms, costfunction=costfunction, 
-                                               iterations=iterations, prefix_paulis=True, 
-                                               pauli_randomize=pauli_randomize)
+    # If we want to randomize the expected output then randomize the p_inverse vector, so that
+    # the final bit of circuit will only invert (or conditionally invert) the preceeding circuit
+    # up to a random Pauli.
+    if randomizeout:
+        p_for_inversion = _symp.random_phase_vector(s_inverse,n)
+    else:
+        p_for_inversion = p_inverse
     
+    # Compile the inversion circuit
+    inversion_circuit = _cc.compile_clifford(s_inverse, p_for_inversion, pspec, iterations=citerations, 
+                                               *compilerargs)    
     full_circuit.append_circuit(inversion_circuit)
     full_circuit.done_editing()
+        
+    # Find the expected outcome of the circuit.
+    s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit,pspec=pspec)
+    assert(_np.array_equal(s_out[:n,n:],_np.zeros((n,n),int)))
+    s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
+    s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
+    idealout = []
+    for q in range(0,n):
+        measurement_out = _symp.pauli_z_measurement(s_outstate, p_outstate, q)
+        bit = measurement_out[1]
+        assert(bit == 0 or bit == 1), "Ideal output is not a computational basis state!"
+        if not randomizeout:
+            assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
+        idealout.append(int(measurement_out[1]))
             
-    return full_circuit
+    return full_circuit, idealout
 
 
 

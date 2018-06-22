@@ -14,6 +14,10 @@ from ..baseobjs import Label as _Label
 from ..tools import symplectic as _symp
 from ..tools import matrixmod2 as _mtx
 
+#def compile_cnotcircuit_with_randomized_advanced_gaussian_elimiation#
+#
+#    RDCAGE
+
 
 # Todo : write this function - a cnot-circuit GE algorithm
 def basic_cnotcircuit_gaussian_elimination(s):
@@ -25,6 +29,8 @@ def advanced_cnotcircuit_gaussian_elimination(s):
     circuit = None
     return circuit
 
+# Change so that the ordering is passed to the function
+# Name as compile_cnotcircuit_using_DCAGE
 def compile_CNOT_circuit(mcnot,pspec,custom_ordering=None,std_ordering='connectivity',
                         qubitshuffle=False):
     ##

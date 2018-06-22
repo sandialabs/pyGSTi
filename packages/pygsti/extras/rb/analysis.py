@@ -204,18 +204,29 @@ def custom_fit_data(lengths, ASPs, n, fixed_A=False, fixed_B=False, seed=None):
     
     return results
 
-def std_practice_analysis(lengths, SPs, counts, n, ASPs=None, seed=[0.8,0.95], 
-                 bootstrap_samples=500, asymptote='std', finite_sample_error=True):
+
+def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=1000, 
+                          asymptote='std', finite_sample_error=True):
     
-    if ASPs == None:       
-        ASPs = _np.mean(_np.array(SPs),axis=1)
-    
+    lengths = RBSdataset.lengths
+    ASPs = RBSdataset.ASPs
+    successcounts = RBSdataset.successcounts
+    counts = RBSdataset.counts
+    n = RBSdataset.number_of_qubits
+
     if asymptote == 'std':
         asymptote = 1/2**n
     
-    full_fit, fixed_asymptote_fit = std_fit_data(lengths,ASPs,n,seed=seed,asymptote=asymptote)
+    RBResults = _results.RBResults(RBSdataset)
     
-    full_fit['r_bootstraps'] = bootstrap(lengths, SPs, n, counts, seed=seed, samples=bootstrap_samples, 
+    create_bootstraped_datasets(RBSdataset,finite_sample_error=True)    
+    fit_full
+    full_fit, fixed_asymptote_fit = std_fit_data(RBResults,seed=seed,asymptote=asymptote)
+    
+    #
+    # Todo -- replace with a bootstrap data creation?
+    #
+    full_fit['r_bootstraps'] = bootstrap(RBSdataset, seed=seed, samples=bootstrap_samples, 
               fixed_asymptote=False,  asymptote=None, finite_sample_error=finite_sample_error)
     fixed_asymptote_fit['r_bootstraps'] = bootstrap(lengths, SPs, n, counts, seed=seed, samples=bootstrap_samples, 
               fixed_asymptote=True,  asymptote=asymptote, finite_sample_error=finite_sample_error)
@@ -226,12 +237,11 @@ def std_practice_analysis(lengths, SPs, counts, n, ASPs=None, seed=[0.8,0.95],
     return full_fit, fixed_asymptote_fit
     
     
-def std_fit_data(lengths,ASPs,n,seed=None,asymptote=None):
+def std_fit_data(lengths, ASPs, n, seed=None, asymptote=None):
     
-    # Bounds commented out and hard bounds put into the objective function
-    
-    #fixed_asymptote_fit_out = _minimize(obj_func_fixed_asymptote, seed, args=(lengths,ASPs,n,asymptote), 
-    #                                   method='L-BFGS-B')#,bounds=[[None,None],[0.,1.]]) 
+    lengths = RBSdataset.lengths
+    ASPs = RBSdataset.ASPs
+    n = RBSdataset.number_of_qubits
     
     if asymptote is not None:
         A = asymptote
@@ -239,52 +249,7 @@ def std_fit_data(lengths,ASPs,n,seed=None,asymptote=None):
         A = 1/2**n
     
     fixed_asymptote_fit = custom_fit_data(lengths, ASPs, n, fixed_A=A, fixed_B=False, seed=seed)
-   
     seed_full = [fixed_asymptote_fit['A'], fixed_asymptote_fit['B'], fixed_asymptote_fit['p']]        
-    
-    # Bounds commented out and hard bounds put into the objective function
-    
-    #full_fit_out = _minimize(obj_func, seed_full, args=(lengths,ASPs),method='L-BFGS-B' ) 
     full_fit =  custom_fit_data(lengths, ASPs, n, fixed_A=False, fixed_B=False, seed=seed_full)
     
     return full_fit, fixed_asymptote_fit
-
-def bootstrap(lengths, SPs, n, counts, seed=None, samples=500, 
-              fixed_asymptote=False,  asymptote=None, finite_sample_error=True):
-    
-    failcount = 0
-    r = _np.zeros(samples)    
-    
-    for i in range(samples): 
-        
-        # A new set of bootstrapped survival probabilities.
-        sampled_SPs = []
-        
-        try:
-            for j in range(len(lengths)):
-
-                sampled_SPs.append([])
-                k_at_length = len(SPs[j])
-
-                for k in range(k_at_length):
-                    sampled_SPs[j].append(SPs[j][_np.random.randint(k_at_length)])
-                if finite_sample_error:   
-                    sampled_SPs[j] = _np.random.binomial(counts,sampled_SPs[j])/counts                
-
-            sampled_ASPs = [_np.mean(_np.array(sampled_SPs[k])) for k in range(len(lengths))]
-
-            fit_full, fit_fixed_A = std_fit_data(lengths,sampled_ASPs,n,seed=seed,asymptote=asymptote)
-
-            if fixed_asymptote:
-                r[i] = fit_fixed_A['r']
-            else:
-                r[i] = fit_full['r']
-        except:
-            failcount += 1
-            i = i - 1
-            if failcount > samples:
-                assert(False),"Bootstrap is failing too often!"
-            
-    if failcount > 0:
-        print("Warning: bootstrap failed {} times".format(failcount))
-    return r

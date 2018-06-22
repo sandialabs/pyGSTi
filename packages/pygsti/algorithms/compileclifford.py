@@ -16,7 +16,7 @@ from ..tools import matrixmod2 as _mtx
 
 from . import compilesymplectic as _csymp
 
-def compile_clifford(s, p, pspec=None, iterations=20, algorithms=['DGGE','RGGE'], 
+def compile_clifford(s, p, pspec=None, iterations=20, algorithm='RBGGE', aargs = [],
                      costfunction='2QGC', prefixpaulis=False, paulirandomize=False):
     """
     Compiles an n-qubit Clifford gate, described by the symplectic matrix s and vector p, into
@@ -62,8 +62,9 @@ def compile_clifford(s, p, pspec=None, iterations=20, algorithms=['DGGE','RGGE']
         assert(n == pspec.number_of_qubits), "The Clifford and the ProcessorSpec are for a different number of qubits!"
     
     # Create a circuit that implements a Clifford with symplectic matrix s.
-    circuit = _csymp.compile_symplectic(s, pspec=pspec, iterations=iterations, algorithms=algorithms,
-                                        costfunction= costfunction, paulirandomize=paulirandomize)
+    circuit = _csymp.compile_symplectic(s, pspec=pspec, iterations=iterations, algorithms=[algorithm,],
+                                        costfunction=costfunction, paulirandomize=paulirandomize, 
+                                        aargs=[aargs,])
 
     temp_s, temp_p = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
     

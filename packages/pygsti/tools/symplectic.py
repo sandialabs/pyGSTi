@@ -250,9 +250,11 @@ def check_valid_clifford(s,p):
 
 def construct_valid_phase_vector(s,pseed):
     """
+    # Todo : fix this docstring
+    #
     Constructs a phase vector that, when paired with the provided symplectic matrix, defines
-    a Clifford gate. Any sympletic matrix s is a representation of some Clifford when paired
-    with *some* phase vector. This finds any such phase vector, starting from the provided
+    a Clifford gate. Any sympletic matrix is a representation of some Clifford when paired
+    with ...... This finds any such phase vector, starting from the provided
     seed. If the seed phase vector is -- along with s -- a representation of some Clifford
     this seed is returned.
     
@@ -1387,6 +1389,12 @@ def random_clifford(n):
         
     """     
     s = random_symplectic_matrix(n,convention='standard')
+    p = random_phase_vector(s,n)
+    
+    return s,p
+
+def random_phase_vector(s,n):
+    # Todo : docstring
     p = _np.zeros(2*n,int)
             
     # A matrix to hold all possible phase vectors -- half of which do not, when
@@ -1419,7 +1427,15 @@ def random_clifford(n):
         
     assert(check_valid_clifford(s,p))
     
-    return s,p
+    return p
+
+def bitstring_for_pauli(p):
+    
+    n = len(p)//2
+    bitstring = p[n:]
+    bitstring[bitstring>0] = 1
+    
+    return list(bitstring)
 
 def symplectic_action(m, glabel, qlist, optype='row'):
     """
