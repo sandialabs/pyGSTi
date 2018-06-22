@@ -1,0 +1,10 @@
+# Desciptor
+# {}
+# Number of qubits
+4
+# RB length // Success counts // Number of repeats // Circuit depth // Circuit two-qubit gate count
+1 10 10 2 4
+2 9 20 4 2
+3 9 12 4 1
+3 10 13 3 2
+1 9 11 2 1
