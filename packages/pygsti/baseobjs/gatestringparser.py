@@ -25,9 +25,11 @@ gate      :: gatenm [':' integer ]*
 instrmt   :: instrmt [':' integer ]*
 povm      :: povm [':' integer ]*
 prep      :: prep [':' integer ]*
-strref    :: 'S' '[' reflbl ']'
+strref    :: 'S' '<' reflbl '>'
 slcref    :: strref [ '[' integer ':' integer ']' ]
-expable   :: gate | instrmt | slcref | '(' string ')' | nop
+layerable :: gate | instrmt
+layer     :: layerable [ [ multop ] layerable ]*
+expable   :: gate | instrmt | '[' layer ']' | slcref | '(' string ')' | nop
 expdstr   :: expable [ expop integer ]*
 string    :: expdstr [ [ multop ] expdstr ]*
 pstring   :: [ prep ] string
@@ -97,12 +99,12 @@ class GateStringLexer:
 
     @staticmethod
     def t_STRINGIND(t):
-        r'S(?=\s*\[)'
+        r'S(?=\s*\<)'
         return t
 
     @staticmethod
     def t_REFLBL(t):
-        r'\[\s*[a-zA-Z0-9_]+\s*\]'
+        r'<\s*[a-zA-Z0-9_]+\s*>'
         t.value = t.value[1:-1].strip()
         return t
 
@@ -189,12 +191,38 @@ class GateStringParser(object):
 #
 #HERE
 
+    @staticmethod
+    def p_layerable(p):
+        '''layerable : GATE
+                     | INSTRMT '''
+        p[0] = p[1]
+
+    @staticmethod
+    def p_layer_layerable(p):
+        '''layer : layerable'''
+        p[0] = p[1]
+
+    @staticmethod
+    def p_layer_str(p):
+        '''layer : layer layerable'''
+        p[0] = p[1] + p[2]  # tuple concatenation
+
+    @staticmethod
+    def p_layer(p):
+        '''layer : layer MULTOP layerable'''
+        p[0] = p[1] + p[3]  # tuple concatenation
 
     @staticmethod
     def p_expable_paren(p):
         '''expable : LPAREN string RPAREN'''
         p[0] = p[2]
 
+    @staticmethod
+    def p_expable_layer(p):
+        '''expable : OPENBR layer CLOSEBR'''
+        p[0] = p[2], # -> tuple
+
+        
     @staticmethod
     def p_expable_single(p):
         '''expable : GATE
@@ -225,7 +253,7 @@ class GateStringParser(object):
     @staticmethod
     def p_string_str(p):
         '''string : string expdstr'''
-        p[0] = p[1] + p[2]  # tuple conatenation
+        p[0] = p[1] + p[2]  # tuple concatenation
 
     @staticmethod
     def p_string(p):

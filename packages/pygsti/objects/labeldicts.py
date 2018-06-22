@@ -33,7 +33,7 @@ class PrefixOrderedDict(_collections.OrderedDict):
 
     def __setitem__(self, key, val):
         """ Assumes key is a Label object """
-        if not key.name.startswith(self._prefix):
+        if not key.has_prefix(self._prefix):
             raise KeyError("All keys must be strings, " +
                            "beginning with the prefix '%s'" % self._prefix)
         super(PrefixOrderedDict,self).__setitem__(key, val)

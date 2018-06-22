@@ -32,6 +32,13 @@ class GateSetChild(object):
         """ Sets the parent of this object."""
         self._parent = value
 
+    def __getstate__(self):
+        """ Don't pickle parent """
+        d = self.__dict__.copy()
+        d['_parent'] = None
+        return d
+
+
         
 
 class GateSetMember(GateSetChild):
@@ -233,11 +240,12 @@ class GateSetMember(GateSetChild):
         
         return gateObj
 
-    def __getstate__(self):
-        """ Don't pickle parent """
-        d = self.__dict__.copy()
-        d['_parent'] = None
-        return d
+    #TODO: REMOVE - base class (GateSetChild) handles this
+    #def __getstate__(self):
+    #    """ Don't pickle parent """
+    #    d = self.__dict__.copy()
+    #    d['_parent'] = None
+    #    return d
 
 
 def _compose_gpindices(parent_gpindices, child_gpindices):

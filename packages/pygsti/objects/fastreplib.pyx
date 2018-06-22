@@ -953,8 +953,8 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm):
     #Get (extension-type) representation objects
     rhorep = rhoVec.torep('prep')
     ereps = [ E.torep('effect') for E in EVecs]  # could cache these? then have torep keep a non-dense rep that can be quickly kron'd for a tensorprod spamvec
-    gate_lookup = { lbl:i for i,lbl in enumerate(calc.gates.keys()) } # gate labels -> ints for faster lookup
-    gatereps = { i:calc.gates[lbl].torep() for lbl,i in gate_lookup.items() }
+    gate_lookup = { lbl:i for i,lbl in enumerate(evalTree.gateLabels) } # gate labels -> ints for faster lookup
+    gatereps = { i:calc._getgate(lbl).torep() for lbl,i in gate_lookup.items() }
     
     # convert to C-mode:  evaltree, gate_lookup, gatereps
     cdef c_evalTree = convert_evaltree(evalTree, gate_lookup)
@@ -1059,8 +1059,8 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     #Get (extension-type) representation objects
     rhorep = calc.preps[rholabel].torep('prep')
     ereps = [ calc.effects[el].torep('effect') for el in elabels]
-    gate_lookup = { lbl:i for i,lbl in enumerate(calc.gates.keys()) } # gate labels -> ints for faster lookup
-    gatereps = { i:calc.gates[lbl].torep() for lbl,i in gate_lookup.items() }
+    gate_lookup = { lbl:i for i,lbl in enumerate(evalTree.gateLabels) } # gate labels -> ints for faster lookup
+    gatereps = { i:calc._getgate(lbl).torep() for lbl,i in gate_lookup.items() }
     
     # convert to C-mode:  evaltree, gate_lookup, gatereps
     cdef c_evalTree = convert_evaltree(evalTree, gate_lookup)
@@ -1096,7 +1096,7 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
             #rebuild reps (not evaltree or gate_lookup)
             rhorep = calc.preps[rholabel].torep('prep')
             ereps = [ calc.effects[el].torep('effect') for el in elabels]
-            gatereps = { i:calc.gates[lbl].torep() for lbl,i in gate_lookup.items() }
+            gatereps = { i:calc._getgate(lbl).torep() for lbl,i in gate_lookup.items() }
             c_rho = convert_rhorep(rhorep)
             c_ereps = convert_ereps(ereps)
             c_gatereps = convert_gatereps(gatereps)
@@ -1138,7 +1138,8 @@ cdef vector[vector[SVTermCRep_ptr]] sv_extract_cterms(python_termrep_lists, int 
 def SV_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None, fastmode=True):
 
     # Create gatelable -> int mapping to be used throughout
-    glmap = { gl: i for i,gl in enumerate(calc.gates.keys()) }
+    distinct_gateLabels = sorted(set(gatestring))
+    glmap = { gl: i for i,gl in enumerate(distinct_gateLabels) }
 
     # Convert gatestring to a vector of ints
     cdef int i
@@ -1153,9 +1154,9 @@ def SV_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=Non
 
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    gate_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in gate.get_order_terms(order)]
+    gate_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in calc._getgate(glbl).get_order_terms(order)]
                                       for order in range(calc.max_order+1) ]
-                       for glbl,gate in calc.gates.items() }
+                       for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
     rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.preps[rholabel].get_order_terms(order)]
@@ -1608,7 +1609,8 @@ cdef vector[vector[SBTermCRep_ptr]] sb_extract_cterms(python_termrep_lists, int 
 def SB_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None, fastmode=True):
 
     # Create gatelable -> int mapping to be used throughout
-    glmap = { gl: i for i,gl in enumerate(calc.gates.keys()) }
+    distinct_gateLabels = sorted(set(gatestring))
+    glmap = { gl: i for i,gl in enumerate(distinct_gateLabels) }
 
     # Convert gatestring to a vector of ints
     cdef int i
@@ -1623,9 +1625,9 @@ def SB_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=Non
     
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    gate_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in gate.get_order_terms(order)]
+    gate_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in calc._getgate(glbl).get_order_terms(order)]
                                       for order in range(calc.max_order+1) ]
-                       for glbl,gate in calc.gates.items() }
+                       for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
     rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.preps[rholabel].get_order_terms(order)]

@@ -47,7 +47,8 @@ class Circuit(_gstr.GateString):
     manipulating quantum circuits. E.g., basic depth compression algorithms.
     """
     
-    def __init__(self, line_items=None, gatestring=None, num_lines=None, line_labels=None):
+    def __init__(self, line_items=None, gatestring=None, num_lines=None,
+                 line_labels=None, parallelize=False):
         """
         Creates a new Circuit object, encapsulating a quantum circuit.
 
@@ -84,6 +85,11 @@ class Circuit(_gstr.GateString):
             length of this list equals the number of lines in the circuit, 
             and if `line_labels` is not given these labels default to the 
             integers starting with 0.
+
+        parallelize : bool, optional
+            Only used when initializing from `gatestring`.  When True, automatic
+            parallelization is performed: consecutive gates in `gatestring`
+            acting on disjoint sets of qubits are be placed in the same layer.
         """
         assert((line_items is not None) or (gatestring is not None) or (num_lines is not None) or (line_labels is not None)), \
             "At least one argument must be not None!"
@@ -117,7 +123,7 @@ class Circuit(_gstr.GateString):
                 self.line_labels = list(range(self.number_of_lines))
             
             if gatestring is not None:
-                self._initialize_from_gatestring(gatestring)
+                self._initialize_from_gatestring(gatestring, parallelize)
             else:
                 self.clear() # initializes an empty circuit
 
@@ -146,16 +152,20 @@ class Circuit(_gstr.GateString):
         
         #Add gates
         for j in range(nlayers): # j = layer index
+            layer_list = []
             processed_lines = set()
             for line_lbl,line in zip(self.line_labels, self.line_items):
                 if line_lbl in processed_lines: continue # we've already added the gate/item on this line (e.g. 2Q gates)
                 if len(line) <= j: continue # this line doesn't have a j-th layer (is this possible?)
 
                 lbl = line[j]
-                if line[j].name != IDENT:
-                    label_list.append( line[j] ) # don't include exact identities
+                if line[j].name != IDENT: #Note: it's OK to use .name on line items (all are *simple* labels)
+                    layer_list.append( line[j] ) # don't include exact identities
                 actson = lbl.qubits if (lbl.qubits is not None) else self.line_labels # None == "all lines"
                 processed_lines.update(actson)
+
+            if len(layer_list) > 0:
+                label_list.append( _Label(layer_list) )
                 
         return tuple(label_list)
 
@@ -196,6 +206,29 @@ class Circuit(_gstr.GateString):
                                " circuit.done_editing() beforehand."))
             self.done_editing()
         return super(Circuit,self).__hash__()
+
+
+    def map_state_space_labels(self, mapper): # a gate string method that we need to implement correctly for Circuit TODO
+        """
+        Return a copy of this gate string with all of the state-space-labels
+        (often just qubit labels) updated according to a mapping function.
+
+        For example, calling this function with `mapper = {0: 1, 1: 3}`
+        on the string "Gx:0Gy:1Gx:1" would return "Gx:1Gy:3Gx:3".
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing state-space-label values
+            and whose value are the new labels, or a function which takes a
+            single (existing label) argument and returns a new label.
+
+        Returns
+        -------
+        GateString
+        """
+        raise NotImplementedError("TODO")
+
                       
     def clear(self):
         """
@@ -207,7 +240,7 @@ class Circuit(_gstr.GateString):
             self.line_items.append([])
         self._tup_dirty = True
                         
-    def _initialize_from_gatestring(self,gatestring):
+    def _initialize_from_gatestring(self,gatestring,parallelize):
         """
         Initializes self.line_items from a sequence of Label objects.
         
@@ -216,6 +249,11 @@ class Circuit(_gstr.GateString):
         gatestring : GateString or tuple
             A sequence of state preparation (optional), gates, and measurement
             (optional), given by a :class:`GateString` object.
+
+        parallelize : bool
+            Whether or not automatic parallelization should be performed, where
+            subsequent gates in `gatestring` acting on disjoint sets of qubits
+            should be placed in the same layer.
         """
         assert(not self._static),"Cannot edit a read-only circuit!"
         
@@ -230,36 +268,37 @@ class Circuit(_gstr.GateString):
 
         # keeps track of which gates have been added to the circuit from the list.
         j = 0
+        
         # keeps track of the circuit layer number
         layer_number = 0
         
         while j < len(gatestring):
-            
-            # The gates that are going into this layer.
-            layer = []
-            # The number of gates beyond j that are going into this layer.
-            k = 0
-            # The qubits used in this layer.
-            used_qubits = set()
-    
-            while j+k < len(gatestring):
-                
-                # look at the j+kth gate and include in this layer
-                gate = gatestring[j+k]
-                gate_qubits = gate.qubits if (gate.qubits is not None) \
-                              else self.line_labels  # then gate uses *all* lines
+            layer = [] # The gates that are going into this layer.
 
-                if len(used_qubits.intersection(gate_qubits)) > 0:
-                    break # `gate` can't fit in this layer
+            if parallelize:
+                k = 0 # The number of gates beyond j that are going into this layer.
+                used_qubits = set() # The qubits used in this layer.
+                while j+k < len(gatestring):
                     
-                layer.append(gate)
-                used_qubits.update(gate_qubits)                    
-                    
-                # look at the next gate in the list, which will be
-                # added to the layer if it does not act on any qubits
-                # with a gate already in this layer
-                k += 1                
-            
+                    # look at the j+kth gate and include in this layer
+                    gate = gatestring[j+k] # really a gate *label*
+                    gate_qubits = gate.qubits if (gate.qubits is not None) \
+                                  else self.line_labels  # then gate uses *all* lines
+    
+                    if len(used_qubits.intersection(gate_qubits)) > 0:
+                        break # `gate` can't fit in this layer
+                        
+                    layer.append(gate)
+                    used_qubits.update(gate_qubits)                    
+                        
+                    # look at the next gate in the list, which will be
+                    # added to the layer if it does not act on any qubits
+                    # with a gate already in this layer
+                    k += 1
+            else: # just add the next gate label as the next layer
+                k = 1 # The number of gates beyond j that are going into this layer.
+                layer.append(gatestring[j])
+                
             # Insert the layer into the circuit.
             self.insert_layer(layer,layer_number)
             
@@ -291,9 +330,13 @@ class Circuit(_gstr.GateString):
         for i in range(0,self.number_of_lines):
             self.line_items[i].insert(j,_Label(IDENT,self.line_labels[i]))
             
-        # Put the gate label in
-        for i in gatelbl.qubits:
-            self.line_items[i][j] = gatelbl
+        # Put the gate label in - note this label may
+        # be a "parallel-gate" label and have mulitple components.
+        for gl_comp in gatelbl.components:
+            gate_qubits = gl_comp.qubits if (gl_comp.qubits is not None) \
+                          else self.line_labels
+            for i in gate_qubits:
+                self.line_items[i][j] = gl_comp
 
         self._tup_dirty = True
 
@@ -326,10 +369,13 @@ class Circuit(_gstr.GateString):
         # Put the gates in.
         for i,line_label in enumerate(self.line_labels):
             for gatelbl in circuit_layer:
-                gate_qubits = gatelbl.qubits if (gatelbl.qubits is not None) \
+                # circuit layer can contain "parallel" gate layers, unlike
+                # the values of self.line_items which are all simple labels
+                for gl_comp in gatelbl.components:
+                    gate_qubits = gl_comp.qubits if (gl_comp.qubits is not None) \
                               else self.line_labels
-                if line_label in gate_qubits:
-                    self.line_items[i][j] = gatelbl
+                    if line_label in gate_qubits:
+                        self.line_items[i][j] = gl_comp
                     
         self._tup_dirty = True
                     
@@ -432,7 +478,7 @@ class Circuit(_gstr.GateString):
         # Insert the circuit
         self.insert_circuit(circuit,j+1)
         
-        
+
     def replace_layer_with_layer(self,circuit_layer,j):
         """
         Replace a layer with a layer. The input layer does not
@@ -460,9 +506,10 @@ class Circuit(_gstr.GateString):
         
         # Write in the gates, from the layer to be inserted.
         for q in range(0,self.number_of_lines):
-            for qq in range(0,len(circuit_layer)):
-                if q in circuit_layer[qq].qubits:
-                    self.line_items[q][j] = circuit_layer[qq]
+            for gatelbl in circuit_layer:
+                for sub_gl in gatelbl.components:
+                    if q in sub_gl.qubits:
+                        self.line_items[q][j] = sub_gl
         self._tup_dirty = True
 
         
@@ -697,21 +744,32 @@ class Circuit(_gstr.GateString):
         A text rendering of the circuit.
         """
         s = ''
+
+        def abbrev(lbl,k): #assumes a simple label w/ name & qubits
+            """ Returns what to print on line 'k' for label 'lbl' """
+            if lbl.number_of_qubits == 1:
+                return lbl.name
+            elif lbl.name in ('CNOT','Gcnot'): # qubit indices = (control,target)
+                # Tim: display *other* CNOT qubit on each line
+                if k == lbl.qubits[0]: return 'C' + str(lbl.qubits[1])
+                else:                  return 'T' + str(lbl.qubits[0])          
+            else:
+                return str(lbl)
+        
+        max_labellen = [ max([ len(abbrev(self.line_items[i][j],i))
+                               for i in range(0,self.number_of_lines)])
+                         for j in range(0,self.depth()) ]
+
         for i in range(0,self.number_of_lines):
             s += 'Qubit {} ---'.format(i)
-            for j in range(0,self.depth()):
+            for j,maxlbllen in enumerate(max_labellen):
                 if self.line_items[i][j].name == IDENT:
                     # Replace with special idle print at some point
-                    s += '|  |-'
-                elif self.line_items[i][j].number_of_qubits == 1:
-                    s += '|' + self.line_items[i][j].name + ' |-'
-                elif self.line_items[i][j].name == 'CNOT':
-                    if self.line_items[i][j].qubits[0] is i:
-                        s += '|'+'C' + str(self.line_items[i][j].qubits[1]) + '|-'
-                    else:
-                        s += '|'+'T' + str(self.line_items[i][j].qubits[0]) + '|-'
+                    s += '-'*(maxlbllen+3) # 1 for each pipe, 1 for joining dash
                 else:
-                    s += self.line_items[i][j].__str__() + '|-|' 
+                    lbl = abbrev(self.line_items[i][j],i)
+                    pad = maxlbllen - len(lbl)
+                    s += '|' + lbl + '|-' + '-'*pad
             s += '--\n'
 
         return s
@@ -983,8 +1041,8 @@ class Circuit(_gstr.GateString):
             that are float probabilities.
         """
         return gateset.probs(self)
-        #return _sim.simulate(self,model,inputstate=inputstate,store=store,returnall=returnall)
 
+    
     def done_editing(self):
         """
         Make this Circuit read-only, so that it can be hashed (used as a

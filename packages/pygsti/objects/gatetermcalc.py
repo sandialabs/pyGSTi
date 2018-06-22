@@ -46,7 +46,7 @@ class GateTermCalc(GateCalc):
     that can be expanded into terms of different orders and PureStateSPAMVecs.
     """
 
-    def __init__(self, dim, gates, preps, effects, paramvec, max_order):
+    def __init__(self, dim, gates, preps, effects, paramvec, autogator, max_order):
         """
         Construct a new GateTermCalc object.
 
@@ -78,7 +78,7 @@ class GateTermCalc(GateCalc):
 
         self.max_order = max_order
         super(GateTermCalc, self).__init__(
-            dim, gates, preps, effects, paramvec)
+            dim, gates, preps, effects, paramvec, autogator)
         if self.evotype not in ("svterm","cterm"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "term-based calculations" % self.evotype))
@@ -86,7 +86,8 @@ class GateTermCalc(GateCalc):
     def copy(self):
         """ Return a shallow copy of this GateMatrixCalc """
         return GateTermCalc(self.dim, self.gates, self.preps,
-                            self.effects, self.paramvec)
+                            self.effects, self.paramvec,
+                            self.autogator, self.max_order)
 
         
     def _rhoE_from_spamTuple(self, spamTuple):

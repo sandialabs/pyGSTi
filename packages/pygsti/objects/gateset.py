@@ -34,6 +34,7 @@ from . import gaugegroup as _gg
 from . import gatematrixcalc as _gatematrixcalc
 from . import gatemapcalc as _gatemapcalc
 from . import gatetermcalc as _gatetermcalc
+from . import autogator as _autogator
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
@@ -130,6 +131,7 @@ class GateSet(object):
         self._default_gauge_group = None
         self._paramvec = _np.zeros(0, 'd')
         self._rebuild_paramvec()
+        self._autogator = _autogator.SimpleCompositionAutoGator(self) # the default
 
         super(GateSet, self).__init__()
 
@@ -438,15 +440,15 @@ class GateSet(object):
 
         if not isinstance(label, _Label): label = _Label(label)
 
-        if label.name.startswith(self.preps._prefix):
+        if label.has_prefix(self.preps._prefix):
             self.preps[label] = value
-        elif label.name.startswith(self.povms._prefix):
+        elif label.has_prefix(self.povms._prefix):
             self.povms[label] = value
-        #elif label.name.startswith(self.effects._prefix):
+        #elif label.has_prefix(self.effects._prefix):
         #    self.effects[label] = value
-        elif label.name.startswith(self.gates._prefix):
+        elif label.has_prefix(self.gates._prefix):
             self.gates[label] = value
-        elif label.name.startswith(self.instruments._prefix):
+        elif label.has_prefix(self.instruments._prefix, typ="any"):
             self.instruments[label] = value
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
@@ -465,15 +467,15 @@ class GateSet(object):
 
         if not isinstance(label, _Label): label = _Label(label)
 
-        if label.name.startswith(self.preps._prefix):
+        if label.has_prefix(self.preps._prefix):
             return self.preps[label]
-        elif label.name.startswith(self.povms._prefix):
+        elif label.has_prefix(self.povms._prefix):
             return self.povms[label]
         #elif label.name.startswith(self.effects._prefix):
         #    return self.effects[label]
-        elif label.name.startswith(self.gates._prefix):
+        elif label.has_prefix(self.gates._prefix):
             return self.gates[label]
-        elif label.name.startswith(self.instruments._prefix):
+        elif label.has_prefix(self.instruments._prefix, typ="any"):
             return self.instruments[label]
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
@@ -592,6 +594,7 @@ class GateSet(object):
             self._dim = stateDict['_dim']
             self._calcClass = stateDict.get('_calcClass',_gatematrixcalc.GateMatrixCalc)
             self._evotype = "densitymx"
+            self._autogator = None # the default for *old* gatesets
             self._default_gauge_group = stateDict['_default_gauge_group']
             self.basis = stateDict.get('basis', _Basis('unknown', None))
             if self.basis.name == "unknown" and '_basisNameAndDim' in stateDict:
@@ -833,6 +836,25 @@ class GateSet(object):
         self._paramvec = v
         #print("DEBUG: Done rebuild: %d params" % len(v))
 
+    def _init_virtual_obj(self, obj):
+        """ 
+        Initializes a "virtual object" - an object (e.g. Gate) that *could* be a
+        member of the GateSet but won't be, as it's just built for temporary
+        use (e.g. the parallel action of several "base" gates).  As such
+        we need to fully initialize its parent and gpindices members so it 
+        knows it belongs to this GateSet BUT it's not allowed to add any new
+        parameters (they'd just be temporary).  It's also assumed that virtual
+        objects don't need to be to/from-vectored as there are already enough
+        real (non-virtual) gates/spamvecs/etc. to accomplish this.
+        """
+        if obj.gpindices is not None:
+            assert(obj.parent is self), "Virtual obj has incorrect parent already set!"
+            return # if parent is already set we assume obj has already been init
+
+        #Assume all parameters of obj are new independent parameters
+        num_new_params = obj.allocate_gpindices(self.num_params(), self)
+        assert(num_new_params == 0),"Virtual object is requesting %d new params!" % num_new_params
+
 
     def to_vector(self):
         """
@@ -973,7 +995,7 @@ class GateSet(object):
 
         assert(self._calcClass is not None), "Gateset does not have a calculator setup yet!"
         return self._calcClass(self._dim, compiled_gates, self.preps,
-                               compiled_effects, self._paramvec, **kwargs)
+                               compiled_effects, self._paramvec, self._autogator, **kwargs)
 
 
     def split_gatestring(self, gatestring, erroron=('prep','povm')):
@@ -1124,13 +1146,43 @@ class GateSet(object):
                         are already build (and won't be modified anymore).
             """
             for i,gate_label in enumerate(s[start:],start=start):
-                if gate_label in self.instruments:
-                    #we've found an instrument - recurse!
-                    for inst_el_lbl in self.instruments[gate_label]:
-                        compiled_el_lbl = gate_label + "_" + inst_el_lbl
+
+                # OLD: now allow "gate-level" labels which can contain
+                # multiple (parallel) instrument labels
+                #if gate_label in self.instruments: 
+                #    #we've found an instrument - recurse!
+                #    for inst_el_lbl in self.instruments[gate_label]:
+                #        compiled_el_lbl = gate_label + "_" + inst_el_lbl
+                #        process(s[0:i] + _gs.GateString((compiled_el_lbl,)) + s[i+1:],
+                #                spamtuples, elIndsToOutcomes, gate_outcomes + (inst_el_lbl,), i+1)
+                #    break
+
+                if any([ sub_gl in self.instruments for sub_gl in gate_label.components]):
+                    # we've found an instrument - recurse!
+                    sublabel_tups_to_iter = [] # one per label component (may be only 1)
+                    for sub_gl in gate_label.components:
+                        if sub_gl in self.instruments:
+                            sublabel_tups_to_iter.append( [ (sub_gl,inst_el_lbl)
+                                for inst_el_lbl in self.instruments[sub_gl].keys()])
+                        else:
+                            sublabel_tups_to_iter.append( [(sub_gl,None)] ) # just a single element
+                            
+                    for sublabel_tups in _itertools.product(*sublabel_tups_to_iter):
+                        sublabels = [] # the sub-labels of the overall gate label to add
+                        outcomes = [] # the outcome tuple associated with this overall label
+                        for sub_gl,inst_el_lbl in sublabel_tups:
+                            if inst_el_lbl is not None:
+                                sublabels.append(sub_gl + "_" + inst_el_lbl)
+                                outcomes.append(inst_el_lbl)
+                            else:
+                                sublabels.append(sub_gl)
+                                
+                        compiled_el_lbl = _Label(sublabels)
+                        compiled_el_outcomes = tuple(outcomes)
                         process(s[0:i] + _gs.GateString((compiled_el_lbl,)) + s[i+1:],
-                                spamtuples, elIndsToOutcomes, gate_outcomes + (inst_el_lbl,), i+1)
+                                spamtuples, elIndsToOutcomes, gate_outcomes + compiled_el_outcomes, i+1)
                     break
+                    
             else: #no instruments -- add "raw" gate string s
                 if s in raw_spamTuples_dict:
                     assert(gate_outcomes == raw_gateOutcomes_dict[s]) #DEBUG
@@ -1914,16 +1966,11 @@ class GateSet(object):
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
 
-        compiled_gate_labels = list(self.gates.keys())
-        for inst_lbl,inst in self.instruments.items():
-            compiled_gate_labels.extend(list(inst.compile_gates(inst_lbl).keys()))
-
         compiled_gatestrings, elIndices, outcomes, nEls = \
                             self.compile_gatestrings(gatestring_list)
 
         evalTree = self._calc().construct_evaltree()
-        evalTree.initialize([""] + compiled_gate_labels,
-                            compiled_gatestrings, numSubtreeComms)
+        evalTree.initialize(compiled_gatestrings, numSubtreeComms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
                     (len(gatestring_list),_time.time()-tm)); tm = _time.time()

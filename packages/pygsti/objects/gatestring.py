@@ -63,8 +63,7 @@ class GateString(object):
 
         def convert_to_label(l):
             if isinstance(l, _Label): return l
-            elif _compat.isstr(l): return _Label(l,None)
-            else: return _Label(l[0],l[1:]) #assume label is an iterable of (name, stateSpcLbl0, stateSpcLbl1, ...)
+            else: return _Label(l) # takes care of all other cases
 
         if tupleOfGateLabels is None and stringRepresentation is None:
             raise ValueError("tupleOfGateLabels and stringRepresentation cannot both be None");

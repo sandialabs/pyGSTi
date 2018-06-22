@@ -23,19 +23,13 @@ class TermEvalTree(EvalTree):
         """ Create a new, empty, evaluation tree. """
         super(TermEvalTree, self).__init__(items)
 
-    def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1, maxCacheSize=None):
+    def initialize(self, compiled_gatestring_list, numSubTreeComms=1, maxCacheSize=None):
         """
         Initialize an evaluation tree using a set of complied gate strings.
         This function must be called before using this EvalTree.
 
         Parameters
         ----------
-        gateLabels : list of strings
-            A list of all the single gate labels to
-            be stored at the beginning of the tree.  This
-            list must include all the gate labels contained
-            in the elements of gatestring_list.
-
         gatestring_list : list of (tuples or GateStrings)
             A list of tuples of gate labels or GateString
             objects, specifying the gate strings that
@@ -52,7 +46,11 @@ class TermEvalTree(EvalTree):
         None
         """
         #tStart = _time.time() #DEBUG TIMER
-        self.gateLabels = gateLabels
+
+        # gateLabels : A list of all the distinct gate labels found in
+        #              compiled_gatestring_list.  Used in calc classes
+        #              as a convenient precomputed quantity.
+        self.gateLabels = self._get_gateLabels(compiled_gatestring_list)
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 

@@ -40,7 +40,7 @@ class GateCalc(object):
     fundamental operations.
     """
 
-    def __init__(self, dim, gates, preps, effects, paramvec):
+    def __init__(self, dim, gates, preps, effects, paramvec, autogator):
         """
         Construct a new GateCalc object.
 
@@ -64,11 +64,14 @@ class GateCalc(object):
 
         paramvec : ndarray
             The parameter vector of the GateSet.
+
+        autogator : TODO docstring
         """
         self.dim = dim
         self.gates = gates
         self.preps = preps
         self.effects = effects
+        self.autogator = autogator
 
         #Conversion of labels -> integers for speed & C-compatibility
         #self.gate_lookup = { lbl:i for i,lbl in enumerate(gates.keys()) }
@@ -88,7 +91,13 @@ class GateCalc(object):
         if len(gates)>0: self.evotype = next(iter(gates.values()))._evotype
         if len(preps)>0: self.evotype = next(iter(preps.values()))._evotype
         if len(effects)>0: self.evotype = next(iter(effects.values()))._evotype
-        
+
+    def _getgate(self, lbl):
+        """ Don't just access self.gates anymore - if `lbl` isn't found use
+            the "auto-gator" """
+        if lbl in self.gates: return self.gates[lbl]
+        if self.autogator: return self.autogator(self.gates, lbl)
+        raise KeyError("%s is not a recognized gate label!" % repr(lbl))
 
     def to_vector(self):
         """
