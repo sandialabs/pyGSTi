@@ -7,29 +7,77 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
+import copy as _copy
 
 class RBSummaryDataset(object):
     """
-    Encapsulates a summary dataset.
+    An object to summarize the results of RB experiments as relevant to implementing a standard RB analysis on the data. 
+
+    This dataset does not contain most of the information in RB experiment results, because it records only the "RB length" of a circuit, 
+    how many times the circuit result in "success", and -- optionally -- some basic circuit information, that can be helpful in understanding
+    the results.
 
     """
-    def __init__(self, n, lengths, successcounts, totalcounts, circuitdepths=None, circuit2Qgcounts=None):
-        
-        self.number_of_qubits = n
+    def __init__(self, number_of_qubits, lengths, successcounts=None, successprobabilities=None, totalcounts=None, 
+                circuitdepths=None, circuit2Qgcounts=None, finitesampling=True, descriptor=None):
+
+        """
+        Initialize an RB summary dataset.
+
+        Parameters
+        ----------
+        number_of_qubits: int
+            The number of qubits the dataset is for. This should be the number of qubits the RB experiments where
+            "holistically" performed on. This dataset type is not suitable for, e.g., simultaneous RB, which might
+            consist of 1-qubit RB simultaneous on 10 qubits.
+
+        lengths: list of ints
+            A list of the "RB lengths" that the data is for. I.e., these are the "m's" in Pm = A + Bp^m.
+            For direct RB this should be the number of circuit layers of native gates in the "core" circuit (i.e.,
+            not including the prep/measure stabilizer circuits). For Clifford RB this should be the number of 
+            Cliffords in the circuit (+ an arbitrary constant, traditionally -1, but -2 is most consistent with
+            direct RB) *before* it is compiled into the native gates.
+
+        successcounts: None or list of list of ints.
+            ......
+            
+
+        """       
+        assert(not (successcounts == None and successprobabilities == None)), "Either success probabilities or success counts must be provided!"
+        assert(not (successcounts != None and successprobabilities != None)), "Success probabilities *and* success counts should not both be provided!"
+        assert(not (successcounts != None and totalcounts == None)), "If success counts are provided total counts must be provided as well!"
+
+        self.number_of_qubits = number_of_qubits
         self.lengths = lengths
         self.successcounts = successcounts
+        self.successprobabilities = successprobabilities
         self.totalcounts = totalcounts
         self.circuitdepths = circuitdepths
         self.circuit2Qgcounts = circuit2Qgcounts
-        
+        self.finitesampling = finitesampling
+        self.descriptor = descriptor
+
+        # If they are not provided, create the success probabilities
+        if successprobabilities == None:
+            SPs = []
+            for i in range(0,len(lengths)):
+                SParray = _np.array(successcounts[i])/_np.array(totalcounts[i])
+                SPs.append(list(SParray))
+            self.successprobabilities = SPs 
+
         # Create the average success probabilities.
-        ASPs = []
-        SPs = []
+        ASPs = []       
         for i in range(0,len(lengths)):
-            SParray = _np.array(successcounts[i])/_np.array(totalcounts[i])
-            SPs.append(list(SParray))
-            ASPs.append(_np.mean(SParray))        
+            ASPs.append(_np.mean(_np.array(self.successprobabilities[i])))        
         self.ASPs = ASPs
+
+        # If data is provided as probabilities, but we know the total counts, we populate self.successcounts
+        if successcounts == None and totalcounts != None:
+            SCs = []
+            for i in range(0,len(lengths)):
+                SCarray = _np.round(_np.array(successprobabilities[i])*_np.array(totalcounts[i]))
+                SCs.append([int(k) for k in SCarray])
+            self.successcounts = SCs 
         
     def generate_bootstrap(self, finite_sample_error=True):
 
@@ -52,14 +100,41 @@ class RBSummaryDataset(object):
                                             self.totalcounts, self.circuitdepths, self.circuit2Qgcounts)
                     
         return BStrappeddataset
+
+    def create_smaller_dataset(self, numberofcircuits):
+
+        newRBSdataset = _copy.deepcopy(self)
+        for i in range(len(newRBSdataset.lengths)):
+            if newRBSdataset.successcounts != None:
+                newRBSdataset.successcounts[i] = newRBSdataset.successcounts[i][:numberofcircuits]
+            if newRBSdataset.successprobabilities != None:
+                newRBSdataset.successprobabilities[i] = newRBSdataset.successprobabilities[i][:numberofcircuits]
+            if newRBSdataset.totalcounts != None:
+                newRBSdataset.totalcounts[i] = newRBSdataset.totalcounts[i][:numberofcircuits]
+            if newRBSdataset.circuitdepths != None:
+                newRBSdataset.circuitdepths[i] = newRBSdataset.circuitdepths[i][:numberofcircuits]
+            if newRBSdataset.circuit2Qgcounts != None:
+                newRBSdataset.circuit2Qgcounts[i] = newRBSdataset.circuit2Qgcounts[i][:numberofcircuits]
+
+        return newRBSdataset
     
-    def std_analysis():
+    #def std_analysis():
         
         # A wrap-around for ....
 
-class RBResults(object):
     
-    def __init__(self, data):
+    # Can't have this as a method, because io imports this file.    
+    #def write_to_file(self,filename):
+    #    """
+    #    Writes the dataset to a .txt file that can be read back in using the rb.io methods.
+    #    """
+    #    _io.write_rb_summary_dataset_to_file(self,filename)
 
+class RBResults(object):
+    """
+   Todo :docstring
+    """
+
+    def __init__(self, data):
         self.data = data
         self.bootstraps = None

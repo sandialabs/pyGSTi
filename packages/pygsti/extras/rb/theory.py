@@ -859,6 +859,33 @@ def gate_dependence_of_errormaps(gs, gs_target, norm='diamond', mxBasis=None):
     delta_avg = _np.mean(delta)    
     return delta_avg
 
+
+#def first_order_fit_function(m,A,B,C,p):
+#    """
+#    The 'first order' fitting function P_m = A + (B + m * C) * p^m, from
+#    "Scalable and Robust Randomized Benchmarking of Quantum Processes" 
+#    (http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504).
+#    This is a simplified verion of the 'first order' in that paper (see Eq. 3),
+#    as the model therein has 1 too many parameters for fitting. The conversion is
+##    A = B_1
+#    B = A_1 - C_1(q/p^(-2) - 1)
+#    C = C_1(q/p^(-2) - 1)
+#    where the LHS (RHS) quantites in this equation are those of our (Magesan 
+#    et al.'s) fitting function.#
+#
+#    Parameters
+#    ----------
+#    m : integer
+#        Length of random RB sequence (not including the inversion gate).
+#    
+#    A,B,C,p : float#
+#
+    # Returns
+    # -------
+    # float
+    # """
+    # return A+(B+C*m)*p**m
+
 #def Magesan_theory_predicted_decay(gs, gs_target, mlist, success_outcomelabel=('0',), 
 #                                   norm='1to1', order='zeroth', return_all = False):
 #    

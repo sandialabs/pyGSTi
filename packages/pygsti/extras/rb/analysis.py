@@ -134,6 +134,55 @@ def crb_rescaling_factor(lengths,quantity):
     
     return rescaling_factor 
 
+
+def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=1000, 
+                          asymptote='std', finite_sample_error=True):
+    
+    lengths = RBSdataset.lengths
+    ASPs = RBSdataset.ASPs
+    successcounts = RBSdataset.successcounts
+    counts = RBSdataset.counts
+    n = RBSdataset.number_of_qubits
+
+    if asymptote == 'std':
+        asymptote = 1/2**n
+    
+    RBResults = _results.RBResults(RBSdataset)
+    
+    create_bootstraped_datasets(RBSdataset,finite_sample_error=True)    
+    fit_full
+    full_fit, fixed_asymptote_fit = std_fit_data(RBResults,seed=seed,asymptote=asymptote)
+    
+    #
+    # Todo -- replace with a bootstrap data creation?
+    #
+    full_fit['r_bootstraps'] = bootstrap(RBSdataset, seed=seed, samples=bootstrap_samples, 
+              fixed_asymptote=False,  asymptote=None, finite_sample_error=finite_sample_error)
+    fixed_asymptote_fit['r_bootstraps'] = bootstrap(lengths, SPs, n, counts, seed=seed, samples=bootstrap_samples, 
+              fixed_asymptote=True,  asymptote=asymptote, finite_sample_error=finite_sample_error)
+    
+    full_fit['r_std'] = _np.std(_np.array(full_fit['r_bootstraps']))
+    fixed_asymptote_fit['r_std'] = _np.std(_np.array(fixed_asymptote_fit['r_bootstraps']))
+
+    return full_fit, fixed_asymptote_fit
+    
+def std_fit_data(lengths, ASPs, n, seed=None, asymptote=None):
+    
+    lengths = RBSdataset.lengths
+    ASPs = RBSdataset.ASPs
+    n = RBSdataset.number_of_qubits
+    
+    if asymptote is not None:
+        A = asymptote
+    else:
+        A = 1/2**n
+    
+    fixed_asymptote_fit = custom_fit_data(lengths, ASPs, n, fixed_A=A, fixed_B=False, seed=seed)
+    seed_full = [fixed_asymptote_fit['A'], fixed_asymptote_fit['B'], fixed_asymptote_fit['p']]        
+    full_fit =  custom_fit_data(lengths, ASPs, n, fixed_A=False, fixed_B=False, seed=seed_full)
+    
+    return full_fit, fixed_asymptote_fit
+
 def custom_fit_data(lengths, ASPs, n, fixed_A=False, fixed_B=False, seed=None):
     
     # The fit to do if a fixed value for A is given    
@@ -203,53 +252,3 @@ def custom_fit_data(lengths, ASPs, n, fixed_A=False, fixed_B=False, seed=None):
     results['r'] = p_to_r(p,n)
     
     return results
-
-
-def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=1000, 
-                          asymptote='std', finite_sample_error=True):
-    
-    lengths = RBSdataset.lengths
-    ASPs = RBSdataset.ASPs
-    successcounts = RBSdataset.successcounts
-    counts = RBSdataset.counts
-    n = RBSdataset.number_of_qubits
-
-    if asymptote == 'std':
-        asymptote = 1/2**n
-    
-    RBResults = _results.RBResults(RBSdataset)
-    
-    create_bootstraped_datasets(RBSdataset,finite_sample_error=True)    
-    fit_full
-    full_fit, fixed_asymptote_fit = std_fit_data(RBResults,seed=seed,asymptote=asymptote)
-    
-    #
-    # Todo -- replace with a bootstrap data creation?
-    #
-    full_fit['r_bootstraps'] = bootstrap(RBSdataset, seed=seed, samples=bootstrap_samples, 
-              fixed_asymptote=False,  asymptote=None, finite_sample_error=finite_sample_error)
-    fixed_asymptote_fit['r_bootstraps'] = bootstrap(lengths, SPs, n, counts, seed=seed, samples=bootstrap_samples, 
-              fixed_asymptote=True,  asymptote=asymptote, finite_sample_error=finite_sample_error)
-    
-    full_fit['r_std'] = _np.std(_np.array(full_fit['r_bootstraps']))
-    fixed_asymptote_fit['r_std'] = _np.std(_np.array(fixed_asymptote_fit['r_bootstraps']))
-
-    return full_fit, fixed_asymptote_fit
-    
-    
-def std_fit_data(lengths, ASPs, n, seed=None, asymptote=None):
-    
-    lengths = RBSdataset.lengths
-    ASPs = RBSdataset.ASPs
-    n = RBSdataset.number_of_qubits
-    
-    if asymptote is not None:
-        A = asymptote
-    else:
-        A = 1/2**n
-    
-    fixed_asymptote_fit = custom_fit_data(lengths, ASPs, n, fixed_A=A, fixed_B=False, seed=seed)
-    seed_full = [fixed_asymptote_fit['A'], fixed_asymptote_fit['B'], fixed_asymptote_fit['p']]        
-    full_fit =  custom_fit_data(lengths, ASPs, n, fixed_A=False, fixed_B=False, seed=seed_full)
-    
-    return full_fit, fixed_asymptote_fit
