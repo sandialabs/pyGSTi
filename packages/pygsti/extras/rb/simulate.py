@@ -3,33 +3,43 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import copy as _copy
 import time as _time
+
 from ...tools import symplectic as _symp
+from . import sample as _samp
 
-from . import sampler as _samp
-
-import matplotlib.pyplot as _plt
-from scipy.optimize import minimize as _minimize
-
-
-def sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=None,
-                                              return_numerrors=False):
-    """
-    Todo :  
-    """
+def tensored_weight1_pauli_errors_simulator(circuit, pspec, pauliprobs, N, alloutcomes=False):
     
-    numerrors = 0
-    n = pspec.number_of_qubits
-    depth = c.depth()
-    paulivector = _np.zeros(2*n,int)
-    srep = pspec.models['clifford'].get_clifford_symplectic_reps()
+    n = circuit.number_of_lines
+    results = {}
+    
+    if alloutcomes:
+        for i in range(2**n):
+            result = tuple(_symp.int_to_bitstring(i,n))
+            results[result] = 0
+ 
+    for i in range(0,N):
+        result = tensored_weight1_pauli_errors_instance(circuit, pspec, pauliprobs)
+        try:
+            results[tuple(result)] += 1
+        except:
+            results[tuple(result)] = 1
+
+    return results
+
+def tensored_weight1_pauli_errors_instance(circuit, pspec, pauliprobs):
+    
+    n = circuit.number_of_lines
+    depth = circuit.depth()
+    sout, pout = _symp.prep_stabilizer_state(n, zvals=None)
+    I = _np.identity(2*n,int)
+    srep=pspec.models['clifford'].get_clifford_symplectic_reps()
     
     for l in range(0,depth):
         
-        layer = c.get_circuit_layer(l)
-        s, p = _symp.clifford_layer_in_symplectic_rep(layer,n,srep_dict=srep)                
-        paulivector = _np.dot(s,paulivector) % 2  
-        
-        layer_paulivector = _np.zeros(2*n,int)
+        layer = circuit.get_circuit_layer(l)
+        s, p = _symp.symplectic_rep_of_clifford_layer(layer,n,srep_dict=srep)        
+        # Apply the layer
+        sout, pout = _symp.apply_clifford_to_stabilizer_state(s, p, sout, pout)
         
         for q in range(0,n):
             gate = layer[q]
@@ -38,102 +48,150 @@ def sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=None,
             if gate.qubits[0] == q: 
                 
                 # Sample a pauli vector for the gate
-                gate_paulivector = _np.zeros(2*n,int)
-                sampledvec = _np.array([list(_np.random.multinomial(1,p)) for p in pauliprobs[gate]]) 
-                gate_paulivector[:n] = sampledvec[:,1] ^ sampledvec[:,2]
-                gate_paulivector[n:] = sampledvec[:,2] ^ sampledvec[:,3]
+                gerror_p = _np.zeros(2*n,int)
+                sampledvec = _np.array([list(_np.random.multinomial(1,pp)) for pp in pauliprobs[gate]]) 
+                # Todo : check this!
+                gerror_p[:n] = 2*(sampledvec[:,1] ^ sampledvec[:,2])
+                gerror_p[n:] = 2*(sampledvec[:,2] ^ sampledvec[:,3])
                 
-                # Combine with the current pauli operator for the layer
-                layer_paulivector = layer_paulivector ^ gate_paulivector
-        
-        # Combine the layer error with the error in the circuit so far.
-        paulivector = paulivector ^ layer_paulivector
-        
-        # If we are storing the number of imperfect layers, record this here
-        if return_numerrors:
-            if not _np.array_equal(layer_paulivector,_np.zeros(2*n)):
-                numerrors += 1
+                try:
+                    sout, pout = _symp.apply_clifford_to_stabilizer_state(I, gerror_p, sout, pout)
+                except:
+                    print(sampledvec)
+                    print(gerror_p)
+                    raise ValueError()
+    output = []
+    for q in range(0,n):
+        measurement_out = _symp.pauli_z_measurement(sout, pout, q)
+        bit = measurement_out[1]
+        assert(bit == 0 or bit == 1), "Ideal output is not a computational basis state!"
+        output.append(int(measurement_out[1]))  
 
-    if spamprobs is not None:
-    
-        sampledpauli = _np.zeros(2*n,int)
-        for q in range(0,n):        
-            sampledvec = _np.array(_np.random.multinomial(1,spamprobs[q])) 
-            sampledpauli[q] = sampledvec[1] ^ sampledvec[2]
-            sampledpauli[q+n] = sampledvec[2] ^ sampledvec[3]
+    return output
 
-        paulivector = sampledpauli ^ paulivector
+# def sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=None,
+#                                               return_numerrors=False):
+#     """
+#     Todo :  
+#     """
     
-    if return_numerrors:
-        return paulivector, numerrors
-    else:
-        return paulivector
-
-def simulate_prb_circuit_with_pauli_errors(circuit,pspec,pauliprobs,N,
-                                           spamprobs=None):
+#     numerrors = 0
+#     n = pspec.number_of_qubits
+#     depth = c.depth()
+#     paulivector = _np.zeros(2*n,int)
+#     srep = pspec.models['clifford'].get_clifford_symplectic_reps()
     
-    SP = 0
-    n = pspec.number_of_qubits
-    
-    for i in range(N):
+#     for l in range(0,depth):
         
-        sample = sample_and_compute_effective_pauli_errors(circuit,pspec,pauliprobs,spamprobs=spamprobs)
+#         layer = c.get_circuit_layer(l)
+#         s, p = _symp.clifford_layer_in_symplectic_rep(layer,n,srep_dict=srep)                
+#         paulivector = _np.dot(s,paulivector) % 2  
         
-        if _np.array_equal(sample[:n],_np.zeros(n,int)):
+#         layer_paulivector = _np.zeros(2*n,int)
+        
+#         for q in range(0,n):
+#             gate = layer[q]
             
-            SP += 1
-    
-    SP = SP/N   
-    
-    return SP
+#             # This stops us including multi-qubit gates more than once.
+#             if gate.qubits[0] == q: 
+                
+#                 # Sample a pauli vector for the gate
+#                 gate_paulivector = _np.zeros(2*n,int)
+#                 sampledvec = _np.array([list(_np.random.multinomial(1,p)) for p in pauliprobs[gate]]) 
+#                 gate_paulivector[:n] = sampledvec[:,1] ^ sampledvec[:,2]
+#                 gate_paulivector[n:] = sampledvec[:,2] ^ sampledvec[:,3]
+                
+#                 # Combine with the current pauli operator for the layer
+#                 layer_paulivector = layer_paulivector ^ gate_paulivector
+        
+#         # Combine the layer error with the error in the circuit so far.
+#         paulivector = paulivector ^ layer_paulivector
+        
+#         # If we are storing the number of imperfect layers, record this here
+#         if return_numerrors:
+#             if not _np.array_equal(layer_paulivector,_np.zeros(2*n)):
+#                 numerrors += 1
 
-def pauli_errors_rb_simulator(pspec, pauliprobs, lengths,k, N, filename=None, rbtype='PRB', verbosity=0, 
-                                spamprobs=None, appenddata=False, returndata=False, improved_CNOT_compiler=True,
-                                ICC_custom_ordering=None, sampler=None, sampler_args=None, idle_name = 'Gi',
-                             iterations = 100):
+#     if spamprobs is not None:
+    
+#         sampledpauli = _np.zeros(2*n,int)
+#         for q in range(0,n):        
+#             sampledvec = _np.array(_np.random.multinomial(1,spamprobs[q])) 
+#             sampledpauli[q] = sampledvec[1] ^ sampledvec[2]
+#             sampledpauli[q+n] = sampledvec[2] ^ sampledvec[3]
+
+#         paulivector = sampledpauli ^ paulivector
+    
+#     if return_numerrors:
+#         return paulivector, numerrors
+#     else:
+#         return paulivector
+
+# def simulate_prb_circuit_with_pauli_errors(circuit,pspec,pauliprobs,N,
+#                                            spamprobs=None):
+    
+#     SP = 0
+#     n = pspec.number_of_qubits
+    
+#     for i in range(N):
+        
+#         sample = sample_and_compute_effective_pauli_errors(circuit,pspec,pauliprobs,spamprobs=spamprobs)
+        
+#         if _np.array_equal(sample[:n],_np.zeros(n,int)):
+            
+#             SP += 1
+    
+#     SP = SP/N   
+    
+#     return SP
+
+# def pauli_errors_rb_simulator(pspec, pauliprobs, lengths,k, N, filename=None, rbtype='PRB', verbosity=0, 
+#                                 spamprobs=None, appenddata=False, returndata=False, improved_CNOT_compiler=True,
+#                                 ICC_custom_ordering=None, sampler=None, sampler_args=None, idle_name = 'Gi',
+#                              iterations = 100):
           
-    if filename is not None:    
-        if not appenddata:
-            with open(filename,'w') as f:
-                f.write('#length Pm circuitdepth 2Qgatecount\n')
+#     if filename is not None:    
+#         if not appenddata:
+#             with open(filename,'w') as f:
+#                 f.write('#length Pm circuitdepth 2Qgatecount\n')
             
-    n = pspec.number_of_qubits
-    sps = {}
-    cdepth = {}
-    ctwoqubitgatecount = {}
+#     n = pspec.number_of_qubits
+#     sps = {}
+#     cdepth = {}
+#     ctwoqubitgatecount = {}
     
-    for l in lengths:
-        sps[l] = []
-        cdepth[l] = []
-        ctwoqubitgatecount[l] = []
+#     for l in lengths:
+#         sps[l] = []
+#         cdepth[l] = []
+#         ctwoqubitgatecount[l] = []
     
-    for i in range(k):   
-        for l in lengths:
-            if rbtype == 'PRB':
-                c = _samp.sample_prb_circuit(pspec,l,iterations=iterations,improved_CNOT_compiler=improved_CNOT_compiler,
-                                           ICC_custom_ordering=ICC_custom_ordering,sampler=sampler,
-                                           sampler_args=sampler_args)
-            if rbtype == 'CRB':
-                c = _samp.sample_crb_circuit(pspec,l,algorithms=['RGGE'],iterations={u'RGGE': iterations})
-            c.replace_gatename('I',idle_name)
-            sp = 0
-            empiricalerrorprob = 0
-            empiricalcircuiterrorprobperlayer = 0
-            for j in range(N):
-                sample = sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=spamprobs)
-                a = sample[:n]
-                if _np.array_equal(a,_np.zeros(n,int)):
-                    sp += 1
-            sp = sp/N   
-            sps[l].append(sp)
-            cdepth[l].append(c.depth())
-            ctwoqubitgatecount[l].append(c.twoqubit_gatecount())
-            if filename is not None:    
-                with open(filename,'a') as f:
-                    f.write('{} {} {} {}\n'.format(l,sp,cdepth[l][-1],ctwoqubitgatecount[l][-1]))
+#     for i in range(k):   
+#         for l in lengths:
+#             if rbtype == 'PRB':
+#                 c = _samp.sample_prb_circuit(pspec,l,iterations=iterations,improved_CNOT_compiler=improved_CNOT_compiler,
+#                                            ICC_custom_ordering=ICC_custom_ordering,sampler=sampler,
+#                                            sampler_args=sampler_args)
+#             if rbtype == 'CRB':
+#                 c = _samp.sample_crb_circuit(pspec,l,algorithms=['RGGE'],iterations={u'RGGE': iterations})
+#             c.replace_gatename('I',idle_name)
+#             sp = 0
+#             empiricalerrorprob = 0
+#             empiricalcircuiterrorprobperlayer = 0
+#             for j in range(N):
+#                 sample = sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=spamprobs)
+#                 a = sample[:n]
+#                 if _np.array_equal(a,_np.zeros(n,int)):
+#                     sp += 1
+#             sp = sp/N   
+#             sps[l].append(sp)
+#             cdepth[l].append(c.depth())
+#             ctwoqubitgatecount[l].append(c.twoqubit_gatecount())
+#             if filename is not None:    
+#                 with open(filename,'a') as f:
+#                     f.write('{} {} {} {}\n'.format(l,sp,cdepth[l][-1],ctwoqubitgatecount[l][-1]))
                 
-    if returndata:
-        return sps
+#     if returndata:
+#         return sps
     
     
 # Should change to allow finite sampling.

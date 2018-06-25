@@ -747,6 +747,52 @@ def clifford_rb_circuit(pspec, length, randomizeout=False, citerations=20, compi
     return full_circuit, idealout
 
 
+def mirror_rb_circuit(pspec, length, inverse_dict, sampler='Qelimination', samplerargs=[]):
+    
+    n = pspec.number_of_qubits
+    paulis = ['Gi','Gxpi','Gypi','Gzpi']
+    
+    random_circuit = circuit(pspec,length,sampler=sampler,samplerargs=samplerargs)
+    random_circuit_inv = _copy.deepcopy(random_circuit)
+    random_circuit_inv.reverse()
+
+
+    for i in range(0,pspec.number_of_qubits):
+        for j in range(0,length):
+            inv_name = inverse_dict[random_circuit_inv.line_items[i][j].name]
+            qubits = random_circuit_inv.line_items[i][j].qubits
+            random_circuit_inv.line_items[i][j] = _lbl.Label(inv_name,qubits)
+
+    for i in range(0,length):
+        
+        r = _np.random.randint(0,4,size=n)
+        
+        pauli_layer = [_lbl.Label(paulis[r[q]],(q,)) for q in range(0,n)]
+        random_circuit.insert_layer(pauli_layer,length-i)
+       
+        r = _np.random.randint(0,4,size=n)
+        pauli_layer = [_lbl.Label(paulis[r[q]],(q,)) for q in range(0,n)]
+        random_circuit_inv.insert_layer(pauli_layer,length-i)
+        
+    random_circuit.append_circuit(random_circuit_inv)
+    
+    r = _np.random.randint(0,4,size=n)
+    pauli_layer = [_lbl.Label(paulis[r[q]],(q,)) for q in range(0,pspec.number_of_qubits)]
+    random_circuit.insert_layer(pauli_layer,0)
+            
+    s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(random_circuit,pspec=pspec)
+    assert(_np.array_equal(s_out,_np.identity(2*n,int)))
+    s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
+    s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
+    idealout = []
+    for q in range(0,n):
+        measurement_out = _symp.pauli_z_measurement(s_outstate, p_outstate, q)
+        bit = measurement_out[1]
+        assert(bit == 0 or bit == 1), "Ideal output is not a computational basis state!"
+        idealout.append(int(measurement_out[1]))  
+    
+    return random_circuit, idealout
+
 
 def oneQ_rb_sequence(m, group_or_gateset, inverse=True, random_pauli=False, interleaved=None, 
                      group_inverse_only=False, group_prep=False, compilation=None,
