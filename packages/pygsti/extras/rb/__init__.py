@@ -11,3 +11,4 @@ from . import theory
 from . import sample
 from . import io
 from . import simulate
+from . import analysis
