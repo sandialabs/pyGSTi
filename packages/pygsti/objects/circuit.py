@@ -133,13 +133,16 @@ class Circuit(_gstr.GateString):
             super(Circuit, self).__init__(tup, strRep)
 
             self._tup_dirty = False # keep track of when we need to _flatten_to_tup
+            self._str_dirty = True # keep track of when we need to auto-compute string rep
 
     def _reinit_base(self):
         """ Re-initialize the members of the base GateString object """
         if self._tup_dirty:
             self._tup = self._flatten_to_tup()
-            self._str = _gstr._gateSeqToStr(self._tup)
             self._tup_dirty = False
+        if self._str_dirty:
+            self._str = _gstr._gateSeqToStr(self._tup)
+            self._str_dirty = False
         
     def _flatten_to_tup(self):
         """ Flatten self.line_items into a serial tuple of gate labels """
@@ -238,7 +241,7 @@ class Circuit(_gstr.GateString):
         self.line_items = []
         for i in range(0,self.number_of_lines):
             self.line_items.append([])
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
                         
     def _initialize_from_gatestring(self,gatestring,parallelize):
         """
@@ -338,7 +341,7 @@ class Circuit(_gstr.GateString):
             for i in gate_qubits:
                 self.line_items[i][j] = gl_comp
 
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
 
         
     def insert_layer(self,circuit_layer,j):
@@ -377,7 +380,7 @@ class Circuit(_gstr.GateString):
                     if line_label in gate_qubits:
                         self.line_items[i][j] = gl_comp
                     
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
                     
     def insert_circuit(self,circuit,j):
         """
@@ -400,7 +403,7 @@ class Circuit(_gstr.GateString):
         for q in range(0,self.number_of_lines):
             self.line_items[q] = self.line_items[q][0:j] + circuit.line_items[q][:] + self.line_items[q][j:]
             
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
                             
     def append_circuit(self,circuit):
         """
@@ -419,7 +422,7 @@ class Circuit(_gstr.GateString):
         
         for q in range(0,self.number_of_lines):
             self.line_items[q] = self.line_items[q] + circuit.line_items[q][:]
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
             
     def prefix_circuit(self,circuit):
         """
@@ -438,7 +441,7 @@ class Circuit(_gstr.GateString):
         
         for q in range(0,self.number_of_lines):
             self.line_items[q] = circuit.line_items[q][:] + self.line_items[q]
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
 
         
     def replace_gate_with_circuit(self,circuit,q,j):
@@ -510,7 +513,7 @@ class Circuit(_gstr.GateString):
                 for sub_gl in gatelbl.components:
                     if q in sub_gl.qubits:
                         self.line_items[q][j] = sub_gl
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
 
         
     def replace_layer_with_circuit(self,circuit,j):
@@ -569,7 +572,7 @@ class Circuit(_gstr.GateString):
             for l in range(depth):
                 if self.line_items[q][l].name == old_gatename:
                     self.line_items[q][l].name = new_gatename #_Label(new_gatename, self.line_items[q][l].qubits)
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
 
         
     def change_gate_library(self,compilation,depth_compression=True,
@@ -652,7 +655,7 @@ class Circuit(_gstr.GateString):
         """
         for q in range(0,self.number_of_lines):
             del self.line_items[q][j]
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
 
         
     def get_circuit_layer(self,j):
@@ -681,7 +684,7 @@ class Circuit(_gstr.GateString):
         """         
         for q in range(0,self.number_of_lines):
             self.line_items[q].reverse()
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
 
         
     def depth(self):
@@ -889,7 +892,7 @@ class Circuit(_gstr.GateString):
                 else:
                     j += 1
 
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
         return flag
     
     def shift_1q_gates_forward(self):
@@ -917,7 +920,7 @@ class Circuit(_gstr.GateString):
                             flag = True
                             self.line_items[q][j-k] = self.line_items[q][j]
                             self.line_items[q][j] = _Label(IDENT,self.line_labels[q])
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
         return flag
     
     def shift_2q_gates_forward(self):
@@ -950,7 +953,7 @@ class Circuit(_gstr.GateString):
                             self.line_items[q][j] = _Label(IDENT,self.line_labels[q])
                             self.line_items[target_label][j] = _Label(IDENT,self.line_labels[int(target_label)])
 
-        self._tup_dirty = True
+        self._tup_dirty = self._str_dirty = True
         return flag
     
     
