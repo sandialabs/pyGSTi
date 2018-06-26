@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
+from . import results as _results
   
 
 def p_to_r(p, d, rtype='EI'):
@@ -67,60 +68,60 @@ def r_to_p(r, d, rtype='EI'):
 
 
 
-#
-# FUNCTIONS FROM OLD CODE
-# FUNCTIONS FROM OLD CODE
-# FUNCTIONS FROM OLD CODE
-#
-# ---- Fitting functions and related ----#
-def standard_fit_function(m,A,B,p):
-    """
-    The standard RB decay fitting function P_m = A + B * p^m. This is 
-    used in standard RB, and also variants on this (e.g., interleaved RB).
+# #
+# # FUNCTIONS FROM OLD CODE
+# # FUNCTIONS FROM OLD CODE
+# # FUNCTIONS FROM OLD CODE
+# #
+# # ---- Fitting functions and related ----#
+# def standard_fit_function(m,A,B,p):
+#     """
+#     The standard RB decay fitting function P_m = A + B * p^m. This is 
+#     used in standard RB, and also variants on this (e.g., interleaved RB).
     
-    Parameters
-    ----------
-    m : integer
-        Length of random RB sequence (not including the inversion gate).
+#     Parameters
+#     ----------
+#     m : integer
+#         Length of random RB sequence (not including the inversion gate).
     
-    A,B,p : float
+#     A,B,p : float
 
-    Returns
-    -------
-    float
-    """
-    return A+B*p**m
+#     Returns
+#     -------
+#     float
+#     """
+#     return A+B*p**m
 
-def first_order_fit_function(m,A,B,C,p):
-    """
-    The 'first order' fitting function P_m = A + (B + m * C) * p^m, from
-    "Scalable and Robust Randomized Benchmarking of Quantum Processes" 
-    (http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504).
-    This is a simplified verion of the 'first order' in that paper (see Eq. 3),
-    as the model therein has 1 too many parameters for fitting. The conversion is
-    A = B_1
-    B = A_1 - C_1(q/p^(-2) - 1)
-    C = C_1(q/p^(-2) - 1)
-    where the LHS (RHS) quantites in this equation are those of our (Magesan 
-    et al.'s) fitting function.
+# def first_order_fit_function(m,A,B,C,p):
+#     """
+#     The 'first order' fitting function P_m = A + (B + m * C) * p^m, from
+#     "Scalable and Robust Randomized Benchmarking of Quantum Processes" 
+#     (http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504).
+#     This is a simplified verion of the 'first order' in that paper (see Eq. 3),
+#     as the model therein has 1 too many parameters for fitting. The conversion is
+#     A = B_1
+#     B = A_1 - C_1(q/p^(-2) - 1)
+#     C = C_1(q/p^(-2) - 1)
+#     where the LHS (RHS) quantites in this equation are those of our (Magesan 
+#     et al.'s) fitting function.
 
-    Parameters
-    ----------
-    m : integer
-        Length of random RB sequence (not including the inversion gate).
+#     Parameters
+#     ----------
+#     m : integer
+#         Length of random RB sequence (not including the inversion gate).
     
-    A,B,C,p : float
+#     A,B,C,p : float
 
-    Returns
-    -------
-    float
-    """
-    return A+(B+C*m)*p**m
-#
-# END OF FUNCTIONS FROM OLD CODE
-# END OF FUNCTIONS FROM OLD CODE
-# END OF FUNCTIONS FROM OLD CODE
-#
+#     Returns
+#     -------
+#     float
+#     """
+#     return A+(B+C*m)*p**m
+# #
+# # END OF FUNCTIONS FROM OLD CODE
+# # END OF FUNCTIONS FROM OLD CODE
+# # END OF FUNCTIONS FROM OLD CODE
+# #
 
 def crb_rescaling_factor(lengths,quantity):
     
@@ -135,73 +136,153 @@ def crb_rescaling_factor(lengths,quantity):
     return rescaling_factor 
 
 
-def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=1000, 
-                          asymptote='std', finite_sample_error=True):
-    
+def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=1000,  asymptote='std', rtype='EI'):
+    """
+    Todo : docstring.
+    """  
     lengths = RBSdataset.lengths
     ASPs = RBSdataset.ASPs
     successcounts = RBSdataset.successcounts
-    counts = RBSdataset.counts
+    totalcounts = RBSdataset.totalcounts
     n = RBSdataset.number_of_qubits
 
     if asymptote == 'std':
         asymptote = 1/2**n
-    
-    RBResults = _results.RBResults(RBSdataset)
-    
-    create_bootstraped_datasets(RBSdataset,finite_sample_error=True)    
-    fit_full
-    full_fit, fixed_asymptote_fit = std_fit_data(RBResults,seed=seed,asymptote=asymptote)
-    
-    #
-    # Todo -- replace with a bootstrap data creation?
-    #
-    full_fit['r_bootstraps'] = bootstrap(RBSdataset, seed=seed, samples=bootstrap_samples, 
-              fixed_asymptote=False,  asymptote=None, finite_sample_error=finite_sample_error)
-    fixed_asymptote_fit['r_bootstraps'] = bootstrap(lengths, SPs, n, counts, seed=seed, samples=bootstrap_samples, 
-              fixed_asymptote=True,  asymptote=asymptote, finite_sample_error=finite_sample_error)
-    
-    full_fit['r_std'] = _np.std(_np.array(full_fit['r_bootstraps']))
-    fixed_asymptote_fit['r_std'] = _np.std(_np.array(fixed_asymptote_fit['r_bootstraps']))
 
-    return full_fit, fixed_asymptote_fit
+    FF_results, FAF_results = std_least_squares_data_fitting(lengths, ASPs, n, seed=seed, asymptote=asymptote)
+
+    if bootstrap_samples > 0:
+        
+        A_bootstraps_FF = []
+        B_bootstraps_FF = []
+        p_bootstraps_FF = []
+        r_bootstraps_FF = []
+
+        A_bootstraps_FAF = []
+        B_bootstraps_FAF = []
+        p_bootstraps_FAF = []
+        r_bootstraps_FAF = []
+
+        bs_failcount_FF = 0
+        bs_failcount_FAF = 0
+
+        RBSdataset.add_bootstrapped_datasets(samples=bootstrap_samples)
+        for i in range(bootstrap_samples):
+
+            BS_ASPs  = RBSdataset.bootstraps[i].ASPs
+            BS_FF_results, BS_FAF_results = std_least_squares_data_fitting(lengths, BS_ASPs, n, seed=seed, asymptote=asymptote)
+
+            if BS_FF_results['success']:
+                A_bootstraps_FF.append(BS_FF_results['estimates']['A'])
+                B_bootstraps_FF.append(BS_FF_results['estimates']['B'])
+                p_bootstraps_FF.append(BS_FF_results['estimates']['p'])
+                r_bootstraps_FF.append(BS_FF_results['estimates']['r'])
+            else:
+                bs_failcount_FF += 1
+            if BS_FAF_results['success']:
+                A_bootstraps_FAF.append(BS_FAF_results['estimates']['A'])
+                B_bootstraps_FAF.append(BS_FAF_results['estimates']['B'])
+                p_bootstraps_FAF.append(BS_FAF_results['estimates']['p'])
+                r_bootstraps_FAF.append(BS_FAF_results['estimates']['r'])
+            else:
+                bs_failcount_FAF += 1
     
-def std_fit_data(lengths, ASPs, n, seed=None, asymptote=None):
+        bootstraps_FF = {}
+        bootstraps_FF['A'] = A_bootstraps_FF
+        bootstraps_FF['B'] = B_bootstraps_FF
+        bootstraps_FF['p'] = p_bootstraps_FF
+        bootstraps_FF['r'] = r_bootstraps_FF
+        bootstraps_failrate_FF = bs_failcount_FF/bootstrap_samples
+
+        std_FF = {}
+        std_FF['A'] = _np.mean(_np.array(A_bootstraps_FF))
+        std_FF['B'] = _np.mean(_np.array(B_bootstraps_FF))
+        std_FF['p'] = _np.mean(_np.array(p_bootstraps_FF))
+        std_FF['r'] = _np.mean(_np.array(r_bootstraps_FF))
+
+        bootstraps_FAF = {}
+        bootstraps_FAF['A'] = A_bootstraps_FAF
+        bootstraps_FAF['B'] = B_bootstraps_FAF
+        bootstraps_FAF['p'] = p_bootstraps_FAF
+        bootstraps_FAF['r'] = r_bootstraps_FAF
+        bootstraps_failrate_FAF = bs_failcount_FAF/bootstrap_samples
+
+        std_FAF = {}
+        std_FAF['A'] = _np.mean(_np.array(A_bootstraps_FAF))
+        std_FAF['B'] = _np.mean(_np.array(B_bootstraps_FAF))
+        std_FAF['p'] = _np.mean(_np.array(p_bootstraps_FAF))
+        std_FAF['r'] = _np.mean(_np.array(r_bootstraps_FAF))
+
+    else:
+        bootstraps_FF = None
+        std_FF = None
+        bootstraps_failrate_FF = None
+        bootstraps_FAF = None
+        std_FAF = None
+        bootstraps_failrate_FAF = None
+
+    fits = {}
+    fits['full'] =  _results.FitResults('LS', FF_results['seed'], rtype, FF_results['success'], FF_results['estimates'], FF_results['variable'], stds=std_FF,  
+               bootstraps=bootstraps_FF, bootstraps_failrate=bootstraps_failrate_FF)
+    fits['A-fixed'] =  _results.FitResults('LS', FAF_results['seed'], rtype, FAF_results['success'], FAF_results['estimates'], FAF_results['variable'], stds=std_FAF,  
+               bootstraps=bootstraps_FAF, bootstraps_failrate=bootstraps_failrate_FAF)
+
+    results = _results.RBResults(RBSdataset,rtype,fits)
+
+    return results
     
-    lengths = RBSdataset.lengths
-    ASPs = RBSdataset.ASPs
-    n = RBSdataset.number_of_qubits
+def std_least_squares_data_fitting(lengths, ASPs, n, seed=None, asymptote=None):
+
     
     if asymptote is not None:
         A = asymptote
     else:
         A = 1/2**n
     
-    fixed_asymptote_fit = custom_fit_data(lengths, ASPs, n, fixed_A=A, fixed_B=False, seed=seed)
-    seed_full = [fixed_asymptote_fit['A'], fixed_asymptote_fit['B'], fixed_asymptote_fit['p']]        
-    full_fit =  custom_fit_data(lengths, ASPs, n, fixed_A=False, fixed_B=False, seed=seed_full)
+    # First perform a fit with a fixed asymptotic value
+    FAF_results = custom_least_squares_data_fitting(lengths, ASPs, n, A=A, seed=seed)
+    # Full fit is seeded by the fixed asymptote fit.
+    seed_full = [FAF_results['estimates']['A'], FAF_results['estimates']['B'], FAF_results['estimates']['p']]        
+    FF_results =  custom_least_squares_data_fitting(lengths, ASPs, n, seed=seed_full)
     
-    return full_fit, fixed_asymptote_fit
+    return FF_results, FAF_results
 
-def custom_fit_data(lengths, ASPs, n, fixed_A=False, fixed_B=False, seed=None):
+def custom_least_squares_data_fitting(lengths, ASPs, n, A=None, B=None, seed=None, rtype='EI'):
     
+    #todo : fix this
+    success = True
+
+    seed_dict = {}
+    variable = {}
+    variable['A'] = True
+    variable['B'] = True
+    variable['p'] = True
+
     # The fit to do if a fixed value for A is given    
-    if fixed_A is not False:
+    if A is not None:
         
-        A = fixed_A
+        variable['A'] = False
         
-        if fixed_B is not False:
+        if B is not None:
             
-            B = fixed_B
+            variable['B'] = False
 
             def curve_to_fit(m,p):
                 return A + B*p**m
             
             if seed is None:
                 seed = 0.9
-                
+                seed_dict['A'] = None
+                seed_dict['B'] = None
+                seed_dict['p'] = seed
+            
+            #try:    
             fitout, junk = _curve_fit(curve_to_fit,lengths,ASPs,p0=seed,bounds=([0.],[1.]))
-            p = fitout 
+            p = fitout
+            #except:
+            #    # todo : fix this. 
+            #    success = False
+
             
         else:
             
@@ -210,6 +291,9 @@ def custom_fit_data(lengths, ASPs, n, fixed_A=False, fixed_B=False, seed=None):
             
             if seed is None:
                 seed = [1.-A,0.9]
+                seed_dict['A'] = None
+                seed_dict['B'] = 1.-A
+                seed_dict['p'] = 0.9
                 
             fitout, junk = _curve_fit(curve_to_fit,lengths,ASPs,p0=seed,bounds=([-_np.inf,0.],[+_np.inf,1.]))
             B = fitout[0]
@@ -218,15 +302,18 @@ def custom_fit_data(lengths, ASPs, n, fixed_A=False, fixed_B=False, seed=None):
     # The fit to do if a fixed value for A is not given       
     else:
         
-        if fixed_B is not False:
+        if B is not None:
             
-            B = fixed_B
+            variable['B'] = False
             
             def curve_to_fit(m,A,p):
                 return A + B*p**m
             
             if seed is None:
                 seed = [1/2**n,0.9]
+                seed_dict['A'] = 1/2**n
+                seed_dict['B'] = None
+                seed_dict['p'] = 0.9
                 
             fitout, junk = _curve_fit(curve_to_fit,lengths,ASPs,p0=seed,bounds=([0.,0.],[1.,1.]))
             A = fitout[0]
@@ -239,16 +326,26 @@ def custom_fit_data(lengths, ASPs, n, fixed_A=False, fixed_B=False, seed=None):
             
             if seed is None:
                 seed = [1/2**n,1-1/2**n,0.9]
+                seed_dict['A'] = 1/2**n
+                seed_dict['B'] = 1-1/2**n
+                seed_dict['p'] = 0.9
                     
             fitout, junk = _curve_fit(curve_to_fit,lengths,ASPs,p0=seed,bounds=([0.,-_np.inf,0.],[1.,+_np.inf,1.]))
             A = fitout[0]
             B = fitout[1]
             p = fitout[2]
    
+    estimates = {}
+    estimates['A'] = A
+    estimates['B'] = B
+    estimates['p'] = p
+    estimates['r'] = p_to_r(p,n)
+
     results = {}
-    results['A'] = A
-    results['B'] = B
-    results['p'] = p
-    results['r'] = p_to_r(p,n)
+    results['estimates'] = estimates
+    results['variable'] = variable
+    results['seed'] = seed_dict
+    # Todo : fix this.
+    results['success'] = success
     
     return results

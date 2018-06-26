@@ -56,6 +56,7 @@ class RBSummaryDataset(object):
         self.circuit2Qgcounts = circuit2Qgcounts
         self.finitesampling = finitesampling
         self.descriptor = descriptor
+        self.bootstraps = None
 
         # If they are not provided, create the success probabilities
         if successprobabilities == None:
@@ -79,27 +80,50 @@ class RBSummaryDataset(object):
                 SCs.append([int(k) for k in SCarray])
             self.successcounts = SCs 
         
-    def generate_bootstrap(self, finite_sample_error=True):
+    def add_bootstrapped_datasets(self, samples=1000):
+
+        if self.finitesampling == True and self.totalcounts is None:
+            print("Warning -- finite sampling is not taken into account!")
+
+        if self.bootstraps is None:
+            self.bootstraps = []
 
         for i in range(samples): 
 
             # A new set of bootstrapped survival probabilities.
-            sampled_scounts = []
+            if self.totalcounts is not None:  
+                sampled_scounts = []
+            else:
+                sampled_SPs = []
 
-            for j in range(len(lengths)):
+            for j in range(len(self.lengths)):
 
-                sampled_counts.append([])
-                circuits_at_length = len(scounts[j])
+                sampled_scounts.append([])
+                circuits_at_length = len(self.successprobabilities[j])
 
                 for k in range(circuits_at_length):
-                    sampled_scounts[j].append(SPs[j][_np.random.randint(k_at_length)])
-                if finite_sample_error:   
-                    sampled_scounts[j] = _np.random.binomial(self.data.totalcounts,self.data.SPs)               
-        
-        BStrappeddataset = RBSummaryDataset(self.number_of_qubits, self.lengths, self.successcounts, 
-                                            self.totalcounts, self.circuitdepths, self.circuit2Qgcounts)
-                    
-        return BStrappeddataset
+                    sampled_SP = self.successprobabilities[j][_np.random.randint(circuits_at_length)]
+                    if self.totalcounts is not None:  
+                        sampled_scounts[j].append(_np.random.binomial(self.totalcounts,sampled_SP))
+                    else:               
+                         sampled_SPs[j].append(sampled_SP)
+            
+            if self.totalcounts is not None:  
+                BStrappeddataset = RBSummaryDataset(self.number_of_qubits, self.lengths, successcounts=sampled_scounts, 
+                                                totalcounts=self.totalcounts, circuitdepths=self.circuitdepths, 
+                                                circuit2Qgcounts=self.circuit2Qgcounts, finitesampling=self.finitesampling,
+                                                descriptor='data created from a non-parametric bootstrap')
+
+            else:
+                BStrappeddataset = RBSummaryDataset(self.number_of_qubits, self.lengths, successcounts=None, 
+                                                totalcounts=None, successprobabilites=sampled_SPs, circuitdepths=self.circuitdepths, 
+                                                circuit2Qgcounts=self.circuit2Qgcounts, finitesampling=self.finitesampling,
+                                                descriptor='data created from a non-parametric bootstrap without per-circuit finite-sampling error')
+
+            self.bootstraps.append(BStrappeddataset)
+
+
+
 
     def create_smaller_dataset(self, numberofcircuits):
 
@@ -117,24 +141,32 @@ class RBSummaryDataset(object):
                 newRBSdataset.circuit2Qgcounts[i] = newRBSdataset.circuit2Qgcounts[i][:numberofcircuits]
 
         return newRBSdataset
-    
-    #def std_analysis():
-        
-        # A wrap-around for ....
+   
 
-    
-    # Can't have this as a method, because io imports this file.    
-    #def write_to_file(self,filename):
-    #    """
-    #    Writes the dataset to a .txt file that can be read back in using the rb.io methods.
-    #    """
-    #    _io.write_rb_summary_dataset_to_file(self,filename)
+class FitResults(object):
+
+    def __init__(self, fittype, seed, rtype, success, estimates, variable, stds=None,  bootstraps=None, bootstraps_failrate=None):
+
+        self.fittype = fittype
+        self.seed = seed
+        self.rtype = rtype
+        self.success = success 
+        
+        self.estimates = estimates
+        self.variable = variable
+        self.stds = stds
+        
+        self.std = None
+        self.bootstraps = bootstraps
+        self.bootstraps_failrate = bootstraps_failrate
 
 class RBResults(object):
     """
    Todo :docstring
     """
 
-    def __init__(self, data):
+    def __init__(self, data, rtype, fits):
+
         self.data = data
-        self.bootstraps = None
+        self.rtype = rtype
+        self.fits = fits
