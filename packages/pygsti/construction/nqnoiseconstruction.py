@@ -141,6 +141,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
                           extraWeight1Hops=0, extraGateWeight=0, sparse=False,
                           gateNoise=None, prepNoise=None, povmNoise=None,
                           sim_type="matrix", parameterization="H+S",
+                          addIdleNoiseToAllGates=True,
                           return_clouds=False, verbosity=0): #, debug=False):
     """ 
     TODO: docstring (cnot_edges)
@@ -212,6 +213,10 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
         using a path-integral approach designed for larger numbers of qubits,
         and are considered expert options.
 
+    addIdleNoiseToAllGates: bool, optional
+        Whether the global idle should be added as a factor following the 
+        ideal action of each of the non-idle gates.
+
     return_clouds : bool, optional
         Whether to return a dictionary of "cloud" objects, used for constructing
         the gate sequences necessary for probing the returned GateSet's
@@ -281,6 +286,9 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
             gs.set_simtype("auto") # run deferred auto-simtype now that _dim is set
 
         idleOP = False
+        
+    if not addIdleNoiseToAllGates:
+        idleOP = False # then never add global idle noise.
 
     # a dictionary of "cloud" objects
     # keys = (target_qubit_indices, cloud_qubit_indices) tuples
