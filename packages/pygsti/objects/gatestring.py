@@ -268,6 +268,7 @@ class GateString(object):
         return self.__dict__
 
     def __setstate__(self, state_dict):
+        self.__dict__.setdefault('_str', None)  # backwards compatibility
         for k, v in state_dict.items():
             if k == 'tup':                    # backwards compatibility
                 self.tup = state_dict['tup'] # backwards compatibility
