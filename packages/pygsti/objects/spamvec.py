@@ -701,7 +701,7 @@ class DenseSPAMVec(SPAMVec):
         in `scratch` maybe used when it is not-None.
         """
         #don't use scratch since we already have memory allocated
-        return self.base[:,0]
+        return _np.asarray(self.base[:,0])
 
     def __copy__(self):
         # We need to implement __copy__ because we defer all non-existing
