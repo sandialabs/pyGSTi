@@ -15,6 +15,7 @@ from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
 from .qubitgraph import QubitGraph as _QubitGraph
 from ..baseobjs import Label as _Label
+from . import gate as _gate
 
 class ProcessorSpec(object):
     """ TODO: docstring """
@@ -166,7 +167,10 @@ class ProcessorSpec(object):
                     library.templates['CNOT'].append((_Label('Gh', 0),_Label('Gh', 1),_Label('Gcnot', (1, 0)), _Label('Gh', 0),_Label('Gh', 1)))
                 else:
                     for gate in self.models['clifford'].gates:
-                        if _np.array_equal(self.models['clifford'][gate].embedded_gate.smatrix,_np.array([[0,1],[1,0]])):
+                        if (isinstance(self.models['clifford'][gate], _gate.EmbeddedGateMap) and 
+                            _np.array_equal(self.models['clifford'][gate].embedded_gate.smatrix,_np.array([[0,1],[1,0]]))) or \
+                           (isinstance(self.models['clifford'][gate], _gate.CliffordGate) and
+                            _np.array_equal(self.models['clifford'][gate].smatrix,_np.array([[0,1],[1,0]]))):
                             #Note: use of gate.name assumes that a Hadamard will have a simple (non-"parallel") gate label
                             library.templates['CNOT'].append( (_Label(gate.name, 0),_Label(gate.name, 1),_Label('Gcnot', (1, 0)),
                                                                _Label(gate.name, 0),_Label(gate.name, 1)))
