@@ -24,6 +24,7 @@ from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 from ..baseobjs import Basis as _Basis
+from ..baseobjs import Dim as _Dim
 from ..baseobjs import Label as _Lbl
 
 from . import gatestringconstruction as _gsc
@@ -500,7 +501,8 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
     
     termgates = [] # gates to compose
     ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nqubits)])]
-    basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse) # TODO: remove - all we need is its 'dim' below
+    #basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse) # TODO: remove - all we need is its 'dim' below
+    basisAllQ_dim = _Dim(2**qubitGraph.nqubits)
     
     nQubits = qubitGraph.nqubits
     possible_err_qubit_inds = _np.arange(nQubits)
@@ -528,7 +530,7 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
         
             err_qubit_global_inds = err_qubit_inds
             fullTermErr = Embedded(ssAllQ, [('Q%d'%i) for i in err_qubit_global_inds],
-                                   termErr, basisAllQ.dim)
+                                   termErr, basisAllQ_dim)
             assert(fullTermErr.num_params() == termErr.num_params())
             printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                         (termErr.dim, termErr.num_params(), fullTermErr.dim))
@@ -716,9 +718,10 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
     printer.log("Creating %d-qubit target op factor on qubits %s" %
                 (len(target_qubit_inds),str(target_qubit_inds)),2)
     ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nqubits)])]
-    basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse)
+    #basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse)
+    basisAllQ_dim = _Dim(2**qubitGraph.nqubits)
     fullTargetOp = Embedded(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
-                            Static(targetOp,"pp"), basisAllQ.dim) 
+                            Static(targetOp,"pp"), basisAllQ_dim) 
 
     #Factor2: idle_noise operation
     printer.log("Creating idle error factor",2)
@@ -732,7 +735,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
             # Id_1Q = _sps.identity(4**1,'d','csr') if sparse else  _np.identity(4**1,'d')
             Id_1Q = _np.identity(4**1,'d') #always dense for now...
             fullIdleErr = Composed(
-                [ Embedded(ssAllQ, ('Q%d'%i,), Lindblad(Id_1Q.copy()),basisAllQ.dim)
+                [ Embedded(ssAllQ, ('Q%d'%i,), Lindblad(Id_1Q.copy()),basisAllQ_dim)
                   for i in range(qubitGraph.nqubits)] )
         elif idle_noise == False:
             printer.log("No idle factor",3)
@@ -792,7 +795,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
                             nonham_diagonal_only=True, truncate=True,
                             mxBasis=basisLocQ)
         fullLocalErr = Embedded(ssAllQ, ['Q%d'%i for i in all_possible_err_qubit_inds],
-                                localErr, basisAllQ.dim)
+                                localErr, basisAllQ_dim)
         printer.log("Lindblad gate w/dim=%d and %d params (from error basis of len %d) -> embedded to gate w/dim=%d" %
                     (localErr.dim, localErr.num_params(), len(errbasis), fullLocalErr.dim),2)
 
@@ -835,7 +838,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
                                    mxBasis=wtBasis)
         
                 fullTermErr = Embedded(ssAllQ, ['Q%d'%i for i in err_qubit_global_inds],
-                                       termErr, basisAllQ.dim)
+                                       termErr, basisAllQ_dim)
                 assert(fullTermErr.num_params() == termErr.num_params())
                 printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                             (termErr.dim, termErr.num_params(), fullTermErr.dim))
