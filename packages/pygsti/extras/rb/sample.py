@@ -611,7 +611,6 @@ def direct_rb_circuit(pspec, length, sampler='Qelimination', samplerargs=[], add
     # Todo : add in a custom compiler.
     #
     n = pspec.number_of_qubits
-
     # Sample a random circuit of "native gates".   
     random_circuit = circuit(pspec=pspec, length=length, sampler=sampler, samplerargs=samplerargs, 
                              addlocal=addlocal, lsargs=lsargs)   
@@ -693,7 +692,7 @@ def direct_rb_circuit(pspec, length, sampler='Qelimination', samplerargs=[], add
 
 def direct_rb_experiment(pspec, lengths, circuits_per_length, sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[],
                          randomizeout=False, cliffordtwirl=True, conditionaltwirl=True, citerations=20, compilerargs=[], 
-                         partitioned=False):
+                         partitioned=False, verbosity=1):
 
     
     if type(circuits_per_length) == int:
@@ -702,16 +701,26 @@ def direct_rb_experiment(pspec, lengths, circuits_per_length, sampler='Qeliminat
     circuits_list = []
     idealout_list = []
 
+
     for i in range(len(lengths)):
         l = lengths[i]
+        if verbosity > 0:
+            print('- Sampling {} circuits at DRB length {} ({} of {} lengths)'.format(circuits_per_length[i],l,i+1,len(lengths)))
         circuits_list.append([])
         idealout_list.append([])
+        if verbosity > 0:
+                print('  - Circuits sampled = ',end='')
         for j in range(circuits_per_length[i]):
-            circuit, idealout = direct_rb_circuit(pspec, l, sampler=sampler, samplerargs=samplerarg, addlocal=addlocal, lsargs=lsargs,
+            
+            circuit, idealout = direct_rb_circuit(pspec, l, sampler=sampler, samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs,
                                                   randomizeout=randomizeout, cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl, 
                                                   citerations=citerations, compilerargs=compilerargs, partitioned=partitioned)
             circuits_list[i].append(circuit)
-            idealout_list[i].append(idealout_list)
+            idealout_list[i].append(idealout)
+            if verbosity > 0:
+                print(str(j+1),end=',')
+        if verbosity > 0:
+            print('')
 
     return circuits_list, idealout_list
      
