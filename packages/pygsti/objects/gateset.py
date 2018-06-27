@@ -135,7 +135,7 @@ class GateSet(object):
 
         super(GateSet, self).__init__()
 
-    def set_simtype(self, sim_type):
+    def set_simtype(self, sim_type, calc_cache=None):
         #Calculator selection based on simulation type
 
         if sim_type == "auto":
@@ -155,7 +155,13 @@ class GateSet(object):
 
         self._calcClass = c
         self._sim_type = sim_type
-        self._sim_args = simtype_and_args[1:]
+        self._sim_args = list(simtype_and_args[1:])
+
+        if sim_type == "termorder":
+            cache = calc_cache if (calc_cache is not None) else {} # make a temp cache if none is given
+            self._sim_args.append(cache) # add calculation cache as another argument
+            
+
 
 
     def _embedGate(self, gateTargetLabels, gateVal):
@@ -990,8 +996,9 @@ class GateSet(object):
                 compiled_gates[k] = g
 
         kwargs = {}
-        if self._sim_type in ("termorder","ctermorder"):
+        if self._sim_type == "termorder":
             kwargs['max_order'] = int(self._sim_args[0])
+            kwargs['cache'] = self._sim_args[-1] # always the list argument
 
         assert(self._calcClass is not None), "Gateset does not have a calculator setup yet!"
         return self._calcClass(self._dim, compiled_gates, self.preps,

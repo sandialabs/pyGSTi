@@ -46,9 +46,10 @@ class GateTermCalc(GateCalc):
     that can be expanded into terms of different orders and PureStateSPAMVecs.
     """
 
-    def __init__(self, dim, gates, preps, effects, paramvec, autogator, max_order):
+    def __init__(self, dim, gates, preps, effects, paramvec, autogator, max_order, cache=None):
         """
         Construct a new GateTermCalc object.
+        TODO: docstring - fix this one and maybe other calcs?
 
         Parameters
         ----------
@@ -77,6 +78,7 @@ class GateTermCalc(GateCalc):
         #    would require pLeft*pRight => |pLeft|^2
 
         self.max_order = max_order
+        self.cache = cache
         super(GateTermCalc, self).__init__(
             dim, gates, preps, effects, paramvec, autogator)
         if self.evotype not in ("svterm","cterm"):
@@ -167,13 +169,21 @@ class GateTermCalc(GateCalc):
         list
             A list of Polynomial objects.
         """
+        cache_keys = [(self.max_order, rholabel, elabel, gatestring) for elabel in tuple(elabels)]
+        if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
+            return [ self.cache[ck] for ck in cache_keys ]
+        
         fastmode = True
         if self.evotype == "svterm":
             poly_reps = replib.SV_prs_as_polys(self, rholabel, elabels, gatestring, comm, memLimit, fastmode)
         else: # "cterm" (stabilizer-based term evolution)
             poly_reps = replib.SB_prs_as_polys(self, rholabel, elabels, gatestring, comm, memLimit, fastmode)
-        prps_fast = [ _Polynomial.fromrep(rep) for rep in poly_reps ]
-        return prps_fast
+        prps = [ _Polynomial.fromrep(rep) for rep in poly_reps ]
+
+        if self.cache is not None:
+            for ck,poly in zip(cache_keys,prps):
+                self.cache[ck] = poly
+        return prps
         
 
     def pr_as_poly(self, spamTuple, gatestring, comm=None, memLimit=None):
