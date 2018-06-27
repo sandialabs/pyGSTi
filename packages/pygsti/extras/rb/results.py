@@ -19,7 +19,7 @@ class RBSummaryDataset(object):
 
     """
     def __init__(self, number_of_qubits, lengths, successcounts=None, successprobabilities=None, totalcounts=None, 
-                circuitdepths=None, circuit2Qgcounts=None, finitesampling=True, descriptor=None):
+                 circuitdepths=None, circuit2Qgcounts=None, sortedinput=False, finitesampling=True, descriptor=None):
 
         """
         Initialize an RB summary dataset.
@@ -48,37 +48,105 @@ class RBSummaryDataset(object):
         assert(not (successcounts != None and totalcounts == None)), "If success counts are provided total counts must be provided as well!"
 
         self.number_of_qubits = number_of_qubits
+        self.finitesampling = finitesampling
+        self.descriptor = descriptor
+        self.bootstraps = None
+
+        if type(totalcounts) is int:
+            totalcounts = [totalcounts for i in range(len(lengths))]
+
+         
+        if not sortedinput:
+
+            # Find and order arrays of sequence lengths at each n
+            ordered_lengths = []
+            for l in lengths:
+                if l not in ordered_lengths:
+                      ordered_lengths.append(l)
+            ordered_lengths.sort()
+
+            # Take all the raw data and put it into lists for each sequence length
+            if successcounts is not None:
+                scounts = []
+                tcounts = []
+                SPs = None
+            else:
+                scounts = None
+                if totalcounts is not None:
+                    tcounts = []
+                else:
+                    tcounts = None
+                SPs = []
+
+            if circuitdepths is not None:
+                cdepths = []
+            else:
+                cdepths = None
+            if circuit2Qgcounts is not None:
+                c2Qgc = []
+            else:
+                c2Qgc = None
+
+            for i in range(0,len(ordered_lengths)):
+                if successcounts is not None:
+                    scounts.append([])
+                    tcounts.append([])
+                else:
+                    SPs.append([])
+                    if totalcounts is not None:
+                        tcounts.append([])
+                if circuitdepths is not None:
+                    cdepths.append([])
+                if circuit2Qgcounts is not None:
+                    c2Qgc.append([])
+
+            for i in range(0,len(lengths)):
+                index = ordered_lengths.index(lengths[i])
+                if successcounts is not None:
+                    scounts[index].append(successcounts[i])
+                    tcounts[index].append(totalcounts[i])
+                else:
+                    SPs[index].append(successprobabilities[i])
+                    if totalcounts is not None:
+                       tcounts[index].append(totalcounts[i]) 
+                if circuitdepths is not None:
+                    cdepths[index].append(circuitdepths[i])
+                if circuit2Qgcounts is not None:
+                    c2Qgc[index].append(circuit2Qgcounts[i])
+
+            lengths = ordered_lengths
+            successcounts = scounts
+            successprobabilities = SPs
+            totalcounts = tcounts
+            circuitdepths = cdepths
+            circuit2Qgcounts = c2Qgc
+
+        # If they are not provided, create the success probabilities
+        if successprobabilities == None:
+            successprobabilities = []
+            for i in range(0,len(lengths)):
+                SParray = _np.array(successcounts[i])/_np.array(totalcounts[i])
+                successprobabilities.append(list(SParray))
+
+        # Create the average success probabilities.
+        ASPs = []       
+        for i in range(0,len(lengths)):
+            ASPs.append(_np.mean(_np.array(successprobabilities[i])))        
+
+        # If data is provided as probabilities, but we know the total counts, we populate self.successcounts
+        if successcounts == None and totalcounts != None:
+            successcounts = []
+            for i in range(0,len(lengths)):
+                SCarray = _np.round(_np.array(successprobabilities[i])*_np.array(totalcounts[i]))
+                successcounts.append([int(k) for k in SCarray])
+
         self.lengths = lengths
         self.successcounts = successcounts
         self.successprobabilities = successprobabilities
         self.totalcounts = totalcounts
         self.circuitdepths = circuitdepths
         self.circuit2Qgcounts = circuit2Qgcounts
-        self.finitesampling = finitesampling
-        self.descriptor = descriptor
-        self.bootstraps = None
-
-        # If they are not provided, create the success probabilities
-        if successprobabilities == None:
-            SPs = []
-            for i in range(0,len(lengths)):
-                SParray = _np.array(successcounts[i])/_np.array(totalcounts[i])
-                SPs.append(list(SParray))
-            self.successprobabilities = SPs 
-
-        # Create the average success probabilities.
-        ASPs = []       
-        for i in range(0,len(lengths)):
-            ASPs.append(_np.mean(_np.array(self.successprobabilities[i])))        
-        self.ASPs = ASPs
-
-        # If data is provided as probabilities, but we know the total counts, we populate self.successcounts
-        if successcounts == None and totalcounts != None:
-            SCs = []
-            for i in range(0,len(lengths)):
-                SCarray = _np.round(_np.array(successprobabilities[i])*_np.array(totalcounts[i]))
-                SCs.append([int(k) for k in SCarray])
-            self.successcounts = SCs 
+        self.ASPs =  ASPs
         
     def add_bootstrapped_datasets(self, samples=1000):
 
@@ -111,16 +179,17 @@ class RBSummaryDataset(object):
             if self.totalcounts is not None:  
                 BStrappeddataset = RBSummaryDataset(self.number_of_qubits, self.lengths, successcounts=sampled_scounts, 
                                                 totalcounts=self.totalcounts, circuitdepths=self.circuitdepths, 
-                                                circuit2Qgcounts=self.circuit2Qgcounts, finitesampling=self.finitesampling,
+                                                circuit2Qgcounts=self.circuit2Qgcounts, sortedinput=True, finitesampling=self.finitesampling,
                                                 descriptor='data created from a non-parametric bootstrap')
 
             else:
                 BStrappeddataset = RBSummaryDataset(self.number_of_qubits, self.lengths, successcounts=None, 
                                                 totalcounts=None, successprobabilites=sampled_SPs, circuitdepths=self.circuitdepths, 
-                                                circuit2Qgcounts=self.circuit2Qgcounts, finitesampling=self.finitesampling,
+                                                circuit2Qgcounts=self.circuit2Qgcounts, sortedinput=True, finitesampling=self.finitesampling,
                                                 descriptor='data created from a non-parametric bootstrap without per-circuit finite-sampling error')
 
             self.bootstraps.append(BStrappeddataset)
+
 
 
 

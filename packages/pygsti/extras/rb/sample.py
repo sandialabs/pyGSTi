@@ -24,17 +24,17 @@ import copy as _copy
 import itertools as _itertools
 from scipy import mod as _mod
 
-def std_practice_direct_rb_experiment():
-    return
+#def std_practice_direct_rb_experiment():
+#    return
 
-def std_practice_clifford_rb_experiment():
-    return
+# def std_practice_clifford_rb_experiment():
+#     return
 
-def std_practice_interleaved_direct_rb_experiment():
-    return
+# def std_practice_interleaved_direct_rb_experiment():
+#     return
 
-def std_practice_interleaved_clifford_rb_experiment():
-    return
+# def std_practice_interleaved_clifford_rb_experiment():
+#     return
 
 def circuit_layer_by_pairings(pspec, twoQprob=0.5, oneQgatenames='all', twoQgatenames='all',
                               gatesetname = 'clifford'):   
@@ -690,6 +690,30 @@ def direct_rb_circuit(pspec, length, sampler='Qelimination', samplerargs=[], add
             outcircuit = [random_circuit, inversion_circuit]
     
     return outcircuit, idealout
+
+def direct_rb_experiment(pspec, lengths, circuits_per_length, sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[],
+                         randomizeout=False, cliffordtwirl=True, conditionaltwirl=True, citerations=20, compilerargs=[], 
+                         partitioned=False):
+
+    
+    if type(circuits_per_length) == int:
+        circuits_per_length = [circuits_per_length for i in range(len(lengths))]
+
+    circuits_list = []
+    idealout_list = []
+
+    for i in range(len(lengths)):
+        l = lengths[i]
+        circuits_list.append([])
+        idealout_list.append([])
+        for j in range(circuits_per_length[i]):
+            circuit, idealout = direct_rb_circuit(pspec, l, sampler=sampler, samplerargs=samplerarg, addlocal=addlocal, lsargs=lsargs,
+                                                  randomizeout=randomizeout, cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl, 
+                                                  citerations=citerations, compilerargs=compilerargs, partitioned=partitioned)
+            circuits_list[i].append(circuit)
+            idealout_list[i].append(idealout_list)
+
+    return circuits_list, idealout_list
      
 def clifford_rb_circuit(pspec, length, randomizeout=False, citerations=20, compilerargs=[]):
     """

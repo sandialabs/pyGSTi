@@ -170,7 +170,7 @@ def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=1000,  
         for i in range(bootstrap_samples):
 
             BS_ASPs  = RBSdataset.bootstraps[i].ASPs
-            BS_FF_results, BS_FAF_results = std_least_squares_data_fitting(lengths, BS_ASPs, n, seed=seed, asymptote=asymptote)
+            BS_FF_results, BS_FAF_results = std_least_squares_data_fitting(lengths, BS_ASPs, n, seed=seed, asymptote=asymptote, ftype='F+FA')
 
             if BS_FF_results['success']:
                 A_bootstraps_FF.append(BS_FF_results['estimates']['A'])
@@ -231,9 +231,12 @@ def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=1000,  
 
     return results
     
-def std_least_squares_data_fitting(lengths, ASPs, n, seed=None, asymptote=None):
+def std_least_squares_data_fitting(lengths, ASPs, n, seed=None, asymptote=None, ftype='full'):
+    """
+    ftype options 'full', 'full+FA', 'FA'
 
-    
+    """
+   
     if asymptote is not None:
         A = asymptote
     else:
@@ -245,7 +248,12 @@ def std_least_squares_data_fitting(lengths, ASPs, n, seed=None, asymptote=None):
     seed_full = [FAF_results['estimates']['A'], FAF_results['estimates']['B'], FAF_results['estimates']['p']]        
     FF_results =  custom_least_squares_data_fitting(lengths, ASPs, n, seed=seed_full)
     
-    return FF_results, FAF_results
+    if ftype == 'full':
+        return FF_results
+    if ftype == 'FA':
+        return FAF_results
+    if ftype == 'full+FA':
+        return FF_results, FAF_results
 
 def custom_least_squares_data_fitting(lengths, ASPs, n, A=None, B=None, seed=None, rtype='EI'):
     
@@ -339,7 +347,7 @@ def custom_least_squares_data_fitting(lengths, ASPs, n, A=None, B=None, seed=Non
     estimates['A'] = A
     estimates['B'] = B
     estimates['p'] = p
-    estimates['r'] = p_to_r(p,n)
+    estimates['r'] = p_to_r(p,2**n)
 
     results = {}
     results['estimates'] = estimates

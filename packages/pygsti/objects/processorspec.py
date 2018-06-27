@@ -22,7 +22,7 @@ class ProcessorSpec(object):
     
     def __init__(self, nQubits, gate_names, nonstd_gate_unitaries=None,
                  availability=None, construct_models=('clifford','target'), 
-                 construct_clifford_compilations=('paulieq','absolute'), verbosity=1):
+                 construct_clifford_compilations=('paulieq','absolute'), verbosity=0):
         """
         An object that can be used to encapsulate the device specification for a one or more qubit 
         quantum computer.

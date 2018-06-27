@@ -7,7 +7,7 @@ import time as _time
 from ...tools import symplectic as _symp
 from . import sample as _samp
 
-def tensored_weight1_pauli_errors_simulator(circuit, pspec, pauliprobs, N, alloutcomes=False):
+def tensored_weight1_pauli_errors_simulator(circuit, pspec, pauliprobs, N, measurement_errors=None, alloutcomes=False):
     
     n = circuit.number_of_lines
     results = {}
@@ -18,7 +18,7 @@ def tensored_weight1_pauli_errors_simulator(circuit, pspec, pauliprobs, N, allou
             results[result] = 0
  
     for i in range(0,N):
-        result = tensored_weight1_pauli_errors_instance(circuit, pspec, pauliprobs)
+        result = tensored_weight1_pauli_errors_instance(circuit, pspec, pauliprobs, measurement_errors=measurement_errors)
         try:
             results[tuple(result)] += 1
         except:
@@ -26,7 +26,7 @@ def tensored_weight1_pauli_errors_simulator(circuit, pspec, pauliprobs, N, allou
 
     return results
 
-def tensored_weight1_pauli_errors_instance(circuit, pspec, pauliprobs):
+def tensored_weight1_pauli_errors_instance(circuit, pspec, pauliprobs, measurement_errors=None):
     
     n = circuit.number_of_lines
     depth = circuit.depth()
@@ -60,12 +60,17 @@ def tensored_weight1_pauli_errors_instance(circuit, pspec, pauliprobs):
                     print(sampledvec)
                     print(gerror_p)
                     raise ValueError()
+
     output = []
     for q in range(0,n):
         measurement_out = _symp.pauli_z_measurement(sout, pout, q)
+        # Todo : make this work with probabilistic measurement outcomes.
         bit = measurement_out[1]
-        assert(bit == 0 or bit == 1), "Ideal output is not a computational basis state!"
-        output.append(int(measurement_out[1]))  
+        output.append(int(measurement_out[1]))
+
+    if measurement_errors is not None:
+         add_to_outcome = _np.array([_np.random.binomial(1,p) for p in measurement_errors])
+         output = list(_np.array(output) ^  add_to_outcome)
 
     return output
 
