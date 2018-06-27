@@ -3514,7 +3514,7 @@ class GateSet(object):
                 srep = (gate.embedded_gate.smatrix,gate.embedded_gate.svector)
             elif isinstance(gate, _gate.CliffordGate):
                 lbl = gl # keep the entire gate label
-                srep = (gate.smatrix,gate.gate.svector)
+                srep = (gate.smatrix,gate.svector)
             else:
                 lbl = srep = None
 
