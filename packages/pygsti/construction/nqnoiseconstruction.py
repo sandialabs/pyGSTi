@@ -398,6 +398,17 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
     gs.preps[_Lbl('rho0')] = _objs.TensorProdSPAMVec('prep', prep_factors)
     gs.povms[_Lbl('Mdefault')] = _objs.TensorProdPOVM(povm_factors)
 
+    # #DEBUG SPECIAL CASE: when prep and povm noise are None create a *fixed*
+    # # (no parameters) POVM of the computational basis elements. (This is just
+    # # as useful for data generation but not as useful for GST as it doesn't
+    # # give the SPAM any degrees of freedom.)
+    # if prepNoise is None and povmNoise is None:
+    #     iterover = [(0,1)]*nQubits
+    #     items = [ (''.join(map(str,outcomes)), _objs.ComputationalSPAMVec(outcomes,"densitymx"))
+    #               for outcomes in _itertools.product(*iterover) ]
+    #     gs.povms[_Lbl('Mdefault')] = _objs.UnconstrainedPOVM(items) # overwrite above
+    # # END DEBUG
+
     #FUTURE - just return cloud keys? (gate label values are never used
     # downstream, but may still be useful for debugging, so keep for now)
     printer.log("DONE! - returning GateSet with dim=%d and gates=%s" % (gs.dim, list(gs.gates.keys())))    
