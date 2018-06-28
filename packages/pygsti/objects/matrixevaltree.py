@@ -615,7 +615,7 @@ class MatrixEvalTree(EvalTree):
             if len(toConcat) > 0:
                 subTree.myFinalElsToParentFinalElsMap = _np.concatenate(toConcat)
             else:
-                subTree.myFinalElsToParentFinalElsMap = _np.empty(0,'i')
+                subTree.myFinalElsToParentFinalElsMap = _np.empty(0,_np.int64)
             #Note: myFinalToParentFinalMap maps only between *final* elements
             #   (which are what is held in compiled_gatestring_spamTuples)
 

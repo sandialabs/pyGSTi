@@ -455,9 +455,9 @@ class Gate(_gatesetmember.GateSetMember):
         GateRep
         """
         if self._evotype == "statevec":
-            return replib.SVGateRep_Dense(self.todense())
+            return replib.SVGateRep_Dense(_np.ascontiguousarray(self.todense(),complex) )
         elif self._evotype == "densitymx":
-            return replib.DMGateRep_Dense(self.todense())
+            return replib.DMGateRep_Dense(_np.ascontiguousarray(self.todense(),'d'))
         else:
             raise NotImplementedError("torep(%s) not implemented for %s objects!" %
                                       (self._evotype, self.__class__.__name__))
@@ -839,7 +839,8 @@ class GateMatrix(Gate):
         """
         Return this gate as a dense matrix.
         """
-        return self.base
+        return _np.asarray(self.base)
+          # *must* be a numpy array for Cython arg conversion
 
     def __copy__(self):
         # We need to implement __copy__ because we defer all non-existing
@@ -2685,16 +2686,18 @@ class LindbladParameterizedGateMap(Gate):
             if self.sparse:
                 if self.unitary_postfactor is None:
                     Udata = _np.empty(0,'d')
-                    Uindices = Uindptr = _np.empty(0,'i')
+                    Uindices = Uindptr = _np.empty(0,_np.int64)
                 else:
                     assert(_sps.isspmatrix_csr(self.unitary_postfactor)), \
                         "Internal error! Unitary postfactor should be a *sparse* CSR matrix!"
                     Udata = self.unitary_postfactor.data
-                    Uindptr = self.unitary_postfactor.indptr
-                    Uindices = self.unitary_postfactor.indices
+                    Uindptr = _np.ascontiguousarray(self.unitary_postfactor.indptr, _np.int64)
+                    Uindices = _np.ascontiguousarray(self.unitary_postfactor.indices, _np.int64)
                            
                 A, mu, m_star, s, eta = self.err_gen_prep
-                return replib.DMGateRep_Lindblad(A.data, A.indices, A.indptr,
+                return replib.DMGateRep_Lindblad(A.data,
+                                                 _np.ascontiguousarray(A.indices, _np.int64),
+                                                 _np.ascontiguousarray(A.indptr, _np.int64),
                                                  mu, eta, m_star, s,
                                                  Udata, Uindices, Uindptr)
             else:
@@ -2737,7 +2740,7 @@ class LindbladParameterizedGateMap(Gate):
         def _compose_poly_indices(terms):
             for term in terms:
                 term.map_indices(lambda x: tuple(_gatesetmember._compose_gpindices(
-                    self.gpindices, _np.array(x,'i'))) )
+                    self.gpindices, _np.array(x,_np.int64))) )
             return terms
         
         if order not in self.terms:
@@ -3933,6 +3936,9 @@ class EmbeddedGateMap(Gate):
     subspace of its contained gate, where it acts as the contained gate does.
     """
 
+    #def _slow_adjoint_acton(self, v): # TODO REMOVE
+    #    raise NotImplementedError() # TEMPORARY JUST TO DO IDLETOMOG TEST
+    
     def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None): # TODO: remove basisdim as arg
         """
         Initialize an EmbeddedGateMap object.
@@ -3999,7 +4005,7 @@ class EmbeddedGateMap(Gate):
                 else: # evotype == "statevec"
                     basisInds.append( list(range(self.stateSpaceLabels.labeldims[l])) ) # e.g. [0,1] for qubits (std *complex* basis)
 
-            self.numBasisEls = _np.array(list(map(len,basisInds)),'i')  # DEPRECATED REPS - can just replace list(range( in loop above with holding lens?
+            self.numBasisEls = _np.array(list(map(len,basisInds)),_np.int64)
             self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one
 
             #offset into "active" tensor product block
@@ -4020,11 +4026,11 @@ class EmbeddedGateMap(Gate):
             # multipliers to go from per-label indices to tensor-product-block index
             # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
             self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
-                reversed(list(map(len,basisInds[:-1]))))) ), 'i')
+                reversed(list(map(len,basisInds[:-1]))))) ), _np.int64)
     
             # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
             labelIndices = [ tensorProdBlkLabels.index(label) for label in labels ]
-            self.actionInds = _np.array(labelIndices,'i')
+            self.actionInds = _np.array(labelIndices,_np.int64)
             assert(_np.product([self.numBasisEls[i] for i in self.actionInds]) == self.embedded_gate.dim), \
                 "Embedded gate has dimension (%d) inconsistent with the given target labels (%s)" % (self.embedded_gate.dim, str(labels))
 
@@ -4063,7 +4069,7 @@ class EmbeddedGateMap(Gate):
             # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
             qubitLabels = self.stateSpaceLabels.labels[0] 
             self.qubit_indices =  _np.array([ qubitLabels.index(targetLbl)
-                                              for targetLbl in self.targetLabels ], 'i')
+                                              for targetLbl in self.targetLabels ], _np.int64)
         else:
             self.qubit_indices = None # (unused)
 
@@ -4219,12 +4225,12 @@ class EmbeddedGateMap(Gate):
         _, _, blockDims = self.basisdim # dmDim, gateDim, blockDims
         
         if self._evotype == "statevec":
-            blocksizes = _np.array(blockDims,'i')
+            blocksizes = _np.array(blockDims,_np.int64)
             return replib.SVGateRep_Embedded(self.embedded_gate.torep(),
                                              self.numBasisEls, self.actionInds, blocksizes,
                                              embeddedDim, nComponents, iActiveBlock, nBlocks, self.dim)
         else:
-            blocksizes = _np.array(blockDims,'i')**2
+            blocksizes = _np.array(blockDims,_np.int64)**2
             return replib.DMGateRep_Embedded(self.embedded_gate.torep(),
                                              self.numBasisEls, self.actionInds, blocksizes,
                                              embeddedDim, nComponents, iActiveBlock, nBlocks, self.dim)
@@ -4656,10 +4662,10 @@ class CliffordGate(Gate):
         """
         invs, invp = _symp.inverse_clifford(self.smatrix, self.svector)
         U = self.unitary.todense() if isinstance(self.unitary, Gate) else self.unitary
-        return replib.SBGateRep_Clifford(_np.ascontiguousarray(self.smatrix,'i'),
-                                         _np.ascontiguousarray(self.svector,'i'),
-                                         _np.ascontiguousarray(invs,'i'),
-                                         _np.ascontiguousarray(invp,'i'),
+        return replib.SBGateRep_Clifford(_np.ascontiguousarray(self.smatrix,_np.int64),
+                                         _np.ascontiguousarray(self.svector,_np.int64),
+                                         _np.ascontiguousarray(invs,_np.int64),
+                                         _np.ascontiguousarray(invp,_np.int64),
                                          _np.ascontiguousarray(U,complex))
 
     def __str__(self):

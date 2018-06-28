@@ -8,10 +8,12 @@ from libc.stdlib cimport malloc, free
 cimport numpy as np
 cimport cython
 
+ctypedef long INT
+
 def dot(np.ndarray[double, ndim=1] f, np.ndarray[double, ndim=1] g):
     cdef long N = f.shape[0]
     cdef float ret = 0.0
-    cdef int i
+    cdef INT i
     for i in range(N):
         ret += f[i]*g[i]
     return ret
@@ -21,19 +23,19 @@ def dot(np.ndarray[double, ndim=1] f, np.ndarray[double, ndim=1] g):
 def embedded_fast_acton_sparse(embedded_gate_acton_fn,
                                np.ndarray[double, ndim=1] output_state,
                                np.ndarray[double, ndim=1] state,
-                               np.ndarray[int, ndim=1] noop_incrementers,
-                               np.ndarray[int, ndim=1] numBasisEls_noop_blankaction,
-                               np.ndarray[int, ndim=1] baseinds):
+                               np.ndarray[np.int64_t, ndim=1] noop_incrementers,
+                               np.ndarray[np.int64_t, ndim=1] numBasisEls_noop_blankaction,
+                               np.ndarray[np.int64_t, ndim=1] baseinds):
 
     cdef long i
-    cdef int k
-    cdef int vec_index_noop = 0
-    cdef int nParts = numBasisEls_noop_blankaction.shape[0]
-    cdef int nActionIndices = baseinds.shape[0]
-    #cdef np.ndarray b = np.zeros(nParts, dtype=int)
-    #cdef np.ndarray gate_b = np.zeros(nAction, dtype=int)
-    #cdef np.ndarray[long, ndim=1] baseinds = np.empty(nActionIndices, dtype=int) #for FASTER
-    cdef int b[100]
+    cdef INT k
+    cdef INT vec_index_noop = 0
+    cdef INT nParts = numBasisEls_noop_blankaction.shape[0]
+    cdef INT nActionIndices = baseinds.shape[0]
+    #cdef np.ndarray b = np.zeros(nParts, dtype=np.int64_t)
+    #cdef np.ndarray gate_b = np.zeros(nAction, dtype=np.int64_t)
+    #cdef np.ndarray[long, ndim=1] baseinds = np.empty(nActionIndices, dtype=np.int64_t) #for FASTER
+    cdef INT b[100]
 
     #These need to be numpy arrays for python interaction
     cdef np.ndarray[double, ndim=1, mode="c"] slc1 = np.empty(nActionIndices, dtype='d')
@@ -96,27 +98,27 @@ def embedded_fast_acton_sparse(embedded_gate_acton_fn,
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def embedded_fast_acton_sparse_spc1(
         np.ndarray[double, ndim=1, mode="c"] Adata not None,
-        np.ndarray[int, ndim=1, mode="c"] Aindptr not None,
-        np.ndarray[int, ndim=1, mode="c"] Aindices not None,
-        double mu, int m_star, int s, double tol, double eta,
+        np.ndarray[np.int64_t, ndim=1, mode="c"] Aindptr not None,
+        np.ndarray[np.int64_t, ndim=1, mode="c"] Aindices not None,
+        double mu, INT m_star, INT s, double tol, double eta,
                                np.ndarray[double, ndim=1] output_state,
                                np.ndarray[double, ndim=1] state,
-                               np.ndarray[int, ndim=1] noop_incrementers,
-                               np.ndarray[int, ndim=1] numBasisEls_noop_blankaction,
-                               np.ndarray[int, ndim=1] baseinds):
+                               np.ndarray[np.int64_t, ndim=1] noop_incrementers,
+                               np.ndarray[np.int64_t, ndim=1] numBasisEls_noop_blankaction,
+                               np.ndarray[np.int64_t, ndim=1] baseinds):
 
-    #                          int offset,
-    #                          np.ndarray[int, ndim=1] numBasisEls_action,
-    #                          np.ndarray[int, ndim=1] actionInds,
+    #                          INT offset,
+    #                          np.ndarray[np.int64_t, ndim=1] numBasisEls_action,
+    #                          np.ndarray[np.int64_t, ndim=1] actionInds,
 
     cdef long i
-    cdef int k
-    cdef int vec_index_noop = 0
+    cdef INT k
+    cdef INT vec_index_noop = 0
     cdef long nParts = numBasisEls_noop_blankaction.shape[0]
-    #cdef int nAction = numBasisEls_action.shape[0]
+    #cdef INT nAction = numBasisEls_action.shape[0]
     cdef long nActionIndices = baseinds.shape[0]
-    cdef int b[100]
-    #cdef int gate_b[100]
+    cdef INT b[100]
+    #cdef INT gate_b[100]
     cdef long Annz = Adata.shape[0]
 
     #Note: malloc just as fast as stack alloc
@@ -146,8 +148,8 @@ def embedded_fast_acton_sparse_spc1(
         
             #SPECIAL ACTON for output_state[ inds ] += acton( state[inds] )
             # replaces:  slc2 = embedded_gate_acton_fn( slc1 )
-            custom_expm_multiply_simple_core_c(&Adata[0], &Aindptr[0],
-                                               &Aindices[0], &slc1[0], nActionIndices,
+            custom_expm_multiply_simple_core_c(&Adata[0], <INT*>&Aindptr[0],
+                                               <INT*>&Aindices[0], &slc1[0], nActionIndices,
                                                mu, m_star, s, tol, eta,
                                                &slc2[0], &scratch[0])
             
@@ -180,18 +182,18 @@ def embedded_fast_acton_sparse_spc1(
 def embedded_fast_acton_sparse_spc2(np.ndarray[double, ndim=2, mode="c"] densemx not None,
                                     np.ndarray[double, ndim=1] output_state,
                                     np.ndarray[double, ndim=1] state,
-                                    np.ndarray[int, ndim=1] noop_incrementers,
-                                    np.ndarray[int, ndim=1] numBasisEls_noop_blankaction,
-                                    np.ndarray[int, ndim=1] baseinds):
+                                    np.ndarray[np.int64_t, ndim=1] noop_incrementers,
+                                    np.ndarray[np.int64_t, ndim=1] numBasisEls_noop_blankaction,
+                                    np.ndarray[np.int64_t, ndim=1] baseinds):
 
     cdef long i
     cdef long j
     cdef double cum
-    cdef int k
-    cdef int vec_index_noop = 0
+    cdef INT k
+    cdef INT vec_index_noop = 0
     cdef long nParts = numBasisEls_noop_blankaction.shape[0]
     cdef long nActionIndices = baseinds.shape[0]
-    cdef int b[100]
+    cdef INT b[100]
 
     #Note: malloc just as fast as stack alloc
     #cdef double *slc1 = <double *>malloc(nActionIndices * sizeof(double))
@@ -245,19 +247,19 @@ def embedded_fast_acton_sparse_spc2(np.ndarray[double, ndim=2, mode="c"] densemx
 def embedded_fast_acton_sparse_complex(embedded_gate_acton_fn,
                                        np.ndarray[np.complex128_t, ndim=1] output_state,
                                        np.ndarray[np.complex128_t, ndim=1] state,
-                                       np.ndarray[int, ndim=1] noop_incrementers,
-                                       np.ndarray[int, ndim=1] numBasisEls_noop_blankaction,
-                                       np.ndarray[int, ndim=1] baseinds):
+                                       np.ndarray[np.int64_t, ndim=1] noop_incrementers,
+                                       np.ndarray[np.int64_t, ndim=1] numBasisEls_noop_blankaction,
+                                       np.ndarray[np.int64_t, ndim=1] baseinds):
 
     cdef long i
-    cdef int k
-    cdef int vec_index_noop = 0
-    cdef int nParts = numBasisEls_noop_blankaction.shape[0]
-    cdef int nActionIndices = baseinds.shape[0]
-    #cdef np.ndarray b = np.zeros(nParts, dtype=int)
-    #cdef np.ndarray gate_b = np.zeros(nAction, dtype=int)
-    #cdef np.ndarray[long, ndim=1] baseinds = np.empty(nActionIndices, dtype=int) #for FASTER
-    cdef int b[100]
+    cdef INT k
+    cdef INT vec_index_noop = 0
+    cdef INT nParts = numBasisEls_noop_blankaction.shape[0]
+    cdef INT nActionIndices = baseinds.shape[0]
+    #cdef np.ndarray b = np.zeros(nParts, dtype=np.int64_t)
+    #cdef np.ndarray gate_b = np.zeros(nAction, dtype=np.int64_t)
+    #cdef np.ndarray[long, ndim=1] baseinds = np.empty(nActionIndices, dtype=np.int64_t) #for FASTER
+    cdef INT b[100]
 
     #These need to be numpy arrays for python interaction
     cdef np.ndarray[np.complex128_t, ndim=1, mode="c"] slc1 = np.empty(nActionIndices, dtype=np.complex128)
@@ -321,27 +323,27 @@ def embedded_fast_acton_sparse_complex(embedded_gate_acton_fn,
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def embedded_fast_acton_sparse_spc1_complex(
         np.ndarray[np.complex128_t, ndim=1, mode="c"] Adata not None,
-        np.ndarray[int, ndim=1, mode="c"] Aindptr not None,
-        np.ndarray[int, ndim=1, mode="c"] Aindices not None,
-        double mu, int m_star, int s, double tol, double eta,
+        np.ndarray[np.int64_t, ndim=1, mode="c"] Aindptr not None,
+        np.ndarray[np.int64_t, ndim=1, mode="c"] Aindices not None,
+        double mu, INT m_star, INT s, double tol, double eta,
                                np.ndarray[np.complex128_t, ndim=1] output_state,
                                np.ndarray[np.complex128_t, ndim=1] state,
-                               np.ndarray[int, ndim=1] noop_incrementers,
-                               np.ndarray[int, ndim=1] numBasisEls_noop_blankaction,
-                               np.ndarray[int, ndim=1] baseinds):
+                               np.ndarray[np.int64_t, ndim=1] noop_incrementers,
+                               np.ndarray[np.int64_t, ndim=1] numBasisEls_noop_blankaction,
+                               np.ndarray[np.int64_t, ndim=1] baseinds):
 
-    #                          int offset,
-    #                          np.ndarray[int, ndim=1] numBasisEls_action,
-    #                          np.ndarray[int, ndim=1] actionInds,
+    #                          INT offset,
+    #                          np.ndarray[np.int64_t, ndim=1] numBasisEls_action,
+    #                          np.ndarray[np.int64_t, ndim=1] actionInds,
 
     cdef long i
-    cdef int k
-    cdef int vec_index_noop = 0
+    cdef INT k
+    cdef INT vec_index_noop = 0
     cdef long nParts = numBasisEls_noop_blankaction.shape[0]
-    #cdef int nAction = numBasisEls_action.shape[0]
+    #cdef INT nAction = numBasisEls_action.shape[0]
     cdef long nActionIndices = baseinds.shape[0]
-    cdef int b[100]
-    #cdef int gate_b[100]
+    cdef INT b[100]
+    #cdef INT gate_b[100]
     cdef long Annz = Adata.shape[0]
 
     #Note: malloc just as fast as stack alloc
@@ -372,8 +374,8 @@ def embedded_fast_acton_sparse_spc1_complex(
             #SPECIAL ACTON for output_state[ inds ] += acton( state[inds] )
             # replaces:  slc2 = embedded_gate_acton_fn( slc1 )
             custom_expm_multiply_simple_core_c_complex(
-                &Adata[0], &Aindptr[0],
-                &Aindices[0], &slc1[0], nActionIndices,
+                &Adata[0], <INT*>&Aindptr[0],
+                <INT*>&Aindices[0], &slc1[0], nActionIndices,
                 mu, m_star, s, tol, eta,
                 &slc2[0], &scratch[0])
             
@@ -408,18 +410,18 @@ def embedded_fast_acton_sparse_spc1_complex(
 def embedded_fast_acton_sparse_spc2_complex(np.ndarray[np.complex128_t, ndim=2, mode="c"] densemx not None,
                                             np.ndarray[np.complex128_t, ndim=1] output_state,
                                             np.ndarray[np.complex128_t, ndim=1] state,
-                                            np.ndarray[int, ndim=1] noop_incrementers,
-                                            np.ndarray[int, ndim=1] numBasisEls_noop_blankaction,
-                                            np.ndarray[int, ndim=1] baseinds):
+                                            np.ndarray[np.int64_t, ndim=1] noop_incrementers,
+                                            np.ndarray[np.int64_t, ndim=1] numBasisEls_noop_blankaction,
+                                            np.ndarray[np.int64_t, ndim=1] baseinds):
 
     cdef long i
     cdef long j
     cdef double complex cum
-    cdef int k
-    cdef int vec_index_noop = 0
+    cdef INT k
+    cdef INT vec_index_noop = 0
     cdef long nParts = numBasisEls_noop_blankaction.shape[0]
     cdef long nActionIndices = baseinds.shape[0]
-    cdef int b[100]
+    cdef INT b[100]
 
     if nParts > 100:
         raise ValueError("Need to increase size of static arrays!")
@@ -467,15 +469,15 @@ def embedded_fast_acton_sparse_spc2_complex(np.ndarray[np.complex128_t, ndim=2, 
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def medium_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
               np.ndarray[double, ndim=2, mode="c"] fastArray not None,
-              np.ndarray[int, ndim=1, mode="c"] fastArraySizes not None):
+              np.ndarray[np.int64_t, ndim=1, mode="c"] fastArraySizes not None):
     
-    cdef int mi[100] # multi-index holding
-    cdef int multipliers[100]
+    cdef INT mi[100] # multi-index holding
+    cdef INT multipliers[100]
     cdef double preprods[101] # +1 from other static dims
-    cdef int nFactors = fastArray.shape[0]
-    cdef int i
-    cdef int k
-    cdef int p
+    cdef INT nFactors = fastArray.shape[0]
+    cdef INT i
+    cdef INT k
+    cdef INT p
     
     if nFactors > 100:
         assert(False) # need to increase static dimensions above
@@ -518,16 +520,16 @@ def medium_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def fast_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
               np.ndarray[double, ndim=2, mode="c"] fastArray not None,
-              np.ndarray[int, ndim=1, mode="c"] fastArraySizes not None):
+              np.ndarray[np.int64_t, ndim=1, mode="c"] fastArraySizes not None):
     
-    cdef int nFactors = fastArray.shape[0]
-    cdef int N = outvec.shape[0]
-    cdef int i
-    cdef int j
-    cdef int k
-    cdef int sz
-    cdef int off
-    cdef int endoff
+    cdef INT nFactors = fastArray.shape[0]
+    cdef INT N = outvec.shape[0]
+    cdef INT i
+    cdef INT j
+    cdef INT k
+    cdef INT sz
+    cdef INT off
+    cdef INT endoff
     cdef double mult
     
     #Put last factor at end of outvec
@@ -566,16 +568,16 @@ def fast_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not None,
                       np.ndarray[np.complex128_t, ndim=2, mode="c"] fastArray not None,
-                      np.ndarray[int, ndim=1, mode="c"] fastArraySizes not None):
+                      np.ndarray[np.int64_t, ndim=1, mode="c"] fastArraySizes not None):
     
-    cdef int nFactors = fastArray.shape[0]
-    cdef int N = outvec.shape[0]
-    cdef int i
-    cdef int j
-    cdef int k
-    cdef int sz
-    cdef int off
-    cdef int endoff
+    cdef INT nFactors = fastArray.shape[0]
+    cdef INT N = outvec.shape[0]
+    cdef INT i
+    cdef INT j
+    cdef INT k
+    cdef INT sz
+    cdef INT off
+    cdef INT endoff
     cdef double complex mult
     
     #Put last factor at end of outvec
@@ -615,8 +617,8 @@ def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not N
 #@cython.boundscheck(False) # turn off bounds-checking for entire function
 #@cython.wraparound(False)  # turn off negative index wrapping for entire function
 #cdef vec_inf_norm(np.ndarray[double, ndim=1] v):
-#    cdef int i
-#    cdef int N = v.shape[0]
+#    cdef INT i
+#    cdef INT N = v.shape[0]
 #    cdef double mx = 0.0
 #    cdef double a
 #    for i in range(N):
@@ -630,19 +632,19 @@ def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not N
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def custom_expm_multiply_simple_core(np.ndarray[double, ndim=1, mode="c"] Adata,
-                                     np.ndarray[int, ndim=1, mode="c"] Aindptr,
-                                     np.ndarray[int, ndim=1, mode="c"] Aindices,
+                                     np.ndarray[np.int64_t, ndim=1, mode="c"] Aindptr,
+                                     np.ndarray[np.int64_t, ndim=1, mode="c"] Aindices,
                                      np.ndarray[double, ndim=1, mode="c"] B,
-                                     double mu, int m_star, int s, double tol, double eta):
+                                     double mu, INT m_star, INT s, double tol, double eta):
 
-    cdef int N = B.shape[0] #Aindptr.shape[0]-1
+    cdef INT N = B.shape[0] #Aindptr.shape[0]-1
     if s == 0: return B #short circuit
 
     cdef np.ndarray[double, ndim=1, mode="c"] F = np.empty(N,'d')
     cdef np.ndarray[double, ndim=1, mode="c"] scratch = np.empty(N,'d')
 
-    custom_expm_multiply_simple_core_c(&Adata[0], &Aindptr[0],
-                                       &Aindices[0], &B[0], N,
+    custom_expm_multiply_simple_core_c(&Adata[0], <INT*>&Aindptr[0],
+                                       <INT*>&Aindices[0], &B[0], N,
                                        mu, m_star, s, tol, eta,
                                        &F[0], &scratch[0])
     return F
@@ -651,16 +653,16 @@ def custom_expm_multiply_simple_core(np.ndarray[double, ndim=1, mode="c"] Adata,
 
 
 @cython.cdivision(True) # turn off divide-by-zero checking
-cdef custom_expm_multiply_simple_core_c(double* Adata, int* Aindptr,
-                                        int* Aindices, double* B,
-                                        int N, double mu, int m_star,
-                                        int s, double tol, double eta,
+cdef custom_expm_multiply_simple_core_c(double* Adata, INT* Aindptr,
+                                        INT* Aindices, double* B,
+                                        INT N, double mu, INT m_star,
+                                        INT s, double tol, double eta,
                                         double* F, double* scratch):
 
-    cdef int i
-    cdef int j
-    cdef int r
-    cdef int k
+    cdef INT i
+    cdef INT j
+    cdef INT r
+    cdef INT k
 
     cdef double a
     cdef double c1
@@ -718,16 +720,16 @@ cdef custom_expm_multiply_simple_core_c(double* Adata, int* Aindptr,
 
 
 @cython.cdivision(True) # turn off divide-by-zero checking
-cdef custom_expm_multiply_simple_core_c_complex(double complex* Adata, int* Aindptr,
-                                                int* Aindices, double complex* B,
-                                                int N, double mu, int m_star,
-                                                int s, double tol, double eta,
+cdef custom_expm_multiply_simple_core_c_complex(double complex* Adata, INT* Aindptr,
+                                                INT* Aindices, double complex* B,
+                                                INT N, double mu, INT m_star,
+                                                INT s, double tol, double eta,
                                                 double complex* F, double complex* scratch):
 
-    cdef int i
-    cdef int j
-    cdef int r
-    cdef int k
+    cdef INT i
+    cdef INT j
+    cdef INT r
+    cdef INT k
 
     cdef double a
     cdef double c1
@@ -789,17 +791,17 @@ cdef custom_expm_multiply_simple_core_c_complex(double complex* Adata, int* Aind
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def csr_subtract_identity(np.ndarray[double, ndim=1] Adata,
-                          np.ndarray[int, ndim=1] Aindptr,
-                          np.ndarray[int, ndim=1] Aindices,
+                          np.ndarray[np.int64_t, ndim=1] Aindptr,
+                          np.ndarray[np.int64_t, ndim=1] Aindices,
                           np.ndarray[double, ndim=1] Bdata,
-                          np.ndarray[int, ndim=1] Bindptr,
-                          np.ndarray[int, ndim=1] Bindices,
-                          double lmb, int n):
+                          np.ndarray[np.int64_t, ndim=1] Bindptr,
+                          np.ndarray[np.int64_t, ndim=1] Bindices,
+                          double lmb, INT n):
 
-    cdef int nxt = 0
-    cdef int iRow = 0
-    cdef int i = 0
-    cdef int bFound = 0
+    cdef INT nxt = 0
+    cdef INT iRow = 0
+    cdef INT i = 0
+    cdef INT bFound = 0
     Bindptr[0] = 0
     
     for iRow in range(n):

@@ -794,7 +794,7 @@ class GateSet(object):
                         new_inds = []
                         for i in obj.gpindices:
                             new_inds.append(i - get_shift(i))
-                        new_inds = _np.array(new_inds,'i')
+                        new_inds = _np.array(new_inds,_np.int64)
                     obj.set_gpindices( new_inds, self, memo)
 
 
@@ -1273,7 +1273,7 @@ class GateSet(object):
 
         #Step4: change lists/slices -> index arrays for user convenience
         elIndicesByParent = _collections.OrderedDict(
-            [ (k, (v if isinstance(v,slice) else _np.array(v,'i')) )
+            [ (k, (v if isinstance(v,slice) else _np.array(v,_np.int64)) )
               for k,v in elIndicesByParent.items()] )
 
 

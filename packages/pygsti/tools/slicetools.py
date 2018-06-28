@@ -143,7 +143,7 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
         if step == 1: step = None
         return slice(start,stop,step)
 
-    if array_ok: return _np.array(lst,'i')
+    if array_ok: return _np.array(lst,_np.int64)
     else: raise ValueError("List does not correspond to a slice!")
 
 def as_array(slcOrListLike):
@@ -151,9 +151,9 @@ def as_array(slcOrListLike):
     Returns `slcOrListLike` as an index array (an integer numpy.ndarray).
     """
     if isinstance(slcOrListLike, slice):
-        return _np.array(indices(slcOrListLike), 'i')
+        return _np.array(indices(slcOrListLike), _np.int64)
     else:
-        return _np.array(slcOrListLike, 'i')
+        return _np.array(slcOrListLike, _np.int64)
 
 
 def divide(slc, maxLen):

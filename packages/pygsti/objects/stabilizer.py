@@ -118,12 +118,12 @@ class StabilizerFrame(object):
 
         self.s = state_s.copy()
         if state_ps is not None:
-            self.ps = _np.empty((len(state_ps),2*self.n),'i')
+            self.ps = _np.empty((len(state_ps),2*self.n),_np.int64)
             for i,p in enumerate(state_ps):
                 self.ps[i,:] = p[:]
             #OLD self.ps = [ p for p in state_ps ]
         else:
-            self.ps = _np.empty((0,2*self.n),'i')
+            self.ps = _np.empty((0,2*self.n),_np.int64)
             #OLD self.ps = []
 
         if amps is not None:
@@ -153,8 +153,8 @@ class StabilizerFrame(object):
         -------
         SBStateRep
         """
-        return replib.SBStateRep(_np.ascontiguousarray(self.s,'i'),
-                                 _np.ascontiguousarray(self.ps,'i'),
+        return replib.SBStateRep(_np.ascontiguousarray(self.s,_np.int64),
+                                 _np.ascontiguousarray(self.ps,_np.int64),
                                  _np.ascontiguousarray(self.a,complex))
 
     def copy(self):

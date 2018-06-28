@@ -4,14 +4,15 @@
 #include <cmath>
 
 typedef std::complex<double> dcomplex;
+typedef long INT;
 
 namespace CReps {
 
   //Helper functions
-  void expm_multiply_simple_core(double* Adata, int* Aindptr,
-				 int* Aindices, double* B,
-				 int N, double mu, int m_star,
-				 int s, double tol, double eta,
+  void expm_multiply_simple_core(double* Adata, INT* Aindptr,
+				 INT* Aindices, double* B,
+				 INT N, double mu, INT m_star,
+				 INT s, double tol, double eta,
 				 double* F, double* scratch);
 
   // DENSE MATRIX (DM) propagation
@@ -20,10 +21,10 @@ namespace CReps {
   class DMStateCRep {
     public:
     double* _dataptr;
-    int _dim;
+    INT _dim;
     bool _ownmem;
-    DMStateCRep(int dim);    
-    DMStateCRep(double* data, int dim, bool copy);
+    DMStateCRep(INT dim);    
+    DMStateCRep(double* data, INT dim, bool copy);
     ~DMStateCRep();
     void print(const char* label);
     void copy_from(DMStateCRep* st);
@@ -32,8 +33,8 @@ namespace CReps {
   // EFFECTSs
   class DMEffectCRep {
     public:
-    int _dim;
-    DMEffectCRep(int dim);
+    INT _dim;
+    DMEffectCRep(INT dim);
     virtual ~DMEffectCRep();
     virtual double probability(DMStateCRep* state) = 0;
   };
@@ -42,7 +43,7 @@ namespace CReps {
   class DMEffectCRep_Dense :public DMEffectCRep {
     public:
     double* _dataptr;
-    DMEffectCRep_Dense(double* data, int dim);
+    DMEffectCRep_Dense(double* data, INT dim);
     virtual ~DMEffectCRep_Dense();
     virtual double probability(DMStateCRep* state);
   };
@@ -50,11 +51,11 @@ namespace CReps {
   class DMEffectCRep_TensorProd :public DMEffectCRep {
     public:
     double* _kron_array;
-    int _max_factor_dim;
-    int* _factordims;
-    int _nfactors;
+    INT _max_factor_dim;
+    INT* _factordims;
+    INT _nfactors;
 
-    DMEffectCRep_TensorProd(double* kron_array, int* factordims, int nfactors, int max_factor_dim, int dim);
+    DMEffectCRep_TensorProd(double* kron_array, INT* factordims, INT nfactors, INT max_factor_dim, INT dim);
     virtual ~DMEffectCRep_TensorProd();
     virtual double probability(DMStateCRep* state);    
   };
@@ -63,9 +64,9 @@ namespace CReps {
   // GATEs
   class DMGateCRep {
     public:
-    int _dim;
+    INT _dim;
 
-    DMGateCRep(int dim);
+    DMGateCRep(INT dim);
     virtual ~DMGateCRep();
     virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state) = 0;
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) = 0;
@@ -74,7 +75,7 @@ namespace CReps {
   class DMGateCRep_Dense :public DMGateCRep {
     public:
     double* _dataptr;
-    DMGateCRep_Dense(double* data, int dim);
+    DMGateCRep_Dense(double* data, INT dim);
     virtual ~DMGateCRep_Dense();
     virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
@@ -83,17 +84,17 @@ namespace CReps {
   class DMGateCRep_Embedded :public DMGateCRep{
     public:
     DMGateCRep* _embedded_gate_crep;
-    int* _noop_incrementers;
-    int* _numBasisEls_noop_blankaction;
-    int* _baseinds;
-    int* _blocksizes; // basis blockdim**2 elements
-    int _nComponents, _embeddedDim, _iActiveBlock, _nBlocks;
+    INT* _noop_incrementers;
+    INT* _numBasisEls_noop_blankaction;
+    INT* _baseinds;
+    INT* _blocksizes; // basis blockdim**2 elements
+    INT _nComponents, _embeddedDim, _iActiveBlock, _nBlocks;
     
     
-    DMGateCRep_Embedded(DMGateCRep* embedded_gate_crep, int* noop_incrementers,
-			int* numBasisEls_noop_blankaction, int* baseinds, int* blocksizes,
-			int embedded_dim, int nComponentsInActiveBlock, int iActiveBlock,
-			int nBlocks, int dim);
+    DMGateCRep_Embedded(DMGateCRep* embedded_gate_crep, INT* noop_incrementers,
+			INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
+			INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
+			INT nBlocks, INT dim);
     virtual ~DMGateCRep_Embedded();
     virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
@@ -111,20 +112,20 @@ namespace CReps {
   class DMGateCRep_Lindblad :public DMGateCRep{
     public:
     double* _U_data; //unitary postfactor 
-    int* _U_indices; // as a CSR sparse
-    int* _U_indptr;  // matrix
-    int _U_nnz;
+    INT* _U_indices; // as a CSR sparse
+    INT* _U_indptr;  // matrix
+    INT _U_nnz;
     double* _A_data;
-    int* _A_indices;
-    int* _A_indptr;
-    int _A_nnz;
+    INT* _A_indices;
+    INT* _A_indptr;
+    INT _A_nnz;
     double _mu, _eta; // tol?
-    int _m_star, _s;
+    INT _m_star, _s;
 
-    DMGateCRep_Lindblad(double* A_data, int* A_indices, int* A_indptr, int nnz,
-			double mu, double eta, int m_star, int s, int dim,
-		        double* unitarypost_data, int* unitarypost_indices,
-			int* unitarypost_indptr, int unitarypost_nnz);
+    DMGateCRep_Lindblad(double* A_data, INT* A_indices, INT* A_indptr, INT nnz,
+			double mu, double eta, INT m_star, INT s, INT dim,
+		        double* unitarypost_data, INT* unitarypost_indices,
+			INT* unitarypost_indptr, INT unitarypost_nnz);
     virtual ~DMGateCRep_Lindblad();
     virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
@@ -138,10 +139,10 @@ namespace CReps {
   class SVStateCRep {
     public:
     dcomplex* _dataptr;
-    int _dim;
+    INT _dim;
     bool _ownmem;
-    SVStateCRep(int dim);    
-    SVStateCRep(dcomplex* data, int dim, bool copy);
+    SVStateCRep(INT dim);    
+    SVStateCRep(dcomplex* data, INT dim, bool copy);
     ~SVStateCRep();
     void print(const char* label);
     void copy_from(SVStateCRep* st);
@@ -150,8 +151,8 @@ namespace CReps {
   // EFFECTSs
   class SVEffectCRep {
     public:
-    int _dim;
-    SVEffectCRep(int dim);
+    INT _dim;
+    SVEffectCRep(INT dim);
     virtual ~SVEffectCRep();
     virtual double probability(SVStateCRep* state) = 0;
     virtual dcomplex amplitude(SVStateCRep* state) = 0;
@@ -161,7 +162,7 @@ namespace CReps {
   class SVEffectCRep_Dense :public SVEffectCRep {
     public:
     dcomplex* _dataptr;
-    SVEffectCRep_Dense(dcomplex* data, int dim);
+    SVEffectCRep_Dense(dcomplex* data, INT dim);
     virtual ~SVEffectCRep_Dense();
     virtual double probability(SVStateCRep* state);
     virtual dcomplex amplitude(SVStateCRep* state);;
@@ -170,11 +171,11 @@ namespace CReps {
   class SVEffectCRep_TensorProd :public SVEffectCRep {
     public:
     dcomplex* _kron_array;
-    int _max_factor_dim;
-    int* _factordims;
-    int _nfactors;
+    INT _max_factor_dim;
+    INT* _factordims;
+    INT _nfactors;
 
-    SVEffectCRep_TensorProd(dcomplex* kron_array, int* factordims, int nfactors, int max_factor_dim, int dim);
+    SVEffectCRep_TensorProd(dcomplex* kron_array, INT* factordims, INT nfactors, INT max_factor_dim, INT dim);
     virtual ~SVEffectCRep_TensorProd();
     virtual double probability(SVStateCRep* state);
     virtual dcomplex amplitude(SVStateCRep* state);
@@ -184,9 +185,9 @@ namespace CReps {
   // GATEs
   class SVGateCRep {
     public:
-    int _dim;
+    INT _dim;
 
-    SVGateCRep(int dim);
+    SVGateCRep(INT dim);
     virtual ~SVGateCRep();
     virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state) = 0;
     virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state) = 0;
@@ -195,7 +196,7 @@ namespace CReps {
   class SVGateCRep_Dense :public SVGateCRep {
     public:
     dcomplex* _dataptr;
-    SVGateCRep_Dense(dcomplex* data, int dim);
+    SVGateCRep_Dense(dcomplex* data, INT dim);
     virtual ~SVGateCRep_Dense();
     virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
     virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
@@ -204,17 +205,17 @@ namespace CReps {
   class SVGateCRep_Embedded :public SVGateCRep{
     public:
     SVGateCRep* _embedded_gate_crep;
-    int* _noop_incrementers;
-    int* _numBasisEls_noop_blankaction;
-    int* _baseinds;
-    int* _blocksizes; // basis blockdim**2 elements
-    int _nComponents, _embeddedDim, _iActiveBlock, _nBlocks;
+    INT* _noop_incrementers;
+    INT* _numBasisEls_noop_blankaction;
+    INT* _baseinds;
+    INT* _blocksizes; // basis blockdim**2 elements
+    INT _nComponents, _embeddedDim, _iActiveBlock, _nBlocks;
     
     
-    SVGateCRep_Embedded(SVGateCRep* embedded_gate_crep, int* noop_incrementers,
-			int* numBasisEls_noop_blankaction, int* baseinds, int* blocksizes,
-			int embedded_dim, int nComponentsInActiveBlock, int iActiveBlock,
-			int nBlocks, int dim);
+    SVGateCRep_Embedded(SVGateCRep* embedded_gate_crep, INT* noop_incrementers,
+			INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
+			INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
+			INT nBlocks, INT dim);
     virtual ~SVGateCRep_Embedded();
     virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
     virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
@@ -235,49 +236,49 @@ namespace CReps {
     // STATEs
   class SBStateCRep {  // a stabilizer frame (perhaps optionally w/out phase info, so just a state?)
     public:
-    int _n, _2n, _namps;
-    int* _smatrix;
-    int* _pvectors;
-    int _zblock_start;
+    INT _n, _2n, _namps;
+    INT* _smatrix;
+    INT* _pvectors;
+    INT _zblock_start;
     dcomplex* _amps;
-    std::vector<std::vector<int> > _view_filters;
+    std::vector<std::vector<INT> > _view_filters;
     bool _ownmem;
     
-    SBStateCRep(int* smatrix, int* pvectors, dcomplex* amps, int namps, int n);
-    SBStateCRep(int namps, int n);
+    SBStateCRep(INT* smatrix, INT* pvectors, dcomplex* amps, INT namps, INT n);
+    SBStateCRep(INT namps, INT n);
     ~SBStateCRep();
-    void push_view(std::vector<int>& view);
+    void push_view(std::vector<INT>& view);
     void pop_view();
-    void clifford_update(int* smatrix, int* svector, dcomplex* Umx);
-    dcomplex extract_amplitude(std::vector<int>& zvals);
-    double measurement_probability(std::vector<int>& zvals); //, qubit_filter);
+    void clifford_update(INT* smatrix, INT* svector, dcomplex* Umx);
+    dcomplex extract_amplitude(std::vector<INT>& zvals);
+    double measurement_probability(std::vector<INT>& zvals); //, qubit_filter);
     void copy_from(SBStateCRep* other);
 
     private:
-    int udot1(int i, int j);
-    void udot2(int* out, int* smatrix1, int* smatrix2);
-    void colsum(int i, int j);
-    void colswap(int i, int j);
+    INT udot1(INT i, INT j);
+    void udot2(INT* out, INT* smatrix1, INT* smatrix2);
+    void colsum(INT i, INT j);
+    void colswap(INT i, INT j);
     void rref();
-    dcomplex apply_xgen(int igen, int pgen, std::vector<int>& zvals_to_acton,
-			dcomplex ampl, std::vector<int>& result);
-    dcomplex get_target_ampl(std::vector<int>& tgt, std::vector<int>& anchor,
-			     dcomplex anchor_amp, int ip);
-    dcomplex canonical_amplitude_of_target(int ip, std::vector<int>& target);
-    void canonical_amplitudes_sample(int ip, std::vector<int> qs_to_sample,
-				     std::vector<int>& anchor, std::vector<dcomplex>& amp_samples);
+    dcomplex apply_xgen(INT igen, INT pgen, std::vector<INT>& zvals_to_acton,
+			dcomplex ampl, std::vector<INT>& result);
+    dcomplex get_target_ampl(std::vector<INT>& tgt, std::vector<INT>& anchor,
+			     dcomplex anchor_amp, INT ip);
+    dcomplex canonical_amplitude_of_target(INT ip, std::vector<INT>& target);
+    void canonical_amplitudes_sample(INT ip, std::vector<INT> qs_to_sample,
+				     std::vector<INT>& anchor, std::vector<dcomplex>& amp_samples);
 
-    void canonical_amplitudes(int ip, int* target, int qs_to_sample=1);
-    void apply_clifford_to_frame(int* s, int* p, std::vector<int> qubit_filter);
-    void apply_clifford_to_frame(int* s, int* p);
+    void canonical_amplitudes(INT ip, INT* target, INT qs_to_sample=1);
+    void apply_clifford_to_frame(INT* s, INT* p, std::vector<INT> qubit_filter);
+    void apply_clifford_to_frame(INT* s, INT* p);
   };
 
   // EFFECTSs
   class SBEffectCRep { // a stabilizer measurement - just implement z-basis meas here for now(?)
     public:
-    int _n;
-    std::vector<int> _zvals;
-    SBEffectCRep(int* zvals, int n);
+    INT _n;
+    std::vector<INT> _zvals;
+    SBEffectCRep(INT* zvals, INT n);
     ~SBEffectCRep();
     dcomplex amplitude(SBStateCRep* state); //make virtual if we turn this into
     double probability(SBStateCRep* state); // a base class & derive from it.
@@ -287,8 +288,8 @@ namespace CReps {
   // GATEs
   class SBGateCRep {
     public:
-    int _n;
-    SBGateCRep(int dim);
+    INT _n;
+    SBGateCRep(INT dim);
     virtual ~SBGateCRep();
     virtual SBStateCRep* acton(SBStateCRep* state, SBStateCRep* out_state) = 0;
     virtual SBStateCRep* adjoint_acton(SBStateCRep* state, SBStateCRep* out_state) = 0;
@@ -296,9 +297,9 @@ namespace CReps {
 
   class SBGateCRep_Embedded :public SBGateCRep {
     public:
-    std::vector<int> _qubits;
+    std::vector<INT> _qubits;
     SBGateCRep* _embedded_gate_crep;
-    SBGateCRep_Embedded(SBGateCRep* embedded_gate_crep, int n, int* qubits, int nqubits);
+    SBGateCRep_Embedded(SBGateCRep* embedded_gate_crep, INT n, INT* qubits, INT nqubits);
     virtual ~SBGateCRep_Embedded();
     virtual SBStateCRep* acton(SBStateCRep* state, SBStateCRep* out_state);
     virtual SBStateCRep* adjoint_acton(SBStateCRep* state, SBStateCRep* out_state);
@@ -315,12 +316,12 @@ namespace CReps {
 
   class SBGateCRep_Clifford :public SBGateCRep{
     public:
-    int _n;
-    int *_smatrix, *_svector; //symplectic rep
-    int *_smatrix_inv, *_svector_inv; //of the inverse, for adjoint ops
+    INT _n;
+    INT *_smatrix, *_svector; //symplectic rep
+    INT *_smatrix_inv, *_svector_inv; //of the inverse, for adjoint ops
     dcomplex *_unitary, *_unitary_adj;
-    SBGateCRep_Clifford(int* smatrix, int* svector, dcomplex* unitary,
-			int* smatrix_inv, int* svector_inv, dcomplex* unitary_adj, int n);
+    SBGateCRep_Clifford(INT* smatrix, INT* svector, dcomplex* unitary,
+			INT* smatrix_inv, INT* svector_inv, dcomplex* unitary_adj, INT n);
     virtual ~SBGateCRep_Clifford();
     virtual SBStateCRep* acton(SBStateCRep* state, SBStateCRep* out_state);
     virtual SBStateCRep* adjoint_acton(SBStateCRep* state, SBStateCRep* out_state);
@@ -329,20 +330,20 @@ namespace CReps {
   //Polynomial class
   class PolyCRep {
     public:
-    std::unordered_map<int, dcomplex> _coeffs;
-    int _max_order;
-    int _max_num_vars;
+    std::unordered_map<INT, dcomplex> _coeffs;
+    INT _max_order;
+    INT _max_num_vars;
     PolyCRep();
-    PolyCRep(std::unordered_map<int, dcomplex> coeffs, int max_order, int max_num_vars);
+    PolyCRep(std::unordered_map<INT, dcomplex> coeffs, INT max_order, INT max_num_vars);
     PolyCRep(const PolyCRep& other);
     ~PolyCRep();
     PolyCRep mult(const PolyCRep& other);
     void add_inplace(const PolyCRep& other);
     void scale(dcomplex scale);
     private:
-    int vinds_to_int(std::vector<int> vinds);
-    std::vector<int> int_to_vinds(int indx);
-    int mult_vinds_ints(int i1, int i2); // multiply vinds corresponding to i1 & i2 and return resulting integer
+    INT vinds_to_int(std::vector<INT> vinds);
+    std::vector<INT> int_to_vinds(INT indx);
+    INT mult_vinds_ints(INT i1, INT i2); // multiply vinds corresponding to i1 & i2 and return resulting integer
   };
   
   //TERMS

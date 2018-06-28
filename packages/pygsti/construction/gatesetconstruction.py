@@ -473,7 +473,7 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
             labelMultipliers.append(stateSpaceDim)
             stateSpaceDim *= sslbls.labeldims[l]
         labelMultipliers.reverse() #reverse back to labels order (labels was reversed in loop above)
-        labelMultipliers = _np.array(labelMultipliers,'i') #so we can use _np.dot below
+        labelMultipliers = _np.array(labelMultipliers,_np.int64) #so we can use _np.dot below
         assert(stateSpaceDim == Ugate.shape[0] == Ugate.shape[1])
 
         # Unitary op approach: build unitary acting on state space than use kron => map acting on vec(density matrix) space
@@ -481,8 +481,8 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
         for i,b1 in enumerate(tensorBlkBasis):
             for j,b2 in enumerate(tensorBlkBasis):
                 if equals_except(b1,b2,labelIndices): #if all parts of tensor prod match except for qubit(s) we're operating on
-                    gate_b1 = _np.array([ b1[K] for K in labelIndices ],'i') #basis indices for just the qubits we're operating on
-                    gate_b2 = _np.array([ b2[K] for K in labelIndices ],'i') # - i.e. those corresponding to the given Ugate
+                    gate_b1 = _np.array([ b1[K] for K in labelIndices ],_np.int64) #basis indices for just the qubits we're operating on
+                    gate_b2 = _np.array([ b2[K] for K in labelIndices ],_np.int64) # - i.e. those corresponding to the given Ugate
                     gate_i = _np.dot(labelMultipliers, gate_b1)
                     gate_j = _np.dot(labelMultipliers, gate_b2)
                     UcohBlk[i,j] = Ugate[ gate_i, gate_j ] # fill in element

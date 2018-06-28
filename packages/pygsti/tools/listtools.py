@@ -175,9 +175,9 @@ def sorted_partitions(n):
     """
 
     if n == 0: #special case
-        yield _np.zeros(0,'i'); return
+        yield _np.zeros(0,_np.int64); return
         
-    p = _np.zeros(n,'i')
+    p = _np.zeros(n,_np.int64)
     k = 0    # Index of last element in a partition
     p[k] = n # Initialize first partition as number itself
  
@@ -265,18 +265,18 @@ def partition_into(n, nbins):
         Iterates over arrays of integers (partitions).
     """
     if n == 0:
-        a = _np.zeros(nbins,'i')
+        a = _np.zeros(nbins,_np.int64)
         yield tuple(a)
 
     elif n == 1:
-        a = _np.zeros(nbins,'i')
+        a = _np.zeros(nbins,_np.int64)
         for i in range(nbins):
             a[i] = 1
             yield tuple(a)
             a[i] = 0
             
     elif n == 2:
-        a = _np.zeros(nbins,'i')
+        a = _np.zeros(nbins,_np.int64)
         for i in range(nbins):
             a[i] = 2
             yield tuple(a)
@@ -303,7 +303,7 @@ def _partition_into_slow(n, nbins):
     for p in sorted_partitions(n):
         if len(p) > nbins: continue # don't include partitions of length > nbins
         previous = tuple()
-        p = _np.concatenate( (p, _np.zeros(nbins-len(p),'i')) ) # pad with zeros
+        p = _np.concatenate( (p, _np.zeros(nbins-len(p),_np.int64)) ) # pad with zeros
         for pp in _itertools.permutations(p[::-1]):
             if pp > previous: # only *unique* permutations 
                 previous = pp # (relies in itertools implementatin detail that

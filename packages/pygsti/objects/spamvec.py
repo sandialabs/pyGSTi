@@ -702,6 +702,7 @@ class DenseSPAMVec(SPAMVec):
         """
         #don't use scratch since we already have memory allocated
         return _np.asarray(self.base[:,0])
+          # *must* be a numpy array for Cython arg conversion
 
     def __copy__(self):
         # We need to implement __copy__ because we defer all non-existing
@@ -1562,7 +1563,7 @@ class TensorProdSPAMVec(SPAMVec):
         if self._evotype in ("statevec","densitymx"): #types that require fast kronecker prods
             max_factor_dim = max(fct.dim for fct in factors)
             self._fast_kron_array = _np.empty( (len(factors), max_factor_dim), complex if self._evotype == "statevec" else 'd')
-            self._fast_kron_factordims = _np.array([fct.dim for fct in factors],'i')
+            self._fast_kron_factordims = _np.array([fct.dim for fct in factors],_np.int64)
             try:
                 self._fill_fast_kron()
             except NotImplementedError: # if todense() or any other prereq isn't implemented (
@@ -1674,14 +1675,14 @@ class TensorProdSPAMVec(SPAMVec):
                     sframe_factors = [ f.todense() for f in self.factors ] # StabilizerFrame for each factor
                     return _stabilizer.sframe_kronecker(sframe_factors).torep()
                 else: #self.typ == "effect", so each factor is a StabilizerEffectVec
-                    outcomes = _np.array( list(_itertools.chain(*[f.outcomes for f in self.factors])), 'i')
+                    outcomes = _np.array( list(_itertools.chain(*[f.outcomes for f in self.factors])), _np.int64)
                     return replib.SBEffectRep(outcomes)
 
             else: #self.typ == "effect", so each factor is a StabilizerZPOVM
                 # like above, but get a StabilizerEffectVec from each StabilizerZPOVM factor
                 factorPOVMs = self.factors
                 factorVecs = [ factorPOVMs[i][self.effectLbls[i]] for i in range(1,len(factorPOVMs)) ]
-                outcomes = _np.array( list(_itertools.chain(*[f.outcomes for f in factorVecs])), 'i')
+                outcomes = _np.array( list(_itertools.chain(*[f.outcomes for f in factorVecs])), _np.int64)
                 return replib.SBEffectRep(outcomes)
                 
                 #OLD - now can remove outcomes prop?
@@ -2649,8 +2650,8 @@ class StabilizerEffectVec(SPAMVec):
     def torep(self, typ, outvec=None):
         # changes to_statevec/to_dmvec -> todense, and have
         # torep create an effect rep object...
-        return replib.SBEffectRep(_np.ascontiguousarray(self._outcomes,'i'))
-          #Note: dtype='i' => int in Cython, whereas dtype=int => long in Cython
+        return replib.SBEffectRep(_np.ascontiguousarray(self._outcomes,_np.int64))
+          #Note: dtype='i' => int in Cython, whereas dtype=int/np.int64 => long in Cython
 
     def to_statevec(self):
         """

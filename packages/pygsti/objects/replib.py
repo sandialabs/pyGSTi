@@ -132,7 +132,7 @@ class DMGateRep_Embedded(DMGateRep):
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
         self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
-                                      reversed(list(numBasisEls[:-1])))) ), 'i')
+                                      reversed(list(numBasisEls[:-1])))) ), _np.int64)
         self.basisInds_action = [ list(range(numBasisEls[i])) for i in actionInds ]
 
         self.embeddedDim = embedded_dim
@@ -369,7 +369,7 @@ class SVGateRep_Embedded(SVGateRep):
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
         self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
-                                      reversed(list(numBasisEls[:-1])))) ), 'i')
+                                      reversed(list(numBasisEls[:-1])))) ), _np.int64)
         self.basisInds_action = [ list(range(numBasisEls[i])) for i in actionInds ]
 
         self.embeddedDim = embedded_dim
@@ -460,7 +460,7 @@ class SBStateRep(object):
           # just rely on StabilizerFrame class to do all the heavy lifting...
           
     def copy(self):
-        cpy = SBStateRep(_np.zeros((0,0),'i'),None,None) # makes a dummy cpy.sframe
+        cpy = SBStateRep(_np.zeros((0,0),_np.int64),None,None) # makes a dummy cpy.sframe
         cpy.sframe = self.sframe.copy() # a legit copy *with* qubit filers copied too
         return cpy
           
@@ -645,7 +645,7 @@ class PolyRep(dict):
         nTerms = len(self)
         vinds = [ self._int_to_vinds(i) for i in self.keys() ]
         nVarIndices = sum(map(len,vinds))
-        vtape = _np.empty(1 + nTerms + nVarIndices, 'i') # "variable" tape
+        vtape = _np.empty(1 + nTerms + nVarIndices, _np.int64) # "variable" tape
         ctape = _np.empty(nTerms, complex if iscomplex else 'd') # "coefficient tape"
 
         i = 0

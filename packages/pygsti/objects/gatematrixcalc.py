@@ -158,7 +158,7 @@ class GateMatrixCalc(GateCalc):
                 if i in gpindices:
                     relevant_gpindices.append(ii)
                     obj_wrtFilter.append(list(gpindices).index(i))
-            relevant_gpindices = _np.array(relevant_gpindices,'i')
+            relevant_gpindices = _np.array(relevant_gpindices,_np.int64)
             if len(relevant_gpindices) == 1:
                 #Don't return a length-1 list, as this doesn't index numpy arrays
                 # like length>1 lists do... ugh.
