@@ -36,7 +36,7 @@ def compile_stabilizer_state(s, p, pspec, iterations=20, paulirandomize=False,
     i = 0
     while i < iterations:
 
-        tc, tcc = symplectic_as_conditional_clifford_circuit_over_CHP(s, pspec, algorithm, *aargs)
+        tc, tcc = symplectic_as_conditional_clifford_circuit_over_CHP(s, pspec, algorithm, aargs)
         i += 1
             #
             # Todo: work out how much this all makes sense.
@@ -126,7 +126,7 @@ def compile_stabilizer_measurement(s, p, pspec, iterations=20, paulirandomize=Fa
     # Todo : remove this try-except method once compiler always works.
     while i < iterations:
         try:
-            tc, tcc = symplectic_as_conditional_clifford_circuit_over_CHP(sin, pspec, algorithm, *aargs)
+            tc, tcc = symplectic_as_conditional_clifford_circuit_over_CHP(sin, pspec, algorithm, aargs)
             i += 1
             tc.reverse()
             # Do the depth-compression *after* the circuit is reversed
@@ -398,7 +398,7 @@ def convert_invertible_to_reduced_echelon_form(matrixin,optype='row',position='u
         return matrix, success, instruction_list
 
 
-def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None, calg='RCACC', cargs=[]):
+def symplectic_as_conditional_clifford_circuit_over_CHP(s, pspec=None, calg='RCACC', cargs=[]):
     """
     
     """
@@ -615,7 +615,7 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None, calg='RCAC
         if calg == 'RCACC':
             improved_instructions4 = _cc.compile_CNOT_circuit(CNOTs[:n,:n],pspec,*cargs)
         else:
-            raise ValueError("calg must be 'BGE' or 'RCAGE'")
+            raise ValueError("calg must be 'BGE' or 'RCACC'")
         main_instructions =  instructions7 + instructions6 + improved_instructions4 + instructions3 + instructions1
         #print(CNOTs)
         nws, nwp = _symp.symplectic_rep_of_clifford_circuit(_Circuit(gatestring=improved_instructions4,num_lines=n))
