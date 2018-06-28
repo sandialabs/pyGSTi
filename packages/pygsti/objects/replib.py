@@ -92,6 +92,82 @@ class DMEffectRep_TensorProd(DMEffectRep):
         scratch = _np.empty(self.dim, 'd')
         Edense = self.todense( scratch  )
         return _np.dot(Edense,state.data) # not vdot b/c data is *real* 
+
+
+class DMEffectRep_Computational(DMEffectRep):
+    def __init__(self, zvals, dim):
+        # int dim = 4**len(zvals) -- just send as argument for speed?
+        assert(dim == 4**len(zvals))
+        assert(len(zvals) <= 64), "Cannot create a Computational basis rep with >64 qubits!"
+          # Current storage of computational basis states converts zvals -> 64-bit integer
+
+        base = 1
+        self.zvals_int = 0
+        for v in zvals:
+            assert(v in (0,1)), "zvals must contain only 0s and 1s"
+            self.zvals_int += base*v
+            base *= 2 # or left shift?
+            
+        self.nfactors = len(zvals) # (or nQubits)
+        self.abs_elval = 1/(_np.sqrt(2)**self.nfactors)
+            
+        super(DMEffectRep_Computational,self).__init__(dim)
+
+    def parity(self, x):
+        """recursively divide the (64-bit) integer into two equal 
+           halves and take their XOR until only 1 bit is left """
+        x = (x & 0x00000000FFFFFFFF)^(x >> 32)
+        x = (x & 0x000000000000FFFF)^(x >> 16)
+	x = (x & 0x00000000000000FF)^(x >> 8)
+	x = (x & 0x000000000000000F)^(x >> 4)
+	x = (x & 0x0000000000000003)^(x >> 2)
+	x = (x & 0x0000000000000001)^(x >> 1)
+	return x & 1 # return the last bit (0 or 1)
+
+    def todense(self, outvec, trust_outvec_sparsity=False):
+        # when trust_outvec_sparsity is True, assume we only need to fill in the
+        # non-zero elements of outvec (i.e. that outvec is already zero wherever
+        # this vector is zero).
+        if not trust_outvec_sparsity:
+            outvec[:] = 0 #reset everything to zero
+        
+        N = self.nfactors
+
+        # there are nQubits factors
+        # each factor (4-element, 1Q dmvec) has 2 zero elements and 2 nonzero ones
+        # loop is over all non-zero elements of the final outvec by looping over
+        #  all the sets of *entirely* nonzero elements from the factors.
+        
+        # Let the two possible nonzero elements of the k-th factor be represented
+        # by the k-th bit of `finds` below, which ranges from 0 to 2^nFactors-1
+        for finds in range(2**N):
+
+            #Create the final index (within outvec) corresponding to finds
+            # assume, like tensorprod, that factor ordering == kron ordering
+            # so outvec = kron( factor[0], factor[1], ... factor[N-1] ).
+            # Let factorDim[k] == 4**(N-1-k) be the stride associated with the k-th index
+            # Whenever finds[bit k] == 0 => finalIndx += 0*factorDim[k]
+            #          finds[bit k] == 1 => finalIndx += 3*factorDim[k] (3 b/c factor's 2nd nonzero el is at index 3)
+            finalIndx = sum([ 3*(4**(N-1-k)) for k in range(N) if bool(finds & (1<<k)) ])
+
+            #Determine the sign of this element (the element is either +/- (1/sqrt(2))^N )
+            # A minus sign is picked up whenever finds[bit k] == 1 (which means we're looking
+            # at the index=3 element of the factor vec) AND self.zvals_int[bit k] == 1
+            # (which means it's a [1 0 0 -1] state rather than a [1 0 0 1] state).
+            # Since we only care whether the number of minus signs is even or odd, we can
+            # BITWISE-AND finds with self.zvals_int (giving an integer whose binary-expansion's
+            # number of 1's == the number of minus signs) and compute the parity of this.
+            minus_sign = self.parity(finds & self.zvals_int)
+
+            outvec[finalIndx] = -self.abs_elval if minus_sign else self.abs_elval
+        
+        return outvec
+
+    def probability(self, state):
+        scratch = _np.empty(self.dim, 'd')
+        Edense = self.todense( scratch  )
+        return _np.dot(Edense,state.data) # not vdot b/c data is *real* 
+
     
 
 class DMGateRep(object):
@@ -328,7 +404,44 @@ class SVEffectRep_TensorProd(SVEffectRep):
         scratch = _np.empty(self.dim, complex)
         Edense = self.todense( scratch  )
         return _np.vdot(Edense,state.data)
-    
+
+
+class SVEffectRep_Computational(DMEffectRep):
+    def __init__(self, zvals, dim):
+        # int dim = 4**len(zvals) -- just send as argument for speed?
+        assert(dim == 2**len(zvals))
+        assert(len(zvals) <= 64), "Cannot create a Computational basis rep with >64 qubits!"
+          # Current storage of computational basis states converts zvals -> 64-bit integer
+
+        # Different than DM counterpart
+        # as each factor only has *1* nonzero element so final state has only a
+        # *single* nonzero element!  We just have to figure out where that
+        # single element lies (compute it's index) based on the given zvals.
+        
+        # Assume, like tensorprod, that factor ordering == kron ordering
+        # so nonzer_index = kron( factor[0], factor[1], ... factor[N-1] ).
+
+        base = 2**(len(zvals)-1)
+        self.nonzero_index = 0
+        for k,v in enumerate(zvals):
+            assert(v in (0,1)), "zvals must contain only 0s and 1s"
+            self.nonzero_index += base*v
+            base /= 2 # or right shift?
+
+            
+    def todense(self, outvec, trust_outvec_sparsity=False):
+        # when trust_outvec_sparsity is True, assume we only need to fill in the
+        # non-zero elements of outvec (i.e. that outvec is already zero wherever
+        # this vector is zero).
+        if not trust_outvec_sparsity:
+            outvec[:] = 0 #reset everything to zero
+        outvec[self.nonzero_index] = 1.0
+
+    def amplitude(self, state): # allow scratch to be passed in?
+        scratch = _np.empty(self.dim, complex)
+        Edense = self.todense( scratch  )
+        return _np.vdot(Edense,state.data)
+
 
 class SVGateRep(object):
     def __init__(self,dim):

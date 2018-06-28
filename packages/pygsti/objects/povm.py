@@ -874,3 +874,84 @@ class StabilizerZPOVM(POVM):
         s = "Stabilizer Z POVM on %d qubits and filter %s\n" \
             % (self.nqubits,str(self.qubit_filter))
         return s
+
+
+#TODO REMOVE - not really needed; maybe make into a factory function that
+# creates an UnconstrainedPOVM of ComputationalSPAMVec elements?
+#class StandardZPOVM(POVM):
+#    """ 
+#    A POVM that "measures" states in the computational "Z" basis.
+#    """
+#    def __init__(self, nqubits, evotype, qubit_filter=None):
+#        """
+#        Creates a new StandardZPOVM object.
+#
+#        Parameters
+#        ----------
+#        nqubits : int
+#            The number of qubits
+#
+#        evotype : {"densitymx", "statevec"}
+#            The type of evolution being performed.
+#
+#        qubit_filter : list, optional
+#            An optional list of integers specifying a subset
+#            of the qubits to be measured.
+#        """
+#        if qubit_filter is not None:
+#            raise NotImplementedError("Still need to implement qubit_filter functionality")
+#
+#
+#        self.nqubits = nqubits
+#        self.qubit_filter = qubit_filter
+#        self.cached_probs = None
+#        self.cached_state = None
+#
+#        if evotype == "densitymx":
+#            dim = 4**nqubits
+#        elif evotype == "statevec":
+#            dim = 2**nqubits
+#        else: raise ValueError("Invalid `evotype`: %s" % evotype)
+#            
+#        #LATER - do something with qubit_filter here
+#        
+#        iterover = [(0,1)]*nqubits
+#        items = [ (''.join(map(str,outcomes)), _sv.ComputationalSPAMVec(outcomes,evotype))
+#                  for outcomes in _itertools.product(*iterover) ]
+#        super(StandardZPOVM, self).__init__(dim, evotype, items)
+#
+#    def __reduce__(self):
+#        """ Needed for OrderedDict-derived classes (to set dict items) """
+#        return (StandardZPOVM, (self.nqubits,self._evotype,self.qubit_filter),
+#                {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
+#
+#
+#    def compile_effects(self, prefix=""):
+#        """
+#        Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
+#        `GateSet` - that is, whose `gpindices` are set to all or a subset of
+#        this POVM's gpindices.  Such effect vectors are used internally within
+#        computations involving the parent `GateSet`.
+#
+#        Parameters
+#        ----------
+#        prefix : str
+#            A string, usually identitying this POVM, which may be used
+#            to prefix the compiled gate keys.
+#
+#        Returns
+#        -------
+#        OrderedDict of SPAMVecs
+#        """
+#        # Create "compiled" effect vectors, which infer their parent and
+#        # gpindices from the set of "factor-POVMs" they're constructed with.
+#        if prefix: prefix += "_"
+#        compiled = _collections.OrderedDict(
+#            [ (prefix + k, Evec) for k,Evec in self.items() ] )
+#        return compiled
+#
+#
+#    def __str__(self):
+#        s = "Standard Z POVM on %d qubits and filter %s\n" \
+#            % (self.nqubits,str(self.qubit_filter))
+#        return s

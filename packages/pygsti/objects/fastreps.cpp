@@ -155,6 +155,67 @@ namespace CReps {
     return ret;
   }
 
+
+  /****************************************************************************\
+  |* DMEffectCRep_Computational                                               *|
+  \****************************************************************************/
+
+    //class DMEffectCRep_Computational :public DMEffectCRep {
+    //public:
+    //INT nfactors;
+    //INT zvals_int;
+    //INT abs_elval;
+
+  DMEffectCRep_Computational::DMEffectCRep_Computational(INT nfactors, INT zvals_int, double abs_elval, INT dim)
+    :DMEffectCRep(dim)
+  {
+    _nfactors = nfactors;
+    _zvals_int = zvals_int;
+    _abs_elval = abs_elval;
+  }
+
+  DMEffectCRep_Computational::~DMEffectCRep_Computational() { }
+    
+  double DMEffectCRep_Computational::probability(DMStateCRep* state) {
+    // The logic here is very similar to the todense method in the Python rep version
+    // Here we don't bother to compute the dense vector - we just perform the
+    // dot product using only the nonzero vector elements.
+    INT& N = _nfactors;
+    INT nNonzero = 1 << N;
+    INT finalIndx, k, base;
+    double ret = 0.0;
+    
+    for(INT finds=0; finds < nNonzero; finds++) {
+
+      //Compute finalIndx
+      finalIndx = 0; base = 1 << (2*N-2); //4**(N-1) = 2**(2N-2)
+      for(k=0; k<N; k++) {
+	finalIndx += (finds & (1<<k)) * 3 * base;
+	base = base >> 2; // /= 4 so base == 4**(N-1-k)
+      }
+
+      //Apply result
+      if(parity(finds & _zvals_int))
+	ret -= _abs_elval * state->_dataptr[finalIndx]; // minus sign
+      else
+	ret += _abs_elval * state->_dataptr[finalIndx];
+    }
+    return ret;
+  }
+
+  INT DMEffectCRep_Computational::parity(INT x) {
+    // int64-bit specific
+    x = (x & 0x00000000FFFFFFFF)^(x >> 32);
+    x = (x & 0x000000000000FFFF)^(x >> 16);
+    x = (x & 0x00000000000000FF)^(x >> 8);
+    x = (x & 0x000000000000000F)^(x >> 4);
+    x = (x & 0x0000000000000003)^(x >> 2);
+    x = (x & 0x0000000000000001)^(x >> 1);
+    return x & 1; // return the last bit (0 or 1)
+  }
+
+
+
   /****************************************************************************\
   |* DMGateCRep                                                               *|
   \****************************************************************************/

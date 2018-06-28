@@ -18,8 +18,8 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 
 #Use 64-bit integers
-ctypedef long INT
-ctypedef unsigned long UINT
+ctypedef long long INT
+ctypedef unsigned long long UINT
 
 cdef extern from "fastreps.h" namespace "CReps":
 
@@ -48,6 +48,12 @@ cdef extern from "fastreps.h" namespace "CReps":
     cdef cppclass DMEffectCRep_TensorProd(DMEffectCRep):
         DMEffectCRep_TensorProd() except +
         DMEffectCRep_TensorProd(double*, INT*, INT, INT, INT) except +
+        double probability(DMStateCRep* state)
+        INT _dim
+
+    cdef cppclass DMEffectCRep_Computational(DMEffectCRep):
+        DMEffectCRep_Computational() except +
+        DMEffectCRep_Computational(INT, INT, double, INT) except +
         double probability(DMStateCRep* state)
         INT _dim
 
@@ -304,6 +310,20 @@ cdef class DMEffectRep_TensorProd(DMEffectRep):
         self.c_effect = new DMEffectCRep_TensorProd(<double*>kron_array.data,
                                                     <INT*>factor_dims.data,
                                                     nfactors, max_factor_dim, dim)
+
+
+cdef class DMEffectRep_Computational(DMEffectRep):
+
+    def __cinit__(self, np.ndarray[np.int64_t, ndim=1, mode='c'] zvals, INT dim):
+        # cdef INT dim = 4**zvals.shape[0] -- just send as argument
+        cdef INT nfactors = zvals.shape[0]
+        cdef double abs_elval = 1/(np.sqrt(2)**nfactors)
+        cdef INT base = 1
+        cdef INT zvals_int = 0
+        for i in range(nfactors):
+            zvals_int += base * zvals[i]
+            base = base << 1 # *= 2
+        self.c_effect = new DMEffectCRep_Computational(nfactors, zvals_int, abs_elval, dim)
 
 
 cdef class DMGateRep:

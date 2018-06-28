@@ -4,7 +4,7 @@
 #include <cmath>
 
 typedef std::complex<double> dcomplex;
-typedef long INT;
+typedef long long INT;
 
 namespace CReps {
 
@@ -58,6 +58,18 @@ namespace CReps {
     DMEffectCRep_TensorProd(double* kron_array, INT* factordims, INT nfactors, INT max_factor_dim, INT dim);
     virtual ~DMEffectCRep_TensorProd();
     virtual double probability(DMStateCRep* state);    
+  };
+
+  class DMEffectCRep_Computational :public DMEffectCRep {
+    public:
+    INT _nfactors;
+    INT _zvals_int;
+    double _abs_elval;
+
+    DMEffectCRep_Computational(INT nfactors, INT zvals_int, double abs_elval, INT dim);
+    virtual ~DMEffectCRep_Computational();
+    virtual double probability(DMStateCRep* state);
+    INT parity(INT x);
   };
 
 
