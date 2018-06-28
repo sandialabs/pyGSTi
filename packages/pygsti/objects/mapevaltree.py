@@ -647,6 +647,7 @@ class MapEvalTree(EvalTree):
             subTree.recompute_spamtuple_indices(bLocal=False)
 
             subTree.trim_nonfinal_els()
+            subTree.gateLabels = self._get_gateLabels( subTree.generate_gatestring_list(permute=False) )
 
             return subTree
     

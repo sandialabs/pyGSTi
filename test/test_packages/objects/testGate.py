@@ -57,8 +57,8 @@ class GateTestCase(BaseTestCase):
         gate.from_vector(v)
         gate.copy()
 
-        with self.assertRaises(NotImplementedError):
-            gate.acton(state)
+        #with self.assertRaises(NotImplementedError):
+        #    gate.acton(state) # REMOVED from gate - now use reps
         with self.assertRaises(NotImplementedError):
             gate.transform(T)
         with self.assertRaises(NotImplementedError):
@@ -199,7 +199,7 @@ class GateTestCase(BaseTestCase):
 
             #test Gate methods
             self.assertEqual( gate.get_dimension(), 4 )
-            gate.acton(state.flatten())
+            gate.torep().acton( pygsti.objects.FullyParameterizedSPAMVec(state).torep("prep"))
             gate.has_nonzero_hessian()
 
             try:
@@ -370,7 +370,7 @@ class GateTestCase(BaseTestCase):
 
             #test Gate methods
             self.assertTrue( gate.get_dimension() in  (4,8) ) # embedded gate2 has dim==8
-            gate.acton(state.flatten())
+            gate.torep().acton( pygsti.objects.FullyParameterizedSPAMVec(state).torep("prep"))
             if hasattr(gate, '_slow_acton'):
                 gate._slow_acton(state) # for EmbeddedGateMaps
 

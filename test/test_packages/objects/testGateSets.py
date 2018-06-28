@@ -1211,7 +1211,7 @@ class TestGateSetMethods(GateSetTestCase):
 
     def test_base_gatecalc(self):
         rawCalc = pygsti.objects.gatecalc.GateCalc(4, {pygsti.obj.Label('Gx'): pygsti.obj.FullyParameterizedGate(np.identity(4,'d')) },
-                                                   {},{}, np.zeros(16,'d'))
+                                                   {},{}, np.zeros(16,'d'), None)
 
         #Lots of things that derived classes implement
         #with self.assertRaises(NotImplementedError):

@@ -371,6 +371,8 @@ class TermEvalTree(EvalTree):
             subTree.num_final_els = sum([len(v) for v in subTree.compiled_gatestring_spamTuples])
             subTree.recompute_spamtuple_indices(bLocal=False)
 
+            subTree.gateLabels = self._get_gateLabels( subTree.generate_gatestring_list(permute=False) )
+
             return subTree
     
         updated_elIndices = self._finish_split(elIndicesDict, subTreeSetList,
