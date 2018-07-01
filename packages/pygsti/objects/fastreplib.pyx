@@ -3,7 +3,7 @@
 # cython: linetrace=False
 # filename: fastactonlib.pyx
 
-import sys
+import sys, time
 import numpy as np
 from libc.stdlib cimport malloc, free
 from libcpp cimport bool
@@ -986,6 +986,8 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm):
     cdef vector[DMEffectCRep*] c_ereps = convert_ereps(ereps)
 
     # create rho_cache = vector of DMStateCReps
+    #print "DB: creating rho_cache of size %d * %g GB => %g GB" % \
+    #   (evalTree.cache_size(), 8.0 * c_rho._dim / 1024.0**3, evalTree.cache_size() * 8.0 * c_rho._dim / 1024.0**3)
     cdef vector[DMStateCRep*] rho_cache = create_rhocache(evalTree.cache_size(), c_rho._dim)
 
     #OLD cdef double[:,:] ret_view = ret
@@ -1021,6 +1023,7 @@ cdef dm_compute_pr_cache(double[:,:] ret,
     # - upon loop entry, prop2 is allocated and prop1 is not (it doesn't "own" any memory)
     # - all rho_cache entries have been allocated via "new"
     for k in range(<INT>c_evalTree.size()):
+        #t0 = time.time() # DEBUG
         intarray = c_evalTree[k]
         i = intarray[0]
         istart = intarray[1]
@@ -1040,7 +1043,10 @@ cdef dm_compute_pr_cache(double[:,:] ret,
         #OLD for j in range(dim): prop1._dataptr[j] = init_state._dataptr[j]   NOW: a method of DMStateCRep?
         prop1.copy_from(init_state) # copy init_state -> prop1 
         #print " prop1:";  print [ prop1._dataptr[t] for t in range(4) ]
+        #t1 = time.time() # DEBUG
         for l in range(3,<INT>intarray.size()): #during loop, both prop1 & prop2 are alloc'd        
+            #print "begin acton %d: %.2fs since last, %.2fs elapsed" % (l-2,time.time()-t1,time.time()-t0) # DEBUG
+            #t1 = time.time() #DEBUG
             c_gatereps[intarray[l]].acton(prop1,prop2)
             #print " post-act prop2:"; print [ prop2._dataptr[t] for t in range(4) ]
             tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
@@ -1048,6 +1054,7 @@ cdef dm_compute_pr_cache(double[:,:] ret,
         # Note: prop2 is the other alloc'd state and this maintains invariant
         #print " final:"; print [ final_state._dataptr[t] for t in range(4) ]
         
+        #print "begin prob comps: %.2fs since last, %.2fs elapsed" % (time.time()-t1, time.time()-t0) # DEBUG
         for j in range(<INT>c_ereps.size()):
             p = c_ereps[j].probability(final_state) #outcome probability
             #print("processing ",i,j,p)
@@ -1058,7 +1065,8 @@ cdef dm_compute_pr_cache(double[:,:] ret,
         else: # our 2nd state was pulled from the shelf before; return it
             shelved = final_state
             final_state = NULL
-
+        #print "%d of %d (i=%d,istart=%d,remlen=%d): %.1fs" % (k, c_evalTree.size(), i, istart,
+        #                                                      intarray.size()-3, time.time()-t0)
 
     #delete our temp states
     del prop2

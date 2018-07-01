@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <algorithm>    // std::find
 #include "fastreps.h"
+//#include <pthread.h>
 
 //using namespace std::complex_literals;
 
@@ -181,7 +182,7 @@ namespace CReps {
     // Here we don't bother to compute the dense vector - we just perform the
     // dot product using only the nonzero vector elements.
     INT& N = _nfactors;
-    INT nNonzero = 1 << N;
+    INT nNonzero = 1 << N; // 2**N
     INT finalIndx, k, base;
     double ret = 0.0;
     
@@ -190,7 +191,7 @@ namespace CReps {
       //Compute finalIndx
       finalIndx = 0; base = 1 << (2*N-2); //4**(N-1) = 2**(2N-2)
       for(k=0; k<N; k++) {
-	finalIndx += (finds & (1<<k)) * 3 * base;
+	finalIndx += ((finds >> k) & 1) * 3 * base;
 	base = base >> 2; // /= 4 so base == 4**(N-1-k)
       }
 
