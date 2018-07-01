@@ -2373,8 +2373,8 @@ class GateSet(object):
 #                                     wrtBlockSize1, wrtBlockSize2)
 
 
-    def bulk_probs(self, gatestring_list,
-                   clipTo=None, check=False, comm=None):
+    def bulk_probs(self, gatestring_list, clipTo=None, check=False,
+                   comm=None, memLimit=None):
         """
         Construct a dictionary containing the probabilities
         for an entire list of gate sequences.
@@ -2397,6 +2397,9 @@ class GateSet(object):
            across multiple processors.  Distribution is performed over
            subtrees of evalTree (if it is split).
 
+        memLimit : int, optional
+            A rough memory limit in bytes which is used to determine processor
+            allocation.
 
         Returns
         -------
@@ -2406,7 +2409,9 @@ class GateSet(object):
             and `p` is the corresponding probability.
         """
         gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
-        evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
+        #OLD: evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
+        evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
+            gatestring_list, comm, memLimit, subcalls=['bulk_fill_probs'], verbosity=2) # DEBUG verbosity (maybe make into an arg?)
         return self._calc().bulk_probs(gatestring_list, evalTree, elIndices,
                                        outcomes, clipTo, check, comm)
 

@@ -230,13 +230,13 @@ class DataSetRow(object):
         return self._get_counts(all_outcomes=True)
 
     @property
-    def fractions(self):
+    def fractions(self, all_outcomes=False):
         """ 
         Returns this row's sequence of "repetition counts", that is, the number of
         repetitions of each outcome label in the `outcomes` list, or
         equivalently, each outcome label index in this rows `.oli` member.
         """
-        cnts = self.counts
+        cnts = self._get_counts(all_outcomes)
         total = sum(cnts.values())
         return _OrderedDict( [(k,cnt/total) for k,cnt in cnts.items()] )
 
@@ -251,6 +251,8 @@ class DataSetRow(object):
     #TODO: remove in favor of fractions property?
     def fraction(self,outcomelabel):
         """ Returns the fraction of total counts for `outcomelabel`."""
+        if outcomelabel not in self.outcomes:
+            return 0.0 # Note: similar to an "all_outcomes=True" default
         d = self.counts
         total = sum(d.values())
         return d[outcomelabel]/total
