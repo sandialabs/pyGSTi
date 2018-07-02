@@ -110,10 +110,10 @@ class EvalTree(list):
     def _get_gateLabels(self, compiled_gatestring_list):
         """ 
         Returns a list of the distinct gate labels in 
-        `compiled_gatestring_list` - a dictionary w/keys = "raw" gate strings.
+        `compiled_gatestring_list` - a dictionary w/keys = "raw" gate strings OR a list of them.
         """
         gateLabels = set()
-        for raw_gstr in compiled_gatestring_list.keys():
+        for raw_gstr in compiled_gatestring_list: # will work for dict keys too
             gateLabels.update( raw_gstr )
         return sorted(gateLabels)
 

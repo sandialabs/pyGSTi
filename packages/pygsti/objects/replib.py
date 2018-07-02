@@ -63,14 +63,14 @@ class DMEffectRep_TensorProd(DMEffectRep):
         for i in range(self.factor_dims[k]):
             outvec[off+i] = self.kron_array[k,i]
         sz = self.factor_dims[k]
-    
+
         #Repeatedly scale&copy last "sz" elements of outputvec forward
         # (as many times as there are elements in the current factor array)
         # - but multiply *in-place* the last "sz" elements.
         for k in range(self.nfactors-2,-1,-1): #for all but the last factor
             off = N-sz*self.factor_dims[k]
             endoff = N-sz
-    
+
             #For all but the final element of self.kron_array[k,:],
             # mult&copy final sz elements of outvec into position
             for j in range(self.factor_dims[k]-1):
@@ -78,21 +78,97 @@ class DMEffectRep_TensorProd(DMEffectRep):
                 for i in range(sz):
                     outvec[off+i] = mult*outvec[endoff+i]
                 off += sz
-    
+
             #Last element: in-place mult
             #assert(off == endoff)
             mult = self.kron_array[k, self.factor_dims[k]-1]
             for i in range(sz):
                 outvec[endoff+i] *= mult
             sz *= self.factor_dims[k]
-            
+
         return outvec
 
     def probability(self, state): # allow scratch to be passed in?
         scratch = _np.empty(self.dim, 'd')
         Edense = self.todense( scratch  )
-        return _np.dot(Edense,state.data) # not vdot b/c data is *real* 
-    
+        return _np.dot(Edense,state.data) # not vdot b/c data is *real*
+
+
+class DMEffectRep_Computational(DMEffectRep):
+    def __init__(self, zvals, dim):
+        # int dim = 4**len(zvals) -- just send as argument for speed?
+        assert(dim == 4**len(zvals))
+        assert(len(zvals) <= 64), "Cannot create a Computational basis rep with >64 qubits!"
+          # Current storage of computational basis states converts zvals -> 64-bit integer
+
+        base = 1
+        self.zvals_int = 0
+        for v in zvals:
+            assert(v in (0,1)), "zvals must contain only 0s and 1s"
+            self.zvals_int += base*v
+            base *= 2 # or left shift?
+
+        self.nfactors = len(zvals) # (or nQubits)
+        self.abs_elval = 1/(_np.sqrt(2)**self.nfactors)
+
+        super(DMEffectRep_Computational,self).__init__(dim)
+
+    def parity(self, x):
+        """recursively divide the (64-bit) integer into two equal
+           halves and take their XOR until only 1 bit is left """
+        x = (x & 0x00000000FFFFFFFF)^(x >> 32)
+        x = (x & 0x000000000000FFFF)^(x >> 16)
+        x = (x & 0x00000000000000FF)^(x >> 8)
+        x = (x & 0x000000000000000F)^(x >> 4)
+        x = (x & 0x0000000000000003)^(x >> 2)
+        x = (x & 0x0000000000000001)^(x >> 1)
+        return x & 1 # return the last bit (0 or 1)
+
+    def todense(self, outvec, trust_outvec_sparsity=False):
+        # when trust_outvec_sparsity is True, assume we only need to fill in the
+        # non-zero elements of outvec (i.e. that outvec is already zero wherever
+        # this vector is zero).
+        if not trust_outvec_sparsity:
+            outvec[:] = 0 #reset everything to zero
+
+        N = self.nfactors
+
+        # there are nQubits factors
+        # each factor (4-element, 1Q dmvec) has 2 zero elements and 2 nonzero ones
+        # loop is over all non-zero elements of the final outvec by looping over
+        #  all the sets of *entirely* nonzero elements from the factors.
+
+        # Let the two possible nonzero elements of the k-th factor be represented
+        # by the k-th bit of `finds` below, which ranges from 0 to 2^nFactors-1
+        for finds in range(2**N):
+
+            #Create the final index (within outvec) corresponding to finds
+            # assume, like tensorprod, that factor ordering == kron ordering
+            # so outvec = kron( factor[0], factor[1], ... factor[N-1] ).
+            # Let factorDim[k] == 4**(N-1-k) be the stride associated with the k-th index
+            # Whenever finds[bit k] == 0 => finalIndx += 0*factorDim[k]
+            #          finds[bit k] == 1 => finalIndx += 3*factorDim[k] (3 b/c factor's 2nd nonzero el is at index 3)
+            finalIndx = sum([ 3*(4**(N-1-k)) for k in range(N) if bool(finds & (1<<k)) ])
+
+            #Determine the sign of this element (the element is either +/- (1/sqrt(2))^N )
+            # A minus sign is picked up whenever finds[bit k] == 1 (which means we're looking
+            # at the index=3 element of the factor vec) AND self.zvals_int[bit k] == 1
+            # (which means it's a [1 0 0 -1] state rather than a [1 0 0 1] state).
+            # Since we only care whether the number of minus signs is even or odd, we can
+            # BITWISE-AND finds with self.zvals_int (giving an integer whose binary-expansion's
+            # number of 1's == the number of minus signs) and compute the parity of this.
+            minus_sign = self.parity(finds & self.zvals_int)
+
+            outvec[finalIndx] = -self.abs_elval if minus_sign else self.abs_elval
+
+        return outvec
+
+    def probability(self, state):
+        scratch = _np.empty(self.dim, 'd')
+        Edense = self.todense( scratch  )
+        return _np.dot(Edense,state.data) # not vdot b/c data is *real*
+
+
 
 class DMGateRep(object):
     def __init__(self,dim):
@@ -101,8 +177,8 @@ class DMGateRep(object):
         raise NotImplementedError()
     def adjoint_acton(self, state):
         raise NotImplementedError()
-    
-        
+
+
 class DMGateRep_Dense(DMGateRep):
     def __init__(self, data):
         self.data = data
@@ -132,7 +208,7 @@ class DMGateRep_Embedded(DMGateRep):
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
         self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
-                                      reversed(list(numBasisEls[:-1])))) ), 'i')
+                                      reversed(list(numBasisEls[:-1])))) ), _np.int64)
         self.basisInds_action = [ list(range(numBasisEls[i])) for i in actionInds ]
 
         self.embeddedDim = embedded_dim
@@ -153,8 +229,8 @@ class DMGateRep_Embedded(DMGateRep):
         offset = 0 #if relToBlock else self.offset (relToBlock == False here)
 
         #print("DB REPLIB ACTON: ",self.basisInds_noop_blankaction)
-        #print("DB REPLIB ACTON: ",self.basisInds_action)        
-        #print("DB REPLIB ACTON: ",self.multipliers)        
+        #print("DB REPLIB ACTON: ",self.basisInds_action)
+        #print("DB REPLIB ACTON: ",self.multipliers)
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
             inds = []
@@ -177,7 +253,7 @@ class DMGateRep_Embedded(DMGateRep):
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
         output_state = DMStateRep( _np.zeros(state.data.shape, 'd') )
         offset = 0 #if relToBlock else self.offset (relToBlock == False here)
-        
+
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
             inds = []
@@ -194,7 +270,7 @@ class DMGateRep_Embedded(DMGateRep):
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state,state)
         return output_state
-        
+
 
 
 class DMGateRep_Composed(DMGateRep):
@@ -250,7 +326,7 @@ class DMGateRep_Lindblad(DMGateRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate matrix on an input state """
         raise NotImplementedError("No adjoint action implemented for sparse Lindblad Gate Reps yet.")
-        
+
 
 # State vector (SV) propagation wrapper classes
 class SVStateRep(object):
@@ -299,14 +375,14 @@ class SVEffectRep_TensorProd(SVEffectRep):
         for i in range(self.factor_dims[k]):
             outvec[off+i] = self.kron_array[k,i]
         sz = self.factor_dims[k]
-    
+
         #Repeatedly scale&copy last "sz" elements of outputvec forward
         # (as many times as there are elements in the current factor array)
         # - but multiply *in-place* the last "sz" elements.
         for k in range(self.nfactors-2,-1,-1): #for all but the last factor
             off = N-sz*self.factor_dims[k]
             endoff = N-sz
-    
+
             #For all but the final element of self.kron_array[k,:],
             # mult&copy final sz elements of outvec into position
             for j in range(self.factor_dims[k]-1):
@@ -314,21 +390,58 @@ class SVEffectRep_TensorProd(SVEffectRep):
                 for i in range(sz):
                     outvec[off+i] = mult*outvec[endoff+i]
                 off += sz
-    
+
             #Last element: in-place mult
             #assert(off == endoff)
             mult = self.kron_array[k, self.factor_dims[k]-1]
             for i in range(sz):
                 outvec[endoff+i] *= mult
             sz *= self.factor_dims[k]
-            
+
         return outvec
 
     def amplitude(self, state): # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
         Edense = self.todense( scratch  )
         return _np.vdot(Edense,state.data)
-    
+
+
+class SVEffectRep_Computational(DMEffectRep):
+    def __init__(self, zvals, dim):
+        # int dim = 4**len(zvals) -- just send as argument for speed?
+        assert(dim == 2**len(zvals))
+        assert(len(zvals) <= 64), "Cannot create a Computational basis rep with >64 qubits!"
+          # Current storage of computational basis states converts zvals -> 64-bit integer
+
+        # Different than DM counterpart
+        # as each factor only has *1* nonzero element so final state has only a
+        # *single* nonzero element!  We just have to figure out where that
+        # single element lies (compute it's index) based on the given zvals.
+
+        # Assume, like tensorprod, that factor ordering == kron ordering
+        # so nonzer_index = kron( factor[0], factor[1], ... factor[N-1] ).
+
+        base = 2**(len(zvals)-1)
+        self.nonzero_index = 0
+        for k,v in enumerate(zvals):
+            assert(v in (0,1)), "zvals must contain only 0s and 1s"
+            self.nonzero_index += base*v
+            base /= 2 # or right shift?
+
+
+    def todense(self, outvec, trust_outvec_sparsity=False):
+        # when trust_outvec_sparsity is True, assume we only need to fill in the
+        # non-zero elements of outvec (i.e. that outvec is already zero wherever
+        # this vector is zero).
+        if not trust_outvec_sparsity:
+            outvec[:] = 0 #reset everything to zero
+        outvec[self.nonzero_index] = 1.0
+
+    def amplitude(self, state): # allow scratch to be passed in?
+        scratch = _np.empty(self.dim, complex)
+        Edense = self.todense( scratch  )
+        return _np.vdot(Edense,state.data)
+
 
 class SVGateRep(object):
     def __init__(self,dim):
@@ -337,8 +450,8 @@ class SVGateRep(object):
         raise NotImplementedError()
     def adjoint_acton(self, state):
         raise NotImplementedError()
-    
-        
+
+
 class SVGateRep_Dense(SVGateRep):
     def __init__(self, data):
         self.data = data
@@ -369,7 +482,7 @@ class SVGateRep_Embedded(SVGateRep):
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
         self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
-                                      reversed(list(numBasisEls[:-1])))) ), 'i')
+                                      reversed(list(numBasisEls[:-1])))) ), _np.int64)
         self.basisInds_action = [ list(range(numBasisEls[i])) for i in actionInds ]
 
         self.embeddedDim = embedded_dim
@@ -388,7 +501,7 @@ class SVGateRep_Embedded(SVGateRep):
     def acton(self, state):
         output_state = SVStateRep( _np.zeros(state.data.shape, complex) )
         offset = 0 #if relToBlock else self.offset (relToBlock == False here)
-        
+
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
             inds = []
@@ -411,7 +524,7 @@ class SVGateRep_Embedded(SVGateRep):
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
         output_state = SVStateRep( _np.zeros(state.data.shape, complex) )
         offset = 0 #if relToBlock else self.offset (relToBlock == False here)
-        
+
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
             inds = []
@@ -428,7 +541,7 @@ class SVGateRep_Embedded(SVGateRep):
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state,state)
         return output_state
-        
+
 
 
 class SVGateRep_Composed(SVGateRep):
@@ -451,19 +564,19 @@ class SVGateRep_Composed(SVGateRep):
         return state
 
 
-        
+
 # Stabilizer state (SB) propagation wrapper classes
-class SBStateRep(object): 
+class SBStateRep(object):
     def __init__(self, smatrix, pvectors, amps):
         from .stabilizer import StabilizerFrame as _StabilizerFrame
         self.sframe = _StabilizerFrame(smatrix,pvectors,amps)
           # just rely on StabilizerFrame class to do all the heavy lifting...
-          
+
     def copy(self):
-        cpy = SBStateRep(_np.zeros((0,0),'i'),None,None) # makes a dummy cpy.sframe
+        cpy = SBStateRep(_np.zeros((0,0),_np.int64),None,None) # makes a dummy cpy.sframe
         cpy.sframe = self.sframe.copy() # a legit copy *with* qubit filers copied too
         return cpy
-          
+
     def __str__(self):
         return "SBStateRep:\n" + str(self.sframe)
 
@@ -555,7 +668,7 @@ class SBGateRep_Clifford(SBGateRep):
                                      _np.conjugate(self.unitary.T))
         return state
 
-        
+
 
 # Other classes
 class PolyRep(dict):
@@ -581,10 +694,10 @@ class PolyRep(dict):
         #    max_num_vars = coeffs_max_vars
         #else:
         #    assert(coeffs_max_vars <= max_num_vars)
-        
+
         self.max_order = max_order
         self.max_num_vars = max_num_vars
-        
+
         super(PolyRep,self).__init__()
         if int_coeffs is not None:
             self.update(int_coeffs)
@@ -604,7 +717,7 @@ class PolyRep(dict):
     def _vinds_to_int(self, vinds):
         assert(len(vinds) <= self.max_order), "max_order is too low!"
         ret = 0; m = 1
-        for i in vinds: # last tuple index is most significant                                                                                                          
+        for i in vinds: # last tuple index is most significant
             assert(i < self.max_num_vars), "Variable index exceed maximum!"
             ret += (i+1)*m
             m *= self.max_num_vars+1
@@ -645,7 +758,7 @@ class PolyRep(dict):
         nTerms = len(self)
         vinds = [ self._int_to_vinds(i) for i in self.keys() ]
         nVarIndices = sum(map(len,vinds))
-        vtape = _np.empty(1 + nTerms + nVarIndices, 'i') # "variable" tape
+        vtape = _np.empty(1 + nTerms + nVarIndices, _np.int64) # "variable" tape
         ctape = _np.empty(nTerms, complex if iscomplex else 'd') # "coefficient tape"
 
         i = 0
@@ -687,7 +800,7 @@ class PolyRep(dict):
         newpoly = self.copy()
         for k in self:
             self[k] *= x
-    
+
     def scalar_mult(self, x):
         # assume a scalar that can multiply values
         newpoly = self.copy()
@@ -700,7 +813,7 @@ class PolyRep(dict):
                 if abs(_np.real(x)) > 1e-6: return "(%.3f+%.3fj)" % (x.real, x.imag)
                 else: return "(%.3fj)" % x.imag
             else: return "%.3f" % x.real
-            
+
         termstrs = []
         sorted_keys = sorted(list(self.keys()))
         for k in sorted_keys:
@@ -715,7 +828,7 @@ class PolyRep(dict):
                 varstr += "x%d%s" % (last_i, ("^%d" % n) if n > 1 else "")
             #print("DB: vinds = ",vinds, " varstr = ",varstr)
             if abs(self[k]) > 1e-4:
-                termstrs.append( "%s%s" % (fmt(self[k]), varstr) )                
+                termstrs.append( "%s%s" % (fmt(self[k]), varstr) )
         if len(termstrs) > 0:
             return " + ".join(termstrs)
         else: return "0"
@@ -736,7 +849,7 @@ class PolyRep(dict):
             for k in newpoly:
                 newpoly[k] += x
         return newpoly
-                
+
     def __mul__(self,x):
         if isinstance(x, PolyRep):
             return self.mult_poly(x)
@@ -751,16 +864,16 @@ class PolyRep(dict):
         cur = self
         for i in range(int(np.floor(np.log2(n)))+1):
             rem = n % 2 #gets least significant bit (i-th) of n
-            if rem == 1: ret *= cur # add current power of x (2^i) if needed  
+            if rem == 1: ret *= cur # add current power of x (2^i) if needed
             cur = cur*cur # current power *= 2
-            n //= 2 # shift bits of n right 
+            n //= 2 # shift bits of n right
         return ret
 
     def __copy__(self):
         return self.copy()
 
 
-    
+
 class SVTermRep(object):
     # just a container for other reps (polys, states, effects, and gates)
     def __init__(self, coeff, pre_state, post_state,
@@ -787,7 +900,7 @@ class SBTermRep(object):
         self.pre_ops = pre_ops
         self.post_ops = post_ops
 
-        
+
 ## END CLASSES -- BEGIN CALC METHODS
 
 
@@ -799,7 +912,7 @@ def propagate_staterep(staterep, gatereps):
 
 
 def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None): # TODO remove scratch
-    
+
     cacheSize = evalTree.cache_size()
     rhoVec,EVecs = calc._rhoEs_from_labels(rholabel, elabels)
     ret = _np.empty((len(evalTree),len(elabels)),'d')
@@ -814,8 +927,8 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None): 
 
     #REMOVE?? - want some way to speed tensorprod effect actions...
     #if self.evotype in ("statevec", "densitymx"):
-    #    Escratch = _np.empty(self.dim,typ) # memory for E.todense() if it wants it            
-                   
+    #    Escratch = _np.empty(self.dim,typ) # memory for E.todense() if it wants it
+
     #comm is currently ignored
     #TODO: if evalTree is split, distribute among processors
     for i in evalTree.get_evaluation_order():
@@ -831,7 +944,7 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None): 
             ret[i,j] = erep.probability(final_state) #outcome probability
 
     #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
-    
+
     return ret
 
 
@@ -853,7 +966,7 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     gate_lookup = { lbl:i for i,lbl in enumerate(evalTree.gateLabels) } # gate labels -> ints for faster lookup
     gatereps = { i:calc._getgate(lbl).torep() for lbl,i in gate_lookup.items() }
     cacheSize = evalTree.cache_size()
-    
+
     # create rho_cache (or use scratch)
     if scratch is None:
         rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
@@ -869,7 +982,7 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     my_param_indices = param_indices[my_slice]
     st = my_slice.start #beginning of where my_param_indices results
                         # get placed into dpr_cache
-    
+
     #Get a map from global parameter indices to the desired
     # final index within dpr_cache
     iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
@@ -888,9 +1001,9 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     #Now each processor has filled the relavant parts of dpr_cache,
     # so gather together:
     _mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=2, comm=comm)
-    
+
     # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
-    #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" % 
+    #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
     #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
 
     return dpr_cache
@@ -913,7 +1026,7 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
 
     mpv = calc.Np # max_poly_vars
     mpo = calc.max_order*2 #max_poly_order
-    
+
     # Construct dict of gate term reps
     distinct_gateLabels = sorted(set(gatestring))
     gate_term_reps = { glbl: [ [t.torep(mpo,mpv,"gate") for t in calc._getgate(glbl).get_order_terms(order)]
@@ -947,7 +1060,7 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
     #            print("Coeff: ",str(term.coeff))
 
 
-        
+
     #HERE DEBUG!!!
     global DEBUG_FCOUNT
     db_part_cnt = 0
@@ -965,7 +1078,7 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
                            [ E_term_reps[p[-1]] ]
             factor_list_lens = list(map(len,factor_lists))
             Einds = E_indices[p[-1]] # specifies which E-vec index each of E_term_reps[p[-1]] corresponds to
-            
+
             if any([len(fl)==0 for fl in factor_lists]): continue
 
             #print("DB partition = ",p, "listlens = ",[len(fl) for fl in factor_lists])
@@ -974,10 +1087,10 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
                 rightSaved = [None]*(len(factor_lists)-1) # factor has been applied
                 coeffSaved = [None]*(len(factor_lists)-1)
                 last_index = len(factor_lists)-1
-                
+
                 for incd,fi in _lt.incd_product(*[range(l) for l in factor_list_lens]):
                     factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
-                    
+
                     if incd == 0: # need to re-evaluate rho vector
                         rhoVecL = factors[0].pre_state # Note: `factor` is a rep & so are it's ops
                         for f in factors[0].pre_ops:
@@ -1002,7 +1115,7 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
                         for f in factors[i].pre_ops:
                             rhoVecL = f.acton(rhoVecL)
                         leftSaved[i] = rhoVecL
-                        
+
                         for f in factors[i].post_ops:
                             rhoVecR = f.acton(rhoVecR)
                         rightSaved[i] = rhoVecR
@@ -1033,7 +1146,7 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
                     if prps[Ei] is None: prps[Ei]  = res
                     else:                prps[Ei] += res # could add_inplace?
                     #print("DB PYHON: prps[%d] = " % Ei, prps[Ei])
-                    
+
             else: # non-fast mode
                 last_index = len(factor_lists)-1
                 for fi in _itertools.product(*[range(l) for l in factor_list_lens]):
@@ -1077,14 +1190,14 @@ def _unitary_sim_pre(complete_factors, comm, memLimit):
     EVec = complete_factors[-1].post_effect
     return EVec.amplitude(rhoVec)
 
-    
+
 def _unitary_sim_post(complete_factors, comm, memLimit):
     rhoVec = complete_factors[0].post_state # a prep representation
     for f in complete_factors[0].post_ops:
         rhoVec = f.acton(rhoVec)
     for f in _itertools.chain(*[f.post_ops for f in complete_factors[1:-1]]):
         rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
-        
+
     # Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
     for f in reversed(complete_factors[-1].pre_ops):
         rhoVec = f.adjoint_acton(rhoVec)

@@ -169,9 +169,9 @@ class GateSetMember(GateSetChild):
         numpy.ndarray
         """
         if self._gpindices is None:
-            return _np.empty(0,'i')
+            return _np.empty(0,_np.int64)
         elif isinstance(self._gpindices, slice):
-            return _np.array(_slct.indices(self._gpindices),'i')
+            return _np.array(_slct.indices(self._gpindices),_np.int64)
         else:
             return self._gpindices #it's already an array
 
@@ -296,4 +296,4 @@ def _decompose_gpindices(parent_gpindices, sibling_gpindices):
         sibInds = _slct.indices(sibling_gpindices) \
                   if isinstance(sibling_gpindices, slice) else sibling_gpindices
         parent_lookup = { j: i for i,j in enumerate(parent_gpindices) }
-        return _np.array( [ parent_lookup[j] for j in sibInds ], 'i')
+        return _np.array( [ parent_lookup[j] for j in sibInds ], _np.int64)

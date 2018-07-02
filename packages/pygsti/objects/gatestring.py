@@ -445,7 +445,7 @@ class CompressedGateString(object):
         while start < L:
             #print "Start = ",start
             score = _np.zeros( maxPeriodToLookFor+1, 'd' )
-            numperiods = _np.zeros( maxPeriodToLookFor+1, 'i' )
+            numperiods = _np.zeros( maxPeriodToLookFor+1, _np.int64 )
             for periodLen in range(1,maxPeriodToLookFor+1):
                 n = CompressedGateString._getNumPeriods( gateString[start:], periodLen )
                 if n == 0: score[periodLen] = 0

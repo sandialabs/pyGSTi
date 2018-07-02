@@ -21,7 +21,8 @@ from pprint import pprint
 
 def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                        sampleError="none", seed=None, randState=None,
-                       aliasDict=None, collisionAction="aggregate", comm=None):
+                       aliasDict=None, collisionAction="aggregate",
+                       comm=None, memLimit=None):
     """Creates a DataSet using the probabilities obtained from a gateset.
 
     Parameters
@@ -84,6 +85,9 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         across multiple processors and ensuring that the *same* dataset is
         generated on each processor.
 
+    memLimit : int, optional
+        A rough memory limit in bytes which is used to determine job allocation
+        when there are multiple processors.
 
     Returns
     -------
@@ -97,28 +101,31 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
     if isinstance(gatesetOrDataset, _ds.DataSet):
         dsGen = gatesetOrDataset
         gsGen = None
-        dataset = _ds.DataSet( collisionAction=collisionAction )
+        dataset = _ds.DataSet( collisionAction=collisionAction,
+                               outcomeLabelIndices = dsGen.olIndex ) # keep same outcome labels
     else:
         gsGen = gatesetOrDataset
         dsGen = None
         dataset = _ds.DataSet( collisionAction=collisionAction )
 
+                
+    if aliasDict:
+        aliasDict = { _lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
+                      for ky,val in aliasDict.items() } # convert to use Labels
+
+    if gsGen:
+        trans_gatestring_list = [ _gstrc.translate_gatestring(s, aliasDict)
+                                  for s in gatestring_list ]
+        all_probs = gsGen.bulk_probs(trans_gatestring_list, comm=comm, memLimit=memLimit)
+        #all_dprobs = gsGen.bulk_dprobs(gatestring_list) #DEBUG - not needed here!!!
+
     if comm is None or comm.Get_rank() == 0: # only root rank computes
+                
         if sampleError in ("binomial","multinomial"):
             if randState is None:
                 rndm = _rndm.RandomState(seed) # ok if seed is None
             else:
                 rndm = randState
-
-        if aliasDict:
-            aliasDict = { _lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
-                          for ky,val in aliasDict.items() } # convert to use Labels
-
-        if gsGen:
-            trans_gatestring_list = [ _gstrc.translate_gatestring(s, aliasDict)
-                                      for s in gatestring_list ]
-            all_probs = gsGen.bulk_probs(trans_gatestring_list)
-            #all_dprobs = gsGen.bulk_dprobs(gatestring_list) #DEBUG - not needed here!!!
 
         for k,s in enumerate(gatestring_list):
 

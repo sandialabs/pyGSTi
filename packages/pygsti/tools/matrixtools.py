@@ -1015,7 +1015,7 @@ def get_csr_sum_indices(csr_matrices):
         indptr.append( len(indices) )
 
     #convert lists -> arrays
-    csr_sum_array = [ _np.array(lst,'i') for lst in csr_sum_array ]
+    csr_sum_array = [ _np.array(lst,_np.int64) for lst in csr_sum_array ]
     indptr = _np.array( indptr )
     indices = _np.array( indices )
 
@@ -1081,10 +1081,12 @@ def expm_multiply_prep(A, tol=EXPM_DEFAULT_TOL):
         ident = _sps.identity(A.shape[0], dtype=A.dtype, format='csr') # CSR specific
         A = A - mu * ident #SLOW!
     else:
-        indptr = _np.empty(n+1, 'i')
-        indices = _np.empty(A.data.shape[0] + n, 'i') # pessimistic (assume no diags exist)
+        indptr = _np.empty(n+1, _np.int64)
+        indices = _np.empty(A.data.shape[0] + n, _np.int64) # pessimistic (assume no diags exist)
         data = _np.empty(A.data.shape[0] + n,A.dtype) # pessimistic (assume no diags exist)
-        nxt = _fastcalc.csr_subtract_identity(A.data, A.indptr, A.indices,
+        nxt = _fastcalc.csr_subtract_identity(A.data,
+                                              _np.ascontiguousarray(A.indptr,_np.int64),
+                                              _np.ascontiguousarray(A.indices,_np.int64),
                                               data, indptr, indices, -mu, n)
         A = _sps.csr_matrix( (data[0:nxt], indices[0:nxt], indptr), shape=(n,n) )
     #DB: CHECK: assert(_spsl.norm(A1 - A2) < 1e-6); A = A1

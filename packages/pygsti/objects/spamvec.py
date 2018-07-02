@@ -702,6 +702,7 @@ class DenseSPAMVec(SPAMVec):
         """
         #don't use scratch since we already have memory allocated
         return _np.asarray(self.base[:,0])
+          # *must* be a numpy array for Cython arg conversion
 
     def __copy__(self):
         # We need to implement __copy__ because we defer all non-existing
@@ -1562,7 +1563,7 @@ class TensorProdSPAMVec(SPAMVec):
         if self._evotype in ("statevec","densitymx"): #types that require fast kronecker prods
             max_factor_dim = max(fct.dim for fct in factors)
             self._fast_kron_array = _np.empty( (len(factors), max_factor_dim), complex if self._evotype == "statevec" else 'd')
-            self._fast_kron_factordims = _np.array([fct.dim for fct in factors],'i')
+            self._fast_kron_factordims = _np.array([fct.dim for fct in factors],_np.int64)
             try:
                 self._fill_fast_kron()
             except NotImplementedError: # if todense() or any other prereq isn't implemented (
@@ -1674,14 +1675,14 @@ class TensorProdSPAMVec(SPAMVec):
                     sframe_factors = [ f.todense() for f in self.factors ] # StabilizerFrame for each factor
                     return _stabilizer.sframe_kronecker(sframe_factors).torep()
                 else: #self.typ == "effect", so each factor is a StabilizerEffectVec
-                    outcomes = _np.array( list(_itertools.chain(*[f.outcomes for f in self.factors])), 'i')
+                    outcomes = _np.array( list(_itertools.chain(*[f.outcomes for f in self.factors])), _np.int64)
                     return replib.SBEffectRep(outcomes)
 
             else: #self.typ == "effect", so each factor is a StabilizerZPOVM
                 # like above, but get a StabilizerEffectVec from each StabilizerZPOVM factor
                 factorPOVMs = self.factors
                 factorVecs = [ factorPOVMs[i][self.effectLbls[i]] for i in range(1,len(factorPOVMs)) ]
-                outcomes = _np.array( list(_itertools.chain(*[f.outcomes for f in factorVecs])), 'i')
+                outcomes = _np.array( list(_itertools.chain(*[f.outcomes for f in factorVecs])), _np.int64)
                 return replib.SBEffectRep(outcomes)
                 
                 #OLD - now can remove outcomes prop?
@@ -2649,8 +2650,8 @@ class StabilizerEffectVec(SPAMVec):
     def torep(self, typ, outvec=None):
         # changes to_statevec/to_dmvec -> todense, and have
         # torep create an effect rep object...
-        return replib.SBEffectRep(_np.ascontiguousarray(self._outcomes,'i'))
-          #Note: dtype='i' => int in Cython, whereas dtype=int => long in Cython
+        return replib.SBEffectRep(_np.ascontiguousarray(self._outcomes,_np.int64))
+          #Note: dtype='i' => int in Cython, whereas dtype=int/np.int64 => long in Cython
 
     def to_statevec(self):
         """
@@ -2693,4 +2694,124 @@ class StabilizerEffectVec(SPAMVec):
     def __str__(self):
         nQubits = len(self.outcomes)
         s = "Stabilizer effect vector for %d qubits with outcome %s" % (nQubits, str(self.outcomes))
+        return s
+
+
+
+class ComputationalSPAMVec(SPAMVec):
+    """
+    A static SPAM vector that is tensor product of 1-qubit Z-eigenstates.
+
+    This is called a "computational basis state" in many contexts.
+    """
+
+    def __init__(self, zvals, evotype):
+        """
+        Initialize a ComputationalSPAMVec object.
+
+        Parameters
+        ----------
+        zvals : iterable
+            A list or other iterable of integer 0 or 1 outcomes specifying
+            which computational basis element this object represents.  The
+            length of `zvals` gives the total number of qubits.
+
+        evotype : {"densitymx", "statevec"}
+            The type of evolution being performed.
+        """
+        self._zvals = _np.array(zvals,_np.int64)
+
+        nqubits = len(self._zvals)
+        if evotype == "densitymx":
+            dim = 4**nqubits
+            #v0 = 1.0/_np.sqrt(2) * _np.array((1,0,0,1),'d') # '0' qubit state as Pauli dmvec
+            #v1 = 1.0/_np.sqrt(2) * _np.array((1,0,0,-1),'d')# '1' qubit state as Pauli dmvec
+        elif evotype == "statevec":
+            dim = 2**nqubits
+            #v0 = _np.array((1,0),complex) # '0' qubit state as complex state vec
+            #v1 = _np.array((0,1),complex) # '1' qubit state as complex state vec
+        else: raise ValueError("Invalid `evotype`: %s" % evotype)
+
+        SPAMVec.__init__(self, dim, evotype)
+
+    def todense(self, scratch=None):
+        """
+        Return this SPAM vector as a (dense) numpy array.  The memory
+        in `scratch` maybe used when it is not-None.
+        """
+        if self._evotype == "densitymx":
+            v0 = 1.0/_np.sqrt(2) * _np.array((1,0,0,1),'d') # '0' qubit state as Pauli dmvec
+            v1 = 1.0/_np.sqrt(2) * _np.array((1,0,0,-1),'d')# '1' qubit state as Pauli dmvec
+        elif self._evotype == "statevec":
+            v0 = _np.array((1,0),complex) # '0' qubit state as complex state vec
+            v1 = _np.array((0,1),complex) # '1' qubit state as complex state vec
+        else: raise ValueError("Invalid `evotype`: %s" % evotype)
+
+        v = (v0,v1)
+        return _functools.reduce(_np.kron, [v[i] for i in self._zvals])
+
+
+    def torep(self, typ, outvec=None):
+        if typ == "prep":
+            if self._evotype == "statevec":
+                return replib.SVStateRep(self.todense())
+            elif self._evotype == "densitymx":
+                return replib.DMStateRep(self.todense())
+            raise NotImplementedError("torep(%s) not implemented for %s objects!" %
+                                      (self._evotype, self.__class__.__name__))
+        elif typ == "effect":
+            if self._evotype == "statevec":
+                return replib.SVEffectRep_Computational(self._zvals, self.dim)
+            elif self._evotype == "densitymx":
+                return replib.DMEffectRep_Computational(self._zvals, self.dim)
+            raise NotImplementedError("torep(%s) not implemented for %s objects!" %
+                                      (self._evotype, self.__class__.__name__))
+        else:
+            raise ValueError("Invalid `typ` argument for torep(): %s" % typ)
+
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this SPAM vector.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return 0 #no parameters
+
+
+    def to_vector(self):
+        """
+        Get the SPAM vector parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The parameters as a 1D array with length num_params().
+        """
+        return _np.array([], 'd') #no parameters
+
+
+    def from_vector(self, v):
+        """
+        Initialize the SPAM vector using a 1D array of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == 0) #should be no parameters, and nothing to do
+
+
+    def __str__(self):
+        nQubits = len(self._zvals)
+        s = "Computational Z-basis SPAM vec for %d qubits w/z-values: %s" % (nQubits, str(self._zvals))
         return s

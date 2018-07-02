@@ -87,7 +87,7 @@ def nparams_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0
         ret = 0
         #Note: no contrib from idle noise (already parameterized)
         for wt, maxHops in weight_maxhops_tuples:
-            possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),'i')
+            possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),_np.int64)
             if requireConnected:
                 nErrTargetLocations = qubitGraph.connected_combos(possible_err_qubit_inds,wt)
             else:
@@ -398,6 +398,17 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
     gs.preps[_Lbl('rho0')] = _objs.TensorProdSPAMVec('prep', prep_factors)
     gs.povms[_Lbl('Mdefault')] = _objs.TensorProdPOVM(povm_factors)
 
+    # #DEBUG SPECIAL CASE: when prep and povm noise are None create a *fixed*
+    # # (no parameters) POVM of the computational basis elements. (This is just
+    # # as useful for data generation but not as useful for GST as it doesn't
+    # # give the SPAM any degrees of freedom.)
+    # if prepNoise is None and povmNoise is None:
+    #     iterover = [(0,1)]*nQubits
+    #     items = [ (''.join(map(str,outcomes)), _objs.ComputationalSPAMVec(outcomes,"densitymx"))
+    #               for outcomes in _itertools.product(*iterover) ]
+    #     gs.povms[_Lbl('Mdefault')] = _objs.UnconstrainedPOVM(items) # overwrite above
+    # # END DEBUG
+
     #FUTURE - just return cloud keys? (gate label values are never used
     # downstream, but may still be useful for debugging, so keep for now)
     printer.log("DONE! - returning GateSet with dim=%d and gates=%s" % (gs.dim, list(gs.gates.keys())))    
@@ -509,7 +520,7 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
     nPossible = nQubits  
     for wt in range(1,maxWeight+1):
         printer.log("Weight %d: %d possible qubits" % (wt,nPossible),2)
-        basisEl_Id = basisProductMatrix(_np.zeros(wt,'i'),sparse)
+        basisEl_Id = basisProductMatrix(_np.zeros(wt,_np.int64),sparse)
         wtId = _sps.identity(4**wt,'d','csr') if sparse else  _np.identity(4**wt,'d')
         wtBasis = _Basis('pp', 2**wt, sparse=sparse)
         
@@ -519,7 +530,7 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
 
             errbasis = [basisEl_Id]
             for err_basis_inds in _iter_basis_inds(wt):        
-                error = _np.array(err_basis_inds,'i') #length == wt
+                error = _np.array(err_basis_inds,_np.int64) #length == wt
                 basisEl = basisProductMatrix(error,sparse)
                 errbasis.append(basisEl)
 
@@ -547,7 +558,7 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
 #    assert(spectatorMaxWeight <= 1) #only 0 and 1 are currently supported
 #    
 #    errinds = [] # list of basis indices for all error terms
-#    possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),'i')
+#    possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),_np.int64)
 #    nPossible = len(possible_err_qubit_inds)
 #    for wt in range(maxWeight+1):
 #        if mode == "no-embedding": # make an error term for the entire gate
@@ -757,12 +768,12 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
         # make a single embedded Lindblad-gate containing all specified error terms
         loc_noise_errinds = [] # list of basis indices for all local-error terms
         all_possible_err_qubit_inds = _np.array( qubitGraph.radius(
-            target_qubit_inds, max([hops for _,hops in weight_maxhops_tuples]) ), 'i') # node labels are ints
+            target_qubit_inds, max([hops for _,hops in weight_maxhops_tuples]) ), _np.int64) # node labels are ints
         nLocal = len(all_possible_err_qubit_inds)
-        basisEl_Id = basisProductMatrix(_np.zeros(nPossible,'i'),sparse) #identity basis el
+        basisEl_Id = basisProductMatrix(_np.zeros(nPossible,_np.int64),sparse) #identity basis el
         
         for wt, maxHops in weight_maxhops_tuples:
-            possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),'i') # node labels are ints
+            possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),_np.int64) # node labels are ints
             nPossible = len(possible_err_qubit_inds)
             possible_to_local = [ all_possible_err_qubit_inds.index(
                 possible_err_qubit_inds[i]) for i in range(nPossible)]
@@ -775,7 +786,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
                 err_qubit_local_inds = possible_to_local[err_qubit_inds]
                                                         
                 for err_basis_inds in _iter_basis_inds(wt):  
-                    error = _np.zeros(nLocal,'i')
+                    error = _np.zeros(nLocal,_np.int64)
                     error[ err_qubit_local_inds ] = err_basis_inds
                     loc_noise_errinds.append( error )
                     
@@ -809,9 +820,9 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
         for wt, maxHops in weight_maxhops_tuples:
                 
             ## loc_noise_errinds = [] # list of basis indices for all local-error terms 
-            possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),'i') # we know node labels are integers
+            possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),_np.int64) # we know node labels are integers
             nPossible = len(possible_err_qubit_inds) # also == "nLocal" in this case
-            basisEl_Id = basisProductMatrix(_np.zeros(wt,'i'),sparse) #identity basis el
+            basisEl_Id = basisProductMatrix(_np.zeros(wt,_np.int64),sparse) #identity basis el
 
             wtId = _sps.identity(4**wt,'d','csr') if sparse else _np.identity(4**wt,'d')
             wtBasis = _Basis('pp', 2**wt, sparse=sparse)
@@ -825,7 +836,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
 
                 errbasis = [basisEl_Id]
                 for err_basis_inds in _iter_basis_inds(wt):  
-                    error = _np.array(err_basis_inds,'i') #length == wt
+                    error = _np.array(err_basis_inds,_np.int64) #length == wt
                     basisEl = basisProductMatrix(error, sparse)
                     errbasis.append(basisEl)
 

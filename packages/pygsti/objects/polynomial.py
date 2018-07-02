@@ -155,7 +155,7 @@ class Polynomial(dict):
         iscomplex = any([ abs(_np.imag(x)) > 1e-12 for x in self.values() ])
         nTerms = len(self)
         nVarIndices = sum(map(len,self.keys()))
-        vtape = _np.empty(1 + nTerms + nVarIndices, 'i') # "variable" tape
+        vtape = _np.empty(1 + nTerms + nVarIndices, _np.int64) # "variable" tape
         ctape = _np.empty(nTerms, complex if iscomplex else 'd') # "coefficient tape"
 
         i = 0
@@ -433,7 +433,7 @@ class Polynomial(dict):
 #        iscomplex = bool(_np.linalg.norm(_np.imag(self.coeffs)) > 1e-12)
 #        nTerms = len(self.inds)
 #        nVarIndices = sum(map(len,self.inds))
-#        vtape = _np.empty(1 + nTerms + nVarIndices, 'i') # "variable" tape
+#        vtape = _np.empty(1 + nTerms + nVarIndices, _np.int64) # "variable" tape
 #        ctape = _np.empty(nTerms, complex if iscomplex else 'd') # "coefficient tape"
 #
 #        i = 0

@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <algorithm>    // std::find
 #include "fastreps.h"
+//#include <pthread.h>
 
 //using namespace std::complex_literals;
 
@@ -18,18 +19,18 @@ namespace CReps {
   /****************************************************************************\
   |* DMStateCRep                                                              *|
   \****************************************************************************/
-  DMStateCRep::DMStateCRep(int dim) {
+  DMStateCRep::DMStateCRep(INT dim) {
     _dataptr = new double[dim];
-    for(int i=0; i<dim; i++) _dataptr[i] = 0;
+    for(INT i=0; i<dim; i++) _dataptr[i] = 0;
     _dim = dim;
     _ownmem = true;
   }
   
-  DMStateCRep::DMStateCRep(double* data, int dim, bool copy=false) {
+  DMStateCRep::DMStateCRep(double* data, INT dim, bool copy=false) {
     //DEGUG std::cout << "DMStateCRep initialized w/dim = " << dim << std::endl;
     if(copy) {
       _dataptr = new double[dim];
-      for(int i=0; i<dim; i++) {
+      for(INT i=0; i<dim; i++) {
 	_dataptr[i] = data[i];
       }
     } else {
@@ -46,20 +47,20 @@ namespace CReps {
 
   void DMStateCRep::print(const char* label) {
     std::cout << label << " = [";
-    for(int i=0; i<_dim; i++) std::cout << _dataptr[i] << " ";
+    for(INT i=0; i<_dim; i++) std::cout << _dataptr[i] << " ";
     std::cout << "]" << std::endl;
   }
 
   void DMStateCRep::copy_from(DMStateCRep* st) {
     assert(_dim == st->_dim);
-    for(int i=0; i<_dim; i++)
+    for(INT i=0; i<_dim; i++)
       _dataptr[i] = st->_dataptr[i];
   }
 
   /****************************************************************************\
   |* DMEffectCRep                                                             *|
   \****************************************************************************/
-  DMEffectCRep::DMEffectCRep(int dim) {
+  DMEffectCRep::DMEffectCRep(INT dim) {
     _dim = dim;
   }
   DMEffectCRep::~DMEffectCRep() { }
@@ -68,7 +69,7 @@ namespace CReps {
   /****************************************************************************\
   |* DMEffectCRep_Dense                                                       *|
   \****************************************************************************/
-  DMEffectCRep_Dense::DMEffectCRep_Dense(double* data, int dim)
+  DMEffectCRep_Dense::DMEffectCRep_Dense(double* data, INT dim)
     :DMEffectCRep(dim)
   {
     _dataptr = data;
@@ -78,7 +79,7 @@ namespace CReps {
 
   double DMEffectCRep_Dense::probability(DMStateCRep* state) {
     double ret = 0.0;
-    for(int i=0; i< _dim; i++) {
+    for(INT i=0; i< _dim; i++) {
       ret += _dataptr[i] * state->_dataptr[i];
     }
     return ret;
@@ -90,8 +91,8 @@ namespace CReps {
   \****************************************************************************/
 
   DMEffectCRep_TensorProd::DMEffectCRep_TensorProd(double* kron_array,
-						   int* factordims, int nfactors,
-						   int max_factor_dim, int dim) 
+						   INT* factordims, INT nfactors,
+						   INT max_factor_dim, INT dim) 
     :DMEffectCRep(dim)
   {
     _kron_array = kron_array;
@@ -109,11 +110,11 @@ namespace CReps {
 
     // BEGIN _fastcalc.fast_kron(scratch, _kron_array, _factordims)
     // - TODO: make this into seprate function & reuse in fastcals.pyx?
-    int N = _dim;
-    int i, j, k, sz, off, endoff, krow;
+    INT N = _dim;
+    INT i, j, k, sz, off, endoff, krow;
     double mult;
     double* array = _kron_array;
-    int* arraysizes = _factordims;
+    INT* arraysizes = _factordims;
 
     // Put last factor at end of scratch
     k = _nfactors-1;  //last factor
@@ -148,18 +149,79 @@ namespace CReps {
     //assert(sz == N)
     // END _fastcalc.fast_kron (output in `scratch`)
 
-    for(int i=0; i< _dim; i++) {
+    for(INT i=0; i< _dim; i++) {
       ret += scratch[i] * state->_dataptr[i];
     }
     delete [] scratch;
     return ret;
   }
 
+
+  /****************************************************************************\
+  |* DMEffectCRep_Computational                                               *|
+  \****************************************************************************/
+
+    //class DMEffectCRep_Computational :public DMEffectCRep {
+    //public:
+    //INT nfactors;
+    //INT zvals_int;
+    //INT abs_elval;
+
+  DMEffectCRep_Computational::DMEffectCRep_Computational(INT nfactors, INT zvals_int, double abs_elval, INT dim)
+    :DMEffectCRep(dim)
+  {
+    _nfactors = nfactors;
+    _zvals_int = zvals_int;
+    _abs_elval = abs_elval;
+  }
+
+  DMEffectCRep_Computational::~DMEffectCRep_Computational() { }
+    
+  double DMEffectCRep_Computational::probability(DMStateCRep* state) {
+    // The logic here is very similar to the todense method in the Python rep version
+    // Here we don't bother to compute the dense vector - we just perform the
+    // dot product using only the nonzero vector elements.
+    INT& N = _nfactors;
+    INT nNonzero = 1 << N; // 2**N
+    INT finalIndx, k, base;
+    double ret = 0.0;
+    
+    for(INT finds=0; finds < nNonzero; finds++) {
+
+      //Compute finalIndx
+      finalIndx = 0; base = 1 << (2*N-2); //4**(N-1) = 2**(2N-2)
+      for(k=0; k<N; k++) {
+	finalIndx += ((finds >> k) & 1) * 3 * base;
+	base = base >> 2; // /= 4 so base == 4**(N-1-k)
+      }
+
+      //Apply result
+      if(parity(finds & _zvals_int))
+	ret -= _abs_elval * state->_dataptr[finalIndx]; // minus sign
+      else
+	ret += _abs_elval * state->_dataptr[finalIndx];
+    }
+    return ret;
+  }
+
+  INT DMEffectCRep_Computational::parity(INT x) {
+    // int64-bit specific
+    x = (x & 0x00000000FFFFFFFF)^(x >> 32);
+    x = (x & 0x000000000000FFFF)^(x >> 16);
+    x = (x & 0x00000000000000FF)^(x >> 8);
+    x = (x & 0x000000000000000F)^(x >> 4);
+    x = (x & 0x0000000000000003)^(x >> 2);
+    x = (x & 0x0000000000000001)^(x >> 1);
+    return x & 1; // return the last bit (0 or 1)
+  }
+
+
+
   /****************************************************************************\
   |* DMGateCRep                                                               *|
   \****************************************************************************/
 
-  DMGateCRep::DMGateCRep(int dim) {
+  DMGateCRep::DMGateCRep(INT dim) {
     _dim = dim;
   }
   DMGateCRep::~DMGateCRep() { }
@@ -169,7 +231,7 @@ namespace CReps {
   |* DMGateCRep_Dense                                                         *|
   \****************************************************************************/
 
-  DMGateCRep_Dense::DMGateCRep_Dense(double* data, int dim)
+  DMGateCRep_Dense::DMGateCRep_Dense(double* data, INT dim)
     :DMGateCRep(dim)
   {
     _dataptr = data;
@@ -180,11 +242,11 @@ namespace CReps {
 				       DMStateCRep* outstate) {
     DEBUG(std::cout << "Dense acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
-    int k;
-    for(int i=0; i< _dim; i++) {
+    INT k;
+    for(INT i=0; i< _dim; i++) {
       outstate->_dataptr[i] = 0.0;
       k = i*_dim; // "row" offset into _dataptr, so dataptr[k+j] ~= dataptr[i,j]
-      for(int j=0; j< _dim; j++) {
+      for(INT j=0; j< _dim; j++) {
 	outstate->_dataptr[i] += _dataptr[k+j] * state->_dataptr[j];
       }
     }
@@ -196,9 +258,9 @@ namespace CReps {
 					       DMStateCRep* outstate) {
     DEBUG(std::cout << "Dense adjoint_acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
-    for(int i=0; i< _dim; i++) {
+    for(INT i=0; i< _dim; i++) {
       outstate->_dataptr[i] = 0.0;
-      for(int j=0; j< _dim; j++) {
+      for(INT j=0; j< _dim; j++) {
 	outstate->_dataptr[i] += _dataptr[j*_dim+i] * state->_dataptr[j];
       }
     }
@@ -211,10 +273,10 @@ namespace CReps {
   |* DMGateCRep_Embedded                                                      *|
   \****************************************************************************/
 
-  DMGateCRep_Embedded::DMGateCRep_Embedded(DMGateCRep* embedded_gate_crep, int* noop_incrementers,
-					   int* numBasisEls_noop_blankaction, int* baseinds, int* blocksizes,
-					   int embedded_dim, int nComponentsInActiveBlock, int iActiveBlock,
-					   int nBlocks, int dim)
+  DMGateCRep_Embedded::DMGateCRep_Embedded(DMGateCRep* embedded_gate_crep, INT* noop_incrementers,
+					   INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
+					   INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
+					   INT nBlocks, INT dim)
     :DMGateCRep(dim)
   {
     _embedded_gate_crep = embedded_gate_crep;
@@ -238,10 +300,10 @@ namespace CReps {
     //                                         self.noop_incrementers,
     //                                         self.numBasisEls_noop_blankaction,
     //                                         self.baseinds)
-    int i, j, k, vec_index_noop = 0;
-    int nParts = _nComponents;
-    int nActionIndices = _embeddedDim;
-    int offset;
+    INT i, j, k, vec_index_noop = 0;
+    INT nParts = _nComponents;
+    INT nActionIndices = _embeddedDim;
+    INT offset;
 
     double* state_data = state->_dataptr;
     double* outstate_data = out_state->_dataptr;
@@ -249,7 +311,7 @@ namespace CReps {
     //zero-out output state initially
     for(i=0; i<_dim; i++) outstate_data[i] = 0.0;
 
-    int b[100]; // could alloc dynamically (LATER?)
+    INT b[100]; // could alloc dynamically (LATER?)
     assert(nParts <= 100); // need to increase size of static arrays above
     for(i=0; i<nParts; i++) b[i] = 0;
 
@@ -302,10 +364,10 @@ namespace CReps {
     //Note: exactly the same as acton(...) but calls embedded gate's adjoint_acton
     DEBUG(std::cout << "Emedded adjoint_acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
-    int i, j, k, vec_index_noop = 0;
-    int nParts = _nComponents;
-    int nActionIndices = _embeddedDim;
-    int offset;
+    INT i, j, k, vec_index_noop = 0;
+    INT nParts = _nComponents;
+    INT nActionIndices = _embeddedDim;
+    INT offset;
 
     double* state_data = state->_dataptr;
     double* outstate_data = out_state->_dataptr;
@@ -313,7 +375,7 @@ namespace CReps {
     //zero-out output state initially
     for(i=0; i<_dim; i++) outstate_data[i] = 0.0;
 
-    int b[100]; // could alloc dynamically (LATER?)
+    INT b[100]; // could alloc dynamically (LATER?)
     assert(nParts <= 100); // need to increase size of static arrays above
     for(i=0; i<nParts; i++) b[i] = 0;
 
@@ -417,7 +479,7 @@ namespace CReps {
       DMStateCRep temp_state(_dim); tmp2 = &temp_state;
 
       //Act with additional gates: tmp1 -> tmp2 then swap, so output in tmp1
-      for(int i=nfactors-2; i >= 0; i--) {
+      for(INT i=nfactors-2; i >= 0; i--) {
 	_factor_gate_creps[i]->adjoint_acton(tmp1,tmp2);
 	t = tmp1; tmp1 = tmp2; tmp2 = t;
       }
@@ -436,10 +498,10 @@ namespace CReps {
   /****************************************************************************\
   |* DMGateCRep_Lindblad                                                      *|
   \****************************************************************************/
-  DMGateCRep_Lindblad::DMGateCRep_Lindblad(double* A_data, int* A_indices, int* A_indptr, int nnz,
-			double mu, double eta, int m_star, int s, int dim,
-			double* unitarypost_data, int* unitarypost_indices,
-			int* unitarypost_indptr, int unitarypost_nnz)
+  DMGateCRep_Lindblad::DMGateCRep_Lindblad(double* A_data, INT* A_indices, INT* A_indptr, INT nnz,
+			double mu, double eta, INT m_star, INT s, INT dim,
+			double* unitarypost_data, INT* unitarypost_indices,
+			INT* unitarypost_indptr, INT unitarypost_nnz)
     :DMGateCRep(dim)
   {
     _U_data = unitarypost_data;
@@ -462,7 +524,7 @@ namespace CReps {
 
   DMStateCRep* DMGateCRep_Lindblad::acton(DMStateCRep* state, DMStateCRep* out_state)
   {
-    int i, j;
+    INT i, j;
     DMStateCRep* init_state = new DMStateCRep(_dim);
     DEBUG(std::cout << "Lindblad acton called!" << _U_nnz << ", " << _A_nnz << std::endl);
     DEBUG(state->print("INPUT"));
@@ -482,7 +544,7 @@ namespace CReps {
 	  
     // BEGIN state = _fastcalc.custom_expm_multiply_simple_core(
     //     A.data, A.indptr, A.indices, state, mu, m_star, s, tol, eta)
-    int N = _dim; // = length(_A_indptr)-1
+    INT N = _dim; // = length(_A_indptr)-1
     if(_s == 0) { // nothing to do - just copy input to output
       out_state->copy_from(init_state);
       delete init_state;
@@ -517,18 +579,18 @@ namespace CReps {
   /****************************************************************************\
   |* SVStateCRep                                                              *|
   \****************************************************************************/
-  SVStateCRep::SVStateCRep(int dim) {
+  SVStateCRep::SVStateCRep(INT dim) {
     _dataptr = new dcomplex[dim];
-    for(int i=0; i<dim; i++) _dataptr[i] = 0;
+    for(INT i=0; i<dim; i++) _dataptr[i] = 0;
     _dim = dim;
     _ownmem = true;
   }
   
-  SVStateCRep::SVStateCRep(dcomplex* data, int dim, bool copy=false) {
+  SVStateCRep::SVStateCRep(dcomplex* data, INT dim, bool copy=false) {
     //DEGUG std::cout << "SVStateCRep initialized w/dim = " << dim << std::endl;
     if(copy) {
       _dataptr = new dcomplex[dim];
-      for(int i=0; i<dim; i++) {
+      for(INT i=0; i<dim; i++) {
 	_dataptr[i] = data[i];
       }
     } else {
@@ -545,20 +607,20 @@ namespace CReps {
 
   void SVStateCRep::print(const char* label) {
     std::cout << label << " = [";
-    for(int i=0; i<_dim; i++) std::cout << _dataptr[i] << " ";
+    for(INT i=0; i<_dim; i++) std::cout << _dataptr[i] << " ";
     std::cout << "]" << std::endl;
   }
 
   void SVStateCRep::copy_from(SVStateCRep* st) {
     assert(_dim == st->_dim);
-    for(int i=0; i<_dim; i++)
+    for(INT i=0; i<_dim; i++)
       _dataptr[i] = st->_dataptr[i];
   }
 
   /****************************************************************************\
   |* SVEffectCRep                                                             *|
   \****************************************************************************/
-  SVEffectCRep::SVEffectCRep(int dim) {
+  SVEffectCRep::SVEffectCRep(INT dim) {
     _dim = dim;
   }
   SVEffectCRep::~SVEffectCRep() { }
@@ -567,7 +629,7 @@ namespace CReps {
   /****************************************************************************\
   |* SVEffectCRep_Dense                                                       *|
   \****************************************************************************/
-  SVEffectCRep_Dense::SVEffectCRep_Dense(dcomplex* data, int dim)
+  SVEffectCRep_Dense::SVEffectCRep_Dense(dcomplex* data, INT dim)
     :SVEffectCRep(dim)
   {
     _dataptr = data;
@@ -581,7 +643,7 @@ namespace CReps {
 
   dcomplex SVEffectCRep_Dense::amplitude(SVStateCRep* state) {
     dcomplex ret = 0.0;
-    for(int i=0; i< _dim; i++) {
+    for(INT i=0; i< _dim; i++) {
       ret += std::conj(_dataptr[i]) * state->_dataptr[i];
     }
     return ret;
@@ -593,8 +655,8 @@ namespace CReps {
   \****************************************************************************/
 
   SVEffectCRep_TensorProd::SVEffectCRep_TensorProd(dcomplex* kron_array,
-						   int* factordims, int nfactors,
-						   int max_factor_dim, int dim) 
+						   INT* factordims, INT nfactors,
+						   INT max_factor_dim, INT dim) 
     :SVEffectCRep(dim)
   {
     _kron_array = kron_array;
@@ -616,11 +678,11 @@ namespace CReps {
 
     // BEGIN _fastcalc.fast_kron(scratch, _kron_array, _factordims)
     // - TODO: make this into seprate function & reuse in fastcals.pyx?
-    int N = _dim;
-    int i, j, k, sz, off, endoff, krow;
+    INT N = _dim;
+    INT i, j, k, sz, off, endoff, krow;
     dcomplex mult;
     dcomplex* array = _kron_array;
-    int* arraysizes = _factordims;
+    INT* arraysizes = _factordims;
 
     // Put last factor at end of scratch
     k = _nfactors-1;  //last factor
@@ -655,7 +717,7 @@ namespace CReps {
     //assert(sz == N)
     // END _fastcalc.fast_kron (output in `scratch`)
 
-    for(int i=0; i< _dim; i++) {
+    for(INT i=0; i< _dim; i++) {
       ret += std::conj(scratch[i]) * state->_dataptr[i];
         //conjugate scratch b/c we assume _kron_array contains
         // info for building up the *column* "effect vector" E
@@ -669,7 +731,7 @@ namespace CReps {
   |* SVGateCRep                                                               *|
   \****************************************************************************/
 
-  SVGateCRep::SVGateCRep(int dim) {
+  SVGateCRep::SVGateCRep(INT dim) {
     _dim = dim;
   }
   SVGateCRep::~SVGateCRep() { }
@@ -679,7 +741,7 @@ namespace CReps {
   |* SVGateCRep_Dense                                                         *|
   \****************************************************************************/
 
-  SVGateCRep_Dense::SVGateCRep_Dense(dcomplex* data, int dim)
+  SVGateCRep_Dense::SVGateCRep_Dense(dcomplex* data, INT dim)
     :SVGateCRep(dim)
   {
     _dataptr = data;
@@ -690,11 +752,11 @@ namespace CReps {
 				       SVStateCRep* outstate) {
     DEBUG(std::cout << "Dense acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
-    int k;
-    for(int i=0; i< _dim; i++) {
+    INT k;
+    for(INT i=0; i< _dim; i++) {
       outstate->_dataptr[i] = 0.0;
       k = i*_dim; // "row" offset into _dataptr, so dataptr[k+j] ~= dataptr[i,j]
-      for(int j=0; j< _dim; j++) {
+      for(INT j=0; j< _dim; j++) {
 	outstate->_dataptr[i] += _dataptr[k+j] * state->_dataptr[j];
       }
     }
@@ -706,9 +768,9 @@ namespace CReps {
 					       SVStateCRep* outstate) {
     DEBUG(std::cout << "Dense adjoint_acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
-    for(int i=0; i< _dim; i++) {
+    for(INT i=0; i< _dim; i++) {
       outstate->_dataptr[i] = 0.0;
-      for(int j=0; j< _dim; j++) {
+      for(INT j=0; j< _dim; j++) {
 	outstate->_dataptr[i] += std::conj(_dataptr[j*_dim+i]) * state->_dataptr[j];
       }
     }
@@ -721,10 +783,10 @@ namespace CReps {
   |* SVGateCRep_Embedded                                                      *|
   \****************************************************************************/
 
-  SVGateCRep_Embedded::SVGateCRep_Embedded(SVGateCRep* embedded_gate_crep, int* noop_incrementers,
-					   int* numBasisEls_noop_blankaction, int* baseinds, int* blocksizes,
-					   int embedded_dim, int nComponentsInActiveBlock, int iActiveBlock,
-					   int nBlocks, int dim)
+  SVGateCRep_Embedded::SVGateCRep_Embedded(SVGateCRep* embedded_gate_crep, INT* noop_incrementers,
+					   INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
+					   INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
+					   INT nBlocks, INT dim)
     :SVGateCRep(dim)
   {
     _embedded_gate_crep = embedded_gate_crep;
@@ -748,10 +810,10 @@ namespace CReps {
     //                                         self.noop_incrementers,
     //                                         self.numBasisEls_noop_blankaction,
     //                                         self.baseinds)
-    int i, j, k, vec_index_noop = 0;
-    int nParts = _nComponents;
-    int nActionIndices = _embeddedDim;
-    int offset;
+    INT i, j, k, vec_index_noop = 0;
+    INT nParts = _nComponents;
+    INT nActionIndices = _embeddedDim;
+    INT offset;
 
     dcomplex* state_data = state->_dataptr;
     dcomplex* outstate_data = out_state->_dataptr;
@@ -759,7 +821,7 @@ namespace CReps {
     //zero-out output state initially
     for(i=0; i<_dim; i++) outstate_data[i] = 0.0;
 
-    int b[100]; // could alloc dynamically (LATER?)
+    INT b[100]; // could alloc dynamically (LATER?)
     assert(nParts <= 100); // need to increase size of static arrays above
     for(i=0; i<nParts; i++) b[i] = 0;
 
@@ -812,10 +874,10 @@ namespace CReps {
     //Note: exactly the same as acton(...) but calls embedded gate's adjoint_acton
     DEBUG(std::cout << "Emedded adjoint_acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
-    int i, j, k, vec_index_noop = 0;
-    int nParts = _nComponents;
-    int nActionIndices = _embeddedDim;
-    int offset;
+    INT i, j, k, vec_index_noop = 0;
+    INT nParts = _nComponents;
+    INT nActionIndices = _embeddedDim;
+    INT offset;
 
     dcomplex* state_data = state->_dataptr;
     dcomplex* outstate_data = out_state->_dataptr;
@@ -823,7 +885,7 @@ namespace CReps {
     //zero-out output state initially
     for(i=0; i<_dim; i++) outstate_data[i] = 0.0;
 
-    int b[100]; // could alloc dynamically (LATER?)
+    INT b[100]; // could alloc dynamically (LATER?)
     assert(nParts <= 100); // need to increase size of static arrays above
     for(i=0; i<nParts; i++) b[i] = 0;
 
@@ -927,7 +989,7 @@ namespace CReps {
       SVStateCRep temp_state(_dim); tmp2 = &temp_state;
 
       //Act with additional gates: tmp1 -> tmp2 then swap, so output in tmp1
-      for(int i=nfactors-2; i >= 0; i--) {
+      for(INT i=nfactors-2; i >= 0; i--) {
 	_factor_gate_creps[i]->adjoint_acton(tmp1,tmp2);
 	t = tmp1; tmp1 = tmp2; tmp2 = t;
       }
@@ -949,7 +1011,7 @@ namespace CReps {
   |* SBStateCRep                                                              *|
   \****************************************************************************/
 
-  SBStateCRep::SBStateCRep(int* smatrix, int* pvectors, dcomplex* amps, int namps, int n) {
+  SBStateCRep::SBStateCRep(INT* smatrix, INT* pvectors, dcomplex* amps, INT namps, INT n) {
     _smatrix = smatrix;
     _pvectors = pvectors;
     _amps = amps;
@@ -960,12 +1022,12 @@ namespace CReps {
     rref(); // initializes _zblock_start
   }
 
-  SBStateCRep::SBStateCRep(int namps, int n) {
+  SBStateCRep::SBStateCRep(INT namps, INT n) {
     _n = n;
     _2n = 2*n;
     _namps = namps;
-    _smatrix = new int[_2n*_2n];
-    _pvectors = new int[_namps*_2n];
+    _smatrix = new INT[_2n*_2n];
+    _pvectors = new INT[_namps*_2n];
     _amps = new dcomplex[_namps];
     _ownmem = true;
     _zblock_start = -1;
@@ -979,7 +1041,7 @@ namespace CReps {
     }
   }
   
-  void SBStateCRep::push_view(std::vector<int>& view) {
+  void SBStateCRep::push_view(std::vector<INT>& view) {
     _view_filters.push_back(view);
   }
   
@@ -987,30 +1049,30 @@ namespace CReps {
     _view_filters.pop_back();
   }
     
-  void SBStateCRep::clifford_update(int* smatrix, int* svector, dcomplex* Umx) {
+  void SBStateCRep::clifford_update(INT* smatrix, INT* svector, dcomplex* Umx) {
     //vs = (_np.array([1,0],complex), _np.array([0,1],complex)) # (v0,v1)
     DEBUG(std::cout << "Clifford Update BEGIN" << std::endl);
-    int i,k,ip;
-    std::vector<std::vector<int> >::iterator it;
-    std::vector<int>::iterator it2;
+    INT i,k,ip;
+    std::vector<std::vector<INT> >::iterator it;
+    std::vector<INT>::iterator it2;
 
-    std::vector<int> qubits(_n);
+    std::vector<INT> qubits(_n);
     for(i=0; i<_n; i++) qubits[i] = i; // start with all qubits being acted on
     for(it=_view_filters.begin(); it != _view_filters.end(); ++it) {
-      std::vector<int>& qfilter = *it;
-      std::vector<int> new_qubits(qfilter.size());
-      for(i=0; i < (int)qfilter.size(); i++)
+      std::vector<INT>& qfilter = *it;
+      std::vector<INT> new_qubits(qfilter.size());
+      for(i=0; i < (INT)qfilter.size(); i++)
 	new_qubits[i] = qubits[ qfilter[i] ]; // apply each filter
       qubits.resize( new_qubits.size() );
-      for(i=0; i < (int)qfilter.size(); i++)
+      for(i=0; i < (INT)qfilter.size(); i++)
 	qubits[i] = new_qubits[i]; //copy new_qubits -> qubits (maybe a faster way?)
     }
 
-    int nQ = qubits.size(); //number of qubits being acted on (<= n in general)
-    std::vector<std::vector<int> > sampled_states(_namps);
+    INT nQ = qubits.size(); //number of qubits being acted on (<= n in general)
+    std::vector<std::vector<INT> > sampled_states(_namps);
     std::vector<std::vector<dcomplex> > sampled_amplitudes(_namps);
 
-    int action_size = pow(2,qubits.size());
+    INT action_size = pow(2,qubits.size());
     std::vector<dcomplex> outstate(action_size);
 
     // Step1: Update global amplitudes - Part A
@@ -1036,7 +1098,7 @@ namespace CReps {
 
     // Step3: Update global amplitudes - Part B
     for(ip=0; ip<_namps; ip++) {
-      const std::vector<int> & base_state = sampled_states[ip];
+      const std::vector<INT> & base_state = sampled_states[ip];
       const std::vector<dcomplex> & ampls = sampled_amplitudes[ip];
 
       //DEBUG!!! - print Umx
@@ -1064,9 +1126,9 @@ namespace CReps {
       for(k=0; k<action_size; k++) {
 	dcomplex comp = outstate[k]; // component of output state
 	if(std::abs(comp) > 1e-6) {
-	  std::vector<int> zvals(base_state);
-	  std::vector<int> k_zvals(nQ);
-	  for(i=0; i<nQ; i++) k_zvals[i] = int( (k >> (nQ-1-i)) & 1);  // hack to extract binary(k)
+	  std::vector<INT> zvals(base_state);
+	  std::vector<INT> k_zvals(nQ);
+	  for(i=0; i<nQ; i++) k_zvals[i] = INT( (k >> (nQ-1-i)) & 1);  // hack to extract binary(k)
 	  for(i=0; i<nQ; i++) zvals[qubits[i]] = k_zvals[i];
 	  
 	  DEBUG(std::cout << "GETTING CANONICAL AMPLITUDE for B' = " << zvals[0] << " actual=" << comp << std::endl);
@@ -1085,15 +1147,15 @@ namespace CReps {
   }
 
   
-  dcomplex SBStateCRep::extract_amplitude(std::vector<int>& zvals) {
+  dcomplex SBStateCRep::extract_amplitude(std::vector<INT>& zvals) {
     dcomplex ampl = 0;
-    for(int ip=0; ip < _namps; ip++) {
+    for(INT ip=0; ip < _namps; ip++) {
       ampl += _amps[ip] * canonical_amplitude_of_target(ip, zvals);
     }
     return ampl;
   }
 
-  double SBStateCRep::measurement_probability(std::vector<int>& zvals) {
+  double SBStateCRep::measurement_probability(std::vector<INT>& zvals) {
     // Could make this faster in the future by using anticommutator?
     // - maybe could use a _canonical_probability for each ip that is
     //   essentially the 'stabilizer_measurement_prob' fn? -- but need to
@@ -1106,43 +1168,43 @@ namespace CReps {
 
   void SBStateCRep::copy_from(SBStateCRep* other) {
     assert(_n == other->_n && _namps == other->_namps); //make sure we don't need to allocate anything
-    int i;
+    INT i;
     for(i=0;i<_2n*_2n;i++) _smatrix[i] = other->_smatrix[i];
     for(i=0;i<_namps*_2n;i++) _pvectors[i] = other->_pvectors[i];
     for(i=0;i<_namps;i++) _amps[i] = other->_amps[i];
     _zblock_start = other->_zblock_start;
     _view_filters.clear();
-    for(i=0; i<(int)other->_view_filters.size(); i++)
+    for(i=0; i<(INT)other->_view_filters.size(); i++)
       _view_filters.push_back( other->_view_filters[i] );
   }
     
 
-  int SBStateCRep::udot1(int i, int j) {
+  INT SBStateCRep::udot1(INT i, INT j) {
     // dot(smatrix[:,i].T, U, smatrix[:,j])
-    int ret = 0;
-    for(int k=0; k < _n; k++)
+    INT ret = 0;
+    for(INT k=0; k < _n; k++)
       ret += _smatrix[(k+_n)*_2n+i] * _smatrix[k*_2n+j];
     return ret;
   }
 
-  void SBStateCRep::udot2(int* out, int* smatrix1, int* smatrix2) {
+  void SBStateCRep::udot2(INT* out, INT* smatrix1, INT* smatrix2) {
     // out = dot(smatrix1.T, U, smatrix2)
-    int tmp;
-    for(int i=0; i<_2n; i++) {
-      for(int j=0; j<_2n; j++) {
+    INT tmp;
+    for(INT i=0; i<_2n; i++) {
+      for(INT j=0; j<_2n; j++) {
 	tmp = 0;
-	for(int k=0; k < _n; k++)
+	for(INT k=0; k < _n; k++)
 	  tmp += smatrix1[(k+_n)*_2n+i] * smatrix2[k*_2n+j];
 	out[i*_2n+j] = tmp;
       }
     }
   }
   
-  void SBStateCRep::colsum(int i, int j) {
-    int k,row;
-    int* pvec;
-    int* s = _smatrix;
-    for(int p=0; p<_namps; p++) {
+  void SBStateCRep::colsum(INT i, INT j) {
+    INT k,row;
+    INT* pvec;
+    INT* s = _smatrix;
+    for(INT p=0; p<_namps; p++) {
       pvec = &_pvectors[ _2n*p ]; // p-th vector
       pvec[i] = (pvec[i] + pvec[j] + 2* udot1(i,j)) % 4;
       for(k=0; k<_n; k++) {
@@ -1154,15 +1216,15 @@ namespace CReps {
     }
   }
   
-  void SBStateCRep::colswap(int i, int j) {
-    int tmp;
-    int* pvec;
-    for(int k=0; k<_2n; k++) {
+  void SBStateCRep::colswap(INT i, INT j) {
+    INT tmp;
+    INT* pvec;
+    for(INT k=0; k<_2n; k++) {
       tmp = _smatrix[k*_2n+i];
       _smatrix[k*_2n+i] = _smatrix[k*_2n+j];
       _smatrix[k*_2n+j] = tmp;
     }
-    for(int p=0; p<_namps; p++) {
+    for(INT p=0; p<_namps; p++) {
       pvec = &_pvectors[ _2n*p ]; // p-th vector
       tmp = pvec[i];
       pvec[i] = pvec[j];
@@ -1172,7 +1234,7 @@ namespace CReps {
   
   void SBStateCRep::rref() {
     //Pass1: form X-block (of *columns*)
-    int i=0, j,k,m; // current *column* (to match ref, but our rep is transposed!)
+    INT i=0, j,k,m; // current *column* (to match ref, but our rep is transposed!)
     for(j=0; j<_n; j++) { // current *row*
       for(k=i; k<_n; k++) { // set k = column with X/Y in j-th position
 	if(_smatrix[j*_2n+k] == 1) break; // X or Y check
@@ -1209,16 +1271,16 @@ namespace CReps {
   }
 
 
-  //result = _np.array(zvals_to_acton,int);
-  dcomplex SBStateCRep::apply_xgen(int igen, int pgen, std::vector<int>& zvals_to_acton,
-				   dcomplex ampl, std::vector<int>& result) {
+  //result = _np.array(zvals_to_acton,INT);
+  dcomplex SBStateCRep::apply_xgen(INT igen, INT pgen, std::vector<INT>& zvals_to_acton,
+				   dcomplex ampl, std::vector<INT>& result) {
 
     dcomplex new_amp = (pgen/2 == 1) ? -ampl : ampl;
     //DEBUG std::cout << "new_amp = "<<new_amp<<std::endl;
     for(std::size_t i=0; i<result.size(); i++)
       result[i] = zvals_to_acton[i];
     
-    for(int j=0; j<_n; j++) { // for each element (literal) in generator
+    for(INT j=0; j<_n; j++) { // for each element (literal) in generator
       if(_smatrix[j*_2n+igen] == 1) { // # X or Y
 	result[j] = 1-result[j]; //flip!
 	// X => a' == a constraint on new/old amplitudes, so nothing to do
@@ -1239,15 +1301,15 @@ namespace CReps {
     return new_amp;
   }
         
-  dcomplex SBStateCRep::get_target_ampl(std::vector<int>& tgt, std::vector<int>& anchor, dcomplex anchor_amp, int ip) {
+  dcomplex SBStateCRep::get_target_ampl(std::vector<INT>& tgt, std::vector<INT>& anchor, dcomplex anchor_amp, INT ip) {
     // requires just a single pass through X-block
-    std::vector<int> zvals(anchor);
+    std::vector<INT> zvals(anchor);
     dcomplex amp = anchor_amp; //start with anchor state
-    int i,j,k, lead = -1;
+    INT i,j,k, lead = -1;
     DEBUG(std::cout << "BEGIN get_target_ampl" << std::endl);
     
     for(i=0; i<_zblock_start; i++) { // index of current generator
-      int gen_p = _pvectors[ip*_2n + i]; //phase of generator
+      INT gen_p = _pvectors[ip*_2n + i]; //phase of generator
       gen_p = (gen_p + 3*udot1(i,i)) % 4;  //counts number of Y's => -i's
       assert(gen_p == 0 || gen_p == 2); //Logic error: phase should be +/- only!
       
@@ -1266,7 +1328,7 @@ namespace CReps {
       if(zvals[lead] != tgt[lead]) {
 	// then applying this generator is productive - do it!
 	DEBUG(std::cout << "Applying XGEN amp=" << amp << std::endl);
-	std::vector<int> zvals_copy(zvals);
+	std::vector<INT> zvals_copy(zvals);
 	amp = apply_xgen(i, gen_p, zvals, amp, zvals_copy);
 	zvals = zvals_copy; //will this work (copy)?
 
@@ -1289,26 +1351,26 @@ namespace CReps {
     return 0; // just to avoid warning
   }
   
-  dcomplex SBStateCRep::canonical_amplitude_of_target(int ip, std::vector<int>& target) {
+  dcomplex SBStateCRep::canonical_amplitude_of_target(INT ip, std::vector<INT>& target) {
     rref(); // ensure we're in reduced row echelon form
         
     // Stage1: go through Z-block columns and find an "anchor" - the first
     // basis state that is allowed given the Z-block parity constraints.
     // (In Z-block, cols can have only Z,I literals)
-    int i,j;
+    INT i,j;
     DEBUG(std::cout << "CanonicalAmps STAGE1: zblock_start = " << _zblock_start << std::endl);
-    std::vector<int> anchor(_n); // "anchor" basis state (zvals), which gets amplitude 1.0 by definition
+    std::vector<INT> anchor(_n); // "anchor" basis state (zvals), which gets amplitude 1.0 by definition
     for(i=0; i<_n; i++) anchor[i] = 0;
     
-    int lead = _n;
+    INT lead = _n;
     for(i=_n-1; i >= _zblock_start; i--) { //index of current generator
-      int gen_p = _pvectors[ip*_2n + i]; //phase of generator
+      INT gen_p = _pvectors[ip*_2n + i]; //phase of generator
       gen_p = (gen_p + 3*udot1(i,i)) % 4;  //counts number of Y's => -i's
       assert(gen_p == 0 || gen_p == 2);
       DEBUG(std::cout << "STARTING LOOP!" << std::endl);
             
       // get positions of Zs
-      std::vector<int> zpos;
+      std::vector<INT> zpos;
       for(j=0; j<_n; j++) {
 	if(_smatrix[(j+_n)*_2n+i] == 1) zpos.push_back(j);
       }      
@@ -1316,10 +1378,10 @@ namespace CReps {
       // set values of anchor between zpos[0] and lead
       // (between current leading-Z position and the last iteration's,
       //  which marks the point at which anchor has been initialized to)
-      int fixed1s = 0; // relevant number of 1s fixed by the already-initialized part of 'anchor'
-      int target1s = 0; // number of 1s in target state, which we want to check for Z-block compatibility
-      std::vector<int> zpos_to_fill;
-      std::vector<int>::iterator it;
+      INT fixed1s = 0; // relevant number of 1s fixed by the already-initialized part of 'anchor'
+      INT target1s = 0; // number of 1s in target state, which we want to check for Z-block compatibility
+      std::vector<INT> zpos_to_fill;
+      std::vector<INT>::iterator it;
       for(it=zpos.begin(); it!=zpos.end(); ++it) {
 	j = *it;
 	if(j >= lead) {
@@ -1331,12 +1393,12 @@ namespace CReps {
       }
 
       assert(zpos_to_fill.size() > 0); // structure of rref Z-block should ensure this
-      int parity = gen_p/2;
-      int eff_parity = (parity - (fixed1s % 2)) % 2; // effective parity for zpos_to_fill
+      INT parity = gen_p/2;
+      INT eff_parity = (parity - (fixed1s % 2)) % 2; // effective parity for zpos_to_fill
 
       DEBUG(std::cout << "  Current gen = "<<i<<" phase = "<<gen_p<<" zpos="<<zpos.size()<<" fixed1s="<<fixed1s<<" tofill="<<zpos_to_fill.size()<<" eff_parity="<<eff_parity<<" lead="<<lead << std::endl);
       DEBUG(std::cout << "   -anchor: ");
-      DEBUG(for(int dbi=0; dbi<_n; dbi++) std::cout << anchor[dbi] << "  ");
+      DEBUG(for(INT dbi=0; dbi<_n; dbi++) std::cout << anchor[dbi] << "  ");
       
       if((target1s % 2) != parity)
 	return dcomplex(0.0); // target fails this parity check -> it's amplitude == 0 (OK)
@@ -1349,7 +1411,7 @@ namespace CReps {
       }
       lead = zpos_to_fill[0]; // update the leading-Z index
       DEBUG(std::cout << "   ==> ");
-      DEBUG(for(int dbi=0; dbi<_n; dbi++) std::cout << anchor[dbi] << "  ");
+      DEBUG(for(INT dbi=0; dbi<_n; dbi++) std::cout << anchor[dbi] << "  ");
       DEBUG(std::cout << std::endl);
     }
     
@@ -1360,7 +1422,7 @@ namespace CReps {
     // Since any/all comp. basis state generators can form all and only the
     // Z-literal only (Z-block) generators 's' is simplly the number of
     // X-block generators (= self.zblock_start).
-    int s = _zblock_start;
+    INT s = _zblock_start;
     dcomplex anchor_amp = 1/(pow(sqrt(2.0),s));
     
     //STAGE 2b - for sampling a set
@@ -1377,12 +1439,12 @@ namespace CReps {
     return get_target_ampl(target,anchor,anchor_amp,ip);
   }
     
-  void SBStateCRep::canonical_amplitudes_sample(int ip, std::vector<int> qs_to_sample,
-						std::vector<int>& anchor, std::vector<dcomplex>& amp_samples) {
+  void SBStateCRep::canonical_amplitudes_sample(INT ip, std::vector<INT> qs_to_sample,
+						std::vector<INT>& anchor, std::vector<dcomplex>& amp_samples) {
     rref(); // ensure we're in reduced row echelon form
 
-    int i,j,k;
-    int remaining = pow(2,qs_to_sample.size()); //number we still need to find
+    INT i,j,k;
+    INT remaining = pow(2,qs_to_sample.size()); //number we still need to find
     assert(amp_samples.size() == remaining);
     for(i=0; i<remaining; i++) amp_samples[i]= std::nan("empty slot");
     // what we'll eventually return - holds amplitudes of all
@@ -1394,14 +1456,14 @@ namespace CReps {
     assert(anchor.size() == _n); // "anchor" basis state (zvals), which gets amplitude 1.0 by definition
     for(i=0; i<_n; i++) anchor[i] = 0;
     
-    int lead = _n;
+    INT lead = _n;
     for(i=_n-1; i >= _zblock_start; i--) { //index of current generator
-      int gen_p = _pvectors[ip*_2n + i]; //phase of generator
+      INT gen_p = _pvectors[ip*_2n + i]; //phase of generator
       gen_p = (gen_p + 3*udot1(i,i)) % 4;  //counts number of Y's => -i's
       assert(gen_p == 0 || gen_p == 2);
             
       // get positions of Zs
-      std::vector<int> zpos;
+      std::vector<INT> zpos;
       for(j=0; j<_n; j++) {
 	if(_smatrix[(j+_n)*_2n+i] == 1) zpos.push_back(j);
       }
@@ -1409,9 +1471,9 @@ namespace CReps {
       // set values of anchor between zpos[0] and lead
       // (between current leading-Z position and the last iteration's,
       //  which marks the point at which anchor has been initialized to)
-      int fixed1s = 0; // relevant number of 1s fixed by the already-initialized part of 'anchor'
-      std::vector<int> zpos_to_fill;
-      std::vector<int>::iterator it;
+      INT fixed1s = 0; // relevant number of 1s fixed by the already-initialized part of 'anchor'
+      std::vector<INT> zpos_to_fill;
+      std::vector<INT>::iterator it;
       for(it=zpos.begin(); it!=zpos.end(); ++it) {
 	j = *it;
 	if(j >= lead) {
@@ -1421,8 +1483,8 @@ namespace CReps {
       }
 	
       assert(zpos_to_fill.size() > 0); // structure of rref Z-block should ensure this
-      int parity = gen_p/2;
-      int eff_parity = (parity - (fixed1s % 2)) % 2; // effective parity for zpos_to_fill
+      INT parity = gen_p/2;
+      INT eff_parity = (parity - (fixed1s % 2)) % 2; // effective parity for zpos_to_fill
 
       if(eff_parity == 0) { // even parity - fill with all 0s
 	// BUT already initalized to 0s, so don't need to do anything for anchor
@@ -1440,12 +1502,12 @@ namespace CReps {
     // Since any/all comp. basis state generators can form all and only the
     // Z-literal only (Z-block) generators 's' is simplly the number of
     // X-block generators (= self.zblock_start).
-    int s = _zblock_start;
+    INT s = _zblock_start;
     dcomplex anchor_amp = 1/(pow(sqrt(2.0),s));
     
     remaining -= 1;
-    int nk = qs_to_sample.size();
-    int anchor_indx = 0;
+    INT nk = qs_to_sample.size();
+    INT anchor_indx = 0;
     for(k=0; k<nk; k++) anchor_indx += anchor[qs_to_sample[k]]*pow(2,(nk-1-k));
     amp_samples[ anchor_indx ] = anchor_amp;
     
@@ -1457,22 +1519,22 @@ namespace CReps {
     // consider whether anchor with qs_to_sample indices updated
     // passes or fails each check
     for(i=_n-1; i >= _zblock_start; i--) { // index of current generator
-      int gen_p = _pvectors[ip*_2n + i]; //phase of generator
+      INT gen_p = _pvectors[ip*_2n + i]; //phase of generator
       gen_p = (gen_p + 3*udot1(i,i)) % 4;  //counts number of Y's => -i's
       
-      std::vector<int> zpos;
+      std::vector<INT> zpos;
       for(j=0; j<_n; j++) {
 	if(_smatrix[(j+_n)*_2n+i] == 1) zpos.push_back(j);
       }
       
-      std::vector<int> inds;
-      std::vector<int>::iterator it, it2;
-      int fixed1s = 0; // number of 1s in target state, which we want to check for Z-block compatibility
+      std::vector<INT> inds;
+      std::vector<INT>::iterator it, it2;
+      INT fixed1s = 0; // number of 1s in target state, which we want to check for Z-block compatibility
       for(it=zpos.begin(); it!=zpos.end(); ++it) {
 	j = *it;
 	it2 = std::find(qs_to_sample.begin(),qs_to_sample.end(),j);
 	if(it2 != qs_to_sample.end()) { // if j in qs_to_sample
-	  int jpos = it2 - qs_to_sample.begin();
+	  INT jpos = it2 - qs_to_sample.begin();
 	  inds.push_back( jpos ); // "sample" indices in parity check
 	}
 	else if(anchor[j] == 1) {
@@ -1480,15 +1542,15 @@ namespace CReps {
 	}
       }
       if(inds.size() > 0) {
-	int parity = (gen_p/2 - (fixed1s % 2)) % 2; // effective parity
-	int* b = new int[qs_to_sample.size()]; //els are just 0 or 1
-	int bi;
-	for(bi=0; bi<(int)qs_to_sample.size(); bi++) b[bi] = 0;
+	INT parity = (gen_p/2 - (fixed1s % 2)) % 2; // effective parity
+	INT* b = new INT[qs_to_sample.size()]; //els are just 0 or 1
+	INT bi;
+	for(bi=0; bi<(INT)qs_to_sample.size(); bi++) b[bi] = 0;
 	k = 0;
 	while(true) {
 	  // tup == b
-	  int tup_parity = 0;
-	  for(int kk=0; kk<(int)inds.size(); kk++) tup_parity += b[inds[kk]];
+	  INT tup_parity = 0;
+	  for(INT kk=0; kk<(INT)inds.size(); kk++) tup_parity += b[inds[kk]];
 	  if(tup_parity != parity) { // parity among inds is NOT allowed => set ampl to zero
 	    if(std::isnan(amp_samples[k].real())) remaining -= 1; //need NAN check here -- TODO replace -1 sentinels
 	    amp_samples[k] = 0.0;
@@ -1518,15 +1580,15 @@ namespace CReps {
     // Stage2: move through X-block processing existing amplitudes
     // (or processing only to move toward a target state?)
 
-    std::vector<int> target(anchor);
-    int* b = new int[qs_to_sample.size()]; //els are just 0 or 1
-    int bi;
-    for(bi=0; bi<(int)qs_to_sample.size(); bi++) b[bi] = 0;
+    std::vector<INT> target(anchor);
+    INT* b = new INT[qs_to_sample.size()]; //els are just 0 or 1
+    INT bi;
+    for(bi=0; bi<(INT)qs_to_sample.size(); bi++) b[bi] = 0;
     k = 0;
     while(true) {
       // tup == b
       if(std::isnan(amp_samples[k].real())) {
-	for(int kk=0; kk<(int)qs_to_sample.size(); kk++)
+	for(INT kk=0; kk<(INT)qs_to_sample.size(); kk++)
 	  target[qs_to_sample[kk]] = b[kk];
 	amp_samples[k] = get_target_ampl(target,anchor,anchor_amp,ip);
       }
@@ -1549,25 +1611,25 @@ namespace CReps {
     return;
   }
 
-  void SBStateCRep::apply_clifford_to_frame(int* s, int* p, std::vector<int> qubit_filter) {
+  void SBStateCRep::apply_clifford_to_frame(INT* s, INT* p, std::vector<INT> qubit_filter) {
     //for now, just embed s,p inside full-size s,p: (TODO: make this function more efficient!)
-    int* full_s = new int[_2n*_2n];
-    int* full_p = new int[_2n];
+    INT* full_s = new INT[_2n*_2n];
+    INT* full_p = new INT[_2n];
 
     // Embed s,p inside full_s and full_p
-    int i,j,ne = qubit_filter.size();
-    int two_ne = 2*ne;
+    INT i,j,ne = qubit_filter.size();
+    INT two_ne = 2*ne;
     for(i=0; i<_2n; i++) {
       for(j=0; j<_2n; j++) full_s[i*_2n+j] = (i==j) ? 1 : 0; // full_s == identity
     }
     for(i=0; i<_2n; i++) full_p[i] = 0; // full_p = zero
     
-    for(int ii=0; ii<ne; ii++) {
+    for(INT ii=0; ii<ne; ii++) {
       i = qubit_filter[ii];
       full_p[i] = p[ii];
       full_p[i+_n] = p[ii+ne];
       
-      for(int jj=0; jj<ne; jj++) {
+      for(INT jj=0; jj<ne; jj++) {
 	j = qubit_filter[jj];
 	full_s[i*_2n+j] = s[ii*two_ne+jj];
 	full_s[(i+_n)*_2n+j] = s[(ii+ne)*two_ne+jj];
@@ -1583,14 +1645,14 @@ namespace CReps {
   }
     
   
-  void SBStateCRep::apply_clifford_to_frame(int* s, int* p) {
-    int i,j,k,tmp;
+  void SBStateCRep::apply_clifford_to_frame(INT* s, INT* p) {
+    INT i,j,k,tmp;
     
     // Below we calculate the s and p for the output state using the formulas from
     // Hostens and De Moor PRA 71, 042315 (2005).
 
     // out_s = _mtx.dotmod2(s,self.s)
-    int* out_s = new int[_2n*_2n];
+    INT* out_s = new INT[_2n*_2n];
     //if(qubit_filter.size() == 0) {
     for(i=0; i<_2n; i++) {
       for(j=0; j<_2n; j++) {
@@ -1601,8 +1663,8 @@ namespace CReps {
       }
     }
     //} else {
-    //  int ii;
-    //  int ne = qubit_filter.size(); // number of qubits s,p act on
+    //  INT ii;
+    //  INT ne = qubit_filter.size(); // number of qubits s,p act on
     //  
     //  //use qubit_filter - only rows & cols of "full s" corresponding to qubit_filter are non-identity
     //  for(i=0; i<_2n*_2n; i++) out_s[i] = _smatrix[i]; // copy out_s = _smatrix
@@ -1611,7 +1673,7 @@ namespace CReps {
     //	i = qubit_filter[ii];
     //    for(j=0; j<_2n; j++) {
     //	  tmp = 0;
-    //	  for(int kk=0; kk<qubit_filter.size(); kk++) { // only non-zero cols of non-identity i-th row of "full s"
+    //	  for(INT kk=0; kk<qubit_filter.size(); kk++) { // only non-zero cols of non-identity i-th row of "full s"
     //	    k = qubit_filter[kk];
     //	    tmp += s[ii*_2n+kk] * _smatrix[k*_2n+j];
     //	    tmp += s[ii*_2n+(kk+ne)] * _smatrix[(k+_n)*_2n+j];
@@ -1621,10 +1683,10 @@ namespace CReps {
     //
     //	// part2, for (i+n)-th row of "full s"
     //	i = qubit_filter[ii] + _n;
-    //	int iin = ii + ne;
+    //	INT iin = ii + ne;
     //	for(j=0; j<_2n; j++) {
     //	  tmp = 0;
-    //	  for(int kk=0; kk<qubit_filter.size(); kk++) { // only non-zero cols of non-identity i-th row of "full s"
+    //	  for(INT kk=0; kk<qubit_filter.size(); kk++) { // only non-zero cols of non-identity i-th row of "full s"
     //	    k = qubit_filter[kk];
     //	    tmp += s[iin*_2n+kk] * _smatrix[k*_2n+j];
     //	    tmp += s[iin*_2n+(kk+ne)] * _smatrix[(k+_n)*_2n+j];
@@ -1634,10 +1696,10 @@ namespace CReps {
     //  }
     //}
 
-    int* inner = new int[_2n*_2n];
-    int* tmp1 = new int[_2n];
-    int* tmp2 = new int[_2n*_2n];
-    int* vec = new int[_2n];
+    INT* inner = new INT[_2n*_2n];
+    INT* tmp1 = new INT[_2n];
+    INT* tmp2 = new INT[_2n*_2n];
+    INT* vec = new INT[_2n];
     udot2(inner, s, s);
 
     // vec = _np.dot(_np.transpose(_smatrix),p - _mtx.diagonal_as_vec(inner))
@@ -1649,7 +1711,7 @@ namespace CReps {
     }
 	  
     //matrix = 2*_mtx.strictly_upper_triangle(inner)+_mtx.diagonal_as_matrix(inner)
-    int* matrix = inner; //just modify inner in place since we don't need it anymore
+    INT* matrix = inner; //just modify inner in place since we don't need it anymore
     for(i=0; i<_2n; i++) {
       for(j=0; j<i; j++) matrix[i*_2n+j] = 0; //lower triangle
       for(j=i+1; j<_2n; j++) matrix[i*_2n+j] *= 2; //strict upper triangle
@@ -1671,7 +1733,7 @@ namespace CReps {
     // _smatrix = out_s (don't set this until we're done using _smatrix)
     for(i=0; i<_2n*_2n; i++) _smatrix[i] = out_s[i];
     for(i=0; i<_namps; i++) {
-      int* pvec = &_pvectors[ _2n*i ]; // i-th vector
+      INT* pvec = &_pvectors[ _2n*i ]; // i-th vector
       for(k=0; k<_2n; k++) pvec[k] = (pvec[k] + vec[k]) % 4;
     }
 
@@ -1686,10 +1748,10 @@ namespace CReps {
   /****************************************************************************\
   |* SBEffectCRep                                                             *|
   \****************************************************************************/
-  SBEffectCRep::SBEffectCRep(int* zvals, int n)
+  SBEffectCRep::SBEffectCRep(INT* zvals, INT n)
     : _zvals(n)
   {
-    for(int i=0; i<n; i++)
+    for(INT i=0; i<n; i++)
       _zvals[i] = zvals[i];
     _n = n;
   }
@@ -1699,9 +1761,9 @@ namespace CReps {
     DEBUG(std::cout << "SBEffectCRep::amplitude called! zvals = " << _zvals[0] << std::endl);
 
     //DEBUG!!!
-    //int i;
-    //int _2n = state->_2n;
-    //int _namps = state->_namps;
+    //INT i;
+    //INT _2n = state->_2n;
+    //INT _namps = state->_namps;
     //
     //std::cout << "S = ";
     //for(i=0; i<_2n*_2n; i++) std::cout << state->_smatrix[i] << " ";
@@ -1727,7 +1789,7 @@ namespace CReps {
   /****************************************************************************\
   |* SBGateCRep                                                               *|
   \****************************************************************************/
-  SBGateCRep::SBGateCRep(int n) {
+  SBGateCRep::SBGateCRep(INT n) {
     _n = n;
   }
   SBGateCRep::~SBGateCRep() { }
@@ -1735,11 +1797,11 @@ namespace CReps {
   /****************************************************************************\
   |* SBGateCRep_Embedded                                                      *|
   \****************************************************************************/
-  SBGateCRep_Embedded::SBGateCRep_Embedded(SBGateCRep* embedded_gate_crep, int n, int* qubits, int nqubits)
+  SBGateCRep_Embedded::SBGateCRep_Embedded(SBGateCRep* embedded_gate_crep, INT n, INT* qubits, INT nqubits)
     :SBGateCRep(n),_qubits(nqubits)
   {
     _embedded_gate_crep = embedded_gate_crep;
-    for(int i=0; i<nqubits; i++)
+    for(INT i=0; i<nqubits; i++)
       _qubits[i] = qubits[i];
   }
   SBGateCRep_Embedded::~SBGateCRep_Embedded() { }
@@ -1812,7 +1874,7 @@ namespace CReps {
       SBStateCRep temp_state(tmp1->_namps,_n); tmp2 = &temp_state;
 
       //Act with additional gates: tmp1 -> tmp2 then swap, so output in tmp1
-      for(int i=nfactors-2; i >= 0; i--) {
+      for(INT i=nfactors-2; i >= 0; i--) {
 	_factor_gate_creps[i]->adjoint_acton(tmp1,tmp2);
 	t = tmp1; tmp1 = tmp2; tmp2 = t;
       }
@@ -1830,8 +1892,8 @@ namespace CReps {
   /****************************************************************************\
   |* SBGateCRep_Clifford                                                      *|
   \****************************************************************************/
-  SBGateCRep_Clifford::SBGateCRep_Clifford(int* smatrix, int* svector, dcomplex* unitary,
-					   int* smatrix_inv, int* svector_inv, dcomplex* unitary_adj, int n)
+  SBGateCRep_Clifford::SBGateCRep_Clifford(INT* smatrix, INT* svector, dcomplex* unitary,
+					   INT* smatrix_inv, INT* svector_inv, dcomplex* unitary_adj, INT n)
     :SBGateCRep(n)
   {
     _smatrix = smatrix;
@@ -1861,7 +1923,7 @@ namespace CReps {
 
     //DEBUG!!!
     //std::cout << "AT SBGateCRep_Clifford::adjoint_acton U = ";
-    //for(int i=0; i<2*2; i++) std::cout << _unitary_adj[i] << " ";
+    //for(INT i=0; i<2*2; i++) std::cout << _unitary_adj[i] << " ";
     //std::cout << std::endl;
     
     out_state->copy_from(state);
@@ -1884,15 +1946,15 @@ namespace CReps {
   //                                         self.baseinds)
 
 
-  void expm_multiply_simple_core(double* Adata, int* Aindptr,
-				 int* Aindices, double* B,
-				 int N, double mu, int m_star,
-				 int s, double tol, double eta,
+  void expm_multiply_simple_core(double* Adata, INT* Aindptr,
+				 INT* Aindices, double* B,
+				 INT N, double mu, INT m_star,
+				 INT s, double tol, double eta,
 				 double* F, double* scratch) {
-    int i;
-    int j;
-    int r;
-    int k;
+    INT i;
+    INT j;
+    INT r;
+    INT k;
 
     double a;
     double c1;
@@ -1976,16 +2038,16 @@ namespace CReps {
   |* PolyCRep                                                                 *|
   \****************************************************************************/
 
-  //std::unordered_map[int, dcomplex] _coeffs;
-  //int _max_order;
-  //int _max_num_vars;
+  //std::unordered_map[INT, dcomplex] _coeffs;
+  //INT _max_order;
+  //INT _max_num_vars;
   PolyCRep::PolyCRep() {
-    _coeffs = std::unordered_map<int, dcomplex>();
+    _coeffs = std::unordered_map<INT, dcomplex>();
     _max_order = 0;
     _max_num_vars = 0;
   }
   
-  PolyCRep::PolyCRep(std::unordered_map<int, dcomplex> coeffs, int max_order, int max_num_vars) {
+  PolyCRep::PolyCRep(std::unordered_map<INT, dcomplex> coeffs, INT max_order, INT max_num_vars) {
     _coeffs = coeffs;
     _max_order = max_order;
     _max_num_vars = max_num_vars;
@@ -2000,11 +2062,11 @@ namespace CReps {
   PolyCRep::~PolyCRep() { }
 
   PolyCRep PolyCRep::mult(const PolyCRep& other) {
-    std::unordered_map<int, dcomplex>::iterator it1, itk;
-    std::unordered_map<int, dcomplex>::const_iterator it2;
-    std::unordered_map<int, dcomplex> result;
+    std::unordered_map<INT, dcomplex>::iterator it1, itk;
+    std::unordered_map<INT, dcomplex>::const_iterator it2;
+    std::unordered_map<INT, dcomplex> result;
     dcomplex val;
-    int k;
+    INT k;
 
     for(it1 = _coeffs.begin(); it1 != _coeffs.end(); ++it1) {
       for(it2 = other._coeffs.begin(); it2 != other._coeffs.end(); ++it2) {
@@ -2021,10 +2083,10 @@ namespace CReps {
   }
 
   void PolyCRep::add_inplace(const PolyCRep& other) {
-    std::unordered_map<int, dcomplex>::const_iterator it2;
-      std::unordered_map<int, dcomplex>::iterator itk;
+    std::unordered_map<INT, dcomplex>::const_iterator it2;
+      std::unordered_map<INT, dcomplex>::iterator itk;
     dcomplex val, newval;
-    int k;
+    INT k;
 
     for(it2 = other._coeffs.begin(); it2 != other._coeffs.end(); ++it2) {
       k = it2->first; // key
@@ -2045,15 +2107,15 @@ namespace CReps {
   }
 
   void PolyCRep::scale(dcomplex scale) {
-    std::unordered_map<int, dcomplex>::iterator it;
+    std::unordered_map<INT, dcomplex>::iterator it;
     for(it = _coeffs.begin(); it != _coeffs.end(); ++it) {
       it->second = it->second * scale; // note: *= doesn't work here (complex Cython?)
     }
   }
 
-  int PolyCRep::vinds_to_int(std::vector<int> vinds) {
-    int ret = 0;
-    int m = 1;
+  INT PolyCRep::vinds_to_int(std::vector<INT> vinds) {
+    INT ret = 0;
+    INT m = 1;
     for(std::size_t i=0; i<vinds.size(); i++) { // last tuple index is most significant
       ret += (vinds[i]+1)*m;
       m *= _max_num_vars+1;
@@ -2061,9 +2123,9 @@ namespace CReps {
     return ret;
   }
   
-  std::vector<int> PolyCRep::int_to_vinds(int indx) {
-    std::vector<int> ret;
-    int nxt, i;
+  std::vector<INT> PolyCRep::int_to_vinds(INT indx) {
+    std::vector<INT> ret;
+    INT nxt, i;
     while(indx != 0) {
       nxt = indx / (_max_num_vars+1);
       i = indx - nxt*(_max_num_vars+1);
@@ -2075,10 +2137,10 @@ namespace CReps {
     return ret;
   }
   
-  int PolyCRep::mult_vinds_ints(int i1, int i2) {
+  INT PolyCRep::mult_vinds_ints(INT i1, INT i2) {
     // multiply vinds corresponding to i1 & i2 and return resulting integer
-    std::vector<int> vinds1 = int_to_vinds(i1);
-    std::vector<int> vinds2 = int_to_vinds(i2);
+    std::vector<INT> vinds1 = int_to_vinds(i1);
+    std::vector<INT> vinds2 = int_to_vinds(i2);
     vinds1.insert( vinds1.end(), vinds2.begin(), vinds2.end() );
     std::sort(vinds1.begin(),vinds1.end());
     return vinds_to_int(vinds1);
