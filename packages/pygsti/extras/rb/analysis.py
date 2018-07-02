@@ -123,20 +123,20 @@ def r_to_p(r, d, rtype='EI'):
 # # END OF FUNCTIONS FROM OLD CODE
 # #
 
-def crb_rescaling_factor(lengths,quantity):
+def rescaling_factor(lengths, quantity, offset=2):
     
     rescaling_factor = []
     
     for i in range(len(lengths)):
         
-        rescaling_factor.append(quantity[i]/(lengths[i]+1))
+        rescaling_factor.append(_np.array(quantity[i])/(_np.array(lengths[i])+offset))
         
     rescaling_factor = _np.mean(_np.array(rescaling_factor))
     
     return rescaling_factor 
 
 
-def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=1000,  asymptote='std', rtype='EI'):
+def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=200,  asymptote='std', rtype='EI'):
     """
     Todo : docstring.
     """  
@@ -149,7 +149,7 @@ def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=1000,  
     if asymptote == 'std':
         asymptote = 1/2**n
 
-    FF_results, FAF_results = std_least_squares_data_fitting(lengths, ASPs, n, seed=seed, asymptote=asymptote)
+    FF_results, FAF_results = std_least_squares_data_fitting(lengths, ASPs, n, seed=seed, asymptote=asymptote, ftype='full+FA')
 
     if bootstrap_samples > 0:
         
@@ -170,7 +170,7 @@ def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=1000,  
         for i in range(bootstrap_samples):
 
             BS_ASPs  = RBSdataset.bootstraps[i].ASPs
-            BS_FF_results, BS_FAF_results = std_least_squares_data_fitting(lengths, BS_ASPs, n, seed=seed, asymptote=asymptote, ftype='F+FA')
+            BS_FF_results, BS_FAF_results = std_least_squares_data_fitting(lengths, BS_ASPs, n, seed=seed, asymptote=asymptote, ftype='full+FA')
 
             if BS_FF_results['success']:
                 A_bootstraps_FF.append(BS_FF_results['estimates']['A'])
@@ -195,10 +195,10 @@ def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=1000,  
         bootstraps_failrate_FF = bs_failcount_FF/bootstrap_samples
 
         std_FF = {}
-        std_FF['A'] = _np.mean(_np.array(A_bootstraps_FF))
-        std_FF['B'] = _np.mean(_np.array(B_bootstraps_FF))
-        std_FF['p'] = _np.mean(_np.array(p_bootstraps_FF))
-        std_FF['r'] = _np.mean(_np.array(r_bootstraps_FF))
+        std_FF['A'] = _np.std(_np.array(A_bootstraps_FF))
+        std_FF['B'] = _np.std(_np.array(B_bootstraps_FF))
+        std_FF['p'] = _np.std(_np.array(p_bootstraps_FF))
+        std_FF['r'] = _np.std(_np.array(r_bootstraps_FF))
 
         bootstraps_FAF = {}
         bootstraps_FAF['A'] = A_bootstraps_FAF
@@ -208,10 +208,10 @@ def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=1000,  
         bootstraps_failrate_FAF = bs_failcount_FAF/bootstrap_samples
 
         std_FAF = {}
-        std_FAF['A'] = _np.mean(_np.array(A_bootstraps_FAF))
-        std_FAF['B'] = _np.mean(_np.array(B_bootstraps_FAF))
-        std_FAF['p'] = _np.mean(_np.array(p_bootstraps_FAF))
-        std_FAF['r'] = _np.mean(_np.array(r_bootstraps_FAF))
+        std_FAF['A'] = _np.std(_np.array(A_bootstraps_FAF))
+        std_FAF['B'] = _np.std(_np.array(B_bootstraps_FAF))
+        std_FAF['p'] = _np.std(_np.array(p_bootstraps_FAF))
+        std_FAF['r'] = _np.std(_np.array(r_bootstraps_FAF))
 
     else:
         bootstraps_FF = None

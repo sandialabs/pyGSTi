@@ -122,7 +122,7 @@ class DriftResults(object):
     
     def plot_power_spectrum(self, sequence='averaged', entity='averaged', 
                             outcome='averaged', threshold='default', figsize=(15,3), 
-                            fix_ymax = False, savepath=None, loc=None):
+                            fix_ymax = False, savepath=None, loc=None, addtitle=True):
         """
         
         threshold : 'none', '1test', 'class', 'all', 'default'
@@ -293,7 +293,8 @@ class DriftResults(object):
         else:
             _plt.legend()
         _plt.xlim(0,_np.max(self.frequencies))
-        _plt.title(title,fontsize=17)
+        if addtitle:
+            _plt.title(title,fontsize=17)
         _plt.xlabel(xlabel,fontsize=15)
         _plt.ylabel("Power",fontsize=15)
         
@@ -303,7 +304,7 @@ class DriftResults(object):
             _plt.show()
             
     def plot_most_drifty_probability(self, errorbars=True, plot_data=False, parray=None, figsize=(15,3), 
-                                     savepath=None, loc=None):
+                                     savepath=None, loc=None, title=True):
         
         if self.multitest_compensation == 'none':
             ws = "Warning: multi-tests compensation is 'none'. This means that if there are many sequences it is likely"
@@ -318,12 +319,12 @@ class DriftResults(object):
         self.plot_estimated_probability(int(most_drift_index[0]), int(most_drift_index[1]), int(most_drift_index[2]),
                                         errorbars=errorbars,
                                         plot_data=plot_data, target_value=None,parray=parray, figsize=figsize, 
-                                        savepath=savepath, loc=loc)
+                                        savepath=savepath, loc=loc, title=title)
         
    
     def plot_estimated_probability(self, sequence, entity=0, outcome=0, errorbars=True,
                                    plot_data=False, target_value=None, parray=None, figsize=(15,3), savepath=None, 
-                                   loc=None):
+                                   loc=None, title=True):
         
         sequence_index = sequence
         
@@ -395,12 +396,13 @@ class DriftResults(object):
         _plt.xlim(0,_np.max(times))
         _plt.ylim(0,1)
         
-        if self.number_of_entities > 1:
-            title = "Estimated probability for sequence " + sequence_label + ", entity "
-            title += str(entity) + " and outcome " + outcome_label
-        else:
-            title = "Estimated probability for sequence " + sequence_label + " and outcome " + outcome_label
- 
+        if title:
+            if self.number_of_entities > 1:
+                title = "Estimated probability for sequence " + sequence_label + ", entity "
+                title += str(entity) + " and outcome " + outcome_label
+            else:
+                title = "Estimated probability for sequence " + sequence_label + " and outcome " + outcome_label
+         
         _plt.title(title,fontsize=17)
         _plt.xlabel(xlabel,fontsize=15)
         _plt.ylabel("Probability",fontsize=15)

@@ -74,7 +74,7 @@ def import_rb_summary_data(filenames, countsdata=True, circuitdata=True, finites
 
     return RBSdataset
 
-def write_rb_summary_dataset_to_file(RBSdataset,filename):
+def write_rb_summary_data_to_file(RBSdataset,filename):
     """
     Todo : docstring.
     """
