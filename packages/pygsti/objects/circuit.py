@@ -13,31 +13,6 @@ import copy as _copy
 from . import gatestring as _gstr
 from ..baseobjs import Label as _Label
 
-IDENT = 'I' # Identity-get sentinel
-#FUTURE?
-#class CircuitLayer(object):
-#    
-#    def __init__(self, gatelist, n):
-#        self.layer = 0
-
-
-#OLD: checks whether a Label is valid - could update this & move to Label?
-#def check_valid_gate(gate):
-#    # To do: check that gate is type Gate.
-#    assert(type(gate.name) is unicode), "The gate label should be unicode!"
-#    assert(type(gate.qubits) is list), "The list of qubits on which the gate acts should be a list!"
-#    
-#    for i in range(1,gate.number_of_qubits):
-#        assert(type(gate.qubits[i]) is int), "The qubits on which a gate acts should be indexed by integers!"
-
-#OLD - could add logic like this to Circuit?
-#def check_valid_circuit_layer(layer,n):
-#    
-#    assert(type(layer) is list), "A gate layer must be a list!"
-#    #
-#    # To do: add other less trivial tests.
-#    #
-
 class Circuit(_gstr.GateString):
     """
     A Circuit is a more structured representation of a sequence of preparation,
@@ -48,7 +23,7 @@ class Circuit(_gstr.GateString):
     """
     
     def __init__(self, line_items=None, gatestring=None, num_lines=None,
-                 line_labels=None, parallelize=False):
+                 line_labels=None, parallelize=False, identity='I'):
         """
         Creates a new Circuit object, encapsulating a quantum circuit.
 
@@ -90,7 +65,12 @@ class Circuit(_gstr.GateString):
             Only used when initializing from `gatestring`.  When True, automatic
             parallelization is performed: consecutive gates in `gatestring`
             acting on disjoint sets of qubits are be placed in the same layer.
+
+        todo: identity
+        
         """
+        self.identity = identity
+
         assert((line_items is not None) or (gatestring is not None) or (num_lines is not None) or (line_labels is not None)), \
             "At least one argument must be not None!"
         self._static = False
@@ -162,7 +142,7 @@ class Circuit(_gstr.GateString):
                 if len(line) <= j: continue # this line doesn't have a j-th layer (is this possible?)
 
                 lbl = line[j]
-                if line[j].name != IDENT: #Note: it's OK to use .name on line items (all are *simple* labels)
+                if line[j].name != self.identity: #Note: it's OK to use .name on line items (all are *simple* labels)
                     layer_list.append( line[j] ) # don't include exact identities
                 actson = lbl.qubits if (lbl.qubits is not None) else self.line_labels # None == "all lines"
                 processed_lines.update(actson)
@@ -331,7 +311,7 @@ class Circuit(_gstr.GateString):
         
         # Add an idle layer.
         for i in range(0,self.number_of_lines):
-            self.line_items[i].insert(j,_Label(IDENT,self.line_labels[i]))
+            self.line_items[i].insert(j,_Label(self.identity,self.line_labels[i]))
             
         # Put the gate label in - note this label may
         # be a "parallel-gate" label and have mulitple components.
@@ -367,7 +347,7 @@ class Circuit(_gstr.GateString):
         
         # Add an idle layer.
         for i in range(0,self.number_of_lines):
-            self.line_items[i].insert(j,_Label(IDENT,self.line_labels[i]))
+            self.line_items[i].insert(j,_Label(self.identity,self.line_labels[i]))
             
         # Put the gates in.
         for i,line_label in enumerate(self.line_labels):
@@ -470,13 +450,13 @@ class Circuit(_gstr.GateString):
         
         # Replace the gate with an idle
         if n == 1:
-            self.line_items[q][j] = _Label(IDENT,self.line_labels[q])
+            self.line_items[q][j] = _Label(self.identity,self.line_labels[q])
             
         else:
             q1 = self.line_items[q][j].qubits[0]
             q2 = self.line_items[q][j].qubits[1]
-            self.line_items[q1][j] = _Label(IDENT,self.line_labels[int(q1)])
-            self.line_items[q2][j] = _Label(IDENT,self.line_labels[int(q2)])
+            self.line_items[q1][j] = _Label(self.identity,self.line_labels[int(q1)])
+            self.line_items[q2][j] = _Label(self.identity,self.line_labels[int(q2)])
         
         # Insert the circuit
         self.insert_circuit(circuit,j+1)
@@ -505,7 +485,7 @@ class Circuit(_gstr.GateString):
         
         # Replace all gates with idles, in the layer to be replaced.
         for q in range(0,self.number_of_lines):
-            self.line_items[q][j] = _Label(IDENT,self.line_labels[q])
+            self.line_items[q][j] = _Label(self.identity,self.line_labels[q])
         
         # Write in the gates, from the layer to be inserted.
         for q in range(0,self.number_of_lines):
@@ -613,12 +593,12 @@ class Circuit(_gstr.GateString):
                 gate = self.line_items[q][d-1-l]
                 # We ignore idle gates, and do not compile them.
                 # To do: is this the behaviour we want?
-                if gate.name != IDENT:
+                if gate.name != self.identity:
                     if gate in in_compilation.keys():
                         self.replace_gate_with_circuit(in_compilation[gate],q,d-1-l)
-                    else:
-                        # To do: replace with a suitable assert somewhere.
-                        print('Error: could not find ', gate, ' in ', list(in_compilation.keys()))
+                    #else:
+                    #    # To do: replace with a suitable assert somewhere.
+                    #    print('Error: could not find ', gate, ' in ', list(in_compilation.keys()))
         
         # If specified, perform the depth compression.
         if depth_compression:            
@@ -713,7 +693,7 @@ class Circuit(_gstr.GateString):
         size = 0
         for q in range(0,self.number_of_lines):
             for j in range(0,self.depth()):
-                if self.line_items[q][j].name != IDENT:
+                if self.line_items[q][j].name != self.identity:
                     size += 1
         return size
     
@@ -767,7 +747,7 @@ class Circuit(_gstr.GateString):
         for i in range(0,self.number_of_lines):
             s += 'Qubit {} ---'.format(i)
             for j,maxlbllen in enumerate(max_labellen):
-                if self.line_items[i][j].name == IDENT:
+                if self.line_items[i][j].name == self.identity:
                     # Replace with special idle print at some point
                     s += '-'*(maxlbllen+3) # 1 for each pipe, 1 for joining dash
                 else:
@@ -805,7 +785,7 @@ class Circuit(_gstr.GateString):
             qstring = '&'
             circuit_for_q = self.line_items[q]
             for gate in circuit_for_q:
-                if gate.name == IDENT:
+                if gate.name == self.identity:
                     qstring += ' \qw &'
                 elif gate.name == 'CNOT':
                     if gate.qubits[0] == q:
@@ -876,7 +856,7 @@ class Circuit(_gstr.GateString):
                             break
                         else:
                             # Flag set to True if a non-trivial shift/combination is to be implemented.
-                            if not self.line_items[q][i].name == IDENT:
+                            if not self.line_items[q][i].name == self.identity:
                                 flag = True
                                 
                             # Find the new label of the gate, according to the combination rules.
@@ -888,7 +868,7 @@ class Circuit(_gstr.GateString):
                             # just change the gates labels. But it seems like better practice to make
                             # new Gate objects.
                             self.line_items[q][k] = _Label(new_label,self.line_labels[q])
-                            self.line_items[q][i] = _Label(IDENT,self.line_labels[q])
+                            self.line_items[q][i] = _Label(self.identity,self.line_labels[q])
                             j += 1
                 else:
                     j += 1
@@ -907,11 +887,11 @@ class Circuit(_gstr.GateString):
                 
                 if self.line_items[q][j].number_of_qubits == 1:                  
                     
-                    if self.line_items[q][j].name != IDENT:
+                    if self.line_items[q][j].name != self.identity:
                     
                         for k in range(1,j+1):
                             idle = True
-                            if self.line_items[q][j-k].name != IDENT:
+                            if self.line_items[q][j-k].name != self.identity:
                                 idle = False
                                 if not idle:
                                     k = k - 1
@@ -920,7 +900,7 @@ class Circuit(_gstr.GateString):
                         if k > 0:
                             flag = True
                             self.line_items[q][j-k] = self.line_items[q][j]
-                            self.line_items[q][j] = _Label(IDENT,self.line_labels[q])
+                            self.line_items[q][j] = _Label(self.identity,self.line_labels[q])
         self._tup_dirty = self._str_dirty = True
         return flag
     
@@ -940,9 +920,9 @@ class Circuit(_gstr.GateString):
                         
                         for k in range(1,j+1):
                             both_idle = True
-                            if self.line_items[q][j-k].name != IDENT:
+                            if self.line_items[q][j-k].name != self.identity:
                                 both_idle = False
-                            if self.line_items[target_label][j-k].name != IDENT:
+                            if self.line_items[target_label][j-k].name != self.identity:
                                 both_idle = False
                             if not both_idle:
                                 k = k - 1
@@ -951,8 +931,8 @@ class Circuit(_gstr.GateString):
                             flag = True
                             self.line_items[q][j-k] = self.line_items[q][j]
                             self.line_items[target_label][j-k] = self.line_items[target_label][j]
-                            self.line_items[q][j] = _Label(IDENT,self.line_labels[q])
-                            self.line_items[target_label][j] = _Label(IDENT,self.line_labels[int(target_label)])
+                            self.line_items[q][j] = _Label(self.identity,self.line_labels[q])
+                            self.line_items[target_label][j] = _Label(self.identity,self.line_labels[int(target_label)])
 
         self._tup_dirty = self._str_dirty = True
         return flag
@@ -971,7 +951,7 @@ class Circuit(_gstr.GateString):
             all_idle = True
             
             for q in range(0,self.number_of_lines):
-                if layer[q].name != IDENT:
+                if layer[q].name != self.identity:
                     all_idle = False
                     
             if all_idle:

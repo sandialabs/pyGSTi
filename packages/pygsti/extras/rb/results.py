@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import copy as _copy
+import matplotlib.pyplot as _plt
 
 class RBSummaryDataset(object):
     """
@@ -18,7 +19,7 @@ class RBSummaryDataset(object):
     the results.
 
     """
-    def __init__(self, number_of_qubits, lengths, successcounts=None, successprobabilities=None, totalcounts=None, 
+    def __init__(self, number_of_qubits, lengths, successcounts=None, totalcounts=None, successprobabilities=None,
                  circuitdepths=None, circuit2Qgcounts=None, sortedinput=False, finitesampling=True, descriptor=None):
 
         """
@@ -167,26 +168,25 @@ class RBSummaryDataset(object):
             for j in range(len(self.lengths)):
 
                 sampled_scounts.append([])
+                # The success probabilities are always there.
                 circuits_at_length = len(self.successprobabilities[j])
 
                 for k in range(circuits_at_length):
                     sampled_SP = self.successprobabilities[j][_np.random.randint(circuits_at_length)]
                     if self.totalcounts is not None:  
-                        sampled_scounts[j].append(_np.random.binomial(self.totalcounts,sampled_SP))
+                        sampled_scounts[j].append(_np.random.binomial(self.totalcounts[j][k],sampled_SP))
                     else:               
                          sampled_SPs[j].append(sampled_SP)
             
             if self.totalcounts is not None:  
                 BStrappeddataset = RBSummaryDataset(self.number_of_qubits, self.lengths, successcounts=sampled_scounts, 
-                                                totalcounts=self.totalcounts, circuitdepths=self.circuitdepths, 
-                                                circuit2Qgcounts=self.circuit2Qgcounts, sortedinput=True, finitesampling=self.finitesampling,
+                                                totalcounts=self.totalcounts, sortedinput=True, finitesampling=self.finitesampling,
                                                 descriptor='data created from a non-parametric bootstrap')
 
             else:
                 BStrappeddataset = RBSummaryDataset(self.number_of_qubits, self.lengths, successcounts=None, 
-                                                totalcounts=None, successprobabilites=sampled_SPs, circuitdepths=self.circuitdepths, 
-                                                circuit2Qgcounts=self.circuit2Qgcounts, sortedinput=True, finitesampling=self.finitesampling,
-                                                descriptor='data created from a non-parametric bootstrap without per-circuit finite-sampling error')
+                                                totalcounts=None, successprobabilites=sampled_SPs, sortedinput=True, 
+                                                finitesampling=self.finitesampling, descriptor='data created from a non-parametric bootstrap without per-circuit finite-sampling error')
 
             self.bootstraps.append(BStrappeddataset)
 
@@ -225,7 +225,6 @@ class FitResults(object):
         self.variable = variable
         self.stds = stds
         
-        self.std = None
         self.bootstraps = bootstraps
         self.bootstraps_failrate = bootstraps_failrate
 
@@ -239,3 +238,45 @@ class RBResults(object):
         self.data = data
         self.rtype = rtype
         self.fits = fits
+
+
+    def plot(self, fitkey='auto', decay=True, successprobabilities=True, size=(8,5), ylim=None, xlim=None, 
+             figpath=None):
+
+        if fitkey == 'auto':
+            allfitkeys = list(self.fits.keys())[0]
+            if 'full' in allfitkeys:
+                fitkey = 'full'
+            else:
+                fitkey = allfitkeys[0]
+
+        
+        _plt.figure(figsize=size)
+        _plt.plot(self.data.lengths,self.data.ASPs,'o')
+        
+        if decay:
+            lengths = _np.linspace(0,max(self.data.lengths),200)
+            A = self.fits[fitkey].estimates['A']
+            B = self.fits[fitkey].estimates['B']
+            p = self.fits[fitkey].estimates['p']
+            _plt.plot(lengths,A+B*p**lengths)
+    
+        if successprobabilities:
+            _plt.violinplot(list(self.data.successprobabilities),self.data.lengths, points=10, widths=1., showmeans=False, 
+                                 showextrema=False, showmedians=False)
+        
+        #plt.title("Results for {} Sampling DRB on {} qubits".format(s,n))
+        _plt.ylabel("Success probability")
+        _plt.xlabel("RB sequence length $(m)$")
+        _plt.ylim(ylim)
+        _plt.xlim(xlim)
+        
+        if figpath is not None:
+            _plt.savefig(figpath,dpi=1000)
+        _plt.show()
+
+
+
+
+
+
