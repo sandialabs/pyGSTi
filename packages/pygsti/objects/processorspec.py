@@ -17,12 +17,27 @@ from .qubitgraph import QubitGraph as _QubitGraph
 from ..baseobjs import Label as _Label
 from . import gate as _gate
 
+# For finding the inversion dict.
+# inverse_dict = {}
+# for gl1 in pspec.models['target'].gates:
+#     gate1 = pspec.models['target'][gl1]
+#     gate1 = gate1.convert_to_matrix(gate1.embedded_gate)
+#     for gl2 in pspec.models['target'].gates:
+#         gate2 = pspec.models['target'][gl2]
+#         gate2 = gate2.convert_to_matrix(gate2.embedded_gate)
+#         #print(gate1,gate2)
+#         if gl1.number_of_qubits == gl2.number_of_qubits:
+#             #print(np.dot(gate1,gate2))
+#             if np.allclose(np.dot(gate1,gate2),np.identity(4**gl1.number_of_qubits,float)):
+#                 print(gl1,gl2)
+
 class ProcessorSpec(object):
     """ TODO: docstring """
     
     def __init__(self, nQubits, gate_names, nonstd_gate_unitaries=None,
                  availability=None, construct_models=('clifford','target'), 
-                 construct_clifford_compilations=('paulieq','absolute'), verbosity=0):
+                 construct_clifford_compilations = {'paulieq' : ('1Qcliffords','cnots'), 
+                 'absolute': ('paulis','1Qcliffords')}, verbosity=0):
         """
         An object that can be used to encapsulate the device specification for a one or more qubit 
         quantum computer.
@@ -82,8 +97,26 @@ class ProcessorSpec(object):
 
         # Add initial compilations
         if 'clifford' in construct_models:
-            for ctype in construct_clifford_compilations: # E.g. 'absolute' or 'paulieq'
-                self.add_std_compilation(ctype, verbosity)
+
+            for ctype in list(construct_clifford_compilations.keys()):
+                if ctype == 'paulieq':
+                    singlequbit = []
+                    twoqubit = []
+                    if '1Qcliffords' in construct_clifford_compilations[ctype]:
+                        singlequbit = ['H','P','PH','HP','HPH']
+                    if 'cnots' in construct_clifford_compilations[ctype]:
+                        twoqubit = ['CNOT']
+                    self.add_std_compilation(ctype, singlequbit, twoqubit, verbosity)
+
+                if ctype == 'absolute':
+                    singlequbit = []
+                    twoqubit = []
+                    if 'paulis' in construct_clifford_compilations[ctype]:
+                        singlequbit = ['I','X','Y','Z']
+                    if '1Qcliffords' in construct_clifford_compilations[ctype]:
+                        # todo : implement this.
+                        raise ValueError("This is not yet implemented")
+                    self.add_std_compilation(ctype, singlequbit, twoqubit, verbosity)
             
             if len(self.compilations) > 0:
                 self.construct_compiler_costs()
@@ -96,9 +129,7 @@ class ProcessorSpec(object):
                     self.clifford_gates_on_qubits[p].append(gl)
         else:
             self.clifford_gates_on_qubits = None
-                    
-
-                
+                                  
         return # done with __init__(...)
 
                 
@@ -142,83 +173,97 @@ class ProcessorSpec(object):
                                                            sim_type)
         
             
-    def construct_std_compilation(self,compile_type,verbosity=1):
+    def construct_std_compilation(self,  compile_type, singlequbit, twoqubit, verbosity=1):
         """ TODO: docstring """
         #Hard-coded gates we need to compile from the native (clifford) gates in order to compile
         # arbitrary (e.g. random) cliffords, since our Clifford compiler outputs circuits in terms
         # of these elements.
-        singlequbit = {'paulieq': ['H','P','PH','HP','HPH'],
-                       'absolute': ['I','X','Y','Z'] }
-        twoqubit = {'paulieq': ['CNOT'],
-                    'absolute': [] }
-        descs = {'paulieq': 'up to Pauli gates',
-                 'absolute': '' }
-
+        descs = {'paulieq': 'up to paulis', 'absolute':''}
+        
         if 'clifford' not in self.models:
             raise ValueError("Cannot create standard compilations without a 'clifford' model")
         library = _CompilationLibrary(self.models['clifford'], compile_type) # empty library to fill
         desc = descs[compile_type]
-        
-        if compile_type == 'paulieq':
-            #print('Adding in the standard CNOT compilations')
-            if 'Gcnot' in self.root_gate_names:
-                library.templates['CNOT'] = [(_Label('Gcnot',(0,1)),)]
-                if 'Gh' in self.root_gate_names:
-                    library.templates['CNOT'].append((_Label('Gh', 0),_Label('Gh', 1),_Label('Gcnot', (1, 0)), _Label('Gh', 0),_Label('Gh', 1)))
-                else:
-                    for gate in self.models['clifford'].gates:
-                        if (isinstance(self.models['clifford'][gate], _gate.EmbeddedGateMap) and 
-                            _np.array_equal(self.models['clifford'][gate].embedded_gate.smatrix,_np.array([[0,1],[1,0]]))) or \
-                           (isinstance(self.models['clifford'][gate], _gate.CliffordGate) and
-                            _np.array_equal(self.models['clifford'][gate].smatrix,_np.array([[0,1],[1,0]]))):
-                            #Note: use of gate.name assumes that a Hadamard will have a simple (non-"parallel") gate label
-                            library.templates['CNOT'].append( (_Label(gate.name, 0),_Label(gate.name, 1),_Label('Gcnot', (1, 0)),
-                                                               _Label(gate.name, 0),_Label(gate.name, 1)))
-                            #print('Hadamard or an equivalent gate found! It is ' + gate.name)
-                            break
-                    
+
         #Stage1:
         # Compile 1Q gates "locally" - i.e., out of native gates which act only
         #  on the target qubit of the gate being compiled.
         for q in range(0,self.number_of_qubits):
-            for gname in singlequbit[compile_type]:
+            for gname in singlequbit:
                 if verbosity > 0:
                     print("Creating a circuit to implement {} {} on qubit {}...".format(gname,desc,q))
-                library.add_local_compilation_of(
-                    _Label(gname,q), verbosity=verbosity)
+                library.add_local_compilation_of(_Label(gname,q), verbosity=verbosity)
 
             if verbosity > 0: print("Complete.")
-            
-        #Stage2:
-        # Compile 2Q gates locally, if possible.  Keep track of what can't be compiled.
-        not_locally_compilable = []
+
+        for gate in twoqubit:
+            assert(gate == 'CNOT'), "Only CNOT compilations are currently possible"
         
-        for q1 in range(0,self.number_of_qubits):
-            for q2 in range(0,self.number_of_qubits):
-                if q1 == q2: continue # 2Q gates must be on different qubits!
-                for gname in twoqubit[compile_type]:
-                    if verbosity > 0:
-                        print("Creating a circuit to implement {} {} on qubits {}...".format(gname,desc,(q1,q2)))
-                    try:
-                        library.add_local_compilation_of(
-                            _Label(gname,(q1,q2)), verbosity=verbosity)
-                    except _CompilationError:
-                        not_locally_compilable.append( (gname,q1,q2) )
-                        
-        #Stage3:
-        # Try to compile remaining 2Q gates non-locally using specific algorithms
-        non_compilable = []
-        for gname,q1,q2 in not_locally_compilable:
-            library.add_nonlocal_compilation_of(_Label(gname,(q1,q2)),
-                                                verbosity=verbosity)
+            if compile_type == 'paulieq':
+                #print('Adding in the standard CNOT compilations')
+                if 'Gcnot' in self.root_gate_names:
+                    library.templates['CNOT'] = [(_Label('Gcnot',(0,1)),)]
+                    if 'Gh' in self.root_gate_names:
+                        library.templates['CNOT'].append((_Label('Gh', 0),_Label('Gh', 1),_Label('Gcnot', (1, 0)), _Label('Gh', 0),_Label('Gh', 1)))
+                    else:
+                        for gate in self.models['clifford'].gates:
+                            if (isinstance(self.models['clifford'][gate], _gate.EmbeddedGateMap) and 
+                                    _np.array_equal(self.models['clifford'][gate].embedded_gate.smatrix,_np.array([[0,1],[1,0]]))) or \
+                                   (isinstance(self.models['clifford'][gate], _gate.CliffordGate) and
+                                    _np.array_equal(self.models['clifford'][gate].smatrix,_np.array([[0,1],[1,0]]))):
+                                #Note: use of gate.name assumes that a Hadamard will have a simple (non-"parallel") gate label
+                                library.templates['CNOT'].append( (_Label(gate.name, 0),_Label(gate.name, 1),_Label('Gcnot', (1, 0)),
+                                                                       _Label(gate.name, 0),_Label(gate.name, 1)))
+                                #print('Hadamard or an equivalent gate found! It is ' + gate.name)
+                                break
+                if 'Gcphase' in self.root_gate_names:
+                    library.templates['CNOT'] = [(_Label('Gcnot',(0,1)),)]
+                    if 'Gh' in self.root_gate_names:
+                        library.templates['CNOT'].append((_Label('Gi', 0),_Label('Gh', 1),_Label('Gcphase', (0, 1)), _Label('Gi', 0),_Label('Gh', 1)))
+                        library.templates['CNOT'].append((_Label('Gi', 0),_Label('Gh', 1),_Label('Gcphase', (1,0)), _Label('Gi', 0),_Label('Gh', 1)))
+
+                    else:
+                        for gate in self.models['clifford'].gates:
+                            if (isinstance(self.models['clifford'][gate], _gate.EmbeddedGateMap) and 
+                                    _np.array_equal(self.models['clifford'][gate].embedded_gate.smatrix,_np.array([[0,1],[1,0]]))) or \
+                                   (isinstance(self.models['clifford'][gate], _gate.CliffordGate) and
+                                    _np.array_equal(self.models['clifford'][gate].smatrix,_np.array([[0,1],[1,0]]))):
+                                #Note: use of gate.name assumes that a Hadamard will have a simple (non-"parallel") gate label
+                                library.templates['CNOT'].append((_Label('Gi', 0),_Label(gate.name, 1),_Label('Gcphase', (0, 1)), _Label('Gi', 0),_Label(gate.name, 1)))
+                                library.templates['CNOT'].append((_Label('Gi', 0),_Label(gate.name, 1),_Label('Gcphase', (1,0)), _Label('Gi', 0),_Label(gate.name, 1)))
+                                #print('Hadamard or an equivalent gate found! It is ' + gate.name)
+
+                              
+            #Stage2:
+            # Compile 2Q gates locally, if possible.  Keep track of what can't be compiled.
+            not_locally_compilable = []
+            
+            for q1 in range(0,self.number_of_qubits):
+                for q2 in range(0,self.number_of_qubits):
+                    if q1 == q2: continue # 2Q gates must be on different qubits!
+                    for gname in twoqubit:
+                        if verbosity > 0:
+                            print("Creating a circuit to implement {} {} on qubits {}...".format(gname,desc,(q1,q2)))
+                        try:
+                            library.add_local_compilation_of(
+                                _Label(gname,(q1,q2)), verbosity=verbosity)
+                        except _CompilationError:
+                            not_locally_compilable.append( (gname,q1,q2) )
+                            
+            #Stage3:
+            # Try to compile remaining 2Q gates non-locally using specific algorithms
+            non_compilable = []
+            for gname,q1,q2 in not_locally_compilable:
+                library.add_nonlocal_compilation_of(_Label(gname,(q1,q2)),
+                                                    verbosity=verbosity)
 
         return library
 
     
-    def add_std_compilation(self,compile_type,verbosity=1):
+    def add_std_compilation(self, compile_type, singlequbit, twoqubit, verbosity=1):
         """ TODO: docstring """
         self.compilations[compile_type] = \
-            self.construct_std_compilation(compile_type,verbosity)
+            self.construct_std_compilation(compile_type, singlequbit, twoqubit, verbosity)
         
                                  
     def construct_compiler_costs(self, custom_connectivity=None):
