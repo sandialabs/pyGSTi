@@ -2411,7 +2411,7 @@ class GateSet(object):
         gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
         #OLD: evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
-            gatestring_list, comm, memLimit, subcalls=['bulk_fill_probs'], verbosity=2) # DEBUG verbosity (maybe make into an arg?)
+            gatestring_list, comm, memLimit, subcalls=['bulk_fill_probs'], verbosity=0) # FUTURE (maybe make verbosity into an arg?)
         return self._calc().bulk_probs(gatestring_list, evalTree, elIndices,
                                        outcomes, clipTo, check, comm)
 
