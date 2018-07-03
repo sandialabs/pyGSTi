@@ -122,7 +122,7 @@ class DMEffectRep_Computational(DMEffectRep):
         x = (x & 0x000000000000000F)^(x >> 4)
         x = (x & 0x0000000000000003)^(x >> 2)
         x = (x & 0x0000000000000001)^(x >> 1)
-	return x & 1 # return the last bit (0 or 1)
+        return x & 1 # return the last bit (0 or 1)
 
     def todense(self, outvec, trust_outvec_sparsity=False):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
