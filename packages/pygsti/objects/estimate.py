@@ -490,7 +490,7 @@ class Estimate(object):
         """
         p = self.parent
         obj = self.parameters.get('objective',None)
-        assert(obj in ('chi2','logl')),"Invalid objective!"
+        assert(obj in ('chi2','logl','lgst')),"Invalid objective!"
 
         gs = self.gatesets['final iteration estimate'] #FUTURE: overrideable?
         gss = p.gatestring_structs['final'] #FUTURE: overrideable?
@@ -502,7 +502,7 @@ class Estimate(object):
                                   minProbClipForWeighting=mpc,
                                   gateLabelAliases=gss.aliases,
                                   evaltree_cache=evaltree_cache, comm=comm)
-        elif obj == "logl":
+        elif obj in ("logl","lgst"):
             logL_upperbound = _tools.logl_max(gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
             logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases,
                                 evaltree_cache=evaltree_cache, comm=comm)
