@@ -479,9 +479,10 @@ class Estimate(object):
             else:
                 return p.dataset
 
-    def misfit_sigma(self, use_accurate_Np=False, evaltree_cache=None):
+    def misfit_sigma(self, use_accurate_Np=False, evaltree_cache=None, comm=None):
         """
         Returns the number of standard deviations (sigma) of model violation.
+        TODO: docstring
 
         Returns
         -------
@@ -500,11 +501,11 @@ class Estimate(object):
             fitQty = _tools.chi2( gs, ds, gss.allstrs,
                                   minProbClipForWeighting=mpc,
                                   gateLabelAliases=gss.aliases,
-                                  evaltree_cache=evaltree_cache)
+                                  evaltree_cache=evaltree_cache, comm=comm)
         elif obj == "logl":
             logL_upperbound = _tools.logl_max(gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
             logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases,
-                                evaltree_cache=evaltree_cache)
+                                evaltree_cache=evaltree_cache, comm=comm)
             fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
 
         ds_allstrs = _tools.find_replace_tuple_list(
