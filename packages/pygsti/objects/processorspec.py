@@ -32,24 +32,32 @@ from . import gate as _gate
 #                 print(gl1,gl2)
 
 class ProcessorSpec(object):
-    """ TODO: docstring """
-    
+    """
+    An object that can be used to encapsulate the device specification for a one or more qubit 
+    quantum computer. This is objected is geared towards multi-qubit devices; many of the contained 
+    structures are superfluous in the case of a single qubit.
+
+    """
     def __init__(self, nQubits, gate_names, nonstd_gate_unitaries=None,
-                 availability=None, qubit_labels = None, construct_models=('clifford','target'), 
+                 availability={}, qubit_labels=None, construct_models=('clifford','target'), 
                  construct_clifford_compilations = {'paulieq' : ('1Qcliffords','cnots'), 
                  'absolute': ('paulis',)}, verbosity=0):
         """
-        An object that can be used to encapsulate the device specification for a one or more qubit 
-        quantum computer.
+        Initializes a ProcessorSpec object.
     
         The most basic information required for a ProcessorSpec object is the number of qubits in the 
-        device, and the library of "native" target gates. This is a list of unitary operators, acting 
-        on ordinary pure state  vectors (so they are 2^k by 2^k complex arrays, where k is the number 
+        device, and the library of "native" target gates, which are specified as unitary matrices
+        (using `nonstd_gate_unitaries`) or using default gate-names known to pyGSTi, such as 'Gcnot'
+        for the CNOT gate (using `gate_names`). The other core information is the availability of the
+        gates (specified via `availability`).
+
+         This is a list of unitary operators, acting 
+        on ordinary pure state vectors (so they are 2^k by 2^k complex arrays, where k is the number 
         of qubits that gate acts upon), defined with respect to the standard computational basis. 
     
         This gate library should include all native gates, and they need not -- and generically should 
         not -- be unitaries acting on all of the qubits. E.g., an example of a gate library would be  
-        {'H' = 2x2 matrix defining the Hadamard gate, 'CNOT' : 4x4 matrix defining the CNOT gate, ...}.
+        {'Gt' = 2x2 matrix defining the T gate, 'Gswap' : 4x4 matrix defining the SWAP gate, ...}.
         
         Parameters
         ----------
@@ -77,8 +85,7 @@ class ProcessorSpec(object):
         if self.nonstd_gate_unitaries != None:
             self.root_gate_names += list(self.nonstd_gate_unitaries.keys())
             
-        self.availability = None if (availability is None) \
-                            else availability.copy()
+        self.availability = availability.copy()
 
         if qubit_labels is None:
             self.qubit_labels = list(range(nQubits)) 

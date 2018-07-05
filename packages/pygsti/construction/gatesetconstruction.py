@@ -1081,7 +1081,7 @@ def build_alias_gateset(gs_primitives, alias_dict):
     return gs_new
 
 
-def build_nqubit_gateset(nQubits, gatedict, availability=None,
+def build_nqubit_gateset(nQubits, gatedict, availability={},
                          parameterization='static', evotype="auto",
                          sim_type="auto", on_construction_error='raise'):
     """
@@ -1122,8 +1122,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
         imply, equate to all possible permutations and combinations of the 
         appropriate number of qubit labels (deterined by the gate's dimension).
         If a gate name (a key of `gatedict`) is not present in `availability`,
-        the default is `"all-permutations"`.  If `availability` is None, this is
-        equivalent to the empty dictionary (all gates get `"all-permutations"`).
+        the default is `"all-permutations"`.
 
     parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
                         "H+S clifford terms", "clifford"}
@@ -1160,7 +1159,6 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
         `availability`).  For instance, the gate label for the `"Gx"` gate on
         qubit 2 might be `Label("Gx",1)`.
     """
-    if availability is None: availability = {}
 
     if evotype == "auto": # Note: this same logic is repeated in build_nqubit_standard_gateset
         if parameterization == "clifford": evotype = "stabilizer"
