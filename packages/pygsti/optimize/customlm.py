@@ -9,7 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import time as _time
 import numpy as _np
 import scipy as _scipy
-#from scipy.optimize import OptimizeResult as _optResult 
+#from scipy.optimize import OptimizeResult as _optResult
 
 from ..tools import mpitools as _mpit
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
@@ -20,8 +20,8 @@ MACH_PRECISION = 1e-12
 #MU_TOL2 = 1e3  # ??
 
 
-def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
-                   rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, comm=None,
+def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-8, jac_norm_tol=1e-8,
+                   rel_ftol=1e-8, rel_xtol=1e-8, max_iter=100, comm=None,
                    verbosity=0, profiler=None):
     """
     An implementation of the Levenberg-Marquardt least-squares optimization
@@ -32,7 +32,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     Parameters
     ----------
     obj_fn : function
-        The objective function.  Must accept and return 1D numpy ndarrays of 
+        The objective function.  Must accept and return 1D numpy ndarrays of
         length N and M respectively.  Same form as scipy.optimize.leastsq.
 
     jac_fn : function
@@ -48,13 +48,13 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     jac_norm_tol : float, optional
         Tolerance for jacobian norm, namely if `infn(dot(J.T,f)) < jac_norm_tol`
-        then mark converged, where `infn` is the infinity-norm and 
+        then mark converged, where `infn` is the infinity-norm and
         `f = obj_fn(x)`.
-    
+
     rel_ftol : float, optional
-        Tolerance on the relative reduction in `F^2`, that is, if 
+        Tolerance on the relative reduction in `F^2`, that is, if
         `d(F^2)/F^2 < rel_ftol` then mark converged.
-    
+
     rel_xtol : float, optional
         Tolerance on the relative value of `|x|`, so that if
         `d(|x|)/|x| < rel_xtol` then mark converged.
@@ -83,7 +83,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     """
 
     printer = _VerbosityPrinter.build_printer(verbosity, comm)
-    
+
     msg = ""
     converged = False
     x = x0
@@ -101,11 +101,11 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     # DB: from ..tools import matrixtools as _mt
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
 
-        
+
     for k in range(max_iter): #outer loop
         # assume x, f, fnorm hold valid values
 
-        if len(msg) > 0: 
+        if len(msg) > 0:
             break #exit outer loop if an exit-message has been set
 
         if norm_f < f_norm2_tol:
@@ -113,7 +113,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             converged = True; break
 
         #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
-        
+
         if profiler: profiler.mem_check("custom_leastsq: begin outer iter *before de-alloc*")
         Jac = None; JTJ = None; JTf = None
 
@@ -127,10 +127,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         #    x_plus_dx = x.copy()
         #    x_plus_dx[i] += eps
         #    Jac[:,i] = (obj_fn(x_plus_dx)-f)/eps
-        
+
         # DB: from ..tools import matrixtools as _mt
         # DB: print("DB JAC (%s)=" % str(Jac.shape)); _mt.print_mx(Jac,prec=0,width=4); assert(False)
-        if profiler: profiler.mem_check("custom_leastsq: after jacobian:" 
+        if profiler: profiler.mem_check("custom_leastsq: after jacobian:"
                                         + "shape=%s, GB=%.2f" % (str(Jac.shape),
                                                         Jac.nbytes/(1024.0**3)) )
 
@@ -184,14 +184,14 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 if profiler: profiler.mem_check("custom_leastsq: before linsolve")
                 tm = _time.time()
                 success = True
-                #dx = _np.linalg.solve(JTJ, -JTf) 
-                #NEW scipy: dx = _scipy.linalg.solve(JTJ, -JTf, assume_a='pos') #or 'sym' 
+                #dx = _np.linalg.solve(JTJ, -JTf)
+                #NEW scipy: dx = _scipy.linalg.solve(JTJ, -JTf, assume_a='pos') #or 'sym'
                 dx = _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
                 if profiler: profiler.add_time("custom_leastsq: linsolve",tm)
             #except _np.linalg.LinAlgError:
             except _scipy.linalg.LinAlgError:
                 success = False
-            
+
             if profiler: profiler.mem_check("custom_leastsq: after linsolve")
             if success: #linear solve succeeded
                 new_x = x + dx
@@ -210,7 +210,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 # DB: from ..tools import matrixtools as _mt
                 # DB: print("DB XNEW (%s)=" % str(new_x.shape)); print(new_x)
                 # DB: print("DB FNEW (%s)=" % str(new_f.shape)); print(new_f); assert(False)
-                
+
                 if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
                 norm_new_f = _np.dot(new_f,new_f) # _np.linalg.norm(new_f)**2
                 if not _np.isfinite(norm_new_f): # avoid infinite loop...
@@ -219,7 +219,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 dL = _np.dot(dx, mu*dx - JTf) # expected decrease in ||F||^2 from linear model
                 dF = norm_f - norm_new_f      # actual decrease in ||F||^2
 
-                printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" % 
+                printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" %
                             (norm_new_f,dL,dF,dL/norm_f,dF/norm_f),2)
 
                 if dL/norm_f < rel_ftol and dF >= 0 and dF/norm_f < rel_ftol and dF/dL < 2.0:
@@ -253,8 +253,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
             # if this point is reached, either the linear solve failed
             # or the error did not reduce.  In either case, reject increment.
-                
-            #Increase damping (mu), then increase damping factor to 
+
+            #Increase damping (mu), then increase damping factor to
             # accelerate further damping increases.
             mu *= nu
             if nu > half_max_nu : #watch for nu getting too large (&overflow)
@@ -262,7 +262,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             nu = 2*nu
             printer.log("      Rejected!  mu => mu*nu = %g, nu => 2*nu = %g"
                         % (mu, nu),2)
-            
+
             JTJ[idiag] = undampled_JTJ_diag #restore diagonal
         #end of inner loop
     #end of outer loop
@@ -280,7 +280,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
 
 
-#Wikipedia-version of LM algorithm, testing mu and mu/nu damping params and taking 
+#Wikipedia-version of LM algorithm, testing mu and mu/nu damping params and taking
 # mu/nu => new_mu if acceptable...  This didn't seem to perform well, but maybe just
 # needs some tweaking, so leaving it commented here for reference
 #def custom_leastsq_wikip(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
@@ -293,7 +293,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 #    tau = 1e-3 #initial mu
 #    nu = 1.3
 #    my_cols_slice = None
-#    
+#
 #
 #    if not _np.isfinite(norm_f):
 #        msg = "Infinite norm of objective function at initial point!"
@@ -301,7 +301,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 #    for k in range(max_iter): #outer loop
 #        # assume x, f, fnorm hold valid values
 #
-#        if len(msg) > 0: 
+#        if len(msg) > 0:
 #            break #exit outer loop if an exit-message has been set
 #
 #        if norm_f < f_norm_tol:
@@ -310,13 +310,13 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 #
 #        if verbosity > 0:
 #            print("--- Outer Iter %d: norm_f = %g" % (k,norm_f))
-#            
+#
 #        if profiler: profiler.mem_check("custom_leastsq: begin outer iter *before de-alloc*")
 #        Jac = None; JTJ = None; JTf = None
 #
 #        if profiler: profiler.mem_check("custom_leastsq: begin outer iter")
 #        Jac = jac_fn(x)
-#        if profiler: profiler.mem_check("custom_leastsq: after jacobian:" 
+#        if profiler: profiler.mem_check("custom_leastsq: after jacobian:"
 #                                        + "shape=%s, GB=%.2f" % (str(Jac.shape),
 #                                                        Jac.nbytes/(1024.0**3)) )
 #
@@ -353,11 +353,11 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 #                if profiler: profiler.mem_check("custom_leastsq: before linsolve")
 #                tm = _time.time()
 #                success = True
-#                dx = _np.linalg.solve(JTJ, -JTf) 
+#                dx = _np.linalg.solve(JTJ, -JTf)
 #                if profiler: profiler.add_time("custom_leastsq: linsolve",tm)
 #            except _np.linalg.LinAlgError:
 #                success = False
-#            
+#
 #            if profiler: profiler.mem_check("custom_leastsq: after linsolve")
 #            if success: #linear solve succeeded
 #                new_x = x + dx
@@ -372,7 +372,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 #
 #                if norm_dx > (norm_x+rel_tol)/MACH_PRECISION:
 #                    msg = "(near-)singular linear system"; break
-#                
+#
 #                new_f = obj_fn(new_x)
 #                if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
 #                norm_new_f = _np.linalg.norm(new_f)
@@ -391,7 +391,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 #                #Linear solve failed:
 #                mu *= nu #increase mu
 #                nu = 2*nu
-#            
+#
 #            JTJ[idiag] = undampled_JTJ_diag #restore diagonal for next inner loop iter
 #        #end of inner loop
 #    #end of outer loop
