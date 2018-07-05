@@ -1081,7 +1081,7 @@ def build_alias_gateset(gs_primitives, alias_dict):
     return gs_new
 
 
-def build_nqubit_gateset(nQubits, gatedict, availability={},
+def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
                          parameterization='static', evotype="auto",
                          sim_type="auto", on_construction_error='raise'):
     """
@@ -1159,6 +1159,8 @@ def build_nqubit_gateset(nQubits, gatedict, availability={},
         `availability`).  For instance, the gate label for the `"Gx"` gate on
         qubit 2 might be `Label("Gx",1)`.
     """
+    if qubit_labels is None:
+        qubit_labels = list(range(nQubits))
 
     if evotype == "auto": # Note: this same logic is repeated in build_nqubit_standard_gateset
         if parameterization == "clifford": evotype = "stabilizer"
@@ -1189,7 +1191,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability={},
 
     gs = _gateset.GateSet(default_param = parameterization, # "full", "TP" or "static", "clifford", ...
                           sim_type = sim_type)              # "matrix", "map", "termorder:X"
-    gs.stateSpaceLabels = _ld.StateSpaceLabels(tuple(range(nQubits)))
+    gs.stateSpaceLabels = _ld.StateSpaceLabels(tuple(qubit_labels))
     gs._evotype = evotype # set this to ensure we create the types of gateset element we expect to.
 
     #Set "sub-type" as in GateSet.set_all_parameterizations
@@ -1229,9 +1231,9 @@ def build_nqubit_gateset(nQubits, gatedict, availability={},
         
         availList = availability.get(gateName, 'all-permutations')
         if availList == 'all-combinations': 
-            availList = list(_itertools.combinations(list(range(nQubits)), gate_nQubits))
+            availList = list(_itertools.combinations(qubit_labels, gate_nQubits))
         elif availList == 'all-permutations': 
-            availList = list(_itertools.permutations(list(range(nQubits)), gate_nQubits))
+            availList = list(_itertools.permutations(qubit_labels, gate_nQubits))
             
         for inds in availList:
             try:
@@ -1301,7 +1303,7 @@ def get_standard_gate_unitaries():
 
 
 def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=None,
-                                  availability=None, parameterization='static',
+                                  availability=None, qubit_labels=None, parameterization='static',
                                   evotype="auto", sim_type="auto", on_construction_error='raise'):
     """
     Creates a "standard" n-qubit gate set, usually of ideal gates.
@@ -1407,7 +1409,7 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
             assert(evotype in ("statevec","stabilizer")), "Invalid evotype: %s" % evotype
             gatedict[name] = U
 
-    return build_nqubit_gateset(nQubits,gatedict,availability,parameterization,
+    return build_nqubit_gateset(nQubits,gatedict,availability,qubit_labels,parameterization,
                                 evotype,sim_type,on_construction_error)
 
 

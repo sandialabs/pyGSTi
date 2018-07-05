@@ -155,7 +155,7 @@ class ProcessorSpec(object):
             assert(sim_type in ('auto','map')), "Clifford model must use 'map' simulation type"
             model = _cnst.build_nqubit_standard_gateset(
                 self.number_of_qubits, self.root_gate_names,
-                self.nonstd_gate_unitaries, self.availability,
+                self.nonstd_gate_unitaries, self.availability, self.qubit_labels,
                 parameterization='clifford', sim_type=sim_type,
                 on_construction_error='warn') # *drop* gates that aren't cliffords
 
@@ -166,7 +166,7 @@ class ProcessorSpec(object):
             
             model = _cnst.build_nqubit_standard_gateset(
                 self.number_of_qubits, self.root_gate_names,
-                self.nonstd_gate_unitaries, self.availability,
+                self.nonstd_gate_unitaries, self.availability, self.qubit_labels,
                 param, sim_type)
             
         else: # unknown model name, so require parameterization
@@ -174,7 +174,7 @@ class ProcessorSpec(object):
                 raise ValueError("Non-std model name '%s' means you must specify `parameterization` argument!" % model_name)
             model = _cnst.build_nqubit_standard_gateset(
                 self.number_of_qubits, self.root_gate_names,
-                self.nonstd_gate_unitaries, self.availability,
+                self.nonstd_gate_unitaries, self.availability, self.qubit_labels,
                 parameterization, sim_type)
             
         return model
