@@ -12,7 +12,7 @@ from ._version import __version__
 from . import algorithms as alg
 from . import construction as cst
 from . import objects as obj
-from . import report as rpt
+#from . import report as rpt
 
 from .algorithms.core import *
 from .algorithms.gaugeopt import *
