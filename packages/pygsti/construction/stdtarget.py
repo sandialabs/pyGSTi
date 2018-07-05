@@ -65,6 +65,10 @@ def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=Fal
     print("Num of Experiments = ", len(listOfExperiments))
 
     key_fn, val_fn = _get_cachefile_names(std_module, "H+S terms", "termorder:%d" % termOrder)
+    _write_calccache(calc_cache, key_fn, val_fn, json_too)
+
+
+def _write_calccache(calc_cache, key_fn, val_fn, json_too=False):
 
     keys = list(calc_cache.keys())
     def conv_key(ky): # converts key to native python objects for faster serialization (but *same* hashing)
@@ -93,7 +97,17 @@ def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=Fal
     ctape = _np.concatenate(ctape)
     _np.savez_compressed(val_fn, vtape=vtape, ctape=ctape)
     print("Wrote %s" % val_fn)
-    
+
+def _load_calccache(key_fn, val_fn):
+    #print("Loading cache..."); t0 = _time.time()
+    with _gzip.open(key_fn,"rb") as f:            
+        keys = _pickle.load(f)
+    npfile = _np.load(val_fn)
+    vals = _objs.polynomial.bulk_load_compact_polys((npfile['vtape'],npfile['ctape']))
+    calc_cache = { k:v for k,v in zip(keys,vals) }
+    #print("Done in %.1fs" % (_time.time()-t0))
+    return calc_cache
+
     
 def _copy_target(std_module, param_type, sim_type="auto", gscache=None):
 
@@ -108,15 +122,8 @@ def _copy_target(std_module, param_type, sim_type="auto", gscache=None):
         simt = "termorder:1" if sim_type == "auto" else sim_type # don't update sim_type b/c gscache
         key_fn, val_fn = _get_cachefile_names(std_module, param_type, simt)
         if _os.path.exists(key_fn) and _os.path.exists(val_fn):        
-            #print("Loading cache..."); t0 = _time.time()
-            with _gzip.open(key_fn,"rb") as f:            
-                keys = _pickle.load(f)
-            npfile = _np.load(val_fn)
-            vals = _objs.polynomial.bulk_load_compact_polys((npfile['vtape'],npfile['ctape']))
-            calc_cache = { k:v for k,v in zip(keys,vals) }
-            #print("Done in %.1fs" % (_time.time()-t0))
+            calc_cache = _load_calccache(key_fn, val_fn)
         else:
-            #print("No cache found!")
             calc_cache = {}
 
         gs.set_simtype(simt,calc_cache)

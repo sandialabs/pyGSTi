@@ -13,7 +13,7 @@ def chi2_terms(gateset, dataset, gateStrings=None,
                minProbClipForWeighting=1e-4, clipTo=None,
                useFreqWeightedChiSq=False, check=False,
                memLimit=None, gateLabelAliases=None,
-               evaltree_cache=None):
+               evaltree_cache=None, comm=None):
     """
     Computes the chi^2 contributions from a set of gate strings.
 
@@ -79,7 +79,7 @@ def chi2_terms(gateset, dataset, gateStrings=None,
         N[ lookup[i] ] = dataset[gateStr].total
         f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
 
-    gateset.bulk_fill_probs(probs, evTree, clipTo, check)
+    gateset.bulk_fill_probs(probs, evTree, clipTo, check, comm)
 
     cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
     v = N * ((probs - f)**2/cprobs)
@@ -101,7 +101,7 @@ def chi2(gateset, dataset, gateStrings=None,
          minProbClipForWeighting=1e-4, clipTo=None,
          useFreqWeightedChiSq=False, check=False,
          memLimit=None, gateLabelAliases=None,
-         evaltree_cache=None):
+         evaltree_cache=None, comm=None):
     """
     Computes the total chi^2 for a set of gate strings.
 
@@ -155,6 +155,10 @@ def chi2(gateset, dataset, gateStrings=None,
         in this computation.  If an empty dictionary is supplied, it is filled
         with cached values to speed up subsequent executions of this function
         which use the *same* `gateset` and `gatestring_list`.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
 
 
     Returns
@@ -258,13 +262,13 @@ def chi2(gateset, dataset, gateStrings=None,
 
     if returnHessian:
         gateset.bulk_fill_hprobs(hprobs, evTree,
-                                probs, dprobs, clipTo, check)
+                                 probs, dprobs, clipTo, check, comm)
     elif returnGradient:
         gateset.bulk_fill_dprobs(dprobs, evTree,
-                                probs, clipTo, check)
+                                 probs, clipTo, check, comm)
     else:
         gateset.bulk_fill_probs(probs, evTree,
-                                clipTo, check)
+                                clipTo, check, comm)
 
 
     #cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting) #clipped probabilities (also clip derivs to 0?)

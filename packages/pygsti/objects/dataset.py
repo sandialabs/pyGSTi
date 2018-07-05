@@ -25,7 +25,7 @@ from . import gatestring as _gs
 from . import labeldicts as _ld
 #from . import dataset as _ds
 
-Oindex_type = _np.uint8
+Oindex_type = _np.uint32
 Time_type = _np.float64
 Repcount_type = _np.float32
  # thought: _np.uint16 but doesn't play well with rescaling
