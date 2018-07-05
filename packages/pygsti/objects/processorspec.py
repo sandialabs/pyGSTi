@@ -108,29 +108,31 @@ class ProcessorSpec(object):
         for model_name in construct_models:
             self.add_std_model(model_name)
 
-        # Add initial compilations
+        # Add compilations for the "basic" Clifford gates specified, which are used for, e.g., Clifford compiler algorithms.
+        # We only do this if there is a 'clifford' gateset, as these are Clifford compilations.
         if 'clifford' in construct_models:
 
             for ctype in list(construct_clifford_compilations.keys()):
                 if ctype == 'paulieq':
-                    singlequbit = []
-                    twoqubit = []
+                    oneQgates = [] # A list of the 1-qubit gates to compile, in the std names understood inside the compilers.
+                    twoQgates = [] # A list of the 2-qubit gates to compile, in the std names understood inside the compilers.
                     if '1Qcliffords' in construct_clifford_compilations[ctype]:
-                        singlequbit = ['H','P','PH','HP','HPH']
+                        oneQgates = ['H','P','PH','HP','HPH']
                     if 'cnots' in construct_clifford_compilations[ctype]:
-                        twoqubit = ['CNOT']
-                    self.add_std_compilation(ctype, singlequbit, twoqubit, verbosity)
+                        twoQgates = ['CNOT']
+                    self.add_std_compilation(ctype, oneQgates, twoQgates, verbosity)
 
                 if ctype == 'absolute':
-                    singlequbit = []
-                    twoqubit = []
+                    oneubit = [] # A list of the 1-qubit gates to compile, in the std names understood inside the compilers.
+                    twoQgates = [] # A list of the 2-qubit gates to compile, in the std names understood inside the compilers.
                     if 'paulis' in construct_clifford_compilations[ctype]:
-                        singlequbit = ['I','X','Y','Z']
+                        oneQgates = ['I','X','Y','Z']
                     if '1Qcliffords' in construct_clifford_compilations[ctype]:
-                        # todo : implement this.
+                        oneQgates += ['C'+str(q) for q in range(24)] # todo : implement this.
                         raise ValueError("This is not yet implemented")
-                    self.add_std_compilation(ctype, singlequbit, twoqubit, verbosity)
+                    self.add_std_compilation(ctype, oneQgates, twoQgates, verbosity)
             
+            # Todo: work out if this makes any sense and/or does anything.
             if len(self.compilations) > 0:
                 self.construct_compiler_costs()
 
@@ -147,7 +149,10 @@ class ProcessorSpec(object):
 
                 
     def construct_std_model(self, model_name, parameterization='auto', sim_type='auto'):
-        """ TODO: docstring """
+        """ 
+        Erik todo: docstring 
+
+        """
         from .. import construction as _cnst
         
         if model_name == 'clifford':
@@ -180,13 +185,16 @@ class ProcessorSpec(object):
         return model
 
     def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
-        """ TODO: docstring """
+        """ 
+        Erik todo: docstring 
+
+        """
         self.models[model_name] = self.construct_std_model(model_name,
                                                            parameterization,
                                                            sim_type)
         
             
-    def construct_std_compilation(self,  compile_type, singlequbit, twoqubit, verbosity=1):
+    def construct_std_compilation(self,  compile_type, oneQgates, twoQgates, verbosity=1):
         """ TODO: docstring """
         #Hard-coded gates we need to compile from the native (clifford) gates in order to compile
         # arbitrary (e.g. random) cliffords, since our Clifford compiler outputs circuits in terms
@@ -201,15 +209,15 @@ class ProcessorSpec(object):
         #Stage1:
         # Compile 1Q gates "locally" - i.e., out of native gates which act only
         #  on the target qubit of the gate being compiled.
-        for q in range(0,self.number_of_qubits):
-            for gname in singlequbit:
+        for q in self.qubit_labels:
+            for gname in oneQgates:
                 if verbosity > 0:
                     print("Creating a circuit to implement {} {} on qubit {}...".format(gname,desc,q))
                 library.add_local_compilation_of(_Label(gname,q), verbosity=verbosity)
 
             if verbosity > 0: print("Complete.")
 
-        for gate in twoqubit:
+        for gate in twoQgates:
             assert(gate == 'CNOT'), "Only CNOT compilations are currently possible"
         
             if compile_type == 'paulieq':
@@ -251,10 +259,10 @@ class ProcessorSpec(object):
             # Compile 2Q gates locally, if possible.  Keep track of what can't be compiled.
             not_locally_compilable = []
             
-            for q1 in range(0,self.number_of_qubits):
-                for q2 in range(0,self.number_of_qubits):
+            for q1 in self.qubit_labels:
+                for q2 in self.qubit_labels:
                     if q1 == q2: continue # 2Q gates must be on different qubits!
-                    for gname in twoqubit:
+                    for gname in twoQgates:
                         if verbosity > 0:
                             print("Creating a circuit to implement {} {} on qubits {}...".format(gname,desc,(q1,q2)))
                         try:
@@ -273,15 +281,18 @@ class ProcessorSpec(object):
         return library
 
     
-    def add_std_compilation(self, compile_type, singlequbit, twoqubit, verbosity=1):
-        """ TODO: docstring """
+    def add_std_compilation(self, compile_type, oneQgates, twoQgates, verbosity=1):
+        """ Tim todo: docstring 
+
+        """
         self.compilations[compile_type] = \
-            self.construct_std_compilation(compile_type, singlequbit, twoqubit, verbosity)
+            self.construct_std_compilation(compile_type, oneQgates, twoQgates, verbosity)
         
                                  
     def construct_compiler_costs(self, custom_connectivity=None):
-        """ TODO: docstring """
+        """ Tim todo: docstring 
 
+        """
         if 'clifford' not in self.models:
             raise ValueError("Cannot construct compiler costs without a 'clifford' model")
 
@@ -293,8 +304,9 @@ class ProcessorSpec(object):
             connectivity = _np.zeros((self.number_of_qubits,self.number_of_qubits),dtype=bool)
             for gatelabel in self.models['clifford'].gates:
                 if gatelabel.number_of_qubits > 1:
+                    # todo : this only works for 2-qubit gates, so make it check for that, or fix.
                     for p in _itertools.permutations(gatelabel.qubits, 2):
-                        connectivity[p] = True
+                        connectivity[self.qubit_labels.index(p[0]),self.qubit_labels.index(p[1])] = True
         
         self.qubitgraph = _QubitGraph(list(range(self.number_of_qubits)), connectivity)
         self.qubitcosts = {}
