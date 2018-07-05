@@ -108,7 +108,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         dsGen = None
         dataset = _ds.DataSet( collisionAction=collisionAction )
 
-                
+
     if aliasDict:
         aliasDict = { _lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
                       for ky,val in aliasDict.items() } # convert to use Labels
@@ -120,7 +120,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         #all_dprobs = gsGen.bulk_dprobs(gatestring_list) #DEBUG - not needed here!!!
 
     if comm is None or comm.Get_rank() == 0: # only root rank computes
-                
+
         if sampleError in ("binomial","multinomial"):
             if randState is None:
                 rndm = _rndm.RandomState(seed) # ok if seed is None
@@ -155,9 +155,11 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                 if psum > 1+TOL:
                     adjusted = True
                     _warnings.warn("Adjusting sum(probs) > 1 to 1")
+                    raise ValueError('Probability adjustment required')
                 if psum < 1-TOL:
                     adjusted = True
                     _warnings.warn("Adjusting sum(probs) < 1 to 1")
+                    raise ValueError('Probability adjustment required')
 
                 # A cleaner probability cleanup.. lol
                 OVERTOL  = 1.0 + TOL
