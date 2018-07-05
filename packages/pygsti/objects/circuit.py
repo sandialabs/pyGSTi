@@ -20,8 +20,8 @@ class Circuit(_gstr.GateString):
     typically one per qubit, and permits a richer set of operations than 
     :class:`GateString`.  These operations include a range of methods for
     manipulating quantum circuits. E.g., basic depth compression algorithms.
-    """
-    
+
+    """   
     def __init__(self, line_items=None, gatestring=None, num_lines=None,
                  line_labels=None, parallelize=False, identity='I'):
         """
@@ -30,9 +30,8 @@ class Circuit(_gstr.GateString):
         You can supply at most one of `line_items` and `gatestring` (alternate
         ways of specifying the gates).  If neither are specified an empty
         Circuit is created.  Unless `line_items` is specified, you must also
-        specify the number and label for each line via `num_lines` and/or
-        `line_labels` (if labels aren't specified they default to the integers
-        beggining with 0).
+        specify the number of lines via `num_lines` and/or `line_labels`. If
+         labels aren't specified they default to the integers starting at 0.
 
         Parameters
         ----------
@@ -52,8 +51,8 @@ class Circuit(_gstr.GateString):
 
         num_lines : int, optional
             The number of lines (usually qubits).  You only need to specify 
-            this when it cannot be inferred, that is, when `line_items` and
-            `line_labels` are not given.
+            this when it cannot be inferred, that is, when `line_items` or
+            `line_labels` is not given.
 
         line_labels : list, optional
             A list of strings or integers labelling each of the lines.  The
@@ -64,15 +63,26 @@ class Circuit(_gstr.GateString):
         parallelize : bool, optional
             Only used when initializing from `gatestring`.  When True, automatic
             parallelization is performed: consecutive gates in `gatestring`
-            acting on disjoint sets of qubits are be placed in the same layer.
+            acting on disjoint sets of qubits are placed in the same layer.
 
-        todo: identity
+        identity : str, optional
+            The "name" for the identity gate. This is the gate name that will
+            be used to "pad" layers: qubits that are without a gate in
+            a layer when the circuit is constructed will be assigned an idle gate
+            with a name fixed by this string. Unlike all other gates, the created
+            circuit "knows" that this particular gate is an idle. So, the circuit
+            will potentially drop idle gates when doing depth-compression, whereas 
+            all other gates are treat as having an unspecified action, by all methods
+            of the circuit, unless the relationship between the gates is given to 
+            a method of circuit.
         
         """
+        assert(type(identity) == str), "The identity name must be a string!"
         self.identity = identity
 
         assert((line_items is not None) or (gatestring is not None) or (num_lines is not None) or (line_labels is not None)), \
-            "At least one argument must be not None!"
+            "At least one of these arguments must be not None!"
+
         self._static = False
 
         if (num_lines is not None) and (line_labels is not None):
@@ -107,13 +117,13 @@ class Circuit(_gstr.GateString):
             else:
                 self.clear() # initializes an empty circuit
 
-            """ Initialize the members of the GateString base class """
-            tup = self._flatten_to_tup()
-            strRep = None  #don't worry about string representation currently - just auto-compute it.
-            super(Circuit, self).__init__(tup, strRep)
+        """ Initialize the members of the GateString base class """
+        tup = self._flatten_to_tup()
+        strRep = None  #don't worry about string representation currently - just auto-compute it.
+        super(Circuit, self).__init__(tup, strRep)
 
-            self._tup_dirty = False # keep track of when we need to _flatten_to_tup
-            self._str_dirty = True # keep track of when we need to auto-compute string rep
+        self._tup_dirty = False # keep track of when we need to _flatten_to_tup
+        self._str_dirty = True # keep track of when we need to auto-compute string rep
 
     def _reinit_base(self):
         """ Re-initialize the members of the base GateString object """
@@ -180,7 +190,6 @@ class Circuit(_gstr.GateString):
         #print("Circuit.str setter accessed")
         self._reinit_base()
         self._str = value
-
 
     def __hash__(self):
         if self._static:
@@ -268,6 +277,10 @@ class Circuit(_gstr.GateString):
                     gate_qubits = gate.qubits if (gate.qubits is not None) \
                                   else self.line_labels  # then gate uses *all* lines
     
+                    # Checks the qubits are all in the line labels.
+                    for qubit in gate_qubits:
+                        assert(qubit in self.line_labels), "Some gates do not act on the qubits in this circuit!"
+
                     if len(used_qubits.intersection(gate_qubits)) > 0:
                         break # `gate` can't fit in this layer
                         
@@ -285,7 +298,7 @@ class Circuit(_gstr.GateString):
             # Insert the layer into the circuit.
             self.insert_layer(layer,layer_number)
             
-            # Move on to the next gate not in included in the circuit.
+            # Move on to the next gate not included in the circuit.
             j += k
             # Update the layer number.
             layer_number += 1
@@ -524,7 +537,7 @@ class Circuit(_gstr.GateString):
             self.insert_layer(layer,j)
             
             
-    def replace_gatename(self,old_gatename,new_gatename):
+    def replace_gatename(self, old_gatename, new_gatename):
         """
         Changes the *name* of a gate throughout this Circuit.
 

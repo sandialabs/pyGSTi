@@ -35,9 +35,9 @@ class ProcessorSpec(object):
     """ TODO: docstring """
     
     def __init__(self, nQubits, gate_names, nonstd_gate_unitaries=None,
-                 availability=None, construct_models=('clifford','target'), 
+                 availability=None, qubit_labels = None, construct_models=('clifford','target'), 
                  construct_clifford_compilations = {'paulieq' : ('1Qcliffords','cnots'), 
-                 'absolute': ('paulis','1Qcliffords')}, verbosity=0):
+                 'absolute': ('paulis',)}, verbosity=0):
         """
         An object that can be used to encapsulate the device specification for a one or more qubit 
         quantum computer.
@@ -79,6 +79,12 @@ class ProcessorSpec(object):
             
         self.availability = None if (availability is None) \
                             else availability.copy()
+
+        if qubit_labels is None:
+            self.qubit_labels = list(range(nQubits)) 
+        else:
+            assert(len(qubit_labels) == nQubits) 
+            self.qubit_labels = list(qubit_labels)
 
         # A dictionary of models for the device (e.g., imperfect unitaries, process matrices etc).
         self.models = _collections.OrderedDict()
