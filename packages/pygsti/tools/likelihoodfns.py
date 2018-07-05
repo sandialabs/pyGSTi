@@ -69,7 +69,7 @@ TOL = 1e-20
  # log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}
  #       = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)
  #
- #   after patching (linear extrapolation below min_p and "softening" f == 0 terms w/cubit below radius "a"):
+ #   after patching (linear extrapolation below min_p and "softening" f == 0 terms w/cubic below radius "a"):
  #
  # logl = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}                                                        if p_{i,sl} >= min_p and N_{i,sl} > 0
  #                   N_{i,sl} log(min_p)    - N[i]*min_p    + S * (p_{i,sl} - min_p) + S2 * (p_{i,sl} - min_p)**2  if p_{i,sl} < p_min and N_{i,sl} > 0
@@ -92,7 +92,7 @@ TOL = 1e-20
  #    logL_term = logL_term(min_p) + S * (p-min_p) + S2 * (p-min_p)**2
  #   and hlogL == d/d1 ( d/d2 ( logl ) )  -- i.e. dp2 is the *first* derivative performed...
  #
- # For cubit interpolation, use function F(p) (derived by Robin: match value, 1st-deriv, 2nd-deriv at p == r, and require min at p == 0):
+ # For cubic interpolation, use function F(p) (derived by Robin: match value, 1st-deriv, 2nd-deriv at p == r, and require min at p == 0):
  #  Given a radius r << 1 (but r>0):
  #   F(p) = piecewise{ if( p>r ) then p; else -(1/3)*p^3/r^2 + p^2/r + (1/3)*r }
  #  OLD: quadratic that doesn't match 2nd-deriv:
@@ -272,7 +272,8 @@ def logl(gateset, dataset, gatestring_list=None,
 
 def logl_jacobian(gateset, dataset, gatestring_list=None,
                   minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
-                  poissonPicture=True, check=False, gateLabelAliases=None):
+                  poissonPicture=True, check=False, comm=None,
+                  memLimit=None, gateLabelAliases=None, verbosity=0):
     """
     The jacobian of the log-likelihood function.
 
@@ -315,12 +316,22 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
         If True, perform extra checks within code to verify correctness.  Used
         for testing, and runs much slower when True.
 
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
+
     gateLabelAliases : dictionary, optional
         Dictionary whose keys are gate label "aliases" and whose values are tuples
         corresponding to what that gate label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
+    verbosity : int, optional
+        How much detail to print to stdout.
 
     Returns
     -------
@@ -328,17 +339,30 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
       array of shape (M,), where M is the length of the vectorized gateset.
     """
 
-    nP = gateset.num_params()
-    jac = _np.zeros([1,nP])
-
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
+
+    C = 1.0/1024.0**3; nP = gateset.num_params()
+    persistentMem = 8*nP + 8*len(gatestring_list)*(nP+1) # in bytes
+
+    if memLimit is not None and memLimit < persistentMem:
+        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit*C) +
+                          "< memory required to hold final results (%g GB)"
+                          % (persistentMem*C))
+
+
+    #OLD: evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list)
+    mlim = None if (memLimit is None) else memLimit-persistentMem
+    evalTree, blkSize, _, lookup, outcomes_lookup = \
+        gateset.bulk_evaltree_from_resources(
+            gatestring_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
+            verbosity)
 
     a = radius # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
 
-    evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list)
-
+    #  Allocate persistent memory
+    jac = _np.zeros([1,nP])
     nEls = evalTree.num_final_elements()
     probs = _np.empty( nEls, 'd' )
     dprobs = _np.empty( (nEls,nP), 'd' )
@@ -361,7 +385,8 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
 
 
     gateset.bulk_fill_dprobs(dprobs, evalTree, prMxToFill=probs,
-                             clipTo=probClipInterval, check=check)
+                             clipTo=probClipInterval, check=check, comm=comm,
+                             wrtBlockSize=blkSize) # FUTURE: set gatherMemLimit=?
 
 
     pos_probs = _np.where(probs < min_p, min_p, probs)
@@ -398,7 +423,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
         jac = dprobs * dprobs_factor[:,None] # (KM,N) * (KM,1)   (N = dim of vectorized gateset)
 
     # jac[iSpamLabel,iGateString,iGateSetParam] contains all d(logl)/d(gatesetParam) contributions
-    return _np.sum(jac, axis=(0,1)) # sum over spam label and gate string dimensions
+    return _np.sum(jac, axis=0) # sum over spam label and gate string dimensions
 
 
 def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
@@ -684,6 +709,168 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
             final_hessian[j,i] = final_hessian[i,j]
 
     return final_hessian # (N,N)
+
+
+def logl_approximate_hessian(gateset, dataset, gatestring_list=None,
+                             minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
+                             poissonPicture=True, check=False, comm=None,
+                             memLimit=None, gateLabelAliases=None, verbosity=0):
+    """
+    An approximate Hessian of the log-likelihood function.
+
+    An approximation to the true Hessian is computed using just the Jacobian
+    (and *not* the Hessian) of the probabilities w.r.t. the gate set
+    parameters.  Let `J = d(probs)/d(params)` and denote the Hessian of the
+    log-likelihood w.r.t. the probabilities as `d2(logl)/dprobs2` (a *diagonal*
+    matrix indexed by the term, i.e. probability, of the log-likelihood). Then
+    this function computes:
+
+    `H = J * d2(logl)/dprobs2 * J.T`
+
+    Which simply neglects the `d2(probs)/d(params)2` terms of the true Hessian.
+    Since this curvature is expected to be small at the MLE point, this
+    approximation can be useful for computing approximate error bars.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        Gateset of parameterized gates (including SPAM)
+
+    dataset : DataSet
+        Probability data
+
+    gatestring_list : list of (tuples or GateStrings), optional
+        Each element specifies a gate string to include in the log-likelihood
+        sum.  Default value of None implies all the gate strings in dataset
+        should be used.
+
+    minProbClip : float, optional
+        The minimum probability treated normally in the evaluation of the log-likelihood.
+        A penalty function replaces the true log-likelihood for probabilities that lie
+        below this threshold so that the log-likelihood never becomes undefined (which improves
+        optimizer performance).
+
+    probClipInterval : 2-tuple or None, optional
+        (min,max) values used to clip the probabilities predicted by gatesets during MLEGST's
+        search for an optimal gateset (if not None).  if None, no clipping is performed.
+
+    radius : float, optional
+        Specifies the severity of rounding used to "patch" the zero-frequency
+        terms of the log-likelihood.
+
+    evalTree : evaluation tree, optional
+        given by a prior call to bulk_evaltree for the same gatestring_list.
+        Significantly speeds up evaluation of log-likelihood derivatives, even
+        more so when accompanied by countVecMx (see below).  Defaults to None.
+
+    poissonPicture : boolean, optional
+        Whether the Poisson-picutre log-likelihood should be differentiated.
+
+    check : boolean, optional
+        If True, perform extra checks within code to verify correctness.  Used
+        for testing, and runs much slower when True.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
+    verbosity : int, optional
+        How much detail to print to stdout.
+
+    Returns
+    -------
+    numpy array
+      array of shape (M,M), where M is the length of the vectorized gateset.
+    """
+
+    if gatestring_list is None:
+        gatestring_list = list(dataset.keys())
+
+    C = 1.0/1024.0**3; nP = gateset.num_params()
+    persistentMem = 8*nP**2 + 8*len(gatestring_list)*(nP+1) # in bytes
+
+    if memLimit is not None and memLimit < persistentMem:
+        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit*C) +
+                          "< memory required to hold final results (%g GB)"
+                          % (persistentMem*C))
+
+
+    #OLD: evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list)
+    mlim = None if (memLimit is None) else memLimit-persistentMem
+    evalTree, blkSize, _, lookup, outcomes_lookup = \
+        gateset.bulk_evaltree_from_resources(
+            gatestring_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
+            verbosity)
+
+    a = radius # parameterizes "roundness" of f == 0 terms
+    min_p = minProbClip
+
+    #  Allocate persistent memory
+    #hessian = _np.zeros( (nP,nP), 'd') # allocated below by assignment
+    nEls = evalTree.num_final_elements()
+    probs = _np.empty( nEls, 'd' )
+    dprobs = _np.empty( (nEls,nP), 'd' )
+
+    ds_gatestring_list = _lt.find_replace_tuple_list(
+        gatestring_list, gateLabelAliases)
+
+    cntVecMx = _np.empty(nEls, 'd' )
+    totalCntVec = _np.empty(nEls, 'd' )
+    for (i,gateStr) in enumerate(ds_gatestring_list):
+        totalCntVec[ lookup[i] ] = dataset[gateStr].total
+        cntVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
+
+    gateset.bulk_fill_dprobs(dprobs, evalTree, prMxToFill=probs,
+                             clipTo=probClipInterval, check=check, comm=comm,
+                             wrtBlockSize=blkSize) # FUTURE: set gatherMemLimit=?
+
+    pos_probs = _np.where(probs < min_p, min_p, probs)
+
+    #Note: these approximate-hessian formula are similar to (but simpler than) the
+    # computations done by the `hessian_from_probs` functions in `logl_hessian(...)`.
+    # They compute just the hessian of the log-likelihood w.r.t. the probabilities -
+    # which correspond to just the `dprobs12_coeffs` variable of the aforementioned
+    # functions.  This is so b/c in this case the "dp1" and "dp2" terms are delta
+    # functions and "hp==0" (b/c the "params" here are just the probabilities
+    # themselves) - so only the X*dp1*dp2 terms survive the general expressions
+    # found above.
+    if poissonPicture:
+        totCnts = totalCntVec  #shorthand
+        S = cntVecMx / min_p - totCnts # slope term that is derivative of logl at min_p
+        S2 = -0.5 * cntVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
+
+        dprobs12_coeffs = \
+            _np.where(probs < min_p, 2*S2, -cntVecMx / pos_probs**2)
+        zfc = _np.where(probs >= a, 0.0, -totCnts*((-2.0/a**2)*probs+2.0/a))
+        dprobs12_coeffs = _np.where(cntVecMx == 0, zfc, dprobs12_coeffs)
+          # a 1D array of the diagonal of d2(logl)/dprobs2; shape = (nEls,)
+
+    else:
+        S = cntVecMx / min_p # slope term that is derivative of logl at min_p
+        S2 = -0.5 * cntVecMx / (min_p**2) # 2nd derivative of logl term at min_p
+        dprobs12_coeffs = \
+            _np.where(probs < min_p, 2*S2, -cntVecMx / pos_probs**2)
+        dprobs12_coeffs = _np.where(cntVecMx == 0, 0.0, dprobs12_coeffs)
+            # a 1D array of the diagonal of d2(logl)/dprobs2; shape = (nEls,)
+
+    # In notation in docstring:
+    # J = dprobs.T (shape nEls,nP)
+    # diagonal of d2(logl)/dprobs2 = dprobs12_coeffs (var name kept to preserve
+    #                similarity w/functions in logl_hessian)
+    # So H = J * d2(logl)/dprobs2 * J.T becomes:
+    hessian = _np.dot( dprobs.T, dprobs12_coeffs[:,None]*dprobs )
+    return hessian
+
 
 @smart_cached
 def logl_max(gateset, dataset, gatestring_list=None, poissonPicture=True,
