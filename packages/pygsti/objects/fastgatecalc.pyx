@@ -14,6 +14,10 @@ from ..tools import symplectic
 cimport numpy as np
 cimport cython
 
+#Use 64-bit integers
+ctypedef long long INT
+ctypedef unsigned long long UINT
+
 def test_map(s):
     cdef string st = s.encode('UTF-8')
     cdef unordered_map[int, complex] my_map
@@ -48,6 +52,227 @@ def test_map(s):
 #    for x in my_map:
 #        print x.first
 #        print my_map[x]
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_bulk_eval_compact_polys(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+                                 np.ndarray[double, ndim=1, mode="c"] ctape,
+                                 np.ndarray[double, ndim=1, mode="c"] paramvec,
+                                 dest_shape):
+    cdef INT dest_size = np.product(dest_shape)
+    cdef np.ndarray[np.float64_t, ndim=1, mode="c"] res = np.empty(dest_size, np.float64)
+    
+    cdef INT c = 0
+    cdef INT i = 0
+    cdef INT r = 0
+    cdef INT vtape_sz = vtape.size
+    cdef INT nTerms
+    cdef INT m
+    cdef INT k
+    cdef INT nVars
+    cdef double a;
+    cdef double poly_val;
+    
+    while i < vtape_sz:
+        poly_val = 0.0
+        nTerms = vtape[i]; i+=1
+        #print "POLY w/%d terms (i=%d)" % (nTerms,i)
+        for m in range(nTerms):
+            nVars = vtape[i]; i+=1 # number of variable indices in this term
+            a = ctape[c]; c+=1
+            #print "  TERM%d: %d vars, coeff=%s" % (m,nVars,str(a))
+            for k in range(nVars):
+                a *= paramvec[ vtape[i] ]; i+=1
+            poly_val += a
+            #print "  -> added %s to poly_val = %s" % (str(a),str(poly_val))," i=%d, vsize=%d" % (i,vtape.size)
+        res[r] = poly_val; r+=1
+    # = dest_shape # reshape w/out possibility of copying
+    return res.reshape(dest_shape)
+
+
+#Same as above, just takes a complex ctape
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_bulk_eval_compact_polys_complex(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+                                         np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
+                                         np.ndarray[double, ndim=1, mode="c"] paramvec,
+                                         dest_shape):
+    cdef INT dest_size = np.product(dest_shape)
+    cdef np.ndarray[np.complex128_t, ndim=1, mode="c"] res = np.empty(dest_size, np.complex128)
+    
+    cdef INT c = 0
+    cdef INT i = 0
+    cdef INT r = 0
+    cdef INT vtape_sz = vtape.size
+    cdef INT nTerms
+    cdef INT m
+    cdef INT k
+    cdef INT nVars
+    cdef double complex a;
+    cdef double complex poly_val;
+    
+    while i < vtape_sz:
+        poly_val = 0.0
+        nTerms = vtape[i]; i+=1
+        #print "POLY w/%d terms (i=%d)" % (nTerms,i)
+        for m in range(nTerms):
+            nVars = vtape[i]; i+=1 # number of variable indices in this term
+            a = ctape[c]; c+=1
+            #print "  TERM%d: %d vars, coeff=%s" % (m,nVars,str(a))
+            for k in range(nVars):
+                a *= paramvec[ vtape[i] ]; i+=1
+            poly_val += a
+            #print "  -> added %s to poly_val = %s" % (str(a),str(poly_val))," i=%d, vsize=%d" % (i,vtape.size)
+        res[r] = poly_val; r+=1
+    # = dest_shape # reshape w/out possibility of copying
+    return res.reshape(dest_shape)
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
+                       np.ndarray[np.complex128_t, ndim=1, mode="c"] ctape,
+                       np.ndarray[np.int64_t, ndim=1, mode="c"] wrtParams):
+    
+    #Note: assumes wrtParams is SORTED but doesn't assert it like Python version does
+
+    cdef INT c = 0
+    cdef INT i = 0
+    cdef INT j,k, m, nTerms, nVars, cur_iWrt, j0, j1, cur_wrt, cnt, off
+    cdef INT vtape_sz = vtape.size
+    cdef INT wrt_sz = wrtParams.size
+    cdef double complex coeff
+
+    #Figure out buffer sizes fro dctapes & dvtapes
+    cdef INT max_nTerms = 0
+    cdef INT max_vsz = 0
+    cdef INT nPolys = 0
+    while i < vtape_sz:
+        j = i # increment j instead of i for this poly
+        nTerms = vtape[j]; j+=1
+        if nTerms > max_nTerms:
+            max_nTerms = nTerms
+        for m in range(nTerms):
+            nVars = vtape[j] # number of variable indices in this term
+            j += nVars + 1
+        if (j-i) > max_vsz:
+            max_vsz = j-i # size of variable tape for this poly
+        i = j; c += nTerms; nPolys += 1
+
+    #print "MAX vtape-sz-per-poly = %d, MAX nTerms = %d, WRT size = %d" % (max_vsz, max_nTerms, wrt_sz)
+        
+    #Allocate space
+    cdef INT vstride = max_vsz+1 # +1 for nTerms insertion
+    cdef double complex* dctapes = <double complex *>malloc(wrt_sz * max_nTerms * sizeof(double complex))
+    cdef INT*            dvtapes = <INT *>malloc(wrt_sz * vstride * sizeof(INT))
+    cdef INT*            dnterms = <INT *>malloc(wrt_sz * sizeof(INT))
+    cdef INT*            cptr = <INT *>malloc(wrt_sz * sizeof(INT))
+    cdef INT*            vptr = <INT *>malloc(wrt_sz * sizeof(INT))
+    #cdef np.ndarray dctapes = np.empty( (wrt_sz, max_nTerms), np.complex128)
+    #cdef np.ndarray dvtapes = np.empty( (wrt_sz, max_vsz+1), np.int64) # +1 for nTerms insertion
+    #cdef np.ndarray dnterms = np.zeros( wrt_sz, np.int64 )
+    #cdef np.ndarray cptr = np.zeros( wrt_sz, np.int64 ) # how much of each dctapes row is used
+    #cdef np.ndarray vptr = np.zeros( wrt_sz, np.int64 ) # how much of each dvtapes row is used
+
+    cdef INT res_vptr = 0, res_cptr = 0
+    cdef np.ndarray[np.int64_t, ndim=1, mode="c"] result_vtape = np.empty( nPolys*wrt_sz*vstride, np.int64 )
+    cdef np.ndarray[np.complex128_t, ndim=1, mode="c"] result_ctape = np.empty( nPolys*wrt_sz*max_nTerms, np.complex128 )
+    #print "TAPE SIZE = %d" % vtape_sz
+    #print "RESULT SIZE = %d" % result_vtape.size
+    
+    c = 0; i = 0    
+    while i < vtape_sz:
+        j = i # increment j instead of i for this poly
+        nTerms = vtape[j]; j+=1
+        #print "POLY w/%d terms (i=%d)" % (nTerms,i)
+
+        # reset/clear dctapes, dvtapes, dnterms for this poly
+        for k in range(wrt_sz): 
+            cptr[k] = 0
+            vptr[k] = 1 # leave room to insert nTerms at end
+            dnterms[k] = 0
+
+        for m in range(nTerms):
+            coeff = ctape[c]; c += 1
+            nVars = vtape[j]; j += 1 # number of variable indices in this term
+
+            #print "  TERM%d: %d vars, coeff=%s" % (m,nVars,str(coeff))
+            cur_iWrt = 0
+            j0 = j # the vtape index where the current term starts
+            j1 = j+nVars # the ending index
+
+            #Loop to get counts of each variable index that is also in `wrt`.
+            # Once we've passed an element of `wrt` process it, since there can't
+            # see it any more (the var indices are sorted).
+            while j < j1: #loop over variable indices for this term
+                # can't be while True above in case nVars == 0 (then vtape[j] isn't valid)
+                
+                #find an iVar that is also in wrt.
+                # - increment the cur_iWrt or j as needed                
+                while cur_iWrt < wrt_sz and vtape[j] > wrtParams[cur_iWrt]: #condition to increment cur_iWrt
+                    cur_iWrt += 1 # so wrtParams[cur_iWrt] >= vtape[j]
+                if cur_iWrt == wrt_sz: break  # no more possible iVars we're interested in;
+                                                # we're done with all wrt elements
+                # - at this point we know wrt[cur_iWrt] is valid and wrt[cur_iWrt] >= tape[j]
+                cur_wrt = wrtParams[cur_iWrt]
+                while j < j1 and vtape[j] < cur_wrt:
+                    j += 1 # so vtape[j] >= wrt[cur_iWrt]
+                if j == j1: break  # no more iVars - we're done
+
+                #print " check j=%d, val=%d, wrt=%d, cur_iWrt=%d" % (j,vtape[j],cur_wrt,cur_iWrt)
+                if vtape[j] == cur_wrt:
+                    #Yay! a value we're looking for is present in the vtape.
+                    # Figure out how many there are (easy since vtape is sorted
+                    # and we'll always stop on the first one)
+                    cnt = 0
+                    while j < j1 and vtape[j] == cur_wrt:
+                        cnt += 1; j += 1
+                    #Process cur_iWrt: add a term to tape for cur_iWrt
+                    off = cur_iWrt*vstride
+                    dctapes[ cur_iWrt*max_nTerms + cptr[cur_iWrt] ] = coeff*cnt;  cptr[cur_iWrt] += 1
+                    dvtapes[ off + vptr[cur_iWrt] ] = nVars-1;                    vptr[cur_iWrt] += 1
+                    off += vptr[cur_iWrt] # now off points to next available slot in dvtape
+                    for k in range(j0,j1):
+                        if k == j-1: continue # remove this index
+                        dvtapes[ off ] = vtape[k]; off += 1
+                        #print " k=%d -> var %d" % (k,vtape[k])
+                    vptr[cur_iWrt] += (nVars-1) # accounts for all the off += 1 calls above.
+                    dnterms[cur_iWrt] += 1
+                    #print " wrt=%d found cnt=%d: adding deriv term coeff=%s nvars=%d" % (cur_wrt, cnt, str(coeff*cnt), nVars-1)
+                    cur_iWrt += 1 # processed this wrt param - move to next one
+
+            #Now term has been processed, adding derivative terms to the dctapes and dvtapes "tape-lists"
+            # We continue processing terms, adding to these tape lists, until all the terms of the
+            # current poly are processed.  Then we can concatenate the tapes for each wrtParams element.
+            j = j1 # move to next term; j may not have been incremented if we exited b/c of cur_iWrt reaching end
+            
+        #Now all terms are processed - concatenate tapes for wrtParams and add to resulting tape.
+        for k in range(wrt_sz):
+            off = k*vstride
+            dvtapes[off] = dnterms[k] # insert nTerms into space reserverd at beginning of each dvtape
+            for l in range(vptr[k]):
+                result_vtape[res_vptr] = dvtapes[off]; off += 1; res_vptr += 1
+
+            off = k*max_nTerms
+            for l in range(cptr[k]):
+                result_ctape[res_cptr] = dctapes[off]; off += 1; res_cptr += 1
+
+            #Use numpy, but still slower than above C-able code
+            #result_vtape[res_vptr:res_vptr+vptr[k]] = dvtapes[k,0:vptr[k]]; res_vptr += vptr[k]
+            #result_ctape[res_cptr:res_cptr+cptr[k]] = dctapes[k,0:cptr[k]]; res_cptr += cptr[k]
+            
+            #result_vtape = np.concatenate( (result_vtape, dvtapes[k,0:vptr[k]]) ) # SLOW!
+            #result_ctape = np.concatenate( (result_ctape, dctapes[k,0:cptr[k]]) ) # SLOW!
+        i = j # update location in vtape after processing poly - actually could just use i instead of j it seems??
+
+    free(dctapes)
+    free(dvtapes)
+    free(dnterms)
+    free(cptr)
+    free(vptr)
+
+    return result_vtape[0:res_vptr], result_ctape[0:res_cptr]
+    
+
 
 def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order,
                       int stabilizer_evo):

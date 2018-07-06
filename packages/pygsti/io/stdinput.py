@@ -121,6 +121,7 @@ class StdInputParser(object):
                 f = float(p)
                 counts.append(f)
             except:
+                if 'G' in p: break # somewhat a hack - if there's a 'G' in it, then it's not a count column
                 try: # "expanded" ColonContainingLabels:count
                     t = p.split(':')
                     assert(len(t) > 1)

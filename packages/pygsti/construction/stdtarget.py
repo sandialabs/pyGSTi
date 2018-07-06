@@ -16,9 +16,8 @@ import numpy as _np
 from . import stdlists as _stdlists
 from .. import objects as _objs
     
-def _get_cachefile_names(std_module, param_type, sim_type):
+def _get_cachefile_names(std_module, param_type, sim_type, py_version):
     """ TODO: docstring (for this entire module) """
-    py_version = 3 if (_sys.version_info > (3, 0)) else 2
     
     if param_type == "H+S terms":
         cachePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
@@ -64,7 +63,9 @@ def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=Fal
     print("Cachesize = ",len(calc_cache))
     print("Num of Experiments = ", len(listOfExperiments))
 
-    key_fn, val_fn = _get_cachefile_names(std_module, "H+S terms", "termorder:%d" % termOrder)
+    py_version = 3 if (_sys.version_info > (3, 0)) else 2
+    key_fn, val_fn = _get_cachefile_names(std_module, "H+S terms",
+                                          "termorder:%d" % termOrder,py_version)
     _write_calccache(calc_cache, key_fn, val_fn, json_too)
 
 
@@ -103,7 +104,7 @@ def _load_calccache(key_fn, val_fn):
     with _gzip.open(key_fn,"rb") as f:            
         keys = _pickle.load(f)
     npfile = _np.load(val_fn)
-    vals = _objs.polynomial.bulk_load_compact_polys((npfile['vtape'],npfile['ctape']))
+    vals = _objs.polynomial.bulk_load_compact_polys(npfile['vtape'],npfile['ctape'],keep_compact=True)
     calc_cache = { k:v for k,v in zip(keys,vals) }
     #print("Done in %.1fs" % (_time.time()-t0))
     return calc_cache
@@ -120,11 +121,16 @@ def _copy_target(std_module, param_type, sim_type="auto", gscache=None):
     if param_type == "H+S terms": 
         assert(sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
         simt = "termorder:1" if sim_type == "auto" else sim_type # don't update sim_type b/c gscache
-        key_fn, val_fn = _get_cachefile_names(std_module, param_type, simt)
-        if _os.path.exists(key_fn) and _os.path.exists(val_fn):        
+        py_version = 3 if (_sys.version_info > (3, 0)) else 2
+        calc_cache = {} # the default
+        
+        key_fn, val_fn = _get_cachefile_names(std_module, param_type, simt, py_version)
+        if _os.path.exists(key_fn) and _os.path.exists(val_fn):
             calc_cache = _load_calccache(key_fn, val_fn)
-        else:
-            calc_cache = {}
+        elif py_version == 3: # python3 will try to load python2 files as a fallback
+            key_fn, val_fn = _get_cachefile_names(std_module, param_type, simt, 2)
+            if _os.path.exists(key_fn) and _os.path.exists(val_fn):
+                calc_cache = _load_calccache(key_fn, val_fn)
 
         gs.set_simtype(simt,calc_cache)
     else:
