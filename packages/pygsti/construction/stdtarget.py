@@ -104,7 +104,7 @@ def _load_calccache(key_fn, val_fn):
     with _gzip.open(key_fn,"rb") as f:            
         keys = _pickle.load(f)
     npfile = _np.load(val_fn)
-    vals = _objs.polynomial.bulk_load_compact_polys((npfile['vtape'],npfile['ctape']))
+    vals = _objs.polynomial.bulk_load_compact_polys(npfile['vtape'],npfile['ctape'],keep_compact=True)
     calc_cache = { k:v for k,v in zip(keys,vals) }
     #print("Done in %.1fs" % (_time.time()-t0))
     return calc_cache
