@@ -20,7 +20,6 @@ class Circuit(_gstr.GateString):
     typically one per qubit, and permits a richer set of operations than 
     :class:`GateString`.  These operations include a range of methods for
     manipulating quantum circuits. E.g., basic depth compression algorithms.
-
     """   
     def __init__(self, line_items=None, gatestring=None, num_lines=None,
                  line_labels=None, parallelize=False, identity='I'):
@@ -74,8 +73,7 @@ class Circuit(_gstr.GateString):
             will potentially drop idle gates when doing depth-compression, whereas 
             all other gates are treat as having an unspecified action, by all methods
             of the circuit, unless the relationship between the gates is given to 
-            a method of circuit.
-        
+            a method of circuit.        
         """
         assert(type(identity) == str), "The identity name must be a string!"
         self.identity = identity
@@ -124,6 +122,9 @@ class Circuit(_gstr.GateString):
 
         self._tup_dirty = False # keep track of when we need to _flatten_to_tup
         self._str_dirty = True # keep track of when we need to auto-compute string rep
+
+        # todo : implement this.
+        #self.barriers = _np.zeros(self.depth()+1,bool)
 
     def _reinit_base(self):
         """ Re-initialize the members of the base GateString object """
@@ -198,30 +199,7 @@ class Circuit(_gstr.GateString):
                                " circuit.done_editing() beforehand."))
             self.done_editing()
         return super(Circuit,self).__hash__()
-
-
-    def map_state_space_labels(self, mapper): # a gate string method that we need to implement correctly for Circuit TODO
-        """
-        Return a copy of this gate string with all of the state-space-labels
-        (often just qubit labels) updated according to a mapping function.
-
-        For example, calling this function with `mapper = {0: 1, 1: 3}`
-        on the string "Gx:0Gy:1Gx:1" would return "Gx:1Gy:3Gx:3".
-
-        Parameters
-        ----------
-        mapper : dict or function
-            A dictionary whose keys are the existing state-space-label values
-            and whose value are the new labels, or a function which takes a
-            single (existing label) argument and returns a new label.
-
-        Returns
-        -------
-        GateString
-        """
-        raise NotImplementedError("TODO")
-
-                      
+                     
     def clear(self):
         """
         Removes all the gates in a circuit (preserving the number of lines).
@@ -277,7 +255,7 @@ class Circuit(_gstr.GateString):
                     gate_qubits = gate.qubits if (gate.qubits is not None) \
                                   else self.line_labels  # then gate uses *all* lines
     
-                    # Checks the qubits are all in the line labels.
+                    # Checks the qubits are all in the line labels. todo : this doesn't work so fix it!
                     for qubit in gate_qubits:
                         assert(qubit in self.line_labels), "Some gates do not act on the qubits in this circuit!"
 
@@ -319,9 +297,7 @@ class Circuit(_gstr.GateString):
         -------
         None
         """
-        #OLD Check input is a valid gate
-        #OLD check_valid_gate(gatelbl)
-        
+        assert(not self._static),"Cannot edit a read-only circuit!"       
         # Add an idle layer.
         for i in range(0,self.number_of_lines):
             self.line_items[i].insert(j,_Label(self.identity,self.line_labels[i]))
@@ -356,8 +332,7 @@ class Circuit(_gstr.GateString):
         -------
         None
         """
-        #OLD check_valid_circuit_layer(circuit_layer,self.number_of_lines)
-        
+        assert(not self._static),"Cannot edit a read-only circuit!"        
         # Add an idle layer.
         for i in range(0,self.number_of_lines):
             self.line_items[i].insert(j,_Label(self.identity,self.line_labels[i]))
@@ -390,7 +365,8 @@ class Circuit(_gstr.GateString):
         Returns
         -------
         None
-        """        
+        """  
+        assert(not self._static),"Cannot edit a read-only circuit!"      
         assert(self.number_of_lines == circuit.number_of_lines), "The circuits must act on the same number of qubits!"
         
         for q in range(0,self.number_of_lines):
@@ -410,7 +386,8 @@ class Circuit(_gstr.GateString):
         Returns
         -------
         None
-        """        
+        """   
+        assert(not self._static),"Cannot edit a read-only circuit!"     
         assert(self.number_of_lines == circuit.number_of_lines), "The circuits must act on the same number of qubits!"
         
         for q in range(0,self.number_of_lines):
@@ -429,7 +406,8 @@ class Circuit(_gstr.GateString):
         Returns
         -------
         None
-        """           
+        """  
+        assert(not self._static),"Cannot edit a read-only circuit!"         
         assert(self.number_of_lines == circuit.number_of_lines), "The circuits must act on the same number of qubits!"
         
         for q in range(0,self.number_of_lines):
@@ -458,6 +436,7 @@ class Circuit(_gstr.GateString):
         -------
         None
         """
+        assert(not self._static),"Cannot edit a read-only circuit!"
         n = self.line_items[q][j].number_of_qubits 
         assert(n == 1 or n == 2), "Only circuits with only 1 and 2 qubit gates supported!" 
         
@@ -474,7 +453,6 @@ class Circuit(_gstr.GateString):
         # Insert the circuit
         self.insert_circuit(circuit,j+1)
         
-
     def replace_layer_with_layer(self,circuit_layer,j):
         """
         Replace a layer with a layer. The input layer does not
@@ -494,8 +472,7 @@ class Circuit(_gstr.GateString):
         -------
         None
         """
-        #OLD check_valid_circuit_layer(circuit_layer,self.number_of_lines)
-        
+        assert(not self._static),"Cannot edit a read-only circuit!"        
         # Replace all gates with idles, in the layer to be replaced.
         for q in range(0,self.number_of_lines):
             self.line_items[q][j] = _Label(self.identity,self.line_labels[q])
@@ -507,7 +484,6 @@ class Circuit(_gstr.GateString):
                     if q in sub_gl.qubits:
                         self.line_items[q][j] = sub_gl
         self._tup_dirty = self._str_dirty = True
-
         
     def replace_layer_with_circuit(self,circuit,j):
         """
@@ -525,6 +501,7 @@ class Circuit(_gstr.GateString):
         -------
         None
         """
+        assert(not self._static),"Cannot edit a read-only circuit!"
         depth = circuit.depth()
         
         # Replace the layer with the first layer of the input circuit.
@@ -535,8 +512,7 @@ class Circuit(_gstr.GateString):
         for i in range(1,depth):
             layer = circuit.get_circuit_layer(i)
             self.insert_layer(layer,j)
-            
-            
+                       
     def replace_gatename(self, old_gatename, new_gatename):
         """
         Changes the *name* of a gate throughout this Circuit.
@@ -560,6 +536,8 @@ class Circuit(_gstr.GateString):
         -------
         None
         """
+        assert(not self._static),"Cannot edit a read-only circuit!"
+
         depth = self.depth()
         for q in range(self.number_of_lines):
             for l in range(depth):
@@ -567,37 +545,35 @@ class Circuit(_gstr.GateString):
                     #self.line_items[q][l].name = new_gatename # This doesn't work now for some reason.
                     self.line_items[q][l] = _Label(new_gatename, self.line_items[q][l].qubits)
         self._tup_dirty = self._str_dirty = True
-
-        
+    
     def change_gate_library(self,compilation,depth_compression=True,
-                            gate_relations_1q=None):
+                            oneQgate_relations=None):
         """
         Re-express a circuit over a different gateset.
         
         Parameters
         ----------
         compilation : dict
-            A dictionary whereby the keys are all of the gates that
-            appear in the circuit, and the values are replacement
-            circuits that are compilations for each of these gates.
+            A dictionary whereby the keys are all of the gates that appear in the circuit, 
+            and the values are replacement circuits that are normally compilations for each 
+            of these gates (if they are not, the action of the circuit will be changed).
             
         depth_compression : bool, opt
-            If True then depth compression is implemented on the output
-            circuit. Without this being set to True, the output circuit
-            will be much larger than necessary, as gates will generically
-            not have been parallelized.
+            If True then depth compression is implemented on the output circuit. Without this being 
+            set to True, the output circuit will be much larger than necessary, as gates will 
+            generically not have been parallelized.
   
-        gate_relations_1q : dict, opt
-            Gate relations for the one-qubit gates in the new gate library,
-            that are used in the depth compression, to cancel / combine
-            gates. E.g., one key-value pair might be 'H','H' : 'I', to
-            signify that two Hadamards compose to an idle gate.
+        oneQgate_relations : dict, opt
+            Gate relations for the one-qubit gates in the new gate library, that are used in the 
+            depth compression, to cancel / combine gates. E.g., one key-value pair might be 
+            ('H','H') : 'I', to signify that two Hadamards compose to an idle gate.
             
         Returns
         -------
-        None 
-        """        
-        in_compilation = compilation # _copy.deepcopy(compilation)
+        None
+        """ 
+        assert(not self._static),"Cannot edit a read-only circuit!"       
+        in_compilation = compilation
         
         d = self.depth()
         n = self.number_of_lines
@@ -615,8 +591,50 @@ class Circuit(_gstr.GateString):
         
         # If specified, perform the depth compression.
         if depth_compression:            
-            self.compress_depth(gate_relations_1q=gate_relations_1q,verbosity=0)
-        
+            self.compress_depth(oneQgate_relations=oneQgate_relations,verbosity=0)
+    
+    def map_state_space_labels(self, mapper):
+        """
+        Return a copy of the circuit with all of the line labels (and the gates) updated according to 
+        a mapping function.
+
+        For example, calling this function with `mapper = {0: 1, 1: 3}`
+        on the string "Gx:0Gy:1Gx:1" would return "Gx:1Gy:3Gx:3".
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing state-space-label values
+            and whose value are the new labels, or a function which takes a
+            single (existing label) argument and returns a new label.
+
+        Returns
+        -------
+        None
+        """
+        assert(not self._static),"Cannot edit a read-only circuit!"
+        # If the mapper is a dict, turn it into a function
+        if type(mapper) == dict:
+            def mapper_func(qlabel):
+                return mapper[qlabel]
+        else:
+            mapper_func = mapper
+
+        self.line_labels = [mapper_func(l) for l in self.line_labels]
+
+        depth = self.depth()
+        for i in range(0,self.number_of_lines):
+            for j in range(0,depth):
+                gate = self.line_items[i][j]
+                self.line_items[i][j] = _Label(gate.name,tuple([mapper_func(l) for l in gate.qubits]))
+
+    def reorder_wires(order):
+        """
+        todo : docstring
+        """
+        todo : implement
+
+    # Todo : I think we want to delete this function, as it does something quite odd.
     def relabel_qubits(self,order):
         """
         Todo : docstring
@@ -624,6 +642,7 @@ class Circuit(_gstr.GateString):
             The quantum wire for qubit i becomes
             the quantum wire for qubit order[i]
         """
+        assert(not self._static),"Cannot edit a read-only circuit!"
         original_circuit = _copy.deepcopy(self.line_items)
         #for i in range(0,circuit.number_of_qubits):
         #    relabelled_circuit.line_items[order[i]] = circuit.line_items[i]
@@ -647,6 +666,7 @@ class Circuit(_gstr.GateString):
         -------
         None
         """
+        assert(not self._static),"Cannot edit a read-only circuit!"
         for q in range(0,self.number_of_lines):
             del self.line_items[q][j]
         self._tup_dirty = self._str_dirty = True
@@ -659,7 +679,8 @@ class Circuit(_gstr.GateString):
         Returns
         -------
         None
-        """       
+        """
+        assert(not self._static),"Cannot edit a read-only circuit!"       
         assert(j >= 0 and j < self.depth()), "Circuit layer label invalid! Circuit is only of depth {}".format(self.depth())
         
         layer = []
@@ -675,7 +696,8 @@ class Circuit(_gstr.GateString):
         Returns
         -------
         None
-        """         
+        """
+        assert(not self._static),"Cannot edit a read-only circuit!"         
         for q in range(0,self.number_of_lines):
             self.line_items[q].reverse()
         self._tup_dirty = self._str_dirty = True
@@ -688,7 +710,7 @@ class Circuit(_gstr.GateString):
         Returns
         -------
         int
-        """        
+        """ 
         return len(self.line_items[0])
     
     def size(self):
@@ -728,7 +750,7 @@ class Circuit(_gstr.GateString):
     def predicted_infidelity(self,fidelities):
         
         f = 1.
-        
+        # todo: need to check how this behaves with the idle gate.       
         gatestring = self._flatten_to_tup()
         for label in gatestring:
             
@@ -758,15 +780,16 @@ class Circuit(_gstr.GateString):
                          for j in range(0,self.depth()) ]
 
         for i in range(0,self.number_of_lines):
-            s += 'Qubit {} ---'.format(i)
+            s += 'Qubit {} ---'.format(self.line_labels[i])
             for j,maxlbllen in enumerate(max_labellen):
                 if self.line_items[i][j].name == self.identity:
                     # Replace with special idle print at some point
-                    s += '-'*(maxlbllen+3) # 1 for each pipe, 1 for joining dash
+                    #s += '-'*(maxlbllen+3) # 1 for each pipe, 1 for joining dash
+                    s += '*'*(maxlbllen+2) + '-' 
                 else:
                     lbl = abbrev(self.line_items[i][j],i)
                     pad = maxlbllen - len(lbl)
-                    s += '|' + lbl + '|-' + '-'*pad
+                    s += '|' + ' '*int(_np.floor(pad/2)) + lbl + ' '*int(_np.ceil(pad/2)) + '|-' #+ '-'*pad
             s += '--\n'
 
         return s
@@ -820,143 +843,147 @@ class Circuit(_gstr.GateString):
         f.write("}\end{equation*}\n")
         f.write("\end{document}")
         f.close() 
-    
-    #
-    # To do: makes this work? Redo as a __copy__ method?
-    #
-    #For some reason this doesn't work so is commented out
-    def copy(self):       
-        return _copy.deepcopy(self)
-    
-    
-    def combine_1q_gates(self,gate_relations):
-        """
-        Compresses the number of non-idle one-qubit gates in the circuit, 
-        using the provided gate relations. 
 
-        TODO: more detail
+    def copy(self):
+        """
+        Returns a copy of the circuit.
+        """       
+        return _copy.deepcopy(self)
+        
+    def combine_oneQgates(self, oneQgate_relations):
+        """
+        Compresses sequences of 1-qubit gates in the circuit, using the provided gate relations.
+        One of the steps of the depth_compression() method, and in most cases that method will
+        be more useful.
         
         Parameters
         ----------
-        gate_relations : dict
-            Gate relations            
+        oneQgate_relations : dict
+            Keys that are pairs of strings, corresponding to 1-qubit gate names, with values that are
+            a single string, also corresponding to a 1-qubit gate name. Whenever a 1-qubit gate with 
+            name `name1` is followed in the circuit by a 1-qubit gate with `name2` then, if 
+            oneQgate_relations[name1,name2] = name3, name1 -> name3 and name2 -> self.identity, the
+            identity name in the circuit. Moreover, this is still implemented when there are self.identity
+            gates between these 1-qubit gates, and it is implemented iteratively in the sense that if there
+            is a sequence of 1-qubit gates with names name1, name2, name3, ... and there are relations
+            for all of (name1,name2) -> name12, (name12,name3) -> name123 etc then the entire sequence of
+            1-qubit gates will be compressed into a single possibly non-idle 1-qubit gate followed by 
+            idle gates in place of the previous 1-qubit gates.
+
+            If a ProcessorSpec object has been created for the gates/device in question, the
+            ProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `oneQgate_relations`.
+
+            Note that this function will not compress sequences of 1-qubit gates that cannot be compressed by 
+            independently inspecting sequential non-idle pairs (as would be the case with, for example, 
+            Gxpi Gzpi Gxpi Gzpi, if the relation did not know that (Gxpi,Gzpi) -> Gypi, even though the sequence
+            is the identity).
         
         Returns
         -------
-        flag : bool
-            False if no compression achieved; True otherwise.
+        bool
+            False if the circuit is unchanged, True otherwise.
         """ 
-        
-        # A flag that is turned to True if any non-trivial re-arranging is implemented
-        # by this method.
-
-        # todo : update this method to check it is compatible with the pspec dict and to allow for missing relations.
-        flag = False
-        
-        def single_qubit_gate_combined(glabel_1,glabel_2):
-            # Combines two gate labels, using the provided rules on how the labels combine.
-            assert((glabel_1,glabel_2) in list(gate_relations.keys())), "Gate relations provided are invalid! Does not contain the required relations for {} and {}".format(glabel_1,glabel_2)  
-            return gate_relations[glabel_1,glabel_2]
-        
-        # Loop through all the qubits
+        assert(not self._static),"Cannot edit a read-only circuit!"
+        # A flag that is turned to True if any non-trivial re-arranging is implemented by this method.
+        compression_implemented = False        
+        # Loop through all the qubits, to try and compress squences of 1-qubit gates on the qubit in question.
         for q in range(0,self.number_of_lines):
+            # j keeps track of the layer of the *next* gate that we are going to try and combine with later gates.
             j = 0
             while j < self.depth()-1:
+                # This is the label of the current gate that we are trying to combine with later gates.
                 k = j
+                # Check that the gate is a 1-qubit gate, because this function can only combine pairs of 1-qubit gates.
                 if self.line_items[q][k].number_of_qubits == 1:
+                    # Loop through the gates following this gate on qubit q.
                     for i in range(k+1,self.depth()):
+                        # For each gate we try and combine we iterate j by 1: so we'll start the next loop at the gate
+                        # we failed to combine with an earlier gate (unless we iterate j further)
+                        j += 1
+                        # If the next gate is not a 1-qubit gate, we leave the loop and try to combine the gate after it
+                        # (the jth gate) with later gates. So we iterate j by 1 before leaving the loop
                         if self.line_items[q][i].number_of_qubits > 1:
                             j += 1
                             break
-                        else:
-                            # Flag set to True if a non-trivial shift/combination is to be implemented.
-                            if not self.line_items[q][i].name == self.identity:
-                                flag = True
-                                
-                            # Find the new label of the gate, according to the combination rules.
+                        # If the next gate is a 1-qubit gate, we see if we can compress it with gate k.
+                        else:                              
+                            # The names of the gates to try and combine
                             gl1 = self.line_items[q][k].name
                             gl2 = self.line_items[q][i].name
-                            new_label = single_qubit_gate_combined(gl1,gl2)
-                            
-                            # Becuase of the way hashing is defining for the Gate object, we could
-                            # just change the gates labels. But it seems like better practice to make
-                            # new Gate objects.
-                            self.line_items[q][k] = _Label(new_label,self.line_labels[q])
-                            self.line_items[q][i] = _Label(self.identity,self.line_labels[q])
-                            j += 1
+                            # If the later gate is the identity we skip and move onto the next gate, because the combination would 
+                            # be trivial.
+                            if gl2 != self.identity:
+                                # Try to find a label they combine to; if the pair is not in the algebra dictionary we don't succeed.
+                                try:  
+                                    new_gl1 = oneQgate_relations[gl1,gl2]
+                                    new_gl2 = self.identity
+                                    # Write in the new gate names.
+                                    self.line_items[q][k] = _Label(new_gl1,self.line_labels[q])
+                                    self.line_items[q][i] = _Label(new_gl2,self.line_labels[q])
+                                    # Record that a compression has been implemented : the circuit has been changed.
+                                    compression_implemented = True
+                                # If we can't combine the gates we quit the loop -- because we can't try and combine the gate with
+                                # a gate that is past this gate. But we don't iterate j, because perhaps this 1-qubit gate can be
+                                # combined with later 1-qubit gates.
+                                except:
+                                    break
+                # If the gate is not a 1-qubit gate we move on to the gate at the next circuit layer: so we iterate j by 1.
                 else:
                     j += 1
+        # Only if we've changed anything do we need to set the "dirty" atributes to True.
+        if compression_implemented:
+            self._tup_dirty = self._str_dirty = True
+        # Returns the flag, so we know whether the algorithm achieved anything.
+        return compression_implemented
+    
+    def shift_gates_forward(self):
+        """
+        All gates are shifted forwarded as far as is possible without any knowledge of what 
+        any of the gates are, except that the self.identity gates (idle gates) can be replaced.
+        One of the steps of the depth_compression() method.
+        """
+        assert(not self._static),"Cannot edit a read-only circuit!"
+        # Keeps track of whether any changes have been made to the circuit.
+        compression_implemented = False
 
-        self._tup_dirty = self._str_dirty = True
-        return flag
-    
-    def shift_1q_gates_forward(self):
-        """
-        TODO: docstring (TIM)
-        """               
-        flag = False
-        
+        can_move_to_layer = _np.zeros(self.number_of_lines,int) 
         for q in range(0,self.number_of_lines):
-            for j in range(1,self.depth()):
-                
-                if self.line_items[q][j].number_of_qubits == 1:                  
-                    
-                    if self.line_items[q][j].name != self.identity:
-                    
-                        for k in range(1,j+1):
-                            idle = True
-                            if self.line_items[q][j-k].name != self.identity:
-                                idle = False
-                                if not idle:
-                                    k = k - 1
-                                    break
-                                
-                        if k > 0:
-                            flag = True
-                            self.line_items[q][j-k] = self.line_items[q][j]
-                            self.line_items[q][j] = _Label(self.identity,self.line_labels[q])
-        self._tup_dirty = self._str_dirty = True
-        return flag
-    
-    def shift_2q_gates_forward(self):
-        """
-        TODO: docstring (TIM)
-        """                
-        flag = False
-        
-        for q in range(0,self.number_of_lines):
-            for j in range(1,self.depth()):
-                if self.line_items[q][j].number_of_qubits == 2:                  
-                    # Only try to do a compression if q is the first qubit of the pair, as we only 
-                    # need to consider one of the two.
-                    if self.line_items[q][j].qubits[0] == q:
-                        target_label = self.line_labels.index(self.line_items[q][j].qubits[1]) # TODO: inefficient...
-                        
-                        for k in range(1,j+1):
-                            both_idle = True
-                            if self.line_items[q][j-k].name != self.identity:
-                                both_idle = False
-                            if self.line_items[target_label][j-k].name != self.identity:
-                                both_idle = False
-                            if not both_idle:
-                                k = k - 1
-                                break
-                        if k > 0:
-                            flag = True
-                            self.line_items[q][j-k] = self.line_items[q][j]
-                            self.line_items[target_label][j-k] = self.line_items[target_label][j]
-                            self.line_items[q][j] = _Label(self.identity,self.line_labels[q])
-                            self.line_items[target_label][j] = _Label(self.identity,self.line_labels[int(target_label)])
+            gate = self.line_items[q][0]
+            if gate.name != self.identity:
+                can_move_to_layer[q] = 1
 
-        self._tup_dirty = self._str_dirty = True
-        return flag
+        for j in range(1,self.depth()):
+            for q in range(0,self.number_of_lines):
+                gate = self.line_items[q][j]
+                if gate.name != self.identity:
+                    move_to_layer = 0
+                    for qlabel in gate.qubits:
+                        qindex = self.line_labels.index(qlabel)
+                        move_to_layer = max(move_to_layer,can_move_to_layer[qindex])
+                    
+                    if move_to_layer < j:
+                        for qlabel in gate.qubits:
+                            qindex = self.line_labels.index(qlabel)
+                            self.line_items[qindex][move_to_layer] = self.line_items[qindex][j]
+                            self.line_items[qindex][j] = _Label(self.identity,qindex)
+                            can_move_to_layer[qindex] = move_to_layer + 1
+                    else:
+                        for qlabel in gate.qubits:
+                            qindex = self.line_labels.index(qlabel)
+                            can_move_to_layer[qindex] = j + 1
+        if return_flag:     
+            return compression_implemented
+        else:
+            return
     
-    
-    def delete_idle_layers(self):
+    def delete_idle_layers(self, return_flag=False):
         """
-        TODO: docstring (TIM)
-        """        
-        flag = False
+        Deletes all layers in the circuit that consist of only idle layers. One of the steps of the
+        depth_compression() method. If return_flag is True, then a bool is returned that is True
+        if and only if one or more layers have been deleted.
+        """
+        assert(not self._static),"Cannot edit a read-only circuit!"        
+        compression_implemented = False
         
         d = self.depth()
         for i in range(0,d):
@@ -969,57 +996,67 @@ class Circuit(_gstr.GateString):
                     all_idle = False
                     
             if all_idle:
-                flag = True
+                compression_implemented = True
                 self.delete_layer(d-1-i)
-                
-        return flag
+        if return_flag:     
+            return compression_implemented
+        else:
+            return
     
     
-    def compress_depth(self,gate_relations_1q=None,max_iterations=10000,verbosity=1):
+    def compress_depth(self, oneQgate_relations=None, verbosity=1):
         """
-        TODO: docstring (TIM)
-        """        
-    
-        if verbosity > 0:
-            print("--------------------------------------------------")
-            print("***** Implementing circuit depth compression *****")
-            print("--------------------------------------------------")
-          
-        if verbosity > 0:
-            print("")
-            print("Circuit depth before compression is {}".format(self.depth()))
-    
-        flag1 = True
-        flag2 = True
-        flag3 = True
-        counter = 0
-    
-        while flag1 or flag2 or flag3:
-            
-            if gate_relations_1q is not None:                            
-                flag1 = self.combine_1q_gates(gate_relations_1q)
-            else:
-                flag1 = self.shift_1q_gates_forward()     
-            flag2 = self.shift_2q_gates_forward()
-            flag3 = self.delete_idle_layers()
+        Compresses the depth of a circuit using very simple re-write rules. 
 
-            counter += 1
-            if counter > max_iterations:
-                print("")
-                print('*** Compression algorthim reached the maximum interations of {} ***'.format(max_iterations))
-                print("")
-                break
+        1. If `oneQgate_relations` is provided, all sequences of 1-qubit gates in the  circuit 
+           are compressed as far as is possible using only the pair-wise combination rules
+           provided by this dict (see below).
+        2. All gates are shifted forwarded as far as is possible without any knowledge of what 
+           any of the gates are, except that the self.identity gates (idle gates) can be replaced.
+        3. All idle-only layers are deleted.
+        
+        Parameters
+        ----------
+        oneQgate_relations : dict
+            Keys that are pairs of strings, corresponding to 1-qubit gate names, with values that are
+            a single string, also corresponding to a 1-qubit gate name. Whenever a 1-qubit gate with 
+            name `name1` is followed in the circuit by a 1-qubit gate with `name2` then, if 
+            oneQgate_relations[name1,name2] = name3, name1 -> name3 and name2 -> self.identity, the
+            identity name in the circuit. Moreover, this is still implemented when there are self.identity
+            gates between these 1-qubit gates, and it is implemented iteratively in the sense that if there
+            is a sequence of 1-qubit gates with names name1, name2, name3, ... and there are relations
+            for all of (name1,name2) -> name12, (name12,name3) -> name123 etc then the entire sequence of
+            1-qubit gates will be compressed into a single possibly non-idle 1-qubit gate followed by 
+            idle gates in place of the previous 1-qubit gates.
+
+            If a ProcessorSpec object has been created for the gates/device in question, the
+            ProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `oneQgate_relations`.
+
+            Note that this function will not compress sequences of 1-qubit gates that cannot be compressed by 
+            independently inspecting sequential non-idle pairs (as would be the case with, for example, 
+            Gxpi Gzpi Gxpi Gzpi, if the relation did not know that (Gxpi,Gzpi) -> Gypi, even though the sequence
+            is the identity).
+
+        verbosity : int, optional
+            If > 0, information about the depth compression is printed to screen.
+        
+        Returns
+        -------
+        None
+        """ 
+        assert(not self._static),"Cannot edit a read-only circuit!"       
     
         if verbosity > 0:
-            print("")
-            print("Circuit depth after compression is {}".format(self.depth()))
-            print("")   
-            print("Number of loops used in compression algorithm was {}".format(counter))
-            print("")
-            print("--------------------------------------------------")
-            print("--------------------------------------------------")
-            print("") 
+            print("- Implementing circuit depth compression")
+            print("  - Circuit depth before compression is {}".format(self.depth()))
+               
+        if oneQgate_relations is not None:                            
+            flag1 = self.combine_oneQgates(oneQgate_relations)
+        flag2 = self.shift_gates_forward()   
+        flag3 = self.delete_idle_layers()
     
+        if verbosity > 0:
+            print("  - Circuit depth after compression is {}".format(self.depth()))       
     
     def simulate(self,gateset): #,inputstate=None,store=True,returnall=False):        
         """

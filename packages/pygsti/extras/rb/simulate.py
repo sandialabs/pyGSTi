@@ -53,8 +53,8 @@ def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, erro
         bit strings) and the values are the counts for all of the outcomes. If False, then the returned
         dictionary only contains keys for those outcomes that happen at least once.
 
-    idle_name 
-        Todo : .......
+    idle_name, str, optional
+        Todo: The name of the idle gate in the `pspec` with which 
     
     Returns
     -------
@@ -198,8 +198,46 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, filename=None, r
 def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, idle_errorrate,
                                  measurement_errorrate=0., ptype='uniform', idle_name='Gi'):
     """
+    Returns a dictionary encoding a Pauli-stochastic error model whereby the errors are the same on all the
+    1-qubit gates, and the same on all 2-qubit gates.
+    `gate_errorrate_list`. The probability of the 3 different Pauli errors on each qubit is specified by 
+    `ptype` and can either be uniform, or always X, Y, or Z errors.
 
-    todo : docstring
+    The dictionary returned is in the appropriate format for the `circuit_simulator_for_tensored_independent_pauli_errors()` 
+    circuit simulator function.
+
+    Parameters
+    ----------
+    pspec : ProcessorSpec
+        The ProcessorSpec that defines the device.
+
+    oneQgate_errorrate_list : float
+        The 1-qubit gates error rate (the probability of a Pauli error on the target qubit) not including 
+        idle gates. 
+
+    twoQgate_errorrate_list : float
+        The 2-qubit gates error rate (the total probability of a Pauli error on either qubit the gate acts
+        on -- each qubit has independent errors with equal probabilities). 
+
+    idle_errorrate : float
+        The idle gates error rate.
+
+    measurement_errorrate : flip
+        The measurement error rate for all of the qubits. This is the probability that a qubits measurement
+        result is bit-flipped.
+
+    ptype : str, optional
+        Can be 'uniform', 'X', 'Y' or 'Z'. If 'uniform' then 3 Pauli errors are equally likely, if 'X', 'Y' or
+        'Z' then the errors are always Pauli X, Y or Z errors, respectively.
+
+    idle_name : str, optional
+        The name of the idle gate.
+    
+    Returns
+    -------
+    dict
+        An dict that encodes the error model described above in the format required for the simulator
+        `circuit_simulator_for_tensored_independent_pauli_errors()`.
 
     """
     if ptype == 'uniform':
@@ -278,13 +316,15 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_list
         A list of length pspec.number_of_qubits of floats in [0,1]. The qth element is the measurement bit-flip
         error probability for the qth qubit.
 
-    ptype : str,
+    ptype : str, optional
         Can be 'uniform', 'X', 'Y' or 'Z'. If 'uniform' then 3 Pauli errors are equally likely, if 'X', 'Y' or
         'Z' then the errors are always Pauli X, Y or Z errors, respectively.
     
     Returns
     -------
     dict
+        An dict that encodes the error model described above in the format required for the simulator
+        `circuit_simulator_for_tensored_independent_pauli_errors()`.
 
     """
     if ptype == 'uniform':
