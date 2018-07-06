@@ -9,12 +9,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import itertools as _itertools
 import collections as _collections
-from scipy.sparse.csgraph import floyd_warshall as _fw
+#from scipy.sparse.csgraph import floyd_warshall as _fw
 
 from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
 from .qubitgraph import QubitGraph as _QubitGraph
 from ..baseobjs import Label as _Label
+from .. import construction as _cnst
 from . import gate as _gate
 
 class ProcessorSpec(object):
@@ -63,7 +64,7 @@ class ProcessorSpec(object):
             as unitaries acting on ordinary pure-state-vectors, in the standard computationl basis. These unitaries 
             need not, and often should not, be unitaries acting on all of the qubits. E.g., a CNOT gate is specified 
             by a key that is the desired name for CNOT, and a value that is the standard 4 x 4 complex matrix for CNOT.
-            It is advisable, although not essential, to use gate names that start with 'G'.
+            All gate names must start with 'G'.
         
         availability : dict, optional
             A dictionary whose keys are some subset of the keys (which are gate names) `nonstd_gate_unitaries` 
@@ -85,10 +86,29 @@ class ProcessorSpec(object):
 
         #Store inputs for adding models later
         self.number_of_qubits = nQubits
-        self.root_gate_names = gate_names
+        self.root_gate_names = gate_names.copy()
         self.nonstd_gate_unitaries = nonstd_gate_unitaries.copy()
         self.root_gate_names += list(self.nonstd_gate_unitaries.keys())    
         self.availability = availability.copy()
+
+        # Stores the basic unitary matrices defining the gates, as it is convenient to have these easily accessable.
+        self.root_gate_unitaries = nonstd_gate_unitaries.copy()
+        std_gate_unitaries = _cnst.get_standard_gate_unitaries()
+        for gname in gate_names:
+            try:
+                self.root_gate_unitaries[gname] = std_gate_unitaries[gname]
+            except:
+                raise ValueError(str(gname)+" is not a valid 'standard' gate name, so should not be an element of `gate_names`!")
+
+        # Records the name of the identity gate, if there is one, as this is useful information to have to hand.
+        self.identity = None
+        if 'Gi' in gate_names:
+            self.identity = 'Gi'
+        else:
+            for gn in list(self.nonstd_gate_unitaries.keys()):
+                if _np.allclose(nonstd_gate_unitaries[gn],_np.identity(2,float)):
+                    self.identity = gn
+                    break
 
         # If no qubit labels are provided it defaults to integers from 0 to nQubits-1.    
         if qubit_labels is None:
@@ -111,7 +131,11 @@ class ProcessorSpec(object):
         #self.connectivity['clifford'] =
         #self.compiler
 
+        # Holds a dictionary with keys that are 1Q gatename pairs (gn1, gn2), with a value gn3 that is the 1Q that
+        # these gates combine to when gn1 is applied first and then gn2. There is no key for a pair if they don't
+        # combine to a 1Q gate in the gateset.
         self.oneQgate_algebra = {}
+        # A dict from a 1Q gatename to the gatename of the inverse gate, if it is in the gateset.
         self.oneQgate_inversions = {}
 
         # Add initial models
@@ -177,6 +201,9 @@ class ProcessorSpec(object):
         else:
             self.clifford_gates_on_qubits = None
                                   
+        
+        self.add_oneQgate_algebra()
+
         return # done with __init__(...)
                
     def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
@@ -184,7 +211,6 @@ class ProcessorSpec(object):
         Erik todo: docstring 
 
         """
-        from .. import construction as _cnst
         
         if model_name == 'clifford':
             assert(parameterization in ('auto','clifford')), "Clifford model must use 'clifford' parameterizations"
@@ -277,8 +303,7 @@ class ProcessorSpec(object):
                                 library.templates['CNOT'].append((_Label('Gi', 0),_Label(gate.name, 1),_Label('Gcphase', (0, 1)), _Label('Gi', 0),_Label(gate.name, 1)))
                                 library.templates['CNOT'].append((_Label('Gi', 0),_Label(gate.name, 1),_Label('Gcphase', (1,0)), _Label('Gi', 0),_Label(gate.name, 1)))
                                 #print('Hadamard or an equivalent gate found! It is ' + gate.name)
-
-                              
+                     
             #Stage2:
             # Compile 2Q gates locally, if possible.  Keep track of what can't be compiled.
             not_locally_compilable = []
@@ -304,16 +329,35 @@ class ProcessorSpec(object):
         
         self.compilations[compile_type] = library
 
+    def add_oneQgate_algebra(self):
 
-    def add_oneQgate_algebra(modelname):
-        # todo
-        return
+        self.oneQgate_algebra = {}
+        for gname1 in self.root_gate_names:
+            u1 = self.root_gate_unitaries[gname1]
+            if _np.shape(u1) == (2,2):
+                for gname2 in self.root_gate_names:
+                    u2 = self.root_gate_unitaries[gname2]
+                    if _np.shape(u2) == (2,2):
+                        ucombined = _np.dot(u2,u1)
+                        for gname3 in self.root_gate_names:
+                            u3 = self.root_gate_unitaries[gname3]
+                            if _np.shape(u3) == (2,2):
+                                if _np.allclose(u3,ucombined):
+                                    # If ucombined is u3, add to the inversion relation.
+                                    self.oneQgate_algebra[gname1,gname2] = gname3
+                        # If ucombined is the identity, add the inversion relation.
+                        if _np.allclose(ucombined,_np.identity(2,complex)):
+                                self.oneQgate_inversions[gname1] = gname2
+                                self.oneQgate_inversions[gname2] = gname1
+             
+    def simulate(self,circuit,modelname):
+        """
+        TODO: docstring
+        A wrap-around for the circuit simulators in simulators.py 
+        """       
+        return self.models[modelname].probs(circuit)
 
-    def add_oneQgate_inversions(modelname):
-        # todo
-        return
-
-
+    
     # For finding the inversion dict.
 # inverse_dict = {}
 # for gl1 in pspec.models['target'].gates:
@@ -363,11 +407,4 @@ class ProcessorSpec(object):
     #                 break
         
     #         self.costorderedqubits.append(qubits_at_this_distance)
-            
-            
-    def simulate(self,circuit,modelname):
-        """
-        TODO: docstring
-        A wrap-around for the circuit simulators in simulators.py 
-        """       
-        return self.models[modelname].probs(circuit)
+           
