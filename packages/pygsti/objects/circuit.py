@@ -825,9 +825,8 @@ class Circuit(_gstr.GateString):
     # To do: makes this work? Redo as a __copy__ method?
     #
     #For some reason this doesn't work so is commented out
-    #def copy(self):
-    #    
-    #    return _copy.deepcopy(self)
+    def copy(self):       
+        return _copy.deepcopy(self)
     
     
     def combine_1q_gates(self,gate_relations):
@@ -850,6 +849,8 @@ class Circuit(_gstr.GateString):
         
         # A flag that is turned to True if any non-trivial re-arranging is implemented
         # by this method.
+
+        # todo : update this method to check it is compatible with the pspec dict and to allow for missing relations.
         flag = False
         
         def single_qubit_gate_combined(glabel_1,glabel_2):

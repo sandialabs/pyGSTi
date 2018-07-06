@@ -1108,7 +1108,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
         `availability`.
 
     availability : dict, optional
-        If not None, a dictionary whose keys are the same gate names as in
+        A dictionary whose keys are the same gate names as in
         `gatedict` and whose values are lists of qubit-label-tuples.  Each
         qubit-label-tuple must have length equal to the number of qubits
         the corresponding gate acts upon, and causes that gate to be
@@ -1288,12 +1288,18 @@ def get_standard_gate_unitaries():
     
     H = (1/_np.sqrt(2))*_np.array([[1.,1.],[1.,-1.]],complex) 
     P = _np.array([[1.,0.],[0.,1j]],complex)
+    Pdag = _np.array([[1.,0.],[0.,-1j]],complex)
     
     std_unitaries['Gh'] =  H  
     std_unitaries['Gp'] = P
+    std_unitaries['Gpdag'] = Pdag
     std_unitaries['Ghp'] = _np.dot(H,P)
     std_unitaries['Gph'] = _np.dot(P,H)
     std_unitaries['Ghph'] = _np.dot(H,_np.dot(P,H))
+
+    std_unitaries['Gt'] = _np.array([[1.,0.],[0.,_np.exp(1j*_np.pi/4)]],complex)
+    std_unitaries['Gtdag'] =_np.array([[1.,0.],[0.,_np.exp(-1j*_np.pi/4)]],complex)
+
  
     # Two-qubit gates
     std_unitaries['Gcphase'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.],[0.,0.,0.,-1.]],complex)
@@ -1302,9 +1308,9 @@ def get_standard_gate_unitaries():
     return std_unitaries
 
 
-def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=None,
-                                  availability=None, qubit_labels=None, parameterization='static',
-                                  evotype="auto", sim_type="auto", on_construction_error='raise'):
+def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries={}, availability={}, 
+                                  qubit_labels=None, parameterization='static', evotype="auto", 
+                                  sim_type="auto", on_construction_error='raise'):
     """
     Creates a "standard" n-qubit gate set, usually of ideal gates.
 
@@ -1333,7 +1339,7 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
         The total number of qubits.
 
     gate_names : list
-        I list of string-type gate names (e.g. `"Gx"`) either taken from
+        A list of string-type gate names (e.g. `"Gx"`) either taken from
         the list of builtin "standard" gate names given above or from the
         keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
         gates that are repeatedly embedded (based on `availability`) to form
@@ -1344,9 +1350,8 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
         of the gate names given by the dictionary's keys.
 
     availability : dict, optional
-        If not None, a dictionary whose keys are gate names and whose values
-        are lists of qubit-label-tuples.  See :function:`built_nqubit_gateset`
-        for more details.
+        A dictionary whose keys are gate names and whose values are lists of 
+        qubit-label-tuples.  See :function:`built_nqubit_gateset` for more details.
 
     parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
                         "H+S clifford terms", "clifford"}
@@ -1384,7 +1389,6 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
         `availability`).  For instance, the gate label for the `"Gx"` gate on
         qubit 2 might be `Label("Gx",1)`.
     """
-    if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
     std_unitaries = get_standard_gate_unitaries()
 
     if evotype == "auto": # same logic as in build_nqubit_gateset

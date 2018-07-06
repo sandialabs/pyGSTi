@@ -17,6 +17,7 @@ from .qubitgraph import QubitGraph as _QubitGraph
 from ..baseobjs import Label as _Label
 from .. import construction as _cnst
 from . import gate as _gate
+from ..tools import gatetools as _gt
 
 class ProcessorSpec(object):
     """
@@ -135,8 +136,8 @@ class ProcessorSpec(object):
         # these gates combine to when gn1 is applied first and then gn2. There is no key for a pair if they don't
         # combine to a 1Q gate in the gateset.
         self.oneQgate_algebra = {}
-        # A dict from a 1Q gatename to the gatename of the inverse gate, if it is in the gateset.
-        self.oneQgate_inversions = {}
+        # A dict from a gatename to the gatename of the inverse gate, if it is in the gateset.
+        self.gate_inverse = {}
 
         # Add initial models
         for model_name in construct_models:
@@ -203,6 +204,7 @@ class ProcessorSpec(object):
                                   
         
         self.add_oneQgate_algebra()
+        self.add_multiqubit_inversion_relations()
 
         return # done with __init__(...)
                
@@ -330,25 +332,46 @@ class ProcessorSpec(object):
         self.compilations[compile_type] = library
 
     def add_oneQgate_algebra(self):
-
-        self.oneQgate_algebra = {}
+        """
+        todo : docstring.
+        """
         for gname1 in self.root_gate_names:
-            u1 = self.root_gate_unitaries[gname1]
-            if _np.shape(u1) == (2,2):
+            # We convert to process matrices, to avoid global phase problems.
+            u1 = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname1])
+            if _np.shape(u1) == (4,4):
                 for gname2 in self.root_gate_names:
-                    u2 = self.root_gate_unitaries[gname2]
-                    if _np.shape(u2) == (2,2):
+                    u2 =  _gt.unitary_to_pauligate(self.root_gate_unitaries[gname2])
+                    if _np.shape(u2) == (4,4):
                         ucombined = _np.dot(u2,u1)
                         for gname3 in self.root_gate_names:
-                            u3 = self.root_gate_unitaries[gname3]
-                            if _np.shape(u3) == (2,2):
+                            u3 = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname3])
+                            if _np.shape(u3) == (4,4):
                                 if _np.allclose(u3,ucombined):
                                     # If ucombined is u3, add to the inversion relation.
                                     self.oneQgate_algebra[gname1,gname2] = gname3
                         # If ucombined is the identity, add the inversion relation.
-                        if _np.allclose(ucombined,_np.identity(2,complex)):
-                                self.oneQgate_inversions[gname1] = gname2
-                                self.oneQgate_inversions[gname2] = gname1
+                        if _np.allclose(ucombined,_np.identity(4,float)):
+                                self.gate_inverse[gname1] = gname2
+                                self.gate_inverse[gname2] = gname1
+
+    def add_multiqubit_inversion_relations(self):
+        """
+        todo
+        """
+        for gname1 in self.root_gate_names:
+            # We convert to process matrices, to avoid global phase problems.
+            u1 = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname1])
+            if _np.shape(u1) != (4,4):
+                for gname2 in self.root_gate_names:
+                    u2 =  _gt.unitary_to_pauligate(self.root_gate_unitaries[gname2])
+                    if _np.shape(u2) == _np.shape(u1):
+                        ucombined = _np.dot(u2,u1)
+                        if _np.allclose(ucombined,_np.identity(_np.shape(u2)[0],float)):
+                            self.gate_inverse[gname1] = gname2
+                            self.gate_inverse[gname2] = gname1
+
+
+
              
     def simulate(self,circuit,modelname):
         """
@@ -357,7 +380,7 @@ class ProcessorSpec(object):
         """       
         return self.models[modelname].probs(circuit)
 
-    
+
     # For finding the inversion dict.
 # inverse_dict = {}
 # for gl1 in pspec.models['target'].gates:

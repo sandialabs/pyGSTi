@@ -12,8 +12,6 @@ from ...objects import circuit as _cir
 from ...baseobjs import label as _lbl
 from ...tools import symplectic as _symp
 
-#
-# ?????? #
 from ... import construction as _cnst
 from ... import objects as _objs
 from ... import io as _io
@@ -24,7 +22,7 @@ import copy as _copy
 
 
 def circuit_layer_by_pairing_qubits(pspec, twoQprob=0.5, oneQgatenames='all', twoQgatenames='all',
-                              gatesetname = 'clifford'):   
+                              gatesetname='clifford'):   
     """
     Samples a random circuit layer by pairing up qubits and picking a two-qubit gate for a pair
     with the specificed probability. This sampler *assumes* all-to-all connectivity, and does
@@ -779,7 +777,7 @@ def clifford_rb_circuit(pspec, length, randomizeout=False, citerations=20, compi
             
     return full_circuit, idealout
 
-def mirror_rb_circuit(pspec, length, inverse_dict, sampler='Qelimination', samplerargs=[], localclifford=True,
+def mirror_rb_circuit(pspec, length, sampler='Qelimination', samplerargs=[], localclifford=True,
                       paulirandomize=True):
 
     assert(not ((not paulirandomize) and localclifford)), "If localclifford is True then paulirandomize must be True!"
@@ -793,7 +791,7 @@ def mirror_rb_circuit(pspec, length, inverse_dict, sampler='Qelimination', sampl
 
     for i in range(0,pspec.number_of_qubits):
         for j in range(0,length):
-            inv_name = inverse_dict[random_circuit_inv.line_items[i][j].name]
+            inv_name = pspec.gate_inverse[random_circuit_inv.line_items[i][j].name]
             qubits = random_circuit_inv.line_items[i][j].qubits
             random_circuit_inv.line_items[i][j] = _lbl.Label(inv_name,qubits)
 
