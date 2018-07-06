@@ -17,20 +17,6 @@ from .qubitgraph import QubitGraph as _QubitGraph
 from ..baseobjs import Label as _Label
 from . import gate as _gate
 
-# For finding the inversion dict.
-# inverse_dict = {}
-# for gl1 in pspec.models['target'].gates:
-#     gate1 = pspec.models['target'][gl1]
-#     gate1 = gate1.convert_to_matrix(gate1.embedded_gate)
-#     for gl2 in pspec.models['target'].gates:
-#         gate2 = pspec.models['target'][gl2]
-#         gate2 = gate2.convert_to_matrix(gate2.embedded_gate)
-#         #print(gate1,gate2)
-#         if gl1.number_of_qubits == gl2.number_of_qubits:
-#             #print(np.dot(gate1,gate2))
-#             if np.allclose(np.dot(gate1,gate2),np.identity(4**gl1.number_of_qubits,float)):
-#                 print(gl1,gl2)
-
 class ProcessorSpec(object):
     """
     An object that can be used to encapsulate the device specification for a one or more qubit 
@@ -38,10 +24,10 @@ class ProcessorSpec(object):
     structures are superfluous in the case of a single qubit.
 
     """
-    def __init__(self, nQubits, gate_names, nonstd_gate_unitaries=None,
-                 availability={}, qubit_labels=None, construct_models=('clifford','target'), 
-                 construct_clifford_compilations = {'paulieq' : ('1Qcliffords','cnots'), 
-                 'absolute': ('paulis',)}, verbosity=0):
+    def __init__(self, nQubits, gate_names, nonstd_gate_unitaries={}, availability={}, 
+                qubit_labels=None, construct_models=('clifford','target'), 
+                construct_clifford_compilations = {'paulieq' : ('1Qcliffords','cnots'), 
+                'absolute': ('paulis',)}, verbosity=0):
         """
         Initializes a ProcessorSpec object.
     
@@ -50,27 +36,48 @@ class ProcessorSpec(object):
         (using `nonstd_gate_unitaries`) or using default gate-names known to pyGSTi, such as 'Gcnot'
         for the CNOT gate (using `gate_names`). The other core information is the availability of the
         gates (specified via `availability`).
-
-         This is a list of unitary operators, acting 
-        on ordinary pure state vectors (so they are 2^k by 2^k complex arrays, where k is the number 
-        of qubits that gate acts upon), defined with respect to the standard computational basis. 
-    
-        This gate library should include all native gates, and they need not -- and generically should 
-        not -- be unitaries acting on all of the qubits. E.g., an example of a gate library would be  
-        {'Gt' = 2x2 matrix defining the T gate, 'Gswap' : 4x4 matrix defining the SWAP gate, ...}.
         
         Parameters
         ----------
         nQubits : int
             The number of qubits in the device.
+
+        gate_names : list of strings
+            The names of gates in the device that correspond to standard gates known by pyGSTi. 
+            The set of standard gates includes, but is not limited to:
+
+            - 'Gi' : the 1Q idle operation
+            - 'Gx','Gy','Gz' : 1-qubit pi/2 rotations
+            - 'Gxpi','Gypi','Gzpi' : 1-qubit pi rotations
+            - 'Gh' : Hadamard
+            - 'Gp' : phase or S-gate (i.e., ((1,0),(0,i)))
+            - 'Gcphase','Gcnot','Gswap' : standard 2-qubit gates
+
+            Alternative names can be used for all or any of these gates, but then they must be explicitly defined 
+            in the `nonstd_gate_unitaries` dictionary.
         
-        gate_library: dictionary of numpy arrays
-            A library consisting of all (target) native gates that can be implemented in the device, as
-            unitaries acting on ordinary pure-state-vectors, in the standard basis. These unitaries need
-            not, and in most circumstances should not, be unitaries acting on all of the qubits. E.g., an 
-            example of  a gate library would be  {'H' = 2x2 matrix defining the Hadamard gate, 
-            'CNOT' : 4x4 matrix  defining the CNOT gate, 'P' = 2x2 matrix defining the Phase gate}. 
-            The keys of this dictionary must be strings, and are the gate names.
+        nonstd_gate_unitaries: dictionary of numpy arrays
+            A dictionary with keys that are gate names (strings) and values that are numpy arrays specifying 
+            quantum gates in terms of unitary matrices. Together with the gates specified in the `gate_names`
+            list, these matrices specify the set of all (target) native gates that can be implemented in the device.
+            as unitaries acting on ordinary pure-state-vectors, in the standard computationl basis. These unitaries 
+            need not, and often should not, be unitaries acting on all of the qubits. E.g., a CNOT gate is specified 
+            by a key that is the desired name for CNOT, and a value that is the standard 4 x 4 complex matrix for CNOT.
+            It is advisable, although not essential, to use gate names that start with 'G'.
+        
+        availability : dict, optional
+            A dictionary whose keys are some subset of the keys (which are gate names) `nonstd_gate_unitaries` 
+            and the strings (which are gate names) in `gate_names` and whose values are lists of qubit-label-tuples.  
+            Each qubit-label-tuple must have length equal to the number of qubits the corresponding gate acts upon, 
+            and causes that gate to be available to act on the specified qubits. Instead of a list of tuples, values 
+            of `availability` may take the special values `"all-permutations"` and `"all-combinations"`, which as their names
+            imply, equate to all possible permutations and combinations of the appropriate number of qubit labels (deterined 
+            by the gate's dimension). If a gate name is not present in `availability`, the default is `"all-permutations"`.
+            So, the availability of a gate only needs to be specified when it cannot act in every valid way on the qubits
+            (e.g., the device does not have all-to-all connectivity).
+
+        construct_models : tuple, optional
+
 
         TODO: docstring
         """
@@ -79,14 +86,11 @@ class ProcessorSpec(object):
         #Store inputs for adding models later
         self.number_of_qubits = nQubits
         self.root_gate_names = gate_names
-        self.nonstd_gate_unitaries = None if (nonstd_gate_unitaries is None) \
-                                     else nonstd_gate_unitaries.copy()
-        # Add in the gate names of the nonstd gates
-        if self.nonstd_gate_unitaries != None:
-            self.root_gate_names += list(self.nonstd_gate_unitaries.keys())
-            
+        self.nonstd_gate_unitaries = nonstd_gate_unitaries.copy()
+        self.root_gate_names += list(self.nonstd_gate_unitaries.keys())    
         self.availability = availability.copy()
 
+        # If no qubit labels are provided it defaults to integers from 0 to nQubits-1.    
         if qubit_labels is None:
             self.qubit_labels = list(range(nQubits)) 
         else:
@@ -101,41 +105,69 @@ class ProcessorSpec(object):
 
         #Compiler-cost variables (set in construct_compiler_costs)
         self.qubitgraph = None
-        self.qubitcosts = None
-        self.costorderedqubits = None
+        # todo : delete these if not using them.
+        # self.qubitcosts = None
+        # self.costorderedqubits = None
+        #self.connectivity['clifford'] =
+        #self.compiler
+
+        self.oneQgate_algebra = {}
+        self.oneQgate_inversions = {}
 
         # Add initial models
         for model_name in construct_models:
             self.add_std_model(model_name)
 
-        # Add compilations for the "basic" Clifford gates specified, which are used for, e.g., Clifford compiler algorithms.
-        # We only do this if there is a 'clifford' gateset, as these are Clifford compilations.
+        
         if 'clifford' in construct_models:
 
+            # Add compilations for the "basic" Clifford gates specified, which are used for, e.g., Clifford compiler algorithms.
+            # We only do this if there is a 'clifford' gateset, as these are Clifford compilations.
             for ctype in list(construct_clifford_compilations.keys()):
+                
+                # We construct the requested Pauli-equivalent compilations.
                 if ctype == 'paulieq':
                     oneQgates = [] # A list of the 1-qubit gates to compile, in the std names understood inside the compilers.
                     twoQgates = [] # A list of the 2-qubit gates to compile, in the std names understood inside the compilers.
-                    if '1Qcliffords' in construct_clifford_compilations[ctype]:
-                        oneQgates = ['H','P','PH','HP','HPH']
-                    if 'cnots' in construct_clifford_compilations[ctype]:
-                        twoQgates = ['CNOT']
-                    self.add_std_compilation(ctype, oneQgates, twoQgates, verbosity)
+                    for subctype in construct_clifford_compilations[ctype]:
+                        if subctype == '1Qcliffords':
+                            oneQgates += ['H','P','PH','HP','HPH']
+                        elif subctype == 'cnots':
+                            twoQgates += ['CNOT']
+                        else:
+                            raise ValueError("One of the values for the key `" + ctype + "` to `construct_clifford_compilations` is not a valid option!")
+                    self.add_std_compilations(ctype, oneQgates, twoQgates, verbosity)
 
-                if ctype == 'absolute':
-                    oneubit = [] # A list of the 1-qubit gates to compile, in the std names understood inside the compilers.
+                # We construct the requested `absolute` (i.e., not only up to Paulis) compilations.
+                elif ctype == 'absolute':
+                    oneQgates = [] # A list of the 1-qubit gates to compile, in the std names understood inside the compilers.
                     twoQgates = [] # A list of the 2-qubit gates to compile, in the std names understood inside the compilers.
-                    if 'paulis' in construct_clifford_compilations[ctype]:
-                        oneQgates = ['I','X','Y','Z']
-                    if '1Qcliffords' in construct_clifford_compilations[ctype]:
-                        oneQgates += ['C'+str(q) for q in range(24)] # todo : implement this.
-                        raise ValueError("This is not yet implemented")
-                    self.add_std_compilation(ctype, oneQgates, twoQgates, verbosity)
-            
-            # Todo: work out if this makes any sense and/or does anything.
-            if len(self.compilations) > 0:
-                self.construct_compiler_costs()
+                    for subctype in construct_clifford_compilations[ctype]:
+                        if subctype == 'paulis':
+                            oneQgates += ['I','X','Y','Z']
+                        elif subctype == '1Qcliffords':
+                            oneQgates += ['C'+str(q) for q in range(24)] # todo : implement this.
+                            raise ValueError("This is not yet implemented")
+                        else:
+                            raise ValueError("One of the values for the key `" + ctype + "` to `construct_clifford_compilations` is not a valid option!")
+                    self.add_std_compilations(ctype, oneQgates, twoQgates, verbosity)
 
+                else:
+                    raise ValueError("The keys to `construct_clifford_compilations` can only be `paulieq` and `absolute!")
+
+            # Generates the QubitGraph for the multi-qubit Clifford gates. If there are multi-qubit gates which are not Clifford gates
+            # then these are not counted as "connections".
+            connectivity = _np.zeros((self.number_of_qubits,self.number_of_qubits),dtype=bool)
+            for gatelabel in self.models['clifford'].gates:
+                # This treats non-entangling 2-qubit gates as making qubits connected. Stopping that is
+                # something we may need to do at some point.
+                if gatelabel.number_of_qubits > 1:
+                    for p in _itertools.permutations(gatelabel.qubits, 2):
+                        connectivity[self.qubit_labels.index(p[0]),self.qubit_labels.index(p[1])] = True
+            
+            self.qubitgraph = _QubitGraph(list(range(self.number_of_qubits)), connectivity)
+
+        # todo : store this in a less clumsy way.
         if 'clifford' in self.models:
             # Compute the gate labels that act on an entire set of qubits
             self.clifford_gates_on_qubits =  _collections.defaultdict(list)
@@ -146,9 +178,8 @@ class ProcessorSpec(object):
             self.clifford_gates_on_qubits = None
                                   
         return # done with __init__(...)
-
-                
-    def construct_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+               
+    def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
         """ 
         Erik todo: docstring 
 
@@ -182,20 +213,13 @@ class ProcessorSpec(object):
                 self.nonstd_gate_unitaries, self.availability, self.qubit_labels,
                 parameterization, sim_type)
             
-        return model
-
-    def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+        self.models[model_name] = model
+                  
+    def add_std_compilations(self, compile_type, oneQgates, twoQgates, verbosity=0):
         """ 
-        Erik todo: docstring 
-
-        """
-        self.models[model_name] = self.construct_std_model(model_name,
-                                                           parameterization,
-                                                           sim_type)
+        Tim todo : docstring
         
-            
-    def construct_std_compilation(self,  compile_type, oneQgates, twoQgates, verbosity=1):
-        """ TODO: docstring """
+        """
         #Hard-coded gates we need to compile from the native (clifford) gates in order to compile
         # arbitrary (e.g. random) cliffords, since our Clifford compiler outputs circuits in terms
         # of these elements.
@@ -277,67 +301,68 @@ class ProcessorSpec(object):
             for gname,q1,q2 in not_locally_compilable:
                 library.add_nonlocal_compilation_of(_Label(gname,(q1,q2)),
                                                     verbosity=verbosity)
+        
+        self.compilations[compile_type] = library
 
-        return library
 
+    def add_oneQgate_algebra(modelname):
+        # todo
+        return
+
+    def add_oneQgate_inversions(modelname):
+        # todo
+        return
+
+
+    # For finding the inversion dict.
+# inverse_dict = {}
+# for gl1 in pspec.models['target'].gates:
+#     gate1 = pspec.models['target'][gl1]
+#     gate1 = gate1.convert_to_matrix(gate1.embedded_gate)
+#     for gl2 in pspec.models['target'].gates:
+#         gate2 = pspec.models['target'][gl2]
+#         gate2 = gate2.convert_to_matrix(gate2.embedded_gate)
+#         #print(gate1,gate2)
+#         if gl1.number_of_qubits == gl2.number_of_qubits:
+#             #print(np.dot(gate1,gate2))
+#             if np.allclose(np.dot(gate1,gate2),np.identity(4**gl1.number_of_qubits,float)):
+#                 print(gl1,gl2)
     
-    def add_std_compilation(self, compile_type, oneQgates, twoQgates, verbosity=1):
-        """ Tim todo: docstring 
+    # Tim is going to replace this at some point with a useful way to specify how "costly" using different qubits/gates is estimated to be, so that
+    # Clifford compilers etc can take this into account.                        
+    # def construct_compiler_costs(self, custom_connectivity=None):
+    #     """ 
 
-        """
-        self.compilations[compile_type] = \
-            self.construct_std_compilation(compile_type, oneQgates, twoQgates, verbosity)
+    #     """
+    #     self.qubitcosts = {}
         
-                                 
-    def construct_compiler_costs(self, custom_connectivity=None):
-        """ Tim todo: docstring 
-
-        """
-        if 'clifford' not in self.models:
-            raise ValueError("Cannot construct compiler costs without a 'clifford' model")
-
-        # A matrix that stores whether there is any gate between a pair of qubits
-        if custom_connectivity is not None:
-            assert(custom_connectivity.shape == (self.number_of_qubits,self.number_of_qubits))
-            connectivity = custom_connectivity
-        else:
-            connectivity = _np.zeros((self.number_of_qubits,self.number_of_qubits),dtype=bool)
-            for gatelabel in self.models['clifford'].gates:
-                if gatelabel.number_of_qubits > 1:
-                    # todo : this only works for 2-qubit gates, so make it check for that, or fix.
-                    for p in _itertools.permutations(gatelabel.qubits, 2):
-                        connectivity[self.qubit_labels.index(p[0]),self.qubit_labels.index(p[1])] = True
+    #     #
+    #     # todo -- I'm not sure whether this makes sense when the graph is directed.
+    #     #
+    #     distances = self.qubitgraph.shortest_path_distance_matrix()
+    #     for i in range(0,self.number_of_qubits):
+    #         self.qubitcosts[i] = _np.sum(distances[i,:])
         
-        self.qubitgraph = _QubitGraph(list(range(self.number_of_qubits)), connectivity)
-        self.qubitcosts = {}
-        
-        #
-        # todo -- I'm not sure whether this makes sense when the graph is directed.
-        #
-        distances = self.qubitgraph.shortest_path_distance_matrix()
-        for i in range(0,self.number_of_qubits):
-            self.qubitcosts[i] = _np.sum(distances[i,:])
-        
-        temp_distances = list(_np.sum(distances,0))
-        temp_qubits = list(_np.arange(0,self.number_of_qubits))
-        self.costorderedqubits = []
+    #     temp_distances = list(_np.sum(distances,0))
+    #     temp_qubits = list(_np.arange(0,self.number_of_qubits))
+    #     self.costorderedqubits = []
                
-        while len(temp_distances) > 0:
+    #     while len(temp_distances) > 0:
             
-            longest_remaining_distance = max(temp_distances)
-            qubits_at_this_distance = []
+    #         longest_remaining_distance = max(temp_distances)
+    #         qubits_at_this_distance = []
             
-            while longest_remaining_distance == max(temp_distances):
+    #         while longest_remaining_distance == max(temp_distances):
                 
-                index = _np.argmax(temp_distances)
-                qubits_at_this_distance.append(temp_qubits[index])
-                del temp_distances[index]
-                del temp_qubits[index]
+    #             index = _np.argmax(temp_distances)
+    #             qubits_at_this_distance.append(temp_qubits[index])
+    #             del temp_distances[index]
+    #             del temp_qubits[index]
                 
-                if len(temp_distances) == 0:
-                    break
+    #             if len(temp_distances) == 0:
+    #                 break
         
-            self.costorderedqubits.append(qubits_at_this_distance)
+    #         self.costorderedqubits.append(qubits_at_this_distance)
             
             
     def simulate(self,circuit,modelname):
