@@ -445,10 +445,10 @@ class Circuit(_gstr.GateString):
             self.line_items[q][j] = _Label(self.identity,self.line_labels[q])
             
         else:
-            q1 = self.line_items[q][j].qubits[0]
-            q2 = self.line_items[q][j].qubits[1]
-            self.line_items[q1][j] = _Label(self.identity,self.line_labels[int(q1)])
-            self.line_items[q2][j] = _Label(self.identity,self.line_labels[int(q2)])
+            q1 = self.line_labels.index(self.line_items[q][j].qubits[0])
+            q2 = self.line_labels.index(self.line_items[q][j].qubits[1])
+            self.line_items[q1][j] = _Label(self.identity,self.line_labels[q1])
+            self.line_items[q2][j] = _Label(self.identity,self.line_labels[q2])
         
         # Insert the circuit
         self.insert_circuit(circuit,j+1)
@@ -632,7 +632,7 @@ class Circuit(_gstr.GateString):
         """
         todo : docstring
         """
-        todo : implement
+        #todo : implement
 
     # Todo : I think we want to delete this function, as it does something quite odd.
     def relabel_qubits(self,order):
@@ -747,15 +747,33 @@ class Circuit(_gstr.GateString):
                     count += 1
         return count//2
     
-    def predicted_infidelity(self,fidelities):
+    def predicted_error_probability(self, gate_error_probabilities):
+        """
+        Predicts the probability that one or more errors occur in the circuit
+        if the gates have the error probabilities specified by in the input
+        dictionary. Given correct error rates for the gates and stochastic errors, 
+        this is predictive of the probability of an error in the circuit -- which 
+        is not the same as the probability that the circuit implemented is incorrect 
+        (e.g., stochastic errors can cancel).
         
+        Parameters
+        ----------
+        gate_error_probabilities : dict
+            A dictionary where the keys are the labels that appear in the circuit, and
+            the value is the error probability for that gate.
+ 
+        Returns
+        -------
+        float
+            The probability that there is one or more errors in the circuit.
+        """
         f = 1.
-        # todo: need to check how this behaves with the idle gate.       
-        gatestring = self._flatten_to_tup()
-        for label in gatestring:
-            
-            f = f*fidelities[label]
-        
+        for i in range(0,self.number_of_lines):
+            for j in range(0,depth):
+                gate = self.line_items[i][j]
+                # So that we don't include multi-qubit gates more than once.
+                if self.line_labels.index(gate.qubits[0]) == i:
+                    f = f*(1-gate_error_probabilities[gate])       
         return 1 - f
 
     def __str__(self):
@@ -794,18 +812,24 @@ class Circuit(_gstr.GateString):
 
         return s
     
-    def write_qcircuit_tex(self,filename):
+    def write_Qcircuit_tex(self, filename):
         """
-        Renders this circuit as LaTeX (using Qcircuit).
+        Writes this circuit into a file, containing LaTex that will diplay this circuit using the 
+        Qcircuit.tex LaTex import (running the LaTex requires the Qcircuit.tex file).
+        
+        Parameters
+        ----------
+        filename : str
+            The file to write the LaTex into. Should end with '.tex'
 
         Returns
         -------
-        str
+        None
         """
         n = self.number_of_lines
         d = self.depth()
         
-        f = open(filename+'.tex','w') 
+        f = open(filename,'w') 
         f.write("\documentclass{article}\n")
         f.write("\\usepackage{mathtools}\n")
         f.write("\\usepackage{xcolor}\n")
@@ -813,22 +837,22 @@ class Circuit(_gstr.GateString):
         f.write("\input{Qcircuit}\n")
         f.write("\\begin{document}\n")
         f.write("\\begin{equation*}\n") 
-        #f.write("\Qcircuit @C=1.2em @R=0.5em {\n")
         f.write("\Qcircuit @C=1.0em @R=0.5em {\n")
         
         n = self.number_of_lines
         for q in range(0,n):
             qstring = '&'
+            # The quantum wire for qubit q
             circuit_for_q = self.line_items[q]
             for gate in circuit_for_q:
                 if gate.name == self.identity:
                     qstring += ' \qw &'
-                elif gate.name == 'CNOT':
+                elif gate.name == 'CNOT' or gate.name == 'Gcnot':
                     if gate.qubits[0] == q:
                         qstring += ' \ctrl{'+str(gate.qubits[1]-q)+'} &'
                     else:
                         qstring += ' \\targ &'
-                elif gate.name == 'CPHASE':
+                elif gate.name == 'CPHASE' or gate.name == 'Gcphase':
                     if gate.qubits[0] == q:
                         qstring += ' \ctrl{'+str(gate.qubits[1]-q)+'} &'
                     else:
@@ -878,11 +902,14 @@ class Circuit(_gstr.GateString):
             Gxpi Gzpi Gxpi Gzpi, if the relation did not know that (Gxpi,Gzpi) -> Gypi, even though the sequence
             is the identity).
         
+        return_flag : bool, optional
+            If True, then a bool is returned. If False, None is returned.
+
         Returns
         -------
-        bool
-            False if the circuit is unchanged, True otherwise.
-        """ 
+        bool or None
+            If a bool, it is  False if the circuit is unchanged, and True otherwise.
+        """
         assert(not self._static),"Cannot edit a read-only circuit!"
         # A flag that is turned to True if any non-trivial re-arranging is implemented by this method.
         compression_implemented = False        
@@ -936,41 +963,82 @@ class Circuit(_gstr.GateString):
         # Returns the flag, so we know whether the algorithm achieved anything.
         return compression_implemented
     
-    def shift_gates_forward(self):
+    def shift_gates_forward(self, return_flag=False):
         """
         All gates are shifted forwarded as far as is possible without any knowledge of what 
         any of the gates are, except that the self.identity gates (idle gates) can be replaced.
         One of the steps of the depth_compression() method.
+        
+        Parameters
+        ----------
+        return_flag : bool, optional
+            If True, then a bool is returned. If False, None is returned.
+
+        Returns
+        -------
+        bool or None
+            If a bool, it is  False if the circuit is unchanged, and True otherwise.
         """
         assert(not self._static),"Cannot edit a read-only circuit!"
         # Keeps track of whether any changes have been made to the circuit.
         compression_implemented = False
-
+        # Stores which layer we can move the current gate forwarded to.
         can_move_to_layer = _np.zeros(self.number_of_lines,int) 
+        # If the first layer isn't an idle, we set this to 1.
         for q in range(0,self.number_of_lines):
             gate = self.line_items[q][0]
             if gate.name != self.identity:
                 can_move_to_layer[q] = 1
 
+        # Look at the gates in each circuit layer, and move them forward if we can
         for j in range(1,self.depth()):
+            # Look at each line in turn
             for q in range(0,self.number_of_lines):
                 gate = self.line_items[q][j]
+                # If the gate isn't the identity, we try and move it forward. If it
+                # is the identity, we don't change can_move_to_layer[q].
                 if gate.name != self.identity:
+                    # This stores which layer we can move the gate to. Starts at 0,
+                    # and is increased as necessary
                     move_to_layer = 0
+                    # Look at each qubit in the gate, and find out how far forward we
+                    # can move a gate on that qubit
                     for qlabel in gate.qubits:
                         qindex = self.line_labels.index(qlabel)
+                        # Update the layer we can move to to the worst-case out of the
+                        # qubits the gate acts on -- as it has to be shifted forward on
+                        # all of these qubits
                         move_to_layer = max(move_to_layer,can_move_to_layer[qindex])
                     
+                    # If the layer we can move it to isn't the current layer we do that.
                     if move_to_layer < j:
+                        # Go through the qubits the gate acts on and move it for all of them
                         for qlabel in gate.qubits:
                             qindex = self.line_labels.index(qlabel)
+                            # Write the gate in where it is move to
                             self.line_items[qindex][move_to_layer] = self.line_items[qindex][j]
-                            self.line_items[qindex][j] = _Label(self.identity,qindex)
+                            # Turn the old location of the gate into an identity on the qubit.
+                            self.line_items[qindex][j] = _Label(self.identity,qlabel)
+                            # The layer 1 after the layer we moved to is now the earliest available
+                            # layer for a moving a gate to for that qubit, so we update this.
                             can_move_to_layer[qindex] = move_to_layer + 1
+                            # We've changed the circuit, so record that in the bool.
+                            compression_implemented = True
+                    # If no compression can be implemented, this gate is now the "road-block" for the
+                    # qubits it acts on, so update `can_move_to_layer` for these qubits to the layer
+                    # *after* this. This might not be an identity, but if it isn't then this will be
+                    # iterated on again so that `an_move_to_layer[qindex]` will always be the same layer
+                    # as the gate we are considering trying to move forward unless this corresponds to
+                    # an idle laye (it stops iterating foward as soon as we hit an idle layer on the qubit).
                     else:
                         for qlabel in gate.qubits:
                             qindex = self.line_labels.index(qlabel)
                             can_move_to_layer[qindex] = j + 1
+
+        # Only if we've changed anything do we need to set the "dirty" atributes to True.
+        if compression_implemented:
+            self._tup_dirty = self._str_dirty = True
+        # Only return the bool if requested
         if return_flag:     
             return compression_implemented
         else:
@@ -979,8 +1047,17 @@ class Circuit(_gstr.GateString):
     def delete_idle_layers(self, return_flag=False):
         """
         Deletes all layers in the circuit that consist of only idle layers. One of the steps of the
-        depth_compression() method. If return_flag is True, then a bool is returned that is True
-        if and only if one or more layers have been deleted.
+        depth_compression() method. 
+
+        Parameters
+        ----------
+        return_flag : bool, optional
+            If True, then a bool is returned. If False, None is returned.
+
+        Returns
+        -------
+        bool or None
+            If a bool, it is  False if the circuit is unchanged, and True otherwise.
         """
         assert(not self._static),"Cannot edit a read-only circuit!"        
         compression_implemented = False
@@ -998,6 +1075,11 @@ class Circuit(_gstr.GateString):
             if all_idle:
                 compression_implemented = True
                 self.delete_layer(d-1-i)
+        
+        # Only if we've changed anything do we need to set the "dirty" atributes to True.
+        if compression_implemented:
+            self._tup_dirty = self._str_dirty = True
+        # Only return the bool if requested
         if return_flag:     
             return compression_implemented
         else:
@@ -1050,15 +1132,18 @@ class Circuit(_gstr.GateString):
             print("- Implementing circuit depth compression")
             print("  - Circuit depth before compression is {}".format(self.depth()))
                
+        flag1 = False
         if oneQgate_relations is not None:                            
-            flag1 = self.combine_oneQgates(oneQgate_relations)
-        flag2 = self.shift_gates_forward()   
-        flag3 = self.delete_idle_layers()
-    
+            flag1 = self.combine_oneQgates(oneQgate_relations,return_flag=True)
+        flag2 = self.shift_gates_forward(return_flag=True)   
+        flag3 = self.delete_idle_layers(return_flag=True)
+
         if verbosity > 0:
+            if not (flag1 or flag2 or flag3):
+                print("  - Circuit unchanged by depth compression algorithm")       
             print("  - Circuit depth after compression is {}".format(self.depth()))       
     
-    def simulate(self,gateset): #,inputstate=None,store=True,returnall=False):        
+    def simulate(self, gateset): 
         """
         Compute the outcome probabilities of this Circuit using `gateset` as a
         model for the gates.
