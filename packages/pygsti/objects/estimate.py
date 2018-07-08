@@ -503,7 +503,8 @@ class Estimate(object):
                                   gateLabelAliases=gss.aliases,
                                   evaltree_cache=evaltree_cache, comm=comm)
         elif obj in ("logl","lgst"):
-            logL_upperbound = _tools.logl_max(gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
+            logL_upperbound = _tools.logl_max(gs, ds, gss.allstrs, gateLabelAliases=gss.aliases,
+                                              evaltree_cache=evaltree_cache)
             logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases,
                                 evaltree_cache=evaltree_cache, comm=comm)
             fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL

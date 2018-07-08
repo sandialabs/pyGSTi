@@ -1138,37 +1138,48 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #   tree and initialization of dsGateStringsToUse)
     probs  = _np.empty( KM, 'd' )
     jac    = _np.empty( (KM+ex,vec_gs_len), 'd')
-
-    N =_np.empty( KM, 'd')
-    f =_np.empty( KM, 'd')
-    fweights = _np.empty( KM, 'd')
     z = _np.zeros( KM, 'd') # for deriv below
+    
+    if evaltree_cache and 'cntVecMx' in evaltree_cache \
+       and useFreqWeightedChiSq == False: # b/c we don't cache fweights
+        cntVecMx = evaltree_cache['cntVecMx']
+        N = evaltree_cache['totalCntVec']
+        fweights = None
+    else:
+        N =_np.empty( KM, 'd') # totalCntVec
+        cntVecMx =_np.empty( KM, 'd')
+        fweights = _np.empty( KM, 'd') if useFreqWeightedChiSq else None # usually not used
 
-    #NOTE on chi^2 expressions:
-    #in general case:   chi^2 = sum (p_i-f_i)^2/p_i  (for i summed over outcomes)
-    #in 2-outcome case: chi^2 = (p+ - f+)^2/p+ + (p- - f-)^2/p-
-    #                         = (p - f)^2/p + (1-p - (1-f))^2/(1-p)
-    #                         = (p - f)^2 * (1/p + 1/(1-p))
-    #                         = (p - f)^2 * ( ((1-p) + p)/(p*(1-p)) )
-    #                         = 1/(p*(1-p)) * (p - f)^2
-
-    for (i,gateStr) in enumerate(dsGateStringsToUse):
-        N[ lookup[i] ] = dataset[gateStr].total
-        f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
-        if useFreqWeightedChiSq:
-            wts = []
-            for x in outcomes_lookup[i]:
-                Nx = dataset[gateStr].total
-                f1 = dataset[gateStr].fraction(x); f2 = (f1+1)/(Nx+2)
-                wts.append( _np.sqrt( Nx / (f2*(1-f2)) ) )
-            fweights[ lookup[i] ] = wts
-
-    if gatestringWeights is not None:
-        for i in range(len(gateStringsToUse)):
+        #NOTE on chi^2 expressions:
+        #in general case:   chi^2 = sum (p_i-f_i)^2/p_i  (for i summed over outcomes)
+        #in 2-outcome case: chi^2 = (p+ - f+)^2/p+ + (p- - f-)^2/p-
+        #                         = (p - f)^2/p + (1-p - (1-f))^2/(1-p)
+        #                         = (p - f)^2 * (1/p + 1/(1-p))
+        #                         = (p - f)^2 * ( ((1-p) + p)/(p*(1-p)) )
+        #                         = 1/(p*(1-p)) * (p - f)^2
+    
+        for (i,gateStr) in enumerate(dsGateStringsToUse):
+            cnts = dataset[gateStr].counts
+            N[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
+            cntVecMx[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
             if useFreqWeightedChiSq:
-                fweights[ lookup[i] ] *= gatestringWeights[i] #b/c we necessarily used unweighted N[i]'s above
-            N[ lookup[i] ] *= gatestringWeights[i] #multiply N's by weights
+                wts = []
+                for x in outcomes_lookup[i]:
+                    Nx = dataset[gateStr].total
+                    f1 = dataset[gateStr].fraction(x); f2 = (f1+1)/(Nx+2)
+                    wts.append( _np.sqrt( Nx / (f2*(1-f2)) ) )
+                fweights[ lookup[i] ] = wts    
+    
+        if gatestringWeights is not None:
+            for i in range(len(gateStringsToUse)):
+                cntVecMx[ lookup[i] ] *= gatestringWeights[i] # dim KM (K = nSpamLabels, M = nGateStrings )
+                N[ lookup[i] ] *= gatestringWeights[i] #multiply N's by weights
 
+        if evaltree_cache is not None:
+            evaltree_cache['cntVecMx'] = cntVecMx
+            evaltree_cache['totalCntVec'] = N
+
+    f = cntVecMx / N
     maxGateStringLength = max([len(x) for x in gateStringsToUse])
 
     if useFreqWeightedChiSq:
@@ -2321,32 +2332,41 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     if forcefn_grad is not None: ex += forcefn_grad.shape[0]
 
     #Allocate peristent memory
-    cntVecMx = _np.empty( KM, 'd' )
     probs = _np.empty( KM, 'd' )
     jac    = _np.empty( (KM+ex,vec_gs_len), 'd' )
 
+    if evaltree_cache and 'cntVecMx' in evaltree_cache:
+        cntVecMx = evaltree_cache['cntVecMx']
+        totalCntVec = evaltree_cache['totalCntVec']
+    else:
+        cntVecMx = _np.empty(KM, 'd' )
+        totalCntVec = _np.empty(KM, 'd' )
+        for (i,gateStr) in enumerate(dsGateStringsToUse):
+            cnts = dataset[gateStr].counts
+            totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
+            cntVecMx[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+            # OLD: totalCntVec[ lookup[i] ] = dataset[gateStr].total
+            # OLD: cntVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
 
-    cntVecMx = _np.empty(KM, 'd' )
-    totalCntVec = _np.empty(KM, 'd' )
-    for (i,gateStr) in enumerate(dsGateStringsToUse):
-        totalCntVec[ lookup[i] ] = dataset[gateStr].total
-        cntVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
+        if gatestringWeights is not None:
+            #From this point downward, scaling cntVecMx, totalCntVec and
+            # minusCntVecMx will scale the corresponding logL terms, as desired.
+            for i in range(len(gateStringsToUse)):
+                cntVecMx[ lookup[i] ] *= gatestringWeights[i] # dim KM (K = nSpamLabels, M = nGateStrings )
+                totalCntVec[ lookup[i] ] *= gatestringWeights[i] #multiply N's by weights
 
+        if evaltree_cache is not None:
+            evaltree_cache['cntVecMx'] = cntVecMx
+            evaltree_cache['totalCntVec'] = totalCntVec
+
+            
     logL_upperbound = _tools.logl_max(gs, dataset, dsGateStringsToUse,
-                                      poissonPicture) # The theoretical upper bound on the log(likelihood)
+                                      poissonPicture, check, gateLabelAliases, evaltree_cache) # The theoretical upper bound on the log(likelihood)
     minusCntVecMx = -1.0 * cntVecMx
 
     freqs = cntVecMx / totalCntVec
     freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
-
-    if gatestringWeights is not None:
-        #From this point downward, scaling cntVecMx, totalCntVec and
-        # minusCntVecMx will scale the corresponding logL terms, as desired.
-        for i in range(len(gateStringsToUse)):
-            cntVecMx[ lookup[i] ] *= gatestringWeights[i] # dim KM (K = nSpamLabels,
-            minusCntVecMx[ lookup[i] ] *= gatestringWeights[i] #    M = nGateStrings )
-            totalCntVec[ lookup[i] ] *= gatestringWeights[i] #multiply N's by weights
-
+    
     if poissonPicture:
         freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 )
     else:
@@ -2835,7 +2855,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
             tRef2=tNxt
 
-            logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases)
+            logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases, evt_cache)
             maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
                                   radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
 

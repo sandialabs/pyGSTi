@@ -38,13 +38,17 @@ class DataSet_KeyValIterator(object):
         oliData = self.dataset.oliData
         timeData = self.dataset.timeData
         repData = self.dataset.repData
+        cntcache = self.dataset.cnt_cache
+
+        def getcache(gs):
+            return dataset.cnt_cache[gs] if dataset.bStatic else None
       
         if repData is None:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None)
-                             for gsi in self.dataset.gsIndex.values() )
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gs))
+                             for gs,gsi in self.dataset.gsIndex.items() )
         else:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ])
-                             for gsi in self.dataset.gsIndex.values() )
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(gs))
+                             for gs,gsi in self.dataset.gsIndex.items() )
         #Note: gsi above will be an index for a non-static dataset and
         #  a slice for a static dataset.
 
@@ -64,13 +68,17 @@ class DataSet_ValIterator(object):
         oliData = self.dataset.oliData
         timeData = self.dataset.timeData
         repData = self.dataset.repData
-    
+        cntcache = self.dataset.cnt_cache
+
+        def getcache(gs):
+            return dataset.cnt_cache[gs] if dataset.bStatic else None
+        
         if repData is None:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None)
-                             for gsi in self.dataset.gsIndex.values() )
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gs))
+                             for gs,gsi in self.dataset.gsIndex.items() )
         else:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ])
-                             for gsi in self.dataset.gsIndex.values() )
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(gs))
+                             for gs,gsi in self.dataset.gsIndex.items() )
         #Note: gsi above will be an index for a non-static dataset and
         #  a slice for a static dataset.
 
@@ -89,11 +97,12 @@ class DataSetRow(object):
     looks similar to a list with `(outcome_label, time_index, repetition_count)`
     tuples as the values.
     """
-    def __init__(self, dataset, rowOliData, rowTimeData, rowRepData):
+    def __init__(self, dataset, rowOliData, rowTimeData, rowRepData, cached_cnts):
         self.dataset = dataset
         self.oli = rowOliData
         self.time = rowTimeData
         self.reps = rowRepData
+        self._cntcache = cached_cnts
 
     @property
     def outcomes(self):
@@ -223,7 +232,11 @@ class DataSetRow(object):
 
     @property
     def counts(self):
-        return self._get_counts()
+        if self._cntcache: return self._cntcache # if not None *and* len > 0
+        ret = self._get_counts()
+        if self._cntcache is not None: # == and empty dict {}
+            self._cntcache.update(ret)
+        return ret
 
     @property
     def allcounts(self):
@@ -589,6 +602,12 @@ class DataSet(object):
         self.oliType  = Oindex_type
         self.timeType = Time_type
         self.repType  = Repcount_type
+
+        # count cache (only used when static; not saved/loaded from disk)
+        if bStatic:
+            self.cnt_cache = { gs:dict() for gs in self.gsIndex }
+        else:
+            self.cnt_cache = None
   
   
     def __iter__(self):
@@ -645,7 +664,8 @@ class DataSet(object):
         repData = self.repData[ self.gsIndex[gatestring] ] \
                   if (self.repData is not None) else None
         return DataSetRow(self, self.oliData[ self.gsIndex[gatestring] ],
-                          self.timeData[ self.gsIndex[gatestring] ], repData)
+                          self.timeData[ self.gsIndex[gatestring] ], repData,
+                          self.cnt_cache[ gatestring ] if self.bStatic else None)
 
     def set_row(self, gatestring, outcomeDictOrSeries, occurrence=0):
         """
@@ -803,9 +823,10 @@ class DataSet(object):
             
         nDOF = 0
         for gstr in gateStringList:
-            cur_t = self[gstr].time[0]
+            dsRow = self[gstr]
+            cur_t = dsRow.time[0]
             cur_outcomes = set() # holds *distinct* outcomes at current time
-            for ol,t,rep in self[gstr]:
+            for ol,t,rep in dsRow:
                 if t == cur_t: cur_outcomes.add(ol)
                 else:
                     #assume final outcome at each time is constrained
@@ -1253,6 +1274,7 @@ class DataSet(object):
             copyOfMe.oliType  =self.oliType
             copyOfMe.timeType = self.timeType
             copyOfMe.repType  = self.repType
+            copyOfMe.cnt_cache = None
             return copyOfMe
 
 
@@ -1274,6 +1296,7 @@ class DataSet(object):
             copyOfMe.oliType  =self.oliType
             copyOfMe.timeType = self.timeType
             copyOfMe.repType  = self.repType
+            copyOfMe.cnt_cache = None
             return copyOfMe
         else:
             return self.copy()
@@ -1323,7 +1346,8 @@ class DataSet(object):
             self.timeData = _np.empty( (0,), self.timeType)
             if self.repData is not None:
                 self.repData = _np.empty( (0,), self.repType)
-          
+
+        self.cnt_cache = { gs:dict() for gs in self.gsIndex }
         self.bStatic = True
         self.uuid = _uuid.uuid4()
 
@@ -1491,6 +1515,7 @@ class DataSet(object):
             self.timeData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
             if useReps:
                 self.repData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
+            self.cnt_cache = { gs:dict() for gs in self.gsIndex } # init cnt_cache afresh
         else:
             self.oliData = []
             for _ in range(state_dict['nRows']):
@@ -1506,5 +1531,6 @@ class DataSet(object):
                     self.repData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
             else:
                 self.repData = None
+            self.cnt_cache = None
         
         if bOpen: f.close()

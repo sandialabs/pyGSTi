@@ -1214,17 +1214,20 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                                            advancedOptions.get('minProbClipForWeighting',1e-4),
                                            advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                            False, False, memLimit,
-                                           advancedOptions.get('gateLabelAliases',None))
+                                           advancedOptions.get('gateLabelAliases',None),
+                                           evaltree_cache=evaltree_cache, comm=comm)
             else: # "logl" or "lgst"
                 maxLogL = _tools.logl_max_terms(gs_lsgst_list[-1], ds, rawLists[-1],
                                                 gateLabelAliases=advancedOptions.get(
-                                                    'gateLabelAliases',None))
+                                                    'gateLabelAliases',None),
+                                                evaltree_cache=evaltree_cache)
 
                 logL = _tools.logl_terms(gs_lsgst_list[-1], ds, rawLists[-1],
                                          advancedOptions.get('minProbClip',1e-4),
                                          advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                          advancedOptions.get('radius',1e-4),
-                                         gateLabelAliases=advancedOptions.get('gateLabelAliases',None))
+                                         gateLabelAliases=advancedOptions.get('gateLabelAliases',None),
+                                         evaltree_cache=evaltree_cache, comm=comm)
                 fitQty = 2*(maxLogL - logL)
 
             #Note: fitQty[iGateString] gives fit quantity for a single gate
@@ -1288,7 +1291,7 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                                       verbosity=printer-1)
                     for x in ('maxiter', 'tol', 'cptp_penalty_factor', 'spam_penalty_factor',
                               'probClipInterval', 'check', 'gateLabelAliases',
-                              'memLimit', 'comm', 'distributeMethod', 'profiler'):
+                              'memLimit', 'comm', 'evaltree_cache', 'distributeMethod', 'profiler'):
                         reopt_args[x] = opt_args[x]
 
                     printer.log("--- Re-optimizing %s after robust data scaling ---" % objective)
