@@ -70,9 +70,9 @@ class CompilationLibrary(_collections.OrderedDict):
         """
         self.gateset = clifford_gateset # gateset of (all Clifford) gates to compile requested gates into
         self.ctype = ctyp # "absolute" or "paulieq"
-        self.identity = 'I'
+        self.identity = identity
         self.templates = _collections.defaultdict(list) # keys=gate names (strs); vals=tuples of Labels
-        self.connectivity = {} # QubitGraphs for gates currently compiled in library (key=gate_name)                        
+        self.connectivity = {} # QubitGraphs for gates currently compiled in library (key=gate_name)                    
         super(CompilationLibrary,self).__init__(items)
 
 
@@ -181,7 +181,7 @@ class CompilationLibrary(_collections.OrderedDict):
         if template_to_use is not None:
             gstr = list( map(to_real_label, template_to_use) )
             return _Circuit(gatestring=gstr,
-                            line_labels=self.gateset.stateSpaceLabels.labels[0])
+                            line_labels=self.gateset.stateSpaceLabels.labels[0],identity=self.identity)
         else:
             if verbosity > 0: print("Cannot locally compile %s" % str(gatelabel))
             raise CompilationError("Cannot locally compile %s" % str(gatelabel))
@@ -289,7 +289,7 @@ class CompilationLibrary(_collections.OrderedDict):
         
         if srep is None:
             template_lbl = _Label(gate_name,tuple(range(nqubits))) # integer ascending qubit labels
-            smatrix, svector = _symp.symplectic_rep_of_clifford_layer([template_lbl],nqubits)
+            smatrix, svector = _symp.symplectic_rep_of_clifford_layer([template_lbl], nqubits, Qlabels=[0,1])
         else:
             smatrix, svector = srep
                 
@@ -322,9 +322,9 @@ class CompilationLibrary(_collections.OrderedDict):
                 all_layers.append( gls_in_layer )
 
         # Find the symplectic action of all possible circuits of length 1 on the qubits
+        # todo -- this might not work with qubit labels differing from integers?
         for layer in all_layers:
-            obtained_sreps[layer] = _symp.symplectic_rep_of_clifford_layer(
-                layer, nqubits, available_sreps)
+            obtained_sreps[layer] = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
                 
         # Main loop. We go through the loop at most max_iterations times
         found = False
@@ -380,8 +380,8 @@ class CompilationLibrary(_collections.OrderedDict):
                 for layer in all_layers:
                         
                     # Calculate the symp rep of this parallel gate
-                    sadd, padd = _symp.symplectic_rep_of_clifford_layer(
-                        layer, nqubits, available_sreps)
+                    # todo -- this might not work with qubit labels differing from integers?
+                    sadd, padd = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
                     key = seq + layer # tuple/GateString concatenation
                         
                     # Calculate and record the symplectic rep of this gate sequence.
@@ -463,8 +463,12 @@ class CompilationLibrary(_collections.OrderedDict):
             else:
                 return init_qgraph
                         
-        else: # assume allowed_filter is iterable and contains qubit labels
-            return init_graph.subgraph( list(allowed_filter) )
+        else: 
+            if allowed_filter is None:
+                return init_qgraph
+            else:
+                # assume allowed_filter is iterable and contains qubit labels
+                return init_qgraph.subgraph( list(allowed_filter) )
             
 
 
@@ -519,8 +523,11 @@ class CompilationLibrary(_collections.OrderedDict):
         assert(gatelabel.name == "CNOT" and gatelabel.number_of_qubits == 2), \
             "Only non-local CNOT compilation is currently supported."
 
-        #Get connectivity of this gate (CNOT)            
+        #Get connectivity of this gate (CNOT) 
+        #if allowed_filter is not None:         
         qgraph = self.filter_connectivity(gatelabel.name, allowed_filter)
+        #else:
+        #    qgraph = self.connectivity[gatelabel.name]
 
         #CNOT specific
         q1 = gatelabel.qubits[0]
@@ -567,26 +574,8 @@ class CompilationLibrary(_collections.OrderedDict):
         cnot_circuit = part_1 + part_2 + part_3 + part_4
         
         # Convert the gatelist to a circuit.
-        circuit = _Circuit(gatestring=cnot_circuit, line_labels=self.gateset.stateSpaceLabels.labels[0])
+        circuit = _Circuit(gatestring=cnot_circuit, line_labels=self.gateset.stateSpaceLabels.labels[0],identity=self.identity)
 
-        #UNUSED - we always compile
-        ## If we are not compiling the CNOTs between connected qubits into native gates
-        ## then we are done.        
-        #if not compile_cnots:
-        #    print(circuit)
-        #    return circuit
-                
-        # If we are compiling the CNOTs between connected qubits into native gates
-        # then we now do this.
-        
-        #UNUSED - FUTURE IMPROVEMENT for just self.ctype == 'paulieq' case:
-        ## Import the gate relations of the single-qubit Cliffords, so that circuit
-        ## compression can be used. Todo: this should probably be handed to this 
-        ## function, as it is should be something that is possibly in the device spec.
-        #grels = _symp.single_qubit_clifford_symplectic_group_relations()
-        ## To do: add an assert that checks that compilations of CNOTs between all
-        ## connected qubits have been generated.
-        ##
         ## Change into the native gates, using the compilation for CNOTs between
         ## connected qubits.
         circuit.change_gate_library(self)
