@@ -411,62 +411,63 @@ class TermEvalTree(EvalTree):
         cpy = self._copyBase( TermEvalTree(self[:]) )
         return cpy
 
-    def get_raw_polys(self, calc, rholabel, elabels, comm):
-        """
-        Compute the polynomials which evaluate to the probabilities this tree 
-        directs the computation for.  This routine constructs and caches a 
-        list of the polynomials for all the gate sequences sandwiched between
-        a state preparation and one or more POVM effects.
-
-        Parameters
-        ----------
-        calc : GateTermCalc
-            A calculator object used to actually construct the polynomials (the
-            evaluation tree just *directs* this computation and acts as a cache
-            - the actual computation of the polynomials involves forward
-            simulation, which is the purview of the calculator class).
-
-        rholabel : Label
-            The (compiled) state preparation label.
-
-        elabels : list
-            A list of (compiled) POVM effect labels.
-
-        comm : mpi4py.MPI.Comm
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        Returns
-        -------
-        list
-            A list of `len(elabels)` lists.  Each sub-list holds a
-            :class:`Polynomial` object for each (final) gate sequence of this
-            tree.
-        """
-        #Check if everything is computed already
-        if all([ ((rholabel,elabel) in self.raw_polys) for elabel in elabels]):
-            return [self.raw_polys[(rholabel,elabel)] for elabel in elabels]
-
-        print("DB: **** COMPUTING RAW POLYS FOR: ",rholabel,elabels, " **********"); t0 = _time.time()
-
-        #Otherwise compute polys
-        polys = [ calc.prs_as_polys(rholabel,elabels, gstr, comm)
-                  for gstr in self.generate_gatestring_list(permute=False) ]
-
-        ## DEBUG - instead of list comp above, do this to show progress & polys
-        #polys = []; lst = self.generate_gatestring_list(permute=False) 
-        #for i,gstr in enumerate(lst):
-        #    polys.append( calc.prs_as_polys(rholabel,elabels, gstr, comm) )
-        #    print("Computed %d of %d: " % (i,len(lst)), str(polys[-1]) )
-        
-        ret = []
-        for i,elabel in enumerate(elabels):
-            if (rholabel,elabel) not in self.raw_polys:
-                self.raw_polys[ (rholabel,elabel) ] = [p[i] for p in polys]
-            ret.append( self.raw_polys[ (rholabel,elabel) ] )
-
-        print("DB: **** DONE in %.1fs **********" % (_time.time()-t0))
-        return ret
+    #OLD: TODO REMOVE
+    #get_raw_polys(self, calc, rholabel, elabels, comm):
+    #"""
+    #Compute the polynomials which evaluate to the probabilities this tree 
+    #directs the computation for.  This routine constructs and caches a 
+    #list of the polynomials for all the gate sequences sandwiched between
+    #a state preparation and one or more POVM effects.
+    #
+    #Parameters
+    #----------
+    #calc : GateTermCalc
+    #    A calculator object used to actually construct the polynomials (the
+    #    evaluation tree just *directs* this computation and acts as a cache
+    #    - the actual computation of the polynomials involves forward
+    #    simulation, which is the purview of the calculator class).
+    #
+    #rholabel : Label
+    #    The (compiled) state preparation label.
+    #
+    #elabels : list
+    #    A list of (compiled) POVM effect labels.
+    #
+    #comm : mpi4py.MPI.Comm
+    #    When not None, an MPI communicator for distributing the computation
+    #    across multiple processors.
+    #
+    #Returns
+    #-------
+    #list
+    #    A list of `len(elabels)` lists.  Each sub-list holds a
+    #    :class:`Polynomial` object for each (final) gate sequence of this
+    #    tree.
+    #"""
+    ##Check if everything is computed already
+    #if all([ ((rholabel,elabel) in self.raw_polys) for elabel in elabels]):
+    #    return [self.raw_polys[(rholabel,elabel)] for elabel in elabels]
+    #
+    ##print("DB: **** COMPUTING RAW POLYS FOR: ",rholabel,elabels, " **********"); t0 = _time.time()
+    #
+    ##Otherwise compute polys
+    #polys = [ calc.prs_as_polys(rholabel,elabels, gstr, comm)
+    #          for gstr in self.generate_gatestring_list(permute=False) ]
+    #
+    ### DEBUG - instead of list comp above, do this to show progress & polys
+    ##polys = []; lst = self.generate_gatestring_list(permute=False) 
+    ##for i,gstr in enumerate(lst):
+    ##    polys.append( calc.prs_as_polys(rholabel,elabels, gstr, comm) )
+    ##    print("Computed %d of %d: " % (i,len(lst)), str(polys[-1]) )
+    #
+    #ret = []
+    #for i,elabel in enumerate(elabels):
+    #    if (rholabel,elabel) not in self.raw_polys:
+    #        self.raw_polys[ (rholabel,elabel) ] = [p[i] for p in polys]
+    #    ret.append( self.raw_polys[ (rholabel,elabel) ] )
+    #
+    ##print("DB: **** DONE in %.1fs **********" % (_time.time()-t0))
+    #return ret
 
 
     def get_p_polys(self, calc, rholabel, elabels, comm):
@@ -565,7 +566,6 @@ class TermEvalTree(EvalTree):
             of gate strings in this tree and K is the number of parameters 
             we've differentiated with respect to (~`len(wrtSlice)`).
         """
-        print("*** getDP POLYS ***"); t0= _time.time()
         slcTup = (wrtSlice.start,wrtSlice.stop,wrtSlice.step) \
                  if (wrtSlice is not None) else (None,None,None)
         slcInds = _slct.indices(wrtSlice if (wrtSlice is not None) else slice(0,calc.Np))
@@ -574,6 +574,8 @@ class TermEvalTree(EvalTree):
         #Check if everything is computed already
         if all([ ((rholabel,elabel,slcTup) in self.dp_polys) for elabel in elabels]):
             return [self.dp_polys[(rholabel,elabel,slcTup)] for elabel in elabels]
+
+        #print("*** getDP POLYS ***"); t0= _time.time()
 
         #Otherwise compute poly
         ret = []
@@ -594,7 +596,7 @@ class TermEvalTree(EvalTree):
         #        self.dp_polys[ (rholabel,elabel,slcTup) ] = (vtape, ctape)
         #    ret.append( self.dp_polys[ (rholabel,elabel,slcTup) ] )
 
-        print("*** DONE DP POLYS in %.1fs ***" % (_time.time()-t0))
+        #print("*** DONE DP POLYS in %.1fs ***" % (_time.time()-t0))
         return ret
 
     def get_hp_polys(self, calc, rholabel, elabels, wrtSlice1, wrtSlice2, comm):
