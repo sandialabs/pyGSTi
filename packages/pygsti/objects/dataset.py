@@ -264,9 +264,9 @@ class DataSetRow(object):
     #TODO: remove in favor of fractions property?
     def fraction(self,outcomelabel):
         """ Returns the fraction of total counts for `outcomelabel`."""
-        if outcomelabel not in self.outcomes:
-            return 0.0 # Note: similar to an "all_outcomes=True" default
         d = self.counts
+        if outcomelabel not in d:
+            return 0.0 # Note: similar to an "all_outcomes=True" default
         total = sum(d.values())
         return d[outcomelabel]/total
 
@@ -334,12 +334,14 @@ class DataSetRow(object):
 
     def scale(self, factor):
         """ Scales all the counts of this row by the given factor """
+        if self.dataset.bStatic: raise ValueError("Cannot scale rows of a *static* DataSet.")
         if self.reps is None:
             raise ValueError(("Cannot scale a DataSet without repetition "
                               "counts. Call DataSet.build_repetition_counts()"
                               " and try this again."))
         for i,cnt in enumerate(self.reps):
             self.reps[i] = cnt*factor
+        
 
     def as_dict(self):
         """ Returns the (outcomeLabel,count) pairs as a dictionary."""
@@ -605,7 +607,7 @@ class DataSet(object):
 
         # count cache (only used when static; not saved/loaded from disk)
         if bStatic:
-            self.cnt_cache = { gs:dict() for gs in self.gsIndex }
+            self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
         else:
             self.cnt_cache = None
   
@@ -887,7 +889,6 @@ class DataSet(object):
         None
         """
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-
 
         #Convert input to an OutcomeLabelDict
         if isinstance(countDict, _ld.OutcomeLabelDict):
@@ -1249,12 +1250,14 @@ class DataSet(object):
         -------
         None
         """
+        if self.bStatic: raise ValueError("Cannot process_gate_strings on a static DataSet object")
         new_gsIndex = _OrderedDict()
         for gstr,indx in self.gsIndex.items():
             new_gstr = processor_fn(gstr)
             assert(isinstance(new_gstr, _gs.GateString)), "`processor_fn` must return a GateString!"
             new_gsIndex[ new_gstr  ] = indx
         self.gsIndex = new_gsIndex
+        #Note: self.cnt_cache just remains None (a non-static DataSet)
 
 
     def copy(self):
@@ -1347,7 +1350,7 @@ class DataSet(object):
             if self.repData is not None:
                 self.repData = _np.empty( (0,), self.repType)
 
-        self.cnt_cache = { gs:dict() for gs in self.gsIndex }
+        self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
         self.bStatic = True
         self.uuid = _uuid.uuid4()
 
@@ -1360,9 +1363,9 @@ class DataSet(object):
                      'oliData': self.oliData,
                      'timeData': self.timeData,
                      'repData': self.repData,
-                     'oliType': self.oliType,
-                     'timeType': self.timeType,
-                     'repType': self.repType,
+                     'oliType': _np.dtype(self.oliType).str,
+                     'timeType': _np.dtype(self.timeType).str,
+                     'repType': _np.dtype(self.repType).str,
                      'collisionAction': self.collisionAction,
                      'uuid' : self.uuid }
         return toPickle
@@ -1403,9 +1406,12 @@ class DataSet(object):
             self.oliData  = state_dict['oliData']
             self.timeData = state_dict['timeData']
             self.repData  = state_dict['repData']
-            self.oliType  = state_dict['oliType']
-            self.timeType = state_dict['timeType']
-            self.repType  = state_dict['repType']
+            self.oliType  = _np.dtype(state_dict['oliType'])
+            self.timeType = _np.dtype(state_dict['timeType'])
+            self.repType  = _np.dtype(state_dict['repType'])
+            if bStatic: #always empty - don't save this, just init
+                self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
+            else: self.cnt_cache = None
             
         self.collisionAction = state_dict.get('collisionAction','aggregate')
         self.uuid = state_dict.get('uuid',None)
@@ -1515,7 +1521,7 @@ class DataSet(object):
             self.timeData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
             if useReps:
                 self.repData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
-            self.cnt_cache = { gs:dict() for gs in self.gsIndex } # init cnt_cache afresh
+            self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex } # init cnt_cache afresh
         else:
             self.oliData = []
             for _ in range(state_dict['nRows']):

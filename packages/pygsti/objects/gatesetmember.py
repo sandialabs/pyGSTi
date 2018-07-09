@@ -18,9 +18,6 @@ class GateSetChild(object):
     def __init__(self, parent=None):
         self._parent = parent # parent GateSet used to determine how to process
                               # a Gate's gpindices when inserted into a GateSet
-                              # Note that this is *not* pickled by virtue of all
-                              # the Gate classes implementing a __reduce__ which
-                              # sets parent==None via this constructor.
 
     @property
     def parent(self):
@@ -239,13 +236,6 @@ class GateSetMember(GateSetChild):
         #gateObj.set_gpindices(gpindices_copy, parent) #don't do this
         
         return gateObj
-
-    #TODO: REMOVE - base class (GateSetChild) handles this
-    #def __getstate__(self):
-    #    """ Don't pickle parent """
-    #    d = self.__dict__.copy()
-    #    d['_parent'] = None
-    #    return d
 
 
 def _compose_gpindices(parent_gpindices, child_gpindices):

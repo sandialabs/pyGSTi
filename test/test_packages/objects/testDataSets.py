@@ -138,7 +138,8 @@ class TestDataSetMethods(BaseTestCase):
         ds4.get_degrees_of_freedom()
 
         #String Manipulation
-        ds.process_gate_strings( lambda s: pygsti.construction.manipulate_gatestring(s, [( ('Gx',), ('Gy',))]) )
+        dsWritable.process_gate_strings( lambda s: pygsti.construction.manipulate_gatestring(s, [( ('Gx',), ('Gy',))]) )
+        test_cntDict = dsWritable[('Gy',)].as_dict()
 
         #Test truncation
         ds2.truncate( [('Gx',),('Gx','Gy')] ) #non-static
@@ -177,12 +178,12 @@ class TestDataSetMethods(BaseTestCase):
 
         #Test various other methods
         nStrs = len(ds)
-        cntDict = ds[('Gy',)].as_dict()
-        asStr = str(ds[('Gy',)])
+        cntDict = ds[('Gx',)].as_dict()
+        asStr = str(ds[('Gx',)])
         
-        ds[('Gy',)].scale(2.0)
-        self.assertEqual(ds[('Gy',)]['0'], 20)
-        self.assertEqual(ds[('Gy',)]['1'], 180)
+        dsWritable[('Gy',)].scale(2.0)
+        self.assertEqual(dsWritable[('Gy',)]['0'], 40)
+        self.assertEqual(dsWritable[('Gy',)]['1'], 160)
         
 
         #Test loading a deprecated dataset file
