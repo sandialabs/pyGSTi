@@ -40,6 +40,7 @@ from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Label as _Label
 
+
 class GateSet(object):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
@@ -1731,6 +1732,8 @@ class GateSet(object):
                     if ng not in evt_cache:
                         evt_cache[ng] = self.bulk_evaltree(
                             gatestring_list, minSubtrees=ng, numSubtreeComms=Ng)
+                        # FUTURE: make a _bulk_evaltree_precompiled version that takes compiled
+                        # gate strings as input so don't have to recompile every time we hit this line.
                     cacheSize = max([s.cache_size() for s in evt_cache[ng][0].get_sub_trees()])
                     nFinalStrs = max([s.num_final_strings() for s in evt_cache[ng][0].get_sub_trees()])
                 else:
@@ -2411,7 +2414,7 @@ class GateSet(object):
         gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
         #OLD: evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
-            gatestring_list, comm, memLimit, subcalls=['bulk_fill_probs'], verbosity=2) # DEBUG verbosity (maybe make into an arg?)
+            gatestring_list, comm, memLimit, subcalls=['bulk_fill_probs'], verbosity=0) # FUTURE (maybe make verbosity into an arg?)
         return self._calc().bulk_probs(gatestring_list, evalTree, elIndices,
                                        outcomes, clipTo, check, comm)
 

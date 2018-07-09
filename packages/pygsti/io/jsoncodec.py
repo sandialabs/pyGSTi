@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import sys as _sys
+import types as _types
 import importlib as _importlib
 import json as _json
 import base64 as _base64
@@ -187,7 +188,8 @@ def encode_std_obj(py_obj, binary):
         return {'__npgeneric__': data,
                 'dtype': tostr(py_obj.dtype.str)}
 
-    elif callable(py_obj): #functions
+    elif isinstance(py_obj, _types.FunctionType): #functions
+    # OLD: elif callable(py_obj): #incorrectly includes pygsti classes w/__call__ (e.g. AutoGator)
         return {'__function__': (py_obj.__module__, py_obj.__name__) }
 
     return py_obj # assume the bare py_obj is json-able

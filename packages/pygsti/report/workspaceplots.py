@@ -389,8 +389,9 @@ def generate_boxplot(subMxs,
         fig = color_boxplot( subMxSums, colormap, colorbar, boxLabelSize,
                              prec, hoverLabelFn)
         #update tickvals b/c color_boxplot doesn't do this (unlike nested_color_boxplot)
-        fig.plotlyfig['layout']['xaxis'].update(tickvals=list(range(nXs)))
-        fig.plotlyfig['layout']['yaxis'].update(tickvals=list(range(nYs)))
+        if fig is not None:
+            fig.plotlyfig['layout']['xaxis'].update(tickvals=list(range(nXs)))
+            fig.plotlyfig['layout']['yaxis'].update(tickvals=list(range(nYs)))
 
         xBoxes = nXs
         yBoxes = nYs
@@ -413,58 +414,79 @@ def generate_boxplot(subMxs,
         boxLabelSize = 8 if boxLabels else 0 #do not scale (OLD: 8*scale)
         fig = nested_color_boxplot(subMxs, colormap, colorbar, boxLabelSize,
                                    prec, hoverLabelFn)
-        assert(fig is not None), "No data to display!"
 
         xBoxes = nXs*(nIXs+1) - 1
         yBoxes = nYs*(nIYs+1) - 1
 
-    pfig = fig.plotlyfig
-    if xlabel: pfig['layout']['xaxis'].update(title=xlabel,
-                                             titlefont={'size': 12*scale, 'color': "black"})
-    if ylabel: pfig['layout']['yaxis'].update(title=ylabel,
-                                             titlefont={'size': 12*scale, 'color': "black"})
-    if xlabels:
-        pfig['layout']['xaxis'].update(tickmode="array",
-                                      ticktext=val_filter(xlabels),
-                                      tickfont={'size': 10*scale, 'color': "black"})
-    if ylabels:
-        pfig['layout']['yaxis'].update(tickmode="array",
-                                      ticktext=val_filter(ylabels),
-                                      tickfont={'size': 10*scale, 'color': "black"})
-
-    #Set plot size and margins
-    lmargin = rmargin = tmargin = bmargin = 20
-    if xlabel: bmargin += 30
-    if ylabel: lmargin += 30
-    if xlabels:
-        max_xl = max([len(xl) for xl in pfig['layout']['xaxis']['ticktext']])
-        if max_xl > 0: bmargin += max_xl*5
-    if ylabels:
-        max_yl = max([len(yl) for yl in pfig['layout']['yaxis']['ticktext']])
-        if max_yl > 0: lmargin += max_yl*5
-    if colorbar: rmargin = 100
-
-      #make sure there's enough margin for hover tooltips
-    if 10*xBoxes < 200: rmargin = max(200 - 10*xBoxes, rmargin)
-    if 10*yBoxes < 200: bmargin = max(200 - 10*xBoxes, bmargin)
-
-    width = lmargin + 10*xBoxes + rmargin
-    height = tmargin + 10*yBoxes + bmargin
-
-    width *= scale
-    height *= scale
-    lmargin *= scale
-    rmargin *= scale
-    tmargin *= scale
-    bmargin *= scale
-
-    #DEBUG
-    #print("DB margins = ",lmargin,rmargin,tmargin,bmargin, " tot hor = ", lmargin+rmargin, " tot vert = ", tmargin+bmargin)
-    #print("DB dims = ",width,height)
+    #assert(fig is not None), "No data to display!"
+    if fig is not None: # i.e., if there was data to plot
+        pfig = fig.plotlyfig
+        if xlabel: pfig['layout']['xaxis'].update(title=xlabel,
+                                                 titlefont={'size': 12*scale, 'color': "black"})
+        if ylabel: pfig['layout']['yaxis'].update(title=ylabel,
+                                                 titlefont={'size': 12*scale, 'color': "black"})
+        if xlabels:
+            pfig['layout']['xaxis'].update(tickmode="array",
+                                          ticktext=val_filter(xlabels),
+                                          tickfont={'size': 10*scale, 'color': "black"})
+        if ylabels:
+            pfig['layout']['yaxis'].update(tickmode="array",
+                                          ticktext=val_filter(ylabels),
+                                          tickfont={'size': 10*scale, 'color': "black"})
     
-    pfig['layout'].update(width=width,
-                         height=height,
-                         margin=go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin))
+        #Set plot size and margins
+        lmargin = rmargin = tmargin = bmargin = 20
+        if xlabel: bmargin += 30
+        if ylabel: lmargin += 30
+        if xlabels:
+            max_xl = max([len(xl) for xl in pfig['layout']['xaxis']['ticktext']])
+            if max_xl > 0: bmargin += max_xl*5
+        if ylabels:
+            max_yl = max([len(yl) for yl in pfig['layout']['yaxis']['ticktext']])
+            if max_yl > 0: lmargin += max_yl*5
+        if colorbar: rmargin = 100
+    
+          #make sure there's enough margin for hover tooltips
+        if 10*xBoxes < 200: rmargin = max(200 - 10*xBoxes, rmargin)
+        if 10*yBoxes < 200: bmargin = max(200 - 10*xBoxes, bmargin)
+    
+        width = lmargin + 10*xBoxes + rmargin
+        height = tmargin + 10*yBoxes + bmargin
+    
+        width *= scale
+        height *= scale
+        lmargin *= scale
+        rmargin *= scale
+        tmargin *= scale
+        bmargin *= scale
+    
+        #DEBUG
+        #print("DB margins = ",lmargin,rmargin,tmargin,bmargin, " tot hor = ", lmargin+rmargin, " tot vert = ", tmargin+bmargin)
+        #print("DB dims = ",width,height)
+        
+        pfig['layout'].update(width=width,
+                             height=height,
+                             margin=go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin))
+        
+    else: # fig is None => use a "No data to display" placeholder figure
+        trace = go.Heatmap(z=_np.zeros((10,10),'d'),
+                           colorscale=[ [0, 'white'], [1, 'black'] ],
+                           showscale=False,zmin=0,zmax=1,hoverinfo='none')
+        layout = go.Layout(
+            width = 100, height = 100,
+            annotations = [ go.Annotation(x=5,y=5,text="NO DATA", showarrow=False,
+                                          font={'size': 20, 'color': "black"},
+                                          xref='x', yref='y') ],
+            xaxis=dict(showline=False, zeroline=False,
+                       showticklabels=False, showgrid=False,
+                       ticks=""),
+            yaxis=dict(showline=False, zeroline=False,
+                       showticklabels=False, showgrid=False,
+                       ticks="")
+        )
+        fig = ReportFigure( go.Figure(data=[trace], layout=layout),
+                            None, "No data!")
+
 
     return fig
 
@@ -825,6 +847,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
                 if gstr in gstrs: continue # skip duplicates
                 ys.append( subMxs[iy][ix][iiy][iix] )
                 gstrs.add(gstr)
+    if len(ys) == 0: ys = [ 0 ] # case of no data - dummy so max works below
 
     minval = 0
     maxval = max(minval+1e-3,_np.max(ys)) #don't let minval==maxval
@@ -1729,9 +1752,11 @@ class ColorBoxPlot(WorkspacePlot):
                 colormap = _colormaps.SequentialColormap(vmin=0, vmax=1)
 
             elif colormapType in ("seq","revseq","blueseq","redseq"):
-                max_abs = max([ _np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
-                                for ix in range(len(gss.used_xvals()))
-                                for iy in range(len(gss.used_yvals())) ])
+                if len(subMxs) > 0:
+                    max_abs = max([ _np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
+                                    for ix in range(len(gss.used_xvals()))
+                                    for iy in range(len(gss.used_yvals())) ])
+                else: max_abs = 0
                 if max_abs == 0: max_abs = 1e-6 # pick a nonzero value if all entries are zero or nan
                 if colormapType == "seq": color = "whiteToBlack"
                 elif colormapType == "revseq": color = "blackToWhite"

@@ -214,6 +214,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
                 value = value.copy()  # copy value (so we don't mess up other parent) and
                 value.set_gpindices(None, self.parent) # erase gindices don't apply to us
 
+            if not hasattr(value, "_evotype"): value._evotype = "densitymx" # for backward compatibility
             self._check_evotype(value._evotype)
             super(OrderedMemberDict,self).__setitem__(key, value)
 

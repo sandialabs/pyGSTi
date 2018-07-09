@@ -582,7 +582,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
             'distributeMethod',"default"),
         check=advancedOptions.get('check',False),
         evaltree_cache={} )
-    
+
     if objective == "chi2":
         args['useFreqWeightedChiSq'] = advancedOptions.get(
             'useFreqWeightedChiSq',False)
@@ -596,6 +596,10 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         args['radius'] = advancedOptions.get('radius',1e-4)
         args['alwaysPerformMLE'] = advancedOptions.get('alwaysPerformMLE',False)
         gs_lsgst_list = _alg.do_iterative_mlgst(**args)
+    elif objective == "lgst":
+        assert(startingPt == "LGST"), "Can only set objective=\"lgst\" for parameterizations compatible with LGST"
+        assert(len(lsgstLists) == 1), "Can only set objective=\"lgst\" with number if lists/max-lengths == 1"
+        gs_lsgst_list = [args['startGateset']]
     else:
         raise ValueError("Invalid objective: %s" % objective)
 
@@ -1198,8 +1202,10 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                  for l in lsgstLists ]
     objective = advancedOptions.get('objective', 'logl')
     badFitThreshold = advancedOptions.get('badFitThreshold',DEFAULT_BAD_FIT_THRESHOLD)
-    if ret.estimates[estlbl].misfit_sigma(evaltree_cache=evaltree_cache) > badFitThreshold:
+    if ret.estimates[estlbl].misfit_sigma(evaltree_cache=evaltree_cache, comm=comm) > badFitThreshold:
         onBadFit = advancedOptions.get('onBadFit',["Robust+"]) # empty list => 'do nothing'
+        if objective == "lgst": onBadFit = [] # we expect lgst fit to be very rough
+        
         if len(onBadFit) > 0 and parameters.get('weights',None) is None:
 
             # Get by-sequence goodness of fit
@@ -1208,17 +1214,20 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                                            advancedOptions.get('minProbClipForWeighting',1e-4),
                                            advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                            False, False, memLimit,
-                                           advancedOptions.get('gateLabelAliases',None))
-            else:
+                                           advancedOptions.get('gateLabelAliases',None),
+                                           evaltree_cache=evaltree_cache, comm=comm)
+            else: # "logl" or "lgst"
                 maxLogL = _tools.logl_max_terms(gs_lsgst_list[-1], ds, rawLists[-1],
                                                 gateLabelAliases=advancedOptions.get(
-                                                    'gateLabelAliases',None))
+                                                    'gateLabelAliases',None),
+                                                evaltree_cache=evaltree_cache)
 
                 logL = _tools.logl_terms(gs_lsgst_list[-1], ds, rawLists[-1],
                                          advancedOptions.get('minProbClip',1e-4),
                                          advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                          advancedOptions.get('radius',1e-4),
-                                         gateLabelAliases=advancedOptions.get('gateLabelAliases',None))
+                                         gateLabelAliases=advancedOptions.get('gateLabelAliases',None),
+                                         evaltree_cache=evaltree_cache, comm=comm)
                 fitQty = 2*(maxLogL - logL)
 
             #Note: fitQty[iGateString] gives fit quantity for a single gate
@@ -1282,7 +1291,7 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                                       verbosity=printer-1)
                     for x in ('maxiter', 'tol', 'cptp_penalty_factor', 'spam_penalty_factor',
                               'probClipInterval', 'check', 'gateLabelAliases',
-                              'memLimit', 'comm', 'distributeMethod', 'profiler'):
+                              'memLimit', 'comm', 'evaltree_cache', 'distributeMethod', 'profiler'):
                         reopt_args[x] = opt_args[x]
 
                     printer.log("--- Re-optimizing %s after robust data scaling ---" % objective)
@@ -1296,6 +1305,8 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                         reopt_args['minProbClip'] = opt_args['minProbClip']
                         reopt_args['radius'] = opt_args['radius']
                         _, gs_reopt = _alg.do_mlgst(**reopt_args)
+
+                    else: raise ValueError("Invalid objective '%s' for robust data scaling reopt" % objective)
 
                     tNxt = _time.time()
                     profiler.add_time('%s: robust data scaling re-opt' % callerName,tRef); tRef=tNxt

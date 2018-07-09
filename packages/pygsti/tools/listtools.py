@@ -32,23 +32,29 @@ def remove_duplicates_in_place(l,indexToTest=None):
     None
     """
     s = set(); n = 0
-    for x in l:
-        t = x if indexToTest is None else x[indexToTest]
-
-        #TODO: create a special duplicate removal function for use with
-        #  WeighedGateStrings and include the below commented block:
-        #Special case of weighted gate strings: if collisions
-        # keep the hightest weight string
-        #if isinstance(t, _WeightedGateString) and t in s:
-        #    for gs in l[0:n]:
-        #        if gs == t:
-        #            if isinstance(gs, _WeightedGateString):
-        #                gs.weight = max(gs.weight, t.weight)
-        #            break
-
-        if t not in s:
-            s.add(t)
-            l[n] = x; n += 1
+    if indexToTest is None:
+        for x in l:
+            if x not in s:
+                s.add(x)
+                l[n] = x; n += 1
+    else:
+        for x in l:
+            t = x[indexToTest]
+    
+            #TODO: create a special duplicate removal function for use with
+            #  WeighedGateStrings and include the below commented block:
+            #Special case of weighted gate strings: if collisions
+            # keep the hightest weight string
+            #if isinstance(t, _WeightedGateString) and t in s:
+            #    for gs in l[0:n]:
+            #        if gs == t:
+            #            if isinstance(gs, _WeightedGateString):
+            #                gs.weight = max(gs.weight, t.weight)
+            #            break
+    
+            if t not in s:
+                s.add(t)
+                l[n] = x; n += 1
 
     del l[n:]
 
@@ -75,8 +81,21 @@ def remove_duplicates(l,indexToTest=None):
     list
         the list after duplicates have been removed.
     """
-    lcopy = l[:]; remove_duplicates_in_place(lcopy,indexToTest)
-    return lcopy
+    s = set(); ret = []
+    if indexToTest is None:
+        for x in l:
+            if x not in s:
+                s.add(x)
+                ret.append(x)
+    else:
+        for x in l:
+            t = x[indexToTest]
+            #TODO: create a special duplicate removal function for use with
+            #  WeighedGateStrings ...
+            if t not in s:
+                s.add(t)
+                ret.append(x)
+    return ret
 
 
 def compute_occurrence_indices(lst):

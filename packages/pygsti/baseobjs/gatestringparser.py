@@ -63,7 +63,8 @@ class GateStringLexer:
 
     @staticmethod
     def t_GATE(t):
-        r'G[a-z0-9_]+(:[a-z0-9_])*'
+        r'G[a-z0-9_]+(:[a-zQ0-9_]+)*'
+        #Note: Q is only capital letter allowed in qubit label
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
         parts = t.value.split(':')
         lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
@@ -177,19 +178,6 @@ class GateStringParser(object):
     def p_slcref(p):
         '''slcref : strref'''
         p[0] = p[1]
-
-#    @staticmethod
-#    def p_gate_withindex(p):
-#        '''gate : GATENM COLON INTEGER'''
-#        s = () if (p[1].sslbls is None) else p[1].sslbls
-#        p[0] = _Label(p[1].name, s+(p[3],)), # add state-space-label; make a tuple
-#
-#    @staticmethod
-#    def p_gate(p):
-#        '''gate : GATENM'''
-#        p[0] = p[1]
-#
-#HERE
 
     @staticmethod
     def p_layerable(p):

@@ -999,13 +999,13 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     
     for i in range(0,depth):        
         layer = circuit.get_circuit_layer(i)
-        layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, srep_dict)
+        layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict)
         s, p = compose_cliffords(s, p, layer_s, layer_p)
     
     return s, p
 
 
-def symplectic_rep_of_clifford_layer(layer, n, srep_dict=None):
+def symplectic_rep_of_clifford_layer(layer, n, Qlabels=None, srep_dict=None):
     """
     Returns the symplectic representation of the n-qubit Clifford implemented by a
     single quantum circuit layer (gates in layer must act on disjoint sets of qubits).
@@ -1018,6 +1018,9 @@ def symplectic_rep_of_clifford_layer(layer, n, srep_dict=None):
 
     n : int
         The total number of qubits.
+
+    Qlabels :
+        todo 
         
     srep_dict : dict, optional
         If not None, a dictionary providing the (symplectic matrix, phase vector)
@@ -1040,36 +1043,24 @@ def symplectic_rep_of_clifford_layer(layer, n, srep_dict=None):
     # the circuit function above to not use it, and instead just perform the action of each 
     # gate.
     #
-    sreps = standard_symplectic_representations()
-
-    #WRONG
-    # sreps = {} #list of available symplectic reps for gates
-    # # add template integer qubit labels to standard gate names
-    # #  so, e.g. "CNOT" => Label("CNOT",(0,1))
-    # std_sreps = standard_symplectic_representations()
-    # for gname, srep in std_sreps.items(): 
-    #     nQ = len(srep[1]) // 2 # number of qubits
-    #     sreps[_Label(gname, tuple(range(nQ)))] = srep
-    
+    sreps = standard_symplectic_representations()    
     if srep_dict is not None: sreps.update(srep_dict)
-            
+    # todo -- fix this function so that it works on > 2 qubit gates.
+    if Qlabels is None:
+        Qlabels = list(range(n))
+
     s = _np.identity(2*n,int)
     p = _np.zeros(2*n,int)
 
     for gatelbl in layer:
         for sub_gl in gatelbl.components:
-        
-            # Checks below are commented out as they are very inefficient, so it is probably
-            # better to just allow a key error.
-            #assert(gate.label in list(s_dict.keys())), "Symplectic matrix for some gate labels not provided!"
-            #assert(gate.label in list(p_dict.keys())), "Phase vector for some gate labels not provided!"
-            matrix, phase = sreps[sub_gl.name]
-            
+
+            matrix, phase = sreps[sub_gl.name]           
             assert(sub_gl.number_of_qubits == 1 or sub_gl.number_of_qubits == 2), "Only 1 and 2 qubit gates are allowed!"
             
             if sub_gl.number_of_qubits == 1:
                 
-                q = sub_gl.qubits[0]
+                q = Qlabels.index(sub_gl.qubits[0])
                 s[q,q] = matrix[0,0]
                 s[q,q+n] = matrix[0,1]
                 s[q+n,q] = matrix[1,0]
@@ -1079,8 +1070,8 @@ def symplectic_rep_of_clifford_layer(layer, n, srep_dict=None):
                 
             else:
                 
-                q1 = sub_gl.qubits[0]
-                q2 = sub_gl.qubits[1]
+                q1 = Qlabels.index(sub_gl.qubits[0])
+                q2 = Qlabels.index(sub_gl.qubits[1])
                 for i in [0,1]:
                     for j in [0,1]:
                         s[q1+i*n,q1+j*n] = matrix[0+2*i,0+2*j]

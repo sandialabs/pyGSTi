@@ -67,6 +67,7 @@ class NQubitTestCase(BaseTestCase):
         germs = pygsti.construction.gatestring_list([ (gl,) for gl in gateLabels ]) 
         maxLs = [1]
         expList = pygsti.construction.make_lsgst_experiment_list(gs_datagen, prep_fiducials, meas_fiducials, germs, maxLs)
+        self.assertTrue(() in expList)
         
         ds = pygsti.construction.generate_fake_data(gs_datagen, expList, 1000, "multinomial", seed=1234)
         print("Created Dataset with %d strings" % len(ds))
@@ -75,6 +76,7 @@ class NQubitTestCase(BaseTestCase):
         max_logL = pygsti.tools.logl_max(gs_datagen, ds, expList)
         twoDeltaLogL = 2*(max_logL-logL)
         chi2 = pygsti.tools.chi2(gs_datagen, ds, expList)
+        
         dof = ds.get_degrees_of_freedom()
         nParams = gs_datagen.num_params()
         print("Datagen 2DeltaLogL = 2(%g-%g) = %g" % (logL,max_logL,twoDeltaLogL))

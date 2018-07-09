@@ -70,15 +70,18 @@ class CompilationLibrary(_collections.OrderedDict):
         """
         self.gateset = clifford_gateset # gateset of (all Clifford) gates to compile requested gates into
         self.ctype = ctyp # "absolute" or "paulieq"
-        self.identity = 'I'
+        self.identity = identity
         self.templates = _collections.defaultdict(list) # keys=gate names (strs); vals=tuples of Labels
-        self.connectivity = {} # QubitGraphs for gates currently compiled in library (key=gate_name)                        
+        self.connectivity = {} # QubitGraphs for gates currently compiled in library (key=gate_name)                    
         super(CompilationLibrary,self).__init__(items)
 
 
-    def add_local_compilation_of(self, gatelabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):
+    def get_local_compilation_of(self, gatelabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):
         """
-        Adds a new local compilation of `gatelabel`.  
+        Get a local compilation of `gatelabel`.  
+
+        This function does *not* add this compilation to the library, it merely
+        returns it.  To add it, use :method:`add_local_compilation_of`.
 
         An existing template is used if one is available, otherwise a new
         template is created using an iterative procedure. Raises
@@ -116,8 +119,7 @@ class CompilationLibrary(_collections.OrderedDict):
 
         Returns
         -------
-        None
-
+        Circuit
         """
         # Template compilations always use integer qubit labels: 0 to N
         #  where N is the number of qubits in the template's overall label
@@ -178,11 +180,59 @@ class CompilationLibrary(_collections.OrderedDict):
         #If a template has been found, use it.
         if template_to_use is not None:
             gstr = list( map(to_real_label, template_to_use) )
-            self[gatelabel] = _Circuit(gatestring=gstr,
-                                       line_labels=self.gateset.stateSpaceLabels.labels[0])
+            return _Circuit(gatestring=gstr,
+                            line_labels=self.gateset.stateSpaceLabels.labels[0],identity=self.identity)
         else:
             if verbosity > 0: print("Cannot locally compile %s" % str(gatelabel))
             raise CompilationError("Cannot locally compile %s" % str(gatelabel))
+
+        
+    def add_local_compilation_of(self, gatelabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):
+        """
+        Adds a new local compilation of `gatelabel`.  
+
+        An existing template is used if one is available, otherwise a new
+        template is created using an iterative procedure. Raises
+        :class:`CompilationError` when no compilation can be found.
+
+        Parameters
+        ----------
+        gatelabel : Label
+            The label of the gate to compile.  If `gatelabel.name` is a
+            recognized standard Clifford name (e.g. 'H', 'P', 'X', 'CNOT')
+            then no further information is needed.  Otherwise, you must specify
+            either (or both) of `unitary` or `srep`.
+
+        unitary : numpy.ndarray, optional
+            The unitary action of the gate being compiled.  If, as is typical,
+            you're compiling using Clifford gates, then this unitary should
+            correspond to a Clifford operation.  If you specify `unitary`, 
+            you don't need to specify `srep` - it is computed automatically.
+
+        srep : tuple, optional
+            The `(smatrix, svector)` tuple giving the symplectic representation
+            of the gate being compiled.
+
+        max_iterations : int, optional
+            The maximum number of iterations for the iterative compilation 
+            algorithm.
+
+        force : bool, optional
+            If True, then a compilation is recomputed even if `gatelabel`
+            already exists in this `CompilationLibrary`.  Otherwise 
+            compilations are only computed when they are *not* present.
+            
+        verbosity : int, optional
+            An integer >= 0 specifying how much detail to send to stdout.
+
+        Returns
+        -------
+        None
+
+        """
+        self[gatelabel] = self.get_local_compilation_of(gatelabel, unitary,srep,
+                                                        max_iterations, force,
+                                                        verbosity)
 
 
     def add_clifford_compilation_template(self, gate_name, nqubits, unitary, srep,
@@ -239,7 +289,7 @@ class CompilationLibrary(_collections.OrderedDict):
         
         if srep is None:
             template_lbl = _Label(gate_name,tuple(range(nqubits))) # integer ascending qubit labels
-            smatrix, svector = _symp.symplectic_rep_of_clifford_layer([template_lbl],nqubits)
+            smatrix, svector = _symp.symplectic_rep_of_clifford_layer([template_lbl], nqubits, Qlabels=[0,1])
         else:
             smatrix, svector = srep
                 
@@ -272,9 +322,9 @@ class CompilationLibrary(_collections.OrderedDict):
                 all_layers.append( gls_in_layer )
 
         # Find the symplectic action of all possible circuits of length 1 on the qubits
+        # todo -- this might not work with qubit labels differing from integers?
         for layer in all_layers:
-            obtained_sreps[layer] = _symp.symplectic_rep_of_clifford_layer(
-                layer, nqubits, available_sreps)
+            obtained_sreps[layer] = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
                 
         # Main loop. We go through the loop at most max_iterations times
         found = False
@@ -330,8 +380,8 @@ class CompilationLibrary(_collections.OrderedDict):
                 for layer in all_layers:
                         
                     # Calculate the symp rep of this parallel gate
-                    sadd, padd = _symp.symplectic_rep_of_clifford_layer(
-                        layer, nqubits, available_sreps)
+                    # todo -- this might not work with qubit labels differing from integers?
+                    sadd, padd = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
                     key = seq + layer # tuple/GateString concatenation
                         
                     # Calculate and record the symplectic rep of this gate sequence.
@@ -374,10 +424,61 @@ class CompilationLibrary(_collections.OrderedDict):
                       
         self.connectivity[gate_name] = _QubitGraph(qubit_labels, connectivity)
 
+        
+    def filter_connectivity(self, gatename, allowed_filter):
+        """ 
+        Compute the QubitGraph giving the available `gatename`
+        gates subject to the constraints imposed by `allowed_filter`.
 
-    def add_nonlocal_compilation_of(self, gatelabel, force=False, verbosity=1, check=True):
+        Parameters
+        ----------
+        gate_name : str
+
+        allowed_filter : dict or set
+            See :method:`get_nonlocal_compilation_of`.
+        
+        Returns
+        -------
+        QubitGraph
         """
-        Add a potentially non-local compilation of `gatelabel` to this library.
+        if gatename not in self.connectivity: #need to recompute
+            self.compute_connectivity_of(gatename)
+
+        init_qgraph = self.connectivity[gatename] #unconstrained
+        
+        if isinstance(allowed_filter, dict):
+            graph_constraint = allowed_filter.get(gatename,None)
+            if graph_constraint is not None:
+                directed = graph_constraint.directed or init_qgraph.directed
+                init_nodes = set(init_qgraph.get_node_names())
+                qlabels = [lbl for lbl in graph_constraint.get_node_names()
+                           if lbl in init_nodes] # labels common to both graphs
+                qlset = set(qlabels) #for faster lookups
+                final_edges = []
+                for edge in graph_constraint.edges(True):
+                    if edge[0] in qlset and edge[1] in qlset and \
+                       init_qgraph.has_edge(edge):
+                        final_edges.append(edge) # edge common to both
+                return _QubitGraph(qlabels, initial_edges=final_edges, directed=directed)
+            else:
+                return init_qgraph
+                        
+        else: 
+            if allowed_filter is None:
+                return init_qgraph
+            else:
+                # assume allowed_filter is iterable and contains qubit labels
+                return init_qgraph.subgraph( list(allowed_filter) )
+            
+
+
+    def get_nonlocal_compilation_of(self, gatelabel, force=False,
+                                    allowed_filter=None, verbosity=1, check=True):
+        """
+        Get a potentially non-local compilation of `gatelabel`.
+
+        This function does *not* add this compilation to the library, it merely 
+        returns it.  To add it, use :method:`add_nonlocal_compilation_of`.
 
         This method currently only generates a compilation for a non-local CNOT,
         up to arbitrary Pauli gates, between a pair of unconnected qubits. It
@@ -396,6 +497,15 @@ class CompilationLibrary(_collections.OrderedDict):
             already exists in this `CompilationLibrary`.  Otherwise 
             compilations are only computed when they are *not* present.
 
+        allowed_filter : dict or set, optional
+            Specifies which gates are allowed to be used in this non-local
+            compilation.  If a `dict`, keys must be gate names (like
+            `"CNOT"`) and values :class:`QubitGraph` objects indicating 
+            where that gate (if it's present in the library) may be used.
+            If a `set`, then it specifies a set of qubits and any gate in
+            the current library that is confined within that set is allowed.
+            If None, then all gates within the library are allowed.
+
         verbosity : int, optional
             An integer >= 0 specifying how much detail to send to stdout.
 
@@ -404,7 +514,7 @@ class CompilationLibrary(_collections.OrderedDict):
 
         Returns
         -------
-        None
+        Circuit
         """
         if not force and gatelabel in self:
             return #don't re-compute unless we're told to
@@ -413,11 +523,11 @@ class CompilationLibrary(_collections.OrderedDict):
         assert(gatelabel.name == "CNOT" and gatelabel.number_of_qubits == 2), \
             "Only non-local CNOT compilation is currently supported."
 
-        #Get connectivity of this gate
-        if gatelabel.name not in self.connectivity: #need to recompute
-            self.compute_connectivity_of(gatelabel.name)
-            
-        qgraph = self.connectivity[gatelabel.name]
+        #Get connectivity of this gate (CNOT) 
+        #if allowed_filter is not None:         
+        qgraph = self.filter_connectivity(gatelabel.name, allowed_filter)
+        #else:
+        #    qgraph = self.connectivity[gatelabel.name]
 
         #CNOT specific
         q1 = gatelabel.qubits[0]
@@ -464,26 +574,8 @@ class CompilationLibrary(_collections.OrderedDict):
         cnot_circuit = part_1 + part_2 + part_3 + part_4
         
         # Convert the gatelist to a circuit.
-        circuit = _Circuit(gatestring=cnot_circuit, line_labels=self.gateset.stateSpaceLabels.labels[0])
+        circuit = _Circuit(gatestring=cnot_circuit, line_labels=self.gateset.stateSpaceLabels.labels[0],identity=self.identity)
 
-        #UNUSED - we always compile
-        ## If we are not compiling the CNOTs between connected qubits into native gates
-        ## then we are done.        
-        #if not compile_cnots:
-        #    print(circuit)
-        #    return circuit
-                
-        # If we are compiling the CNOTs between connected qubits into native gates
-        # then we now do this.
-        
-        #UNUSED - FUTURE IMPROVEMENT for just self.ctype == 'paulieq' case:
-        ## Import the gate relations of the single-qubit Cliffords, so that circuit
-        ## compression can be used. Todo: this should probably be handed to this 
-        ## function, as it is should be something that is possibly in the device spec.
-        #grels = _symp.single_qubit_clifford_symplectic_group_relations()
-        ## To do: add an assert that checks that compilations of CNOTs between all
-        ## connected qubits have been generated.
-        ##
         ## Change into the native gates, using the compilation for CNOTs between
         ## connected qubits.
         circuit.change_gate_library(self)
@@ -504,5 +596,49 @@ class CompilationLibrary(_collections.OrderedDict):
             if self.ctype == "absolute":
                 assert(_np.array_equal(p,p_cnot)), "Compilation has failed!"
 
-        self[gatelabel] = circuit
+        return circuit
+
+    def add_nonlocal_compilation_of(self, gatelabel, force=False,
+                                    allowed_filter=None, verbosity=1, check=True):
+        """
+        Add a potentially non-local compilation of `gatelabel` to this library.
+
+        This method currently only generates a compilation for a non-local CNOT,
+        up to arbitrary Pauli gates, between a pair of unconnected qubits. It
+        converts this CNOT into a circuit of CNOT gates between connected qubits,
+        using a fixed circuit form. This compilation is not optimal in at least
+        some circumstances.
+        
+        Parameters
+        ----------
+        gatelabel : Label
+            The label of the gate to compile.  Currently, `gatelabel.name` must
+            equal `"CNOT"`.
+
+        force : bool, optional
+            If True, then a compilation is recomputed even if `gatelabel`
+            already exists in this `CompilationLibrary`.  Otherwise 
+            compilations are only computed when they are *not* present.
+
+        allowed_filter : dict or set, optional
+            Specifies which gates are allowed to be used in this non-local
+            compilation.  If a `dict`, keys must be gate names (like
+            `"CNOT"`) and values :class:`QubitGraph` objects indicating 
+            where that gate (if it's present in the library) may be used.
+            If a `set`, then it specifies a set of qubits and any gate in
+            the current library that is confined within that set is allowed.
+            If None, then all gates within the library are allowed.
+
+        verbosity : int, optional
+            An integer >= 0 specifying how much detail to send to stdout.
+
+        check : bool, optional
+            Whether to perform internal consistency checks.
+
+        Returns
+        -------
+        None
+        """
+        self[gatelabel] = self.get_nonlocal_compilation_of(
+            gatelabel, force, allowed_filter, verbosity, check)
 

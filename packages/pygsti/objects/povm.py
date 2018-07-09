@@ -662,13 +662,62 @@ class TensorProdPOVM(POVM):
         if evotype is None:
             evotype = "densitymx" # default (if there are no factors)
 
-        items = []
-        effectLabelKeys = [ povm.keys() for povm in factorPOVMs ]
-        for el in _itertools.product(*effectLabelKeys):
-            effect = _sv.TensorProdSPAMVec('effect',self.factorPOVMs, el) #infers parent & gpindices from factorPOVMs
-            items.append( ("".join(el), effect) )
+        items = [] # init as empty (lazy creation of members)
+        self._factor_keys = tuple((povm.keys() for povm in factorPOVMs ))
+        self._factor_lbllens = []
+        for fkeys in self._factor_keys:
+            assert(len(fkeys) > 0), "Each factor POVM must have at least one effect!"
+            l = len(list(fkeys)[0]) # length of the first outcome label (a string)
+            assert(all([len(elbl) == l for elbl in fkeys])), \
+                "All the effect labels for a given factor POVM must be the *same* length!"
+            self._factor_lbllens.append(l)
+            
+        #OLD: self._keys = _collections.OrderedDict( [("".join(el),False) for el in _itertools.product(*effectLabelKeys) ] )
+
+        #OLDER: create all vectors upon init (gets slow if there are lots of qubits)
+        #for el in _itertools.product(*effectLabelKeys):
+        #    effect = _sv.TensorProdSPAMVec('effect',self.factorPOVMs, el) #infers parent & gpindices from factorPOVMs
+        #    items.append( ("".join(el), effect) )
 
         super(TensorProdPOVM, self).__init__(dim, evotype, items)
+
+
+    def __contains__(self, key):
+        """ For lazy creation of effect vectors """
+        i = 0
+        for fkeys,lbllen in zip(self._factor_keys,self._factor_lbllens):
+            if key[i:i+lbllen] not in fkeys: return False
+            i += lbllen
+        return True
+
+    def __iter__(self):
+        return self.keys()
+
+    def keys(self):
+        for k in _itertools.product(*self._factor_keys):
+            yield "".join(k)
+
+    def values(self):
+        for k in self.keys():
+            yield self[k]
+
+    def items(self):
+        for k in self.keys():
+            yield k,self[k]
+
+    def __getitem__(self, key):
+        """ For lazy creation of effect vectors """
+        if _collections.OrderedDict.__contains__(self,key):
+            return _collections.OrderedDict.__getitem__(self, key)
+        elif key in self: # calls __contains__ to efficiently check for membership
+            #create effect vector now that it's been requested (lazy creation)
+            elbls = []; i=0 # decompose key into separate factor-effect labels 
+            for fkeys,lbllen in zip(self._factor_keys,self._factor_lbllens):
+                elbls.append( key[i:i+lbllen] ); i += lbllen
+            effect = _sv.TensorProdSPAMVec('effect',self.factorPOVMs, elbls) #infers parent & gpindices from factorPOVMs
+            _collections.OrderedDict.__setitem__(self,key,effect)
+            return effect
+        else: raise KeyError("%s is not an outcome label of this TensorProdPOVM" % key)
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
@@ -708,10 +757,11 @@ class TensorProdPOVM(POVM):
 
         # Create "compiled" effect vectors, which infer their parent and
         # gpindices from the set of "factor-POVMs" they're constructed with.
+        # Currently compile *all* the effects, creating those that haven't been yet (lazy creation)
         if prefix: prefix += "_"
         compiled = _collections.OrderedDict(
-            [ (prefix + k, _sv.TensorProdSPAMVec('effect',factorPOVMs_compiled, Evec.effectLbls))
-              for k,Evec in self.items() ] )
+            [ (prefix + k, _sv.TensorProdSPAMVec('effect',factorPOVMs_compiled, self[k].effectLbls))
+              for k in self.keys() ] )
         return compiled
 
 
@@ -833,11 +883,50 @@ class StabilizerZPOVM(POVM):
 
         #LATER - do something with qubit_filter here
         # qubits = self.qubit_filter if (self.qubit_filter is not None) else list(range(self.nqubits))
-        
-        iterover = [(0,1)]*nqubits
-        items = [ (''.join(map(str,outcomes)), _sv.StabilizerEffectVec(outcomes,self))
-                  for outcomes in _itertools.product(*iterover) ]
+
+        items = [] # init as empty (lazy creation of members)
+
+        #OLD: create all vectors upon init (slow when lots of qubits)
+        #iterover = [(0,1)]*nqubits
+        #items = [ (''.join(map(str,outcomes)), _sv.StabilizerEffectVec(outcomes,self))
+        #          for outcomes in _itertools.product(*iterover) ]
         super(StabilizerZPOVM, self).__init__(dim, "stabilizer", items)
+
+
+    def __contains__(self, key):
+        """ For lazy creation of effect vectors """
+        fkeys = ('0','1')
+        return bool(len(key) == self.nqubits and
+                    all([ (letter in fkeys) for letter in key]))
+
+    def __iter__(self):
+        return self.keys()
+
+    def keys(self):
+        iterover = [('0','1')]*self.nqubits
+        for k in _itertools.product(*iterover):
+            yield "".join(k)
+
+    def values(self):
+        for k in self.keys():
+            yield self[k]
+
+    def items(self):
+        for k in self.keys():
+            yield k,self[k]
+
+    def __getitem__(self, key):
+        """ For lazy creation of effect vectors """
+        if _collections.OrderedDict.__contains__(self,key):
+            return _collections.OrderedDict.__getitem__(self, key)
+        elif key in self: # calls __contains__ to efficiently check for membership
+            #create effect vector now that it's been requested (lazy creation)
+            outcomes = [ (0 if letter == '0' else 1) for letter in key ] # decompose key into separate factor-effect labels
+            effect = _sv.StabilizerEffectVec(outcomes,self)
+            _collections.OrderedDict.__setitem__(self,key,effect)
+            return effect
+        else: raise KeyError("%s is not an outcome label of this StabilizerZPOVM" % key)
+
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
@@ -866,7 +955,7 @@ class StabilizerZPOVM(POVM):
         # gpindices from the set of "factor-POVMs" they're constructed with.
         if prefix: prefix += "_"
         compiled = _collections.OrderedDict(
-            [ (prefix + k, Evec) for k,Evec in self.items() ] )
+            [ (prefix + k, self[k]) for k in self.keys() ] )
         return compiled
 
 

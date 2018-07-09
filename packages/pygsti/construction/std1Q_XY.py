@@ -8,8 +8,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 Variables for working with the a gate set containing X(pi/2) and Y(pi/2) gates.
 """
 
+import sys as _sys
 from . import gatestringconstruction as _strc
 from . import gatesetconstruction as _setc
+from . import stdtarget as _stdtarget
 from collections import OrderedDict as _OrderedDict
 
 description = "X(pi/2) and Y(pi/2) gates"
@@ -31,6 +33,29 @@ germs_lite = germs[0:4]
 #Construct a target gateset:  X(pi/2), Y(pi/2)
 gs_target = _setc.build_gateset([2],[('Q0',)], ['Gx','Gy'],
                                 [ "X(pi/2,Q0)", "Y(pi/2,Q0)"])
+
+_gscache = { ("full","auto"): gs_target }
+def copy_target(parameterization_type="full", sim_type="auto"):
+    """ 
+    Returns a copy of the target gateset in the given parameterization.
+
+    Parameters
+    ----------
+    parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
+        The gate and SPAM vector parameterization type. See 
+        :function:`GateSet.set_all_parameterizations` for all allowed values.
+        
+    sim_type : {"auto", "matrix", "map", "termorder:X" }
+        The simulator type to be used for gate set calculations (leave as
+        "auto" if you're not sure what this is).
+    
+    Returns
+    -------
+    GateSet
+    """
+    return _stdtarget._copy_target(_sys.modules[__name__],parameterization_type,
+                                   sim_type, _gscache)
+
 
 clifford_compilation = _OrderedDict()
 clifford_compilation["Gc0"] = []

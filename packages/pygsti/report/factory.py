@@ -308,16 +308,24 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             else:
                 est_modvi = est
 
+            def rpt_objective(opt_objective):
+                """ If optimized using just LGST, compute logl values """
+                if opt_objective == "lgst": return "logl"
+                else: return opt_objective
+
             switchBd.params[d,i] = est.parameters
-            switchBd.objective[d,i] = est.parameters['objective']
-            switchBd.objective_tvd_tuple[d,i] = (est.parameters['objective'],'tvd')
-            switchBd.objective_modvi[d,i] = est_modvi.parameters['objective']
+            switchBd.objective[d,i] = rpt_objective(est.parameters['objective'])
+            switchBd.objective_tvd_tuple[d,i] = (rpt_objective(est.parameters['objective']),'tvd')
+            switchBd.objective_modvi[d,i] = rpt_objective(est_modvi.parameters['objective'])
             if est.parameters['objective'] == "logl":
                 switchBd.mpc[d,i] = est.parameters['minProbClip']
                 switchBd.mpc_modvi[d,i] = est_modvi.parameters['minProbClip']
-            else:
+            elif est.parameters['objective'] == "chi2":
                 switchBd.mpc[d,i] = est.parameters['minProbClipForWeighting']
                 switchBd.mpc_modvi[d,i] = est_modvi.parameters['minProbClipForWeighting']
+            else: # "lgst" - just use defaults for logl
+                switchBd.mpc[d,i] = 1e-4
+                switchBd.mpc_modvi[d,i] = 1e-4
             switchBd.clifford_compilation[d,i] = est.parameters.get("clifford compilation",'auto')
             if switchBd.clifford_compilation[d,i] == 'auto':
                 switchBd.clifford_compilation[d,i] = find_std_clifford_compilation(

@@ -12,8 +12,6 @@ from ...objects import circuit as _cir
 from ...baseobjs import label as _lbl
 from ...tools import symplectic as _symp
 
-#
-# ?????? #
 from ... import construction as _cnst
 from ... import objects as _objs
 from ... import io as _io
@@ -21,23 +19,10 @@ from ... import tools as _tools
 
 import numpy as _np
 import copy as _copy
-import itertools as _itertools
-from scipy import mod as _mod
 
-#def std_practice_direct_rb_experiment():
-#    return
-
-# def std_practice_clifford_rb_experiment():
-#     return
-
-# def std_practice_interleaved_direct_rb_experiment():
-#     return
-
-# def std_practice_interleaved_clifford_rb_experiment():
-#     return
 
 def circuit_layer_by_pairing_qubits(pspec, twoQprob=0.5, oneQgatenames='all', twoQgatenames='all',
-                              gatesetname = 'clifford'):   
+                              gatesetname='clifford'):   
     """
     Samples a random circuit layer by pairing up qubits and picking a two-qubit gate for a pair
     with the specificed probability. This sampler *assumes* all-to-all connectivity, and does
@@ -792,7 +777,7 @@ def clifford_rb_circuit(pspec, length, randomizeout=False, citerations=20, compi
             
     return full_circuit, idealout
 
-def mirror_rb_circuit(pspec, length, inverse_dict, sampler='Qelimination', samplerargs=[], localclifford=True,
+def mirror_rb_circuit(pspec, length, sampler='Qelimination', samplerargs=[], localclifford=True,
                       paulirandomize=True):
 
     assert(not ((not paulirandomize) and localclifford)), "If localclifford is True then paulirandomize must be True!"
@@ -806,7 +791,7 @@ def mirror_rb_circuit(pspec, length, inverse_dict, sampler='Qelimination', sampl
 
     for i in range(0,pspec.number_of_qubits):
         for j in range(0,length):
-            inv_name = inverse_dict[random_circuit_inv.line_items[i][j].name]
+            inv_name = pspec.gate_inverse[random_circuit_inv.line_items[i][j].name]
             qubits = random_circuit_inv.line_items[i][j].qubits
             random_circuit_inv.line_items[i][j] = _lbl.Label(inv_name,qubits)
 
@@ -909,7 +894,7 @@ def oneQ_rb_sequence(m, group_or_gateset, inverse=True, random_pauli=False, inte
                      group_inverse_only=False, group_prep=False, compilation=None,
                      generated_group=None, gateset_to_group_labels=None, seed=None, randState=None):
     """
-    Makes a random RB sequence.
+    Makes a random 1-qubit RB sequence. This function is todo: docstring and test.
     
     Parameters
     ----------
@@ -1154,30 +1139,30 @@ def oneQ_rb_experiment(m_list, K_m, group_or_gateset, inverse=True,
     else:
         return string_lists #note we also return this if alias_maps == {}
 
-def create_random_interleaved_gatestrings(m_list, K_m, group_or_gateset, interleaved_list,
-                                          inverse=True, alias_maps=None):
+# def create_random_interleaved_gatestrings(m_list, K_m, group_or_gateset, interleaved_list,
+#                                           inverse=True, alias_maps=None):
     
-    # Currently no random number generator seed allowed, as needs to have different seed for each
-    # call of create_random_gatestrings().
-    all_random_string_lists = {}
-    alias_maps_mod = {} if (alias_maps is None) else alias_maps      
-    random_string_lists = create_random_gatestrings(m_list, K_m, 
-                          group_or_gateset,inverse,interleaved = None, 
-                          alias_maps = alias_maps_mod,)
+#     # Currently no random number generator seed allowed, as needs to have different seed for each
+#     # call of create_random_gatestrings().
+#     all_random_string_lists = {}
+#     alias_maps_mod = {} if (alias_maps is None) else alias_maps      
+#     random_string_lists = create_random_gatestrings(m_list, K_m, 
+#                           group_or_gateset,inverse,interleaved = None, 
+#                           alias_maps = alias_maps_mod,)
 
-    if alias_maps is None: 
-        all_random_string_lists['baseline'] = random_string_lists['uncompiled']
-    else:
-        all_random_string_lists['baseline'] = random_string_lists
+#     if alias_maps is None: 
+#         all_random_string_lists['baseline'] = random_string_lists['uncompiled']
+#     else:
+#         all_random_string_lists['baseline'] = random_string_lists
         
-    for interleaved in interleaved_list:
-        random_string_lists = \
-                       create_random_gatestrings(m_list, K_m, group_or_gateset,inverse,
-                                  interleaved = interleaved, alias_maps = alias_maps_mod)
+#     for interleaved in interleaved_list:
+#         random_string_lists = \
+#                        create_random_gatestrings(m_list, K_m, group_or_gateset,inverse,
+#                                   interleaved = interleaved, alias_maps = alias_maps_mod)
 
-        if alias_maps is None: 
-            all_random_string_lists[interleaved] = random_string_lists['uncompiled']
-        else:
-            all_random_string_lists[interleaved] = random_string_lists
+#         if alias_maps is None: 
+#             all_random_string_lists[interleaved] = random_string_lists['uncompiled']
+#         else:
+#             all_random_string_lists[interleaved] = random_string_lists
             
-        return all_random_string_lists          
+#         return all_random_string_lists          
