@@ -937,6 +937,55 @@ def standard_symplectic_representations(gllist=None):
     complete_p_dict['PH'] = _np.array([0,1],int)
     complete_p_dict['HP'] = _np.array([3,0],int)
     complete_p_dict['HPH'] = _np.array([0,3],int)
+
+    complete_s_dict['C0'] = _np.array([[1,0],[0,1]],int)
+    complete_p_dict['C0'] = _np.array([0,0],int)
+    complete_s_dict['C1'] = _np.array([[1,1],[1,0]],int)
+    complete_p_dict['C1'] = _np.array([1,0],int)
+    complete_s_dict['C2'] = _np.array([[0,1],[1,1]],int)
+    complete_p_dict['C2'] = _np.array([0,1],int)
+    complete_s_dict['C3'] = _np.array([[1,0],[0,1]],int)
+    complete_p_dict['C3'] = _np.array([0,2],int)
+    complete_s_dict['C4'] = _np.array([[1,1],[1,0]],int)
+    complete_p_dict['C4'] = _np.array([1,2],int)
+    complete_s_dict['C5'] = _np.array([[0,1],[1,1]],int)
+    complete_p_dict['C5'] = _np.array([0,3],int)
+    complete_s_dict['C6'] = _np.array([[1,0],[0,1]],int)
+    complete_p_dict['C6'] = _np.array([2,2],int)
+    complete_s_dict['C7'] = _np.array([[1,1],[1,0]],int)
+    complete_p_dict['C7'] = _np.array([3,2],int)
+    complete_s_dict['C8'] = _np.array([[0,1],[1,1]],int)
+    complete_p_dict['C8'] = _np.array([2,3],int)
+    complete_s_dict['C9'] = _np.array([[1,0],[0,1]],int)
+    complete_p_dict['C9'] = _np.array([2,0],int)
+    complete_s_dict['C10'] = _np.array([[1,1],[1,0]],int)
+    complete_p_dict['C10'] = _np.array([3,0],int)
+    complete_s_dict['C11'] = _np.array([[0,1],[1,1]],int)
+    complete_p_dict['C11'] = _np.array([2,1],int)
+    complete_s_dict['C12'] = _np.array([[0,1],[1,0]],int)
+    complete_p_dict['C12'] = _np.array([0,0],int)
+    complete_s_dict['C13'] = _np.array([[1,1],[0,1]],int)
+    complete_p_dict['C13'] = _np.array([0,1],int)
+    complete_s_dict['C14'] = _np.array([[1,0],[1,1]],int)
+    complete_p_dict['C14'] = _np.array([1,0],int)
+    complete_s_dict['C15'] = _np.array([[0,1],[1,0]],int)
+    complete_p_dict['C15'] = _np.array([0,2],int)
+    complete_s_dict['C16'] = _np.array([[1,1],[0,1]],int)
+    complete_p_dict['C16'] = _np.array([0,3],int)
+    complete_s_dict['C17'] = _np.array([[1,0],[1,1]],int)
+    complete_p_dict['C17'] = _np.array([1,2],int)
+    complete_s_dict['C18'] = _np.array([[0,1],[1,0]],int)
+    complete_p_dict['C18'] = _np.array([2,2],int)
+    complete_s_dict['C19'] = _np.array([[1,1],[0,1]],int)
+    complete_p_dict['C19'] = _np.array([2,3],int)
+    complete_s_dict['C20'] = _np.array([[1,0],[1,1]],int)
+    complete_p_dict['C20'] = _np.array([3,2],int)
+    complete_s_dict['C21'] = _np.array([[0,1],[1,0]],int)
+    complete_p_dict['C21'] = _np.array([2,0],int)
+    complete_s_dict['C22'] = _np.array([[1,1],[0,1]],int)
+    complete_p_dict['C22'] = _np.array([2,1],int)
+    complete_s_dict['C23'] = _np.array([[1,0],[1,1]],int)
+    complete_p_dict['C23'] = _np.array([3,0],int)
        
     # The CNOT gate, CPHASE gate, and SWAP gate.
     complete_s_dict['CNOT'] = _np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int)    
@@ -977,6 +1026,8 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         tuples associated with each gate label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this 
         may be None. Otherwise it must be specified.
+
+    todo tim 
         
     Returns
     -------
@@ -1027,6 +1078,8 @@ def symplectic_rep_of_clifford_layer(layer, n, Qlabels=None, srep_dict=None):
         tuples associated with each gate label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this 
         may be None. Otherwise it must be specified.
+
+    todo tim 
 
     Returns
     -------
@@ -1137,6 +1190,7 @@ def single_qubit_clifford_symplectic_group_relations():
     
     return group_relations
 
+# todo : remove and have a function that works for any-dimension gates.
 def unitary_to_symplectic_1Q(u,flagnonclifford=True):
     """
     Returns the symplectic representation of a single qubit Clifford unitary, 

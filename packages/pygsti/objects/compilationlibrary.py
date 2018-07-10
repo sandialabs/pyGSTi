@@ -65,8 +65,9 @@ class CompilationLibrary(_collections.OrderedDict):
             The "compilation type" for this library.  If `"absolute"`, then 
             compilations must match the gate operation being compiled exactly.
             If `"paulieq"`, then compilations only need to match the desired 
-            gate operation up to a Paui operation (sometimes useful within
-            Randomized Benchmarking).
+            gate operation up to a Paui operation (which is useful for compiling
+            multi-qubit Clifford gates / stabilizer states without unneeded 1-qubit
+            gate over-heads).
         """
         self.gateset = clifford_gateset # gateset of (all Clifford) gates to compile requested gates into
         self.ctype = ctyp # "absolute" or "paulieq"
@@ -76,7 +77,7 @@ class CompilationLibrary(_collections.OrderedDict):
         super(CompilationLibrary,self).__init__(items)
 
 
-    def get_local_compilation_of(self, gatelabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):
+    def construct_local_compilation_of(self, gatelabel, unitary=None, srep=None, max_iterations=10, verbosity=1):
         """
         Get a local compilation of `gatelabel`.  
 
@@ -93,7 +94,11 @@ class CompilationLibrary(_collections.OrderedDict):
             The label of the gate to compile.  If `gatelabel.name` is a
             recognized standard Clifford name (e.g. 'H', 'P', 'X', 'CNOT')
             then no further information is needed.  Otherwise, you must specify
-            either (or both) of `unitary` or `srep`.
+            either (or both) of `unitary` or `srep` *unless* the compilation
+            for this gatelabel has already been previously constructed and force
+            is `False`. In that case, the previously constructed compilation will
+            be returned in all cases, and so this method does not need to know
+            what the gate actually is.
 
         unitary : numpy.ndarray, optional
             The unitary action of the gate being compiled.  If, as is typical,
@@ -124,10 +129,6 @@ class CompilationLibrary(_collections.OrderedDict):
         # Template compilations always use integer qubit labels: 0 to N
         #  where N is the number of qubits in the template's overall label
         #  (i.e. its key in self.templates)
-
-        if not force and gatelabel in self:
-            return #don't re-compute unless we're told to
-
         def to_real_label(template_label):
             """ Convert a "template" gate label (which uses integer qubit labels
                 0 to N) to a "real" label for a potential gate in self.gateset. """
@@ -183,10 +184,17 @@ class CompilationLibrary(_collections.OrderedDict):
             return _Circuit(gatestring=gstr,
                             line_labels=self.gateset.stateSpaceLabels.labels[0],identity=self.identity)
         else:
-            if verbosity > 0: print("Cannot locally compile %s" % str(gatelabel))
             raise CompilationError("Cannot locally compile %s" % str(gatelabel))
 
-        
+    def get_local_compilation_of(self, gatelabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):
+
+        if not force and gatelabel in self:
+            return self[gatelabel] #don't re-compute unless we're told to
+
+        circuit = self.construct_local_compilation_of(gatelabel, unitary=unitary, srep=srep, max_iterations= max_iterations,
+                                                        verbosity=verbosity)
+        return circuit
+       
     def add_local_compilation_of(self, gatelabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):
         """
         Adds a new local compilation of `gatelabel`.  
@@ -230,10 +238,9 @@ class CompilationLibrary(_collections.OrderedDict):
         None
 
         """
-        self[gatelabel] = self.get_local_compilation_of(gatelabel, unitary,srep,
+        self[gatelabel] = self.get_local_compilation_of(gatelabel, unitary, srep,
                                                         max_iterations, force,
                                                         verbosity)
-
 
     def add_clifford_compilation_template(self, gate_name, nqubits, unitary, srep,
                                           available_glabels, available_sreps,
@@ -275,12 +282,8 @@ class CompilationLibrary(_collections.OrderedDict):
             A tuple of the gate labels (essentially a gate string) specifying
             the template compilation that was generated.
         """
-        #Get the total number of qubits in the 
-        #WRONG? nQ = int(round(np.log2(self.gateset.dim))) # assumes *unitary* mode (OK?)
-        
         # The unitary is specifed, this takes priority and we use it to construct the 
-        # symplectic rep of the gate.
-        
+        # symplectic rep of the gate.      
         if unitary is not None:
             srep = _symp.unitary_to_symplectic(unitary,flagnonclifford=True)
         
@@ -469,11 +472,8 @@ class CompilationLibrary(_collections.OrderedDict):
             else:
                 # assume allowed_filter is iterable and contains qubit labels
                 return init_qgraph.subgraph( list(allowed_filter) )
-            
 
-
-    def get_nonlocal_compilation_of(self, gatelabel, force=False,
-                                    allowed_filter=None, verbosity=1, check=True):
+    def construct_nonlocal_compilation_of(self, gatelabel, allowed_filter=None, verbosity=1, check=True):
         """
         Get a potentially non-local compilation of `gatelabel`.
 
@@ -516,8 +516,8 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         Circuit
         """
-        if not force and gatelabel in self:
-            return #don't re-compute unless we're told to
+        #if not force and gatelabel in self:
+        #    return #don't re-compute unless we're told to
 
         assert(gatelabel.number_of_qubits > 1),"1-qubit gates can't be non-local!"
         assert(gatelabel.name == "CNOT" and gatelabel.number_of_qubits == 2), \
@@ -574,11 +574,11 @@ class CompilationLibrary(_collections.OrderedDict):
         cnot_circuit = part_1 + part_2 + part_3 + part_4
         
         # Convert the gatelist to a circuit.
-        circuit = _Circuit(gatestring=cnot_circuit, line_labels=self.gateset.stateSpaceLabels.labels[0],identity=self.identity)
+        circuit = _Circuit(gatestring=cnot_circuit, line_labels=self.gateset.stateSpaceLabels.labels[0])
 
         ## Change into the native gates, using the compilation for CNOTs between
         ## connected qubits.
-        circuit.change_gate_library(self)
+        circuit.change_gate_library(self, identity=self.identity)
 
         if check:
             # Calculate the symplectic matrix implemented by this circuit, to check the compilation
@@ -595,6 +595,27 @@ class CompilationLibrary(_collections.OrderedDict):
             assert(_np.array_equal(s,s_cnot)), "Compilation has failed!"
             if self.ctype == "absolute":
                 assert(_np.array_equal(p,p_cnot)), "Compilation has failed!"
+
+        return circuit
+
+    def get_nonlocal_compilation_of(self, gatelabel, force=False,
+                                    allowed_filter=None, verbosity=1, check=True):
+
+        context_key = None
+        if isinstance(allowed_filter, dict):
+            context_key = frozenset(allowed_filter.items())
+        elif isinstance(allowed_filter, set):
+            context_key = frozenset(allowed_filter)
+
+        if context_key is not None:
+            key = (gatelabel,context_key)
+        else:
+            key = gatelabel
+
+        if not force and key in self:
+            return self[gatelabel] #don't re-compute unless we're told to
+
+        circuit = self.construct_nonlocal_compilation_of(gatelabel, allowed_filter=allowed_filter, verbosity=verbosity, check=check)
 
         return circuit
 
@@ -639,6 +660,59 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         None
         """
-        self[gatelabel] = self.get_nonlocal_compilation_of(
-            gatelabel, force, allowed_filter, verbosity, check)
+        context_key = None
+        if isinstance(allowed_filter, dict):
+            context_key = frozenset(allowed_filter.items())
+        elif isinstance(allowed_filter, set):
+            context_key = frozenset(allowed_filter)
 
+        if context_key is not None:
+            key = (gatelabel,context_key)
+        else:
+            key = gatelabel
+
+        if not force and key in self:
+            return
+        else:
+            circuit = self.get_nonlocal_compilation_of(gatelabel, force, allowed_filter, 
+                                                      verbosity, check)
+
+            self[key] =  circuit
+
+    def get_compilation_of(self, gatelabel, force=False, allowed_filter=None, verbosity=1, check=True):
+
+        # first try and compile the gate locally. Future todo: this will not work properly if the allowed_filter removes gates that
+        # the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence should be removed somehow.
+        try:
+            # We don't have to account for `force` manually here, because it is dealt with inside this function
+            circuit = self.get_local_compilation_of(gatelabel, unitary=None, srep=None, max_iterations=10, force=force, verbosity=verbosity)
+            # Check for the case where this function won't currently behave as expected.
+            if isinstance(allowed_filter, dict):
+                raise ValueError("This function may behave incorrectly when the allowed_filer is a dict *and* the gate can be compiled locally!")
+       
+        # If local compilation isn't possible, we move on and try non-local compilation
+        except:
+            pass
+
+        circuit = self.get_nonlocal_compilation_of(gatelabel, force=force, allowed_filter=allowed_filter, verbosity=verbosity, check=check)
+
+        return circuit
+
+    def add_compilation_of(self, gatelabel, force=False, allowed_filter=None, verbosity=1, check=True):
+
+        # first try and compile the gate locally. Future todo: this will not work properly if the allowed_filter removes gates that
+        # the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence should be removed somehow.
+        try:
+            # We don't have to account for `force` manually here, because it is dealt with inside this function
+            self.add_local_compilation_of(gatelabel, unitary=None, srep=None, max_iterations=10, force=force, verbosity=verbosity)
+            # Check for the case where this function won't currently behave as expected.
+            if isinstance(allowed_filter, dict):
+                raise ValueError("This function may behave incorrectly when the allowed_filer is a dict *and* the gate can be compiled locally!")
+       
+        # If local compilation isn't possible, we move on and try non-local compilation
+        except:
+            pass
+
+        self.add_nonlocal_compilation_of(gatelabel, force=force, allowed_filter=allowed_filter, verbosity=verbosity, check=check)
+
+        return
