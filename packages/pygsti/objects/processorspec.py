@@ -30,7 +30,7 @@ class ProcessorSpec(object):
     def __init__(self, nQubits, gate_names, nonstd_gate_unitaries={}, availability={}, 
                 qubit_labels=None, construct_models=('clifford','target'), 
                 construct_clifford_compilations = {'paulieq' : ('1Qcliffords','allcnots'), 
-                'absolute': ('paulis',)}, verbosity=0):
+                'absolute': ('paulis','1Qcliffords')}, verbosity=0):
         """
         Initializes a ProcessorSpec object.
     
@@ -189,7 +189,6 @@ class ProcessorSpec(object):
                             oneQgates += ['I','X','Y','Z']
                         elif subctype == '1Qcliffords':
                             oneQgates += ['C'+str(q) for q in range(24)] # todo : implement this.
-                            raise ValueError("This is not yet implemented")
                         else:
                             raise ValueError("One of the values for the key `" + ctype + "` to `construct_clifford_compilations` is not a valid option!")
                     self.add_std_compilations(ctype, oneQgates, twoQgates, verbosity)
