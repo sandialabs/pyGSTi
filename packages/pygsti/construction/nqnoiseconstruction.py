@@ -885,7 +885,7 @@ def _onqubit(s,iQubit):
 
 def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfiducials=None,
                                        prepLbl=None, effectLbls=None, initJ=None, initJrank=None,
-                                       wrtParams=None, verbosity=0):
+                                       wrtParams=None, algorithm="greedy", verbosity=0):
     """
     TODO: docstring
     prepLbl : Label
@@ -921,46 +921,88 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfi
         J = _np.empty( (0,Np), 'complex'); Jrank = 0
     else:
         J = initJ; Jrank = initJrank
-    
-    # loop over all possible fiducial pairs
-    nQubits = len(qubit_filter); nIters = len(singleQfiducials)**nQubits
-    with printer.progress_logging(1):
-        for itr,prep in enumerate(_itertools.product(*([singleQfiducials]*nQubits) )):
-            printer.show_progress(itr, nIters, prefix='--- Finding amped-polys for idle: ')
-            prepFid = _objs.GateString(())
-            for i,el in enumerate(prep):
-                prepFid = prepFid + _onqubit(el,qubit_filter[i])
-                
-            for meas in _itertools.product(*([singleQfiducials]*nQubits) ):
-                measFid = _objs.GateString(())
-                for i,el in enumerate(meas):
-                    measFid = measFid + _onqubit(el,qubit_filter[i])
+
+    if algorithm == "greedy":
+        Jrows = _np.empty( (len(effectLbls),Np), 'complex')
+
+    #Outer iteration
+    while Jrank < Np:
+
+        if algorithm == "sequential":
+            printer.log("Sequential find_amped_polys_for_syntheticidle started. Target rank=%d" % Np)
+            
+        elif algorithm == "greedy":
+            maxRankInc = 0
+            bestJrows = None
+            printer.log("Greedy find_amped_polys_for_syntheticidle started. Target rank=%d" % Np)
+            
+        else: raise ValueError("Invalid `algorithm` argument: %s" % algorithm)
         
-                gstr_L0 = prepFid + measFid            # should be a GateString
-                gstr_L1 = prepFid + idleStr + measFid  # should be a GateString
-                ps=gateset._calc().prs_as_polys(prepLbl, effectLbls, gstr_L1 )
-                qs=gateset._calc().prs_as_polys(prepLbl, effectLbls, gstr_L0 )
-                #OLD: Jtest = J
-                added = False
-                for elbl,p,q in zip(effectLbls,ps,qs):
-                    amped = p + -1*q # the amplified poly
-                    Jrow = _np.array([[ amped.deriv(iParam).evaluate(dummy) for iParam in _slct.as_array(wrtParams)]])
-                    if _np.linalg.norm(Jrow) < 1e-8: continue  # row of zeros can fool matrix_rank
+        
+        # loop over all possible (remaining) fiducial pairs
+        nQubits = len(qubit_filter); nIters = len(singleQfiducials)**nQubits
+        with printer.progress_logging(2):
+            for itr,prep in enumerate(_itertools.product(*([singleQfiducials]*nQubits) )):
+                printer.show_progress(itr, nIters, prefix='--- Finding amped-polys for idle: ')
+                prepFid = _objs.GateString(())
+                for i,el in enumerate(prep):
+                    prepFid = prepFid + _onqubit(el,qubit_filter[i])
                     
-                    Jtest = _np.concatenate((J,Jrow),axis=0) 
-                    testRank = _np.linalg.matrix_rank(Jtest)
-                    #print("find_amped_polys_for_syntheticidle: ",prep,meas,elbl," => rank ",testRank, " (Np=",Np,")")
-                    if testRank > Jrank:
-                        #print("taken!")
-                        J = Jtest
-                        Jrank = testRank
-                        #amped_polys.append(amped)
-                        if not added:
-                            gatename_fidpair_list = [ (prep[i],meas[i]) for i in range(nQubits) ]
-                            selected_gatename_fidpair_lists.append( gatename_fidpair_list )
-                            added = True # only add fidpair once per elabel loop!
-                        #OLD selected_fidpairs.append( (prepFid, measFid) )
-                        if Jrank == Np: break # this is the largest rank J can take!
+                for meas in _itertools.product(*([singleQfiducials]*nQubits) ):
+                    measFid = _objs.GateString(())
+                    for i,el in enumerate(meas):
+                        measFid = measFid + _onqubit(el,qubit_filter[i])
+    
+                    gatename_fidpair_list = [ (prep[i],meas[i]) for i in range(nQubits) ]
+                    if gatename_fidpair_list in selected_gatename_fidpair_lists:
+                        continue # we've already chosen this pair in a previous iteration
+            
+                    gstr_L0 = prepFid + measFid            # should be a GateString
+                    gstr_L1 = prepFid + idleStr + measFid  # should be a GateString
+                    ps=gateset._calc().prs_as_polys(prepLbl, effectLbls, gstr_L1 )
+                    qs=gateset._calc().prs_as_polys(prepLbl, effectLbls, gstr_L0 )
+
+                    if algorithm == "sequential":
+                        added = False
+                        for elbl,p,q in zip(effectLbls,ps,qs):
+                            amped = p + -1*q # the amplified poly
+                            Jrow = _np.array([[ amped.deriv(iParam).evaluate(dummy) for iParam in _slct.as_array(wrtParams)]])
+                            if _np.linalg.norm(Jrow) < 1e-8: continue  # row of zeros can fool matrix_rank
+                            
+                            Jtest = _np.concatenate((J,Jrow),axis=0) 
+                            testRank = _np.linalg.matrix_rank(Jtest)
+                            if testRank > Jrank:
+                                printer.log("fidpair: %s,%s (%s) increases rank => %d" %
+                                            (str(prep),str(meas),str(elbl),testRank), 4)
+                                J = Jtest
+                                Jrank = testRank
+                                if not added:
+                                    selected_gatename_fidpair_lists.append( gatename_fidpair_list )
+                                    added = True # only add fidpair once per elabel loop!
+                                if Jrank == Np: break # this is the largest rank J can take!
+
+                    elif algorithm == "greedy":
+                        #test adding all effect labels - get the overall increase in rank due to this fidpair
+                        for k,(elbl,p,q) in enumerate(zip(effectLbls,ps,qs)):
+                            amped = p + -1*q # the amplified poly
+                            Jrows[k,:] = _np.array([[ amped.deriv(iParam).evaluate(dummy) for iParam in _slct.as_array(wrtParams)]])
+                        Jtest = _np.concatenate((J,Jrows),axis=0) 
+                        testRank = _np.linalg.matrix_rank(Jtest)
+                        rankInc = testRank - Jrank
+                        if rankInc > maxRankInc:
+                            maxRankInc = rankInc
+                            bestJrows = Jrows.copy()
+                            bestFidpair = gatename_fidpair_list
+                            if testRank == Np: break # this is the largest rank we can get!
+                        
+        if algorithm == "greedy":
+            assert(maxRankInc > 0), "No fiducial pair increased the Jacobian rank!"
+            Jrank += maxRankInc
+            J = _np.concatenate((J,bestJrows),axis=0)
+            selected_gatename_fidpair_lists.append( bestFidpair )
+            printer.log("%d fidpairs => rank %d (Np=%d)" %
+                        (len(selected_gatename_fidpair_lists), Jrank, Np))
+            
     
     #DEBUG
     #print("DB: J = ")
@@ -969,6 +1011,45 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfi
     
     return J, Jrank, selected_gatename_fidpair_lists
 
+
+def test_amped_polys_for_syntheticidle(fidpairs, idleStr, gateset,  prepLbl=None, effectLbls=None,
+                                       wrtParams=None, verbosity=0):
+    """
+    TODO: docstring
+    """
+    #TODO: Assert that gateset uses termorder:1, as doing L1-L0 to extract the "amplified" part
+    # relies on only expanding to *first* order.
+    printer = _VerbosityPrinter.build_printer(verbosity)
+    
+    if prepLbl is None:
+        prepLbl = list(gateset.preps.keys())[0]
+    if effectLbls is None:
+        povmLbl = list(gateset.povms.keys())[0]
+        effectLbls = [ _Lbl("%s_%s" % (povmLbl,l)) for l in gateset.povms[povmLbl] ]
+        
+    dummy = 5.0*_np.random.random(gateset.num_params()) + 0.5*_np.ones(gateset.num_params(),'d')
+    
+    if wrtParams is None: wrtParams = slice(0,gateset.num_params())
+    Np = _slct.length(wrtParams) 
+    nEffectLbls = len(effectLbls)
+    nRows = len(fidpairs) * nEffectLbls # number of jacobian rows
+    J = _np.empty( (nRows,Np), 'complex'); Jrank = 0
+    
+    for i,(prepFid, measFid) in enumerate(fidpairs):
+        gstr_L0 = prepFid + measFid            # should be a GateString
+        gstr_L1 = prepFid + idleStr + measFid  # should be a GateString
+        ps=gateset._calc().prs_as_polys(prepLbl, effectLbls, gstr_L1 )
+        qs=gateset._calc().prs_as_polys(prepLbl, effectLbls, gstr_L0 )
+
+        for k,(elbl,p,q) in enumerate(zip(effectLbls,ps,qs)):
+            amped = p + -1*q # the amplified poly
+            Jrow = _np.array([[ amped.deriv(iParam).evaluate(dummy) for iParam in _slct.as_array(wrtParams)]])
+            J[i*nEffectLbls+k,:] = Jrow
+
+    rank = _np.linalg.matrix_rank(J)
+    print("Rank = %d, num params = %d" % (rank, Np))
+
+    
 def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueIdlePairs, idleStr, maxWt,
                                                 gateset, singleQfiducials=None,
                                                 prepLbl=None, effectLbls=None, initJ=None, initJrank=None,
@@ -1305,8 +1386,8 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
                 prep_gatenames, meas_gatenames = gatename_fidpair
                 prep_gates.extend( [_Lbl(gatename,iQubit) for gatename in prep_gatenames ]) 
                 meas_gates.extend( [_Lbl(gatename,iQubit) for gatename in meas_gatenames ]) 
-                final_fidpairs.append( (_objs.GateString(prep_gates),
-                                        _objs.GateString(meas_gates)) )
+            final_fidpairs.append( (_objs.GateString(prep_gates),
+                                    _objs.GateString(meas_gates)) )
             
     _lt.remove_duplicates_in_place(final_fidpairs)    
     return final_fidpairs
@@ -1497,12 +1578,13 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     effectLbls = [ _Lbl("Mdefault_%s" % l) for l in gateset.povms['Mdefault'].keys()]
 
     # create a gateset with maxIdleWeight qubits that includes all
-    # the errors of the acrtual n-qubit gateset...
+    # the errors of the actual n-qubit gateset...
     #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line'; no CNOTs)
     printer.log("Creating \"idle error\" gateset on %d qubits" % maxIdleWeight)
     idle_gateset = build_nqnoise_gateset(maxIdleWeight, 'line', [], maxIdleWeight, maxhops,
                                          extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
                                          sim_type="termorder:1", parameterization="H+S terms")
+    idle_params = idle_gateset['Gi'].gpindices # these are the params we want to amplify at first...
 
     if maxIdleWeight in cache['Idle gatename fidpair lists']:
         printer.log("Getting cached sequences needed for max-weight=%d errors on the idle gate" % maxIdleWeight)
@@ -1513,7 +1595,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
         ampedJ, ampedJ_rank, idle_maxwt_gatename_fidpair_lists = \
             find_amped_polys_for_syntheticidle(list(range(maxIdleWeight)),
                                                idleGateStr, idle_gateset, singleQfiducials,
-                                               prepLbl, None, verbosity=printer-1)
+                                               prepLbl, None, wrtParams=idle_params, verbosity=printer-1)
         #ampedJ, ampedJ_rank, idle_maxwt_gatename_fidpair_lists = None,0,[] # DEBUG GRAPH ISO
         cache['Idle gatename fidpair lists'][maxIdleWeight] = idle_maxwt_gatename_fidpair_lists
 
@@ -1888,11 +1970,28 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     return sequences, selected_germs
 
 
+def _get_kcoverage_template_k2(n):
+    """ Special case where k == 2 -> use hypercube construction """
+    # k = 2 implies binary strings of 0's and 1's
+    def bitstr(nQubits, bit):
+        """ Returns a length-nQubits list of the values of the bit-th bit in the integers 0->nQubits"""
+        return [ ((i>>bit) & 1) for i in range(nQubits)]
+    def invert(bstr):
+        return [ (0 if x else 1) for x in bstr ]
+    
+    half = [ bitstr(n,k) for k in range(int(_np.ceil(_np.math.log(n,2)))) ]
+    other_half = [ invert(bstr) for bstr in half ]
+    return half + other_half
+
+
 def get_kcoverage_template(n, k, debug=0):
     """ TODO: docstring """
     #n = total number of qubits
     #indices run 0->(k-1)
     assert(n >= k), "Total number of qubits must be >= k"
+
+    if k == 2:
+        return _get_kcoverage_template_k2(n)
     
     #first k cols -> k! permutations of the k indices: 
     cols = [ list() for i in range(k) ]
@@ -1907,7 +2006,7 @@ def get_kcoverage_template(n, k, debug=0):
         if debug > 1: print(" - Adding column %d: currently %d rows" % (a,nRows))
         
         #We know that columns 0..(a-1) satisfy the property that
-        # the values of any k of them contain at every permutation 
+        # the values of any k of them contain every permutation 
         # of the integers 0..(k-1) (perhaps multiple times).  It is
         # then also true that the values of any (k-1) columns take
         # on each Perm(k,k-1) - i.e. the length-(k-1) permutations of
@@ -1920,8 +2019,29 @@ def get_kcoverage_template(n, k, debug=0):
         # 
         
         col_a = [None]*nRows # the new column - start with None sentinels in all current rows
+
+        # added heuristic step for increased efficiency:
+        # preference each open element of the a-th column by taking the
+        # "majority vote" among what the existing column values "want"
+        # the a-th column to be.
+        pref_a = []
+        for m in range(nRows):
+            votes = _collections.defaultdict(lambda: 0)
+            for existing_cols in _itertools.combinations(range(a),k-1):
+                vals = set(range(k)) #the values the k-1 existing + a-th columns need to take
+                vals = vals - set([cols[i][m] for i in existing_cols])
+                assert(len(vals) == 1)
+                val = vals.pop() # pops the *only* element
+                votes[val] += 1
+
+            majority = None; majority_cnt = 0
+            for ky,val in votes.items():
+                if val > majority_cnt:
+                     majority,majority_cnt = ky,val
+            pref_a.append( majority )
+
         
-        for existing_cols in _itertools.combinations(range(a),k-1):
+        for existing_cols in _itertools.combinations(range(a-1,-1,-1),k-1): # reverse-range(a) == heuristic
             if debug > 2: print("  - check perms are present for cols %s" % str(existing_cols + (a,)) )
             
             #make sure cols existing_cols + [a] take on all the needed permutations
@@ -1944,40 +2064,60 @@ def get_kcoverage_template(n, k, debug=0):
                 if debug > 3: print("   - perm %s: %d rows, %d match perm, %d open"
                                 % (str(desired_row), nRows, len(matching_rows), len(open_rows)) )
                 v = {'value': desired_row[k-1], 'alternate_rows': matching_rows}
+                placed = False
+
+                #Best: find a row that already has the value we're looking for (set via previous iteration)
+                for m in matching_rows:
+                    if col_a[m] and col_a[m]['value'] == desired_row[k-1]: # a perfect match! - no need to take an open slot
+                        updated_alts = [ i for i in col_a[m]['alternate_rows'] if i in matching_rows ]
+                        if debug > 3: print("    -> existing row (index %d) perfectly matches!" % m)
+                        col_a[m]['alternate_rows'] = updated_alts; placed=True; break
+                if placed: continue
+
+                #Better: find an open row that prefers the value we want to place in it
+                for m in matching_rows:
+                    if col_a[m] is None and pref_a[m] == desired_row[k-1]: # slot is open & prefers the value we want to place in it - take it!
+                        if debug > 3: print("    -> open preffered row (index %d) matches!" % m)
+                        col_a[m] = v; placed=True; break
+                if placed: continue
+
+                #Good: find any open row (FUTURE: maybe try to shift for preference first?)
                 for m in matching_rows:
                     if col_a[m] is None: # slot is open - take it!
                         if debug > 3: print("    -> open row (index %d) matches!" % m)
-                        col_a[m] = v; break
-                else: # no open slots
-                    # option1: (if there are any open rows)
-                    #  Look to swap an existing value in a matching row 
-                    #   to an open row allowing us to complete the matching
-                    #   row using the current desired_row.
-                    open_rows = set(open_rows) # b/c use intersection below
-                    shift_soln_found = False
-                    if len(open_rows) > 0:
-                        for m in matching_rows:
-                            # can assume col_a[m] is *not* None given above logic
-                            ist = open_rows.intersection(col_a[m]['alternate_rows'])
-                            if len(ist) > 0:
-                                m2 = ist.pop() # just get the first element
-                                # move value in row m to m2, then put v into the now-open m-th row
-                                col_a[m2] = col_a[m]
-                                col_a[m] = v
-                                if debug > 3: print("    -> row %d >> row %d, and row %d matches!" % (m,m2,m))
-                                shift_soln_found = True
-                                break
-                                
-                    if shift_soln_found == False:
-                        # no shifting can be performed to place v into an open row,
-                        # so we just create a new row equal to desired_row on existing_cols.
-                        # How do we choose the non-(existing & last) colums? For now, just
-                        # replicate the first element of matching_rows:
-                        if debug > 3: print("    -> creating NEW row.")
-                        for i in range(a):
-                            cols[i].append( cols[i][matching_rows[0]] )
-                        col_a.append(v)
-                        nRows += 1
+                        col_a[m] = v; placed=True; break
+                if placed: continue
+                        
+                # no open slots
+                # option1: (if there are any open rows)
+                #  Look to swap an existing value in a matching row 
+                #   to an open row allowing us to complete the matching
+                #   row using the current desired_row.
+                open_rows = set(open_rows) # b/c use intersection below
+                shift_soln_found = False
+                if len(open_rows) > 0:
+                    for m in matching_rows:
+                        # can assume col_a[m] is *not* None given above logic
+                        ist = open_rows.intersection(col_a[m]['alternate_rows'])
+                        if len(ist) > 0:
+                            m2 = ist.pop() # just get the first element
+                            # move value in row m to m2, then put v into the now-open m-th row
+                            col_a[m2] = col_a[m]
+                            col_a[m] = v
+                            if debug > 3: print("    -> row %d >> row %d, and row %d matches!" % (m,m2,m))
+                            shift_soln_found = True
+                            break
+                            
+                if shift_soln_found == False:
+                    # no shifting can be performed to place v into an open row,
+                    # so we just create a new row equal to desired_row on existing_cols.
+                    # How do we choose the non-(existing & last) colums? For now, just
+                    # replicate the first element of matching_rows:
+                    if debug > 3: print("    -> creating NEW row.")
+                    for i in range(a):
+                        cols[i].append( cols[i][matching_rows[0]] )
+                    col_a.append(v)
+                    nRows += 1
                         
         # a-th column is complete; "cement" it by replacing 
         # value/alternative_rows dicts with just the values
