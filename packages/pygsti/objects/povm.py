@@ -690,6 +690,9 @@ class TensorProdPOVM(POVM):
             i += lbllen
         return True
 
+    def __iter__(self):
+        return self.keys()
+
     def keys(self):
         for k in _itertools.product(*self._factor_keys):
             yield "".join(k)
@@ -895,6 +898,9 @@ class StabilizerZPOVM(POVM):
         fkeys = ('0','1')
         return bool(len(key) == self.nqubits and
                     all([ (letter in fkeys) for letter in key]))
+
+    def __iter__(self):
+        return self.keys()
 
     def keys(self):
         iterover = [('0','1')]*self.nqubits

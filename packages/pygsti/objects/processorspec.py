@@ -15,7 +15,6 @@ from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
 from .qubitgraph import QubitGraph as _QubitGraph
 from ..baseobjs import Label as _Label
-from .. import construction as _cnst
 from . import gate as _gate
 from ..tools import gatetools as _gt
 from ..tools import internalgates as _ig
@@ -96,6 +95,7 @@ class ProcessorSpec(object):
         ProcessorSpec
         """
         assert(type(nQubits) is int), "The number of qubits, n, should be an integer!"
+        from .. import construction as _cnst
 
         #Store inputs for adding models later
         self.number_of_qubits = nQubits
@@ -228,7 +228,8 @@ class ProcessorSpec(object):
     def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
         """ 
         Erik todo: docstring 
-        """       
+        """
+        from .. import construction as _cnst
         if model_name == 'clifford':
             assert(parameterization in ('auto','clifford')), "Clifford model must use 'clifford' parameterizations"
             assert(sim_type in ('auto','map')), "Clifford model must use 'map' simulation type"
