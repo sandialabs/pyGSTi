@@ -1266,25 +1266,26 @@ def get_standard_gate_unitaries():
     dict of numpy.ndarray objects.
     """
     std_unitaries = {}
-    
-    # The idle gate.
-    std_unitaries['Gi'] = _np.array([[1.,0.],[0.,1.]],complex)
-
-    # Non-idle single qubit gates
-    std_unitaries['Gxpi'] = _np.array([[0.,1.],[1.,0.]],complex)
-    std_unitaries['Gypi'] = _np.array([[0.,-1j],[1j,0.]],complex)
-    std_unitaries['Gzpi'] = _np.array([[1.,0.],[0.,-1.]],complex)
 
     sigmax = _np.array([[0,1],[1,0]])
     sigmay = _np.array([[0,-1.0j],[1.0j,0]])
     sigmaz = _np.array([[1,0],[0,-1]])
     def Ugate(exp):
-        return _np.array(_spl.expm(-1j * exp/2),complex) # 1j prefactor?
+        return _np.array(_spl.expm(-1j * exp/2),complex)
     
-    std_unitaries['Gx'] = Ugate(_np.pi/2 * sigmax)
-    std_unitaries['Gy'] = Ugate(_np.pi/2 * sigmay)
-    std_unitaries['Gz'] = Ugate(_np.pi/2 * sigmaz)
+    std_unitaries['Gi'] = _np.array([[1.,0.],[0.,1.]],complex)
 
+    std_unitaries['Gxpi2'] = Ugate(_np.pi/2 * sigmax)
+    std_unitaries['Gypi2'] = Ugate(_np.pi/2 * sigmay)
+    std_unitaries['Gzpi2'] = Ugate(_np.pi/2 * sigmaz)
+
+    std_unitaries['Gxpi'] = _np.array([[0.,1.],[1.,0.]],complex)
+    std_unitaries['Gypi'] = _np.array([[0.,-1j],[1j,0.]],complex)
+    std_unitaries['Gzpi'] = _np.array([[1.,0.],[0.,-1.]],complex)  
+
+    std_unitaries['Gxmpi2'] = Ugate(-1*_np.pi/2 * sigmax)
+    std_unitaries['Gympi2'] = Ugate(-1*_np.pi/2 * sigmay)
+    std_unitaries['Gzmpi2'] = Ugate(-1*_np.pi/2 * sigmaz)
     
     H = (1/_np.sqrt(2))*_np.array([[1.,1.],[1.,-1.]],complex) 
     P = _np.array([[1.,0.],[0.,1j]],complex)
@@ -1299,7 +1300,6 @@ def get_standard_gate_unitaries():
 
     std_unitaries['Gt'] = _np.array([[1.,0.],[0.,_np.exp(1j*_np.pi/4)]],complex)
     std_unitaries['Gtdag'] =_np.array([[1.,0.],[0.,_np.exp(-1j*_np.pi/4)]],complex)
-
  
     # Two-qubit gates
     std_unitaries['Gcphase'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.],[0.,0.,0.,-1.]],complex)
