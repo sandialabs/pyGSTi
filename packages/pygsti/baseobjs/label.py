@@ -310,7 +310,7 @@ class LabelStr(Label,str):
     @property
     def qubits(self): #Used in Circuit
         """An alias for sslbls, since commonly these are just qubit indices"""
-        return ()
+        return None
 
     @property
     def number_of_qubits(self): #Used in Circuit
