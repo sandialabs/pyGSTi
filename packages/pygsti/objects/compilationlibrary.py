@@ -18,8 +18,6 @@ from ..baseobjs import Label as _Label
 from .circuit import Circuit as _Circuit
 from .qubitgraph import QubitGraph as _QubitGraph
 
-
-
 class CompilationError(Exception):
     """ A compilation error, raised by :class:`CompilationLibrary` """
     pass
@@ -79,10 +77,7 @@ class CompilationLibrary(_collections.OrderedDict):
 
     def construct_local_compilation_of(self, gatelabel, unitary=None, srep=None, max_iterations=10, verbosity=1):
         """
-        Get a local compilation of `gatelabel`.  
-
-        This function does *not* add this compilation to the library, it merely
-        returns it.  To add it, use :method:`add_local_compilation_of`.
+        Constructs a local compilation of `gatelabel`.  
 
         An existing template is used if one is available, otherwise a new
         template is created using an iterative procedure. Raises
@@ -187,7 +182,43 @@ class CompilationLibrary(_collections.OrderedDict):
             raise CompilationError("Cannot locally compile %s" % str(gatelabel))
 
     def get_local_compilation_of(self, gatelabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):
+        """
+        Gets a new local compilation of `gatelabel`.  
 
+        Parameters
+        ----------
+        gatelabel : Label
+            The label of the gate to compile.  If `gatelabel.name` is a
+            recognized standard Clifford name (e.g. 'H', 'P', 'X', 'CNOT')
+            then no further information is needed.  Otherwise, you must specify
+            either (or both) of `unitary` or `srep`.
+
+        unitary : numpy.ndarray, optional
+            The unitary action of the gate being compiled.  If, as is typical,
+            you're compiling using Clifford gates, then this unitary should
+            correspond to a Clifford operation.  If you specify `unitary`, 
+            you don't need to specify `srep` - it is computed automatically.
+
+        srep : tuple, optional
+            The `(smatrix, svector)` tuple giving the symplectic representation
+            of the gate being compiled.
+
+        max_iterations : int, optional
+            The maximum number of iterations for the iterative compilation 
+            algorithm.
+
+        force : bool, optional
+            If True, then a compilation is recomputed even if `gatelabel`
+            already exists in this `CompilationLibrary`.  Otherwise 
+            compilations are only computed when they are *not* present.
+            
+        verbosity : int, optional
+            An integer >= 0 specifying how much detail to send to stdout.
+
+        Returns
+        -------
+        None
+        """
         if not force and gatelabel in self:
             return self[gatelabel] #don't re-compute unless we're told to
 
@@ -198,10 +229,6 @@ class CompilationLibrary(_collections.OrderedDict):
     def add_local_compilation_of(self, gatelabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):
         """
         Adds a new local compilation of `gatelabel`.  
-
-        An existing template is used if one is available, otherwise a new
-        template is created using an iterative procedure. Raises
-        :class:`CompilationError` when no compilation can be found.
 
         Parameters
         ----------
@@ -325,7 +352,6 @@ class CompilationLibrary(_collections.OrderedDict):
                 all_layers.append( gls_in_layer )
 
         # Find the symplectic action of all possible circuits of length 1 on the qubits
-        # todo -- this might not work with qubit labels differing from integers?
         for layer in all_layers:
             obtained_sreps[layer] = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
                 
@@ -475,10 +501,7 @@ class CompilationLibrary(_collections.OrderedDict):
 
     def construct_nonlocal_compilation_of(self, gatelabel, allowed_filter=None, verbosity=1, check=True):
         """
-        Get a potentially non-local compilation of `gatelabel`.
-
-        This function does *not* add this compilation to the library, it merely 
-        returns it.  To add it, use :method:`add_nonlocal_compilation_of`.
+        Constructs a potentially non-local compilation of `gatelabel`.
 
         This method currently only generates a compilation for a non-local CNOT,
         up to arbitrary Pauli gates, between a pair of unconnected qubits. It
@@ -491,11 +514,6 @@ class CompilationLibrary(_collections.OrderedDict):
         gatelabel : Label
             The label of the gate to compile.  Currently, `gatelabel.name` must
             equal `"CNOT"`.
-
-        force : bool, optional
-            If True, then a compilation is recomputed even if `gatelabel`
-            already exists in this `CompilationLibrary`.  Otherwise 
-            compilations are only computed when they are *not* present.
 
         allowed_filter : dict or set, optional
             Specifies which gates are allowed to be used in this non-local
@@ -516,9 +534,6 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         Circuit
         """
-        #if not force and gatelabel in self:
-        #    return #don't re-compute unless we're told to
-
         assert(gatelabel.number_of_qubits > 1),"1-qubit gates can't be non-local!"
         assert(gatelabel.name == "CNOT" and gatelabel.number_of_qubits == 2), \
             "Only non-local CNOT compilation is currently supported."
@@ -600,7 +615,48 @@ class CompilationLibrary(_collections.OrderedDict):
 
     def get_nonlocal_compilation_of(self, gatelabel, force=False,
                                     allowed_filter=None, verbosity=1, check=True):
+        """
+        Get a potentially non-local compilation of `gatelabel`.
 
+        This function does *not* add this compilation to the library, it merely 
+        returns it. To add it, use :method:`add_nonlocal_compilation_of`.
+
+        This method currently only generates a compilation for a non-local CNOT,
+        up to arbitrary Pauli gates, between a pair of unconnected qubits. It
+        converts this CNOT into a circuit of CNOT gates between connected qubits,
+        using a fixed circuit form. This compilation is not optimal in at least
+        some circumstances.
+        
+        Parameters
+        ----------
+        gatelabel : Label
+            The label of the gate to compile.  Currently, `gatelabel.name` must
+            equal `"CNOT"`.
+
+        force : bool, optional
+            If True, then a compilation is recomputed even if `gatelabel`
+            already exists in this `CompilationLibrary`.  Otherwise 
+            compilations are only computed when they are *not* present.
+
+        allowed_filter : dict or set, optional
+            Specifies which gates are allowed to be used in this non-local
+            compilation.  If a `dict`, keys must be gate names (like
+            `"CNOT"`) and values :class:`QubitGraph` objects indicating 
+            where that gate (if it's present in the library) may be used.
+            If a `set`, then it specifies a set of qubits and any gate in
+            the current library that is confined within that set is allowed.
+            If None, then all gates within the library are allowed.
+
+        verbosity : int, optional
+            An integer >= 0 specifying how much detail to send to stdout.
+
+        check : bool, optional
+            Whether to perform internal consistency checks.
+
+        Returns
+        -------
+        Circuit
+        """
         context_key = None
         if isinstance(allowed_filter, dict):
             context_key = frozenset(allowed_filter.items())
@@ -629,6 +685,11 @@ class CompilationLibrary(_collections.OrderedDict):
         converts this CNOT into a circuit of CNOT gates between connected qubits,
         using a fixed circuit form. This compilation is not optimal in at least
         some circumstances.
+
+        If `allowed_filter` is None then the compilation is recorded under the key `gatelabel`.
+        Otherwise, the compilation is recorded under the key (`gatelabel`,`context_key`) where
+        `context_key` is frozenset(`allowed_filter`) when `allowed_filter` is a set, and
+        `context_key` is frozenset(`allowed_filter`.items()) when `allowed_filter` is a dict.
         
         Parameters
         ----------
@@ -680,7 +741,47 @@ class CompilationLibrary(_collections.OrderedDict):
             self[key] =  circuit
 
     def get_compilation_of(self, gatelabel, force=False, allowed_filter=None, verbosity=1, check=True):
+        """
+        Get a compilation of `gatelabel` in the context of `allowed_filter`, if any. This is
+        often more convenient than querying the CompilationLibrary directly as a dictionary,
+        because:
 
+        1. If allowed_filter is not None, this handles the correct querying of the dictionary
+           to find out if there is a previously saved compilation with this `allowed_filter` context.
+        2. If a compilation is not present, this method will try to compute one.
+
+        This method does *not* store the compilation. To store the compilation first call the
+        method `add_compilation_of()`.
+        
+        Parameters
+        ----------
+        gatelabel : Label
+            The label of the gate to compile.
+
+        force : bool, optional
+            If True, then an attempt is made to recompute a compilation
+            even if `gatelabel` already exists in this `CompilationLibrary`.  
+            Otherwise compilations are only computed when they are *not* present.
+
+        allowed_filter : dict or set, optional
+            Specifies which gates are allowed to be used in this non-local
+            compilation.  If a `dict`, keys must be gate names (like
+            `"CNOT"`) and values :class:`QubitGraph` objects indicating 
+            where that gate (if it's present in the library) may be used.
+            If a `set`, then it specifies a set of qubits and any gate in
+            the current library that is confined within that set is allowed.
+            If None, then all gates within the library are allowed.
+
+        verbosity : int, optional
+            An integer >= 0 specifying how much detail to send to stdout.
+
+        check : bool, optional
+            Whether to perform internal consistency checks.
+
+        Returns
+        -------
+        Circuit
+        """
         # first try and compile the gate locally. Future todo: this will not work properly if the allowed_filter removes gates that
         # the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence should be removed somehow.
         try:
@@ -699,7 +800,42 @@ class CompilationLibrary(_collections.OrderedDict):
         return circuit
 
     def add_compilation_of(self, gatelabel, force=False, allowed_filter=None, verbosity=1, check=True):
+        """
+        Adds a compilation of `gatelabel` in the context of `allowed_filter`, if any. If 
+        `allowed_filter` is None then the compilation is recorded under the key `gatelabel`.
+        Otherwise, the compilation is recorded under the key (`gatelabel`,`context_key`) where
+        `context_key` is frozenset(`allowed_filter`) when `allowed_filter` is a set, and
+        `context_key` is frozenset(`allowed_filter`.items()) when `allowed_filter` is a dict.
+        
+        Parameters
+        ----------
+        gatelabel : Label
+            The label of the gate to compile.
 
+        force : bool, optional
+            If True, then an attempt is made to recompute a compilation
+            even if `gatelabel` already exists in this `CompilationLibrary`.  
+            Otherwise compilations are only computed when they are *not* present.
+
+        allowed_filter : dict or set, optional
+            Specifies which gates are allowed to be used in this non-local
+            compilation.  If a `dict`, keys must be gate names (like
+            `"CNOT"`) and values :class:`QubitGraph` objects indicating 
+            where that gate (if it's present in the library) may be used.
+            If a `set`, then it specifies a set of qubits and any gate in
+            the current library that is confined within that set is allowed.
+            If None, then all gates within the library are allowed.
+
+        verbosity : int, optional
+            An integer >= 0 specifying how much detail to send to stdout.
+
+        check : bool, optional
+            Whether to perform internal consistency checks.
+
+        Returns
+        -------
+        None
+        """
         # first try and compile the gate locally. Future todo: this will not work properly if the allowed_filter removes gates that
         # the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence should be removed somehow.
         try:

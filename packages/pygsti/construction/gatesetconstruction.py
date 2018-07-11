@@ -1255,10 +1255,12 @@ def get_standard_gate_unitaries():
     dictionary) are:
 
     - 'Gi' : the 1Q idle operation
-    - 'Gx','Gy','Gz' : 1Q pi/2 rotations
-    - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
+    - 'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
+    - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations around X, Y and Z.
+    - 'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
+     'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
     - 'Gh' : Hadamard
-    - 'Gp' : phase
+    - 'Gp', 'Gpdag' : phase and inverse phase (an alternative notation/name for Gzpi and Gzmpi2)
     - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
 
     Returns

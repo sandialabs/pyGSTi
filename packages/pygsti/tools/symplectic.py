@@ -250,13 +250,11 @@ def check_valid_clifford(s,p):
 
 def construct_valid_phase_vector(s,pseed):
     """
-    # Todo : fix this docstring
-    #
     Constructs a phase vector that, when paired with the provided symplectic matrix, defines
-    a Clifford gate. Any sympletic matrix is a representation of some Clifford when paired
-    with ...... This finds any such phase vector, starting from the provided
-    seed. If the seed phase vector is -- along with s -- a representation of some Clifford
-    this seed is returned.
+    a Clifford gate. If the seed phase vector, when paired with `s`, represents some Clifford
+    this seed is returned. Otherwise 1 mod 4 is added to the required elements of the `pseed`
+    in order to make it at valid phase vector (which is one of many possible phase vectors
+    that, together with s, define a valid Clifford).
     
     Parameters
     ----------
@@ -269,8 +267,7 @@ def construct_valid_phase_vector(s,pseed):
     Returns
     -------
     numpy array
-        Some p such that (s,p) is the symplectic representation of some Clifford.
-        
+        Some p such that (s,p) is the symplectic representation of some Clifford.        
     """    
     pout = pseed.copy()    
     n = _np.shape(s)[0]//2
@@ -443,8 +440,6 @@ def compose_cliffords(s1,p1,s2,p2):
     
     return s, p
 
-
-
 def symplectic_kronecker(sp_factors):
     """ 
     Construct a single `(s,p)` symplectic (or stabilizer) representation that
@@ -486,8 +481,6 @@ def symplectic_kronecker(sp_factors):
         k += nq
 
     return sout, pout
-
-
 
 def prep_stabilizer_state(nqubits, zvals=None):
     """
@@ -678,7 +671,6 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
         assert(icount == 2) # should never get 1 or 3 (low bit should always be 0)
         return (0.0, 1.0, state_s, state_s, state_p, state_p)
 
-
 #OLD TODO REMOVE
 #def colsum_g(x1,z1,x2,z2):
 #    """ TODO: -- see PRA -- but different b/c 11 := XZ = -iY here, but 11 := Y in PRA
@@ -787,7 +779,6 @@ def colsum_acc(acc_s,acc_p,j,s,p,n):
         #TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
     return
 
-
 def stabilizer_measurement_prob(state_sp_tuple, moutcomes, qubit_filter=None,
                                 return_state=False):
     """
@@ -838,7 +829,6 @@ def stabilizer_measurement_prob(state_sp_tuple, moutcomes, qubit_filter=None,
             
     return (p, state_s, state_p) if return_state else p
 
-
 def embed_clifford(s,p,qubit_inds,n):
     """
     Embeds the `(s,p)` Clifford symplectic representation into 
@@ -883,14 +873,13 @@ def embed_clifford(s,p,qubit_inds,n):
             
     return s_out, p_out
 
-
 def standard_symplectic_representations(gllist=None):
     """
     Returns dictionaries containing the symplectic matrices and phase vectors that represent
     the specified 'standard' Clifford gates, or the representations of all the standard gates
     if no list of gate labels is supplied. These 'standard' Clifford gates are those gates that
     are already known to the code gates (e.g., the label 'CNOT' has a specfic meaning in the
-    code).
+    code), and are recorded as unitaries in "internalgates.py".
     
     Parameters
     ----------
@@ -930,14 +919,13 @@ def standard_symplectic_representations(gllist=None):
     complete_s_dict['P'] = _np.array([[1,0],[1,1]],int)
     complete_s_dict['PH'] = _np.array([[0,1],[1,1]],int)
     complete_s_dict['HP'] = _np.array([[1,1],[1,0]],int)
-    complete_s_dict['HPH'] = _np.array([[1,1],[0,1]],int)
-    
+    complete_s_dict['HPH'] = _np.array([[1,1],[0,1]],int)   
     complete_p_dict['H'] = _np.array([0,0],int)
     complete_p_dict['P'] = _np.array([1,0],int)
     complete_p_dict['PH'] = _np.array([0,1],int)
     complete_p_dict['HP'] = _np.array([3,0],int)
     complete_p_dict['HPH'] = _np.array([0,3],int)
-
+    # The full 1-qubit Cliffor group, using the same labelling as in extras.rb.group
     complete_s_dict['C0'] = _np.array([[1,0],[0,1]],int)
     complete_p_dict['C0'] = _np.array([0,0],int)
     complete_s_dict['C1'] = _np.array([[1,1],[1,0]],int)
@@ -985,13 +973,11 @@ def standard_symplectic_representations(gllist=None):
     complete_s_dict['C22'] = _np.array([[1,1],[0,1]],int)
     complete_p_dict['C22'] = _np.array([2,1],int)
     complete_s_dict['C23'] = _np.array([[1,0],[1,1]],int)
-    complete_p_dict['C23'] = _np.array([3,0],int)
-       
+    complete_p_dict['C23'] = _np.array([3,0],int)      
     # The CNOT gate, CPHASE gate, and SWAP gate.
     complete_s_dict['CNOT'] = _np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int)    
     complete_s_dict['CPHASE'] = _np.array([[1,0,0,0],[0,1,0,0],[0,1,1,0],[1,0,0,1]])
-    complete_s_dict['SWAP'] = _np.array([[0,1,0,0],[1,0,0,0],[0,0,0,1],[0,0,1,0]])
-    
+    complete_s_dict['SWAP'] = _np.array([[0,1,0,0],[1,0,0,0],[0,0,0,1],[0,0,1,0]])   
     complete_p_dict['CNOT'] = _np.array([0,0,0,0],int)
     complete_p_dict['CPHASE'] = _np.array([0,0,0,0],int)
     complete_p_dict['SWAP'] = _np.array([0,0,0,0],int)
@@ -1025,9 +1011,16 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         If not None, a dictionary providing the (symplectic matrix, phase vector)
         tuples associated with each gate label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this 
-        may be None. Otherwise it must be specified.
+        may be None. Alternatively, if `pspec` is specifed and it contains the 
+        gates in `circuit` in a Clifford gateset, it also does not need to be 
+        specified (and it is ignored if it is specified). Otherwise it must be 
+        specified.
 
-    todo tim 
+    pspec : ProcessorSpec, optional
+        A ProcessorSpec that contains a Clifford gateset that defines the symplectic
+        action of all of the gates in `circuit`. If this is not None it over-rides
+        `srep_dict`. Both `pspec` and `srep_dict` can only be None if the circuit
+        contains only gates with names that are hard-coded into pyGSTi.
         
     Returns
     -------
@@ -1050,6 +1043,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     
     for i in range(0,depth):        
         layer = circuit.get_circuit_layer(i)
+        # todo : update so that we don't use this function : because it is much slower than necessary.
         layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict)
         s, p = compose_cliffords(s, p, layer_s, layer_p)
     
@@ -1070,16 +1064,21 @@ def symplectic_rep_of_clifford_layer(layer, n, Qlabels=None, srep_dict=None):
     n : int
         The total number of qubits.
 
-    Qlabels :
-        todo 
+    Qlabels : list, optional
+        A list of all the qubit labels. If the layer is over qubits that are not
+        labelled by integers 0 to n-1 then it is necessary to specify this list.
+        Note that this should contain *all* the qubit labels for the circuit that
+        this is a layer from, and they should be ordered as in that circuit, otherwise
+        the symplectic rep returned might not be of the correct dimension or of the
+        correct order.
         
     srep_dict : dict, optional
         If not None, a dictionary providing the (symplectic matrix, phase vector)
         tuples associated with each gate label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this 
-        may be None. Otherwise it must be specified.
-
-    todo tim 
+        may be None. Otherwise it must be specified. If the layer contains some 
+        standard gates it is not necesary to specify the symplectic represenation
+        for those gates.
 
     Returns
     -------
@@ -1091,11 +1090,8 @@ def symplectic_rep_of_clifford_layer(layer, n, Qlabels=None, srep_dict=None):
         The phase vector representing the Clifford implement by specified 
         circuit layer
     """
-    #
-    # Todo: this method is currently pretty stupid. It is probably useful to keep it, but for
-    # the circuit function above to not use it, and instead just perform the action of each 
-    # gate.
-    #
+    # This method is currently pretty stupid, and uses a brute-force matrix construction.
+    # Perhaps this should be udpate at some point.
     sreps = standard_symplectic_representations()    
     if srep_dict is not None: sreps.update(srep_dict)
     # todo -- fix this function so that it works on > 2 qubit gates.
@@ -1140,10 +1136,23 @@ def symplectic_rep_of_clifford_layer(layer, n, Qlabels=None, srep_dict=None):
     return s, p
 
 def single_qubit_clifford_symplectic_group_relations():
-    
-    #
-    # TODO : docstring (TIM), and think about whether this function does what we want or not.
-    #
+    """
+    Returns a dictionary containing the group relationship between
+    the 'I', 'H', 'P' 'HP', 'PH', and 'HPH' up-to-Paulis operators.
+    The returned dictionary contains keys (A,B) for all A and B in
+    the above list. The value for key (A,B) is C if BA = C x some 
+    Pauli operator. E,g, ('P','P') = 'I'.
+
+    This dictionary is important for Compiling multi-qubit Clifford 
+    gates without unneccessary 1-qubit gate over-heads. But note that
+    this dictionary should not be used for compressing circuits containing
+    these gates when the exact action of the circuit is of importance (not
+    only the up-to-Paulis action of the circuit).
+
+    Returns
+    -------
+    dict
+    """
     group_relations = {}
     
     group_relations['I','I'] = 'I'
@@ -1440,7 +1449,27 @@ def random_clifford(n):
     return s,p
 
 def random_phase_vector(s,n):
-    # Todo : docstring
+    """
+    Generates a uniformly random phase vector that, together with the 
+    provided symplectic matrix, define a valid n-qubit Clifford. In 
+    combination with a uniformly random `s` the returned `p` defines
+    a uniformly random Clifford gate.
+
+    Parameters
+    ----------
+    n : int 
+        The number of qubits the Clifford group is over.
+    
+    s : numpy array
+        The symplectic matrix to construct a random phase vector
+    
+    Returns
+    -------
+    p : numpy array
+        A phase vector sampled uniformly at random from all those phase
+        vectors that, as a pair with `s`, define a valid n-qubit Clifford.
+             
+    """
     p = _np.zeros(2*n,int)
             
     # A matrix to hold all possible phase vectors -- half of which do not, when
@@ -1476,11 +1505,13 @@ def random_phase_vector(s,n):
     return p
 
 def bitstring_for_pauli(p):
-    
+    """
+    The state, represented by a bitstring, that the Pauli operator represented by
+    the phase-vector p creates when acting on the standard input state.
+    """
     n = len(p)//2
     bitstring = p[n:]
-    bitstring[bitstring>0] = 1
-    
+    bitstring[bitstring>0] = 1   
     return list(bitstring)
 
 def symplectic_action(m, glabel, qlist, optype='row'):
@@ -1655,8 +1686,6 @@ def bitstring_to_int(b,nn):
         tmp = tmp*2 
         
     return output
-
-
 
 def find_symplectic_transvection(x,y):
     """
