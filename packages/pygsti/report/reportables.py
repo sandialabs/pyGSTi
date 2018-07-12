@@ -32,7 +32,7 @@ def _projectToValidProb(p, tol=1e-9):
     return p
 
 def _make_reportable_qty_or_dict(f0, df=None, nonMarkovianEBs=False):
-    """ Just adds special processing with f0 is a dict, where we 
+    """ Just adds special processing with f0 is a dict, where we
         return a dict or ReportableQtys rather than a single
         ReportableQty of the dict.
     """
@@ -47,7 +47,7 @@ def _make_reportable_qty_or_dict(f0, df=None, nonMarkovianEBs=False):
         return _ReportableQty(f0, df, nonMarkovianEBs)
 
 def evaluate(gatesetFn, cri=None, verbosity=0):
-    """ 
+    """
     Evaluate a GateSetFunction object using confidence region information
 
     Parameters
@@ -69,7 +69,7 @@ def evaluate(gatesetFn, cri=None, verbosity=0):
     """
     if gatesetFn is None: # so you can set fn to None when they're missing (e.g. diamond norm)
         return _ReportableQty(_np.nan)
-    
+
     if cri:
         nmEBs = bool(cri.get_errobar_type() == "non-markovian")
         df, f0 =  cri.get_fn_confidence_interval(
@@ -120,11 +120,11 @@ class Gate_eigenvalues(_gsf.GateSetFunction):
     def __init__(self, gateset, gatelabel):
         self.gatelabel = gatelabel
         _gsf.GateSetFunction.__init__(self, gateset, ["gate:" + str(gatelabel)])
-            
+
     def evaluate(self, gateset):
         """Evaluate at `gateset`"""
         evals,evecs = _np.linalg.eig(gateset.gates[self.gatelabel])
-        
+
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup:abs(tup[1]), reverse=True)
         indx,evals = zip(*ev_list)
@@ -162,7 +162,7 @@ class Gate_eigenvalues(_gsf.GateSetFunction):
 #        self.evB = _np.linalg.eigvals(B)
 #        self.gatestring = gatestring
 #        _gsf.GateSetFunction.__init__(self, gatesetA, ["all"])
-#            
+#
 #    def evaluate(self, gateset):
 #        Mx = gateset.product(self.gatestring)
 #        return _np.array(sorted(_np.linalg.eigvals(),
@@ -188,12 +188,12 @@ class Gatestring_eigenvalues(_gsf.GateSetFunction):
     def __init__(self, gateset, gatestring):
         self.gatestring = gatestring
         _gsf.GateSetFunction.__init__(self, gateset, ["all"])
-            
+
     def evaluate(self, gateset):
         """Evaluate at `gateset`"""
         Mx = gateset.product(self.gatestring)
         evals,evecs = _np.linalg.eig(Mx)
-        
+
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup:abs(tup[1]), reverse=True)
         indx,evals = zip(*ev_list)
@@ -223,7 +223,7 @@ class Gatestring_eigenvalues(_gsf.GateSetFunction):
 #Gatestring_eigenvalues = _gsf.gatesetfn_factory(gatestring_eigenvalues)
 ## init args == (gateset, gatestring)
 
-  
+
 def rel_gatestring_eigenvalues(gatesetA, gatesetB, gatestring):
     """Eigenvalues of dot(productB(gatestring)^-1, productA(gatestring))"""
     A = gatesetA.product(gatestring) # "gate"
@@ -231,7 +231,7 @@ def rel_gatestring_eigenvalues(gatesetA, gatesetB, gatestring):
     rel_gate = _np.dot(_np.linalg.inv(B), A) # "relative gate" == target^{-1} * gate
     return _np.linalg.eigvals(rel_gate)
 Rel_gatestring_eigenvalues = _gsf.gatesetfn_factory(rel_gatestring_eigenvalues)
-# init args == (gatesetA, gatesetB, gatestring) 
+# init args == (gatesetA, gatesetB, gatestring)
 
 
 def gatestring_fro_diff(gatesetA, gatesetB, gatestring):
@@ -252,7 +252,7 @@ Gatestring_entanglement_infidelity = _gsf.gatesetfn_factory(gatestring_entanglem
 # init args == (gatesetA, gatesetB, gatestring)
 
 def gatestring_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
-    """ Average gate infidelity between productA(gatestring) 
+    """ Average gate infidelity between productA(gatestring)
         and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
@@ -262,7 +262,7 @@ Gatestring_avg_gate_infidelity = _gsf.gatesetfn_factory(gatestring_avg_gate_infi
 
 
 def gatestring_jt_diff(gatesetA, gatesetB, gatestring):
-    """ Jamiolkowski trace distance between productA(gatestring) 
+    """ Jamiolkowski trace distance between productA(gatestring)
         and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
@@ -281,7 +281,7 @@ try:
             self.B = gatesetB.product(gatestring)
             self.d = int(round(_np.sqrt(gatesetA.dim)))
             _gsf.GateSetFunction.__init__(self, gatesetA, ["all"])
-                
+
         def evaluate(self, gateset):
             """Evaluate this function at `gateset`"""
             A = gateset.product(self.gatestring)
@@ -289,7 +289,7 @@ try:
                                        return_x=True)
             self.W = W
             return 0.5*dm
-    
+
         def evaluate_nearby(self, nearby_gateset):
             """Evaluate at a nearby gate set"""
             mxBasis = nearby_gateset.basis
@@ -312,8 +312,8 @@ except ImportError:
 
 
 def gatestring_nonunitary_entanglement_infidelity(gatesetA, gatesetB, gatestring):
-    """ Nonunitary entanglement infidelity between productA(gatestring) 
-        and productB(gatestring)"""    
+    """ Nonunitary entanglement infidelity between productA(gatestring)
+        and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return nonunitary_entanglement_infidelity(A,B,gatesetB.basis)
@@ -322,8 +322,8 @@ Gatestring_nonunitary_entanglement_infidelity = _gsf.gatesetfn_factory(gatestrin
 
 
 def gatestring_nonunitary_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
-    """ Nonunitary average gate infidelity between productA(gatestring) 
-        and productB(gatestring)"""    
+    """ Nonunitary average gate infidelity between productA(gatestring)
+        and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return nonunitary_avg_gate_infidelity(A,B,gatesetB.basis)
@@ -332,8 +332,8 @@ Gatestring_nonunitary_avg_gate_infidelity = _gsf.gatesetfn_factory(gatestring_no
 
 
 def gatestring_eigenvalue_entanglement_infidelity(gatesetA, gatesetB, gatestring):
-    """ Eigenvalue entanglement infidelity between productA(gatestring) 
-        and productB(gatestring)"""    
+    """ Eigenvalue entanglement infidelity between productA(gatestring)
+        and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return eigenvalue_entanglement_infidelity(A,B,gatesetB.basis)
@@ -342,8 +342,8 @@ Gatestring_eigenvalue_entanglement_infidelity = _gsf.gatesetfn_factory(gatestrin
 
 
 def gatestring_eigenvalue_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
-    """ Eigenvalue average gate infidelity between productA(gatestring) 
-        and productB(gatestring)"""    
+    """ Eigenvalue average gate infidelity between productA(gatestring)
+        and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return eigenvalue_avg_gate_infidelity(A,B,gatesetB.basis)
@@ -351,8 +351,8 @@ Gatestring_eigenvalue_avg_gate_infidelity = _gsf.gatesetfn_factory(gatestring_ei
   # init args == (gatesetA, gatesetB, gatestring)
 
 def gatestring_eigenvalue_nonunitary_entanglement_infidelity(gatesetA, gatesetB, gatestring):
-    """ Eigenvalue nonunitary entanglement infidelity between 
-        productA(gatestring) and productB(gatestring)"""    
+    """ Eigenvalue nonunitary entanglement infidelity between
+        productA(gatestring) and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return eigenvalue_nonunitary_entanglement_infidelity(A,B,gatesetB.basis)
@@ -361,18 +361,18 @@ Gatestring_eigenvalue_nonunitary_entanglement_infidelity = _gsf.gatesetfn_factor
 
 
 def gatestring_eigenvalue_nonunitary_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
-    """ Eigenvalue nonunitary average gate infidelity between 
-        productA(gatestring) and productB(gatestring)"""    
+    """ Eigenvalue nonunitary average gate infidelity between
+        productA(gatestring) and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return eigenvalue_nonunitary_avg_gate_infidelity(A,B,gatesetB.basis)
 Gatestring_eigenvalue_nonunitary_avg_gate_infidelity = _gsf.gatesetfn_factory(gatestring_eigenvalue_nonunitary_avg_gate_infidelity)
   # init args == (gatesetA, gatesetB, gatestring)
 
-  
+
 def gatestring_eigenvalue_diamondnorm(gatesetA, gatesetB, gatestring):
-    """ Eigenvalue diamond distance between 
-        productA(gatestring) and productB(gatestring)"""    
+    """ Eigenvalue diamond distance between
+        productA(gatestring) and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return eigenvalue_diamondnorm(A,B,gatesetB.basis)
@@ -381,8 +381,8 @@ Gatestring_eigenvalue_diamondnorm = _gsf.gatesetfn_factory(gatestring_eigenvalue
 
 
 def gatestring_eigenvalue_nonunitary_diamondnorm(gatesetA, gatesetB, gatestring):
-    """ Eigenvalue nonunitary diamond distance between 
-        productA(gatestring) and productB(gatestring)"""    
+    """ Eigenvalue nonunitary diamond distance between
+        productA(gatestring) and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return eigenvalue_nonunitary_diamondnorm(A,B,gatesetB.basis)
@@ -391,8 +391,8 @@ Gatestring_eigenvalue_nonunitary_diamondnorm = _gsf.gatesetfn_factory(gatestring
 
 
 def povm_entanglement_infidelity(gatesetA, gatesetB, povmlbl):
-    """ 
-    POVM entanglement infidelity between `gatesetA` and `gatesetB`, equal to 
+    """
+    POVM entanglement infidelity between `gatesetA` and `gatesetB`, equal to
     `1 - entanglement_fidelity(POVM_MAP)` where `POVM_MAP` is the extension
     of the POVM from the classical space of k-outcomes to the space of
     (diagonal) k by k density matrices.
@@ -402,7 +402,7 @@ POVM_entanglement_infidelity = _gsf.povmfn_factory(povm_entanglement_infidelity)
 # init args == (gateset1, gatesetB, povmlbl)
 
 def povm_jt_diff(gatesetA, gatesetB, povmlbl):
-    """ 
+    """
     POVM Jamiolkowski trace distance between `gatesetA` and `gatesetB`, equal to
     `Jamiolkowski_trace_distance(POVM_MAP)` where `POVM_MAP` is the extension
     of the POVM from the classical space of k-outcomes to the space of
@@ -416,7 +416,7 @@ try:
     import cvxpy as _cvxpy # pylint: disable=unused-import
 
     def povm_half_diamond_norm(gatesetA, gatesetB, povmlbl):
-        """ 
+        """
         Half the POVM diamond distance between `gatesetA` and `gatesetB`, equal
         to `half_diamond_dist(POVM_MAP)` where `POVM_MAP` is the extension
         of the POVM from the classical space of k-outcomes to the space of
@@ -484,7 +484,7 @@ Maximum_trace_dist = _gsf.gatefn_factory(maximum_trace_dist)
 def angles_btwn_rotn_axes(gateset):
     """
     Array of angles between the rotation axes of the gates of `gateset`.
-    
+
     Returns
     -------
     numpy.ndarray
@@ -578,7 +578,7 @@ try:
             self.B = gatesetB.gates[gatelabel]
             self.d = int(round(_np.sqrt(gatesetA.dim)))
             _gsf.GateSetFunction.__init__(self, gatesetA, ["gate:"+gatelabel])
-                
+
         def evaluate(self, gateset):
             """Evaluate at `gatesetA = gateset` """
             gl = self.gatelabel
@@ -586,7 +586,7 @@ try:
                                        return_x=True)
             self.W = W
             return 0.5*dm
-    
+
         def evaluate_nearby(self, nearby_gateset):
             """Evaluates at a nearby gate set"""
             gl = self.gatelabel; mxBasis = nearby_gateset.basis
@@ -608,6 +608,7 @@ except ImportError:
 
 def std_unitarity(A,B, mxBasis):
     """ A gauge-invariant quantity that behaves like the unitarity """
+    return -99999999999
     from ..extras.rb import rbutils as _rbutils
     Lambda = _np.dot(A, _np.linalg.inv(B))
     return _rbutils.unitarity( Lambda, mxBasis )
@@ -618,7 +619,7 @@ def eigenvalue_unitarity(A,B):
     d2 = Lambda.shape[0]
     lmb = _np.linalg.eigvals(Lambda)
     return (_np.real(_np.vdot(lmb,lmb)) - 1.0) / (d2 - 1.0)
-    
+
 def nonunitary_entanglement_infidelity(A, B, mxBasis):
     """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the unitarity of A*B^{-1} """
     d2 = A.shape[0]; U = std_unitarity(A,B,mxBasis)
@@ -701,6 +702,7 @@ Eigenvalue_nonunitary_diamondnorm = _gsf.gatesfn_factory(eigenvalue_nonunitary_d
 def avg_gate_infidelity(A, B, mxBasis):
     """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
     d = _np.sqrt(A.shape[0])
+    return -99999999999
     from ..extras.rb import rbutils as _rbutils
     return _rbutils.average_gate_infidelity(A,B, d, mxBasis)
 Avg_gate_infidelity = _gsf.gatesfn_factory(avg_gate_infidelity)
@@ -779,24 +781,24 @@ def errgen_and_projections(errgen, mxBasis):
     Returns
     -------
     dict
-        Dictionary of 'error generator', '*X* projections', and 
-        '*X* projection power' keys, where *X* is 'hamiltonian', 
+        Dictionary of 'error generator', '*X* projections', and
+        '*X* projection power' keys, where *X* is 'hamiltonian',
         'stochastic', and 'affine'.
     """
     ret = {}
     egnorm = _np.linalg.norm(errgen.flatten())
     ret['error generator'] = errgen
     proj, scale = \
-        _tools.std_errgen_projections( 
+        _tools.std_errgen_projections(
             errgen,"hamiltonian",mxBasis.name,mxBasis,return_scale_fctr=True)
         # mxBasis.name because projector dim is not the same as gate dim
     ret['hamiltonian projections'] = proj
     ret['hamiltonian projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2 \
                                            if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
       #sum of squared projections of normalized error generator onto normalized projectors
-      
+
     proj, scale = \
-        _tools.std_errgen_projections( 
+        _tools.std_errgen_projections(
             errgen,"stochastic",mxBasis.name,mxBasis,return_scale_fctr=True)
         # mxBasis.name because projector dim is not the same as gate dim
     ret['stochastic projections'] = proj
@@ -805,13 +807,13 @@ def errgen_and_projections(errgen, mxBasis):
       #sum of squared projections of normalized error generator onto normalized projectors
 
     proj, scale = \
-        _tools.std_errgen_projections( 
+        _tools.std_errgen_projections(
             errgen,"affine",mxBasis.name,mxBasis,return_scale_fctr=True)
         # mxBasis.name because projector dim is not the same as gate dim
     ret['affine projections'] = proj
     ret['affine projection power'] = float(_np.sum(proj**2)/scale**2) / egnorm**2 \
                                      if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
-      #sum of squared projections of normalized error generator onto normalized projectors  
+      #sum of squared projections of normalized error generator onto normalized projectors
     return ret
 
 def logTiG_and_projections(A, B, mxBasis):
@@ -861,17 +863,17 @@ def robust_logGTi_and_projections(gatesetA, gatesetB, syntheticIdleStrs):
     gateLabels = [gl for gl,gate in gatesetB.gates.items() if not _np.allclose(gate, Id)]
     idLabels = [gl for gl,gate in gatesetB.gates.items() if _np.allclose(gate, Id)]
     nGates = len(gateLabels)
-    
+
     error_superops = []; ptype_counts = {}; ptype_scaleFctrs = {}
     error_labels = []
     for ptype in ("hamiltonian","stochastic","affine"):
         lindbladMxs = _tools.std_error_generators(gatesetA.dim, ptype,
                                                   mxBasis.name) # in std basis
         lindbladMxBasis = _Basis(mxBasis.name, int(round(_np.sqrt(gatesetA.dim))))
-        
+
         lindbladMxs = lindbladMxs[1:] #skip [0] == Identity
         lbls = lindbladMxBasis.labels[1:]
-        
+
         scaleFctr = _tools.std_scale_factor(gatesetA.dim, ptype)
         #if ptype == "hamiltonian": scaleFctr *= 2.0 #HACK (DEAL LATER)
         #if ptype == "affine": scaleFctr *= 0.5 #HACK
@@ -896,7 +898,7 @@ def robust_logGTi_and_projections(gatesetA, gatesetB, syntheticIdleStrs):
     def get_projection_vec(errgen):
         proj = []
         for ptype in ("hamiltonian","stochastic","affine"):
-            proj.append( _tools.std_errgen_projections( 
+            proj.append( _tools.std_errgen_projections(
                 errgen,ptype,mxBasis.name,mxBasis)[1:] ) #skip [0] == Identity
         return _np.concatenate( proj )
 
@@ -913,9 +915,9 @@ def robust_logGTi_and_projections(gatesetA, gatesetB, syntheticIdleStrs):
     #            for ptype in ("hamiltonian","stochastic","affine"):
     #                ret['%s %s projections' % (gl, ptype)] = _np.zeros(ptype_counts[ptype], 'd')
     #                ret['%s %s projections power' % (gl, ptype)] = 0
-    #            
+    #
     #    return ret
-    
+
     def firstOrderNoise( gstr, errSupOp, glWithErr ):
         noise = _np.zeros((gatesetB.dim,gatesetB.dim), 'd')
         for n,gl in enumerate(gstr):
@@ -925,7 +927,7 @@ def robust_logGTi_and_projections(gatesetA, gatesetB, syntheticIdleStrs):
         #DEBUG
         #print("first order noise (%s,%s) Choi superop : " % (str(gstr),glWithErr))
         #_tools.print_mx( _tools.jamiolkowski_iso(noise, mxBasis, mxBasis) ,width=4,prec=1)
-        
+
         return noise #_tools.jamiolkowski_iso(noise, mxBasis, mxBasis)
 
     def errorGeneratorJacobian(gstr):
@@ -962,11 +964,11 @@ def robust_logGTi_and_projections(gatesetA, gatesetB, syntheticIdleStrs):
         else:
             runningJac = _np.concatenate((runningJac,jacSI), axis=0)
             runningY = _np.concatenate( (runningY,SIproj), axis=0)
-            
+
         rank = _np.linalg.matrix_rank(runningJac)
 
         print("DB: Added synthetic idle %s => rank=%d <?> %d (shape=%s; %s)" % (str(s),rank,nSuperOps*nGates,str(runningJac.shape),str(runningY.shape)))
-        
+
         #if rank >= nSuperOps*nGates: #then we can extract error terms for the gates
         #    # J*vec_gateErrs = Y => vec_gateErrs = (J^T*J)^-1 J^T*Y (lin least squares)
         #    J,JT = runningJac, runningJac.T
@@ -989,7 +991,7 @@ def robust_logGTi_and_projections(gatesetA, gatesetB, syntheticIdleStrs):
         combo_str = " + ".join([ "%.1f*%s" % (c,errLbl) for c,errLbl in zip(combo,gate_error_labels) if abs(c) > COEFF_TOL ])
         ret[combo_str] = val
     return ret
-    
+
 
 Robust_LogGTi_and_projections = _gsf.gatesetfn_factory(robust_logGTi_and_projections)
 # init args == (gatesetA, gatesetB, syntheticIdleStrs)
@@ -1010,7 +1012,7 @@ def general_decomposition(gatesetA, gatesetB):
     decomp = {}
     gateLabels = list(gatesetA.gates.keys())  # gate labels
     mxBasis = gatesetB.basis # B is usually the target which has a well-defined basis
-    
+
     for gl in gateLabels:
         gate = gatesetA.gates[gl]
         targetGate = gatesetB.gates[gl]
@@ -1018,27 +1020,27 @@ def general_decomposition(gatesetA, gatesetB):
 
         target_evals = _np.linalg.eigvals(targetGate)
         if _np.any(_np.isclose(target_evals,-1.0)):
-            target_logG = _tools.unitary_superoperator_matrix_log(targetGate, mxBasis)        
+            target_logG = _tools.unitary_superoperator_matrix_log(targetGate, mxBasis)
             logG = _tools.approximate_matrix_log(gate, target_logG)
         else:
             logG = _tools.real_matrix_log(gate, "warn")
             if _np.linalg.norm(logG.imag) > 1e-6:
                 _warnings.warn("Truncating imaginary logarithm!")
                 logG = _np.real(logG)
-                
+
         decomp[gl + ' log inexactness'] = _np.linalg.norm(_spl.expm(logG)-gate)
-    
+
         hamProjs, hamGens = _tools.std_errgen_projections(
             logG, "hamiltonian", mxBasis.name, mxBasis, return_generators=True)
         norm = _np.linalg.norm(hamProjs)
         decomp[gl + ' axis'] = hamProjs / norm if (norm > 1e-15) else hamProjs
-            
+
         decomp[gl + ' angle'] = norm * 2.0 / _np.pi
         # Units: hamProjs (and norm) are already in "Hamiltonian-coefficient" units,
         # (see 'std_scale_factor' fn), but because of convention the "angle" is equal
         # to *twice* this coefficient (e.g. a X(pi/2) rotn is exp( i pi/4 X ) ),
         # thus the factor of 2.0 above.
-    
+
         basis_mxs = mxBasis.get_composite_matrices()
         scalings = [ ( _np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
                        if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0 )
@@ -1048,13 +1050,13 @@ def general_decomposition(gatesetA, gatesetB):
         decomp[gl + ' hamiltonian eigenvalues'] = _np.array(_np.linalg.eigvals(hamMx))
 
     for gl in gateLabels:
-        for gl_other in gateLabels:            
+        for gl_other in gateLabels:
             rotnAngle = decomp[str(gl) + ' angle']
             rotnAngle_other = decomp[str(gl_other) + ' angle']
 
             if gl == gl_other or abs(rotnAngle) < 1e-4 or abs(rotnAngle_other) < 1e-4:
                 decomp[str(gl) + "," + str(gl_other) + " axis angle"] = 10000.0 #sentinel for irrelevant angle
-    
+
             real_dot = _np.clip(
                 _np.real(_np.dot(decomp[str(gl) + ' axis'].flatten(),
                                  decomp[str(gl_other) + ' axis'].flatten())),
@@ -1071,16 +1073,18 @@ def average_gateset_infidelity(gatesetA, gatesetB):
     """ Average gate set infidelity """
     # B is target gateset usually but must be "gatesetB" b/c of decorator coding...
     from ..extras.rb import rbutils as _rbutils
+    return -99999999999
     return _rbutils.average_gateset_infidelity(gatesetA,gatesetB)
 Average_gateset_infidelity = _gsf.gatesetfn_factory(average_gateset_infidelity)
 # init args == (gatesetA, gatesetB)
 
 
 def predicted_rb_number(gatesetA, gatesetB):
-    """ 
+    """
     Prediction of RB number based on estimated (A) and target (B) gate sets
     """
-    from ..extras.rb import rbutils as _rbutils
+    return -9999999999999999999999999999999999999999
+    #from ..extras.rb import rbutils as _rbutils
     return _rbutils.predicted_RB_number(gatesetA, gatesetB)
 Predicted_rb_number = _gsf.gatesetfn_factory(predicted_rb_number)
 # init args == (gatesetA, gatesetB)
@@ -1127,7 +1131,7 @@ Vec_as_stdmx_eigenvalues = _gsf.vecfn_factory(vec_as_stdmx_eigenvalues)
 
 
 def info_of_gatefn_by_name(name):
-    """ 
+    """
     Returns a nice human-readable name and tooltip for a given gate-function
     abbreviation.
 
@@ -1200,7 +1204,7 @@ def info_of_gatefn_by_name(name):
 
 def evaluate_gatefn_by_name(name, gateset, targetGateset, gateLabelOrString,
                             confidenceRegionInfo):
-    """ 
+    """
     Evaluates that gate-function named by the abbreviation `name`.
 
     Parameters
@@ -1210,7 +1214,7 @@ def evaluate_gatefn_by_name(name, gateset, targetGateset, gateLabelOrString,
         same as those of :func:`info_of_gatefn_by_name`.
 
     gateset, targetGateSet : GateSet
-        The gatesets to compare.  Only the element or product given by 
+        The gatesets to compare.  Only the element or product given by
         `gateLabelOrString` is compared using the named gate-function.
 
     gateLabelOrString : str or GateString or tuple
@@ -1220,7 +1224,7 @@ def evaluate_gatefn_by_name(name, gateset, targetGateset, gateLabelOrString,
 
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region  used to compute error
-        intervals.    
+        intervals.
 
     Returns
     -------
@@ -1228,7 +1232,7 @@ def evaluate_gatefn_by_name(name, gateset, targetGateset, gateLabelOrString,
     """
     gl = gateLabelOrString
     b = bool(_tools.isstr(gl)) #whether this is a gate label or a string
-    
+
     if name == "inf":
         fn = Entanglement_infidelity if b else \
              Gatestring_entanglement_infidelity
