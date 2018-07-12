@@ -1477,24 +1477,74 @@ class Circuit(_gstr.GateString):
             
         return quil  
     
-    def simulate(self, gateset): 
+    def simulate(self, gateset, return_all_outcomes=False): 
         """
         Compute the outcome probabilities of this Circuit using `gateset` as a
-        model for the gates.
+        model for the gates. The order of the outcome strings (e.g., '0100') is
+        w.r.t to the ordering of the qubits in the circuit. That is, the ith element
+        of the outcome string corresponds to the qubit with label self.qubit_labels[i].
 
         Parameters
         ----------
         gateset : GateSet
             A description of the gate and SPAM operations corresponding to the
-            labels stored in this Circuit.
+            labels stored in this Circuit. If this gateset is over more qubits 
+            than the circuit, the output will be the probabilities for the qubits 
+            in the circuit marginalized over the other qubits. But, the simulation
+            is over the full set of qubits in the gateset, and so the time taken for
+            the simulation scales with the number of qubits in the gateset. For
+            models whereby "spectator" qubits do not affect the qubits in this
+            circuit (such as with perfect gates), more efficient simulations will
+            be obtained by first creating a gateset only over the qubits in this 
+            circuit.
+
+        return_all_outcomes: bool, optional
+            Whether to include outcomes in the returned dictionary that have zero
+            probability. When False, the threshold for discarding an outcome as z
+            ero probability is 10^-12.
 
         Returns
         -------
         probs : dictionary
-            A dictionary with keys equal to the possible outcomes and values
-            that are float probabilities.
+            A dictionary with keys equal to all (`return_all_outcomes` is True) or 
+            possibly only some (`return_all_outcomes` is False) of the possible 
+            outcomes, and values that are float probabilities.
         """
-        return gateset.probs(self)
+        # These results is a dict with strings of outcomes (normally bits) ordered according to the
+        # state space ordering in the gateset.
+        results = gateset.probs(self)
+
+        # The state-space labels of the gateset.
+        ssls = list(gateset.stateSpaceLabels.labels[0])
+        
+        # This relabels a outcomes string, and drops state space labels not in the circuit.
+        def parse_outcome_string(outcome):
+            relabelled_outcome = ''
+            for l in self.line_labels: relabelled_outcome  += outcome[0][ssls.index(l)]
+            return relabelled_outcome
+        
+        # Find the full set of relabelled outcomes, which will be the keys to the output dict.
+        all_relabelled_outcomes = []
+        for outcome in list(results.keys()):
+            relabelled_outcome = parse_outcome_string(outcome)
+            if relabelled_outcome not in all_relabelled_outcomes: all_relabelled_outcomes.append(relabelled_outcome)
+
+        relabelled_results = {}
+        if return_all_outcomes:
+            # Set up a dict for the output results, and init all the probs to 0.
+            relabelled_results = {relabelled_outcome : 0. for relabelled_outcome in all_relabelled_outcomes}
+            # Add in the results: this rearranges and marginalizes the results.
+            for outcome in list(results.keys()):
+                relabelled_results[parse_outcome_string(outcome)] += results[outcome]
+        else:
+            for outcome in list(results.keys()):
+                if results[outcome] > 10**-12:
+                    try:
+                        relabelled_results[parse_outcome_string(outcome)] += results[outcome]
+                    except:
+                        relabelled_results[parse_outcome_string(outcome)] = results[outcome]
+
+        return relabelled_results
     
     def done_editing(self):
         """

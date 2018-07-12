@@ -465,33 +465,6 @@ class ProcessorSpec(object):
                             self.gate_inverse[gname1] = gname2
                             self.gate_inverse[gname2] = gname1
            
-    def simulate(self, circuit, modelname):
-        """
-        Compute the outcome probabilities of the circuit `circuit` (a Circuit object)
-        using the GateSet given by self.models[`modelname`] as a model for the gates.
-        This is a wrap-around for the simulator in the specified GateSet. See the
-        relevant GateSet.probs() docstring for more information.
-
-        Parameters
-        ----------
-        circuit : Circuit
-            The circuit to simulate. Except for the circuit.identity gate, this circuit
-            should contain only gates (as `Label` objects) that are also in the GateSet
-            specified by `modelname`.
-
-        modelname : str
-            A key to a GateSet, stored in the dictionary self.models. This GateSet is
-            a description of the gate and SPAM operations corresponding to the labels 
-            stored in the `circuit` Circuit object.
-
-        Returns
-        -------
-        probs : dictionary
-            A dictionary with keys equal to the possible outcomes and values
-            that are float probabilities.
-        """      
-        return self.models[modelname].probs(circuit)
-
     # Tim is going to replace this at some point with a useful way to specify how "costly" using different qubits/gates is estimated to be, so that
     # Clifford compilers etc can take this into account.                        
     # def construct_compiler_costs(self, custom_connectivity=None):
