@@ -156,7 +156,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
         for (i,gateStr) in enumerate(ds_gatestring_list):
             cnts = dataset[gateStr].counts
             totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
-            countVecMx[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+            countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
         #could add to cache, but we don't have option of gateStringWeights
         # here yet, so let's be conservative and not do this:
@@ -389,7 +389,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     for (i,gateStr) in enumerate(ds_gatestring_list):
         cnts = dataset[gateStr].counts
         totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
-        countVecMx[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+        countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
     #OLD
     #freqs = cntVecMx / totalCntVec[None,:]
@@ -645,7 +645,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     for (i,gateStr) in enumerate(ds_subtree_gatestring_list):
         cnts = dataset[gateStr].counts
         totalCntVec_all[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
-        cntVecMx_all[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+        cntVecMx_all[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
     tStart = _time.time()
 
@@ -847,7 +847,7 @@ def logl_approximate_hessian(gateset, dataset, gatestring_list=None,
     for (i,gateStr) in enumerate(ds_gatestring_list):
         cnts = dataset[gateStr].counts
         totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
-        cntVecMx[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+        cntVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
     gateset.bulk_fill_dprobs(dprobs, evalTree, prMxToFill=probs,
                              clipTo=probClipInterval, check=check, comm=comm,
@@ -1013,7 +1013,7 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
         for (i,gateStr) in enumerate(gatestring_list):
             cnts = dataset[gateStr].counts
             totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
-            countVecMx[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+            countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
         #could add to cache, but we don't have option of gateStringWeights
         # here yet, so let's be conservative and not do this:

@@ -1162,7 +1162,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         for (i,gateStr) in enumerate(dsGateStringsToUse):
             cnts = dataset[gateStr].counts
             N[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
-            cntVecMx[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+            cntVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
             if useFreqWeightedChiSq:
                 wts = []
                 for x in outcomes_lookup[i]:
@@ -2346,7 +2346,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         for (i,gateStr) in enumerate(dsGateStringsToUse):
             cnts = dataset[gateStr].counts
             totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
-            cntVecMx[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+            cntVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
             # OLD: totalCntVec[ lookup[i] ] = dataset[gateStr].total
             # OLD: cntVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
 
