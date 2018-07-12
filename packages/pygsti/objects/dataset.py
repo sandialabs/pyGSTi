@@ -175,7 +175,16 @@ class DataSetRow(object):
         elif isinstance(indexOrOutcomeLabel, _numbers.Real): #timestamp
             return self.counts_at_time(indexOrOutcomeLabel)
         else:
-            return self.counts[indexOrOutcomeLabel]
+            try:
+                return self.counts[indexOrOutcomeLabel]
+            except KeyError:
+                # if outcome label isn't in counts but *is* in the dataset's
+                # outcome labels then return 0 (~= return self.allcounts[...])
+                key = indexOrOutcomeLabel
+                key = (key,) if _compat.isstr(key) else tuple(key) # as in OutcomeLabelDict
+                if key in self.dataset.get_outcome_labels(): return 0
+                raise KeyError("%s is not an index, timestamp, or outcome label!"
+                               % str(indexOrOutcomeLabel))
             
     def __setitem__(self,indexOrOutcomeLabel,val):
         if isinstance(indexOrOutcomeLabel, _numbers.Integral):
@@ -867,7 +876,8 @@ class DataSet(object):
             self.repData.append( _np.ones(len(oliAr), self.repType) )
 
     
-    def add_count_dict(self, gateString, countDict, overwriteExisting=True):
+    def add_count_dict(self, gateString, countDict, overwriteExisting=True,
+                       recordZeroCnts=False):
         """
         Add a single gate string's counts to this DataSet
 
@@ -883,6 +893,11 @@ class DataSet(object):
             If `True`, overwrite any existing data for the `gateString`.  If
             `False`, add this count data with the next non-negative integer
             timestamp.
+
+        recordZeroCnts : bool, optional
+            Whether zero-counts are actually recorded (stored) in this DataSet.
+            If False, then zero counts are ignored, except for potentially
+            registering new outcome labels.
 
         Returns
         -------
@@ -914,11 +929,12 @@ class DataSet(object):
             timeStampList = [0]*len(countList)
 
         self.add_raw_series_data(gateString, outcomeLabelList, timeStampList,
-                             countList, overwriteExisting)
+                                 countList, overwriteExisting, recordZeroCnts)
 
 
     def add_raw_series_data(self, gateString, outcomeLabelList, timeStampList,
-                            repCountList=None, overwriteExisting=True):
+                            repCountList=None, overwriteExisting=True,
+                            recordZeroCnts=True):
         """ 
         Add a single gate string's counts to this DataSet
         
@@ -942,6 +958,16 @@ class DataSet(object):
             by `outcomeLabelList` occurred at the time given by `timeStampList`.
             If None, then all counts are assumed to be 1.  When not None, must
             be the same length as `outcomeLabelList`.
+
+        overwriteExisting : bool, optional
+            Whether to overwrite the data for `gatestring` (if it exists).  If
+            False, then the given lists are appended (added) to existing data.
+
+        recordZeroCnts : bool, optional
+            Whether zero-counts (elements of `repCountList` that are zero) are
+            actually recorded (stored) in this DataSet.  If False, then zero 
+            counts are ignored, except for potentially registering new outcome
+            labels.
 
         Returns
         -------
@@ -979,6 +1005,14 @@ class DataSet(object):
                 # so we need to build this up for all existings sequences:
                 self.build_repetition_counts()
             repArray = _np.array(repCountList, self.repType)
+
+        if not recordZeroCnts:
+            # Go through repArray and remove any zeros, along with
+            # corresponding elements of oliArray and timeArray
+            mask = repArray != 0 # boolean array (note: == float comparison *is* desired)
+            repArray  = repArray[mask]
+            oliArray  = oliArray[mask]
+            timeArray = timeArray[mask]
             
         if gateString in self.gsIndex:
             gateStringIndx = self.gsIndex[gateString]
