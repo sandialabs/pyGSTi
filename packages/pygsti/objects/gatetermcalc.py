@@ -86,7 +86,6 @@ class GateTermCalc(GateCalc):
         #    allow unitary-evolution calcs to be term-based, which essentially
         #    eliminates the "pRight" portion of all the propagation calcs, and
         #    would require pLeft*pRight => |pLeft|^2
-
         self.max_order = max_order
         self.cache = cache
         super(GateTermCalc, self).__init__(
@@ -260,7 +259,7 @@ class GateTermCalc(GateCalc):
         if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
             return [ self.cache[ck] for ck in cache_keys ]
 
-        raw_prps = prs_as_polys(rholabel, elabels, gatestring, comm, memLimit)
+        raw_prps = self.prs_as_polys(rholabel, elabels, gatestring, comm, memLimit)
         prps = [ poly.compact(force_complex=True) for poly in raw_prps ]
           # create compact polys w/*complex* coeffs always since we're likely
           # going to concatenate a bunch of them.
@@ -296,8 +295,11 @@ class GateTermCalc(GateCalc):
         -------
         probability: float
         """
-        poly = self.pr_as_poly(spamTuple, gatestring, comm=None, memLimit=None)
-        p = _np.real_if_close(poly.evaluate(self.paramvec))
+        #OLD: poly = self.pr_as_poly(spamTuple, gatestring)
+        #OLD: p = _np.real_if_close(cpoly.evaluate(self.paramvec))
+        cpoly = self.prs_as_compact_polys(spamTuple[0], [spamTuple[1]], gatestring)[0]
+        val = _bulk_eval_compact_polys(cpoly[0], cpoly[1], self.paramvec, (1,))[0]
+        p = _np.real_if_close(val)
         if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
         return float(p)
     
