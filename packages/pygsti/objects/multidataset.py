@@ -221,9 +221,10 @@ class MultiDataSet(object):
         self.comment = comment
 
         #data types - should stay in sync with DataSet
-        self.oliType = _np.uint8
+        self.oliType = _np.uint32
         self.timeType = _np.float64
-        self.repType = _np.uint16
+        self.repType = _np.float32
+          # thought: _np.uint16 but doesn't play well with rescaling
 
 
 
@@ -374,43 +375,150 @@ class MultiDataSet(object):
             The data set to add.
         """
 
-        #first test if dataset is compatible
+        #Check if dataset is compatible
         if not dataset.bStatic:
             raise ValueError("Cannot add dataset: only static DataSets can be added to a MultiDataSet")
-        if self.gsIndex is not None and dataset.gsIndex != self.gsIndex:
-            raise ValueError("Cannot add dataset: gate strings and/or their indices do not match")
-        if self.olIndex is not None and dataset.olIndex != self.olIndex:
-            raise ValueError("Cannot add dataset: outcome labels and/or their indices do not match")
-
-        #if self.gsIndex:  #Note: tests if not none and nonempty
-        #    maxIndex = max(self.gsIndex.values())
-        #    assert( dataset.counts.shape[0] > maxIndex and dataset.counts.shape[1] == len(self.slIndex) )
-        if len(self.oliDict) > 0:
-            firstKey =  list(self.oliDict.keys())[0]
-            dataLen = len(self.oliDict[firstKey])
-            assert( len(dataset.oliData) == dataLen ), "Incompatible data sizes!"
-
-            if (dataset.repData is not None) and self.repDict is None:
-                # buildup trivial repDatas for all existing datasets
-                self.repDict = _OrderedDict(
-                    [ (nm,_np.ones(dataLen, self.repType)) for nm in self])
-                
-        elif dataset.repData is not None:
-            self.repDict = _OrderedDict()
-                
-        self.oliDict[datasetName] = dataset.oliData
-        self.timeDict[datasetName] = dataset.timeData
-        if dataset.repData is not None:
-            self.repDict[datasetName] = dataset.repData
-            
-        self.collisionActions[datasetName] = dataset.collisionAction
-        self.comments[datasetName] = dataset.comment
+        if self.gsIndex is not None and set(dataset.gsIndex.keys()) != set(self.gsIndex.keys()):
+            raise ValueError("Cannot add dataset: gate strings do not match")
 
         if self.gsIndex is None:
             self.gsIndex = dataset.gsIndex
 
         if self.olIndex is None:
             self.olIndex = dataset.olIndex
+
+        # Check if outcome labels use the same indexing; if not, update dataset.oliData
+        ds_oliData = dataset.oliData #default - just use dataset's outcome indices as is...
+        update_map = {} # default - no updates needed
+        if dataset.olIndex != self.olIndex:
+            next_olIndex = max(self.olIndex.values())+1
+            for ol,i in dataset.olIndex.items():
+                if ol not in self.olIndex: # then add a new outcome label
+                    self.olIndex[ol] = next_olIndex; next_olIndex += 1
+                if self.olIndex[ol] != i: # if we need to update dataset's indices
+                    update_map[i] = self.olIndex[ol] # old -> new index
+            if update_map:
+                # update dataset's outcome indices to conform to self.olIndex
+                ds_oliData = _np.array([ update_map.get(oli,oli)
+                                         for oli in dataset.oliData ], self.oliType)
+
+        #Do easy additions
+        self.collisionActions[datasetName] = dataset.collisionAction
+        self.comments[datasetName] = dataset.comment
+
+        #Add dataset's data to self.oliDict, self.timeDict and self.repDict,
+        # updating gsIndex and existing data if needed
+        if len(self.oliDict) == 0:
+            # this is the first added DataSet, so we can just overwrite
+            # gsIndex even if it isn't None.
+            self.gsIndex = dataset.gsIndex
+
+            #And then add data:
+            self.oliDict[datasetName] = ds_oliData
+            self.timeDict[datasetName] = dataset.timeData
+            if dataset.repData is not None:
+                self.repDict = _OrderedDict() # OK since this is the first DataSet added
+                self.repDict[datasetName] = dataset.repData
+
+        elif dataset.gsIndex == self.gsIndex:
+            # self.gsIndex is fine as is - no need to reconcile anything 
+            self.oliDict[datasetName] = ds_oliData
+            self.timeDict[datasetName] = dataset.timeData
+            if dataset.repData is not None:
+                if self.repDict is None: # then build self.repDict
+                    firstKey =  list(self.oliDict.keys())[0]
+                    dataLen = len(self.oliDict[firstKey]) # current length of self's data arrays
+                    self.repDict = _OrderedDict(
+                        [ (nm,_np.ones(dataLen, self.repType)) for nm in self])
+                self.repDict[datasetName] = dataset.repData
+
+        else:
+            # Merge data due to differences in self.gsIndex and dataset.gsIndex, which can 
+            # occur because dataset may have zeros in different places from self.
+            firstKey =  list(self.oliDict.keys())[0]
+            dataLen = len(self.oliDict[firstKey]) # current length of self's data arrays
+
+            #We'll need 0-rep elements to reconcile, so can't have repDict == None
+            if self.repDict is None: # then create self.repDict
+                self.repDict = _OrderedDict(
+                    [ (nm,_np.ones(dataLen, self.repType)) for nm in self])
+
+            ds_timeData = dataset.timeData
+            ds_repData = dataset.repData if (dataset.repData is not None) \
+                         else _np.ones(len(ds_oliData), self.repType)
+
+            #Create new arrays to populate with dataset's data
+            self.oliDict[datasetName] = _np.zeros(dataLen, self.oliType)
+            self.timeDict[datasetName] = _np.zeros(dataLen, self.timeType)
+            self.repDict[datasetName] = _np.zeros(dataLen, self.repType)
+            
+            #sort keys in order of increasing slice-start position (w.r.t. self)
+            sorted_gsIndex = sorted(list(self.gsIndex.items()),key=lambda x: x[1].start)
+
+            off = 0
+            for gs,slc in sorted_gsIndex:
+                other_slc = dataset.gsIndex[gs] # we know key exists from check above
+                l1 = slc.stop-slc.start; assert(slc.step is None)
+                l2 = other_slc.stop-other_slc.start; assert(slc.step is None)
+
+                #Update gsIndex - (expands slice if l2 > l1; adds in offset)
+                l = max(l1,l2)
+                new_slc = slice(off + slc.start, off + slc.start + l)
+                self.gsIndex[gs] = new_slc
+
+                #Update existing data & new data arrays
+                if l2 > l1: # insert 0-reps into self's data arrays
+                    nToInsert = l2-l1; insertAt = off+slc.stop
+                    for nm in self:
+                        oliVal = self.oliDict[nm][insertAt-1]    # just repeat the final bin's outcome 
+                        timeVal = self.timeDict[nm][insertAt-1]  # index and timestamp in 0-count bins
+                        self.oliDict[nm] = _np.insert( self.oliDict[nm],insertAt,
+                                                       oliVal * _np.ones(nToInsert,self.oliType) )
+                        self.timeDict[nm] = _np.insert( self.timeDict[nm],insertAt,
+                                                        timeVal * _np.ones(nToInsert,self.timeType) )
+                        self.repDict[nm] = _np.insert( self.repDict[nm],insertAt,
+                                                       _np.zeros(nToInsert,self.repType) )
+                    off += nToInsert
+
+                #Copy dataset's data into new_ arrays (already padded as needed above)
+                if l2 >= l1: # no need to pad dataset's array
+                    self.oliDict[datasetName][new_slc] = ds_oliData[other_slc]
+                    self.timeDict[datasetName][new_slc] = ds_timeData[other_slc]
+                    self.repDict[datasetName][new_slc] = ds_repData[other_slc]
+                else: # l2 < l1 - need to pad dataset arrays w/0-counts
+                    new_slc_part1 = slice(new_slc.start, new_slc.start + l2)
+                    new_slc_part2 = slice(new_slc.start + l2, new_slc.stop)
+                    self.oliDict[datasetName][new_slc_part1] = ds_oliData[other_slc]
+                    self.timeDict[datasetName][new_slc_part1] = ds_timeData[other_slc]
+                    self.repDict[datasetName][new_slc_part1] = ds_repData[other_slc]
+
+                    nPad = l1-l2
+                    timeVal = ds_timeData[ other_slc.stop-1] # index and timestamp in 0-count bins
+                    oliVal  = ds_oliData[ other_slc.stop-1]       # just repeat the final bin's outcome 
+                    self.oliDict[datasetName][new_slc_part2] = oliVal
+                    self.timeDict[datasetName][new_slc_part2] = timeVal
+                    # (leave self.repDict[datasetName] with zeros in remaining "part2" of slice)
+                        
+                    
+        #OLD
+        #if len(self.oliDict) > 0:
+        #    firstKey =  list(self.oliDict.keys())[0]
+        #    dataLen = len(self.oliDict[firstKey])
+        #    assert( len(dataset.oliData) == dataLen ), "Incompatible data sizes!"
+        #
+        #    if (dataset.repData is not None) and self.repDict is None:
+        #        # buildup trivial repDatas for all existing datasets
+        #        self.repDict = _OrderedDict(
+        #            [ (nm,_np.ones(dataLen, self.repType)) for nm in self])
+        #        
+        #elif dataset.repData is not None:
+        #    self.repDict = _OrderedDict()
+        #        
+        #self.oliDict[datasetName] = dataset.oliData
+        #self.timeDict[datasetName] = dataset.timeData
+        #if dataset.repData is not None:
+        #    self.repDict[datasetName] = dataset.repData
+            
 
 
     #REMOVE FOR NOW - Maybe revive later

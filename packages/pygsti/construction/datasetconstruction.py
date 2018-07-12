@@ -191,10 +191,14 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
             labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1]) ]
               # "outcome labels" - sort by prob for consistent generation
             if sampleError == "binomial":
-                assert(len(labels) == 2)
-                ol0,ol1 = labels[0], labels[1]
-                counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
-                counts[ol1] = nWeightedSamples - counts[ol0]
+                
+                if len(labels) == 1: #Special case when labels[0] == 1.0 (100%)
+                    counts[labels[0]] = nWeightedSamples
+                else:
+                    assert(len(labels) == 2)
+                    ol0,ol1 = labels[0], labels[1]
+                    counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
+                    counts[ol1] = nWeightedSamples - counts[ol0]
 
             elif sampleError == "multinomial":
                 countsArray = rndm.multinomial(nWeightedSamples,
@@ -254,7 +258,7 @@ def merge_outcomes(dataset,label_merge_dict):
         for new_outcome in new_outcomes:
             count_dict[new_outcome] = 0
             for old_outcome in label_merge_dict[new_outcome]:
-                count_dict[new_outcome] += linecounts[old_outcome]
+                count_dict[new_outcome] += linecounts.get(old_outcome,0)
         merged_dataset.add_count_dict(key,count_dict)
     merged_dataset.done_adding_data()
     return merged_dataset
