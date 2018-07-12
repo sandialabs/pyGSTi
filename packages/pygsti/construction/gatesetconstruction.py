@@ -1320,7 +1320,6 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries={},
         into `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
         may be useful.
 
-
     Returns
     -------
     GateSet

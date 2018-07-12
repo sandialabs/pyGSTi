@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
+import scipy.linalg as _spl
 from . import gatetools as _gts
 
 def get_internal_gatename_unitaries():
@@ -75,9 +76,27 @@ def get_internal_gatename_unitaries():
 
 def is_gate_this_standard_unitary(gate_unitary,standard_gate_name):
     """
-    Returns True if a unitary is the specified standard gate, up to phase.
-    Else, returns false.
+    Returns True if the unitary `gate_unitary` is, up to phase, the standard gate specified
+    by the name `standard_gate_name`. The correspondence between the standard names and 
+    unitaries is w.r.t the internally-used gatenames (see get_internal_gatename_unitaries()).
+    For example, one use of this function is to check whether some gate specifed by a user
+    with the name 'Ghadamard' is the Hadamard gate, denoted internally by 'H'.
+
+    Parameters
+    ----------
+    gate_unitary : complex np.array
+        The unitary to test.
+
+    standard_gate_name : str
+        The standard gatename to check whether the unitary `gate_unitary` is (e.g., 'CNOT').
+
+    Returns
+    -------
+    bool
+        True if the `gate_unitary` is, up to phase, the unitary specified `standard_gate_name`.
+        False otherwise.
     """
+    std_unitaries = get_internal_gatename_unitaries()
     if _np.shape(gate_unitary) != _np.shape(std_unitaries[standard_gate_name]):
         return False
     else:
@@ -184,7 +203,6 @@ def get_standard_gatename_unitaries():
     std_unitaries['Gc21'] = _np.array([[1,-1],[1,1]],complex)/_np.sqrt(2)
     std_unitaries['Gc22'] = _np.array([[0.5+0.5j,0.5-0.5j],[-0.5+0.5j,-0.5-0.5j]],complex)
     std_unitaries['Gc23'] = _np.array([[1,0],[0,-1j]],complex)
- 
     # Two-qubit gates
     std_unitaries['Gcphase'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.],[0.,0.,0.,-1.]],complex)
     std_unitaries['Gcnot'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,0.,1.],[0.,0.,1.,0.]],complex)
@@ -204,6 +222,10 @@ def get_standard_gatenames_quil_conversions():
     conversion dictionary will be incorrect.
 
     Currently there are some standard gate names with no conversion to quil.
+
+    Returns
+    -------
+    dict mapping strings to strings.
     """
     std_gatenames_to_quil = {}
     std_gatenames_to_quil['Gi'] = 'I'
