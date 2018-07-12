@@ -16,6 +16,7 @@ import warnings as _warnings
 from ..tools import gatetools as _gt
 from ..tools import basistools as _bt
 from ..tools import compattools as _compat
+from ..tools import internalgates as _itgs
 from ..objects import gate as _gate
 from ..objects import spamvec as _spamvec
 from ..objects import povm as _povm
@@ -1247,69 +1248,6 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
             
     return gs
 
-
-def get_standard_gate_unitaries():
-    """
-    Constructs and returns a dictionary of unitary matrices describing the
-    action of "standard" gates.  These gates (also the keys of the returned
-    dictionary) are:
-
-    - 'Gi' : the 1Q idle operation
-    - 'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
-    - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations around X, Y and Z.
-    - 'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
-     'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
-    - 'Gh' : Hadamard
-    - 'Gp', 'Gpdag' : phase and inverse phase (an alternative notation/name for Gzpi and Gzmpi2)
-    - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
-
-    Returns
-    -------
-    dict of numpy.ndarray objects.
-    """
-    std_unitaries = {}
-
-    sigmax = _np.array([[0,1],[1,0]])
-    sigmay = _np.array([[0,-1.0j],[1.0j,0]])
-    sigmaz = _np.array([[1,0],[0,-1]])
-    def Ugate(exp):
-        return _np.array(_spl.expm(-1j * exp/2),complex)
-    
-    std_unitaries['Gi'] = _np.array([[1.,0.],[0.,1.]],complex)
-
-    std_unitaries['Gxpi2'] = Ugate(_np.pi/2 * sigmax)
-    std_unitaries['Gypi2'] = Ugate(_np.pi/2 * sigmay)
-    std_unitaries['Gzpi2'] = Ugate(_np.pi/2 * sigmaz)
-
-    std_unitaries['Gxpi'] = _np.array([[0.,1.],[1.,0.]],complex)
-    std_unitaries['Gypi'] = _np.array([[0.,-1j],[1j,0.]],complex)
-    std_unitaries['Gzpi'] = _np.array([[1.,0.],[0.,-1.]],complex)  
-
-    std_unitaries['Gxmpi2'] = Ugate(-1*_np.pi/2 * sigmax)
-    std_unitaries['Gympi2'] = Ugate(-1*_np.pi/2 * sigmay)
-    std_unitaries['Gzmpi2'] = Ugate(-1*_np.pi/2 * sigmaz)
-    
-    H = (1/_np.sqrt(2))*_np.array([[1.,1.],[1.,-1.]],complex) 
-    P = _np.array([[1.,0.],[0.,1j]],complex)
-    Pdag = _np.array([[1.,0.],[0.,-1j]],complex)
-    
-    std_unitaries['Gh'] =  H  
-    std_unitaries['Gp'] = P
-    std_unitaries['Gpdag'] = Pdag
-    std_unitaries['Ghp'] = _np.dot(H,P)
-    std_unitaries['Gph'] = _np.dot(P,H)
-    std_unitaries['Ghph'] = _np.dot(H,_np.dot(P,H))
-
-    std_unitaries['Gt'] = _np.array([[1.,0.],[0.,_np.exp(1j*_np.pi/4)]],complex)
-    std_unitaries['Gtdag'] =_np.array([[1.,0.],[0.,_np.exp(-1j*_np.pi/4)]],complex)
- 
-    # Two-qubit gates
-    std_unitaries['Gcphase'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.],[0.,0.,0.,-1.]],complex)
-    std_unitaries['Gcnot'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,0.,1.],[0.,0.,1.,0.]],complex)
-    std_unitaries['Gswap'] = _np.array([[1.,0.,0.,0.],[0.,0.,1.,0.],[0.,1.,0.,0.],[0.,0.,0.,1.]],complex)
-    return std_unitaries
-
-
 def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries={}, availability={}, 
                                   qubit_labels=None, parameterization='static', evotype="auto", 
                                   sim_type="auto", on_construction_error='raise'):
@@ -1391,7 +1329,7 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries={},
         `availability`).  For instance, the gate label for the `"Gx"` gate on
         qubit 2 might be `Label("Gx",1)`.
     """
-    std_unitaries = get_standard_gate_unitaries()
+    std_unitaries = _itgs.get_standard_gatename_unitaries()
 
     if evotype == "auto": # same logic as in build_nqubit_gateset
         if parameterization == "clifford": evotype = "stabilizer"

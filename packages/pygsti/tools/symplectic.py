@@ -1041,8 +1041,10 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     s = _np.identity(2*n,int)
     p = _np.zeros(2*n,int)
     
-    for i in range(0,depth):        
-        layer = circuit.get_circuit_layer(i)
+    for i in range(0,depth):     
+        # This relies on the circuit having a valid self.identity identifier -- as those gates are
+        # not returned in the layer. Note that the layer contains each gate only once.   
+        layer = circuit.get_layer(i)
         # todo : update so that we don't use this function : because it is much slower than necessary.
         layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict)
         s, p = compose_cliffords(s, p, layer_s, layer_p)
@@ -1135,7 +1137,7 @@ def symplectic_rep_of_clifford_layer(layer, n, Qlabels=None, srep_dict=None):
                 
     return s, p
 
-def single_qubit_clifford_symplectic_group_relations():
+def oneQclifford_symplectic_group_relations():
     """
     Returns a dictionary containing the group relationship between
     the 'I', 'H', 'P' 'HP', 'PH', and 'HPH' up-to-Paulis operators.
