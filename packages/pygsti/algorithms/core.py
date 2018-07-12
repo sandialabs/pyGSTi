@@ -1106,9 +1106,10 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
+        dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
         evTree, wrtBlkSize,_, lookup, outcomes_lookup = gs.bulk_evaltree_from_resources(
             gateStringsToUse, comm, mlim, distributeMethod,
-            ["bulk_fill_probs","bulk_fill_dprobs"], printer-1)
+            ["bulk_fill_probs","bulk_fill_dprobs"], dstree, printer-1) 
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
@@ -2307,9 +2308,10 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
+        dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
         evTree, wrtBlkSize,_,lookup,outcomes_lookup = gs.bulk_evaltree_from_resources(
             gateStringsToUse, comm, mlim, distributeMethod,
-            ["bulk_fill_probs","bulk_fill_dprobs"], printer-1)
+            ["bulk_fill_probs","bulk_fill_dprobs"], dstree, printer-1)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
