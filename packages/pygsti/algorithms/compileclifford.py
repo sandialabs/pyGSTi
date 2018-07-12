@@ -64,7 +64,7 @@ def compile_clifford(s, p, pspec=None, iterations=20, algorithm='RBGGE', aargs =
     # Create a circuit that implements a Clifford with symplectic matrix s.
     circuit = _csymp.compile_symplectic(s, pspec=pspec, iterations=iterations, algorithms=[algorithm,],
                                         costfunction=costfunction, paulirandomize=paulirandomize, 
-                                        aargs=[aargs,])
+                                        aargs=[aargs,],check=False)
 
     temp_s, temp_p = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
     

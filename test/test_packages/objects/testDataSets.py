@@ -390,8 +390,8 @@ Gx^4 20 80 0.2 100
         ds4.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
 
         multiDS['myDS'] = ds
-        with self.assertRaises(ValueError):
-            multiDS['badDS'] = ds2 # different spam labels
+        #with self.assertRaises(ValueError):
+        #    multiDS['badDS'] = ds2 # different spam labels
         with self.assertRaises(ValueError):
             multiDS['badDS'] = ds3 # different gates
         with self.assertRaises(ValueError):

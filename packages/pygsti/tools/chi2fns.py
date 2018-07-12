@@ -45,9 +45,10 @@ def chi2_terms(gateset, dataset, gateStrings=None,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
+        dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
         evTree, _,_, lookup, outcomes_lookup = \
             gateset.bulk_evaltree_from_resources(
-            gateStrings, None, memLimit, "deriv", ['bulk_fill_probs'])
+            gateStrings, None, memLimit, "deriv", ['bulk_fill_probs'], dstree)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:

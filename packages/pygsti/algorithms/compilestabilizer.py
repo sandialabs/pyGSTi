@@ -42,7 +42,7 @@ def compile_stabilizer_state(s, p, pspec, iterations=20, paulirandomize=False,
             # Todo: work out how much this all makes sense.
             #
             # Do the depth-compression *before* changing gate library            
-        tc.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)            
+        tc.compress_depth(gate_relations_1q,verbosity=0)            
         tc.change_gate_library(pspec.compilations['paulieq'])        
         twoqubit_gatecount = tc.twoqubit_gatecount()
         if twoqubit_gatecount  < min_twoqubit_gatecount :
@@ -57,7 +57,7 @@ def compile_stabilizer_state(s, p, pspec, iterations=20, paulirandomize=False,
         # constructed in DeviceSpec, instead of this ad-hoc method.
         sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
         sprecompression, junk =  _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
-        circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
+        circuit.compress_depth(relations,verbosity=0)    
         spostcompression, junk =  _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
         assert(_np.array_equal(sprecompression,spostcompression)), "The gate relations provided are incorrect!"
         
@@ -93,7 +93,7 @@ def compile_stabilizer_state(s, p, pspec, iterations=20, paulirandomize=False,
     circuit.append_circuit(paulicircuit)
     
     if not paulirandomize:        
-        circuit.compress_depth(max_iterations=100,verbosity=0)
+        circuit.compress_depth(verbosity=0)
     
     return circuit
 
@@ -130,7 +130,7 @@ def compile_stabilizer_measurement(s, p, pspec, iterations=20, paulirandomize=Fa
             i += 1
             tc.reverse()
             # Do the depth-compression *after* the circuit is reversed
-            tc.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
+            tc.compress_depth(gate_relations_1q,verbosity=0)
             tc.change_gate_library(pspec.compilations['paulieq'])
             twoqubit_gatecount = tc.twoqubit_gatecount()
             if twoqubit_gatecount  < min_twoqubit_gatecount :
@@ -150,7 +150,7 @@ def compile_stabilizer_measurement(s, p, pspec, iterations=20, paulirandomize=Fa
         # constructed in DeviceSpec, instead of this ad-hoc method.
         sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
         sprecompression, junk =  _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
-        circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
+        circuit.compress_depth(relations,verbosity=0)    
         spostcompression, junk =  _symp.symplectic_rep_of_clifford_circuit(circuit,sreps)
         assert(_np.array_equal(sprecompression,spostcompression)), "Gate relations are incorrect!"
         
@@ -203,7 +203,7 @@ def compile_stabilizer_measurement(s, p, pspec, iterations=20, paulirandomize=Fa
     circuit.prefix_circuit(paulicircuit)
     
     if not paulirandomize:
-        circuit.compress_depth(max_iterations=10,verbosity=0) 
+        circuit.compress_depth(verbosity=0) 
     
     return circuit
 

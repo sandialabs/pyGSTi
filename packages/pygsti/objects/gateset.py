@@ -1056,7 +1056,7 @@ class GateSet(object):
         return prep_lbl, gatestring, povm_lbl
 
 
-    def compile_gatestrings(self, gatestrings):
+    def compile_gatestrings(self, gatestrings, dataset=None):
         """
         Compiles a list of :class:`GateString`s.
 
@@ -1071,6 +1071,11 @@ class GateSet(object):
         ----------
         gatestrings : list of GateStrings
             The list to compile.
+
+        dataset : DataSet, optional
+            If not None, restrict what is compiled to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
 
         Returns
         -------
@@ -1144,7 +1149,8 @@ class GateSet(object):
                              for elbl in self.povms[povm_lbl]]
             return gatestring, spamtups
 
-        def process(s, spamtuples,elIndsToOutcomes,gate_outcomes=(),start=0):
+        def process(s, spamtuples, observed_outcomes, elIndsToOutcomes,
+                    gate_outcomes=(), start=0):
             """
             Implements recursive processing of a string. Separately
             implements two different behaviors:
@@ -1171,7 +1177,7 @@ class GateSet(object):
                     for sub_gl in gate_label.components:
                         if sub_gl in self.instruments:
                             sublabel_tups_to_iter.append( [ (sub_gl,inst_el_lbl)
-                                for inst_el_lbl in self.instruments[sub_gl].keys()])
+                                                            for inst_el_lbl in self.instruments[sub_gl].keys() ])
                         else:
                             sublabel_tups_to_iter.append( [(sub_gl,None)] ) # just a single element
                             
@@ -1188,7 +1194,8 @@ class GateSet(object):
                         compiled_el_lbl = _Label(sublabels)
                         compiled_el_outcomes = tuple(outcomes)
                         process(s[0:i] + _gs.GateString((compiled_el_lbl,)) + s[i+1:],
-                                spamtuples, elIndsToOutcomes, gate_outcomes + compiled_el_outcomes, i+1)
+                                spamtuples, observed_outcomes, elIndsToOutcomes,
+                                gate_outcomes + compiled_el_outcomes, i+1)
                     break
                     
             else: #no instruments -- add "raw" gate string s
@@ -1197,6 +1204,11 @@ class GateSet(object):
                     #if action == "add":
                     od = raw_spamTuples_dict[s] # ordered dict
                     for spamtup in spamtuples:
+                        outcome_tup = gate_outcomes + spamTupleToOutcome[spamtup]
+                        if (observed_outcomes is not None) and \
+                           (outcome_tup not in observed_outcomes): continue
+                           # don't add spamtuples we don't observe
+                        
                         spamtup_indx = od.get(spamtup,None)
                         if spamtup is None:
                             # although we've seen this raw string, we haven't
@@ -1205,7 +1217,6 @@ class GateSet(object):
                             od[spamtup] = spamtup_indx
 
                         #Link the current iParent to this index (even if it was already going to be computed)
-                        outcome_tup = gate_outcomes + spamTupleToOutcome[spamtup]
                         elIndsToOutcomes[(s,spamtup_indx)] = outcome_tup
 
                     #OLD: raw_spamTuples_dict[s] = _lt.remove_duplicates(raw_spamTuples_dict[s] + spamtuples)
@@ -1230,16 +1241,29 @@ class GateSet(object):
                 else:
                     # Note: store elements of raw_spamTuples_dict as dicts for
                     # now, for faster lookup during "index" mode
-                    raw_spamTuples_dict[s] = _collections.OrderedDict([(spamtup,i) for i,spamtup in enumerate(spamtuples)])
-                    raw_gateOutcomes_dict[s] = gate_outcomes #DEBUG
-
-                    spamTuple_indices = range(len(spamtuples))
                     outcome_tuples =  [ gate_outcomes + spamTupleToOutcome[x] for x in spamtuples ]
-                    for ist,out_tup in zip(spamTuple_indices,outcome_tuples):
-                        elIndsToOutcomes[(s,ist)] = out_tup
-                          # Note: works even if `i` already exists - doesn't reorder keys then
+                    
+                    if observed_outcomes is not None:
+                        # only add els of `spamtuples` corresponding to observed data (w/indexes starting at 0)
+                        spamtup_dict = _collections.OrderedDict(); ist = 0
+                        for spamtup,outcome_tup in zip(spamtuples, outcome_tuples):
+                            if outcome_tup in observed_outcomes:
+                                spamtup_dict[spamtup] = ist
+                                elIndsToOutcomes[(s,ist)] = outcome_tup
+                                ist += 1
+                    else:
+                        # add all els of `spamtuples` (w/indexes starting at 0)
+                        spamtup_dict = _collections.OrderedDict( [
+                            (spamtup,i) for i,spamtup in enumerate(spamtuples) ] )
 
+                        # OLD: spamTuple_indices = range(len(spamtuples))
+                        # OLD: for ist,out_tup in zip(spamTuple_indices,outcome_tuples):
+                        for ist,out_tup in enumerate(outcome_tuples): # ist = spamtuple index
+                            elIndsToOutcomes[(s,ist)] = out_tup # element index is given by (parent_gatestring, spamtuple_index) tuple
+                              # Note: works even if `i` already exists - doesn't reorder keys then
 
+                    raw_spamTuples_dict[s] = spamtup_dict
+                    raw_gateOutcomes_dict[s] = gate_outcomes #DEBUG
 
         #Begin actual processing work:
 
@@ -1248,7 +1272,8 @@ class GateSet(object):
         resolved_gatestrings = list(map(resolveSPAM, gatestrings))
         for iParent,(gstr,spamtuples) in enumerate(resolved_gatestrings):
             elIndsToOutcomesByParent[iParent] = _collections.OrderedDict()
-            process(gstr,spamtuples, elIndsToOutcomesByParent[iParent])
+            oouts = None if (dataset is None) else set(dataset[gstr].outcomes)
+            process(gstr,spamtuples, oouts, elIndsToOutcomesByParent[iParent])
 
         # Step2: fill raw_offsets dictionary
         off = 0
@@ -1623,7 +1648,7 @@ class GateSet(object):
 
     def bulk_evaltree_from_resources(self, gatestring_list, comm=None, memLimit=None,
                                      distributeMethod="default", subcalls=[],
-                                     verbosity=0):
+                                     dataset=None, verbosity=0):
         """
         Create an evaluation tree based on available memory and CPUs.
 
@@ -1656,6 +1681,11 @@ class GateSet(object):
             using the returned evaluation tree, which are necessary for
             estimating memory usage (for comparison to memLimit).  If
             memLimit is None, then there's no need to specify `subcalls`.
+
+        dataset : DataSet, optional
+            If not None, restrict what is computed to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
 
         verbosity : int, optional
             How much detail to send to stdout.
@@ -1731,7 +1761,8 @@ class GateSet(object):
                     #Slower (but more accurate way)
                     if ng not in evt_cache:
                         evt_cache[ng] = self.bulk_evaltree(
-                            gatestring_list, minSubtrees=ng, numSubtreeComms=Ng)
+                            gatestring_list, minSubtrees=ng, numSubtreeComms=Ng,
+                            dataset=dataset)
                         # FUTURE: make a _bulk_evaltree_precompiled version that takes compiled
                         # gate strings as input so don't have to recompile every time we hit this line.
                     cacheSize = max([s.cache_size() for s in evt_cache[ng][0].get_sub_trees()])
@@ -1926,7 +1957,7 @@ class GateSet(object):
 
 
     def bulk_evaltree(self, gatestring_list, minSubtrees=None, maxTreeSize=None,
-                      numSubtreeComms=1, verbosity=0):
+                      numSubtreeComms=1, dataset=None, verbosity=0):
         """
         Create an evaluation tree for all the gate strings in gatestring_list.
 
@@ -1950,6 +1981,11 @@ class GateSet(object):
             The number of processor groups (communicators)
             to divide the subtrees of the EvalTree among
             when calling its `distribute` method.
+
+        dataset : DataSet, optional
+            If not None, restrict what is computed to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
 
         verbosity : int, optional
             How much detail to send to stdout.
@@ -1977,7 +2013,7 @@ class GateSet(object):
         printer = _VerbosityPrinter.build_printer(verbosity)
 
         compiled_gatestrings, elIndices, outcomes, nEls = \
-                            self.compile_gatestrings(gatestring_list)
+                            self.compile_gatestrings(gatestring_list, dataset)
 
         evalTree = self._calc().construct_evaltree()
         evalTree.initialize(compiled_gatestrings, numSubtreeComms)
@@ -2377,7 +2413,7 @@ class GateSet(object):
 
 
     def bulk_probs(self, gatestring_list, clipTo=None, check=False,
-                   comm=None, memLimit=None):
+                   comm=None, memLimit=None, dataset=None):
         """
         Construct a dictionary containing the probabilities
         for an entire list of gate sequences.
@@ -2404,6 +2440,12 @@ class GateSet(object):
             A rough memory limit in bytes which is used to determine processor
             allocation.
 
+        dataset : DataSet, optional
+            If not None, restrict what is computed to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
+
+
         Returns
         -------
         probs : dictionary
@@ -2412,15 +2454,16 @@ class GateSet(object):
             and `p` is the corresponding probability.
         """
         gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
-        #OLD: evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
+        #OLD: evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list, dataset=dataset)
         evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
-            gatestring_list, comm, memLimit, subcalls=['bulk_fill_probs'], verbosity=0) # FUTURE (maybe make verbosity into an arg?)
+            gatestring_list, comm, memLimit, subcalls=['bulk_fill_probs'],
+            dataset=dataset, verbosity=0) # FUTURE (maybe make verbosity into an arg?)
         return self._calc().bulk_probs(gatestring_list, evalTree, elIndices,
                                        outcomes, clipTo, check, comm)
 
 
     def bulk_dprobs(self, gatestring_list, returnPr=False,clipTo=None,
-                    check=False,comm=None,wrtBlockSize=None):
+                    check=False,comm=None,wrtBlockSize=None,dataset=None):
 
         """
         Construct a dictionary containing the probability-derivatives
@@ -2457,6 +2500,11 @@ class GateSet(object):
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
 
+        dataset : DataSet, optional
+            If not None, restrict what is computed to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
+
 
         Returns
         -------
@@ -2469,7 +2517,7 @@ class GateSet(object):
             `(outcome, dp)`).
         """
         gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
-        evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
+        evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list, dataset=dataset)
         return self._calc().bulk_dprobs(gatestring_list, evalTree, elIndices,
                                         outcomes, returnPr,clipTo,
                                         check, comm, None, wrtBlockSize)
@@ -2477,7 +2525,7 @@ class GateSet(object):
 
     def bulk_hprobs(self, gatestring_list, returnPr=False,returnDeriv=False,
                     clipTo=None, check=False, comm=None,
-                    wrtBlockSize1=None, wrtBlockSize2=None):
+                    wrtBlockSize1=None, wrtBlockSize2=None, dataset=None):
 
         """
         Construct a dictionary containing the probability-Hessians
@@ -2516,6 +2564,11 @@ class GateSet(object):
           wrtFilter is not None.  Set this to non-None to reduce amount of
           intermediate memory required.
 
+        dataset : DataSet, optional
+            If not None, restrict what is computed to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
+
 
         Returns
         -------
@@ -2529,7 +2582,7 @@ class GateSet(object):
             If `returnDeriv` if False, then `dp` is not included in the tuples.
         """
         gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
-        evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
+        evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list, dataset=dataset)
         return self._calc().bulk_hprobs(gatestring_list, evalTree, elIndices,
                                         outcomes, returnPr, returnDeriv,
                                         clipTo, check, comm, None, None,

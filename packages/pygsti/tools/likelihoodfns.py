@@ -133,7 +133,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
-        evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list)
+        evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list, dataset=dataset)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
@@ -156,7 +156,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
         for (i,gateStr) in enumerate(ds_gatestring_list):
             cnts = dataset[gateStr].counts
             totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
-            countVecMx[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+            countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
         #could add to cache, but we don't have option of gateStringWeights
         # here yet, so let's be conservative and not do this:
@@ -366,10 +366,11 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
 
     #OLD: evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list)
     mlim = None if (memLimit is None) else memLimit-persistentMem
+    dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
     evalTree, blkSize, _, lookup, outcomes_lookup = \
         gateset.bulk_evaltree_from_resources(
             gatestring_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
-            verbosity)
+            dstree, verbosity)
 
     a = radius # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
@@ -388,7 +389,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     for (i,gateStr) in enumerate(ds_gatestring_list):
         cnts = dataset[gateStr].counts
         totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
-        countVecMx[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+        countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
     #OLD
     #freqs = cntVecMx / totalCntVec[None,:]
@@ -526,10 +527,11 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     #  - figure out how many row & column partitions are needed
     #    to fit computation within available memory (and use all cpus)
     mlim = None if (memLimit is None) else memLimit-persistentMem
+    dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
     evalTree, blkSize1, blkSize2, lookup, outcomes_lookup = \
         gateset.bulk_evaltree_from_resources(
             gatestring_list, comm, mlim, "deriv", ['bulk_hprobs_by_block'],
-            verbosity)
+            dstree, verbosity)
     
     rowParts = int(round(nP / blkSize1)) if (blkSize1 is not None) else 1
     colParts = int(round(nP / blkSize2)) if (blkSize2 is not None) else 1
@@ -643,7 +645,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     for (i,gateStr) in enumerate(ds_subtree_gatestring_list):
         cnts = dataset[gateStr].counts
         totalCntVec_all[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
-        cntVecMx_all[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+        cntVecMx_all[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
     tStart = _time.time()
 
@@ -822,10 +824,11 @@ def logl_approximate_hessian(gateset, dataset, gatestring_list=None,
 
     #OLD: evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list)
     mlim = None if (memLimit is None) else memLimit-persistentMem
+    dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
     evalTree, blkSize, _, lookup, outcomes_lookup = \
         gateset.bulk_evaltree_from_resources(
             gatestring_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
-            verbosity)
+            dstree, verbosity)
 
     a = radius # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
@@ -844,7 +847,7 @@ def logl_approximate_hessian(gateset, dataset, gatestring_list=None,
     for (i,gateStr) in enumerate(ds_gatestring_list):
         cnts = dataset[gateStr].counts
         totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
-        cntVecMx[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+        cntVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
     gateset.bulk_fill_dprobs(dprobs, evalTree, prMxToFill=probs,
                              clipTo=probClipInterval, check=check, comm=comm,
@@ -993,7 +996,7 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
             gatestring_list = list(dataset.keys())
 
         raw_dict, lookup, outcomes_lookup, nEls = \
-            gateset.compile_gatestrings(gatestring_list)
+            gateset.compile_gatestrings(gatestring_list, dataset)
         #Note: we don't actually need an evaltree, so we
         # won't make one here and so won't fill an empty
         # evaltree_cache.
@@ -1010,7 +1013,7 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
         for (i,gateStr) in enumerate(gatestring_list):
             cnts = dataset[gateStr].counts
             totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
-            countVecMx[ lookup[i] ] = [ cnts[x] for x in outcomes_lookup[i] ]
+            countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
         #could add to cache, but we don't have option of gateStringWeights
         # here yet, so let's be conservative and not do this:
