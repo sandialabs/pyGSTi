@@ -13,6 +13,7 @@ import numpy.random as _rndm
 from ..tools import listtools as _lt
 from ..tools import compattools as _compat
 from ..objects import gatestring as _gs
+from ..objects import GateSet as _GateSet
 
 def _runExpression(str_expression, myLocals):
     exec( "result = " + str_expression, {"__builtins__": None}, myLocals )
@@ -430,7 +431,7 @@ def list_partial_strings(gateString):
         ret.append( tuple(gateString[0:l]) )
     return ret
 
-def list_lgst_gatestrings(prepStrs, effectStrs, gateLabels):
+def list_lgst_gatestrings(prepStrs, effectStrs, gateLabelSrc):
     """
     List the gate strings required for running LGST.
 
@@ -440,14 +441,20 @@ def list_lgst_gatestrings(prepStrs, effectStrs, gateLabels):
         Fiducial GateString lists used to construct a informationally complete
         preparation and measurement.
 
-    gateLabels : tuple
-        tuple of gate labels to estimate using LGST.
+    gateLabelSrc : tuple or GateSet
+        List/tuple of gate labels OR a GateSet whose gate and instrument
+        labels should be used.
 
     Returns
     -------
     list of GateString objects
         The list of required gate strings, without duplicates.
     """
+    if isinstance(gateLabelSrc, _GateSet):
+        gateLabels = list(gateLabelSrc.gates.keys()) + \
+                     list(gateLabelSrc.instruments.keys())
+    else: gateLabels = gateLabelSrc
+
     singleGates = [ _gs.GateString( (gl,), "(%s)" % str(gl) ) for gl in gateLabels ]
     ret = create_gatestring_list('eStr','prepStr','prepStr+eStr','prepStr+g+eStr',
                                eStr=effectStrs, prepStr=prepStrs, g=singleGates,

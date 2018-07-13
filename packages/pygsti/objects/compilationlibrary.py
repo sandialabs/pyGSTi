@@ -319,7 +319,7 @@ class CompilationLibrary(_collections.OrderedDict):
         
         if srep is None:
             template_lbl = _Label(gate_name,tuple(range(nqubits))) # integer ascending qubit labels
-            smatrix, svector = _symp.symplectic_rep_of_clifford_layer([template_lbl], nqubits, Qlabels=[0,1])
+            smatrix, svector = _symp.symplectic_rep_of_clifford_layer([template_lbl], nqubits)
         else:
             smatrix, svector = srep
                 
@@ -589,7 +589,7 @@ class CompilationLibrary(_collections.OrderedDict):
         cnot_circuit = part_1 + part_2 + part_3 + part_4
         
         # Convert the gatelist to a circuit.
-        circuit = _Circuit(gatestring=cnot_circuit, line_labels=self.gateset.stateSpaceLabels.labels[0])
+        circuit = _Circuit(gatestring=cnot_circuit, line_labels=self.gateset.stateSpaceLabels.labels[0], identity=self.identity)
 
         ## Change into the native gates, using the compilation for CNOTs between
         ## connected qubits.
@@ -793,9 +793,7 @@ class CompilationLibrary(_collections.OrderedDict):
        
         # If local compilation isn't possible, we move on and try non-local compilation
         except:
-            pass
-
-        circuit = self.get_nonlocal_compilation_of(gatelabel, force=force, allowed_filter=allowed_filter, verbosity=verbosity, check=check)
+            circuit = self.get_nonlocal_compilation_of(gatelabel, force=force, allowed_filter=allowed_filter, verbosity=verbosity, check=check)
 
         return circuit
 

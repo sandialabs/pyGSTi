@@ -15,6 +15,7 @@ import numpy as _np
 
 from . import stdlists as _stdlists
 from .. import objects as _objs
+from ..tools import mpitools as _mpit
     
 def _get_cachefile_names(std_module, param_type, sim_type, py_version):
     """ TODO: docstring (for this entire module) """
@@ -31,7 +32,7 @@ def _get_cachefile_names(std_module, param_type, sim_type, py_version):
     else:
         raise ValueError("No cache files used for param-type=%s" % param_type)
 
-def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=False):
+def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=False, comm=None):
     """ A utility routine to for creating the cache files for a standard gate set """
     gs_target = std_module.gs_target.copy()
     prep_fiducials = std_module.prepStrs
@@ -46,27 +47,43 @@ def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=Fal
         
     listOfExperiments = _stdlists.make_lsgst_experiment_list(
                             gs_target, prep_fiducials, effect_fiducials, germs, maxLengths)
-    print(len(listOfExperiments),"Experiments")
 
     gs_terms = gs_target.copy()
     gs_terms.set_all_parameterizations("H+S terms") # CPTP terms?
-    calc_cache = {}
-    gs_terms.set_simtype("termorder:%d" % termOrder,calc_cache)
+    my_calc_cache = {}
+    gs_terms.set_simtype("termorder:%d" % termOrder,my_calc_cache)
+
+    #divide up strings among ranks
+    my_expList, _,_ = _mpit.distribute_indices(listOfExperiments,comm,False)
+    rankStr = "" if (comm is None) else "Rank%d: " % comm.Get_rank()
+
+    if comm is not None and comm.Get_rank() == 0:
+        print("%d gate strings divided among %d processors" % (len(listOfExperiments),comm.Get_size()))
 
     t0 = _time.time()
-    for i,gstr in enumerate(listOfExperiments):
-        print("%.2fs: Computing prob %d of %d" % (_time.time()-t0,i,len(listOfExperiments)))
+    for i,gstr in enumerate(my_expList):
+        print("%s%.2fs: Computing prob %d of %d" % (rankStr, _time.time()-t0,i,len(listOfExperiments)))
         gs_terms.probs(gstr)
+    #gs_terms.bulk_probs(my_expList) # also fills cache, but allocs more mem at once
 
-    #gs_terms.bulk_probs(listOfExperiments) # also fills cache, but allocs more mem at once
-    print("Completed in %.2fs" % (_time.time()-t0))
-    print("Cachesize = ",len(calc_cache))
-    print("Num of Experiments = ", len(listOfExperiments))
+    if comm is None:
+        calcc_list = [ my_calc_cache ]
+    else:
+        calcc_list = comm.gather(my_calc_cache, root=0)
 
-    py_version = 3 if (_sys.version_info > (3, 0)) else 2
-    key_fn, val_fn = _get_cachefile_names(std_module, "H+S terms",
-                                          "termorder:%d" % termOrder,py_version)
-    _write_calccache(calc_cache, key_fn, val_fn, json_too)
+    if comm is None or comm.Get_rank() == 0:
+        calc_cache = {}
+        for c in calcc_list:
+            calc_cache.update(c)
+        
+        print("Completed in %.2fs" % (_time.time()-t0))
+        print("Cachesize = ",len(calc_cache))
+        print("Num of Experiments = ", len(listOfExperiments))
+
+        py_version = 3 if (_sys.version_info > (3, 0)) else 2
+        key_fn, val_fn = _get_cachefile_names(std_module, "H+S terms",
+                                              "termorder:%d" % termOrder,py_version)
+        _write_calccache(calc_cache, key_fn, val_fn, json_too)
 
 
 def _write_calccache(calc_cache, key_fn, val_fn, json_too=False):
@@ -91,7 +108,7 @@ def _write_calccache(calc_cache, key_fn, val_fn, json_too=False):
     values = [calc_cache[k] for k in keys]
     vtape = []; ctape = []
     for v in values:
-        vt,ct = v.compact()
+        vt,ct = v #.compact() # Now cache hold compact polys already
         vtape.append(vt)
         ctape.append(ct)    
     vtape = _np.concatenate(vtape)

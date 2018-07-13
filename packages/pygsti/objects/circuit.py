@@ -684,15 +684,13 @@ class Circuit(_gstr.GateString):
                     # We never consider not having a compilation for the identity to be a failure.
                     if gate.name != self.identity and not allow_unchanged_gates:
                         raise ValueError("`compilation` does not contain, or cannot generate a compilation for {}!".format(gate))
-                    # If a new name for the identity element has been specified, we change to that new name.
-                    if gate.name == self.identity and identity is not None:
-                        self.line_items[q][d-1-l] = _Label(identity,gate.qubits)
 
         # If we are given a potentially new identity label, change to this. We do this after changing gate library, as
         # it's useful to be able to treat gates that have the *old* identity label differently: we don't fail if there is
-        # no compilation given for them, but we do change the name if `identity` is specifed.
+        # no compilation given for them, but we do change the name if `identity` is specifed. Because `replace_gate_with_circuit`
+        # can add idles at various points it's also important to sweep the entire circuit and remove any idles.
         if identity is not None:
-            self.identity = identity
+            self.replace_identity(identity)
 
         # If specified, perform the depth compression. It is better to do this *after* the identity name has been changed.
         if depth_compression:            
@@ -941,6 +939,12 @@ class Circuit(_gstr.GateString):
         assert(not self._static),"Cannot edit a read-only circuit!"
         # Keeps track of whether any changes have been made to the circuit.
         compression_implemented = False
+        # If the circuit is depth 0, we quit as the code below fails in that case
+        if self.depth() == 0:
+            if return_flag:
+                return False
+            else:
+                return
         # Stores which layer we can move the current gate forwarded to.
         can_move_to_layer = _np.zeros(self.number_of_lines,int) 
         # If the first layer isn't an idle, we set this to 1.
@@ -953,6 +957,7 @@ class Circuit(_gstr.GateString):
         for j in range(1,self.depth()):
             # Look at each line in turn
             for q in range(0,self.number_of_lines):
+                #print(j,q)
                 gate = self.line_items[q][j]
                 # If the gate isn't the identity, we try and move it forward. If it
                 # is the identity, we don't change can_move_to_layer[q].
@@ -1085,11 +1090,16 @@ class Circuit(_gstr.GateString):
             print("- Implementing circuit depth compression")
             print("  - Circuit depth before compression is {}".format(self.depth()))
                
+        #try:
         flag1 = False
         if oneQgate_relations is not None:                            
             flag1 = self.combine_oneQgates(oneQgate_relations,return_flag=True)
         flag2 = self.shift_gates_forward(return_flag=True)   
         flag3 = self.delete_idle_layers(return_flag=True)
+        #except:
+        #    print(self.number_of_lines, len(self.line_labels), self.line_labels, len(self.line_items),len(self.line_items[0]))
+        #    print(self.line_items)
+        #    assert(False)
 
         if verbosity > 0:
             if not (flag1 or flag2 or flag3):
@@ -1477,24 +1487,74 @@ class Circuit(_gstr.GateString):
             
         return quil  
     
-    def simulate(self, gateset): 
+    def simulate(self, gateset, return_all_outcomes=False): 
         """
         Compute the outcome probabilities of this Circuit using `gateset` as a
-        model for the gates.
+        model for the gates. The order of the outcome strings (e.g., '0100') is
+        w.r.t to the ordering of the qubits in the circuit. That is, the ith element
+        of the outcome string corresponds to the qubit with label self.qubit_labels[i].
 
         Parameters
         ----------
         gateset : GateSet
             A description of the gate and SPAM operations corresponding to the
-            labels stored in this Circuit.
+            labels stored in this Circuit. If this gateset is over more qubits 
+            than the circuit, the output will be the probabilities for the qubits 
+            in the circuit marginalized over the other qubits. But, the simulation
+            is over the full set of qubits in the gateset, and so the time taken for
+            the simulation scales with the number of qubits in the gateset. For
+            models whereby "spectator" qubits do not affect the qubits in this
+            circuit (such as with perfect gates), more efficient simulations will
+            be obtained by first creating a gateset only over the qubits in this 
+            circuit.
+
+        return_all_outcomes: bool, optional
+            Whether to include outcomes in the returned dictionary that have zero
+            probability. When False, the threshold for discarding an outcome as z
+            ero probability is 10^-12.
 
         Returns
         -------
         probs : dictionary
-            A dictionary with keys equal to the possible outcomes and values
-            that are float probabilities.
+            A dictionary with keys equal to all (`return_all_outcomes` is True) or 
+            possibly only some (`return_all_outcomes` is False) of the possible 
+            outcomes, and values that are float probabilities.
         """
-        return gateset.probs(self)
+        # These results is a dict with strings of outcomes (normally bits) ordered according to the
+        # state space ordering in the gateset.
+        results = gateset.probs(self)
+
+        # The state-space labels of the gateset.
+        ssls = list(gateset.stateSpaceLabels.labels[0])
+        
+        # This relabels a outcomes string, and drops state space labels not in the circuit.
+        def parse_outcome_string(outcome):
+            relabelled_outcome = ''
+            for l in self.line_labels: relabelled_outcome  += outcome[0][ssls.index(l)]
+            return relabelled_outcome
+        
+        # Find the full set of relabelled outcomes, which will be the keys to the output dict.
+        all_relabelled_outcomes = []
+        for outcome in list(results.keys()):
+            relabelled_outcome = parse_outcome_string(outcome)
+            if relabelled_outcome not in all_relabelled_outcomes: all_relabelled_outcomes.append(relabelled_outcome)
+
+        relabelled_results = {}
+        if return_all_outcomes:
+            # Set up a dict for the output results, and init all the probs to 0.
+            relabelled_results = {relabelled_outcome : 0. for relabelled_outcome in all_relabelled_outcomes}
+            # Add in the results: this rearranges and marginalizes the results.
+            for outcome in list(results.keys()):
+                relabelled_results[parse_outcome_string(outcome)] += results[outcome]
+        else:
+            for outcome in list(results.keys()):
+                if results[outcome] > 10**-12:
+                    try:
+                        relabelled_results[parse_outcome_string(outcome)] += results[outcome]
+                    except:
+                        relabelled_results[parse_outcome_string(outcome)] = results[outcome]
+
+        return relabelled_results
     
     def done_editing(self):
         """
