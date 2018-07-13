@@ -6,8 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from ...algorithms import compileclifford as _cc
-from ...algorithms import compilestabilizer as _cs
+from ...algorithms import compilecliffordcircuit as _ccc
+from ...algorithms import compilestabilizerstate as _css
 from ...objects import circuit as _cir
 from ...baseobjs import label as _lbl
 from ...tools import symplectic as _symp
@@ -665,11 +665,11 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         s_composite, p_composite = _symp.compose_cliffords(s_initial, p_initial, s_rc, p_rc)
         # If conditionaltwirl we do a stabilizer prep (a conditional Clifford).
         if conditionaltwirl:
-            initial_circuit = _cs.compile_stabilizer_state(s_initial, p_initial, pspec, subsetQs, citerations, 
+            initial_circuit = _css.compile_stabilizer_state(s_initial, p_initial, pspec, subsetQs, citerations, 
                                                            *compilerargs)           
         # If not conditionaltwirl, we do a full random Clifford.
         else:
-            initial_circuit = _cc.compile_clifford(s_initial, p_initial, pspec, subsetQs, citerations, 
+            initial_circuit = _ccc.compile_clifford(s_initial, p_initial, pspec, subsetQs, citerations, 
                                                      *compilerargs)
         
     # If we are not Clifford twirling, we just copy the effect of the random circuit as the effect
@@ -690,10 +690,10 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         p_for_inversion = p_inverse
     
     if conditionaltwirl:
-        inversion_circuit = _cs.compile_stabilizer_measurement(s_inverse, p_for_inversion, pspec, subsetQs,
+        inversion_circuit = _css.compile_stabilizer_measurement(s_inverse, p_for_inversion, pspec, subsetQs,
                                                                citerations,*compilerargs)   
     else:
-        inversion_circuit = _cc.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs, citerations,
+        inversion_circuit = _ccc.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs, citerations,
                                                    *compilerargs)
         
     if cliffordtwirl:
@@ -785,7 +785,7 @@ def clifford_rb_circuit(pspec, length, subsetQs=None, randomizeout=False, citera
     for i in range(0,length+1):
     
         s, p = _symp.random_clifford(n)
-        circuit = _cc.compile_clifford(s, p, pspec, subsetQs=subsetQs, iterations=citerations, *compilerargs)       
+        circuit = _ccc.compile_clifford(s, p, pspec, subsetQs=subsetQs, iterations=citerations, *compilerargs)       
         # Keeps track of the current composite Clifford
         s_composite, p_composite = _symp.compose_cliffords(s_composite, p_composite, s, p)
         full_circuit.append_circuit(circuit)
@@ -802,7 +802,7 @@ def clifford_rb_circuit(pspec, length, subsetQs=None, randomizeout=False, citera
         p_for_inversion = p_inverse
     
     # Compile the inversion circuit
-    inversion_circuit = _cc.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs=subsetQs, iterations=citerations, 
+    inversion_circuit = _ccc.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs=subsetQs, iterations=citerations, 
                                                *compilerargs)    
     full_circuit.append_circuit(inversion_circuit)
     full_circuit.done_editing()
@@ -885,10 +885,19 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
        handed to the sampler, as the first argument of the sampler function.
                 
     length : int
-        If `addlocal` is False, this is the length of the sampled circuit. If `addlocal is
-        True the length of the circuits is 2*length+1 with odd-indexed layers sampled according
-        to the sampler specified by `sampler`, and the the zeroth layer + the even-indexed 
-        layers consisting of random 1-qubit gates (with the sampling specified by `lsargs`).
+        The "mirror RB length" of the circuit, which is closely related to the circuit depth. It
+        must be an even integer, and can be zero.
+
+        - If `localclifford` and `paulirandomize` are False, this is the depth of the sampled circuit.
+          The first length/2 layers are all sampled independently according to the sampler specified by
+          `sampler`. The remaining half of the circuit is the "inversion" circuit that is determined
+          by the first half.
+        - If `paulirandomize` is True and `localclifford` is False, the depth of the circuits is 
+          2*length+1 with odd-indexed layers sampled according to the sampler specified by `sampler, and
+          the the zeroth layer + the even-indexed layers consisting of random 1-qubit Pauli gates.
+        - If `paulirandomize` and `localclifford` are True, the depth of the circuits is 
+          2*length+1 + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for 
+          the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
 
     subsetQs : list, optional
         If not None, a list of the qubits that the RB circuit is to be sampled for. This should

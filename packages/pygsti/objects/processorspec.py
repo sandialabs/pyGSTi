@@ -113,9 +113,9 @@ class ProcessorSpec(object):
             except:
                 raise ValueError(str(gname)+" is not a valid 'standard' gate name, so should not be an element of `gate_names`!")
 
-        # Records the name of the identity gate, if there is one, as this is useful information to have to hand. This
-        # may cause strange behaviour if there are multiple identities -- so maybe we need to check for that.
-        self.identity = None
+        # Records the name of the identity gate, if there is one, as this is useful information to have to hand. If there
+        # isn't one we use the default 'I' label.
+        self.identity = 'I'
         for gn in self.root_gate_names:
             if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'I'):
                 self.identity = gn
@@ -145,7 +145,7 @@ class ProcessorSpec(object):
         # Holds a dictionary with keys that are 1Q gatename pairs (gn1, gn2), with a value gn3 that is the 1Q that
         # these gates combine to when gn1 is applied first and then gn2. There is no key for a pair if they don't
         # combine to a 1Q gate in the gateset.
-        self.oneQgate_algebra = {}
+        self.oneQgate_relations = {}
         # A dict from a gatename to the gatename of the inverse gate, if it is in the gateset.
         self.gate_inverse = {}
 
@@ -219,7 +219,7 @@ class ProcessorSpec(object):
             self.clifford_gates_on_qubits = None
                                   
         # Adds in the 1-qubit gate algebra
-        self.add_oneQgate_algebra()
+        self.add_oneQgate_relations()
         # Records the inverses of gates that have an inverse in the gateset (only compares to gates of the same dimension)
         self.add_multiqubit_inversion_relations()
 
@@ -350,6 +350,13 @@ class ProcessorSpec(object):
                     H_name = gn
                     break
 
+            # If we've failed to find a 
+            if H_name is None and compile_type is 'paulieq':
+                for gn in self.root_gate_names:
+                    if _symp.unitary_is_a_clifford(self.root_gate_unitaries[gn]):
+                        if _itgs.is_gate_pauli_equivalent_to_this_standard_unitary(self.root_gate_unitaries[gn],'H'):
+                            H_name = gn
+
             # If CNOT is available, add it as a template for 'CNOT'.
             if cnot_name is not None:
                 library.templates['CNOT'] = [(_Label(cnot_name,(0,1)),)]
@@ -357,16 +364,17 @@ class ProcessorSpec(object):
                 if H_name is not None:
                     library.templates['CNOT'].append((_Label(H_name, 0),_Label(H_name, 1),_Label(cnot_name, (0, 1)), _Label(H_name, 0),_Label( H_name, 1)))
 
-             # If CNOT isn't available, look to see if we have CPHASE gate in the gateset (with any name). If we do *and* we have 
+            # If CNOT isn't available, look to see if we have CPHASE gate in the gateset (with any name). If we do *and* we have 
             # Hadamards, we add the obvious construction of CNOT from CPHASE and Hadamards as a template
-            if H_name is not None:
-                if cnot_name is None:
-                    cphase_name = None
-                    for gn in self.root_gate_names:
-                        if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'CPHASE'):
-                            cphase_name = gn                   
-                            break
-                    # If we find CPHASE, we add it into the compilation
+            else:
+                cphase_name = None
+                for gn in self.root_gate_names:
+                    if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'CPHASE'):
+                        cphase_name = gn                   
+                        break
+
+                # If we find CPHASE, and we have a Hadamard-like gate, we add used them to add a CNOT compilation template.
+                if H_name is not None:
                     if cphase_name is not None:
                         # We need the identity gate for these templates
                         if self.identity is not None:
@@ -400,16 +408,16 @@ class ProcessorSpec(object):
             
         self.compilations[compile_type] = library
 
-    def add_oneQgate_algebra(self):
+    def add_oneQgate_relations(self):
         """
         Records the basic pair-wise relationships relationships between the gates.
 
         1. It multiplies all possible combinations of two 1-qubit gates together, from
         the full gateset available to in this device. If the two gates multiple to
         another 1-qubit gate from this set of gates this is recorded in the dictionary 
-        self.oneQgate_algebra. If the 1-qubit gate with name `name1` followed by the 
+        self.oneQgate_relations. If the 1-qubit gate with name `name1` followed by the 
         1-qubit gate with name `name2` multiple (up to phase) to the gate with `name3`, 
-        then self.oneQgate_algebra[`name1`,`name2`] = `name3`.
+        then self.oneQgate_relations[`name1`,`name2`] = `name3`.
 
         2. If the inverse of any 1-qubit gate is contained in the gateset, this is
         recorded in the dictionary self.gate_inverse.
@@ -431,7 +439,7 @@ class ProcessorSpec(object):
                             if _np.shape(u3) == (4,4):
                                 if _np.allclose(u3,ucombined):
                                     # If ucombined is u3, add to the inversion relation.
-                                    self.oneQgate_algebra[gname1,gname2] = gname3
+                                    self.oneQgate_relations[gname1,gname2] = gname3
                         # If ucombined is the identity, add the inversion relation.
                         if _np.allclose(ucombined,_np.identity(4,float)):
                                 self.gate_inverse[gname1] = gname2
@@ -447,7 +455,7 @@ class ProcessorSpec(object):
         self.gate_inverse[`name1`] = `name2` and self.gate_inverse[`name2`] = `name1`
 
         1-qubit gates are not added by this method, as they can be added by the method
-        add_oneQgate_algebra().
+        add_oneQgate_relations().
 
         Returns
         -------

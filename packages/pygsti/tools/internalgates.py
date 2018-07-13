@@ -9,8 +9,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import scipy.linalg as _spl
 from . import gatetools as _gts
+from . import symplectic as _symp
+from . import gatetools as _gts
 
-def get_internal_gatename_unitaries():
+def get_internal_gate_unitaries():
     """
     The unitaries for the *internally* defined gates. These are gates that are used in
     some circuit-compilation methods internally (e.g., compiling multi-qubit Clifford 
@@ -78,7 +80,7 @@ def is_gate_this_standard_unitary(gate_unitary,standard_gate_name):
     """
     Returns True if the unitary `gate_unitary` is, up to phase, the standard gate specified
     by the name `standard_gate_name`. The correspondence between the standard names and 
-    unitaries is w.r.t the internally-used gatenames (see get_internal_gatename_unitaries()).
+    unitaries is w.r.t the internally-used gatenames (see get_internal_gate_unitaries()).
     For example, one use of this function is to check whether some gate specifed by a user
     with the name 'Ghadamard' is the Hadamard gate, denoted internally by 'H'.
 
@@ -96,7 +98,7 @@ def is_gate_this_standard_unitary(gate_unitary,standard_gate_name):
         True if the `gate_unitary` is, up to phase, the unitary specified `standard_gate_name`.
         False otherwise.
     """
-    std_unitaries = get_internal_gatename_unitaries()
+    std_unitaries = get_internal_gate_unitaries()
     if _np.shape(gate_unitary) != _np.shape(std_unitaries[standard_gate_name]):
         return False
     else:
@@ -107,9 +109,36 @@ def is_gate_this_standard_unitary(gate_unitary,standard_gate_name):
 
 # Currently not needed, but might be added in.
 #
-#def is_gate_pauli_equivalent_to_this_standard_unitary(gate_unitary,standard_gate_name):
-#    return
-#
+def is_gate_pauli_equivalent_to_this_standard_unitary(gate_unitary,standard_gate_name):
+    """
+    Returns True if the unitary `gate_unitary` is, when pre- and post-multiplied by some
+    Pauli and up to phase, the standard gate specified by the name `standard_gate_name`. 
+    The correspondence between the standard names and unitaries is w.r.t the internally-used 
+    gatenames (see get_internal_gate_unitaries()).
+
+    Currently only supported for Clifford gates.
+
+    Parameters
+    ----------
+    gate_unitary : complex np.array
+        The unitary to test.
+
+    standard_gate_name : str
+        The standard gatename to check whether the unitary `gate_unitary` is (e.g., 'CNOT').
+
+    Returns
+    -------
+    bool
+        True if the `gate_unitary` is, up to phase and Pauli-multiplication, the unitary 
+        specified `standard_gate_name`. False otherwise.
+    """
+    std_symplectic_reps = _symp.get_internal_gate_symplectic_representations()
+    gate_symplectic_rep = _symp.unitary_to_symplectic(gate_unitary)
+
+    if _np.shape(gate_symplectic_rep[0]) != _np.shape(std_symplectic_reps[standard_gate_name][0]):
+        return False
+    else:
+        return _np.allclose(gate_symplectic_rep[0],std_symplectic_reps[standard_gate_name][0])
 
 def get_standard_gatename_unitaries():
     """
@@ -179,30 +208,30 @@ def get_standard_gatename_unitaries():
     std_unitaries['Gtdag'] =_np.array([[1.,0.],[0.,_np.exp(-1j*_np.pi/4)]],complex)
     # The 1-qubit Clifford group. The labelling is the same as in the the 1-qubit Clifford group generated
     # in pygsti.extras.rb.group, and also in the internal standard unitary (but with 'Gci' -> 'Ci')
-    std_unitaries['Gc0'] = _np.array([[1,0],[0,1]],complex)
+    std_unitaries['Gc0'] = _np.array([[1,0],[0,1]],complex) # This is Gi
     std_unitaries['Gc1'] = _np.array([[1,-1j],[1,1j]],complex)/_np.sqrt(2)
-    std_unitaries['Gc2'] = _np.array([[1,1],[1j,-1j]],complex)/_np.sqrt(2)
-    std_unitaries['Gc3'] = _np.array([[0,1],[1,0]],complex)
+    std_unitaries['Gc2'] = _np.array([[1,1],[1j,-1j]],complex)/_np.sqrt(2) 
+    std_unitaries['Gc3'] = _np.array([[0,1],[1,0]],complex) # This is Gxpi (up to phase)
     std_unitaries['Gc4'] = _np.array([[-1,-1j],[1,-1j]],complex)/_np.sqrt(2)
     std_unitaries['Gc5'] = _np.array([[1,1],[-1j,1j]],complex)/_np.sqrt(2)
-    std_unitaries['Gc6'] = _np.array([[0,-1j],[1j,0]],complex)
-    std_unitaries['Gc7'] = _np.array([[1j,1],[-1j,1]],complex)/_np.sqrt(2)
+    std_unitaries['Gc6'] = _np.array([[0,-1j],[1j,0]],complex) # This is Gypi (up to phase)
+    std_unitaries['Gc7'] = _np.array([[1j,1],[-1j,1]],complex)/_np.sqrt(2) 
     std_unitaries['Gc8'] = _np.array([[1j,-1j],[1,1]],complex)/_np.sqrt(2)
-    std_unitaries['Gc9'] = _np.array([[1,0],[0,-1]],complex)
+    std_unitaries['Gc9'] = _np.array([[1,0],[0,-1]],complex) # This is Gzpi
     std_unitaries['Gc10'] = _np.array([[1,1j],[1,-1j]],complex)/_np.sqrt(2)
     std_unitaries['Gc11'] = _np.array([[1,-1],[1j,1j]],complex)/_np.sqrt(2)
-    std_unitaries['Gc12'] = _np.array([[1,1],[1,-1]],complex)/_np.sqrt(2)
-    std_unitaries['Gc13'] = _np.array([[0.5-0.5j,0.5+0.5j],[0.5+0.5j,0.5-0.5j]],complex)
-    std_unitaries['Gc14'] = _np.array([[1,0],[0,1j]],complex)
-    std_unitaries['Gc15'] = _np.array([[1,1],[-1,1]],complex)/_np.sqrt(2)
-    std_unitaries['Gc16'] = _np.array([[0.5+0.5j,0.5-0.5j],[0.5-0.5j,0.5+0.5j]],complex)
+    std_unitaries['Gc12'] = _np.array([[1,1],[1,-1]],complex)/_np.sqrt(2) # This is Gh
+    std_unitaries['Gc13'] = _np.array([[0.5-0.5j,0.5+0.5j],[0.5+0.5j,0.5-0.5j]],complex) # This is Gxmpi2 (up to phase)
+    std_unitaries['Gc14'] = _np.array([[1,0],[0,1j]],complex) # THis is Gzpi2 / Gp (up to phase)
+    std_unitaries['Gc15'] = _np.array([[1,1],[-1,1]],complex)/_np.sqrt(2) # This is Gympi2 (up to phase)
+    std_unitaries['Gc16'] = _np.array([[0.5+0.5j,0.5-0.5j],[0.5-0.5j,0.5+0.5j]],complex) # This is Gxpi2 (up to phase)
     std_unitaries['Gc17'] = _np.array([[0,1],[1j,0]],complex)
     std_unitaries['Gc18'] = _np.array([[1j,-1j],[-1j,-1j]],complex)/_np.sqrt(2)
     std_unitaries['Gc19'] = _np.array([[0.5+0.5j,-0.5+0.5j],[0.5-0.5j,-0.5-0.5j]],complex)
     std_unitaries['Gc20'] = _np.array([[0,-1j],[-1,0]],complex)
-    std_unitaries['Gc21'] = _np.array([[1,-1],[1,1]],complex)/_np.sqrt(2)
+    std_unitaries['Gc21'] = _np.array([[1,-1],[1,1]],complex)/_np.sqrt(2) # This is Gypi2 (up to phase)
     std_unitaries['Gc22'] = _np.array([[0.5+0.5j,0.5-0.5j],[-0.5+0.5j,-0.5-0.5j]],complex)
-    std_unitaries['Gc23'] = _np.array([[1,0],[0,-1j]],complex)
+    std_unitaries['Gc23'] = _np.array([[1,0],[0,-1j]],complex) # This is Gzmpi2 / Gpdag (up to phase)
     # Two-qubit gates
     std_unitaries['Gcphase'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.],[0.,0.,0.,-1.]],complex)
     std_unitaries['Gcnot'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,0.,1.],[0.,0.,1.,0.]],complex)
@@ -244,3 +273,83 @@ def get_standard_gatenames_quil_conversions():
     std_gatenames_to_quil['Gcnot'] = 'CNOT'
 
     return std_gatenames_to_quil
+
+def get_standard_gatenames_qasm_conversions():
+    """
+    A dictionary converting the gates with standard names 
+    (see get_standard_gatename_unitaries()) to the QASM
+    names for these gates.
+
+    Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
+    are not enforced to correspond to the expected unitaries. So, if the user
+    has, say, defined 'Gh' to be something other than the Hadamard gate this 
+    conversion dictionary will be incorrect.
+
+    Returns
+    -------
+    dict mapping strings to strings.
+    """
+    std_gatenames_to_qasm = {}
+    std_gatenames_to_qasm['Gi'] = 'id'
+    std_gatenames_to_qasm['Gxpi2'] = 'u3(1.570796326794897, 4.71238898038469, 1.570796326794897)' # [1, 3, 1] * pi/2
+    std_gatenames_to_qasm['Gxmpi2'] = 'u3(1.570796326794897, 1.570796326794897, 4.71238898038469)' # [1, 1, 3] * pi/2
+    std_gatenames_to_qasm['Gxpi'] = 'x'
+    std_gatenames_to_qasm['Gzpi2'] = 'u3(0., 0., 1.570796326794897)' # [0, 0, 1] * pi/2
+    std_gatenames_to_qasm['Gzmpi2'] = 'u3(0., 0., 4.71238898038469)' # [0, 0, 3] * pi/2 
+    std_gatenames_to_qasm['Gzpi'] = 'z'
+    std_gatenames_to_qasm['Gypi2'] = 'u3(1.570796326794897, 0. 0.)' # [1, 0, 0] * pi/2
+    std_gatenames_to_qasm['Gympi2'] = 'u3(1.570796326794897, 3.141592653589793, 3.141592653589793)' # [1, 2, 2] * pi/2
+    std_gatenames_to_qasm['Gypi'] = 'y'
+    std_gatenames_to_qasm['Gp'] = 's' 
+    std_gatenames_to_qasm['Gpdag'] = 'sdg'
+    std_gatenames_to_qasm['Gh'] = 'h'
+    std_gatenames_to_qasm['Gt'] = 't'
+    std_gatenames_to_qasm['Gtdag'] = 'tdg'
+    std_gatenames_to_qasm['Gcphase'] = 'cz'
+    std_gatenames_to_qasm['Gcnot'] = 'cx'
+    std_gatenames_to_qasm['Gswap'] = 'swap'
+
+    std_gatenames_to_qasm['Gc0'] = 'u3(0., 0., 0.)' # [0, 0, 0] * pi/2 (thi is Gi)
+    std_gatenames_to_qasm['Gc1'] = 'u3(1.570796326794897, 0., 1.570796326794897)' # [1, 0, 1] * pi/2
+    std_gatenames_to_qasm['Gc2'] = 'u3(1.570796326794897, 1.570796326794897, 3.141592653589793)' # [1, 1, 2] * pi/2
+    std_gatenames_to_qasm['Gc3'] = 'u3(3.141592653589793, 0., 3.141592653589793)' # [2, 0, 2] * pi/2 (this is Gxpi)
+    std_gatenames_to_qasm['Gc4'] = 'u3(1.570796326794897, 3.141592653589793, 4.71238898038469)' # [1, 2, 3] * pi/2
+    std_gatenames_to_qasm['Gc5'] = 'u3(1.570796326794897, 4.71238898038469, 3.141592653589793)' # [1, 3, 2] * pi/2
+    std_gatenames_to_qasm['Gc6'] = 'u3(3.141592653589793, 0., 0.)' # [2, 0, 0] * pi/2 (this is Gypi)
+    std_gatenames_to_qasm['Gc7'] = 'u3(1.570796326794897, 3.141592653589793, 1.570796326794897)' # [1, 2, 1] * pi/2
+    std_gatenames_to_qasm['Gc8'] = 'u3(1.570796326794897, 4.71238898038469, 0.)' # [1, 3, 0] * pi/2
+    std_gatenames_to_qasm['Gc9'] = 'u3(0., 0., 3.141592653589793)' # [0, 0, 2] * pi/2 (this is Gzpi)
+    std_gatenames_to_qasm['Gc10'] = 'u3(1.570796326794897, 0., 4.71238898038469)' # [1, 0, 3] * pi/2
+    std_gatenames_to_qasm['Gc11'] = 'u3(1.570796326794897, 1.570796326794897, 0.)' # [1, 1, 0] * pi/2
+    std_gatenames_to_qasm['Gc12'] = 'u3(1.570796326794897, 0., 3.141592653589793)' # [1, 0, 2] * pi/2 (this is Gh)
+    std_gatenames_to_qasm['Gc13'] = 'u3(1.570796326794897, 1.570796326794897, 4.71238898038469)' # [1, 1, 3] * pi/2 (this is Gxmpi2 )
+    std_gatenames_to_qasm['Gc14'] = 'u3(0., 0., 1.570796326794897)' # [0, 0, 1] * pi/2 (this is Gzpi2 / Gp)
+    std_gatenames_to_qasm['Gc15'] = 'u3(1.570796326794897, 3.141592653589793, 3.141592653589793)' # [1, 2, 2] * pi/2 (the is Gympi2)
+    std_gatenames_to_qasm['Gc16'] = 'u3(1.570796326794897, 4.71238898038469, 1.570796326794897)' # [1, 3, 1] * pi/2 (this is Gxpi2 )
+    std_gatenames_to_qasm['Gc17'] = 'u3(3.141592653589793, 0., 1.570796326794897)' # [2, 0, 1] * pi/2
+    std_gatenames_to_qasm['Gc18'] = 'u3(1.570796326794897, 3.141592653589793, 0.)' # [1, 2, 0] * pi/2
+    std_gatenames_to_qasm['Gc19'] = 'u3(1.570796326794897, 4.71238898038469, 4.71238898038469)' # [1, 3, 3] * pi/2
+    std_gatenames_to_qasm['Gc20'] = 'u3(3.141592653589793, 0., 4.71238898038469)' # [2, 0, 3] * pi/2
+    std_gatenames_to_qasm['Gc21'] = 'u3(1.570796326794897, 0., 0.)' # [1, 0, 0] * pi/2 (this is Gypi2)
+    std_gatenames_to_qasm['Gc22'] = 'u3(1.570796326794897, 1.570796326794897, 1.570796326794897)' # [1, 1, 1] * pi/2
+    std_gatenames_to_qasm['Gc23'] = 'u3(0., 0., 4.71238898038469)' # [0, 0, 3] * pi/2 (this is Gzmpi2 / Gpdag)
+
+    return std_gatenames_to_qasm
+
+def qasm_u3(theta, phi, lamb, output='unitary'):
+    """
+    The u3 1-qubit gate of QASM, returned as a unitary
+    if output = 'unitary' and as a processmatrix in the
+    Pauli basis if out = 'superoperater.'
+    """    
+    u3_unitary = _np.array([[_np.cos(theta/2),-1*_np.exp(1j*lamb)*_np.sin(theta/2)], 
+                           [_np.exp(1j*phi)*_np.sin(theta/2), _np.exp(1j*(lamb+phi))*_np.cos(theta/2)]])
+    
+    if output == 'unitary':
+        return u3_unitary
+    
+    elif output == 'superoperator':
+        u3_superoperator = _gts.unitary_to_pauligate(u3_unitary)           
+        return u3_superoperator
+
+    else: raise ValueError("The `output` string is invalid!")
