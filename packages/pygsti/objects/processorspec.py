@@ -17,7 +17,7 @@ from .qubitgraph import QubitGraph as _QubitGraph
 from ..baseobjs import Label as _Label
 from . import gate as _gate
 from ..tools import gatetools as _gt
-from ..tools import internalgates as _ig
+from ..tools import internalgates as _itgs
 
 class ProcessorSpec(object):
     """
@@ -106,7 +106,7 @@ class ProcessorSpec(object):
 
         # Stores the basic unitary matrices defining the gates, as it is convenient to have these easily accessable.
         self.root_gate_unitaries = nonstd_gate_unitaries.copy()
-        std_gate_unitaries = _cnst.get_standard_gate_unitaries()
+        std_gate_unitaries = _itgs.get_standard_gatename_unitaries()
         for gname in gate_names:
             try:
                 self.root_gate_unitaries[gname] = std_gate_unitaries[gname]
@@ -117,7 +117,7 @@ class ProcessorSpec(object):
         # may cause strange behaviour if there are multiple identities -- so maybe we need to check for that.
         self.identity = None
         for gn in self.root_gate_names:
-            if _ig.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'I'):
+            if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'I'):
                 self.identity = gn
                 break
 
@@ -303,7 +303,7 @@ class ProcessorSpec(object):
         # For printing to screen what the compiler is doing.
         descs = {'paulieq': 'up to paulis', 'absolute':''}
         # Lists that are all the hard-coded 1-qubit and 2-qubit gates.
-        # todo: should probably import these from _igs somehow.
+        # todo: should probably import these from _itgss somehow.
         hardcoded_oneQgates = ['I', 'X', 'Y', 'Z', 'H', 'P', 'HP', 'PH', 'HPH' ] + ['C'+str(i) for i in range(24)]
         hardcoded_twoQgates = ['CNOT','CPHASE','SWAP']
 
@@ -340,13 +340,13 @@ class ProcessorSpec(object):
             # Look to see if we have a CNOT gate in the gateset (with any name).
             cnot_name = None
             for gn in self.root_gate_names:
-                if _ig.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'CNOT'):
+                if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'CNOT'):
                     cnot_name = gn                   
                     break
 
             H_name = None
             for gn in self.root_gate_names:
-                if _ig.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'H'):
+                if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'H'):
                     H_name = gn
                     break
 
@@ -363,7 +363,7 @@ class ProcessorSpec(object):
                 if cnot_name is None:
                     cphase_name = None
                     for gn in self.root_gate_names:
-                        if _ig.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'CPHASE'):
+                        if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'CPHASE'):
                             cphase_name = gn                   
                             break
                     # If we find CPHASE, we add it into the compilation
@@ -465,33 +465,6 @@ class ProcessorSpec(object):
                             self.gate_inverse[gname1] = gname2
                             self.gate_inverse[gname2] = gname1
            
-    def simulate(self, circuit, modelname):
-        """
-        Compute the outcome probabilities of the circuit `circuit` (a Circuit object)
-        using the GateSet given by self.models[`modelname`] as a model for the gates.
-        This is a wrap-around for the simulator in the specified GateSet. See the
-        relevant GateSet.probs() docstring for more information.
-
-        Parameters
-        ----------
-        circuit : Circuit
-            The circuit to simulate. Except for the circuit.identity gate, this circuit
-            should contain only gates (as `Label` objects) that are also in the GateSet
-            specified by `modelname`.
-
-        modelname : str
-            A key to a GateSet, stored in the dictionary self.models. This GateSet is
-            a description of the gate and SPAM operations corresponding to the labels 
-            stored in the `circuit` Circuit object.
-
-        Returns
-        -------
-        probs : dictionary
-            A dictionary with keys equal to the possible outcomes and values
-            that are float probabilities.
-        """      
-        return self.models[modelname].probs(circuit)
-
     # Tim is going to replace this at some point with a useful way to specify how "costly" using different qubits/gates is estimated to be, so that
     # Clifford compilers etc can take this into account.                        
     # def construct_compiler_costs(self, custom_connectivity=None):
