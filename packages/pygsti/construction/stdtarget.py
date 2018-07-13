@@ -15,6 +15,7 @@ import numpy as _np
 
 from . import stdlists as _stdlists
 from .. import objects as _objs
+from ..tools import mpitools as _mpit
     
 def _get_cachefile_names(std_module, param_type, sim_type, py_version):
     """ TODO: docstring (for this entire module) """
@@ -53,7 +54,7 @@ def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=Fal
     gs_terms.set_simtype("termorder:%d" % termOrder,my_calc_cache)
 
     #divide up strings among ranks
-    my_expList, _,_ = pygsti.tools.mpitools.distribute_indices(listOfExperiments,comm,False)
+    my_expList, _,_ = _mpit.distribute_indices(listOfExperiments,comm,False)
     rankStr = "" if (comm is None) else "Rank%d: " % comm.Get_rank()
 
     if comm is not None and comm.Get_rank() == 0:
@@ -107,7 +108,7 @@ def _write_calccache(calc_cache, key_fn, val_fn, json_too=False):
     values = [calc_cache[k] for k in keys]
     vtape = []; ctape = []
     for v in values:
-        vt,ct = v.compact()
+        vt,ct = v #.compact() # Now cache hold compact polys already
         vtape.append(vt)
         ctape.append(ct)    
     vtape = _np.concatenate(vtape)
