@@ -183,6 +183,93 @@ def do_model_test(modelGateFilenameOrSet,
                                 output_pkl, verbosity, profiler)
 
 
+def do_linear_gst(dataFilenameOrSet, targetGateFilenameOrSet,
+                  prepStrsListOrFilename, effectStrsListOrFilename,
+                  gaugeOptParams=None, advancedOptions=None, comm=None,
+                  memLimit=None, output_pkl=None, verbosity=2):
+    """
+    Perform Linear Gate Set Tomography (LGST).
+
+    This function differs from the lower level :function:`do_lgst` function
+    in that it may perform a post-LGST gauge optimization and this routine
+    returns a :class:`Results` object containing the LGST estimate.
+
+    Overall, this is a high-level driver routine which can be used similarly
+    to :function:`do_long_sequence_gst`  whereas `do_lgst` is a low-level
+    routine used when building your own algorithms.
+
+
+    Parameters
+    ----------
+    dataFilenameOrSet : DataSet or string
+        The data set object to use for the analysis, specified either directly
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
+
+    targetGateFilenameOrSet : GateSet or string
+        The target gate set, specified either directly or by the filename of a
+        gateset file (text format).
+
+    prepStrsListOrFilename : (list of GateStrings) or string
+        The state preparation fiducial gate strings, specified either directly
+        or by the filename of a gate string list file (text format).
+
+    effectStrsListOrFilename : (list of GateStrings) or string or None
+        The measurement fiducial gate strings, specified either directly or by
+        the filename of a gate string list file (text format).  If ``None``,
+        then use the same strings as specified by prepStrsListOrFilename.
+
+    gaugeOptParams : dict, optional
+        A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
+        how the final gauge optimization should be performed.  The keys and
+        values of this dictionary may correspond to any of the arguments
+        of :func:`gaugeopt_to_target` *except* for the first `gateset`
+        argument, which is specified internally.  The `targetGateset` argument,
+        *can* be set, but is specified internally when it isn't.  If `None`,
+        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        is used.  If `False`, then then *no* gauge optimization is performed.
+
+    advancedOptions : dict, optional
+        Specifies advanced options most of which deal with numerical details of
+        the objective function or expert-level functionality.  See
+        :function:`do_long_sequence_gst`.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors.  In this LGST case, this is just the gauge
+        optimization.
+
+    memLimit : int or None, optional
+        A rough memory limit in bytes which restricts the amount of memory
+        used (per core when run on multi-CPUs).
+
+    output_pkl : str or file, optional
+        If not None, a file(name) to `pickle.dump` the returned `Results` object
+        to (only the rank 0 process performs the dump when `comm` is not None).
+
+    verbosity : int, optional
+       The 'verbosity' option is an integer specifying the level of
+       detail printed to stdout during the calculation.
+
+    Returns
+    -------
+    Results
+    """
+    gs_target = _load_gateset(targetGateFilenameOrSet)
+    germs = _construction.gatestring_list([()] + [(gl,) for gl in gs_target.gates.keys()]) # just the single gates
+    maxLengths = [1] # we only need maxLength == 1 when doing LGST
+    
+    defAdvOptions = {'onBadFit': [], 'estimateLabel': 'LGST'}
+    if advancedOptions is None: advancedOptions = {}
+    advancedOptions.update(defAdvOptions)
+    advancedOptions['objective'] = 'lgst' # not override-able
+
+    return do_long_sequence_gst(dataFilenameOrSet, gs_target,
+                                prepStrsListOrFilename,effectStrsListOrFilename,
+                                germs, maxLengths, gaugeOptParams,
+                                advancedOptions, comm, memLimit,
+                                output_pkl, verbosity)
+
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
@@ -1204,7 +1291,6 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
     badFitThreshold = advancedOptions.get('badFitThreshold',DEFAULT_BAD_FIT_THRESHOLD)
     if ret.estimates[estlbl].misfit_sigma(evaltree_cache=evaltree_cache, comm=comm) > badFitThreshold:
         onBadFit = advancedOptions.get('onBadFit',["Robust+"]) # empty list => 'do nothing'
-        if objective == "lgst": onBadFit = [] # we expect lgst fit to be very rough
         
         if len(onBadFit) > 0 and parameters.get('weights',None) is None:
 
