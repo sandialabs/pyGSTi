@@ -14,7 +14,7 @@ from ..baseobjs import Label as _Label
 from ..tools import symplectic as _symp
 from ..tools import matrixmod2 as _mtx
 
-from . import compilecnot as _cc
+from . import compilecnotcircuit as _cc
 
 #
 # Todo : change to have a algorithms list for the CNOT circuit.

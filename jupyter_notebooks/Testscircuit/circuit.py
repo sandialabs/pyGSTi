@@ -263,4 +263,17 @@ def test_circuit():
         fail = False
     except:
         pass
-    assert(fail)    
+    assert(fail)
+    
+    # Create a pspec, to test the circuit simulator.
+    n = 4
+    qubit_labels = ['Q'+str(i) for i in range(n)]
+    availability = {'Gcnot':[('Q'+str(i),'Q'+str(i+1)) for i in range(0,n-1)]}
+    gate_names = ['Gi','Gh','Gp','Gxpi','Gpdag','Gcnot']
+    ps = ProcessorSpec(n,gate_names=gate_names,qubit_labels=qubit_labels)
+
+    # Tests the circuit simulator
+    c = Circuit(gatestring=[Label('Gh','Q0'),Label('Gcnot',('Q0','Q1'))],line_labels=['Q0','Q1'],identity='Gi')
+    out = c.simulate(ps.models['target'])
+    assert(abs(out['00'] - 0.5) < 10**-10)
+    assert(abs(out['11'] - 0.5) < 10**-10)
