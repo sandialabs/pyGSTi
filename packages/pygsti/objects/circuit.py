@@ -684,15 +684,13 @@ class Circuit(_gstr.GateString):
                     # We never consider not having a compilation for the identity to be a failure.
                     if gate.name != self.identity and not allow_unchanged_gates:
                         raise ValueError("`compilation` does not contain, or cannot generate a compilation for {}!".format(gate))
-                    # If a new name for the identity element has been specified, we change to that new name.
-                    if gate.name == self.identity and identity is not None:
-                        self.line_items[q][d-1-l] = _Label(identity,gate.qubits)
 
         # If we are given a potentially new identity label, change to this. We do this after changing gate library, as
         # it's useful to be able to treat gates that have the *old* identity label differently: we don't fail if there is
-        # no compilation given for them, but we do change the name if `identity` is specifed.
+        # no compilation given for them, but we do change the name if `identity` is specifed. Because `replace_gate_with_circuit`
+        # can add idles at various points it's also important to sweep the entire circuit and remove any idles.
         if identity is not None:
-            self.identity = identity
+            self.replace_identity(identity)
 
         # If specified, perform the depth compression. It is better to do this *after* the identity name has been changed.
         if depth_compression:            
@@ -941,6 +939,12 @@ class Circuit(_gstr.GateString):
         assert(not self._static),"Cannot edit a read-only circuit!"
         # Keeps track of whether any changes have been made to the circuit.
         compression_implemented = False
+        # If the circuit is depth 0, we quit as the code below fails in that case
+        if self.depth() == 0:
+            if return_flag:
+                return False
+            else:
+                return
         # Stores which layer we can move the current gate forwarded to.
         can_move_to_layer = _np.zeros(self.number_of_lines,int) 
         # If the first layer isn't an idle, we set this to 1.
@@ -953,6 +957,7 @@ class Circuit(_gstr.GateString):
         for j in range(1,self.depth()):
             # Look at each line in turn
             for q in range(0,self.number_of_lines):
+                #print(j,q)
                 gate = self.line_items[q][j]
                 # If the gate isn't the identity, we try and move it forward. If it
                 # is the identity, we don't change can_move_to_layer[q].
@@ -1085,11 +1090,16 @@ class Circuit(_gstr.GateString):
             print("- Implementing circuit depth compression")
             print("  - Circuit depth before compression is {}".format(self.depth()))
                
+        #try:
         flag1 = False
         if oneQgate_relations is not None:                            
             flag1 = self.combine_oneQgates(oneQgate_relations,return_flag=True)
         flag2 = self.shift_gates_forward(return_flag=True)   
         flag3 = self.delete_idle_layers(return_flag=True)
+        #except:
+        #    print(self.number_of_lines, len(self.line_labels), self.line_labels, len(self.line_items),len(self.line_items[0]))
+        #    print(self.line_items)
+        #    assert(False)
 
         if verbosity > 0:
             if not (flag1 or flag2 or flag3):
