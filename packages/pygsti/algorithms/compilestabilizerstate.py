@@ -581,6 +581,7 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s, pspec=None, calg='RCA
     s4, instructions4, success = stage4(s3)
     instructions4.reverse()
     assert(success)
+
     #print(s4)
     
     # CNOT circuit from the RHS to map the URH and LRH submatrices of s from M to I.
@@ -605,9 +606,7 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s, pspec=None, calg='RCA
     precircuit_instructions = instructions2 + instructions5
     
     n = len(s[0,:])//2
-    
-    
-    
+       
     if calg != 'BGE':
         # Let's replace the instructions for 4 with a better CNOT circuit compiler
         CNOtc = _Circuit(gatestring= instructions4,num_lines=n)

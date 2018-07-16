@@ -132,6 +132,8 @@ def logl_terms(gateset, dataset, gatestring_list=None,
         evalTree = evaltree_cache['evTree']
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
+        #tree_gatestring_list = evalTree.generate_gatestring_list()
+        # Note: this is != gatestring_list, as the tree hold *compiled* gatestrings
     else:
         evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list, dataset=dataset)
 
@@ -987,7 +989,8 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
         outcomes_lookup = evaltree_cache['outcomes_lookup']
 
         #construct raw_dict & nEls from tree (holds keys & vals separately)
-        gatestring_list = evalTree.generate_gatestring_list() #override argument?
+        #tree_gatestring_list = evalTree.generate_gatestring_list()
+        # Note: this is != gatestring_list, as the tree hold *compiled* gatestrings
         raw_dict = _OrderedDict(list(zip(gatestring_list,
                                          evalTree.compiled_gatestring_spamTuples)))
         nEls = evalTree.num_final_elements()

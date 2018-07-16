@@ -90,26 +90,24 @@ class Circuit(_gstr.GateString):
         if line_items is not None:
             assert(gatestring is None), "Cannot specify both `line_items` and `gatestring`"
             self.line_items = line_items
-            self.number_of_lines = len(self.line_items)
             if num_lines is not None:
-                assert(num_lines == self.number_of_lines), "Inconsistent `line_items` and `num_lines` arguments!"
+                assert(num_lines == len(line_items)), "Inconsistent `line_items` and `num_lines` arguments!"
             if line_labels is not None:
-                assert(len(line_labels) == self.number_of_lines), "Inconsistent `line_items` and `line_labels` arguments!"
+                assert(len(line_labels) == len(line_items)), "Inconsistent `line_items` and `line_labels` arguments!"
                 self.line_labels = list(line_labels)
             else:
-                self.line_labels = list(range(self.number_of_lines))
-
+                self.line_labels = list(range(len(line_items)))
+                
         else:
             assert(num_lines is not None or line_labels is not None), \
                 "`num_lines` or `line_labels`  must be specified whenever `line_items` is None!"
             if num_lines is not None:
                 assert(isinstance(num_lines, _numbers.Integral)), "`num_lines` must be an integer!"
-                self.number_of_lines = num_lines
             if line_labels is not None:
                 self.line_labels = list(line_labels)
-                self.number_of_lines = len(line_labels)
+                num_lines = len(list(line_labels))
             else:
-                self.line_labels = list(range(self.number_of_lines))
+                self.line_labels = list(range(num_lines))
             
             if gatestring is not None:
                 self._initialize_from_gatestring(gatestring, parallelize)
@@ -139,7 +137,7 @@ class Circuit(_gstr.GateString):
     def _flatten_to_tup(self):
         """ Flatten self.line_items into a serial tuple of gate labels """
         #print("DB: flattening to tuple!!")
-        if self.number_of_lines <= 0:
+        if self.number_of_lines() <= 0:
             return ()
 
         label_list = []
@@ -201,6 +199,12 @@ class Circuit(_gstr.GateString):
             self.done_editing()
         return super(Circuit,self).__hash__()
    
+    def number_of_lines(self):
+        """
+        The number of lines in the circuit
+        """
+        return len(self.line_labels)
+
     def copy(self):
         """
         Returns a copy of the circuit.
@@ -213,7 +217,7 @@ class Circuit(_gstr.GateString):
         """
         assert(not self._static),"Cannot edit a read-only circuit!"
         self.line_items = []
-        for i in range(0,self.number_of_lines):
+        for i in range(0,self.number_of_lines()):
             self.line_items.append([])
         self._tup_dirty = self._str_dirty = True
                         
@@ -318,7 +322,7 @@ class Circuit(_gstr.GateString):
         # gate on other lines around. But otherwise we add in an idle layer at this point.   
         if not self.lines_are_idle_at_layer(gatelbl.qubits,j):    
             # Add an idle layer.
-            for i in range(0,self.number_of_lines):
+            for i in range(0,self.number_of_lines()):
                 self.line_items[i].insert(j,_Label(self.identity,self.line_labels[i]))
             
         # Put the gate label in at the jth layer - note this label may
@@ -387,7 +391,7 @@ class Circuit(_gstr.GateString):
         """
         assert(not self._static),"Cannot edit a read-only circuit!"        
         # Add an idle layer.
-        for i in range(0,self.number_of_lines):
+        for i in range(0,self.number_of_lines()):
             self.line_items[i].insert(j,_Label(self.identity,self.line_labels[i]))
             
         # Put the gates in.
@@ -464,7 +468,7 @@ class Circuit(_gstr.GateString):
         None
         """
         assert(not self._static),"Cannot edit a read-only circuit!"
-        for q in range(0,self.number_of_lines):
+        for q in range(0,self.number_of_lines()):
             del self.line_items[q][j]
 
         self._tup_dirty = self._str_dirty = True
@@ -497,7 +501,7 @@ class Circuit(_gstr.GateString):
 
         # Keeps track of lines that are not in the circuit to insert -- so we can pad them with identities
         lines_to_pad = self.line_labels.copy()
-        for q in range(circuit.number_of_lines):
+        for q in range(circuit.number_of_lines()):
             llabel = circuit.line_labels[q]
             # If there are lines in the circuit to insert that aren't in this circuit, we go in here.
             if llabel not in self.line_labels:
@@ -550,6 +554,55 @@ class Circuit(_gstr.GateString):
 
         """  
         self.insert_circuit(circuit,0)
+
+    def tensor_circuit(self, circuit, line_order=None):
+        """
+        Tensors a circuit to this circuit. It creates a circuit that consists of the current
+        circuit in parallel with the circuit of `circuit`. The line_labels of `circuit` must
+        be disjoint from the line_labels of this circuit, as otherwise applying the circuits
+        in parallel does not make sense. Note that the `identity` label of this circuit must
+        be the same as the `identity` label of `circuit`.
+
+        Parameters
+        ----------
+        circuit : A Circuit object
+            The circuit to be prefixed.
+
+        line_order : List, optional
+            A list of all the line labels specifying the order of the circuit in the updated
+            circuit. If None, the lines of `circuit` are added below the lines of this circuit.
+            Note that, for many purposes, the ordering of lines of the circuit is irrelevant.
+
+        Returns
+        -------
+        None  
+        """
+        assert(self.identity == circuit.identity), "The identity labels must be the same!"
+        for line_label in circuit.line_labels:
+            assert(line_label not in self.line_labels), "The line labels of the circuit to tensor must be distinct from the line labels of this circuit!"
+
+        if line_order is not None:
+            assert(set(line_order).issubset(set(self.line_labels + circuit.line_labels))), "The line order `line_order`, if not None, must be a list containing all and only the line labels of the two circuits!"
+            assert(set(self.line_labels + circuit.line_labels).issubset(set(line_order))), "The line order `line_order`, if not None, must be a list containing all and only the line labels of the two circuits!"
+            new_line_labels = line_order
+        else:
+            new_line_labels = self.line_labels + circuit.line_labels
+
+        # Make the circuits the same depth, by padding the end of whichever (if either) circuit is shorter.
+        cdepth = circuit.depth()
+        sdepth = self.depth()
+        if cdepth > sdepth:
+            for q in range(self.number_of_lines()):
+                self.line_items[q] += [_Label(self.identity,q) for i in range(cdepth-sdepth)]
+        elif cdepth < sdepth:
+            for q in range(circuit.number_of_lines()):
+                circuit.line_items[q] += [_Label(circuit.identity,q) for i in range(sdepth-cdepth)]
+        
+        self.insert_idling_wires(new_line_labels)
+
+        for llabel in circuit.line_labels:
+            lindex = self.line_labels.index(llabel)
+            self.line_items[lindex] = _copy.deepcopy(circuit.get_line(llabel))
                        
     def replace_gatename(self, old_gatename, new_gatename):
         """
@@ -573,7 +626,7 @@ class Circuit(_gstr.GateString):
         assert(not self._static),"Cannot edit a read-only circuit!"
 
         depth = self.depth()
-        for q in range(self.number_of_lines):
+        for q in range(self.number_of_lines()):
             for l in range(depth):
                 if self.line_items[q][l].name == old_gatename:
                     #self.line_items[q][l].name = new_gatename # This doesn't work now for some reason.
@@ -671,7 +724,7 @@ class Circuit(_gstr.GateString):
                 return compilation.get(gate,None)
         
         d = self.depth()
-        n = self.number_of_lines
+        n = self.number_of_lines()
         for l in range(0,d):
             for q in range(0,n):
                 gate = self.line_items[q][d-1-l]
@@ -725,7 +778,7 @@ class Circuit(_gstr.GateString):
         self.line_labels = [mapper_func(l) for l in self.line_labels]
 
         depth = self.depth()
-        for i in range(0,self.number_of_lines):
+        for i in range(0,self.number_of_lines()):
             for j in range(0,depth):
                 gate = self.line_items[i][j]
                 self.line_items[i][j] = _Label(gate.name,tuple([mapper_func(l) for l in gate.qubits]))
@@ -750,7 +803,7 @@ class Circuit(_gstr.GateString):
         assert(set(order) == set(self.line_labels)), "The line labels must be the same!"
         old_line_items = _copy.deepcopy(self.line_items)
         self.line_items = []
-        for i in range(0,self.number_of_lines):
+        for i in range(0,self.number_of_lines()):
             self.line_items.append(old_line_items[self.line_labels.index(order[i])])
         # Also need to change the line_labels
         self.line_labels = order
@@ -764,7 +817,7 @@ class Circuit(_gstr.GateString):
         assert(not self._static),"Cannot edit a read-only circuit!"
         # Find the idle lines
         allidle_list = []
-        num_lines = self.number_of_lines
+        num_lines = self.number_of_lines()
         for q in range(num_lines):
             allidle = True
             for i in range(self.depth()):
@@ -779,7 +832,6 @@ class Circuit(_gstr.GateString):
                 del self.line_items[num_lines-1-q]
                 del self.line_labels[num_lines-1-q]
 
-        self.number_of_lines = len(self.line_items)
         self._tup_dirty = self._str_dirty = True
 
     def insert_idling_wires(self, all_line_labels):
@@ -807,7 +859,6 @@ class Circuit(_gstr.GateString):
 
         self.line_labels = all_line_labels
         self.line_items = []
-        self.number_of_lines = len(all_line_labels)
 
         for llabel in all_line_labels:
             if llabel in old_line_labels:
@@ -826,7 +877,7 @@ class Circuit(_gstr.GateString):
         None
         """
         assert(not self._static),"Cannot edit a read-only circuit!"         
-        for q in range(0,self.number_of_lines):
+        for q in range(0,self.number_of_lines()):
             self.line_items[q].reverse()
         self._tup_dirty = self._str_dirty = True
 
@@ -870,7 +921,7 @@ class Circuit(_gstr.GateString):
         # A flag that is turned to True if any non-trivial re-arranging is implemented by this method.
         compression_implemented = False        
         # Loop through all the qubits, to try and compress squences of 1-qubit gates on the qubit in question.
-        for q in range(0,self.number_of_lines):
+        for q in range(0,self.number_of_lines()):
             # j keeps track of the layer of the *next* gate that we are going to try and combine with later gates.
             j = 0
             while j < self.depth()-1:
@@ -939,16 +990,17 @@ class Circuit(_gstr.GateString):
         assert(not self._static),"Cannot edit a read-only circuit!"
         # Keeps track of whether any changes have been made to the circuit.
         compression_implemented = False
-        # If the circuit is depth 0, we quit as the code below fails in that case
+        # If the circuit is depth 0, we quit as there is nothing to do (and the code below 
+        # fails in this case)
         if self.depth() == 0:
             if return_flag:
                 return False
             else:
                 return
         # Stores which layer we can move the current gate forwarded to.
-        can_move_to_layer = _np.zeros(self.number_of_lines,int) 
+        can_move_to_layer = _np.zeros(self.number_of_lines(),int) 
         # If the first layer isn't an idle, we set this to 1.
-        for q in range(0,self.number_of_lines):
+        for q in range(0,self.number_of_lines()):
             gate = self.line_items[q][0]
             if gate.name != self.identity:
                 can_move_to_layer[q] = 1
@@ -956,7 +1008,7 @@ class Circuit(_gstr.GateString):
         # Look at the gates in each circuit layer, and move them forward if we can
         for j in range(1,self.depth()):
             # Look at each line in turn
-            for q in range(0,self.number_of_lines):
+            for q in range(0,self.number_of_lines()):
                 #print(j,q)
                 gate = self.line_items[q][j]
                 # If the gate isn't the identity, we try and move it forward. If it
@@ -1124,7 +1176,7 @@ class Circuit(_gstr.GateString):
         
         layer = []
         qubits_used = []
-        for i in range(0,self.number_of_lines):
+        for i in range(0,self.number_of_lines()):
             
             gate = self.line_items[i][j]
             # Checks every element is a Label object.
@@ -1252,7 +1304,7 @@ class Circuit(_gstr.GateString):
         int        
         """
         size = 0
-        for q in range(0,self.number_of_lines):
+        for q in range(0,self.number_of_lines()):
             for j in range(0,self.depth()):
                 if self.line_items[q][j].name != self.identity:
                     size += 1
@@ -1269,7 +1321,7 @@ class Circuit(_gstr.GateString):
         int
         """           
         count = 0
-        for q in range(0,self.number_of_lines):
+        for q in range(0,self.number_of_lines()):
             for j in range(0,self.depth()):
                 if self.line_items[q][j].number_of_qubits == 2:
                     count += 1
@@ -1286,7 +1338,7 @@ class Circuit(_gstr.GateString):
         int
         """           
         count = 0
-        for q in range(0,self.number_of_lines):
+        for q in range(0,self.number_of_lines()):
             for j in range(0,self.depth()):
                 if self.line_items[q][j].number_of_qubits >= 2:
                     if self.line_items[q][j].qubits[0] == self.line_labels[q]:
@@ -1315,7 +1367,7 @@ class Circuit(_gstr.GateString):
         """
         f = 1.
         depth = self.depth()
-        for i in range(0,self.number_of_lines):
+        for i in range(0,self.number_of_lines()):
             for j in range(0,depth):
                 gate = self.line_items[i][j]
                 # So that we don't include multi-qubit gates more than once.
@@ -1345,12 +1397,12 @@ class Circuit(_gstr.GateString):
                 return str(lbl)
         
         max_labellen = [ max([ len(abbrev(self.line_items[i][j],i))
-                               for i in range(0,self.number_of_lines)])
+                               for i in range(0,self.number_of_lines())])
                          for j in range(0,self.depth()) ]
 
         max_linelabellen = max([len(str(llabel)) for llabel in self.line_labels])
 
-        for i in range(0,self.number_of_lines):
+        for i in range(self.number_of_lines()):
             s += 'Qubit {} '.format(self.line_labels[i]) + ' '*(max_linelabellen - len(str(self.line_labels[i]))) + '---'
             for j,maxlbllen in enumerate(max_labellen):
                 if self.line_items[i][j].name == self.identity:
@@ -1379,7 +1431,7 @@ class Circuit(_gstr.GateString):
         -------
         None
         """
-        n = self.number_of_lines
+        n = self.number_of_lines()
         d = self.depth()
         
         f = open(filename,'w') 
@@ -1392,7 +1444,6 @@ class Circuit(_gstr.GateString):
         f.write("\\begin{equation*}\n") 
         f.write("\Qcircuit @C=1.0em @R=0.5em {\n")
         
-        n = self.number_of_lines
         for q in range(0,n):
             qstring = '&'
             # The quantum wire for qubit q
