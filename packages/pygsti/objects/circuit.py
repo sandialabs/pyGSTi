@@ -1486,6 +1486,87 @@ class Circuit(_gstr.GateString):
             quil += "MEASURE {0} [{1}]\n".format(str(qubit_conversion[q]),str(qubit_conversion[q]))
             
         return quil  
+
+    def convert_to_openqasm(self, gatename_conversion=None, qubit_conversion=None):
+        """
+        Docstring todo.
+        """
+        # create standard conversations.
+        if gatename_conversion is None:
+            gatename_conversion = _itgs.get_standard_gatenames_openqasm_conversions()
+        if qubit_conversion is None:
+            # To tell us whether we have found a standard qubit labelling type.
+            standardtype = False
+            # Must first check they are strings, because can query q[0] for int q.
+            if all([isinstance(q,str) for q in self.line_labels]):
+                if all([q[0] == 'Q' for q in self.line_labels]):
+                    standardtype = True
+                    qubit_conversion = {llabel : int(llabel[1:]) for llabel in self.line_labels}
+            if all([isinstance(q,int) for q in self.line_labels]):
+                   qubit_conversion = {q : q for q in self.line_labels}
+                   standardtype = True
+            if not standardtype:
+                raise ValueError("No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
+        
+        num_qubits = len(self.line_labels)
+        
+        # Init the openqasm string.
+        openqasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\n'
+        
+        openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
+        openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
+        openqasm += '\n'
+        
+        depth = self.depth()
+        
+        # Go through the layers, and add the openqasm for each layer in turn.
+        for l in range(depth):
+            
+            # Get the layer, without identity gates and containing each gate only once.
+            layer = self.get_layer(l)
+            # For keeping track of which qubits have a gate on them in the layer.
+            qubits_used = []
+            
+            # Go through the (non-self.identity) gates in the layer and convert them to openqasm
+            for gate in layer:
+                assert(len(gate.qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
+                
+                # Find the openqasm for the gate.
+                openqasm_for_gate = gatename_conversion[gate.name]
+                for q in gate.qubits: 
+                    openqasm_for_gate += ' q[' + str(qubit_conversion[q])+']'
+                    if q != gate.qubits[-1]:
+                        openqasm_for_gate += ', '
+                openqasm_for_gate += ';\n'
+                # Add the openqasm for the gate to the openqasm string.
+                openqasm += openqasm_for_gate
+                
+                # Keeps track of the qubits that have been accounted for, and checks that hadn't been used
+                # although that should already be checked in the .get_layer(), which checks for its a valid 
+                # circuit layer.
+                assert(not set(gate.qubits).issubset(set(qubits_used)))
+                qubits_used += list(gate.qubits)
+            
+            # All gates that don't have a non-idle gate acting on them get an idle in the layer.
+            # Todo : is this needed? Ask Kenny.
+            for q in self.line_labels:
+                if q not in qubits_used:
+                    openqasm += 'id' + ' q[' + str(qubit_conversion[q]) +'];\n'
+                    
+            # Add in a barrier after every circuit layer. Todo: Should make this optional at some
+            # point and/or to agree with the "barriers" in the circuit (to be added).
+            openqasm += 'barrier '
+            for qidx in range(num_qubits-1):
+                openqasm += 'q[{0}], '.format(str(qidx))
+            openqasm += 'q[{0}];\n'.format(str(qidx+1))
+#            openqasm += ';'
+        
+        # Add in a measurement at the end.
+        for q in self.line_labels:
+            openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]),str(qubit_conversion[q]))
+            
+        return openqasm
+
     
     def simulate(self, gateset, return_all_outcomes=False): 
         """

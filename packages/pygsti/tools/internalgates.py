@@ -274,7 +274,7 @@ def get_standard_gatenames_quil_conversions():
 
     return std_gatenames_to_quil
 
-def get_standard_gatenames_qasm_conversions():
+def get_standard_gatenames_openqasm_conversions():
     """
     A dictionary converting the gates with standard names 
     (see get_standard_gatename_unitaries()) to the QASM
