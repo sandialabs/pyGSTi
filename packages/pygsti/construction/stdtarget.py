@@ -62,7 +62,7 @@ def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=Fal
 
     t0 = _time.time()
     for i,gstr in enumerate(my_expList):
-        print("%s%.2fs: Computing prob %d of %d" % (rankStr, _time.time()-t0,i,len(listOfExperiments)))
+        print("%s%.2fs: Computing prob %d of %d" % (rankStr, _time.time()-t0,i,len(my_expList)))
         gs_terms.probs(gstr)
     #gs_terms.bulk_probs(my_expList) # also fills cache, but allocs more mem at once
 
