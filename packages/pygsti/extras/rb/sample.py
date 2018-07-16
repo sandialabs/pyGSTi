@@ -938,17 +938,18 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     Circuit
         A random circuit, sampled as specified, of depth:
 
-            - 2*`length`, if not paulirandomize and not local clifford.
-            - 4*`length`+1 if paulirandomize and not local clifford.
-            - 2*`length` + X, if not paulirandomize and local clifford, where X is a random variable
+            - `length`, if not paulirandomize and not local clifford.
+            - 2*`length`+1 if paulirandomize and not local clifford.
+            - `length` + X, if not paulirandomize and local clifford, where X is a random variable
               that accounts for the depth from the layers of random 1-qubit Cliffords (X = 2 if the 1
               qubit Clifford gates are "native" gates in the ProcessorSpec).
-            - 4*`length`+1 + X, if paulirandomize and local clifford, where X is a random variable
+            - 2*`length`+1 + X, if paulirandomize and local clifford, where X is a random variable
               that accounts for the depth from the layers of random 1-qubit Cliffords (X = 2 if the 1
               qubit Clifford gates are "native" gates in the ProcessorSpec).        
-    """
-    assert(not ((not paulirandomize) and localclifford)), "If localclifford is True then paulirandomize must be True!"
-    
+    """    
+    assert(length % 2 == 0), "The mirror rb length `length` must be even!"
+    random_natives_circuit_length = length//2
+
     # This is used to fix the identity element in the circuits to be consistent with the pspec.identity element,
     # if there is one.
     if pspec.identity is not None:
@@ -956,17 +957,25 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     else:
         identity = 'I'
     if subsetQs is not None:
+        assert(isinstance(subsetQs,list)), "If not None, `subsetQs` must be a list!"
+        #n = 0
+        #allqubits = []
+        #for Qset in subsetsQs:
+        #    assert(isinstance(Qset,list)), "If not None, `subsetQs` must be a list of lists!"
+        #    n += len(Qset)
+        #    allqubits += Qset
         n = len(subsetQs)
-        qubits = subsetQs.copy()
+        allqubits = subsetQs
     else:
         n = pspec.number_of_qubits
-        qubits = pspec.qubit_labels.copy()
+        allqubits = pspec.qubit_labels.copy()
 
     # The hard-coded notation for that Pauli operators
     paulis = ['I','X','Y','Z']
     
     # Find a random circuit according to the sampling specified; this is the "out" circuit.
-    random_circuit = circuit(pspec,length,subsetQs=subsetQs,sampler=sampler,samplerargs=samplerargs)
+    random_circuit = circuit(pspec, random_natives_circuit_length, subsetQs=subsetQs, sampler=sampler, samplerargs=samplerargs)
+
     # Copy the circuit, to create the "back" circuit from the "out" circuit.
     random_circuit_inv = random_circuit.copy()
     # First we reverse the circuit; then we'll replace each gate with its inverse.
@@ -974,8 +983,8 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
 
     # Go through the circuit and replace every gate with its inverse, stored in the pspec. If the circuits
     # are length 0 this is skipped.
-    for i in range(0,n):
-        for j in range(0,length):
+    for i in range(n):
+        for j in range(random_natives_circuit_length):
             # This will fail if the gates do not all have an inverse in the set.
             inv_name = pspec.gate_inverse[random_circuit_inv.line_items[i][j].name]
             qubits_for_gate = random_circuit_inv.line_items[i][j].qubits
@@ -985,11 +994,11 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     # If we are Pauli randomizing, we add a indepedent uniformly random Pauli layer, as a compiled circuit, after 
     # every layer in the "out" and "back" circuits. If the circuits are length 0 we do nothing here.
     if paulirandomize:
-        for i in range(0,length):            
+        for i in range(random_natives_circuit_length):            
             pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
-            random_circuit.insert_circuit(pauli_circuit,length-i)
+            random_circuit.insert_circuit(pauli_circuit,random_natives_circuit_length-i)
             pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
-            random_circuit_inv.insert_circuit(pauli_circuit,length-i)
+            random_circuit_inv.insert_circuit(pauli_circuit,random_natives_circuit_length-i)
         
     # We then append the "back" circuit to the "out" circuit. At length 0 this will be a length 0 circuit.
     random_circuit.append_circuit(random_circuit_inv)
@@ -1010,8 +1019,8 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         # matter much which we do).
         oneQ_clifford_circuit_back = oneQ_clifford_circuit_out.copy()
         oneQ_clifford_circuit_back.reverse()
-        for i in range(0,n):
-            for j in range(0,oneQ_clifford_circuit_back.depth()):
+        for i in range(n):
+            for j in range(oneQ_clifford_circuit_back.depth()):
                 # This will fail if the gates do not all have an inverse in the set.
                 inv_name = pspec.gate_inverse[oneQ_clifford_circuit_back.line_items[i][j].name]
                 qubits_for_gate = oneQ_clifford_circuit_back.line_items[i][j].qubits
@@ -1026,17 +1035,39 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     assert(_np.array_equal(s_out,_np.identity(2*n,int)))
     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
     s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
-    idealout = []
-    for q in range(0,n):
+    idealout = {}
+    for q in range(n):
+
         measurement_out = _symp.pauli_z_measurement(s_outstate, p_outstate, q)
         bit = measurement_out[1]
         assert(bit == 0 or bit == 1), "Ideal output is not a computational basis state!"
         if not paulirandomize:
             assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
-        idealout.append(int(measurement_out[1]))  
+        idealout[allqubits[q]] = int(measurement_out[1])
     
     return random_circuit, idealout
 
+def mirror_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sampler='Qelimination', samplerargs=[], 
+                         localclifford=True, paulirandomize=True):
+
+    """
+    Todo : docstring.
+    """
+
+    circuits = []
+    idealout = []
+
+    for l in lengths:
+        circuits.append([])
+        idealout.append([])
+        for j in range(circuits_per_length):
+            c, iout = mirror_rb_circuit(pspec, l, subsetQs=subsetQs, sampler=sampler, samplerargs=samplerargs, 
+                                        localclifford=localclifford, paulirandomize=paulirandomize)
+
+            circuits[-1].append(c)
+            idealout[-1].append(iout)
+
+    return circuits, idealout
 
 def oneQ_rb_sequence(m, group_or_gateset, inverse=True, random_pauli=False, interleaved=None, 
                      group_inverse_only=False, group_prep=False, compilation=None,
