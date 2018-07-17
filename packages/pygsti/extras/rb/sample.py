@@ -718,6 +718,7 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         if not randomizeout:
             assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
         idealout.append(int(measurement_out[1]))
+    idealout = tuple(idealout)
     
     if not partitioned:
         outcircuit = full_circuit
@@ -726,7 +727,7 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
             outcircuit = [initial_circuit, random_circuit, inversion_circuit]
         else:
             outcircuit = [random_circuit, inversion_circuit]
-    
+
     return outcircuit, idealout
 
 def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[],
@@ -820,7 +821,8 @@ def clifford_rb_circuit(pspec, length, subsetQs=None, randomizeout=False, citera
         if not randomizeout:
             assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
         idealout.append(int(measurement_out[1]))
-            
+    idealout = tuple(idealout)
+
     return full_circuit, idealout
 
 def pauli_layer_as_compiled_circuit(pspec, subsetQs=None):
@@ -1035,7 +1037,7 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     assert(_np.array_equal(s_out,_np.identity(2*n,int)))
     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
     s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
-    idealout = {}
+    idealout = []
     for q in range(n):
 
         measurement_out = _symp.pauli_z_measurement(s_outstate, p_outstate, q)
@@ -1043,31 +1045,41 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         assert(bit == 0 or bit == 1), "Ideal output is not a computational basis state!"
         if not paulirandomize:
             assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
-        idealout[allqubits[q]] = int(measurement_out[1])
+        idealout.append(int(measurement_out[1]))
+    idealout = tuple(idealout)
     
     return random_circuit, idealout
 
 def mirror_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sampler='Qelimination', samplerargs=[], 
-                         localclifford=True, paulirandomize=True):
+                         localclifford=True, paulirandomize=True, descriptor=None):
 
     """
     Todo : docstring.
     """
-
-    circuits = []
-    idealout = []
+    experiment_dict = {}
+    experiment_dict['spec'] = {}
+    experiment_dict['spec']['subsetQs'] = subsetQs
+    experiment_dict['spec']['sampler'] = sampler
+    experiment_dict['spec']['samplerargs'] = samplerargs
+    experiment_dict['spec']['localclifford'] = localclifford
+    experiment_dict['spec']['paulirandomize'] = paulirandomize
+    experiment_dict['spec']['descriptor'] = descriptor
+    if subsetQs is not None:
+        experiment_dict['qubitordering'] = tuple(subsetQs)
+    else:
+        experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
+    experiment_dict['circuits'] = {}
+    experiment_dict['idealout'] = {}
 
     for l in lengths:
-        circuits.append([])
-        idealout.append([])
         for j in range(circuits_per_length):
             c, iout = mirror_rb_circuit(pspec, l, subsetQs=subsetQs, sampler=sampler, samplerargs=samplerargs, 
                                         localclifford=localclifford, paulirandomize=paulirandomize)
 
-            circuits[-1].append(c)
-            idealout[-1].append(iout)
+            experiment_dict['circuits'][l,j] = c
+            experiment_dict['idealout'][l,j] = iout
 
-    return circuits, idealout
+    return experiment_dict
 
 def oneQ_rb_sequence(m, group_or_gateset, inverse=True, random_pauli=False, interleaved=None, 
                      group_inverse_only=False, group_prep=False, compilation=None,

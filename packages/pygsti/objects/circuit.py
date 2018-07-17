@@ -1482,7 +1482,7 @@ class Circuit(_gstr.GateString):
         if qubit_conversion is None:
             # To tell us whether we have found a standard qubit labelling type.
             standardtype = False
-            # Must first check they are strings, because can query q[0] for int q.
+            # Must first check they are strings, because cannot query q[0] for int q.
             if all([isinstance(q,str) for q in self.line_labels]):
                 if all([q[0] == 'Q' for q in self.line_labels]):
                     standardtype = True
@@ -1548,7 +1548,7 @@ class Circuit(_gstr.GateString):
         if qubit_conversion is None:
             # To tell us whether we have found a standard qubit labelling type.
             standardtype = False
-            # Must first check they are strings, because can query q[0] for int q.
+            # Must first check they are strings, because cannot query q[0] for int q.
             if all([isinstance(q,str) for q in self.line_labels]):
                 if all([q[0] == 'Q' for q in self.line_labels]):
                     standardtype = True
@@ -1618,7 +1618,6 @@ class Circuit(_gstr.GateString):
             
         return openqasm
 
-    
     def simulate(self, gateset, return_all_outcomes=False): 
         """
         Compute the outcome probabilities of this Circuit using `gateset` as a
