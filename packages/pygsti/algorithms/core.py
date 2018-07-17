@@ -2634,8 +2634,6 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     profiler.add_time("do_mlgst: total time",tStart)
     return (logL_upperbound - deltaLogL), gs
 
-
-
 def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                        maxiter=100000, maxfev=None, tol=1e-6,
                        cptp_penalty_factor=0, spam_penalty_factor=0,
@@ -2796,7 +2794,6 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):
-            #printer.log('', 2)
             extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
             printer.show_progress(i, nIters, verboseMessages=extraMessages,
                                   prefix="--- Iterative MLGST:",

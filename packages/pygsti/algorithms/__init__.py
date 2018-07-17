@@ -10,6 +10,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # the package namespace
 
 from .core import *
+from .experimental import *
 from .grammatrix import *
 from .germselection import *
 from .fiducialpairreduction import *

@@ -284,6 +284,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - stringManipRules = list of (find,replace) tuples
         - germLengthLimits = dict of form {germ: maxlength}
         - recordOutput = bool (default = True)
+        - varyTolerance = bool (default = False)
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
@@ -582,7 +583,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
             'distributeMethod',"default"),
         check=advancedOptions.get('check',False),
         evaltree_cache={} )
-    
+
     if objective == "chi2":
         args['useFreqWeightedChiSq'] = advancedOptions.get(
             'useFreqWeightedChiSq',False)
@@ -595,7 +596,14 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         args['minProbClip'] = advancedOptions.get('minProbClip',1e-4)
         args['radius'] = advancedOptions.get('radius',1e-4)
         args['alwaysPerformMLE'] = advancedOptions.get('alwaysPerformMLE',False)
-        gs_lsgst_list = _alg.do_iterative_mlgst(**args)
+        annealed = advancedOptions.get('varyTolerance', False)
+        seed_selection = advancedOptions.get('seed_selection', False)
+        if annealed:
+            gs_lsgst_list = _alg.do_annealed_iterative_mlgst(**args)
+        elif seed_selection:
+            gs_lsgst_list = _alg.do_seed_selection_iterative_mlgst(**args)
+        else:
+            gs_lsgst_list = _alg.do_iterative_mlgst(**args)
     else:
         raise ValueError("Invalid objective: %s" % objective)
 
@@ -1188,7 +1196,7 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
         _, gaugeEl, go_gs_final = _alg.gaugeopt_to_target(**gaugeOptParams)
         gaugeOptParams['_gaugeGroupEl'] = gaugeEl #store gaugeopt el
         ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final,
-                                                 None, comm, printer-1)        
+                                                 None, comm, printer-1)
 
         tNxt = _time.time()
         profiler.add_time('%s: gauge optimization' % callerName,tRef); tRef=tNxt
@@ -1274,7 +1282,7 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                     gsindx = { gatestr:i for i,gatestr in enumerate(rawLists[-1]) }
                     for gatestr, weight in gsWeights.items():
                         gsWeightsArray[ gsindx[gatestr] ] = weight
-                    
+
                     reopt_args = dict(dataset=ds,
                                       startGateset=gs_lsgst_list[-1],
                                       gateStringsToUse=rawLists[-1],
