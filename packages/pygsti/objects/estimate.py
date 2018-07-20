@@ -21,14 +21,14 @@ CRFkey = _collections.namedtuple('CRFkey', ['gateset','gatestring_list'])
 
 class Estimate(object):
     """
-    A class encapsulating the `GateSet` objects related to 
-    a single GST estimate up-to-gauge freedoms. 
+    A class encapsulating the `GateSet` objects related to
+    a single GST estimate up-to-gauge freedoms.
 
     Thus, this class holds the "iteration" `GateSet`s leading up to a
     final `GateSet`, and then different gauge optimizations of the final
     set.
     """
-    
+
     def __init__(self, parent, targetGateset=None, seedGateset=None,
                  gatesetsByIter=None, parameters=None):
         """
@@ -79,7 +79,7 @@ class Estimate(object):
         #Meta info
         self.meta = {}
 
-                
+
     def get_start_gateset(self, goparams):
         """
         Returns the starting gateset for the gauge optimization given by `goparams`.
@@ -101,7 +101,7 @@ class Estimate(object):
         goparams_list = [goparams] if hasattr(goparams,'keys') else goparams
         return goparams_list[0].get('gateset',self.gatesets['final iteration estimate'])
 
-                
+
     def add_gaugeoptimized(self, goparams, gateset=None, label=None, comm=None, verbosity=None):
         """
         Adds a gauge-optimized GateSet (computing it if needed) to this object.
@@ -113,10 +113,10 @@ class Estimate(object):
             to :func:`gaugeopt_to_target`, specifying how the gauge optimization
             was (or should be) performed.  When `gateset` is `None` (and this
             function computes the gate set internally) the keys and values of
-            this dictionary must correspond to allowed arguments of 
+            this dictionary must correspond to allowed arguments of
             :func:`gaugeopt_to_target`. By default, :func:`gaugeopt_to_target`'s
             first two arguments, the `GateSet` to optimize and the target,
-            are taken to be `self.gatesets['final iteration estimate']` and 
+            are taken to be `self.gatesets['final iteration estimate']` and
             self.gatesets['target'].  This argument can also be a *list* of
             such parameter dictionaries, which specifies a multi-stage gauge-
             optimization whereby the output of one stage is the input of the
@@ -130,7 +130,7 @@ class Estimate(object):
         label : str, optional
             A label for this gauge-optimized gate set, used as the key in
             this object's `gatesets` and `goparameters` member dictionaries.
-            If None, then the next available "go<X>", where <X> is a 
+            If None, then the next available "go<X>", where <X> is a
             non-negative integer, is used as the label.
 
         comm : mpi4py.MPI.Comm, optional
@@ -154,7 +154,7 @@ class Estimate(object):
                 label = "go%d" % i; i += 1
                 if (label not in self.goparameters) and \
                    (label not in self.gatesets): break
-            
+
         goparams_list = [goparams] if hasattr(goparams,'keys') else goparams
         ordered_goparams = []
         last_gs = None
@@ -170,9 +170,9 @@ class Estimate(object):
                  max( [ gop.get('verbosity',0) for gop in goparams_list ])
         printer = _VerbosityPrinter.build_printer(max_vb, printer_comm)
         printer.log("-- Adding Gauge Optimized (%s) --" % label)
-        
+
         for i,gop in enumerate(goparams_list):
-            
+
             if gateset is not None:
                 last_gs = gateset #just use user-supplied result
             else:
@@ -183,7 +183,7 @@ class Estimate(object):
                 if verbosity is not None:
                     gop['verbosity'] = printer-1 #use common printer
 
-                if comm is not None and 'comm' not in gop: 
+                if comm is not None and 'comm' not in gop:
                     gop['comm'] = comm
 
                 if last_gs:
@@ -192,18 +192,18 @@ class Estimate(object):
                     if 'final iteration estimate' in self.gatesets:
                         gop["gateset"] = self.gatesets['final iteration estimate']
                     else: raise ValueError("Must supply 'gateset' in 'goparams' argument")
-                    
+
                 if "targetGateset" not in gop:
                     if 'target' in self.gatesets:
                         gop["targetGateset"] = self.gatesets['target']
                     else: raise ValueError("Must supply 'targetGateset' in 'goparams' argument")
-    
+
                 gop['returnAll'] = True
                 _, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)
                 gop['_gaugeGroupEl'] = gaugeGroupEl # an output stored here for convenience
 
             #sort the parameters by name for consistency
-            ordered_goparams.append( _collections.OrderedDict( 
+            ordered_goparams.append( _collections.OrderedDict(
                 [(k,gop[k]) for k in sorted(list(gop.keys()))]) )
 
         assert(last_gs is not None)
@@ -211,7 +211,7 @@ class Estimate(object):
         self.goparameters[label] = ordered_goparams if len(goparams_list) > 1 \
                                    else ordered_goparams[0]
 
-        
+
     def add_confidence_region_factory(self,
                                       gateset_label='final iteration estimate',
                                       gatestrings_label='final'):
@@ -221,8 +221,8 @@ class Estimate(object):
         An instance of :class:`ConfidenceRegionFactory` serves to create
         confidence intervals and regions in reports and elsewhere.  This
         function creates such a factory, which is specific to a given
-        `GateSet` (given by this object's `.gatesets[gateset_label]` ) and 
-        gate string list (given by the parent `Results`'s 
+        `GateSet` (given by this object's `.gatesets[gateset_label]` ) and
+        gate string list (given by the parent `Results`'s
         `.gatestring_lists[gastrings_label]` list).
 
         Parameters
@@ -243,11 +243,11 @@ class Estimate(object):
         ky = CRFkey(gateset_label, gatestrings_label)
         if ky in self.confidence_region_factories:
             _warnings.warn("Confidence region factory for %s already exists - overwriting!" % str(ky))
-            
+
         newCRF = _ConfidenceRegionFactory(self, gateset_label, gatestrings_label)
         self.confidence_region_factories[ky] = newCRF
         return newCRF
-                                                                                    
+
 
     def has_confidence_region_factory(self, gateset_label='final iteration estimate',
                                       gatestrings_label='final'):
@@ -270,7 +270,7 @@ class Estimate(object):
         """
         return bool( CRFkey(gateset_label, gatestrings_label) in self.confidence_region_factories)
 
-    
+
     def get_confidence_region_factory(self, gateset_label='final iteration estimate',
                                       gatestrings_label='final', createIfNeeded=False):
         """
@@ -289,7 +289,7 @@ class Estimate(object):
 
         createIfNeeded : bool, optional
             If True, a new confidence region factory will be created if none
-            exists.  Otherwise a `KeyError` is raised when the requested 
+            exists.  Otherwise a `KeyError` is raised when the requested
             factory doesn't exist.
 
         Returns
@@ -303,7 +303,7 @@ class Estimate(object):
             return self.add_confidence_region_factory(gateset_label, gatestrings_label)
         else:
             raise KeyError("No confidence region factory for key %s exists!" % str(ky))
-        
+
     def gauge_propagate_confidence_region_factory(
             self, to_gateset_label, from_gateset_label='final iteration estimate',
             gatestrings_label = 'final', EPS=1e-3, verbosity=0):
@@ -311,7 +311,7 @@ class Estimate(object):
         Propagates an existing "reference" confidence region for a GateSet
         "G0" to a new confidence region for a gauge-equivalent gateset "G1".
 
-        When successful, a new confidence region factory is created for the 
+        When successful, a new confidence region factory is created for the
         `.gatesets[to_gateset_label]` `GateSet` and `gatestrings_label` gate
         string list from the existing factory for `.gatesets[from_gateset_label]`.
 
@@ -327,7 +327,7 @@ class Estimate(object):
         from_gateset_label : str, optional
             The key into this `Estimate` object's `gatesets` dictionary
             that identifies the reference gate set.
-        
+
         gatestrings_label : str, optional
             The key of the gate string list (within the parent `Results`'s
             `.gatestring_lists` dictionary) that identifies the gate string
@@ -348,7 +348,7 @@ class Estimate(object):
             value of this function can often be ignored.
         """
         printer = _VerbosityPrinter.build_printer(verbosity)
-        
+
         ref_gateset = self.gatesets[from_gateset_label]
         goparams = self.goparameters[to_gateset_label]
         start_gateset = goparams['gateset'].copy()
@@ -363,13 +363,13 @@ class Estimate(object):
 
         assert(start_gateset.frobeniusdist(ref_gateset) < 1e-6), \
             "Gauge-opt starting point must be the 'from' (reference) GateSet"
-        
+
         crf = self.confidence_region_factories.get(
             CRFkey(from_gateset_label, gatestrings_label), None)
-            
+
         assert(crf is not None), "Initial confidence region factory doesn't exist!"
         assert(crf.has_hessian()), "Initial factory must contain a computed Hessian!"
-                            
+
         #Update hessian by TMx = d(diffs in current go'd gateset)/d(diffs in ref gateset)
         TMx = _np.empty( (final_gateset.num_params(), ref_gateset.num_params()), 'd' )
         v0, w0 = ref_gateset.to_vector(), final_gateset.to_vector()
@@ -380,7 +380,7 @@ class Estimate(object):
 
         with printer.progress_logging(1):
             for iCol in range(ref_gateset.num_params()):
-               v = v0.copy(); v[iCol] += EPS # dv is along iCol-th direction 
+               v = v0.copy(); v[iCol] += EPS # dv is along iCol-th direction
                gs.from_vector(v)
                for gaugeGroupEl in gaugeGroupEls:
                    gs.transform(gaugeGroupEl)
@@ -392,7 +392,7 @@ class Estimate(object):
 
         #rank = _np.linalg.matrix_rank(TMx)
         #print("DEBUG: constructed TMx: rank = ", rank)
-        
+
         # Hessian is gauge-transported via H -> TMx_inv^T * H * TMx_inv
         TMx_inv = _np.linalg.inv(TMx)
         new_hessian = _np.dot(TMx_inv.T, _np.dot(crf.hessian, TMx_inv))
@@ -436,11 +436,11 @@ class Estimate(object):
         p = self.parent
         gss = p.gatestring_structs['final'] #FUTURE: overrideable?
         weights = self.parameters.get("weights",None)
-        
+
         if weights is not None:
             scaled_dataset = p.dataset.copy_nonstatic()
             nRows, nCols = gss.plaquette_rows_cols()
-            
+
             subMxs = []
             for y in gss.used_yvals():
                 subMxs.append( [] )
@@ -462,9 +462,9 @@ class Estimate(object):
             if return_subMxs:
                 return scaled_dataset, subMxs
             else: return scaled_dataset
-            
+
         else: #no weights specified - just return original dataset (no scaling)
-            
+
             if return_subMxs: #then need to create subMxs with all 1's
                 subMxs = []
                 for y in gss.used_yvals():
@@ -479,9 +479,10 @@ class Estimate(object):
             else:
                 return p.dataset
 
-    def misfit_sigma(self, use_accurate_Np=False):
+    def misfit_sigma(self, use_accurate_Np=False, evaltree_cache=None, comm=None):
         """
         Returns the number of standard deviations (sigma) of model violation.
+        TODO: docstring
 
         Returns
         -------
@@ -489,20 +490,23 @@ class Estimate(object):
         """
         p = self.parent
         obj = self.parameters.get('objective',None)
-        assert(obj in ('chi2','logl')),"Invalid objective!"
+        assert(obj in ('chi2','logl','lgst')),"Invalid objective!"
 
         gs = self.gatesets['final iteration estimate'] #FUTURE: overrideable?
         gss = p.gatestring_structs['final'] #FUTURE: overrideable?
         mpc = self.parameters.get('minProbClipForWeighting',1e-4)
         ds = self.get_effective_dataset()
-        
+
         if obj == "chi2":
             fitQty = _tools.chi2( gs, ds, gss.allstrs,
                                   minProbClipForWeighting=mpc,
-                                  gateLabelAliases=gss.aliases)
-        elif obj == "logl":
-            logL_upperbound = _tools.logl_max(gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
-            logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
+                                  gateLabelAliases=gss.aliases,
+                                  evaltree_cache=evaltree_cache, comm=comm)
+        elif obj in ("logl","lgst"):
+            logL_upperbound = _tools.logl_max(gs, ds, gss.allstrs, gateLabelAliases=gss.aliases,
+                                              evaltree_cache=evaltree_cache)
+            logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases,
+                                evaltree_cache=evaltree_cache, comm=comm)
             fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
 
         ds_allstrs = _tools.find_replace_tuple_list(
@@ -513,7 +517,7 @@ class Estimate(object):
         if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
         return (fitQty-k)/_np.sqrt(2*k)
 
-    
+
     def view(self, gaugeopt_keys, parent=None):
         """
         Creates a shallow copy of this Results object containing only the
@@ -523,7 +527,7 @@ class Estimate(object):
         ----------
         gaugeopt_keys : str or list, optional
             Either a single string-value gauge-optimization key or a list of
-            such keys.  If `None`, then all gauge-optimization keys are 
+            such keys.  If `None`, then all gauge-optimization keys are
             retained.
 
         parent : Results, optional
@@ -539,7 +543,7 @@ class Estimate(object):
         view.parameters = self.parameters
         view.gatesets = self.gatesets
         view.confidence_region_factories = self.confidence_region_factories
-        
+
         if gaugeopt_keys is None:
             gaugeopt_keys = list(self.goparameters.keys())
         elif _compat.isstr(gaugeopt_keys):
@@ -549,7 +553,7 @@ class Estimate(object):
                 view.goparameters[go_key] = self.goparameters[go_key]
 
         return view
-    
+
 
     def copy(self):
         """ Creates a copy of this Estimate object. """
@@ -562,7 +566,7 @@ class Estimate(object):
         cpy.meta = _copy.deepcopy(self.meta)
         return cpy
 
-    
+
     def __str__(self):
         s  = "----------------------------------------------------------\n"
         s += "---------------- pyGSTi Estimate Object ------------------\n"
@@ -572,7 +576,7 @@ class Estimate(object):
         s += " .gatesets   -- a dictionary of GateSet objects w/keys:\n"
         s += " ---------------------------------------------------------\n"
         s += "  " + "\n  ".join(list(self.gatesets.keys())) + "\n"
-        s += "\n"        
+        s += "\n"
         s += " .parameters   -- a dictionary of simulation parameters:\n"
         s += " ---------------------------------------------------------\n"
         s += "  " + "\n  ".join(list(self.parameters.keys())) + "\n"
@@ -582,12 +586,12 @@ class Estimate(object):
         s += "  " + "\n  ".join(list(self.goparameters.keys())) + "\n"
         s += "\n"
         return s
-    
+
     def __getstate__(self):
         #Don't pickle comms in goparameters
         to_pickle = self.__dict__.copy()
         to_pickle['goparameters'] = _collections.OrderedDict()
-        for lbl,goparams in self.goparameters.items():            
+        for lbl,goparams in self.goparameters.items():
             if hasattr(goparams,"keys"):
                 if 'comm' in goparams:
                     goparams = goparams.copy()
@@ -603,16 +607,16 @@ class Estimate(object):
                 to_pickle['goparameters'][lbl] = new_goparams
 
         # don't pickle parent (will create circular reference)
-        del to_pickle['parent'] 
+        del to_pickle['parent']
         return  to_pickle
 
     def __setstate__(self, stateDict):
         #BACKWARDS COMPATIBILITY
-        if 'confidence_regions' in stateDict: 
+        if 'confidence_regions' in stateDict:
             del stateDict['confidence_regions']
             stateDict['confidence_region_factories'] = _collections.OrderedDict()
         if 'meta' not in stateDict: stateDict['meta'] = {}
-            
+
         self.__dict__.update(stateDict)
         for crf in self.confidence_region_factories.values():
             crf.set_parent(self)
@@ -623,5 +627,5 @@ class Estimate(object):
         Sets the parent Results object of this Estimate.
         """
         self.parent = parent
-     
+
 

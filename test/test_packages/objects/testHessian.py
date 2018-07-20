@@ -5,6 +5,7 @@ from pygsti.construction import std1Q_XYI as stdxyi
 from pygsti.construction import std1Q_XY as stdxy
 from pygsti.objects import gatesetfunction as gsf
 from pygsti.objects.gatemapcalc import GateMapCalc
+from pygsti.objects import Label as L
 
 import numpy as np
 import sys, os
@@ -170,6 +171,7 @@ class TestHessianMethods(BaseTestCase):
 
         cfctry = est.get_confidence_region_factory('final iteration estimate', 'final')
         self.assertFalse( cfctry.can_construct_views() ) # b/c no hessian or LR enabled yet...
+        cfctry.compute_hessian(approximate=True)
         cfctry.compute_hessian()
         self.assertTrue( cfctry.has_hessian() )
         self.assertFalse( cfctry.can_construct_views() ) # b/c hessian isn't projected yet...
@@ -242,9 +244,9 @@ class TestHessianMethods(BaseTestCase):
             
             #linear response CI doesn't support profile likelihood intervals
             if ci_cur is not ci_linresponse: # (profile likelihoods not implemented in this case)
-                ar_of_intervals_Gx = ci_cur.get_profile_likelihood_confidence_intervals("Gx")
-                ar_of_intervals_rho0 = ci_cur.get_profile_likelihood_confidence_intervals("rho0")
-                ar_of_intervals_M0 = ci_cur.get_profile_likelihood_confidence_intervals("Mdefault")
+                ar_of_intervals_Gx = ci_cur.get_profile_likelihood_confidence_intervals(L("Gx"))
+                ar_of_intervals_rho0 = ci_cur.get_profile_likelihood_confidence_intervals(L("rho0"))
+                ar_of_intervals_M0 = ci_cur.get_profile_likelihood_confidence_intervals(L("Mdefault"))
                 ar_of_intervals = ci_cur.get_profile_likelihood_confidence_intervals()
 
                 with self.assertRaises(ValueError):

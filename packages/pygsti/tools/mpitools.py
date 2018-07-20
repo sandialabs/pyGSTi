@@ -15,7 +15,7 @@ from .matrixtools import _fas, _findx, _findx_shape
 
 
 def distribute_indices(indices, comm, allow_split_comm=True):
-    """ 
+    """
     Partition an array of indices (any type) evenly among `comm`'s processors.
 
     Parameters
@@ -28,7 +28,7 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         which may be split into returned sub-communicators.
 
     allow_split_comm : bool
-        If True, when there are more processors than indices, 
+        If True, when there are more processors than indices,
         multiple processors will be given the *same* set of local
         indices and `comm` will be split into sub-communicators,
         one for each group of processors that are given the same
@@ -43,18 +43,18 @@ def distribute_indices(indices, comm, allow_split_comm=True):
 
     owners : dict
         A dictionary mapping the elements of `indices` to integer ranks, such
-        that `owners[el]` gives the rank of the processor responsible for 
+        that `owners[el]` gives the rank of the processor responsible for
         communicating that element's results to the other processors.  Note that
         in the case when `allow_split_comm=True` and multiple procesors have
-        computed the results for a given element, only a single (the first) 
+        computed the results for a given element, only a single (the first)
         processor rank "owns" the element, and is thus responsible for sharing
         the results.  This notion of ownership is useful when gathering the
         results.
-        
+
     loc_comm : mpi4py.MPI.Comm or None
         The local communicator for the group of processors which have been
         given the same `loc_indices` to compute, obtained by splitting `comm`.
-        If `loc_indices` is unique to the current processor, or if 
+        If `loc_indices` is unique to the current processor, or if
         `allow_split_comm` is False, None is returned.
     """
     if comm is None:
@@ -67,7 +67,7 @@ def distribute_indices(indices, comm, allow_split_comm=True):
                                                   allow_split_comm)
 
     #Split comm into sub-comms when there are more procs than
-    # indices, resulting in all procs getting only a 
+    # indices, resulting in all procs getting only a
     # single index and multiple procs getting the *same*
     # (single) index.
     #if nprocs > 1 and len(indices)==1 and (comm is not None) and allow_split_comm:
@@ -77,13 +77,13 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         color = loc_indices[0] if isinstance(loc_indices[0], int) \
                 else (int(hash(loc_indices[0])) >> 32) # mpi4py only allows 32-bit ints
         loc_comm = comm.Split(color=color, key=rank)
-    else: 
+    else:
         loc_comm = None
 
     return loc_indices, owners, loc_comm
 
 def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
-    """ 
+    """
     Partition an array of "indices" evenly among a given number of "processors"
 
     This function is similar to :func:`distribute_indices`, but allows for more
@@ -96,7 +96,7 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
     ----------
     indices : list
         An array of items (any type) which are to be partitioned.
-       
+
     nprocs : int
         The number of "processors" to distribute the elements of
         `indices` among.
@@ -107,7 +107,7 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
         obtained from any MPI communicator.
 
     allow_split_comm : bool
-        If True, when there are more processors than indices, 
+        If True, when there are more processors than indices,
         multiple processors will be given the *same* set of local
         indices.  If False, then extra processors are simply given
         nothing to do, i.e. empty lists of local indices.
@@ -120,10 +120,10 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
 
     owners : dict
         A dictionary mapping the elements of `indices` to integer ranks, such
-        that `owners[el]` gives the rank of the processor responsible for 
+        that `owners[el]` gives the rank of the processor responsible for
         communicating that element's results to the other processors.  Note that
         in the case when `allow_split_comm=True` and multiple procesors have
-        computed the results for a given element, only a single (the first) 
+        computed the results for a given element, only a single (the first)
         processor rank "owns" the element, and is thus responsible for sharing
         the results.  This notion of ownership is useful when gathering the
         results.
@@ -143,7 +143,7 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
             else:
                 loc_indices = [ indices[
                         extra + (rank-extra*(nloc_std+1)) // nloc_std ] ]
-    
+
             # owners dict gives rank of first (chief) processor for each index
             # (the "owner" of a given index is responsible for communicating
             #  results for that index to the other processors)
@@ -152,14 +152,14 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
                              for i in range(extra, nIndices) } )
         else:
             #Not allowed to assign multiple procs the same local index
-            # (presumably b/c there is no way to sub-divide the work 
+            # (presumably b/c there is no way to sub-divide the work
             #  performed for a single index among multiple procs)
             if rank < nIndices:
                 loc_indices = [ indices[rank] ]
             else:
                 loc_indices = [ ] #extra procs do nothing
             owners = { indices[i]: i for i in range(nIndices) }
-            
+
     else:
         nloc_std =  nIndices // nprocs
         extra = nIndices - nloc_std*nprocs # extra indices
@@ -187,7 +187,7 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
 
 
 def slice_up_slice(slc, num_slices):
-    """ 
+    """
     Divides up `slc` into `num_slices` slices.
 
     Parameters
@@ -203,14 +203,14 @@ def slice_up_slice(slc, num_slices):
     list of slices
     """
     assert(slc.step is None) #currently, no support for step != None slices
-    if slc.start is None or slc.stop is None: 
+    if slc.start is None or slc.stop is None:
         return slice_up_range(0, num_slices)
-    else: 
+    else:
         return slice_up_range(slc.stop-slc.start, num_slices, slc.start)
 
 
 def slice_up_range(n, num_slices, start=0):
-    """ 
+    """
     Divides up `range(start,start+n)` into `num_slices` slices.
 
     Parameters
@@ -222,7 +222,7 @@ def slice_up_range(n, num_slices, start=0):
        The number of slices to divide the range into.
 
     start : int, optional
-       The starting entry of the range, so that the range to be 
+       The starting entry of the range, so that the range to be
        divided is `range(start,start+n)`.
 
     Returns
@@ -233,7 +233,7 @@ def slice_up_range(n, num_slices, start=0):
     m1 = n - base*num_slices # num base+1 size slices
     m2 = num_slices - m1     # num base size slices
     assert( ((base+1)*m1 + base*m2) == n )
-    
+
     off = start
     ret =  [slice(off+(base+1)*i,off+(base+1)*(i+1)) for i in range(m1)]
     off += (base+1)*m1
@@ -244,7 +244,7 @@ def slice_up_range(n, num_slices, start=0):
 
 
 def distribute_slice(s, comm, allow_split_comm=True):
-    """ 
+    """
     Partition a continuous slice evenly among `comm`'s processors.
 
     This function is similar to :func:`distribute_indices`, but
@@ -261,7 +261,7 @@ def distribute_slice(s, comm, allow_split_comm=True):
         which may be split into returned sub-communicators.
 
     allow_split_comm : bool
-        If True, when there are more processors than slice indices, 
+        If True, when there are more processors than slice indices,
         multiple processors will be given the *same* local slice
         and `comm` will be split into sub-communicators, one for each
         group of processors that are given the same local slice.
@@ -282,11 +282,11 @@ def distribute_slice(s, comm, allow_split_comm=True):
     owners : dict
         A dictionary giving the owning rank of each slice.  Values are integer
         ranks and keys are integers into `slices`, specifying which slice.
-        
+
     loc_comm : mpi4py.MPI.Comm or None
         The local communicator for the group of processors which have been
         given the same `loc_slice` to compute, obtained by splitting `comm`.
-        If `loc_slice` is unique to the current processor, or if 
+        If `loc_slice` is unique to the current processor, or if
         `allow_split_comm` is False, None is returned.
     """
     if comm is None:
@@ -307,12 +307,12 @@ def distribute_slice(s, comm, allow_split_comm=True):
         loc_slice = slices[loc_iSlices[0]]
 
         #Split comm into sub-comms when there are more procs than
-        # indices, resulting in all procs getting only a 
+        # indices, resulting in all procs getting only a
         # single index and multiple procs getting the *same*
         # (single) index.
         if nprocs > _slct.length(s) and (comm is not None) and allow_split_comm:
-            loc_comm = comm.Split(color=loc_iSlices[0], key=rank)  
-        else: 
+            loc_comm = comm.Split(color=loc_iSlices[0], key=rank)
+        else:
             loc_comm = None
 
     else:
@@ -325,7 +325,7 @@ def distribute_slice(s, comm, allow_split_comm=True):
 
 def gather_slices(slices, slice_owners, arToFill,
                   arToFillInds, axes, comm, max_buffer_size=None):
-    """ 
+    """
     Gathers data within a numpy array, `arToFill`, according to given slices.
 
     Upon entry it is assumed that the different processors within `comm` have
@@ -338,10 +338,10 @@ def gather_slices(slices, slice_owners, arToFill,
     ----------
     slices : list
         A list of all the slices (computed by *any* of the processors, not
-        just the current one).  Each element of `slices` may be either a 
+        just the current one).  Each element of `slices` may be either a
         single slice or a tuple of slices (when gathering across multiple
         dimensions).
-        
+
     slice_owners : dict
         A dictionary mapping the index of a slice (or tuple of slices)
         within `slices` to an integer rank of the processor responsible
@@ -353,16 +353,16 @@ def gather_slices(slices, slice_owners, arToFill,
 
     arToFillInds : list
         A list of slice or index-arrays specifying the (fixed) sub-array of
-        `arToFill` that should be gathered into.  The elements of 
+        `arToFill` that should be gathered into.  The elements of
         `arToFillInds` are taken to be indices for the leading dimension
-        first, and any unspecified dimensions or `None` elements are 
+        first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
         the combination of `arToFill` and `arToFillInds` is essentally like
         passing `arToFill[arToFillInds]` to this function, except it will
         work with index arrays as well as slices.
 
     axes : int or tuple of ints
-        The axis or axes of `arToFill` on which the slices apply (which axis 
+        The axis or axes of `arToFill` on which the slices apply (which axis
         do the slices in `slices` refer to?).  Note that `len(axes)` must
         be equal to the number of slices (i.e. the tuple length) of each
         element of `slices`.
@@ -372,7 +372,7 @@ def gather_slices(slices, slice_owners, arToFill,
         to perform the gather operation.
 
     max_buffer_size : int or None
-        The maximum buffer size in bytes that is allowed to be used 
+        The maximum buffer size in bytes that is allowed to be used
         for gathering data.  If None, there is no limit.
 
     Returns
@@ -406,7 +406,7 @@ def gather_slices(slices, slice_owners, arToFill,
                 break
         else:
             _warnings.warn("gather_slices: Could not achieve max_buffer_size")
-            
+
 
     for iSlice,slcOrSlcTup in enumerate(slices):
         owner = slice_owners[iSlice] #owner's rank
@@ -439,7 +439,7 @@ def gather_slices(slices, slice_owners, arToFill,
 
 def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
                            axes, comm, max_buffer_size=None):
-    """ 
+    """
     Gathers data within a numpy array, `arToFill`, according to given slices.
 
     Upon entry it is assumed that the different processors within `comm` have
@@ -454,23 +454,23 @@ def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
         A list of all the slices computed by the *current* processor.
         Each element of `slices` may be either a single slice or a
         tuple of slices (when gathering across multiple dimensions).
-        
+
     arToFill : numpy.ndarray
         The array which contains partial data upon entry and the gathered
         data upon exit.
 
     arToFillInds : list
         A list of slice or index-arrays specifying the (fixed) sub-array of
-        `arToFill` that should be gathered into.  The elements of 
+        `arToFill` that should be gathered into.  The elements of
         `arToFillInds` are taken to be indices for the leading dimension
-        first, and any unspecified dimensions or `None` elements are 
+        first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
         the combination of `arToFill` and `arToFillInds` is essentally like
         passing `arToFill[arToFillInds]` to this function, except it will
         work with index arrays as well as slices.
 
     axes : int or tuple of ints
-        The axis or axes of `arToFill` on which the slices apply (which axis 
+        The axis or axes of `arToFill` on which the slices apply (which axis
         do the slices in `slices` refer to?).  Note that `len(axes)` must
         be equal to the number of slices (i.e. the tuple length) of each
         element of `slices`.
@@ -480,7 +480,7 @@ def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
         to perform the gather operation.
 
     max_buffer_size : int or None
-        The maximum buffer size in bytes that is allowed to be used 
+        The maximum buffer size in bytes that is allowed to be used
         for gathering data.  If None, there is no limit.
 
     Returns
@@ -517,14 +517,14 @@ def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
         else:
             _warnings.warn("gather_slices_by_owner: Could not achieve max_buffer_size")
     # -- end part that is the same as gather_slices
-            
+
     #Get a list of the slices to broadcast, indexed by the rank of the owner proc
-    slices_by_owner = comm.allgather(slicesIOwn) 
-    for owner, slices in enumerate(slices_by_owner):    
+    slices_by_owner = comm.allgather(slicesIOwn)
+    for owner, slices in enumerate(slices_by_owner):
         for slcOrSlcTup in slices:
             slcTup =(slcOrSlcTup,) if isinstance(slcOrSlcTup,slice) else slcOrSlcTup
             assert(len(slcTup) == len(axes))
-    
+
             #Get the a list of the (sub-)slices along each axis, whose product
             # (along the specified axes) gives the entire block given by slcTup
             axisSlices = []
@@ -534,12 +534,12 @@ def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
                     axisSlices.append( [slc] ) #arIndx[axis] = slc
                 else:
                     axisSlices.append( _slct.divide(slc, max_indices[iaxis]) )
-    
+
             for axSlcs in _itertools.product(*axisSlices):
                 #create arIndx from per-axis (sub-)slices and broadcast
                 for iaxis,axis in enumerate(axes):
                     arIndx[axis] = axSlcs[iaxis]
-    
+
                 #broadcast arIndx slice
                 buf = _findx(arToFill,arIndx,True) if (my_rank == owner) \
                     else _np.empty(_findx_shape(arToFill,arIndx), arToFill.dtype)
@@ -550,11 +550,11 @@ def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
 
 def gather_indices(indices, index_owners, arToFill, arToFillInds,
                    axes, comm, max_buffer_size=None):
-    """ 
+    """
     Gathers data within a numpy array, `arToFill`, according to given indices.
 
     Upon entry it is assumed that the different processors within `comm` have
-    computed different parts of `arToFill`, namely different slices or 
+    computed different parts of `arToFill`, namely different slices or
     index-arrays of the `axis`-th axis.  At exit, data has been gathered such
     that all processors have the results for the entire `arToFill` (or at least
     for all the indices given).
@@ -564,9 +564,9 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
     indices : list
         A list of all the integer-arrays or slices (computed by *any* of
         the processors, not just the current one).  Each element of `indices`
-        may be either a single slice/index-array or a tuple of such 
+        may be either a single slice/index-array or a tuple of such
         elements (when gathering across multiple dimensions).
-        
+
     index_owners : dict
         A dictionary mapping the index of an element within `slices` to an
         integer rank of the processor responsible for communicating that
@@ -578,16 +578,16 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
 
     arToFillInds : list
         A list of slice or index-arrays specifying the (fixed) sub-array of
-        `arToFill` that should be gathered into.  The elements of 
+        `arToFill` that should be gathered into.  The elements of
         `arToFillInds` are taken to be indices for the leading dimension
-        first, and any unspecified dimensions or `None` elements are 
+        first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
         the combination of `arToFill` and `arToFillInds` is essentally like
         passing `arToFill[arToFillInds]` to this function, except it will
         work with index arrays as well as slices.
 
     axes : int or tuple of ints
-        The axis or axes of `arToFill` on which the slices apply (which axis 
+        The axis or axes of `arToFill` on which the slices apply (which axis
         do the elements of `indices` refer to?).  Note that `len(axes)` must
         be equal to the number of sub-indices (i.e. the tuple length) of each
         element of `indices`.
@@ -597,7 +597,7 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
         to perform the gather operation.
 
     max_buffer_size : int or None
-        The maximum buffer size in bytes that is allowed to be used 
+        The maximum buffer size in bytes that is allowed to be used
         for gathering data.  If None, there is no limit.
 
     Returns
@@ -631,7 +631,7 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
                 break
         else:
             _warnings.warn("gather_indices: Could not achieve max_buffer_size")
-            
+
 
     for iIndex,indOrIndTup in enumerate(indices):
         owner = index_owners[iIndex] #owner's rank
@@ -642,7 +642,7 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
             """Breaks a slice or index array into a list of slices"""
             if isinstance(indexArrayOrSlice, slice):
                 return [ indexArrayOrSlice ] # easy!
-            
+
             lst = indexArrayOrSlice
             if len(lst) == 0: return [slice(0,0)]
 
@@ -655,10 +655,10 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
                 stop = lst[i]+1
                 slc_lst.append( slice(start, stop, None if step==1 else step) )
                 i += 1
-                
+
             return slc_lst
 
-        
+
         #Get the a list of the (sub-)indices along each axis, whose product
         # (along the specified axes) gives the entire block given by slcTup
         axisSlices = []
@@ -770,6 +770,8 @@ def parallel_apply(f, l, comm):
         function of an item in the list l
     l : list
         list of items as arguments to f
+    comm : MPI Comm
+        MPI communicator object for organizing parallel programs
 
     Returns
     -------
@@ -777,7 +779,7 @@ def parallel_apply(f, l, comm):
         list of items after f has been applied
     '''
     locArgs, _, locComm = distribute_indices(l, comm)
-    if locComm is None or locComm.Get_rank() == 0: #only first proc in local comm group 
+    if locComm is None or locComm.Get_rank() == 0: #only first proc in local comm group
         locResults = [f(arg) for arg in locArgs] # needs to do anything
     else: locResults = []
     results = comm.allgather(locResults) # Certain there is a better way to do this (see above)

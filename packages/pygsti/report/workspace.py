@@ -256,7 +256,7 @@ class Workspace(object):
 
         self.Switchboard = makefactory(Switchboard)
         self.NotApplicable = makefactory(NotApplicable)
-
+        
         #Tables
           # Gate sequences
         self.GatestringTable = makefactory(_wt.GatestringTable)
@@ -715,10 +715,10 @@ class Switchboard(_collections.OrderedDict):
                           for i in range(len(switches))]
         self.positionLabels = positions
         if initial_pos is None:
-            self.initialPositions = _np.array([0]*len(switches),'i')
+            self.initialPositions = _np.array([0]*len(switches),_np.int64)
         else:
             assert(len(initial_pos) == len(switches))
-            self.initialPositions = _np.array(initial_pos,'i')
+            self.initialPositions = _np.array(initial_pos,_np.int64)
 
         self.descriptions = descriptions
         

@@ -14,7 +14,6 @@ from .. import objects   as _objs
 
 from ..baseobjs import smart_cached
 
-
 def total_count_matrix(gsplaq, dataset):
     """
     Computes the total count matrix for a base gatestring.
@@ -133,7 +132,7 @@ def probability_matrices(gsplaq, gateset,
     -------
     numpy array of shape ( len(spamlabels), len(effectStrs), len(prepStrs) )
         probability values corresponding to spamLabel and gate sequences
-        where gateString is sandwiched between the each prep-fiducial, 
+        where gateString is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
     ret = _np.nan * _np.ones(gsplaq.num_compiled_elements, 'd')
@@ -183,7 +182,7 @@ def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
     """
     gsplaq_ds = gsplaq.expand_aliases(dataset, gatestring_compiler=gateset)
     cnts = total_count_matrix(gsplaq_ds, dataset)
-    probs = probability_matrices(gsplaq, gateset, 
+    probs = probability_matrices(gsplaq, gateset,
                                  probs_precomp_dict)
     freqs = frequency_matrices(gsplaq_ds, dataset)
 
@@ -192,7 +191,7 @@ def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
             gsplaq.iter_compiled(),gsplaq_ds.iter_compiled()) :
         chiSqs= _tools.chi2fn( cnts[elIndices_ds], probs[elIndices],
                                freqs[elIndices_ds], minProbClipForWeighting)
-        ret[i,j] = sum(chiSqs) # sum all elements for each (i,j) pair 
+        ret[i,j] = sum(chiSqs) # sum all elements for each (i,j) pair
     return ret
 
 
@@ -235,10 +234,10 @@ def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
     gsplaq_ds = gsplaq.expand_aliases(dataset, gatestring_compiler=gateset)
 
     cnts = total_count_matrix(gsplaq_ds, dataset)
-    probs = probability_matrices(gsplaq, gateset, 
+    probs = probability_matrices(gsplaq, gateset,
                                  probs_precomp_dict)
     freqs = frequency_matrices(gsplaq_ds, dataset)
-    
+
     ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for (i,j,gstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
             gsplaq.iter_compiled(),gsplaq_ds.iter_compiled()) :
@@ -282,10 +281,10 @@ def tvd_matrix(gsplaq, dataset, gateset, probs_precomp_dict=None):
     """
     gsplaq_ds = gsplaq.expand_aliases(dataset, gatestring_compiler=gateset)
 
-    probs = probability_matrices(gsplaq, gateset, 
+    probs = probability_matrices(gsplaq, gateset,
                                  probs_precomp_dict)
     freqs = frequency_matrices(gsplaq_ds, dataset)
-    
+
     ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for (i,j,gstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
             gsplaq.iter_compiled(),gsplaq_ds.iter_compiled()) :
@@ -426,10 +425,10 @@ def _compute_num_boxes_dof(subMxs, sumUp, element_dof):
 
     return n_boxes, dof_per_box
 
-    
+
 
 def _computeProbabilities(gss, gateset, dataset):
-    """ 
+    """
     Returns a dictionary of probabilities for each gate sequence in
     GatestringStructure `gss`.
     """
@@ -440,13 +439,13 @@ def _computeProbabilities(gss, gateset, dataset):
     bulk_probs = _np.empty(evt.num_final_elements(), 'd')
     gateset.bulk_fill_probs(bulk_probs, evt) # LATER use comm?
       # bulk_probs indexed by [element_index]
-      
+
     probs_dict = \
-        { gatestringList[i]: bulk_probs.take(_tools.as_array(lookup[i])) 
+        { gatestringList[i]: bulk_probs.take(_tools.as_array(lookup[i]))
           for i in range(len(gatestringList)) }
     return probs_dict
 
-    
+
 #@smart_cached
 def _computeSubMxs(gss, gateset, subMxCreationFn):
     if gateset is not None: gss.compile_plaquettes(gateset)
@@ -472,7 +471,7 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directGateset,
     gsplaq : GatestringPlaquette
         Obtained via :method:`GatestringStructure.get_plaquette`, this object
         specifies which matrix indices should be computed and which gate strings
-        (for accessing the dataset) they correspond to.  
+        (for accessing the dataset) they correspond to.
 
     gss : GatestringStructure
         The gate string structure object containing `gsplaq`.  The structure is
@@ -500,18 +499,18 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directGateset,
         plaq_ds = gsplaq.expand_aliases(dataset, gatestring_compiler=directGateset)
         plaq_pr = gss.create_plaquette( _objs.GateString( ("GsigmaLbl",) ) )
         plaq_pr.compile_gatestrings(directGateset)
-        
+
         cnts = total_count_matrix(plaq_ds, dataset)
         probs = probability_matrices( plaq_pr, directGateset) # no probs_precomp_dict
         freqs = frequency_matrices( plaq_ds, dataset)
-        
-        ret = _np.empty( (plaq_ds.rows,plaq_ds.cols), 'd')    
+
+        ret = _np.empty( (plaq_ds.rows,plaq_ds.cols), 'd')
         for (i,j,gstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
                 plaq_pr.iter_compiled(),plaq_ds.iter_compiled()) :
             chiSqs= _tools.chi2fn( cnts[elIndices_ds], probs[elIndices],
                                    freqs[elIndices_ds], minProbClipForWeighting)
             ret[i,j] = sum(chiSqs) # sum all elements for each (i,j) pair
-            
+
         return ret
     else:
         return _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
@@ -536,7 +535,7 @@ def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
     gsplaq : GatestringPlaquette
         Obtained via :method:`GatestringStructure.get_plaquette`, this object
         specifies which matrix indices should be computed and which gate strings
-        (for accessing the dataset) they correspond to.  
+        (for accessing the dataset) they correspond to.
 
     gss : GatestringStructure
         The gate string structure object containing `gsplaq`.  The structure is
@@ -563,17 +562,17 @@ def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
         plaq_ds = gsplaq.expand_aliases(dataset, gatestring_compiler=directGateset)
         plaq_pr = gss.create_plaquette( _objs.GateString( ("GsigmaLbl",) ) )
         plaq_pr.compile_gatestrings(directGateset)
-    
+
         cnts = total_count_matrix(plaq_ds, dataset)
         probs = probability_matrices( plaq_pr, directGateset) # no probs_precomp_dict
         freqs = frequency_matrices( plaq_ds, dataset)
-    
+
         ret = _np.empty( (plaq_ds.rows,plaq_ds.cols), 'd')
         for (i,j,gstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
                 plaq_pr.iter_compiled(),plaq_ds.iter_compiled()) :
             logLs = _tools.two_delta_loglfn( cnts[elIndices_ds], probs[elIndices],
                                                   freqs[elIndices_ds], minProbClip)
-            ret[i,j] = sum(logLs) # sum all elements for each (i,j) pair 
+            ret[i,j] = sum(logLs) # sum all elements for each (i,j) pair
         return ret
     else:
         return _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
@@ -584,7 +583,7 @@ def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
 @smart_cached
 def dscompare_llr_matrices(gsplaq, dscomparator):
     """
-    Computes matrix of 2*log-likelihood-ratios comparing the 
+    Computes matrix of 2*log-likelihood-ratios comparing the
     datasets of `dscomparator`.
 
     Parameters
@@ -613,8 +612,8 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
 @smart_cached
 def drift_oneoverpvalue_matrices(gsplaq, driftresults):
     """
-    Computes matrix of 1 / pvalues for testing the 
-    "no drift" null hypothesis in each sequence, using the 
+    Computes matrix of 1 / pvalues for testing the
+    "no drift" null hypothesis in each sequence, using the
     "max power in spectra" test. These are the pvalues associated
     with the quantities returned by `drift_maxpower_matrices`.
 
@@ -632,15 +631,15 @@ def drift_oneoverpvalue_matrices(gsplaq, driftresults):
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
         1 / pvalues for testing the "no drift" null hypothesis, using the "max power in
-        spectra" test, on the relevant sequences. This gate sequences correspond to the 
+        spectra" test, on the relevant sequences. This gate sequences correspond to the
         gate sequences where a base gateString is sandwiched between the each prep-fiducial
         and effect-fiducial pair.
-        
+
     """
     pvalues_and_strings_dict = {}
     for s in range(0,driftresults.number_of_sequences):
         pvalues_and_strings_dict[driftresults.indices_to_sequences[s]] = driftresults.ps_pvalue[s]
-    
+
     ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for i,j,gstr in gsplaq:
         if gstr in driftresults.indices_to_sequences:
@@ -654,7 +653,7 @@ def drift_oneoverpvalue_matrices(gsplaq, driftresults):
                 oneoverpvls = oneoverpvls[_np.isfinite(oneoverpvls)]
                 ret[i,j] = 2*_np.round(_np.max(oneoverpvls))
             else:
-                ret[i,j] = 1./pvalues_and_strings_dict[gstr]    
+                ret[i,j] = 1./pvalues_and_strings_dict[gstr]
     return ret
 
 @smart_cached
@@ -663,7 +662,7 @@ def drift_maxpower_matrices(gsplaq, driftresults):
     Computes matrix of max powers in the time-series power spectra. This
     value is a reasonable proxy for how "drifty" the sequence appears
     to be.
-    
+
     Parameters
     ----------
     gsplaq : GatestringPlaquette
@@ -677,12 +676,12 @@ def drift_maxpower_matrices(gsplaq, driftresults):
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
-        Matrix of max powers in the time-series power spectra forthe gate sequences where a 
+        Matrix of max powers in the time-series power spectra forthe gate sequences where a
         base gateString is sandwiched between the each prep-fiducial and effect-fiducial pair.
-        
+
     """
     maxpowers_and_strings_dict = {}
-    for s in range(0,driftresults.number_of_sequences): 
+    for s in range(0,driftresults.number_of_sequences):
         maxpowers_and_strings_dict[driftresults.indices_to_sequences[s]] = driftresults.ps_max_power[s]
 
     ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
@@ -693,7 +692,7 @@ def drift_maxpower_matrices(gsplaq, driftresults):
 
 
 def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
-    """ 
+    """
     Computes the number of standard deviations of model violation, comparing
     the data in `dataset` with the `gateset` model at the "points" (sequences)
     specified by `gss`.
@@ -702,7 +701,7 @@ def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
     ----------
     dataset : DataSet
         The data set.
-    
+
     gateset : GateSet
         The gate set (model).
 
@@ -716,7 +715,7 @@ def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
         Which objective function is used to compute the model violation.
 
     Np : int, optional
-        The number of free parameters in the model.  If None, then 
+        The number of free parameters in the model.  If None, then
         `gateset.num_nongauge_params()` is used.
 
     returnAll : bool, optional
@@ -741,7 +740,7 @@ def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
         `returnAll==True`.
 
     Ns, Np : int
-        The number of dataset and model parameters, respectively. Only 
+        The number of dataset and model parameters, respectively. Only
         returned when `returnAll==True`.
 
     """
@@ -758,7 +757,7 @@ def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
             raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
 
     ds_gstrs = _tools.find_replace_tuple_list(gstrs, gss.aliases)
-    
+
     if Np is None: Np = gateset.num_nongauge_params()
     Ns = dataset.get_degrees_of_freedom(ds_gstrs) #number of independent parameters in dataset
     k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean

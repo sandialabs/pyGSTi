@@ -15,9 +15,9 @@ from .dataset import DataSet
 from .evaltree import EvalTree
 from .matrixevaltree import MatrixEvalTree
 from .mapevaltree import MapEvalTree
+from .termevaltree import TermEvalTree
 from .gate import Gate
 from .gate import GateMatrix
-from .gate import GateMap
 from .gate import LinearlyParameterizedGate
 from .gate import FullyParameterizedGate
 from .gate import TPParameterizedGate
@@ -30,6 +30,7 @@ from .gate import EmbeddedGateMap
 from .gate import EmbeddedGate
 from .gate import ComposedGateMap
 from .gate import ComposedGate
+from .gate import CliffordGate
 from .spamvec import SPAMVec
 from .spamvec import DenseSPAMVec
 from .spamvec import FullyParameterizedSPAMVec
@@ -38,6 +39,9 @@ from .spamvec import CPTPParameterizedSPAMVec
 from .spamvec import ComplementSPAMVec
 from .spamvec import StaticSPAMVec
 from .spamvec import TensorProdSPAMVec
+from .spamvec import PureStateSPAMVec
+from .spamvec import LindbladParameterizedSPAMVec
+from .spamvec import ComputationalSPAMVec
 from .povm import POVM
 from .povm import TPPOVM
 from .povm import UnconstrainedPOVM
@@ -50,8 +54,13 @@ from .gatestring import GateString
 from .gatestring import WeightedGateString
 from .gatestringstructure import GatestringStructure
 from .gatestringstructure import LsGermsStructure
+from .circuit import Circuit
 from .multidataset import MultiDataSet
 from .datacomparator import DataComparator
+from .compilationlibrary import CompilationLibrary
+from .processorspec import ProcessorSpec
+from .stabilizer import StabilizerFrame
+from .qubitgraph import QubitGraph
 
 from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement
 from .gaugegroup import TPGaugeGroup, TPGaugeGroupElement
@@ -61,6 +70,7 @@ from .gaugegroup import UnitaryGaugeGroup, UnitaryGaugeGroupElement
 from .gaugegroup import SpamGaugeGroup, SpamGaugeGroupElement
 from .gaugegroup import TPSpamGaugeGroup, TPSpamGaugeGroupElement
 from .gaugegroup import TrivialGaugeGroup, TrivialGaugeGroupElement
+from .labeldicts import StateSpaceLabels
 
 from .results import Results
 
@@ -68,4 +78,4 @@ from .results import Results
 from .gate import compose, optimize_gate, finite_difference_deriv_wrt_params
 
 #Important Base Objects
-from ..baseobjs import VerbosityPrinter, Profiler, SmartCache, Basis
+from ..baseobjs import VerbosityPrinter, Profiler, SmartCache, Basis, Label

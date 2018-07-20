@@ -22,11 +22,11 @@ def length(s):
     int
     """
     if not isinstance(s,slice): return len(s)
-    if s.start is None or s.stop is None: 
+    if s.start is None or s.stop is None:
         return 0
-    if s.step is None: 
+    if s.step is None:
         return s.stop - s.start
-    else: 
+    else:
         return len(range(s.start, s.stop, s.step))
 
 def shift(s, offset):
@@ -63,18 +63,18 @@ def intersect(s1, s2):
     """
     assert (s1.step is None and s2.step is None) or s1.step == s2.step, \
         "Only implemented for same-step slices"
-    if s1.start is None: 
+    if s1.start is None:
         start = s2.start
-    elif s2.start is None: 
+    elif s2.start is None:
         start = s1.start
-    else: 
+    else:
         start = max(s1.start,s2.start)
 
-    if s1.stop is None: 
+    if s1.stop is None:
         stop = s2.stop
-    elif s2.stop is None: 
+    elif s2.stop is None:
         stop = s1.stop
-    else: 
+    else:
         stop = min(s1.stop,s2.stop)
 
     if stop is not None and start is not None and stop < start:
@@ -98,7 +98,7 @@ def indices(s):
     """
     if s.start is None or s.stop is None:
         return []
-    if s.step is None: 
+    if s.step is None:
         return list(range(s.start,s.stop))
     return list(range(s.start,s.stop,s.step))
 
@@ -133,7 +133,7 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
         return lst
     if lst is None or len(lst) == 0: return slice(0,0)
     start=lst[0]
-    
+
     if len(lst) == 1: return slice(start,start+1)
     step=lst[1]-lst[0]; stop = start + step*len(lst)
     if require_contiguous:
@@ -141,19 +141,19 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
 
     if list(lst) == list(range(start,stop,step)):
         if step == 1: step = None
-        return slice(start,stop,step) 
+        return slice(start,stop,step)
 
-    if array_ok: return _np.array(lst,'i')
+    if array_ok: return _np.array(lst,_np.int64)
     else: raise ValueError("List does not correspond to a slice!")
 
 def as_array(slcOrListLike):
-    """ 
+    """
     Returns `slcOrListLike` as an index array (an integer numpy.ndarray).
     """
     if isinstance(slcOrListLike, slice):
-        return _np.array(indices(slcOrListLike), 'i')
+        return _np.array(indices(slcOrListLike), _np.int64)
     else:
-        return _np.array(slcOrListLike, 'i')
+        return _np.array(slcOrListLike, _np.int64)
 
 
 def divide(slc, maxLen):

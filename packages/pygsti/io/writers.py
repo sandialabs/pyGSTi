@@ -191,8 +191,9 @@ def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabe
         output.write(headerString + '\n')
         for gateString in gatestring_list: #gateString should be a GateString object here
             gs = gateString.tup #gatestring tuple
-            output.write(gateString.str + "  " + "  ".join( [("%g" % multidataset[dsl][gs].counts.get(ol,'--'))
-                                                            for dsl in dsLabels for ol in outcomeLabels] ) + '\n')
+            cnts = [multidataset[dsl][gs].counts.get(ol,'--') for dsl in dsLabels for ol in outcomeLabels]
+            output.write(gateString.str + "  " + "  ".join( [ (("%g" % cnt) if (cnt != '--') else cnt)
+                                                              for cnt in cnts] ) + '\n')
 
 def write_gatestring_list(filename, gatestring_list, header=None):
     """
@@ -302,7 +303,7 @@ def write_gateset(gs,filename,title=None):
                      "text format gate set files.  It will be read in as a"
                      "fully parameterized gate").format(typ=str(type(gate))))
                 typ = "GATE"
-            output.write(typ + ": " + label + '\n')
+            output.write(typ + ": " + str(label) + '\n')
             output.write("LiouvilleMx\n")
             output.write(_tools.mx_to_string(gate, width=16, prec=8) + '\n')
             output.write("\n")
@@ -316,7 +317,7 @@ def write_gateset(gs,filename,title=None):
                      "text format gate set files.  It will be read in as a"
                      "standard Instrument").format(typ=str(type(inst))))
                 typ = "Instrument"
-            output.write(typ + ": " + instLabel + '\n\n')
+            output.write(typ + ": " + str(instLabel) + '\n\n')
 
             for label,gate in inst.items():
                 if isinstance(gate, _objs.FullyParameterizedGate): typ = "IGATE"
@@ -328,7 +329,7 @@ def write_gateset(gs,filename,title=None):
                          "text format gate set files.  It will be read in as a"
                          "fully parameterized gate").format(typ=str(type(gate))))
                     typ = "IGATE"
-                output.write(typ + ": " + label + '\n')
+                output.write(typ + ": " + str(label) + '\n')
                 output.write("LiouvilleMx\n")
                 output.write(_tools.mx_to_string(gate, width=16, prec=8) + '\n')
                 output.write("\n")

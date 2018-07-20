@@ -8,9 +8,14 @@ import pygsti
 
 from pygsti.extras import rb
 from pygsti.construction import std1Q_XYI
+from pygsti.objects import Label as L
 
 class RBTestCase(BaseTestCase):
 
+    def test_rb_WAIT_FOR_NEW_RB(self):
+        # A PLACEHOLDER TO STOP AUTOMERGE TO BETA UNTIL NEW RB TESTS ARE ADDED
+        self.assertTrue(False)
+    
     def test_rb_full(self):
         gs_target = std1Q_XYI.gs_target
         clifford_group = rb.std1Q.clifford_group
@@ -251,7 +256,7 @@ class RBTestCase(BaseTestCase):
 
         self.assertEqual(np.shape(rb.R_matrix(gs_clifford_Z,clifford_group,d=2)), (96,96))
         self.assertEqual(np.shape(rb.R_matrix(gs_clifford_Z,clifford_group,d=2,
-                                               subset_sampling=['Gc0','Gc16','Gc21'])),(96,96))
+                                               subset_sampling=[L('Gc0'),L('Gc16'),L('Gc21')])),(96,96))
         
         full_set = ['Gc0','Gc1','Gc2','Gc3','Gc4','Gc5','Gc6','Gc7','Gc8','Gc9','Gc10','Gc11','Gc12','Gc13',
             'Gc14','Gc15','Gc16','Gc17','Gc18','Gc19','Gc20','Gc21','Gc22','Gc23']
@@ -274,10 +279,10 @@ class RBTestCase(BaseTestCase):
                                   rb.predicted_RB_number(gs_d_cliff,gs_clifford_target))
         # check the predicted R decay parameter agrees with L-matrix method for "generator" RB
         self.assertAlmostEqual(rb.p_to_r(rb.R_matrix_predicted_RB_decay_parameter(gs_Z,clifford_group,d=2,
-                subset_sampling=['Gi','Gx','Gy'],group_to_gateset = {'Gc0':'Gi','Gc16':'Gx','Gc21':'Gy'})),
+                subset_sampling=[L('Gi'),L('Gx'),L('Gy')],group_to_gateset = {L('Gc0'):L('Gi'),L('Gc16'):L('Gx'),L('Gc21'):L('Gy')})),
                 rb.predicted_RB_number(gs_Z,gs_target))
         self.assertAlmostEqual(rb.p_to_r(rb.R_matrix_predicted_RB_decay_parameter(gs_d,clifford_group,d=2,
-                subset_sampling=['Gi','Gx','Gy'],group_to_gateset={'Gc0':'Gi','Gc16':'Gx','Gc21':'Gy'})),
+                subset_sampling=[L('Gi'),L('Gx'),L('Gy')],group_to_gateset={L('Gc0'):L('Gi'),L('Gc16'):L('Gx'),L('Gc21'):L('Gy')})),
                 rb.predicted_RB_number(gs_d,gs_target))
         # check the "generator RB" prediction is accurate for depolarizing noise.
         self.assertAlmostEqual(rb.predicted_RB_number(gs_d,gs_target),rb.p_to_r(1-depol_strength))
@@ -287,8 +292,8 @@ class RBTestCase(BaseTestCase):
                    compilation=None) # fixed_length_each_m = False, 
         self.assertAlmostEqual(np.amax(abs(P_m1 - rb.standard_fit_function(m1+1,0.5,0.5,1-depol_strength))),0.0)
         m2, P_m2 = rb.exact_RB_ASPs(gs_d,clifford_group,m_max=100,m_min=1,m_step=1,
-                   d=2,success_outcomelabel=('0',), subset_sampling=['Gi','Gx','Gy'],group_to_gateset=
-                   {'Gc0':'Gi','Gc16':'Gx','Gc21':'Gy'}, #fixed_length_each_m = False,
+                   d=2,success_outcomelabel=('0',), subset_sampling=[L('Gi'),L('Gx'),L('Gy')],group_to_gateset=
+                   {L('Gc0'):L('Gi'),L('Gc16'):L('Gx'),L('Gc21'):L('Gy')}, #fixed_length_each_m = False,
                    compilation=clifford_to_primitive)
         self.assertAlmostEqual(P_m2[0],(0.5+0.5*((1.*(1-depol_strength)**1. + 
                                           2.*(1-depol_strength)**3.)/3.)*(1-depol_strength)))

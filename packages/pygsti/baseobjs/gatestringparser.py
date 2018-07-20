@@ -16,22 +16,28 @@ integer :: '0'..'9'+
 real    :: ['+'|'-'] integer [ '.' integer [ 'e' ['+'|'-'] integer ] ]
 reflbl  :: (alpha | digit | '_')+
 
-nop     :: '{}'
-gate    :: 'G' [ lowercase | digit | '_' ]+
-instrmt :: 'I' [ lowercase | digit | '_' ]+
-povm    :: 'M' [ lowercase | digit | '_' ]+
-prep    :: 'rho' [ lowercase | digit | '_' ]+
-strref  :: 'S' '[' reflbl ']'
-slcref  :: strref [ '[' integer ':' integer ']' ]
-expable :: gate | instrmt | slcref | '(' string ')' | nop
-expdstr :: expable [ expop integer ]*
-string  :: expdstr [ [ multop ] expdstr ]*
-pstring :: [ prep ] string
-ppstring:: pstring [ povm ]
+nop       :: '{}'
+gatenm    :: 'G' [ lowercase | digit | '_' ]+ 
+instrmtnm :: 'I' [ lowercase | digit | '_' ]+ 
+povmnm    :: 'M' [ lowercase | digit | '_' ]+
+prepnm    :: 'rho' [ lowercase | digit | '_' ]+
+gate      :: gatenm [':' integer ]*
+instrmt   :: instrmt [':' integer ]*
+povm      :: povm [':' integer ]*
+prep      :: prep [':' integer ]*
+strref    :: 'S' '<' reflbl '>'
+slcref    :: strref [ '[' integer ':' integer ']' ]
+layerable :: gate | instrmt
+layer     :: layerable [ [ multop ] layerable ]*
+expable   :: gate | instrmt | '[' layer ']' | slcref | '(' string ')' | nop
+expdstr   :: expable [ expop integer ]*
+string    :: expdstr [ [ multop ] expdstr ]*
+pstring   :: [ prep ] string
+ppstring  :: pstring [ povm ]
 """
 
 from ply import lex, yacc
-
+from .label import Label as _Label
 
 class GateStringLexer:
     """ Lexer for matching and interpreting text-format gate sequences """
@@ -57,36 +63,49 @@ class GateStringLexer:
 
     @staticmethod
     def t_GATE(t):
-        r'G[a-z0-9_]+'
-        t.value = t.value,  # make it a tuple
-        return t
+        r'G[a-z0-9_]+(:[a-zQ0-9_]+)*'
+        #Note: Q is only capital letter allowed in qubit label
+        #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
+        parts = t.value.split(':')
+        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
+        t.value = lbl, # make it a tuple
+        return t 
 
     @staticmethod
     def t_INSTRMT(t):
         r'I[a-z0-9_]+'
-        t.value = t.value,  # make it a tuple
+        #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
+        parts = t.value.split(':')
+        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
+        t.value = lbl, # make it a tuple
         return t
 
     @staticmethod
     def t_PREP(t):
         r'rho[a-z0-9_]+'
-        t.value = t.value,  # make it a tuple
+        #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
+        parts = t.value.split(':')
+        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
+        t.value = lbl, # make it a tuple
         return t
 
     @staticmethod
     def t_POVM(t):
         r'M[a-z0-9_]+'
-        t.value = t.value,  # make it a tuple
+        #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
+        parts = t.value.split(':')
+        lbl = _Label(t.value) if (len(parts) == 1) else _Label(parts[0],parts[1:]) 
+        t.value = lbl, # make it a tuple
         return t
 
     @staticmethod
     def t_STRINGIND(t):
-        r'S(?=\s*\[)'
+        r'S(?=\s*\<)'
         return t
 
     @staticmethod
     def t_REFLBL(t):
-        r'\[\s*[a-zA-Z0-9_]+\s*\]'
+        r'<\s*[a-zA-Z0-9_]+\s*>'
         t.value = t.value[1:-1].strip()
         return t
 
@@ -161,10 +180,37 @@ class GateStringParser(object):
         p[0] = p[1]
 
     @staticmethod
+    def p_layerable(p):
+        '''layerable : GATE
+                     | INSTRMT '''
+        p[0] = p[1]
+
+    @staticmethod
+    def p_layer_layerable(p):
+        '''layer : layerable'''
+        p[0] = p[1]
+
+    @staticmethod
+    def p_layer_str(p):
+        '''layer : layer layerable'''
+        p[0] = p[1] + p[2]  # tuple concatenation
+
+    @staticmethod
+    def p_layer(p):
+        '''layer : layer MULTOP layerable'''
+        p[0] = p[1] + p[3]  # tuple concatenation
+
+    @staticmethod
     def p_expable_paren(p):
         '''expable : LPAREN string RPAREN'''
         p[0] = p[2]
 
+    @staticmethod
+    def p_expable_layer(p):
+        '''expable : OPENBR layer CLOSEBR'''
+        p[0] = p[2], # -> tuple
+
+        
     @staticmethod
     def p_expable_single(p):
         '''expable : GATE
@@ -195,7 +241,7 @@ class GateStringParser(object):
     @staticmethod
     def p_string_str(p):
         '''string : string expdstr'''
-        p[0] = p[1] + p[2]  # tuple conatenation
+        p[0] = p[1] + p[2]  # tuple concatenation
 
     @staticmethod
     def p_string(p):

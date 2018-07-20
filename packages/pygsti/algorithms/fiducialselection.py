@@ -663,7 +663,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
 
     scoreD = {}
 
-    #fidLengths = _np.array( list(map(len,fidList)), 'i')
+    #fidLengths = _np.array( list(map(len,fidList)), _np.int64)
     if prepOrMeas == 'prep':
         fidArrayList = make_prep_mxs(gateset, fidList)
     elif prepOrMeas == 'meas':
@@ -770,7 +770,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
     if initialWeights is not None:
         weights = _np.array([1 if x else 0 for x in initialWeights])
     else:
-        weights = _np.ones(nFids, 'i') #default: start with all germs
+        weights = _np.ones(nFids, _np.int64) #default: start with all germs
         lessWeightOnly = True #we're starting at the max-weight vector
 
     score = compute_score(weights)
@@ -886,7 +886,7 @@ def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
         printer.warning("Aborting search.")
         return (None, None, None) if returnAll else None
 
-    initialWeights = _np.zeros(len(fidsList), dtype='i')
+    initialWeights = _np.zeros(len(fidsList), dtype=_np.int64)
     if forceEmpty:
         fidsLens = [len(fiducial) for fiducial in fidsList]
         initialWeights[fidsLens.index(0)] = 1
