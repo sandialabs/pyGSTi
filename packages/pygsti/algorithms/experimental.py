@@ -12,6 +12,7 @@ import scipy.stats    as _stats
 import warnings       as _warnings
 import time           as _time
 import random         as _random
+import math           as _math
 
 from .. import optimize     as _opt
 from .. import tools        as _tools
@@ -21,7 +22,7 @@ from .. import construction as _pc
 from ..baseobjs import DummyProfiler as _DummyProfiler
 _dummy_profiler = _DummyProfiler()
 
-TOLMIN = 1e-8
+TOLMIN = 1e-6
 
 from .core import *
 
@@ -182,9 +183,11 @@ def do_annealed_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEsti
     tStart = _time.time()
     tRef = tStart
 
+    originalTol = tol if not isinstance(tol, dict) else tol['relf']
+
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):
-            tol = min(1 / 10 ** i, TOLMIN)
+            tol = min(1 / 10 ** i, originalTol)
             extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
             printer.show_progress(i, nIters, verboseMessages=extraMessages,
                                   prefix="--- Iterative MLGST:",
@@ -236,6 +239,8 @@ def do_annealed_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEsti
             tRef=tNxt
 
             if i == len(gateStringLists)-1 and not alwaysPerformMLE: #on the last iteration, do ML
+                # Decrease tolerance on last iteration
+                tol = 1.0 / (10.0 * (1.0/tol))
                 printer.log("Switching to ML objective (last iteration)",2)
 
                 mleGateset.basis = startGateset.basis

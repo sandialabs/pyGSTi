@@ -596,11 +596,10 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         args['minProbClip'] = advancedOptions.get('minProbClip',1e-4)
         args['radius'] = advancedOptions.get('radius',1e-4)
         args['alwaysPerformMLE'] = advancedOptions.get('alwaysPerformMLE',False)
-        annealed = advancedOptions.get('varyTolerance', False)
-        seed_selection = advancedOptions.get('seed_selection', False)
-        if annealed:
+        algorithm = advancedOptions.get('algorithm', 'default')
+        if algorithm == 'anneal':
             gs_lsgst_list = _alg.do_annealed_iterative_mlgst(**args)
-        elif seed_selection:
+        elif algorithm == 'seed_selection':
             gs_lsgst_list = _alg.do_seed_selection_iterative_mlgst(**args)
         else:
             gs_lsgst_list = _alg.do_iterative_mlgst(**args)
