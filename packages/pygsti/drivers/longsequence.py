@@ -601,6 +601,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
             gs_lsgst_list = _alg.do_annealed_iterative_mlgst(**args)
         elif algorithm == 'seed_selection':
             gs_lsgst_list = _alg.do_seed_selection_iterative_mlgst(**args)
+        elif algorithm == 'intermediate_seed_selection':
+            gs_lsgst_list = _alg.do_intermediate_seed_selection_iterative_mlgst(**args)
         else:
             gs_lsgst_list = _alg.do_iterative_mlgst(**args)
     else:
