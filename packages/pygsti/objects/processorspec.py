@@ -9,7 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import itertools as _itertools
 import collections as _collections
-#from scipy.sparse.csgraph import floyd_warshall as _fw
+import warnings as _warnings
 
 from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
@@ -79,7 +79,10 @@ class ProcessorSpec(object):
             (e.g., the device does not have all-to-all connectivity).
 
         construct_models : tuple, optional
-            Erik todo : write this bit.
+            Standard model for the gates to add. 
+                - If 'target' is in the tuple, "target" process matrices corresponding to ideal gates are added. 
+                - If 'clifford' is in the tuple, the Clifford gates in the gateset are represented in their efficient-in-n 
+                symplectic form (these are reps. of perfect gates).
 
         construct_clifford_compilations : dict, optional
             The compilations for "standard" Clifford gates that are constructed. These are mostly only of importance for
@@ -115,11 +118,14 @@ class ProcessorSpec(object):
 
         # Records the name of the identity gate, if there is one, as this is useful information to have to hand. If there
         # isn't one we use the default 'I' label.
-        self.identity = 'I'
+        self.identity = None
         for gn in self.root_gate_names:
             if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'I'):
                 self.identity = gn
                 break
+        if self.identity is None:
+            _warnings.warn(("There is no identity gate in the gateset! This may cause some unusual behave with, e.g., circuit compilers."))
+            self.identity = 'I'
 
         # If no qubit labels are provided it defaults to integers from 0 to nQubits-1.    
         if qubit_labels is None:
@@ -134,8 +140,11 @@ class ProcessorSpec(object):
         # Compilations are stored here.
         self.compilations = _collections.OrderedDict()
 
-        #Compiler-cost variables (set in construct_compiler_costs)
+        # The connectivity graph of the device, for the "clifford" gateset (future: perhaps this should not only be for
+        # Clifford gates, or there should be a qubitgraph for each gateset.)
         self.qubitgraph = None
+
+        #Compiler-cost variables (set in construct_compiler_costs)       
         # todo : delete these if not using them.
         # self.qubitcosts = None
         # self.costorderedqubits = None
@@ -206,7 +215,7 @@ class ProcessorSpec(object):
                     for p in _itertools.permutations(gatelabel.qubits, 2):
                         connectivity[self.qubit_labels.index(p[0]),self.qubit_labels.index(p[1])] = True
             
-            self.qubitgraph = _QubitGraph(list(range(self.number_of_qubits)), connectivity)
+            self.qubitgraph = _QubitGraph(self.qubit_labels, connectivity)
 
         # todo : store this in a less clumsy way.
         if 'clifford' in self.models:
@@ -226,8 +235,11 @@ class ProcessorSpec(object):
         return # done with __init__(...)
                
     def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+        # Erik todo : improve docstring.
         """ 
-        Erik todo: docstring 
+        Adds a standard model for the gates. For example, "target" process matrices are added 
+        if model_name = 'target_name';  Target Clifford gates, represented in their efficient-in-n 
+        symplectic form, are added if model_name = 'clifford'.
         """
         from .. import construction as _cnst
         if model_name == 'clifford':
@@ -473,8 +485,8 @@ class ProcessorSpec(object):
                             self.gate_inverse[gname1] = gname2
                             self.gate_inverse[gname2] = gname1
            
-    # Tim is going to replace this at some point with a useful way to specify how "costly" using different qubits/gates is estimated to be, so that
-    # Clifford compilers etc can take this into account.                        
+    # Future : replace this with a way to specify how "costly" using different qubits/gates is estimated to be, so that
+    # Clifford compilers etc can take this into account by auto-generating a costfunction from this information.                        
     # def construct_compiler_costs(self, custom_connectivity=None):
     #     """ 
 

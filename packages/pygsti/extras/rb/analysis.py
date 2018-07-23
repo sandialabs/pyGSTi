@@ -66,7 +66,18 @@ def r_to_p(r, d, rtype='EI'):
         
     return p
 
+def marginalize(results,keepqubits,allqubits):
 
+    mresults = []
+    mask = _np.zeros(len(allqubits),bool)
+
+    for q in keepqubits:
+        mask[allqubits.index(q)] = True
+
+    for i in range(len(results)):
+        mresults.append(tuple(_np.array(results[i])[mask]))
+
+    return mresults
 
 # #
 # # FUNCTIONS FROM OLD CODE

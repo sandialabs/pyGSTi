@@ -6,8 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from ...algorithms import compilecliffordcircuit as _ccc
-from ...algorithms import compilestabilizerstate as _css
+from ...algorithms import compilers as _cmpl
 from ...objects import circuit as _cir
 from ...baseobjs import label as _lbl
 from ...tools import symplectic as _symp
@@ -665,11 +664,11 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         s_composite, p_composite = _symp.compose_cliffords(s_initial, p_initial, s_rc, p_rc)
         # If conditionaltwirl we do a stabilizer prep (a conditional Clifford).
         if conditionaltwirl:
-            initial_circuit = _css.compile_stabilizer_state(s_initial, p_initial, pspec, subsetQs, citerations, 
+            initial_circuit = _cmpl.compile_stabilizer_state(s_initial, p_initial, pspec, subsetQs, citerations, 
                                                            *compilerargs)           
         # If not conditionaltwirl, we do a full random Clifford.
         else:
-            initial_circuit = _ccc.compile_clifford(s_initial, p_initial, pspec, subsetQs, citerations, 
+            initial_circuit = _cmpl.compile_clifford(s_initial, p_initial, pspec, subsetQs, citerations, 
                                                      *compilerargs)
         
     # If we are not Clifford twirling, we just copy the effect of the random circuit as the effect
@@ -690,10 +689,10 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         p_for_inversion = p_inverse
     
     if conditionaltwirl:
-        inversion_circuit = _css.compile_stabilizer_measurement(s_inverse, p_for_inversion, pspec, subsetQs,
+        inversion_circuit = _cmpl.compile_stabilizer_measurement(s_inverse, p_for_inversion, pspec, subsetQs,
                                                                citerations,*compilerargs)   
     else:
-        inversion_circuit = _ccc.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs, citerations,
+        inversion_circuit = _cmpl.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs, citerations,
                                                    *compilerargs)
         
     if cliffordtwirl:
@@ -719,7 +718,7 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
             assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
         idealout.append(int(measurement_out[1]))
     idealout = tuple(idealout)
-    
+
     if not partitioned:
         outcircuit = full_circuit
     else:
@@ -786,7 +785,7 @@ def clifford_rb_circuit(pspec, length, subsetQs=None, randomizeout=False, citera
     for i in range(0,length+1):
     
         s, p = _symp.random_clifford(n)
-        circuit = _ccc.compile_clifford(s, p, pspec, subsetQs=subsetQs, iterations=citerations, *compilerargs)       
+        circuit = _cmpl.compile_clifford(s, p, pspec, subsetQs=subsetQs, iterations=citerations, *compilerargs)       
         # Keeps track of the current composite Clifford
         s_composite, p_composite = _symp.compose_cliffords(s_composite, p_composite, s, p)
         full_circuit.append_circuit(circuit)
@@ -803,7 +802,7 @@ def clifford_rb_circuit(pspec, length, subsetQs=None, randomizeout=False, citera
         p_for_inversion = p_inverse
     
     # Compile the inversion circuit
-    inversion_circuit = _ccc.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs=subsetQs, iterations=citerations, 
+    inversion_circuit = _cmpl.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs=subsetQs, iterations=citerations, 
                                                *compilerargs)    
     full_circuit.append_circuit(inversion_circuit)
     full_circuit.done_editing()
@@ -959,7 +958,8 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     else:
         identity = 'I'
     if subsetQs is not None:
-        assert(isinstance(subsetQs,list)), "If not None, `subsetQs` must be a list!"
+        assert(isinstance(subsetQs,list) or isinstance(subsetQs,tuple)), "If not None, `subsetQs` must be a list!"
+        subsetQs = list(subsetQs)
         #n = 0
         #allqubits = []
         #for Qset in subsetsQs:

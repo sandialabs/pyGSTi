@@ -11,13 +11,13 @@ def test_circuit():
     c = pygsti.obj.Circuit(num_lines=5)
     assert(c.depth()==0)
     assert(c.size()==0)
-    assert(c.number_of_lines == 5)
+    assert(c.number_of_lines() == 5)
     assert(c.line_labels == list(range(5)))
 
     c = pygsti.obj.Circuit(gatestring=[],num_lines=5)
     assert(c.depth()==0)
     assert(c.size()==0)
-    assert(c.number_of_lines == 5)
+    assert(c.number_of_lines() == 5)
     assert(c.line_labels == list(range(5)))
 
     # Test initializing a circuit from a non-empty gatestring that is a list
@@ -28,7 +28,7 @@ def test_circuit():
     # Not parallelized by default, so will be depth 2.
     assert(c.depth()==2)
     assert(c.size()==2)
-    assert(c.number_of_lines == 4)
+    assert(c.number_of_lines() == 4)
     assert(c.line_labels == ['Q0','Q1','Q8','Q12'])
 
     # Do again with parallelization
@@ -132,19 +132,45 @@ def test_circuit():
     c2 = pygsti.obj.Circuit(gatestring=gatestring,line_labels=['Q0','Q1','Q2','Q3'])
     c1.insert_circuit(c2,0)
     assert(c1.line_labels == ['Q0','Q1'])
-    assert(c1.number_of_lines == 2)
+    assert(c1.number_of_lines() == 2)
 
     # Test inserting a circuit that is on *less* qubits.
     c1 = pygsti.obj.Circuit(gatestring=gatestring, line_labels=['Q0','Q1'], identity='id')
     c2 = pygsti.obj.Circuit(gatestring=[Label('Gx','Q0')], line_labels=['Q0',])
     c1.insert_circuit(c2,1)
     assert(c1.line_labels == ['Q0','Q1'])
-    assert(c1.number_of_lines == 2)
+    assert(c1.number_of_lines() == 2)
 
+    # Test appending and prefixing a circuit
     c1 = pygsti.obj.Circuit(gatestring=gatestring, line_labels=['Q0','Q1'], identity='id')
     c2 = pygsti.obj.Circuit(gatestring=[Label('Gx','Q0')], line_labels=['Q0',])
     c1.append_circuit(c2)
     c1.prefix_circuit(c2)
+    
+    # Test tensoring circuits of same length
+    gatestring1 = GateString( None, "[Gx:Q0Gy:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1" )
+    gatestring2 = GateString( None, "[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3" )
+    c1 = pygsti.obj.Circuit(gatestring=gatestring1,line_labels=['Q0','Q1'])
+    c2 = pygsti.obj.Circuit(gatestring=gatestring2,line_labels=['Q2','Q3'])
+    c1.tensor_circuit(c2)
+    assert(c1.depth() == max(c1.depth(),c2.depth()))
+    assert(c1.line_items[2] == c2.line_items[0])
+
+    # Test tensoring circuits where the inserted circuit is shorter
+    gatestring1 = GateString( None, "[Gx:Q0Gy:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1Gy:Q0" )
+    gatestring2 = GateString( None, "[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3" )
+    c1 = pygsti.obj.Circuit(gatestring=gatestring1,line_labels=['Q0','Q1'])
+    c2 = pygsti.obj.Circuit(gatestring=gatestring2,line_labels=['Q2','Q3'])
+    c1.tensor_circuit(c2,line_order=['Q1','Q3','Q0','Q2'])
+    assert(c1.depth() == max(c1.depth(),c2.depth()))
+
+    # Test tensoring circuits where the inserted circuit is longer
+    gatestring1 = GateString( None, "[Gx:Q0Gy:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1" )
+    gatestring2 = GateString( None, "[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3Gy:Q2" )
+    c1 = pygsti.obj.Circuit(gatestring=gatestring1,line_labels=['Q0','Q1'])
+    c2 = pygsti.obj.Circuit(gatestring=gatestring2,line_labels=['Q2','Q3'])
+    c1.tensor_circuit(c2)
+    assert(c1.depth() == max(c1.depth(),c2.depth()))
 
     # Test changing a gate name
     gatestring = GateString( None, "[Gx:Q0Gy:Q1][Gy:Q0Gx:Q1]Gx:Q0Gi:Q1")
@@ -187,10 +213,10 @@ def test_circuit():
     c = pygsti.obj.Circuit(gatestring=gatestring,line_labels=['Q0','Q1'],identity='Gi')
     c.insert_idling_wires(['Q0','Q1','Q2'])
     assert(c.line_labels == ['Q0','Q1','Q2'])
-    assert(c.number_of_lines == 3)
+    assert(c.number_of_lines() == 3)
     c.delete_idling_wires()
     assert(c.line_labels == ['Q0','Q1'])
-    assert(c.number_of_lines == 2)
+    assert(c.number_of_lines() == 2)
 
     # Test circuit reverse.
     gate1 = c.get_line('Q0')[0]

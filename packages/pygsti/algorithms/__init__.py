@@ -16,6 +16,4 @@ from .fiducialpairreduction import *
 from .fiducialselection import *
 from .gaugeopt import *
 from .contract import *
-from .compilecliffordcircuit import compile_clifford
-from .compilestabilizerstate import compile_stabilizer_state, compile_stabilizer_measurement
-from .compilecnotcircuit import compile_cnot_circuit
+from .compilers import compile_clifford, compile_stabilizer_state, compile_stabilizer_measurement, compile_cnot_circuit
