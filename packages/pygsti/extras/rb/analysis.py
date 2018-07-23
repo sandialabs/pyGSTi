@@ -66,6 +66,10 @@ def r_to_p(r, d, rtype='EI'):
         
     return p
 
+#
+# Put functions for converting sim RB data to the correct format.
+#
+
 def marginalize(results,keepqubits,allqubits):
 
     mresults = []

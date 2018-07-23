@@ -30,6 +30,8 @@ def entanglement_infidelity(A, B, mxBasis=None):
 def gateset_infidelity(gs, gs_target, itype = 'EI', 
                        weights=None, mxBasis=None):
     """
+    Todo : update docstring. 
+
     Computes the average-over-gates of the average gate infidelity between 
     gates in `gs` and the gates in `gs_target`. This quantity is sometimes
     called the "average error rate" and Proctor et al Phys. Rev. Lett. 119, 
@@ -143,7 +145,12 @@ def predicted_RB_number(gs, gs_target, weights=None, d=None, rtype='EI'):
         p obtained from fitting to Pm = A + Bp^m. "EI" corresponds to
         an RB error rate that is associated with entanglement infidelity, which
         is the probability of error for a gate with stochastic errors. This is 
-        the RB error rate defined in the "direct RB" protocol. "AGI" corresponds
+        the RB error rate defined in the "direct RB" protocol, and is given by
+
+        todo: update. 
+        
+        r = (....)
+         "AGI" corresponds
         to an RB error rate that is associated with average gate infidelity. This 
         is the more standard (but perhaps less well motivated) definition of the 
         RB error rate.

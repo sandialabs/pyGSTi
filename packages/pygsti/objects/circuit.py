@@ -122,7 +122,7 @@ class Circuit(_gstr.GateString):
         self._tup_dirty = False # keep track of when we need to _flatten_to_tup
         self._str_dirty = True # keep track of when we need to auto-compute string rep
 
-        # todo : implement this.
+        #future : implement this.
         #self.barriers = _np.zeros(self.depth()+1,bool)
 
     def _reinit_base(self):
@@ -1160,8 +1160,9 @@ class Circuit(_gstr.GateString):
        
     def get_layer(self,j):
         """
-        Returns the layer at depth j.
-        Todo : docstring update.
+        Returns the layer, as a list, at depth j. This list contains all gates
+        in the layer except self.identity gates, and contains each gate only
+        once (although multi-qubit gates appear on multiple lines of the circuit).
 
         Parameters
         ----------
@@ -1171,6 +1172,7 @@ class Circuit(_gstr.GateString):
         Returns
         -------
         List of Labels
+            Each gate in the layer, except self.identity gates, once and only once.
         """      
         assert(j >= 0 and j < self.depth()), "Circuit layer label invalid! Circuit is only of depth {}".format(self.depth())
         
@@ -1386,13 +1388,16 @@ class Circuit(_gstr.GateString):
             if lbl.number_of_qubits == 1:
                 return lbl.name
             elif lbl.name in ('CNOT','Gcnot'): # qubit indices = (control,target)
-                # Tim: display *other* CNOT qubit on each line
                 if k == self.line_labels.index(lbl.qubits[0]):
                     return  '\u25CF' + str(lbl.qubits[1])
                 else:
                     return 'T' + str(lbl.qubits[0])
             elif lbl.name in ('CPHASE', 'Gcphase'):
-                return '\u25CF' + str(lbl.qubits[1])
+                if k == self.line_labels.index(lbl.qubits[0]):
+                    otherqubit = lbl.qubits[1]
+                else:
+                    otherqubit = lbl.qubits[0]
+                return '\u25CF' + str(otherqubit)
             else:
                 return str(lbl)
         
@@ -1474,7 +1479,31 @@ class Circuit(_gstr.GateString):
 
     def convert_to_quil(self, gatename_conversion=None, qubit_conversion=None):
         """
-        Docstring todo.
+        Converts a circuit to a quil string.
+
+        Parameters
+        ----------
+        gatename_conversion : dict, optional
+            If not None, a dictionary that converts the gatenames in the circuit to the
+            gatenames that will appear in the quil output. If only standard pyGSTi names 
+            are used (e.g., 'Gh', 'Gp', 'Gcnot', 'Gcphase', etc) this dictionary need not 
+            be specified, and an automatic conversion to the standard quil names will be
+            implemented.
+
+            * Currently some standard pyGSTi names do not have an inbuilt conversion to quil names. 
+            This will be fixed in the future *
+
+        qubit_conversion : dict, optional
+            If not None, a dictionary converting the qubit labels in the circuit to the 
+            desired qubit labels in the quil output. Can be left as None if the qubit
+            labels are either (1) integers, or (2) of the form 'Qi' for integer i. In
+            this case they are converted to integers (i.e., for (1) the mapping is trivial,
+            for (2) the mapping strips the 'Q'). 
+
+        Returns
+        -------
+        str
+            A quil string.
         """
         # create standard conversations.
         if gatename_conversion is None:
@@ -1523,12 +1552,11 @@ class Circuit(_gstr.GateString):
                 qubits_used += list(gate.qubits)
             
             # All gates that don't have a non-idle gate acting on them get an idle in the layer.
-            # Todo : is this needed? Ask Kenny.
             for q in self.line_labels:
                 if q not in qubits_used:
                     quil += 'I' + ' ' + str(qubit_conversion[q]) +'\n'
                     
-            # Add in a barrier after every circuit layer. Todo: Should make this optional at some
+            # Add in a barrier after every circuit layer. Future: Should make this optional at some
             # point and/or to agree with the "barriers" in the circuit (to be added).
             quil += 'PRAGMA PRESERVE_BLOCK\nPRAGMA END_PRESERVE_BLOCK\n'
         
@@ -1540,7 +1568,28 @@ class Circuit(_gstr.GateString):
 
     def convert_to_openqasm(self, gatename_conversion=None, qubit_conversion=None):
         """
-        Docstring todo.
+        Converts a circuit to an openqasm string.
+
+        Parameters
+        ----------
+        gatename_conversion : dict, optional
+            If not None, a dictionary that converts the gatenames in the circuit to the
+            gatenames that will appear in the openqasm output. If only standard pyGSTi names 
+            are used (e.g., 'Gh', 'Gp', 'Gcnot', 'Gcphase', etc) this dictionary need not 
+            be specified, and an automatic conversion to the standard openqasm names will be
+            implemented.
+
+        qubit_conversion : dict, optional
+            If not None, a dictionary converting the qubit labels in the circuit to the 
+            desired qubit labels in the openqasm output. Can be left as None if the qubit
+            labels are either (1) integers, or (2) of the form 'Qi' for integer i. In
+            this case they are converted to integers (i.e., for (1) the mapping is trivial,
+            for (2) the mapping strips the 'Q'). 
+
+        Returns
+        -------
+        str
+            An openqasm string.
         """
         # create standard conversations.
         if gatename_conversion is None:
@@ -1599,12 +1648,11 @@ class Circuit(_gstr.GateString):
                 qubits_used += list(gate.qubits)
             
             # All gates that don't have a non-idle gate acting on them get an idle in the layer.
-            # Todo : is this needed? Ask Kenny.
             for q in self.line_labels:
                 if q not in qubits_used:
                     openqasm += 'id' + ' q[' + str(qubit_conversion[q]) +'];\n'
                     
-            # Add in a barrier after every circuit layer. Todo: Should make this optional at some
+            # Add in a barrier after every circuit layer. Future: Should make this optional at some
             # point and/or to agree with the "barriers" in the circuit (to be added).
             openqasm += 'barrier '
             for qidx in range(num_qubits-1):

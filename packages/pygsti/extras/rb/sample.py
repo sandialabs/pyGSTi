@@ -513,13 +513,10 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
     -------
     list of gates
         A list of gate Labels that defines a "complete" circuit layer (there is one and 
-        only one gate acting on each qubit).
-        
+        only one gate acting on each qubit).       
     """
-    if subsetQs is not None:
-        qubits = subsetQs.copy()
-    else:
-        qubits = pspec.qubit_labels.copy()
+    if subsetQs is not None: qubits = subsetQs.copy()
+    else: qubits = pspec.qubit_labels.copy()
 
     sampled_layer = []
     
@@ -534,8 +531,7 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
                     sampled_layer.append(gate)
                 except:
                     raise ValueError ("There are no 1Q Clifford gates on qubit {}!".format(i))
-        else:
-            raise ValueError("Currently, 'gatesetname' must be 'clifford'")
+        else: raise ValueError("Currently, 'gatesetname' must be 'clifford'")
     
     else:
         # A basic check for the validity of pdist.
@@ -568,16 +564,20 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
     ----------
     pspec : ProcessorSpec
        The ProcessorSpec for the device that the circuit is being sampled for. This is always
-       handed to the sampler, as the first argument of the sampler function
-                
+       handed to the sampler, as the first argument of the sampler function. Unless
+       `subsetQs` is not None, the circuit is sampled over all the qubits in `pspec`.
+                 
     length : int
         If `addlocal` is False, this is the length of the sampled circuit. If `addlocal is
         True the length of the circuits is 2*length+1 with odd-indexed layers sampled according
         to the sampler specified by `sampler`, and the the zeroth layer + the even-indexed 
-        layers consisting of random 1-qubit gates (with the sampling specified by `lsargs`).
+        layers consisting of random 1-qubit gates (with the sampling specified by `lsargs`)
 
-    subsetQs : todo.
-        
+    subsetQs : list, optional
+        If not None, a list of the qubits to sample the circuit for. This is a subset of
+        `pspec.qubit_labels`. If None, the circuit is sampled to act on all the qubits 
+        in `pspec`.
+
     sampler : str or function, optional
         If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
@@ -592,7 +592,8 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
     samplerargs : list, optional
         A list of arguments that are handed to the sampler function, specified by `sampler`.
         The first argument handed to the sampler is `pspec` and `samplerargs` lists the
-        remaining arguments handed to the sampler.
+        remaining arguments handed to the sampler. For some in-built samplers this is not
+        optional.
         
     addlocal : bool, optional
         If False, the circuit sampled is of length `length` and each layer is independently
@@ -618,8 +619,7 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
     -------
     Circuit
         A random circuit of length `length` (if not addlocal) or length 2*`length`+1 (if addlocal)
-        with layers independently sampled using the specified sampling distribution.
-        
+        with layers independently sampled using the specified sampling distribution.        
     """ 
     if type(sampler) == str:
         
@@ -666,13 +666,15 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
     return circuit
 
 def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[],
-                      randomizeout=False, cliffordtwirl=True, conditionaltwirl=True, citerations=20,
+                      randomizeout=True, cliffordtwirl=True, conditionaltwirl=True, citerations=20,
                       compilerargs=[], partitioned=False):
     """
     Generates a "direct randomized benchmarking" (DRB) circuit, which is the protocol introduced in
-    arXiv *todo*.
-
-    todo : update docstring -- it is currently the MRB one.
+    arXiv *todo*. The length of the "core" sequence is given by `length` and may be any integer >= 0.
+    An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random stabilizer state;
+    (2) a length-l circuit (specified by `length`) consisting of circuit layers sampled according to 
+    some user-specified distribution (specified by `sampler`), (3) a circuit that maps the output of
+    the preceeding circuit to a computational basis state.
 
     Parameters
     ----------
@@ -681,79 +683,108 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
        "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
        the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
        is always handed to the sampler, as the first argument of the sampler function (this is only
-       of importance when not using an in-built sampler for the "core" of the DRB circuit).
-                
+       of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
+       `subsetQs` is not None, the circuit is sampled over all the qubits in `pspec`.
+                         
     length : int
-        The "mirror RB length" of the circuit, which is closely related to the circuit depth. It
-        must be an even integer, and can be zero.
-
-        - If `localclifford` and `paulirandomize` are False, this is the depth of the sampled circuit.
-          The first length/2 layers are all sampled independently according to the sampler specified by
-          `sampler`. The remaining half of the circuit is the "inversion" circuit that is determined
-          by the first half.
-        - If `paulirandomize` is True and `localclifford` is False, the depth of the circuits is 
-          2*length+1 with odd-indexed layers sampled according to the sampler specified by `sampler, and
-          the the zeroth layer + the even-indexed layers consisting of random 1-qubit Pauli gates.
-        - If `paulirandomize` and `localclifford` are True, the depth of the circuits is 
-          2*length+1 + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for 
-          the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
+        The "direct RB length" of the circuit, which is closely related to the circuit depth. It
+        must be an integer >= 0. Unless `addlocal` is True, it is the depth of the "core" random 
+        circuit, sampled according to `sampler`, specified in step (2) above. If `addlocal` is True, 
+        each layer in the "core" circuit sampled according to "sampler` is followed by a layer of 
+        1-qubit gates, with sampling specified by `lsargs` (and the first layer is proceeded by a 
+        layer of 1-qubit gates), and so the circuit of step (2) is length 2*`length` + 1.
 
     subsetQs : list, optional
-        If not None, a list of the qubits that the RB circuit is to be sampled for. This should
-        be all or a subset of the qubits in the device specified by the ProcessorSpec `pspec`.
-        If None, it is assumed that the RB circuit should be over all the qubits. Note that the
-        ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
-        irrelevant.
+        If not None, a list of the qubits to sample the circuit for. This is a subset of
+        `pspec.qubit_labels`. If None, the circuit is sampled to act on all the qubits 
+        in `pspec`.
         
     sampler : str or function, optional
         If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
-        corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates. If this is a
-        function, it should be a function that takes as the first argument a ProcessorSpec, and
-        returns a random circuit layer as a list of gate Label objects. Note that the default
-        'Qelimination' is not necessarily the most useful in-built sampler, but it is the only
-        sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary 
+        corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not 
+        a valid form of sampling for n-qubit DRB, but is not explicitly forbidden in this function]. 
+        If `sampler` is a function, it should be a function that takes as the first argument a 
+        ProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that 
+        the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is 
+        the only sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary 
         connectivity devices. See the docstrings for each of these samplers for more information.
     
     samplerargs : list, optional
         A list of arguments that are handed to the sampler function, specified by `sampler`.
-        The first argument handed to the sampler is `pspec` and `samplerargs` lists the
-        remaining arguments handed to the sampler.
+        The first argument handed to the sampler is `pspec`, the second argument is `subsetQs`,
+        and `samplerargs` lists the remaining arguments handed to the sampler. This is not
+        optional for some choices of `sampler`.
+
+    addlocal : bool, optional
+        Whether to follow each layer in the "core" circuit, sampled according to `sampler` with
+        a layer of 1-qubit gates.
+
+    lsargs : list, optional
+        Only used if addlocal is True. A list of optional arguments handed to the 1Q gate
+        layer sampler circuit_layer_by_oneQgate(). Specifies how to sample 1Q-gate layers.
         
-    localclifford: bool, optional
-        Whether to start the circuit with uniformly random 1-qubit Cliffords and all of the 
-        qubits (compiled into the native gates of the device).
+    randomizeout : bool, optional
+        If False, the ideal output of the circuit (the "success" or "survival" outcome) is the all-zeros
+        bit string. If True, the ideal output of the circuit is randomized to a uniformly random bit-string. 
+        This setting is useful for, e.g., detecting leakage/loss/measurement-bias etc.
+
+    cliffordtwirl : bool, optional
+        Wether to begin the circuit with a sequence that generates a random stabilizer state. For
+        standard DRB this should be set to True. There are a variety of reasons why it is better
+        to have this set to True.
+
+    conditionaltwirl : bool, optional
+        DRB only requires that the initial/final sequences of step (1) and (3) create/measure
+        a uniformly random / particular stabilizer state, rather than implement a particular unitary. 
+        step (1) and (3) can be achieved by implementing a uniformly random Clifford gate and the
+        unique inversion Clifford, respectively. This is implemented if `conditionaltwirl` is False.
+        However, steps (1) and (3) can be implemented much more efficiently than this: the sequences
+        of (1) and (3) only need to map a particular input state to a particular output state, 
+        if `conditionaltwirl` is True this more efficient option is chosen -- this is option corresponds 
+        to "standard" DRB. (the term "conditional" refers to the fact that in this case we essentially
+        implementing a particular Clifford conditional on a known input).
+
+    citerations : int, optional
+        Some of the stabilizer state / Clifford compilation algorithms in pyGSTi (including the default 
+        algorithms) are  randomized, and the lowest-cost circuit is chosen from all the circuit generated 
+        in the iterations of the algorithm. This is the number of iterations used. The time required to
+        generate a DRB circuit is linear in `citerations`. Lower-depth / lower 2-qubit gate count
+        compilations of steps (1) and (3) are important in order to successfully implement DRB on as many
+        qubits as possible. 
+    
+    compilerargs : list, optional
+        A list of arguments that are handed to the compile_stabilier_state/measurement()functions (or the
+        compile_clifford() function if `conditionaltwirl `is False). This includes all the optional 
+        arguments of these functions *after* the `iterations` option (set by `citerations`). For most
+        purposes the default options will be suitable (or at least near-optimal from the compilation methods
+        in-built into pyGSTi). See the docstrings of these functions for more information. 
         
-    paulirandomize: bool, optional
-        Whether to have uniformly random Pauli operators on all of the qubits before and 
-        after all of the layers in the "out" and "back" random circuits. At length 0 there
-        is a single layer of random Pauli operators (in between two layers of 1-qubit Clifford
-        gates if `localclifford` is True); at length l there are 2l+1 Pauli layers as there
-        are 
+    partitioned : bool, optional
+        If False, a single circuit is returned consisting of the full circuit. If True, three circuits
+        are returned in a list consisting of: (1) the stabilizer-prep circuit, (2) the core random circuit, 
+        (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1) 
+        and then (3) to (1).
         
     Returns
     -------
-    Circuit
-        A random circuit, sampled as specified, of depth:
+    Circuit or list of Circuits
+        If partioned is False, a random DRB circuit sampled as specified. If partioned is True, a list of
+        three circuits consisting of (1) the stabilizer-prep circuit, (2) the core random circuit, 
+        (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1) 
+        and then (3) to (1) [except in the case of cliffordtwirl=False, when it is a list of two circuits].    
 
-            - `length`, if not paulirandomize and not local clifford.
-            - 2*`length`+1 if paulirandomize and not local clifford.
-            - `length` + X, if not paulirandomize and local clifford, where X is a random variable
-              that accounts for the depth from the layers of random 1-qubit Cliffords (X = 2 if the 1
-              qubit Clifford gates are "native" gates in the ProcessorSpec).
-            - 2*`length`+1 + X, if paulirandomize and local clifford, where X is a random variable
-              that accounts for the depth from the layers of random 1-qubit Cliffords (X = 2 if the 1
-              qubit Clifford gates are "native" gates in the ProcessorSpec).        
+    Tuple 
+        A length-n tuple of integers in [0,1], corresponding to the error-free outcome of the 
+        circuit. Always all zeros if `randomizeout` is False. The ith element of the tuple 
+        corresponds to the error-free outcome for the qubit labelled by: the ith element of
+        `subsetQs`, if `subsetQs` is not None; the ith element of `pspec.qubit_labels`, otherwise.
+        In both cases, the ith element of the tuple corresponds to the error-free outcome for the
+        qubit on the ith wire of the output circuit.
     """    
-    #
-    # Todo : allow for pauli-twirling in the prep/measure circuits
-    #
-    # Todo : add in a custom compiler.
-    #
     if subsetQs is not None: n = len(subsetQs)
-    else:
-        n = pspec.number_of_qubits
+    else: n = pspec.number_of_qubits
     # Sample a random circuit of "native gates".   
     circuit = random_circuit(pspec=pspec, length=length, subsetQs=subsetQs, sampler=sampler, 
                              samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)   
@@ -772,34 +803,32 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
             initial_circuit = _cmpl.compile_stabilizer_state(s_initial, p_initial, pspec, subsetQs, citerations, 
                                                            *compilerargs)           
         # If not conditionaltwirl, we do a full random Clifford.
-        else:
-            initial_circuit = _cmpl.compile_clifford(s_initial, p_initial, pspec, subsetQs, citerations, 
-                                                     *compilerargs)
-        
+        else: initial_circuit = _cmpl.compile_clifford(s_initial, p_initial, pspec, subsetQs, citerations, 
+                                                       *compilerargs)        
     # If we are not Clifford twirling, we just copy the effect of the random circuit as the effect
     # of the "composite" prep + random circuit (as here the prep circuit is the null circuit).
     else:
         s_composite = _copy.deepcopy(s_rc)
         p_composite = _copy.deepcopy(p_rc)
     
-    # Find the Clifford that inverts the circuit so far.
-    s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)
-    
-    # If we want to randomize the expected output then randomize the p_inverse vector, so that
-    # the final bit of circuit will only invert (or conditionally invert) the preceeding circuit
-    # up to a random Pauli.
-    if randomizeout:
-        p_for_inversion = _symp.random_phase_vector(s_inverse,n)
-    else:
-        p_for_inversion = p_inverse
-    
     if conditionaltwirl:
-        inversion_circuit = _cmpl.compile_stabilizer_measurement(s_inverse, p_for_inversion, pspec, subsetQs,
-                                                               citerations,*compilerargs)   
+        # If we want to randomize the expected output then randomize the p vector, otherwise
+        # it is left as p. Note that, unlike with compile_clifford, we don't invert (s,p)
+        # before handing it to the stabilizer measurement function.
+        if randomizeout: p_for_measurement = _symp.random_phase_vector(s,n)
+        else: p_for_measurement =  p_composite
+        inversion_circuit = _cmpl.compile_stabilizer_measurement(s_composite, p_for_measurement, pspec, subsetQs,
+                                                                 citerations, *compilerargs)   
     else:
-        inversion_circuit = _cmpl.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs, citerations,
-                                                   *compilerargs)
-        
+        # Find the Clifford that inverts the circuit so far. We 
+        s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)
+        # If we want to randomize the expected output then randomize the p_inverse vector, otherwise
+        # do not.
+        if randomizeout: p_for_inversion = _symp.random_phase_vector(s_inverse,n)
+        else: p_for_inversion =  p_inverse
+        # Compile the Clifford.
+        inversion_circuit = _cmpl.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs, 
+                                                   citerations, *compilerargs)        
     if cliffordtwirl:
         full_circuit = _copy.deepcopy(initial_circuit)
         full_circuit.append_circuit(circuit)
@@ -807,11 +836,14 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     else:
         full_circuit = _copy.deepcopy(circuit)
         full_circuit.append_circuit(inversion_circuit)         
-    full_circuit.done_editing() 
      
     # Find the expected outcome of the circuit.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit,pspec=pspec)
-    assert(_np.array_equal(s_out[:n,n:],_np.zeros((n,n),int)))
+    if conditionaltwirl: # s_out is not always the identity with a conditional twirl, only conditional on prep/measure.
+        assert(_np.array_equal(s_out[:n,n:],_np.zeros((n,n),int))), "Compiler has failed!"
+    else: assert(_np.array_equal(s_out,_np.identity(2*n,int))), "Compiler has failed!"
+
+    # Find the ideal output of the circuit.
     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
     s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
     idealout = []
@@ -824,52 +856,199 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         idealout.append(int(measurement_out[1]))
     idealout = tuple(idealout)
 
-    if not partitioned:
-        outcircuit = full_circuit
+    if not partitioned: outcircuit = full_circuit
     else:
-        if cliffordtwirl:
-            outcircuit = [initial_circuit, circuit, inversion_circuit]
-        else:
-            outcircuit = [circuit, inversion_circuit]
+        if cliffordtwirl: outcircuit = [initial_circuit, circuit, inversion_circuit]
+        else: outcircuit = [circuit, inversion_circuit]
 
     return outcircuit, idealout
 
 def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[],
                          randomizeout=False, cliffordtwirl=True, conditionaltwirl=True, citerations=20, compilerargs=[], 
-                         partitioned=False, verbosity=1):
+                         partitioned=False, descriptor='A DRB experiment', verbosity=1):
     """
-    docstring todo.
-    """
-
+    Generates a "direct randomized benchmarking" (DRB) experiments, which is the protocol introduced in
+    arXiv *todo*. The set of lengths of the "core" sequence is given by `lengths` and may be an list
+    of any integers >= 0.
     
-    if type(circuits_per_length) == int:
-        circuits_per_length = [circuits_per_length for i in range(len(lengths))]
+    An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random stabilizer state;
+    (2) a length-l circuit (specified by `length`) consisting of circuit layers sampled according to 
+    some user-specified distribution (specified by `sampler`), (3) a circuit that maps the output of
+    the preceeding circuit to a computational basis state. For more information see arXiv *todo*.
 
-    circuits_list = []
-    idealout_list = []
+    Parameters
+    ----------
+    pspec : ProcessorSpec
+       The ProcessorSpec for the device that the circuit is being sampled for, which defines the 
+       "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
+       the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+       is always handed to the sampler, as the first argument of the sampler function (this is only
+       of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
+       `subsetQs` is not None, the circuit is sampled over all the qubits in `pspec`.
+                         
+    lengths : int
+        The set of "direct RB lengths" for the circuits. The DRB lengths must be integers >= 0. 
+        Unless `addlocal` is True, the DRB length is the depth of the "core" random circuit, 
+        sampled according to `sampler`, specified in step (2) above. If `addlocal` is True, 
+        each layer in the "core" circuit sampled according to "sampler` is followed by a layer of 
+        1-qubit gates, with sampling specified by `lsargs` (and the first layer is proceeded by a 
+        layer of 1-qubit gates), and so the circuit of step (2) is length 2*`length` + 1.
 
+    circuits_per_length : int
+        The number of (possibly) different DRB circuits sampled at each length.
 
-    for i in range(len(lengths)):
-        l = lengths[i]
+    subsetQs : list, optional
+        If not None, a list of the qubits to sample the circuit for. This is a subset of
+        `pspec.qubit_labels`. If None, the circuit is sampled to act on all the qubits 
+        in `pspec`.
+        
+    sampler : str or function, optional
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
+        Except for 'local', this corresponds to sampling layers according to the sampling function 
+        in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+        corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not 
+        a valid form of sampling for n-qubit DRB, but is not explicitly forbidden in this function]. 
+        If `sampler` is a function, it should be a function that takes as the first argument a 
+        ProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+        the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is the
+        only sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary 
+        connectivity devices. See the docstrings for each of these samplers for more information.
+    
+    samplerargs : list, optional
+        A list of arguments that are handed to the sampler function, specified by `sampler`.
+        The first argument handed to the sampler is `pspec`, the second argument is `subsetQs`,
+        and `samplerargs` lists the remaining arguments handed to the sampler. This is not
+        optional for some choices of `sampler`.
+
+    addlocal : bool, optional
+        Whether to follow each layer in the "core" circuits, sampled according to `sampler` with
+        a layer of 1-qubit gates.
+
+    lsargs : list, optional
+        Only used if addlocal is True. A list of optional arguments handed to the 1Q gate
+        layer sampler circuit_layer_by_oneQgate(). Specifies how to sample 1Q-gate layers.
+        
+    randomizeout : bool, optional
+        If False, the ideal output of the circuits (the "success" or "survival" outcome) is the all-zeros
+        bit string. If True, the ideal output of each circuit is randomized to a uniformly random bit-string. 
+        This setting is useful for, e.g., detecting leakage/loss/measurement-bias etc.
+
+    cliffordtwirl : bool, optional
+        Wether to begin the circuitas with a sequence that generates a random stabilizer state. For
+        standard DRB this should be set to True. There are a variety of reasons why it is better
+        to have this set to True.
+
+    conditionaltwirl : bool, optional
+        DRB only requires that the initial/final sequences of step (1) and (3) create/measure
+        a uniformly random / particular stabilizer state, rather than implement a particular unitary. 
+        step (1) and (3) can be achieved by implementing a uniformly random Clifford gate and the
+        unique inversion Clifford, respectively. This is implemented if `conditionaltwirl` is False.
+        However, steps (1) and (3) can be implemented much more efficiently than this: the sequences
+        of (1) and (3) only need to map a particular input state to a particular output state, 
+        if `conditionaltwirl` is True this more efficient option is chosen -- this is option corresponds 
+        to "standard" DRB. (the term "conditional" refers to the fact that in this case we essentially
+        implementing a particular Clifford conditional on a known input).
+
+    citerations : int, optional
+        Some of the stabilizer state / Clifford compilation algorithms in pyGSTi (including the default 
+        algorithms) are  randomized, and the lowest-cost circuit is chosen from all the circuits generated 
+        in the iterations of the algorithm. This is the number of iterations used. The time required to
+        generate a DRB circuit is linear in `citerations`. Lower-depth / lower 2-qubit gate count
+        compilations of steps (1) and (3) are important in order to successfully implement DRB on as many
+        qubits as possible. 
+    
+    compilerargs : list, optional
+        A list of arguments that are handed to the compile_stabilier_state/measurement()functions (or the
+        compile_clifford() function if `conditionaltwirl `is False). This includes all the optional 
+        arguments of these functions *after* the `iterations` option (set by `citerations`). For most
+        purposes the default options will be suitable (or at least near-optimal from the compilation methods
+        in-built into pyGSTi). See the docstrings of these functions for more information. 
+        
+    partitioned : bool, optional
+        If False, each circuit is returned as a single full circuit. If True, each circuit is returned as
+        a list of three circuits consisting of: (1) the stabilizer-prep circuit, (2) the core random circuit, 
+        (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1) 
+        and then (3) to (1).
+
+    descriptor : str, optional
+        A description of the experiment being generated. Stored in the output dictionary.
+
+    verbosity : int, optional
+        If > 0 the number of circuits generated so far is shown.
+        
+    Returns
+    -------
+    Circuit or list of Circuits
+        If partioned is False, a random DRB circuit sampled as specified. If partioned is True, a list of
+        three circuits consisting of (1) the stabilizer-prep circuit, (2) the core random circuit, 
+        (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1) 
+        and then (3) to (1).     
+
+    Tuple 
+        A length-n tuple of integers in [0,1], corresponding to the error-free outcome of the 
+        circuit. Always all zeros if `randomizeout` is False. The ith element of the tuple 
+        corresponds to the error-free outcome for the qubit labelled by: the ith element of
+        `subsetQs`, if `subsetQs` is not None; the ith element of `pspec.qubit_labels`, otherwise.
+        In both cases, the ith element of the tuple corresponds to the error-free outcome for the
+        qubit on the ith wire of the output circuit.
+    
+    Returns
+    -------
+    dict
+        A dictionary containing the generated RB circuits, the error-free outputs of the circuit,
+        and the specification used to generate the circuits. The keys are:
+
+        - 'circuits'. A dictionary of the sampled circuits. The circuit with key(l,k) is the kth circuit 
+        at DRB length l.
+
+        - 'idealout'. A dictionary of the error-free outputs of the circuits as tuples. The tuple with 
+        key(l,k) is the error-free output of the (l,k) circuit. The ith element of this tuple corresponds
+        to the error-free outcome for the qubit on the ith wire of the output circuit and/or the ith element
+        of the list at the key 'qubitordering'. These tuples will all be (0,0,0,...) when `randomizeout` is
+        False
+
+        - 'qubitordering'. The ordering of the qubits in the 'idealout' tuples.
+
+        - 'spec'. A dictionary containing all of the parameters handed to this function, except `pspec`.
+        This then specifies how the circuits where generated.
+    """    
+
+    experiment_dict = {}
+    experiment_dict['spec'] = {}
+    experiment_dict['spec']['subsetQs'] = subsetQs
+    experiment_dict['spec']['sampler'] = sampler
+    experiment_dict['spec']['samplerargs'] = samplerargs
+    experiment_dict['spec']['addlocal'] = addlocal
+    experiment_dict['spec']['lsargs'] = lsargs
+    experiment_dict['spec']['randomizeout'] = randomizeout
+    experiment_dict['spec']['cliffordtwirl'] = cliffordtwirl
+    experiment_dict['spec']['conditionaltwirl'] = conditionaltwirl
+    experiment_dict['spec']['citerations'] = citerations
+    experiment_dict['spec']['compilerargs'] = compilerargs
+    experiment_dict['spec']['partitioned'] = partitioned
+    experiment_dict['spec']['descriptor'] = descriptor
+
+    if subsetQs is not None: experiment_dict['qubitordering'] = tuple(subsetQs)
+    else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
+    
+    experiment_dict['circuits'] = {}
+    experiment_dict['idealout'] = {}
+
+    for lnum, l in enumerate(lengths):
         if verbosity > 0:
-            print('- Sampling {} circuits at DRB length {} ({} of {} lengths)'.format(circuits_per_length[i],l,i+1,len(lengths)))
-        circuits_list.append([])
-        idealout_list.append([])
-        if verbosity > 0:
-                print('  - Circuits sampled = ',end='')
-        for j in range(circuits_per_length[i]):
-            
-            circuit, idealout = direct_rb_circuit(pspec, l, subsetQs=subsetQs, sampler=sampler, samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs,
-                                                  randomizeout=randomizeout, cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl, 
+            print('- Sampling {} circuits at DRB length {} ({} of {} lengths)'.format(circuits_per_length,l,lnum+1,len(lengths)))
+            print('  - Number of circuits sampled = ',end='')
+        for j in range(circuits_per_length):            
+            circuit, idealout = direct_rb_circuit(pspec, l, subsetQs=subsetQs, sampler=sampler, samplerargs=samplerargs, 
+                                                  addlocal=addlocal, lsargs=lsargs, randomizeout=randomizeout, 
+                                                  cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl, 
                                                   citerations=citerations, compilerargs=compilerargs, partitioned=partitioned)
-            circuits_list[i].append(circuit)
-            idealout_list[i].append(idealout)
-            if verbosity > 0:
-                print(str(j+1),end=',')
-        if verbosity > 0:
-            print('')
+            experiment_dict['circuits'][l,j] = circuit
+            experiment_dict['idealout'][l,j] = idealout
+            if verbosity > 0: print(j,end=',')
+        if verbosity >0: print('')
 
-    return circuits_list, idealout_list
+    return experiment_dict
 
 def clifford_rb_circuit(pspec, length, subsetQs=None, randomizeout=False, citerations=20, compilerargs=[]):
     """
@@ -1008,7 +1187,8 @@ def clifford_rb_circuit(pspec, length, subsetQs=None, randomizeout=False, citera
     return full_circuit, idealout
 
 def clifford_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, randomizeout=False, 
-                           citerations=20, compilerargs=[], descriptor='A Clifford RB experiment'):
+                           citerations=20, compilerargs=[], descriptor='A Clifford RB experiment',
+                           verbosity=1):
 
     """
     Generates a "Clifford randomized benchmarking" (CRB) experiment, which is the RB protocol defined 
@@ -1084,6 +1264,9 @@ def clifford_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, r
         A string describing the experiment generated, which will be stored in the returned
         dictionary.
 
+    verbosity : int, optional
+        If > 0 the number of circuits generated so far is shown.
+
     Returns
     -------
     dict
@@ -1091,7 +1274,7 @@ def clifford_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, r
         and the specification used to generate the circuits. The keys are:
 
         - 'circuits'. A dictionary of the sampled circuits. The circuit with key(l,k) is the kth circuit 
-        at length CRB length l.
+        at CRB length l.
 
         - 'idealout'. A dictionary of the error-free outputs of the circuits as tuples. The tuple with 
         key(l,k) is the error-free output of the (l,k) circuit. The ith element of this tuple corresponds
@@ -1117,47 +1300,78 @@ def clifford_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, r
     experiment_dict['circuits'] = {}
     experiment_dict['idealout'] = {}
 
-    for l in lengths:
+    for lnum, l in enumerate(lengths):
+        if verbosity > 0:
+            print('- Sampling {} circuits at CRB length {} ({} of {} lengths)'.format(circuits_per_length,l,lnum+1,len(lengths)))
+            print('  - Number of circuits sampled = ',end='')
         for j in range(circuits_per_length):
             c, iout = clifford_rb_circuit(pspec, l, subsetQs=subsetQs, randomizeout=randomizeout, 
-                                          citerations=citerations, compilerargs=compilerargs)
-
+                                          citerations=citerations, compilerargs=compilerargs)           
             experiment_dict['circuits'][l,j] = c
             experiment_dict['idealout'][l,j] = iout
+            if verbosity > 0: print(j,end=',')
+        if verbosity >0: print('')
 
     return experiment_dict
 
 def pauli_layer_as_compiled_circuit(pspec, subsetQs=None):
     """
-    todo : docstring
-    """
+    Samples a uniformly random n-qubit Pauli and then converts
+    it to the native gate-set of `pspec`.
 
-    if pspec.identity is not None: 
-        identity = pspec.identity
-    else:
-        identity = 'I'
-    if subsetQs is not None:
-        n = len(subsetQs)
-        qubits = subsetQs.copy()
-    else:
-        n = pspec.number_of_qubits
-        qubits = pspec.qubit_labels.copy()
+    Parameters
+    ----------
+    pspec : ProcessorSpec
+       The ProcessorSpec for the device.
+                
+    subsetQs : list, optional
+        If not None, a list of a subset of the qubits from `pspec` that 
+        the pauli circuit should act on.
+
+    Returns
+    -------
+    Circuit
+        A circuit corresponding to a uniformly random n-qubit Pauli.
+    """
+    if pspec.identity is not None: identity = pspec.identity
+    else: identity = 'I'
+    if subsetQs is not None:qubits = subsetQs.copy()
+    else: qubits = pspec.qubit_labels.copy()
+    n = len(qubits)
 
     # The hard-coded notation for that Pauli operators
     paulis = ['I','X','Y','Z']
-           
-    r = _np.random.randint(0,4,size=n)
-            
+    
+    # Samples a random Pauli layer   
+    r = _np.random.randint(0,4,size=n)           
     pauli_layer_std_lbls = [_lbl.Label(paulis[r[q]],(qubits[q],)) for q in range(n)]
-    pauli_circuit = _cir.Circuit(gatestring=pauli_layer_std_lbls, parallelize=True, line_labels=qubits, identity=identity)
-    pauli_circuit.change_gate_library(pspec.compilations['absolute'])
+    # Converts the layer to a circuit, and changes to the native gateset.
+    pauli_circuit = _cir.Circuit(gatestring=pauli_layer_std_lbls, parallelize=True, line_labels=qubits, identity='I')
+    pauli_circuit.change_gate_library(pspec.compilations['absolute'], identity=identity)
     return pauli_circuit
 
 def oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=None):
     """
-    todo
-    """
+    Samples a uniformly random layer of 1-qubit Cliffords on all 
+    the qubits, and then converts it to the native gate-set of `pspec`.
+    That is, an independent and uniformly random 1-qubit Clifford is
+    sampled for each qubit.
 
+    Parameters
+    ----------
+    pspec : ProcessorSpec
+       The ProcessorSpec for the device.
+                
+    subsetQs : list, optional
+        If not None, a list of a subset of the qubits from `pspec` that 
+        the circuit should act on.
+
+    Returns
+    -------
+    Circuit
+        A circuit corresponding to an independent, uniformly random 1-qubit
+        Clifford gate on each qubit.
+    """
     if pspec.identity is not None:
         identity = pspec.identity
     else:
@@ -1183,15 +1397,16 @@ def oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=None):
 def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samplerargs=[], localclifford=True,
                       paulirandomize=True):
     """
-    Generates a ``mirror randomized benchmarking circuit", for the case of Clifford gates and with the option
-    of Pauli randomization and Clifford-twirling. This RB method is currently in development; this docstring will 
+    Generates a "mirror randomized benchmarking" (MRB) circuit, for the case of Clifford gates and with the option
+    of Pauli-randomization and Clifford-twirling. This RB method is currently in development; this docstring will 
     be updated in the future with further information on this technique.
+
+    To implement mirror RB it is necessary for U^(-1) to in the gate-set for every U in the gate-set.
 
     Parameters
     ----------
     pspec : ProcessorSpec
-       The ProcessorSpec for the device that the circuit is being sampled for. The RB circuit
-       can be for a subset of the qubits in this device (see `subsetQs`). The `pspec` is always
+       The ProcessorSpec for the device that the circuit is being sampled for. The `pspec` is always
        handed to the sampler, as the first argument of the sampler function.
                 
     length : int
@@ -1202,11 +1417,17 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
           The first length/2 layers are all sampled independently according to the sampler specified by
           `sampler`. The remaining half of the circuit is the "inversion" circuit that is determined
           by the first half.
+
         - If `paulirandomize` is True and `localclifford` is False, the depth of the circuits is 
           2*length+1 with odd-indexed layers sampled according to the sampler specified by `sampler, and
           the the zeroth layer + the even-indexed layers consisting of random 1-qubit Pauli gates.
+
         - If `paulirandomize` and `localclifford` are True, the depth of the circuits is 
           2*length+1 + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for 
+          the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
+
+        - If `paulirandomize` is False and `localclifford` is True, the depth of the circuits is 
+          length + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for 
           the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
 
     subsetQs : list, optional
@@ -1220,12 +1441,14 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
-        corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates. If this is a
-        function, it should be a function that takes as the first argument a ProcessorSpec, and
-        returns a random circuit layer as a list of gate Label objects. Note that the default
-        'Qelimination' is not necessarily the most useful in-built sampler, but it is the only
-        sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary 
-        connectivity devices. See the docstrings for each of these samplers for more information.
+        corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
+        a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
+        forbidden by this function]. If `sampler` is a function, it should be a function that takes 
+        as the first argument a ProcessorSpec, and returns a random circuit layer as a list of gate 
+        Label objects. Note that the default 'Qelimination' is not necessarily the most useful 
+        in-built sampler, but it is the only sampler that requires no parameters beyond the ProcessorSpec 
+        *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers 
+        for more information.
     
     samplerargs : list, optional
         A list of arguments that are handed to the sampler function, specified by `sampler`.
@@ -1270,10 +1493,8 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
 
     # This is used to fix the identity element in the circuits to be consistent with the pspec.identity element,
     # if there is one.
-    if pspec.identity is not None:
-        identity = pspec.identity
-    else:
-        identity = 'I'
+    if pspec.identity is not None: identity = pspec.identity
+    else: identity = 'I'
     if subsetQs is not None:
         assert(isinstance(subsetQs,list) or isinstance(subsetQs,tuple)), "If not None, `subsetQs` must be a list!"
         subsetQs = list(subsetQs)
@@ -1283,17 +1504,18 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         n = pspec.number_of_qubits
         allqubits = pspec.qubit_labels.copy()
 
+    # Check that the inverse of every gate is in the gateset:
+    for gname in pspec.root_gate_names:
+        assert(gname in list(pspec.gate_inverse.keys())), "Not every gate has its inverse in the gate-set! MRB is not possible!"
+
     # The hard-coded notation for that Pauli operators
-    paulis = ['I','X','Y','Z']
-    
+    paulis = ['I','X','Y','Z']   
     # Find a random circuit according to the sampling specified; this is the "out" circuit.
     circuit = random_circuit(pspec, random_natives_circuit_length, subsetQs=subsetQs, sampler=sampler, samplerargs=samplerargs)
-
     # Copy the circuit, to create the "back" circuit from the "out" circuit.
     circuit_inv = circuit.copy()
     # First we reverse the circuit; then we'll replace each gate with its inverse.
     circuit_inv.reverse()
-
     # Go through the circuit and replace every gate with its inverse, stored in the pspec. If the circuits
     # are length 0 this is skipped.
     for i in range(n):
@@ -1344,13 +1566,16 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         circuit.append_circuit(oneQclifford_circuit_out)
         circuit.prefix_circuit(oneQclifford_circuit_back)
 
+    # The full circuit should be, up to a Pauli, the identity.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(circuit,pspec=pspec)
     assert(_np.array_equal(s_out,_np.identity(2*n,int)))
+
+    # Find the error-free output.
     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
     s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
     idealout = []
-    for q in range(n):
 
+    for q in range(n):
         measurement_out = _symp.pauli_z_measurement(s_outstate, p_outstate, q)
         bit = measurement_out[1]
         assert(bit == 0 or bit == 1), "Ideal output is not a computational basis state!"
@@ -1362,10 +1587,100 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     return circuit, idealout
 
 def mirror_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sampler='Qelimination', samplerargs=[], 
-                         localclifford=True, paulirandomize=True, descriptor=None):
+                         localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment'):
     """
-    Todo : docstring.
-    """
+    Generates a "mirror randomized benchmarking" (MRB) experiment, for the case of Clifford gates and with the option
+    of Pauli-randomization and Clifford-twirling. This RB method is currently in development; this docstring will 
+    be updated in the future with further information on this technique.
+
+    To implement mirror RB it is necessary for U^(-1) to in the gate-set for every U in the gate-set.
+
+    Parameters
+    ----------
+    pspec : ProcessorSpec
+       The ProcessorSpec for the device that the experiment is being generated for. The `pspec` is always
+       handed to the sampler, as the first argument of the sampler function.
+                
+    lengths : list of ints
+        The "mirror RB lengths" of the circuits, which is closely related to the circuit depth. A MRB
+        length must be an even integer, and can be zero.
+
+        - If `localclifford` and `paulirandomize` are False, the depth of a sampled circuit = the MRB length.
+          The first length/2 layers are all sampled independently according to the sampler specified by
+          `sampler`. The remaining half of the circuit is the "inversion" circuit that is determined
+          by the first half.
+
+        - If `paulirandomize` is True and `localclifford` is False, the depth of a circuit is 
+          2*length+1 with odd-indexed layers sampled according to the sampler specified by `sampler, and
+          the the zeroth layer + the even-indexed layers consisting of random 1-qubit Pauli gates.
+
+        - If `paulirandomize` and `localclifford` are True, the depth of a circuit is 
+          2*length+1 + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for 
+          the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
+
+        - If `paulirandomize` is False and `localclifford` is True, the depth of a circuit is 
+          length + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for 
+          the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
+
+    subsetQs : list, optional
+        If not None, a list of the qubits that the RB circuit is to be sampled for. This should
+        be all or a subset of the qubits in the device specified by the ProcessorSpec `pspec`.
+        If None, it is assumed that the RB circuit should be over all the qubits. Note that the
+        ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
+        irrelevant.
+        
+    sampler : str or function, optional
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
+        Except for 'local', this corresponds to sampling layers according to the sampling function 
+        in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+        corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
+        a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
+        forbidden by this function]. If `sampler` is a function, it should be a function that takes 
+        as the first argument a ProcessorSpec, and returns a random circuit layer as a list of gate 
+        Label objects. Note that the default 'Qelimination' is not necessarily the most useful 
+        in-built sampler, but it is the only sampler that requires no parameters beyond the ProcessorSpec 
+        *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers 
+        for more information.
+    
+    samplerargs : list, optional
+        A list of arguments that are handed to the sampler function, specified by `sampler`.
+        The first argument handed to the sampler is `pspec` and `samplerargs` lists the
+        remaining arguments handed to the sampler.
+        
+    localclifford : bool, optional
+        Whether to start the circuit with uniformly random 1-qubit Cliffords and all of the 
+        qubits (compiled into the native gates of the device).
+        
+    paulirandomize : bool, optional
+        Whether to have uniformly random Pauli operators on all of the qubits before and 
+        after all of the layers in the "out" and "back" random circuits. At length 0 there
+        is a single layer of random Pauli operators (in between two layers of 1-qubit Clifford
+        gates if `localclifford` is True); at length l there are 2l+1 Pauli layers as there
+        are 
+
+    descriptor : str, optional
+        A string describing the generated experiment. Stored in the returned dictionary.
+        
+    Returns
+    -------
+    dict
+        A dictionary containing the generated RB circuits, the error-free outputs of the circuit,
+        and the specification used to generate the circuits. The keys are:
+
+        - 'circuits'. A dictionary of the sampled circuits. The circuit with key(l,k) is the kth circuit 
+        at MRB length l.
+
+        - 'idealout'. A dictionary of the error-free outputs of the circuits as tuples. The tuple with 
+        key(l,k) is the error-free output of the (l,k) circuit. The ith element of this tuple corresponds
+        to the error-free outcome for the qubit on the ith wire of the output circuit and/or the ith element
+        of the list at the key 'qubitordering'. These tuples will all be (0,0,0,...) when `paulirandomize` is
+        False
+
+        - 'qubitordering'. The ordering of the qubits in the 'idealout' tuples.
+
+        - 'spec'. A dictionary containing all of the parameters handed to this function, except `pspec`.
+        This then specifies how the circuits where generated
+    """ 
     experiment_dict = {}
     experiment_dict['spec'] = {}
     experiment_dict['spec']['subsetQs'] = subsetQs
@@ -1374,10 +1689,8 @@ def mirror_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
     experiment_dict['spec']['localclifford'] = localclifford
     experiment_dict['spec']['paulirandomize'] = paulirandomize
     experiment_dict['spec']['descriptor'] = descriptor
-    if subsetQs is not None:
-        experiment_dict['qubitordering'] = tuple(subsetQs)
-    else:
-        experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
+    if subsetQs is not None: experiment_dict['qubitordering'] = tuple(subsetQs)
+    else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
     experiment_dict['circuits'] = {}
     experiment_dict['idealout'] = {}
 

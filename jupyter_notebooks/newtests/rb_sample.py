@@ -21,14 +21,14 @@ def test_sample():
     circuits_per_length = 2
     subsetQs = ['Q1','Q2','Q3']
     out = rb.sample.clifford_rb_experiment(pspec_1, lengths, circuits_per_length, subsetQs=subsetQs, randomizeout=False, 
-                                       citerations=2, compilerargs=[], descriptor='A Clifford RB experiment')
+                                       citerations=2, compilerargs=[], descriptor='A Clifford RB experiment', verbosity=0)
     for key in list(out['idealout'].keys()):
         assert(out['idealout'][key] == (0,0,0))
 
     assert(len(out['circuits']) == circuits_per_length * len(lengths))
 
     out = rb.sample.clifford_rb_experiment(pspec_2, lengths, circuits_per_length, subsetQs=None, randomizeout=True, 
-                                       citerations=1, compilerargs=[], descriptor='A Clifford RB experiment')
+                                       citerations=1, compilerargs=[], descriptor='A Clifford RB experiment',verbosity=0)
     
     # --- Tests of the circuit layer samplers --- #
 
@@ -53,34 +53,33 @@ def test_sample():
                                       gatesetname = 'target')
     assert(layer[0].name == 'Gxpi')
 
-    # Tests for the sampling by sectors function
+    # Tests for the sampling by Co2QGs function
     C01 = Label('Gcnot',('Q0','Q1'))
     C23 = Label('Gcnot',('Q2','Q3'))
-    sectors = [[],[C01,C23]]
-    layer = rb.sample.circuit_layer_by_sectors(pspec_1, None, sectors, sectorsprob='uniform', twoQprob=1.0, 
+    Co2QGs = [[],[C01,C23]]
+    layer = rb.sample.circuit_layer_by_Co2QGs(pspec_1, None, Co2QGs, Co2QGsprob='uniform', twoQprob=1.0, 
                                                oneQgatenames='all', gatesetname='clifford')
     assert(len(layer) == n_1 or len(layer) == n_1//2)
-    layer = rb.sample.circuit_layer_by_sectors(pspec_1, None, sectors, sectorsprob=[0.,1.], twoQprob=1.0, 
+    layer = rb.sample.circuit_layer_by_Co2QGs(pspec_1, None, Co2QGs, Co2QGsprob=[0.,1.], twoQprob=1.0, 
                                                oneQgatenames='all', gatesetname='clifford')
     assert(len(layer) == n_1//2)
-    layer = rb.sample.circuit_layer_by_sectors(pspec_1, None, sectors, sectorsprob=[1.,0.], twoQprob=1.0, 
+    layer = rb.sample.circuit_layer_by_Co2QGs(pspec_1, None, Co2QGs, Co2QGsprob=[1.,0.], twoQprob=1.0, 
                                                oneQgatenames=['Gx',], gatesetname='clifford')
     assert(len(layer) == n_1)
     assert(layer[0].name == 'Gx')
     
-    sectors = [[],[C23,]]
-    layer = rb.sample.circuit_layer_by_sectors(pspec_1, ['Q2','Q3'], sectors, sectorsprob=[0.25,0.75], twoQprob=0.5, 
+    Co2QGs = [[],[C23,]]
+    layer = rb.sample.circuit_layer_by_Co2QGs(pspec_1, ['Q2','Q3'], Co2QGs, Co2QGsprob=[0.25,0.75], twoQprob=0.5, 
                                                oneQgatenames='all', gatesetname='clifford')
-    assert(len(layer) == 2)
-    sectors = [[C01,]]
-    layer = rb.sample.circuit_layer_by_sectors(pspec_1, None, sectors, sectorsprob=[1.], twoQprob=1.0, 
+    Co2QGs = [[C01,]]
+    layer = rb.sample.circuit_layer_by_Co2QGs(pspec_1, None, Co2QGs, Co2QGsprob=[1.], twoQprob=1.0, 
                                                oneQgatenames='all', gatesetname='clifford')
     assert(layer[0].name == 'Gcnot')
     assert(len(layer) == 3)
     
-    # Tests the nested sectors option.
-    sectors = [[],[[C01,C23],[C01,]]]
-    layer = rb.sample.circuit_layer_by_sectors(pspec_1, None, sectors, sectorsprob='uniform', twoQprob=1.0, 
+    # Tests the nested Co2QGs option.
+    Co2QGs = [[],[[C01,C23],[C01,]]]
+    layer = rb.sample.circuit_layer_by_Co2QGs(pspec_1, None, Co2QGs, Co2QGsprob='uniform', twoQprob=1.0, 
                                                oneQgatenames='all', gatesetname='clifford')
     # Tests for the sampling a layer of 1Q gates.
     layer = rb.sample.circuit_layer_of_oneQgates(pspec_1, oneQgatenames='all', pdist='uniform',
@@ -101,7 +100,7 @@ def test_sample():
     
     C01 = Label('Gcnot',('Q0','Q1'))
     C23 = Label('Gcnot',('Q2','Q3'))
-    sectors = [[],[[C01,C23],[C01,]]]
+    Co2QGs = [[],[[C01,C23],[C01,]]]
     circuit = rb.sample.random_circuit(pspec_1, length=100, sampler='Qelimination')
     assert(circuit.depth() == 100)
     circuit = rb.sample.random_circuit(pspec_2, length=100, sampler='Qelimination', samplerargs=[0.1,], addlocal = True)
@@ -110,14 +109,51 @@ def test_sample():
     circuit = rb.sample.random_circuit(pspec_1, length=100, sampler='pairingQs')
     circuit = rb.sample.random_circuit(pspec_1, length=10, sampler='pairingQs', samplerargs=[0.1,['Gx',]])
 
-    circuit = rb.sample.random_circuit(pspec_1, length=100, sampler='sectors', samplerargs=[sectors])
-    circuit = rb.sample.random_circuit(pspec_1, length=100, sampler='sectors', samplerargs=[sectors,[0.1,0.2],0.1], 
+    circuit = rb.sample.random_circuit(pspec_1, length=100, sampler='Co2QGs', samplerargs=[Co2QGs])
+    circuit = rb.sample.random_circuit(pspec_1, length=100, sampler='Co2QGs', samplerargs=[Co2QGs,[0.1,0.2],0.1], 
                                 addlocal = True, lsargs=[['Gx',]])
     assert(circuit.depth() == 201)
     circuit = rb.sample.random_circuit(pspec_1, length=5, sampler='local')
     assert(circuit.depth() == 5)
     circuit = rb.sample.random_circuit(pspec_1, length=5, sampler='local',samplerargs=[['Gx']])
     assert(circuit.line_items[0][0].name == 'Gx')
-
-
     
+    lengths = [0,2,5]
+    circuits_per_length = 2
+    # Test DRB experiment with all defaults.
+    exp = rb.sample.direct_rb_experiment(pspec_2, lengths, circuits_per_length, verbosity=0)
+    
+    exp = rb.sample.direct_rb_experiment(pspec_2, lengths, circuits_per_length, subsetQs=[0,1], sampler='pairingQs',
+                                        cliffordtwirl=False, conditionaltwirl=False, citerations=2, partitioned=True,
+                                        verbosity=0)
+    
+    exp = rb.sample.direct_rb_experiment(pspec_2, lengths, circuits_per_length, subsetQs=[0,1], sampler='Co2QGs',
+                                         samplerargs = [[[],[Label('Gcphase',(0,1)),]],[0.,1.]],
+                                        cliffordtwirl=False, conditionaltwirl=False, citerations=2, partitioned=True,
+                                        verbosity=0)
+    
+    exp = rb.sample.direct_rb_experiment(pspec_2, lengths, circuits_per_length, subsetQs=[0,1], sampler='local',
+                                        cliffordtwirl=False, conditionaltwirl=False, citerations=2, partitioned=True,
+                                        verbosity=0)
+    
+    # Tests of MRB : gateset must have self-inverses in the gate-set.
+    n_1 = 4
+    glist = ['Gi','Gxpi2','Gxmpi2','Gypi2','Gympi2','Gcnot']
+    pspec_inv = pygsti.obj.ProcessorSpec(n_1, glist, verbosity=0, qubit_labels=['Q0','Q1','Q2','Q3'])
+    lengths = [0,4,8]
+    circuits_per_length = 10
+    exp = rb.sample.mirror_rb_experiment(pspec_inv, lengths, circuits_per_length, subsetQs=['Q1','Q2','Q3'],
+                                         sampler='Qelimination', samplerargs=[], localclifford=True, 
+                                         paulirandomize=True)
+    
+    exp = rb.sample.mirror_rb_experiment(pspec_inv, lengths, circuits_per_length, subsetQs=['Q1','Q2','Q3'],
+                                         sampler='Qelimination', samplerargs=[], localclifford=True, 
+                                         paulirandomize=False)
+    
+    exp = rb.sample.mirror_rb_experiment(pspec_inv, lengths, circuits_per_length, subsetQs=['Q1','Q2','Q3'],
+                                         sampler='Qelimination', samplerargs=[], localclifford=False, 
+                                         paulirandomize=False)
+ 
+    exp = rb.sample.mirror_rb_experiment(pspec_inv, lengths, circuits_per_length, subsetQs=['Q1','Q2','Q3'],
+                                         sampler='Qelimination', samplerargs=[], localclifford=False, 
+                                         paulirandomize=True)    
