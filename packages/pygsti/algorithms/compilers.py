@@ -25,6 +25,8 @@ def create_standard_cost_function(name):
         Allowed values are:
             - '2QGC' : the cost of the circuit is the number of 2-qubit gates it contains.
             - 'depth' : the cost of the circuit is the depth of the circuit.
+            - '2QGC:x:depth:y' : the cost of the circuit is x * the number of 2-qubit gates in the circuit +
+                y * the depth of the circuit, where x and y are integers.
     Returns
     -------
     function
@@ -33,16 +35,29 @@ def create_standard_cost_function(name):
         of the circuit.
     """
     if name == '2QGC':
-        def costfunction(circuit, junk):
+        def costfunction(circuit, junk): # Junk input as no processorspec is needed here.
             return circuit.twoqubit_gatecount()
     elif name == 'depth':
-        def costfunction(circuit, junk):
+        def costfunction(circuit, junk): # Junk input as no processorspec is needed here.
             return circuit.depth()
+    # This allows for '2QGC:x:depth:y' strings
+    elif name[:4] == '2QGC':
+
+        s = name.split(":")
+        try: twoQGCfactor = int(s[1])
+        except: raise ValueError ("This `costfunction` string is not a valid option!")
+        assert(s[2] == 'depth'), "This `costfunction` string is not a valid option!"
+        try: depthfactor = int(s[3])
+        except: raise ValueError ("This `costfunction` string is not a valid option!")
+
+        def costfunction(circuit, junk): # Junk input as no processorspec is needed here.
+            return twoQGCfactor*circuit.twoqubit_gatecount() + depthfactor*circuit.depth()
+
     else: raise ValueError("This `costfunction` string is not a valid option!")
     return costfunction
 
 def compile_clifford(s, p, pspec=None, subsetQs=None, iterations=20, algorithm='ROGGE', aargs = [],
-                     costfunction='2QGC', prefixpaulis=False, paulirandomize=False):
+                     costfunction='2QGC:10:depth:1', prefixpaulis=False, paulirandomize=False):
     """
     Compiles an n-qubit Clifford gate, described by the symplectic matrix s and vector p, into
     a circuit over the specified gateset, or, a standard gateset. Clifford gates/circuits can be converted
@@ -128,6 +143,8 @@ def compile_clifford(s, p, pspec=None, subsetQs=None, iterations=20, algorithm='
 
             - '2QGC' : the cost of the circuit is the number of 2-qubit gates it contains.
             - 'depth' : the cost of the circuit is the depth of the circuit.
+            - '2QGC:x:depth:y' : the cost of the circuit is x * the number of 2-qubit gates in the circuit +
+                y * the depth of the circuit, where x and y are integers.
 
     prefixpauli : bool, optional
         The circuits are constructed by finding a circuit that implements the correct Clifford up to Pauli
@@ -189,7 +206,7 @@ def compile_clifford(s, p, pspec=None, subsetQs=None, iterations=20, algorithm='
     return circuit
 
 def compile_symplectic(s, pspec=None, subsetQs=None, iterations=20, algorithms=['ROGGE'], 
-                       costfunction='2QGC', paulirandomize=False, aargs={}, check=True):
+                       costfunction='2QGC:10:depth:1', paulirandomize=False, aargs={}, check=True):
     """
     Returns an n-qubit circuit that implements an n-qubit Clifford gate that is described by the symplectic 
     matrix `s` and *some* vector `p`. The circuit created by this function will be over a user-specified gateset 
@@ -263,6 +280,8 @@ def compile_symplectic(s, pspec=None, subsetQs=None, iterations=20, algorithms=[
 
             - '2QGC' : the cost of the circuit is the number of 2-qubit gates it contains.
             - 'depth' : the cost of the circuit is the depth of the circuit.
+            - '2QGC:x:depth:y' : the cost of the circuit is x * the number of 2-qubit gates in the circuit +
+                y * the depth of the circuit, where x and y are integers.
 
     paulirandomize : bool, optional
         If True then independent, uniformly random Pauli layers (a Pauli on each qubit) are inserted in between
@@ -394,7 +413,7 @@ def compile_symplectic(s, pspec=None, subsetQs=None, iterations=20, algorithms=[
             
     return circuit
 
-def compile_symplectic_using_ROGGE_algorithm(s, pspec=None, subsetQs=None, ctype='basic', costfunction='2QGC', 
+def compile_symplectic_using_ROGGE_algorithm(s, pspec=None, subsetQs=None, ctype='basic', costfunction='2QGC:10:depth:1', 
                                            iterations=10, check=True):
     """
     The order global Gaussian elimiation algorithm of compile_symplectic_using_OGGE_algorithm() with the
@@ -445,6 +464,8 @@ def compile_symplectic_using_ROGGE_algorithm(s, pspec=None, subsetQs=None, ctype
 
             - '2QGC' : the cost of the circuit is the number of 2-qubit gates it contains.
             - 'depth' : the cost of the circuit is the depth of the circuit.
+            - '2QGC:x:depth:y' : the cost of the circuit is x * the number of 2-qubit gates in the circuit +
+                y * the depth of the circuit, where x and y are integers.
 
     check : bool, optional
         Whether to check that the output circuit implements the correct symplectic matrix (i.e., tests for algorithm
@@ -848,7 +869,7 @@ def compile_symplectic_using_AG_algorithm(s, pspec=None, subsetQs=None, cnotmeth
     return circuit
 
 def compile_symplectic_using_RiAG_algoritm(s, pspec, subsetQs=None, iterations=20, cnotalg='COiCAGE', 
-                                           cargs=[], costfunction='2QGC', check=True):
+                                           cargs=[], costfunction='2QGC:10:depth:1', check=True):
     """
     Our improved version of Aaraonson-Gottesman method [PRA 70 052328 (2014)] for compiling a symplectic matrix 
     using 5 CNOT circuits + local layers. Our version of this algorithm uses 3 CNOT circuits, and 3 layers of
@@ -907,6 +928,8 @@ def compile_symplectic_using_RiAG_algoritm(s, pspec, subsetQs=None, iterations=2
 
             - '2QGC' : the cost of the circuit is the number of 2-qubit gates it contains.
             - 'depth' : the cost of the circuit is the depth of the circuit.
+            - '2QGC:x:depth:y' : the cost of the circuit is x * the number of 2-qubit gates in the circuit +
+                y * the depth of the circuit, where x and y are integers.
 
     check : bool, optional
         Whether to check that the output circuit implements the correct symplectic matrix (i.e., tests for algorithm
@@ -1691,7 +1714,7 @@ def compile_cnot_circuit_using_OiCAGE_algorithm(s, pspec, qubitorder, subsetQs=N
     return cnot_circuit
 
 def compile_stabilizer_state(s, p, pspec, subsetQs=None, iterations=20, paulirandomize=False, 
-                             algorithm = 'COiCAGE', aargs = [], costfunction='2QGC'):
+                             algorithm = 'COiCAGE', aargs = [], costfunction='2QGC:10:depth:1'):
     """
     Generates a circuit to create the stabilizer state specified by `s` and `p` from the standard
     input state |0,0,0,...>. The circuit returned is over the gateset of the processor spec `pspec`.
@@ -1764,6 +1787,8 @@ def compile_stabilizer_state(s, p, pspec, subsetQs=None, iterations=20, pauliran
 
             - '2QGC' : the cost of the circuit is the number of 2-qubit gates it contains.
             - 'depth' : the cost of the circuit is the depth of the circuit.
+            - '2QGC:x:depth:y' : the cost of the circuit is x * the number of 2-qubit gates in the circuit +
+                y * the depth of the circuit, where x and y are integers.
 
     Returns
     -------
@@ -1835,7 +1860,7 @@ def compile_stabilizer_state(s, p, pspec, subsetQs=None, iterations=20, pauliran
     return circuit
 
 def compile_stabilizer_measurement(s, p, pspec, subsetQs=None, iterations=20, paulirandomize=False, 
-                                   algorithm = 'COCAGE', aargs = [], costfunction='2QGC'):
+                                   algorithm = 'COCAGE', aargs = [], costfunction='2QGC:10:depth:1'):
     """
     Generates a circuit to map the stabilizer state specified by `s` and `p` to the standard
     state |0,0,0,...>. The circuit returned is over the gateset of the processor spec `pspec`.
@@ -1911,6 +1936,8 @@ def compile_stabilizer_measurement(s, p, pspec, subsetQs=None, iterations=20, pa
 
             - '2QGC' : the cost of the circuit is the number of 2-qubit gates it contains.
             - 'depth' : the cost of the circuit is the depth of the circuit.
+            - '2QGC:x:depth:y' : the cost of the circuit is x * the number of 2-qubit gates in the circuit +
+                y * the depth of the circuit, where x and y are integers.
 
     Returns
     -------
