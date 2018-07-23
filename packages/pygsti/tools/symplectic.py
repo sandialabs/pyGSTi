@@ -1209,14 +1209,12 @@ def oneQclifford_symplectic_group_relations():
 
 def unitary_is_a_clifford(unitary):
     """
-    Returns True if the unitary is a Clifford gate, and False
-    otherwise.
+    Returns True if the unitary is a Clifford gate (w.r.t the standard
+    basis), and False otherwise.
     """
     s, p = unitary_to_symplectic(unitary,flagnonclifford=False)
-    if s is None and p is None:
-        return False
-    else:
-        return Trye
+    if s is None: return False
+    else: return True
 
 def _unitary_to_symplectic_1Q(u,flagnonclifford=True):
     """

@@ -15,9 +15,9 @@ from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
 from .qubitgraph import QubitGraph as _QubitGraph
 from ..baseobjs import Label as _Label
-from . import gate as _gate
 from ..tools import gatetools as _gt
 from ..tools import internalgates as _itgs
+from ..tools import symplectic as _symp
 
 class ProcessorSpec(object):
     """
