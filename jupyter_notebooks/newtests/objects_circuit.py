@@ -250,7 +250,7 @@ def test_circuit():
     s = c.__str__()
 
     # Check we can write to a Qcircuit file.
-    c.write_Qcircuit_tex('test_qcircuit.tex')
+    c.write_Qcircuit_tex('testfiles/test_qcircuit.tex')
 
     # Test depth compression both with and without 1-qubit gate compression
     ls = [Label('H',1),Label('P',1),Label('P',1),Label('I',1),Label('CNOT',(2,3))]

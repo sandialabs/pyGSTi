@@ -16,11 +16,15 @@ import numpy as _np
 import warnings as _warnings
 
 def average_gate_infidelity(A ,B, mxBasis="gm"):
-    # Todo : docstring
+    """
+    Todo : docstring. Copy from average_gate_fidelity?
+    """
     return 1 - _tls.average_gate_fidelity(A ,B, mxBasis)
 
 def entanglement_infidelity(A, B, mxBasis=None):
-    # Todo : docstring
+    """
+    Todo : docstring. Copy from process_fidelity?
+    """
     return 1 - float(_tls.process_fidelity(A, B, mxBasis))
 
 def gateset_infidelity(gs, gs_target, itype = 'EI', 
