@@ -184,15 +184,21 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
     tStart = _time.time()
     tRef = tStart
 
+    def calc_2dlogl(mleGateset):
+        logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases)
+        maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval, radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
+        return 2*(logL_ub - maxLogL)
+
     if seeds is None:
-        seeds = [(mleGateset, float('inf'))]
+        seeds = [(mleGateset, calc_2qlogl(mleGateset))]
         for i in range(nSeeds):
             seed = mleGateset.copy()
             if i == 0:
                 seeds.append(seed)
             else:
                 depol_amount = 1 / 10 ** (i - 1)
-                seeds.append((seed.depolarize(gate_noise=_random.uniform(0, depol_amount)), 0))
+                seed = seed.depolarize(gate_noise=_random.uniform(0, depol_amount))
+                seeds.append(seed, calc_2dlogl(seed))
 
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):
