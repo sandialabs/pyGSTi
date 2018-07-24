@@ -1400,7 +1400,7 @@ class GateCalc(object):
         for i, gstr in enumerate(gatestrings):
             elInds = _slct.indices(elIndices[i]) \
                      if isinstance(elIndices[i],slice) else elIndices[i]
-            ret[gstr] = _collections.OrderedDict(
+            ret[gstr] = _ld.OutcomeLabelDict(
                 [(outLbl,vp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
@@ -1568,10 +1568,10 @@ class GateCalc(object):
             elInds = _slct.indices(elIndices[i]) \
                      if isinstance(elIndices[i],slice) else elIndices[i]
             if returnPr:
-                ret[gstr] = _collections.OrderedDict(
+                ret[gstr] = _ld.OutcomeLabelDict(
                     [(outLbl,(vdp[ei],vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
             else:
-                ret[gstr] = _collections.OrderedDict(
+                ret[gstr] = _ld.OutcomeLabelDict(
                     [(outLbl,vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
@@ -1774,7 +1774,7 @@ class GateCalc(object):
         for i, gstr in enumerate(gatestrings):
             elInds = _slct.indices(elIndices[i]) \
                      if isinstance(elIndices[i],slice) else elIndices[i]
-            outcomeQtys = _collections.OrderedDict()
+            outcomeQtys = _ld.OutcomeLabelDict()
             for ei, outLbl in zip(elInds, outcomes[i]):
                 if returnDeriv:
                     if vdp2 is None:

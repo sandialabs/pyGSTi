@@ -11,8 +11,10 @@ import numpy as _np
 import copy as _copy
 
 from . import gatestring as _gstr
+from . import labeldicts as _ld
 from ..baseobjs import Label as _Label
 from ..tools import internalgates as _itgs
+
 
 class Circuit(_gstr.GateString):
     """
@@ -1388,9 +1390,9 @@ class Circuit(_gstr.GateString):
             elif lbl.name in ('CNOT','Gcnot'): # qubit indices = (control,target)
                 # Tim: display *other* CNOT qubit on each line
                 if k == self.line_labels.index(lbl.qubits[0]):
-                    return  '\u25CF' + str(lbl.qubits[1])
+                    return  '\u25CF' + str(lbl.qubits[1]) # was "C"
                 else:
-                    return 'T' + str(lbl.qubits[0])
+                    return '\u2295' + str(lbl.qubits[0]) # was "T"
             elif lbl.name in ('CPHASE', 'Gcphase'):
                 return '\u25CF' + str(lbl.qubits[1])
             else:
@@ -1655,37 +1657,34 @@ class Circuit(_gstr.GateString):
         # state space ordering in the gateset.
         results = gateset.probs(self)
 
-        # The state-space labels of the gateset.
-        ssls = list(gateset.stateSpaceLabels.labels[0])
+        # Mapping from the state-space labels of the gateset to their indices.
+        # (e.g. if gateset.stateSpaceLabels is [('Qa','Qb')] then sslInds['Qb'] = 1
+        # (and 'Qb' may be a circuit line label)
+        sslInds = { sslbl:i for i,sslbl in enumerate(gateset.stateSpaceLabels.labels[0]) }
+          # Note: we ignore all but the first tensor product block of the state space.
         
-        # This relabels a outcomes string, and drops state space labels not in the circuit.
-        def parse_outcome_string(outcome):
-            relabelled_outcome = ''
-            for l in self.line_labels: relabelled_outcome  += outcome[0][ssls.index(l)]
-            return relabelled_outcome
+        def process_outcome(outcome):
+            """Relabels an outcome tuple and drops state space labels not in the circuit."""
+            processed_outcome = []
+            for lbl in outcome: # lbl is a string - an instrument element or POVM effect label, e.g. '010'
+                relbl = ''.join([ lbl[sslInds[ll]] for ll in self.line_labels ])
+                processed_outcome.append(relbl)
+                #Note: above code *assumes* that each state-space label (and so circuit line label)
+                # corresponds to a *single* letter of the instrument/POVM label `lbl`.  This is almost
+                # always the case, as state space labels are usually qubits and so effect labels are
+                # composed of '0's and '1's.
+            return tuple(processed_outcome)
         
-        # Find the full set of relabelled outcomes, which will be the keys to the output dict.
-        all_relabelled_outcomes = []
-        for outcome in list(results.keys()):
-            relabelled_outcome = parse_outcome_string(outcome)
-            if relabelled_outcome not in all_relabelled_outcomes: all_relabelled_outcomes.append(relabelled_outcome)
+        processed_results = _ld.OutcomeLabelDict()
+        for outcome,pr in results.items():
+            if return_all_outcomes or pr > 1e-12: # then process & accumulate pr
+                p_outcome = process_outcome(outcome) # rearranges and drops parts of `outcome`
+                if p_outcome in processed_results: # (may occur b/c processing can map many-to-one)
+                    processed_results[p_outcome] += pr # adding marginalizes the results.
+                else:
+                    processed_results[p_outcome] = pr
 
-        relabelled_results = {}
-        if return_all_outcomes:
-            # Set up a dict for the output results, and init all the probs to 0.
-            relabelled_results = {relabelled_outcome : 0. for relabelled_outcome in all_relabelled_outcomes}
-            # Add in the results: this rearranges and marginalizes the results.
-            for outcome in list(results.keys()):
-                relabelled_results[parse_outcome_string(outcome)] += results[outcome]
-        else:
-            for outcome in list(results.keys()):
-                if results[outcome] > 10**-12:
-                    try:
-                        relabelled_results[parse_outcome_string(outcome)] += results[outcome]
-                    except:
-                        relabelled_results[parse_outcome_string(outcome)] = results[outcome]
-
-        return relabelled_results
+        return processed_results
     
     def done_editing(self):
         """

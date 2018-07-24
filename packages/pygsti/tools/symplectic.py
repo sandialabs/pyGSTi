@@ -599,7 +599,7 @@ def apply_clifford_to_stabilizer_state(s,p,state_s,state_p):
 
 def pauli_z_measurement(state_s, state_p, qubit_index):
     """ 
-    Computes the probabilities of +/- outcomes from measuring a 
+    Computes the probabilities of 0/1 (+/-) outcomes from measuring a 
     Pauli operator on a stabilizer state.
 
     Parameters
@@ -615,14 +615,14 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
 
     Returns
     -------
-    pminus, pplus : float
-        Probabilities of - and + outcomes.
+    p0, p1 : float
+        Probabilities of 0 (+ eigenvalue) and 1 (- eigenvalue) outcomes.
 
-    state_s_minus, state_s_plus : numpy array
+    state_s_0, state_s_1: numpy array
         Matrix over the integers mod 2 representing the output stabilizer
         states.
 
-    state_p_minus, state_p_plus : numpy array
+    state_p_0, state_p_1 : numpy array
         Phase vectors over the integers mod 4 representing the output
         stabilizer states.
     """

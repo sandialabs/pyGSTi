@@ -730,7 +730,7 @@ def read_gateset(filename):
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
             ham_basis = proj_basis
             nonham_basis = proj_basis
-            nonham_diagonal_only = False; cptp = True; truncate=True
+            nonham_diagonal_only = False; cptp = True; truncate=False
             gs.gates[cur_label] = _objs.LindbladParameterizedGate.from_gate_matrix(
                 qty, unitary_post, ham_basis, nonham_basis,
                 cptp, nonham_diagonal_only, truncate, basis)

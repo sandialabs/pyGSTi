@@ -534,8 +534,8 @@ class SVGateRep_Embedded(SVGateRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i]*bInd
                 inds.append(offset + vec_index)
-            embedded_instate = SVStateRep( state[inds] )
-            emedded_outstate= self.embedded_gate.adjoint_acton( embedded_instate )
+            embedded_instate = SVStateRep( state.data[inds] )
+            embedded_outstate= self.embedded_gate.adjoint_acton( embedded_instate )
             output_state.data[ inds ] += embedded_outstate.data
 
         #act on other blocks trivially:

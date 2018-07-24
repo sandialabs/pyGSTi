@@ -182,9 +182,9 @@ def get_standard_gatename_unitaries():
     
     std_unitaries['Gi'] = _np.array([[1.,0.],[0.,1.]],complex)
 
-    std_unitaries['Gxpi2'] = Ugate(_np.pi/2 * sigmax)
-    std_unitaries['Gypi2'] = Ugate(_np.pi/2 * sigmay)
-    std_unitaries['Gzpi2'] = Ugate(_np.pi/2 * sigmaz)
+    std_unitaries['Gx'] = std_unitaries['Gxpi2'] = Ugate(_np.pi/2 * sigmax)
+    std_unitaries['Gy'] = std_unitaries['Gypi2'] = Ugate(_np.pi/2 * sigmay)
+    std_unitaries['Gz'] = std_unitaries['Gzpi2'] = Ugate(_np.pi/2 * sigmaz)
 
     std_unitaries['Gxpi'] = _np.array([[0.,1.],[1.,0.]],complex)
     std_unitaries['Gypi'] = _np.array([[0.,-1j],[1j,0.]],complex)
