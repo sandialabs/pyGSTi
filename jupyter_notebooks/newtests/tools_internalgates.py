@@ -8,7 +8,7 @@ def test_internalgates():
     # Checks we can get the dicts this file generates.
     std_unitaries = internalgates.get_standard_gatename_unitaries()
     std_quil = internalgates.get_standard_gatenames_quil_conversions()
-    std_quil = internalgates.get_standard_gatenames_qasm_conversions()
+    std_quil = internalgates.get_standard_gatenames_openqasm_conversions()
     
     # Checks the standard Clifford gate unitaries agree with the Clifford group unitaries.
     group = rb.group.construct_1Q_Clifford_group()

@@ -116,20 +116,19 @@ def diagonal_as_matrix(m):
      
     return out
 
-  
-
 # Code for factorizing a symmetric matrix invertable matrix A over GL(n,2) into
 # the form A = F F.T. The algorithm mostly follows the proof in *Orthogonal Matrices 
 # Over Finite Fields* by Jessie MacWilliams in The American Mathematical Monthly, 
 # Vol. 76, No. 2 (Feb., 1969), pp. 152-164
-
-
-# Todo : go through the code below and find / removing anything that duplicates other parts of 
-# the code
 def albert_factor(D, failcount = 0):
     """
-    Returns a matrix M such that D = M M.T
-    
+    Returns a matrix M such that D = M M.T for symmetric D, where D and M are 
+    matrices over [0,1] mod 2. The algorithm mostly follows the proof in "Orthogonal Matrices 
+    Over Finite Fields" by Jessie MacWilliams in The American Mathematical Monthly, Vol. 76, No. 2 
+    (Feb., 1969), pp. 152-164
+
+    There is generally not a unique albert factorization, and this algorthm is randomized. It will
+    general return a different factorizations from multiple calls.
     """
     D = _np.array(D, dtype='int')
 
@@ -163,8 +162,7 @@ def albert_factor(D, failcount = 0):
 
 def random_bitstring(n, p, failcount = 0):
     """
-    Constructs a random bitstring of length n with parity p
-    
+    Constructs a random bitstring of length n with parity p    
     """
     bitstring = _np.random.randint(0,2,size=n)
     if _np.mod(sum(bitstring),2) == p:
@@ -175,7 +173,6 @@ def random_bitstring(n, p, failcount = 0):
 def random_invertable_matrix(n, failcount=0):
     """
     Finds a random invertable matrix M over GL(n,2)
-    
     """
     M = _np.array([random_bitstring(n,_np.random.randint(0,2)) for x in range(n)])
     if detmod2(M) == 0:
@@ -186,8 +183,7 @@ def random_invertable_matrix(n, failcount=0):
 
 def random_symmetric_invertable_matrix(n):
     """
-    Creates a random, symmetric, invertible matrix from GL(n,2)
-    
+    Creates a random, symmetric, invertible matrix from GL(n,2)    
     """
     M = random_invertable_matrix(n)
     return dotmod2(M,M.T)
@@ -195,7 +191,6 @@ def random_symmetric_invertable_matrix(n):
 def onesify(A, failcount=0, maxfailcount=100):
     """
     Returns M such that M A M.T has ones along the main diagonal
-    
     """
     assert(failcount < maxfailcount), "The function has failed too many times! Perhaps the input is invalid."
     
@@ -273,7 +268,6 @@ def proper_permutation(A):
     submatrices of P A P are invertible.
     
     """
-
     t = len(A)
     Ps = [] # permutation matrices
     for ind in range(t):

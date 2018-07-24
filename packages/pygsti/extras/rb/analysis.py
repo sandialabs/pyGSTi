@@ -10,7 +10,6 @@ import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
 from . import results as _results
   
-
 def p_to_r(p, d, rtype='EI'):
     # Todo : docstring sort.
     """
@@ -66,7 +65,23 @@ def r_to_p(r, d, rtype='EI'):
         
     return p
 
+#
+# Put functions for converting sim RB data to the correct format.
+#
 
+def marginalize(results, keepqubits, allqubits):
+    """
+    todo : docstring.
+    """
+
+    mresults = []
+    mask = _np.zeros(len(allqubits),bool)
+
+    for q in keepqubits: mask[allqubits.index(q)] = True
+
+    for i in range(len(results)): mresults.append(tuple(_np.array(results[i])[mask]))
+
+    return mresults
 
 # #
 # # FUNCTIONS FROM OLD CODE
@@ -124,6 +139,9 @@ def r_to_p(r, d, rtype='EI'):
 # #
 
 def rescaling_factor(lengths, quantity, offset=2):
+    """
+    Todo : docstring.
+    """
     
     rescaling_factor = []
     
@@ -233,10 +251,9 @@ def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=200,  a
     
 def std_least_squares_data_fitting(lengths, ASPs, n, seed=None, asymptote=None, ftype='full'):
     """
+    Todo : docstring.
     ftype options 'full', 'full+FA', 'FA'
-
-    """
-   
+    """   
     if asymptote is not None:
         A = asymptote
     else:
@@ -256,7 +273,9 @@ def std_least_squares_data_fitting(lengths, ASPs, n, seed=None, asymptote=None, 
         return FF_results, FAF_results
 
 def custom_least_squares_data_fitting(lengths, ASPs, n, A=None, B=None, seed=None, rtype='EI'):
-    
+    """
+    todo : docstring.
+    """
     #todo : fix this
     success = True
 

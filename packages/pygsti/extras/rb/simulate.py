@@ -182,7 +182,7 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, filename=None, r
                 scounts.append(0)
 
             cdepths.append(c.depth())
-            c2Qgcounts.append(c.twoqubit_gatecount())
+            c2Qgcounts.append(c.twoQgate_count())
 
             # Write the data to file in each round.
             if filename is not None:    
