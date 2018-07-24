@@ -1,4 +1,4 @@
-""" Clifford, CNOT, and stabilizer state/measurement compilation routines """
+""" Clifford circuit, CNOT circuit, and stabilizer state/measurement generation compilation routines """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -36,10 +36,11 @@ def create_standard_cost_function(name):
     """
     if name == '2QGC':
         def costfunction(circuit, junk): # Junk input as no processorspec is needed here.
-            return circuit.twoqubit_gatecount()
+            return circuit.twoQgate_count()
     elif name == 'depth':
         def costfunction(circuit, junk): # Junk input as no processorspec is needed here.
             return circuit.depth()
+            
     # This allows for '2QGC:x:depth:y' strings
     elif name[:4] == '2QGC':
 
@@ -51,7 +52,7 @@ def create_standard_cost_function(name):
         except: raise ValueError ("This `costfunction` string is not a valid option!")
 
         def costfunction(circuit, junk): # Junk input as no processorspec is needed here.
-            return twoQGCfactor*circuit.twoqubit_gatecount() + depthfactor*circuit.depth()
+            return twoQGCfactor*circuit.twoQgate_count() + depthfactor*circuit.depth()
 
     else: raise ValueError("This `costfunction` string is not a valid option!")
     return costfunction

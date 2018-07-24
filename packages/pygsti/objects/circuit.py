@@ -1312,7 +1312,7 @@ class Circuit(_gstr.GateString):
                     size += 1
         return size
     
-    def twoqubit_gatecount(self):
+    def twoQgate_count(self):
         """
         The number of two-qubit gates in the circuit. (Note that this cannot
         distinguish between "true" 2-qubit gates and gate that have been defined
@@ -1329,7 +1329,7 @@ class Circuit(_gstr.GateString):
                     count += 1
         return count//2
 
-    def multiqubit_gatecount(self):
+    def multiQgate_count(self):
         """
         The number of multi-qubit gates in the circuit. (Note that this cannot
         distinguish between "true" multi-qubit gates and gate that have been defined

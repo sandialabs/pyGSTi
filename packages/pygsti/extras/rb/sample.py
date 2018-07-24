@@ -670,11 +670,12 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
                       compilerargs=[], partitioned=False):
     """
     Generates a "direct randomized benchmarking" (DRB) circuit, which is the protocol introduced in
-    arXiv *todo*. The length of the "core" sequence is given by `length` and may be any integer >= 0.
-    An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random stabilizer state;
-    (2) a length-l circuit (specified by `length`) consisting of circuit layers sampled according to 
-    some user-specified distribution (specified by `sampler`), (3) a circuit that maps the output of
-    the preceeding circuit to a computational basis state.
+    arXiv:1807.07975 (2018). The length of the "core" sequence is given by `length` and may be any 
+    integer >= 0. An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random 
+    stabilizer state; (2) a length-l circuit (specified by `length`) consisting of circuit layers sampled 
+    according to some user-specified distribution (specified by `sampler`), (3) a circuit that maps the 
+    output of the preceeding circuit to a computational basis state. See arXiv:1807.07975 (2018) for further
+    details.
 
     Parameters
     ----------
@@ -868,13 +869,14 @@ def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
                          partitioned=False, descriptor='A DRB experiment', verbosity=1):
     """
     Generates a "direct randomized benchmarking" (DRB) experiments, which is the protocol introduced in
-    arXiv *todo*. The set of lengths of the "core" sequence is given by `lengths` and may be an list
-    of any integers >= 0.
+    arXiv:1807.07975 (2018). The set of lengths of the "core" sequence is given by `lengths` and may be 
+    a list of any distinct integers >= 0.
     
     An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random stabilizer state;
     (2) a length-l circuit (specified by `length`) consisting of circuit layers sampled according to 
     some user-specified distribution (specified by `sampler`), (3) a circuit that maps the output of
-    the preceeding circuit to a computational basis state. For more information see arXiv *todo*.
+    the preceeding circuit to a computational basis state. See arXiv:1807.07975 (2018) for further
+    details.
 
     Parameters
     ----------

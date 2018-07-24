@@ -225,15 +225,15 @@ def test_circuit():
     assert(gate1 == gate2)
 
     # Test 2-qubit and multi-qubit gate count
-    assert(c.twoqubit_gatecount() == 0)
+    assert(c.twoQgate_count() == 0)
     gatestring = GateString( None, "[Gcnot:Q0:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1" )
     c = pygsti.obj.Circuit(gatestring=gatestring,parallelize=False,line_labels=['Q0','Q1'])
-    assert(c.twoqubit_gatecount() == 2)
-    assert(c.multiqubit_gatecount() == 2)
+    assert(c.twoQgate_count() == 2)
+    assert(c.multiQgate_count() == 2)
     gatestring = GateString( None, "[Gccnot:Q0:Q1:Q2]^2[Gccnot:Q0:Q1]Gi:Q0Gi:Q1" )
     c = pygsti.obj.Circuit(gatestring=gatestring,parallelize=False,line_labels=['Q0','Q1','Q2'])
-    assert(c.twoqubit_gatecount() == 1)
-    assert(c.multiqubit_gatecount() == 3)
+    assert(c.twoQgate_count() == 1)
+    assert(c.multiQgate_count() == 3)
 
     # Test the error-probability prediction method
     gatestring = GateString( None, "[Gx:Q0][Gi:Q0Gi:Q1]")
