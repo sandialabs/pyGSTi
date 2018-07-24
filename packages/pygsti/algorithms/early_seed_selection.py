@@ -34,7 +34,7 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
                        gateLabelAliases=None, memLimit=None,
                        profiler=None, comm=None, distributeMethod = "deriv",
                        alwaysPerformMLE=False, evaltree_cache=None, nSeeds=10, seeds=None,
-                       earlyIteration=5):
+                       earlyIteration=7):
     """
     Performs Iterative Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
@@ -271,6 +271,11 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
                         mleGateset = mleGateset_p
                     else:
                         printer.warning("MLGST failed to improve logl: retaining chi2-objective estimate")
+                    bestSeed, seed_logl = min(seeds, key=lambda t : t[1])
+                    if seed_logl > maxLogL: #if do_mlgst improved the maximum log-likelihood
+                        maxLogL = seed_logl
+                        mleGateset = bestSeed
+                        printer.log('Improved final iteration estimate by selecting a previous gateset')
 
                     tNxt = _time.time();
                     profiler.add_time('do_iterative_mlgst: iter %d logl-opt' % (i+1),tRef)

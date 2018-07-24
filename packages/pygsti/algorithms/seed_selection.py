@@ -268,6 +268,11 @@ def do_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSetsToUse
                         mleGateset = mleGateset_p
                     else:
                         printer.warning("MLGST failed to improve logl: retaining chi2-objective estimate")
+                    bestSeed, seed_logl = min(seeds, key=lambda t : t[1])
+                    if seed_logl > maxLogL: #if do_mlgst improved the maximum log-likelihood
+                        maxLogL = seed_logl
+                        mleGateset = bestSeed
+                        printer.log('Improved final iteration estimate by selecting a previous gateset')
 
                     tNxt = _time.time();
                     profiler.add_time('do_iterative_mlgst: iter %d logl-opt' % (i+1),tRef)
