@@ -185,13 +185,14 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
     tRef = tStart
 
     if seeds is None:
-        seeds = [(mleGateset, 0)]
+        seeds = [(mleGateset, float('inf'))]
         for i in range(nSeeds):
             seed = mleGateset.copy()
-            depol_amount = 1 / 10 ** i
-            seeds.append((seed.depolarize(gate_noise=_random.uniform(0, depol_amount)), 0))
-    elif isinstance(seeds, list):
-        seeds = [(k, 0) for k in seeds]
+            if i == 0:
+                seeds.append(seed)
+            else:
+                depol_amount = 1 / 10 ** (i - 1)
+                seeds.append((seed.depolarize(gate_noise=_random.uniform(0, depol_amount)), 0))
 
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):

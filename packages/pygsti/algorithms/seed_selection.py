@@ -33,7 +33,7 @@ def do_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSetsToUse
                        verbosity=0, check=False, gatestringWeightsDict=None,
                        gateLabelAliases=None, memLimit=None,
                        profiler=None, comm=None, distributeMethod = "deriv",
-                       alwaysPerformMLE=False, evaltree_cache=None, nSeeds=10, seeds=None):
+                       alwaysPerformMLE=False, evaltree_cache=None, nSeeds=3, seeds=None):
     """
     Performs Iterative Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
@@ -187,11 +187,11 @@ def do_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSetsToUse
         seeds = [(mleGateset, 0)]
         for i in range(nSeeds):
             seed = mleGateset.copy()
-            depol_amount = 1 / 10 ** i
-            seeds.append((seed.depolarize(gate_noise=_random.uniform(0, depol_amount)), 0))
-    elif isinstance(seeds, list):
-        seeds = [(k, 0) for k in seeds]
-
+            if i == 0:
+                seeds.append(seed)
+            else:
+                depol_amount = 1 / 10 ** i
+                seeds.append((seed.depolarize(gate_noise=_random.uniform(0, depol_amount)), 0))
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):
             for j, (mleGateset, previousScore) in enumerate(seeds):
