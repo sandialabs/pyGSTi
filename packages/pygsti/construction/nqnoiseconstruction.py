@@ -1530,7 +1530,7 @@ def get_candidates_for_core(gateset, core_qubits, candidate_counts, seedStart): 
 
 def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWeight=1, maxhops=0,
                             extraWeight1Hops=0, extraGateWeight=0, sparse=False, verbosity=0,
-                            cache=None, idleOnly=False):
+                            cache=None, idleOnly=False, algorithm="greedy"):
     """ 
     TODO: docstring
 
@@ -1586,7 +1586,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     idle_gateset = build_nqnoise_gateset(maxIdleWeight, 'line', [], maxIdleWeight, maxhops,
                                          extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
                                          sim_type="termorder:1", parameterization="H+S terms")
-    idle_params = idle_gateset['Gi'].gpindices # these are the params we want to amplify at first...
+    idle_params = idle_gateset.gates['Gi'].gpindices # these are the params we want to amplify at first...
 
     if maxIdleWeight in cache['Idle gatename fidpair lists']:
         printer.log("Getting cached sequences needed for max-weight=%d errors on the idle gate" % maxIdleWeight)
@@ -1598,7 +1598,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
             find_amped_polys_for_syntheticidle(list(range(maxIdleWeight)),
                                                idleGateStr, idle_gateset, singleQfiducials,
                                                prepLbl, None, wrtParams=idle_params, 
-                                               verbosity=printer-1)
+                                               algorithm=algorithm, verbosity=printer-1)
         #ampedJ, ampedJ_rank, idle_maxwt_gatename_fidpair_lists = None,0,[] # DEBUG GRAPH ISO
         cache['Idle gatename fidpair lists'][maxIdleWeight] = idle_maxwt_gatename_fidpair_lists
 
@@ -1637,11 +1637,12 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
             sidle_gateset = build_nqnoise_gateset(maxSyntheticIdleWt, 'line', [], maxIdleWeight, maxhops,
                                                   extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
                                                   sim_type="termorder:1", parameterization="H+S terms")
-            idle_params = sidle_gateset['Gi'].gpindices # these are the params we want to amplify...
+            idle_params = sidle_gateset.gates['Gi'].gpindices # these are the params we want to amplify...
 
             _, _, idle_gatename_fidpair_lists = find_amped_polys_for_syntheticidle(
                 list(range(maxSyntheticIdleWt)), idleGateStr, sidle_gateset,
-                singleQfiducials, prepLbl, None, wrtParams=idle_params, verbosity=printer-1) 
+                singleQfiducials, prepLbl, None, wrtParams=idle_params,
+                algorithm=algorithm, verbosity=printer-1) 
             #idle_gatename_fidpair_lists = [] # DEBUG GRAPH ISO
             cache['Idle gatename fidpair lists'][maxSyntheticIdleWt] = idle_gatename_fidpair_lists        
         
