@@ -4,6 +4,7 @@ import numpy as np
 from pygsti.construction import std1Q_XY
 from pygsti.construction import std2Q_XYICNOT
 from pygsti.objects import Label as L
+import pygsti.construction as pc
 import sys, os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
@@ -32,6 +33,117 @@ class NQubitTestCase(BaseTestCase):
         #print("Constructed gateset with %d gates, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %
         #      (len(gs_test.gates),gs_test.dim,gs_test.num_params(), np.linalg.norm(gs_test.to_vector()) ))
 
+    def test_sequential_sequenceselection(self):
+        nQubits = 2
+        maxLengths = [1,2]
+        cnot_edges = [(i,i+1) for i in range(nQubits-1)] #only single direction
+
+        gs_datagen = pc.build_nqnoise_gateset(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
+                                      extraWeight1Hops=0, extraGateWeight=0, sparse=True, verbosity=1,
+                                      sim_type="map", parameterization="H+S",
+                                      gateNoise=(1234,0.01), prepNoise=(456,0.01), povmNoise=(789,0.01))
+
+        cache = {}
+        expList_tups, germs = pygsti.construction.create_nqubit_sequences(
+            nQubits, maxLengths, 'line', cnot_edges, maxIdleWeight=2, maxhops=1,
+            extraWeight1Hops=0, extraGateWeight=0, verbosity=4, cache=cache, algorithm="sequential")
+        expList = [ tup[0] for tup in expList_tups]
+
+        #RUN to save list & dataset
+        #pygsti.io.json.dump(expList_tups, open(compare_files + "/nqubit_2Q_seqs.json",'w'))
+        #ds = pygsti.construction.generate_fake_data(gs_datagen, expList, 1000, "multinomial", seed=1234)
+        #pygsti.io.json.dump(ds,open(compare_files + "/nqubit_2Q_dataset.json",'w'))
+
+        compare_tups = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
+        self.assertEqual(set(expList_tups), set(compare_tups))
+
+
+
+    def test_greedy_sequenceselection(self):
+        nQubits = 1
+        maxLengths = [1,2]
+        cnot_edges = []
+
+        gs_datagen = pc.build_nqnoise_gateset(nQubits, "line", cnot_edges, maxIdleWeight=1, maxhops=0,
+                                      extraWeight1Hops=0, extraGateWeight=0, sparse=True, verbosity=1,
+                                      sim_type="map", parameterization="H+S",
+                                      gateNoise=(1234,0.01), prepNoise=(456,0.01), povmNoise=(789,0.01))
+
+        cache = {}
+        expList_tups, germs = pygsti.construction.create_nqubit_sequences(
+            nQubits, maxLengths, 'line', cnot_edges, maxIdleWeight=1, maxhops=0,
+            extraWeight1Hops=0, extraGateWeight=0, verbosity=4, cache=cache, algorithm="greedy")
+        #expList = [ tup[0] for tup in expList_tups]
+
+        #RUN to save list
+        #pygsti.io.json.dump(expList_tups, open(compare_files + "/nqubit_1Q_seqs.json",'w'))
+
+        compare_tups = pygsti.io.json.load(open(compare_files + "/nqubit_1Q_seqs.json"))
+        self.assertEqual(set(expList_tups), set(compare_tups))
+
+        
+    def test_2Q(self):
+
+        expList_tups = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
+        expList = [ tup[0] for tup in expList_tups]
+
+        ds = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_dataset.json"))
+        print(len(expList)," sequences")   
+
+        nQubits = 2
+        maxLengths = [1,2]
+        cnot_edges = [(i,i+1) for i in range(nQubits-1)] #only single direction
+
+        lsgstLists = []; lst = []
+        for L in maxLengths:
+            for tup in expList_tups:
+                if tup[1] == L: lst.append( tup[0] )
+            lsgstLists.append(lst[:]) # append *running* list
+            
+        gs_to_optimize = pc.build_nqnoise_gateset(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
+                                                  extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
+                                                  sim_type="map", parameterization="H+S", sparse=True)
+
+        results = pygsti.do_long_sequence_gst_base(ds, gs_to_optimize,
+                                                   lsgstLists, gaugeOptParams=False,
+                                                   advancedOptions={'tolerance': 1e-2}, verbosity=4)
+
+    def test_2Q_terms(self):
+
+        expList_tups = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
+        expList = [ tup[0] for tup in expList_tups]
+        
+        ds = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_dataset.json"))
+        print(len(expList)," sequences")   
+
+        nQubits = 2
+        maxLengths = [1,2]
+        cnot_edges = [(i,i+1) for i in range(nQubits-1)] #only single direction
+
+        lsgstLists = []; lst = []
+        for L in maxLengths:
+            for tup in expList_tups:
+                if tup[1] == L: lst.append( tup[0] )
+            lsgstLists.append(lst[:]) # append *running* list
+
+        gs_to_optimize = pc.build_nqnoise_gateset(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
+                                                  extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
+                                                  sim_type="termorder:1", parameterization="H+S terms", sparse=False)
+
+        #RUN to create cache
+        #calc_cache = {}
+        #gs_to_optimize.set_simtype("termorder:1",calc_cache)
+        #gs_to_optimize.bulk_probs(lsgstLists[-1])
+        #pygsti.io.json.dump(calc_cache, open(compare_files + '/nqubit_2Qterms.cache','w'))
+
+        #Just load precomputed cache (we test do_long_sequence_gst_base here, not cache computation)
+        calc_cache = pygsti.io.json.load(open(compare_files + '/nqubit_2Qterms.cache'))
+        gs_to_optimize.set_simtype("termorder:1",calc_cache)
+
+        results = pygsti.do_long_sequence_gst_base(ds, gs_to_optimize,
+                                                   lsgstLists, gaugeOptParams=False,
+                                                   advancedOptions={'tolerance': 1e-3}, verbosity=4)
+        
         
     def test_3Q(self):
 
