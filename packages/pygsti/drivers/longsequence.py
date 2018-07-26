@@ -183,6 +183,93 @@ def do_model_test(modelGateFilenameOrSet,
                                 output_pkl, verbosity, profiler)
 
 
+def do_linear_gst(dataFilenameOrSet, targetGateFilenameOrSet,
+                  prepStrsListOrFilename, effectStrsListOrFilename,
+                  gaugeOptParams=None, advancedOptions=None, comm=None,
+                  memLimit=None, output_pkl=None, verbosity=2):
+    """
+    Perform Linear Gate Set Tomography (LGST).
+
+    This function differs from the lower level :function:`do_lgst` function
+    in that it may perform a post-LGST gauge optimization and this routine
+    returns a :class:`Results` object containing the LGST estimate.
+
+    Overall, this is a high-level driver routine which can be used similarly
+    to :function:`do_long_sequence_gst`  whereas `do_lgst` is a low-level
+    routine used when building your own algorithms.
+
+
+    Parameters
+    ----------
+    dataFilenameOrSet : DataSet or string
+        The data set object to use for the analysis, specified either directly
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
+
+    targetGateFilenameOrSet : GateSet or string
+        The target gate set, specified either directly or by the filename of a
+        gateset file (text format).
+
+    prepStrsListOrFilename : (list of GateStrings) or string
+        The state preparation fiducial gate strings, specified either directly
+        or by the filename of a gate string list file (text format).
+
+    effectStrsListOrFilename : (list of GateStrings) or string or None
+        The measurement fiducial gate strings, specified either directly or by
+        the filename of a gate string list file (text format).  If ``None``,
+        then use the same strings as specified by prepStrsListOrFilename.
+
+    gaugeOptParams : dict, optional
+        A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
+        how the final gauge optimization should be performed.  The keys and
+        values of this dictionary may correspond to any of the arguments
+        of :func:`gaugeopt_to_target` *except* for the first `gateset`
+        argument, which is specified internally.  The `targetGateset` argument,
+        *can* be set, but is specified internally when it isn't.  If `None`,
+        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        is used.  If `False`, then then *no* gauge optimization is performed.
+
+    advancedOptions : dict, optional
+        Specifies advanced options most of which deal with numerical details of
+        the objective function or expert-level functionality.  See
+        :function:`do_long_sequence_gst`.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors.  In this LGST case, this is just the gauge
+        optimization.
+
+    memLimit : int or None, optional
+        A rough memory limit in bytes which restricts the amount of memory
+        used (per core when run on multi-CPUs).
+
+    output_pkl : str or file, optional
+        If not None, a file(name) to `pickle.dump` the returned `Results` object
+        to (only the rank 0 process performs the dump when `comm` is not None).
+
+    verbosity : int, optional
+       The 'verbosity' option is an integer specifying the level of
+       detail printed to stdout during the calculation.
+
+    Returns
+    -------
+    Results
+    """
+    gs_target = _load_gateset(targetGateFilenameOrSet)
+    germs = _construction.gatestring_list([()] + [(gl,) for gl in gs_target.gates.keys()]) # just the single gates
+    maxLengths = [1] # we only need maxLength == 1 when doing LGST
+    
+    defAdvOptions = {'onBadFit': [], 'estimateLabel': 'LGST'}
+    if advancedOptions is None: advancedOptions = {}
+    advancedOptions.update(defAdvOptions)
+    advancedOptions['objective'] = 'lgst' # not override-able
+
+    return do_long_sequence_gst(dataFilenameOrSet, gs_target,
+                                prepStrsListOrFilename,effectStrsListOrFilename,
+                                germs, maxLengths, gaugeOptParams,
+                                advancedOptions, comm, memLimit,
+                                output_pkl, verbosity)
+
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
@@ -582,7 +669,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
             'distributeMethod',"default"),
         check=advancedOptions.get('check',False),
         evaltree_cache={} )
-    
+
     if objective == "chi2":
         args['useFreqWeightedChiSq'] = advancedOptions.get(
             'useFreqWeightedChiSq',False)
@@ -596,6 +683,10 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         args['radius'] = advancedOptions.get('radius',1e-4)
         args['alwaysPerformMLE'] = advancedOptions.get('alwaysPerformMLE',False)
         gs_lsgst_list = _alg.do_iterative_mlgst(**args)
+    elif objective == "lgst":
+        assert(startingPt == "LGST"), "Can only set objective=\"lgst\" for parameterizations compatible with LGST"
+        assert(len(lsgstLists) == 1), "Can only set objective=\"lgst\" with number if lists/max-lengths == 1"
+        gs_lsgst_list = [args['startGateset']]
     else:
         raise ValueError("Invalid objective: %s" % objective)
 
@@ -1198,8 +1289,9 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                  for l in lsgstLists ]
     objective = advancedOptions.get('objective', 'logl')
     badFitThreshold = advancedOptions.get('badFitThreshold',DEFAULT_BAD_FIT_THRESHOLD)
-    if ret.estimates[estlbl].misfit_sigma(evaltree_cache=evaltree_cache) > badFitThreshold:
+    if ret.estimates[estlbl].misfit_sigma(evaltree_cache=evaltree_cache, comm=comm) > badFitThreshold:
         onBadFit = advancedOptions.get('onBadFit',["Robust+"]) # empty list => 'do nothing'
+        
         if len(onBadFit) > 0 and parameters.get('weights',None) is None:
 
             # Get by-sequence goodness of fit
@@ -1208,17 +1300,20 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                                            advancedOptions.get('minProbClipForWeighting',1e-4),
                                            advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                            False, False, memLimit,
-                                           advancedOptions.get('gateLabelAliases',None))
-            else:
+                                           advancedOptions.get('gateLabelAliases',None),
+                                           evaltree_cache=evaltree_cache, comm=comm)
+            else: # "logl" or "lgst"
                 maxLogL = _tools.logl_max_terms(gs_lsgst_list[-1], ds, rawLists[-1],
                                                 gateLabelAliases=advancedOptions.get(
-                                                    'gateLabelAliases',None))
+                                                    'gateLabelAliases',None),
+                                                evaltree_cache=evaltree_cache)
 
                 logL = _tools.logl_terms(gs_lsgst_list[-1], ds, rawLists[-1],
                                          advancedOptions.get('minProbClip',1e-4),
                                          advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                          advancedOptions.get('radius',1e-4),
-                                         gateLabelAliases=advancedOptions.get('gateLabelAliases',None))
+                                         gateLabelAliases=advancedOptions.get('gateLabelAliases',None),
+                                         evaltree_cache=evaltree_cache, comm=comm)
                 fitQty = 2*(maxLogL - logL)
 
             #Note: fitQty[iGateString] gives fit quantity for a single gate
@@ -1282,7 +1377,7 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                                       verbosity=printer-1)
                     for x in ('maxiter', 'tol', 'cptp_penalty_factor', 'spam_penalty_factor',
                               'probClipInterval', 'check', 'gateLabelAliases',
-                              'memLimit', 'comm', 'distributeMethod', 'profiler'):
+                              'memLimit', 'comm', 'evaltree_cache', 'distributeMethod', 'profiler'):
                         reopt_args[x] = opt_args[x]
 
                     printer.log("--- Re-optimizing %s after robust data scaling ---" % objective)
@@ -1296,6 +1391,8 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                         reopt_args['minProbClip'] = opt_args['minProbClip']
                         reopt_args['radius'] = opt_args['radius']
                         _, gs_reopt = _alg.do_mlgst(**reopt_args)
+
+                    else: raise ValueError("Invalid objective '%s' for robust data scaling reopt" % objective)
 
                     tNxt = _time.time()
                     profiler.add_time('%s: robust data scaling re-opt' % callerName,tRef); tRef=tNxt

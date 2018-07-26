@@ -510,7 +510,9 @@ class MapEvalTree(EvalTree):
                 maxCost = self.get_num_applies() / numSubTrees
             else: maxCost = len(self) / numSubTrees
             maxCostLowerBound, maxCostUpperBound = maxCost, None
-            maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0/len(self), +1.0/len(self)
+            maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0, +1.0 
+               #OLD (& incorrect) vals were 0, -1.0/len(self), +1.0/len(self),
+               #   though current -1,1 vals are probably overly conservative...
             resultingSubtrees = numSubTrees+1 #just to prime the loop
             iteration = 0
 
@@ -532,6 +534,7 @@ class MapEvalTree(EvalTree):
                 #Perform binary search in maxCost then maxCostRate to find
                 # desired final subtree count.
                 if maxCostUpperBound is None or abs(maxCostLowerBound-maxCostUpperBound) > 1.0:
+                    # coarse adjust => vary maxCost
                     last_maxCost = maxCost
                     if resultingSubtrees <= numSubTrees: #too few trees: reduce maxCost
                         maxCost = (maxCost + maxCostLowerBound)/2.0
@@ -543,6 +546,7 @@ class MapEvalTree(EvalTree):
                             maxCost = (maxCost + maxCostUpperBound)/2.0
                             maxCostLowerBound = last_maxCost
                 else:
+                    # fine adjust => vary maxCostRate
                     last_maxRate = maxCostRate
                     if resultingSubtrees <= numSubTrees: # too few trees reduce maxCostRate
                         maxCostRate = (maxCostRate + rateLowerBound)/2.0

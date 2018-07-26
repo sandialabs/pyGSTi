@@ -171,6 +171,7 @@ class TestHessianMethods(BaseTestCase):
 
         cfctry = est.get_confidence_region_factory('final iteration estimate', 'final')
         self.assertFalse( cfctry.can_construct_views() ) # b/c no hessian or LR enabled yet...
+        cfctry.compute_hessian(approximate=True)
         cfctry.compute_hessian()
         self.assertTrue( cfctry.has_hessian() )
         self.assertFalse( cfctry.can_construct_views() ) # b/c hessian isn't projected yet...

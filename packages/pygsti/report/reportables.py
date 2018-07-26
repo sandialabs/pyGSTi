@@ -608,9 +608,9 @@ except ImportError:
 
 def std_unitarity(A,B, mxBasis):
     """ A gauge-invariant quantity that behaves like the unitarity """
-    from ..extras.rb import rbutils as _rbutils
-    Lambda = _np.dot(A, _np.linalg.inv(B))
-    return _rbutils.unitarity( Lambda, mxBasis )
+    #from ..extras.rb import rbutils as _rbutils
+    #Lambda = _np.dot(A, _np.linalg.inv(B))
+    return 0.0 #_rbutils.unitarity( Lambda, mxBasis )
 
 def eigenvalue_unitarity(A,B):
     """ A gauge-invariant quantity that behaves like the unitarity """
@@ -701,8 +701,8 @@ Eigenvalue_nonunitary_diamondnorm = _gsf.gatesfn_factory(eigenvalue_nonunitary_d
 def avg_gate_infidelity(A, B, mxBasis):
     """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
     d = _np.sqrt(A.shape[0])
-    from ..extras.rb import rbutils as _rbutils
-    return _rbutils.average_gate_infidelity(A,B, d, mxBasis)
+    #from ..extras.rb import rbutils as _rbutils
+    return 0.0 #_rbutils.average_gate_infidelity(A,B, d, mxBasis)
 Avg_gate_infidelity = _gsf.gatesfn_factory(avg_gate_infidelity)
 # init args == (gateset1, gateset2, gateLabel)
 
@@ -1070,8 +1070,8 @@ General_decomposition = _gsf.gatesetfn_factory(general_decomposition)
 def average_gateset_infidelity(gatesetA, gatesetB):
     """ Average gate set infidelity """
     # B is target gateset usually but must be "gatesetB" b/c of decorator coding...
-    from ..extras.rb import rbutils as _rbutils
-    return _rbutils.average_gateset_infidelity(gatesetA,gatesetB)
+    #from ..extras.rb import rbutils as _rbutils
+    return 0.0 #_rbutils.average_gateset_infidelity(gatesetA,gatesetB)
 Average_gateset_infidelity = _gsf.gatesetfn_factory(average_gateset_infidelity)
 # init args == (gatesetA, gatesetB)
 
@@ -1080,8 +1080,8 @@ def predicted_rb_number(gatesetA, gatesetB):
     """ 
     Prediction of RB number based on estimated (A) and target (B) gate sets
     """
-    from ..extras.rb import rbutils as _rbutils
-    return _rbutils.predicted_RB_number(gatesetA, gatesetB)
+    #from ..extras.rb import rbutils as _rbutils
+    return 0.0 #_rbutils.predicted_RB_number(gatesetA, gatesetB)
 Predicted_rb_number = _gsf.gatesetfn_factory(predicted_rb_number)
 # init args == (gatesetA, gatesetB)
 

@@ -170,7 +170,7 @@ class ConfidenceRegionFactory(object):
         return self.parent.gatesets[self.gateset_lbl]
 
         
-    def compute_hessian(self, comm=None, memLimit=None):
+    def compute_hessian(self, comm=None, memLimit=None, approximate=False):
         """
         Computes the Hessian for this factory.
 
@@ -183,6 +183,11 @@ class ConfidenceRegionFactory(object):
         memLimit : int, optional
             A rough memory limit in bytes which restricts the amount of intermediate
             values that are computed and stored.
+
+        approximate : bool, optional
+            Whether to compute the true Hessian or just an approximation of it.
+            See :function:`logl_approximate_hessian`.  Setting to True can
+            significantly reduce the run time.
 
         Returns
         -------
@@ -228,10 +233,12 @@ class ConfidenceRegionFactory(object):
         MIN_NON_MARK_RADIUS = 1e-8 #must be >= 0
 
         if obj == 'logl':
-            hessian = _tools.logl_hessian(gateset, dataset, gatestring_list,
-                                          minProbClip, probClipInterval, radius,
-                                          comm=comm, memLimit=memLimit, verbosity=vb,
-                                          gateLabelAliases=aliases)
+            hessian_fn = _tools.logl_approximate_hessian if approximate \
+                         else _tools.logl_hessian
+            hessian = hessian_fn(gateset, dataset, gatestring_list,
+                                 minProbClip, probClipInterval, radius,
+                                 comm=comm, memLimit=memLimit, verbosity=vb,
+                                 gateLabelAliases=aliases)
 
             nonMarkRadiusSq = max( 2*(_tools.logl_max(gateset, dataset)
                                       - _tools.logl(gateset, dataset,
@@ -240,9 +247,10 @@ class ConfidenceRegionFactory(object):
 
         elif obj == 'chi2':
             chi2, hessian = _tools.chi2(gateset, dataset, gatestring_list,
-                                False, True, minProbClipForWeighting,
-                                probClipInterval, memLimit=memLimit,
-                                gateLabelAliases=aliases)
+                                        False, True, minProbClipForWeighting,
+                                        probClipInterval, memLimit=memLimit,
+                                        gateLabelAliases=aliases,
+                                        approximateHessian=approximate)
             
             nonMarkRadiusSq = max(chi2 - (nDataParams-nModelParams), MIN_NON_MARK_RADIUS)
         else:
@@ -251,7 +259,6 @@ class ConfidenceRegionFactory(object):
         self.hessian = hessian
         self.nonMarkRadiusSq = nonMarkRadiusSq
         return hessian
-
 
 
     def project_hessian(self, projection_type, label=None, tol=1e-7, maxiter=10000):

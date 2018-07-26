@@ -17,8 +17,7 @@ def is_integer(x):
 
 def construct_1Q_Clifford_group():
     """
-    Returns the 1 qubit Clifford group as a MatrixGroup object
-    
+    Returns the 1 qubit Clifford group as a MatrixGroup object   
     """
     gs = std1Q_Cliffords.gs_target
     return  MatrixGroup(gs.gates.values(),gs.gates.keys())
@@ -26,7 +25,6 @@ def construct_1Q_Clifford_group():
 class MatrixGroup(object):
     """
     Encapsulates a group where each element is represented by a matrix.
-
     """
     def __init__(self, listOfMatrices, labels=None):
         """
@@ -39,8 +37,7 @@ class MatrixGroup(object):
             can be gs.gate.values() for some GateSet `gs` that forms a group.
 
         labels : list, optional
-            A label corresponding to each group element.
-            
+            A label corresponding to each group element.            
         """
         self.mxs = list(listOfMatrices)
         self.labels = list(labels) if (labels is not None) else None
@@ -89,8 +86,7 @@ class MatrixGroup(object):
         
         Returns
         -------
-        numpy array
-        
+        numpy array        
         """
         if not is_integer(i): i = self.label_indices[i]
         return self.mxs[i]
@@ -106,8 +102,7 @@ class MatrixGroup(object):
         
         Returns
         -------
-        numpy array
-        
+        numpy array      
         """
         if not is_integer(i): i = self.label_indices[i]
         return self.mxs[self.inverse_table[i]]
@@ -125,8 +120,7 @@ class MatrixGroup(object):
         -------
         int or str
             If `i` is an integer, returns the element's index.  Otherwise
-            returns the element's label.
-            
+            returns the element's label.           
         """
         if is_integer(i):
             return self.inverse_table[i]
@@ -152,8 +146,7 @@ class MatrixGroup(object):
         -------
         int or str
             If `indices` contains integers, returns the resulting element's
-            index.  Otherwise returns the resulting element's label.
-            
+            index.  Otherwise returns the resulting element's label.           
         """
         if len(indices) == 0: return None
         if is_integer(indices[0]):
@@ -165,7 +158,6 @@ class MatrixGroup(object):
 
     def __len__(self):
         """ 
-        Returns the order of the group (the number of elements)
-        
+        Returns the order of the group (the number of elements)       
         """
         return len(self.mxs)

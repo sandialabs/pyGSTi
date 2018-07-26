@@ -21,7 +21,6 @@ from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from ..baseobjs import Label as _Label
 from .termevaltree import TermEvalTree as _TermEvalTree
-from .polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
 from .gatecalc import GateCalc
 from .polynomial import Polynomial as _Polynomial
 
@@ -31,10 +30,21 @@ except ImportError:
     from . import replib
 
 try:
-#import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
     from . import fastgatecalc as _fastgatecalc
+    def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
+        if _np.iscomplexobj(ctape):
+            ret = _fastgatecalc.fast_bulk_eval_compact_polys_complex(
+                vtape, ctape, paramvec, dest_shape)
+            assert(_np.linalg.norm(_np.imag(ret)) < 1e-6 ) # DEBUG CHECK
+            return _np.real( ret )
+        else:
+            return _np.real( _fastgatecalc.fast_bulk_eval_compact_polys(
+                vtape, ctape, paramvec, dest_shape) )
+    #from .fastgatecalc import fast_bulk_eval_compact_polys as _fastbulk_eval_compact_polys
 except ImportError:
-    _fastgatecalc = None
+    from .polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
+
+#from . import fastgatecalc as _fastgatecalc
 #_fastgatecalc.test_map("Hi")
 
 _dummy_profiler = _DummyProfiler()
@@ -76,7 +86,6 @@ class GateTermCalc(GateCalc):
         #    allow unitary-evolution calcs to be term-based, which essentially
         #    eliminates the "pRight" portion of all the propagation calcs, and
         #    would require pLeft*pRight => |pLeft|^2
-
         self.max_order = max_order
         self.cache = cache
         super(GateTermCalc, self).__init__(
@@ -169,9 +178,10 @@ class GateTermCalc(GateCalc):
         list
             A list of Polynomial objects.
         """
-        cache_keys = [(self.max_order, rholabel, elabel, gatestring) for elabel in tuple(elabels)]
-        if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
-            return [ self.cache[ck] for ck in cache_keys ]
+        #Cache hold *compact* polys now: see prs_as_compact_polys
+        #cache_keys = [(self.max_order, rholabel, elabel, gatestring) for elabel in tuple(elabels)]
+        #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
+        #    return [ self.cache[ck] for ck in cache_keys ]
         
         fastmode = True
         if self.evotype == "svterm":
@@ -180,9 +190,10 @@ class GateTermCalc(GateCalc):
             poly_reps = replib.SB_prs_as_polys(self, rholabel, elabels, gatestring, comm, memLimit, fastmode)
         prps = [ _Polynomial.fromrep(rep) for rep in poly_reps ]
 
-        if self.cache is not None:
-            for ck,poly in zip(cache_keys,prps):
-                self.cache[ck] = poly
+        #Cache hold *compact* polys now: see prs_as_compact_polys
+        #if self.cache is not None:
+        #    for ck,poly in zip(cache_keys,prps):
+        #        self.cache[ck] = poly
         return prps
         
 
@@ -213,7 +224,50 @@ class GateTermCalc(GateCalc):
         """
         return self.prs_as_polys(spamTuple[0], [spamTuple[1]], gatestring,
                                  comm, memLimit)[0]
-    
+
+    def prs_as_compact_polys(self, rholabel, elabels, gatestring, comm=None, memLimit=None):
+        """
+        Computes compact-form polynomials of the probabilities for multiple
+        spam-tuples of `gatestring`, sharing the same state preparation (so
+        with different POVM effects).
+
+        Parameters
+        ----------
+        rho_label : Label
+            The state preparation label.
+        
+        elabels : list
+            A list of :class:`Label` objects giving the *compiled* effect labels.
+
+        gatestring : GateString or tuple
+            A tuple-like object of *compiled* gates (e.g. may include
+            instrument elements like 'Imyinst_0')
+        
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        memLimit : int, optional
+            A memory limit in bytes to impose on the computation.
+        
+        Returns
+        -------
+        list
+            A list of Polynomial objects.
+        """
+        cache_keys = [(self.max_order, rholabel, elabel, gatestring) for elabel in tuple(elabels)]
+        if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
+            return [ self.cache[ck] for ck in cache_keys ]
+
+        raw_prps = self.prs_as_polys(rholabel, elabels, gatestring, comm, memLimit)
+        prps = [ poly.compact(force_complex=True) for poly in raw_prps ]
+          # create compact polys w/*complex* coeffs always since we're likely
+          # going to concatenate a bunch of them.
+
+        if self.cache is not None:
+            for ck,poly in zip(cache_keys,prps):
+                self.cache[ck] = poly
+        return prps
         
 
     def pr(self, spamTuple, gatestring, clipTo, bScale):
@@ -241,8 +295,11 @@ class GateTermCalc(GateCalc):
         -------
         probability: float
         """
-        poly = self.pr_as_poly(spamTuple, gatestring, comm=None, memLimit=None)
-        p = _np.real_if_close(poly.evaluate(self.paramvec))
+        #OLD: poly = self.pr_as_poly(spamTuple, gatestring)
+        #OLD: p = _np.real_if_close(cpoly.evaluate(self.paramvec))
+        cpoly = self.prs_as_compact_polys(spamTuple[0], [spamTuple[1]], gatestring)[0]
+        val = _bulk_eval_compact_polys(cpoly[0], cpoly[1], self.paramvec, (1,))[0]
+        p = _np.real_if_close(val)
         if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
         return float(p)
     
@@ -498,7 +555,7 @@ class GateTermCalc(GateCalc):
 
                 for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
                     #use cached data to final values
-                    prCache = _bulk_eval_compact_polys(polys[i], self.paramvec, (nStrs,) ) # ( nGateStrings,)
+                    prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nGateStrings,)
                     ps = evalSubTree.final_view( prCache, axis=0) # ( nGateStrings,)
                     _fas(mxToFill, [fInds], ps[gInds], add=sumInto)
 
@@ -621,7 +678,7 @@ class GateTermCalc(GateCalc):
                 if prMxToFill is not None:
                     polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
                     for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
-                        prCache = _bulk_eval_compact_polys(polys[i], self.paramvec, (nStrs,) ) # ( nGateStrings,)
+                        prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nGateStrings,)
                         ps = evalSubTree.final_view( prCache, axis=0) # ( nGateStrings,)
                         _fas(prMxToFill, [fInds], ps[gInds], add=sumInto)
 
@@ -629,7 +686,7 @@ class GateTermCalc(GateCalc):
                 dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
                 nP = self.Np if (paramSlice is None or paramSlice.start is None) else _slct.length(paramSlice)
                 for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
-                    dprCache = _bulk_eval_compact_polys(dpolys[i], self.paramvec, (nStrs,nP) )
+                    dprCache = _bulk_eval_compact_polys(dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs,nP) )
                     dps = evalSubTree.final_view( dprCache, axis=0) # ( nGateStrings, nDerivCols)
                     _fas(mxToFill, [fInds, pslc1], dps[gInds], add=sumInto)
                 profiler.add_time("bulk_fill_dprobs: calc_and_fill", tm)
@@ -820,7 +877,7 @@ class GateTermCalc(GateCalc):
                 if prMxToFill is not None:
                     polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
                     for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
-                        prCache = _bulk_eval_compact_polys(polys[i], self.paramvec, (nStrs,) ) # ( nGateStrings,)
+                        prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nGateStrings,)
                         ps = evalSubTree.final_view( prCache, axis=0) # ( nGateStrings,)
                         _fas(prMxToFill, [fInds], ps[gInds], add=sumInto)
 
@@ -830,7 +887,7 @@ class GateTermCalc(GateCalc):
                 if deriv1MxToFill is not None:
                     dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
                     for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
-                        dprCache = _bulk_eval_compact_polys(dpolys[i], self.paramvec, (nStrs,nP1)) # ( nGateStrings, nDerivCols)
+                        dprCache = _bulk_eval_compact_polys(dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs,nP1)) # ( nGateStrings, nDerivCols)
                         dps1 = evalSubTree.final_view( dprCache, axis=0) # ( nGateStrings, nDerivCols)
                         _fas(deriv1MxToFill, [fInds,pslc1], dps1[gInds], add=sumInto)
                     
@@ -842,14 +899,14 @@ class GateTermCalc(GateCalc):
                     else:
                         dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
                         for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
-                            dprCache = _bulk_eval_compact_polys(dpolys[i], self.paramvec, (nStrs,nP2)) # ( nGateStrings, nDerivCols)
+                            dprCache = _bulk_eval_compact_polys(dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs,nP2)) # ( nGateStrings, nDerivCols)
                             dps2 = evalSubTree.final_view( dprCache, axis=0) # ( nGateStrings, nDerivCols)
                             _fas(deriv2MxToFill, [fInds,pslc2], dps2[gInds], add=sumInto)
 
                 #Fill cache info
                 hpolys = evalSubTree.get_hp_polys(self, rholabel, elabels, paramSlice1, paramSlice2, fillComm)
                 for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
-                    hprCache = _bulk_eval_compact_polys(hpolys[i], self.paramvec, (nStrs,nP1,nP2)) # ( nGateStrings, nDerivCols1, nDerivCols2)
+                    hprCache = _bulk_eval_compact_polys(hpolys[i][0], hpolys[i][1], self.paramvec, (nStrs,nP1,nP2)) # ( nGateStrings, nDerivCols1, nDerivCols2)
                     hps = evalSubTree.final_view( hprCache, axis=0) # ( nGateStrings, nDerivCols1, nDerivCols2)
                     _fas(mxToFill, [fInds,pslc1,pslc2], hps[gInds], add=sumInto)
 

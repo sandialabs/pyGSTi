@@ -11,6 +11,7 @@ import warnings as _warnings
 import itertools as _itertools
 import time as _time
 import sys as _sys
+from collections import OrderedDict as _OrderedDict
 from . import basistools as _bt
 from . import listtools as _lt
 from . import jamiolkowski as _jam
@@ -69,7 +70,7 @@ TOL = 1e-20
  # log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}
  #       = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)
  #
- #   after patching (linear extrapolation below min_p and "softening" f == 0 terms w/cubit below radius "a"):
+ #   after patching (linear extrapolation below min_p and "softening" f == 0 terms w/cubic below radius "a"):
  #
  # logl = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}                                                        if p_{i,sl} >= min_p and N_{i,sl} > 0
  #                   N_{i,sl} log(min_p)    - N[i]*min_p    + S * (p_{i,sl} - min_p) + S2 * (p_{i,sl} - min_p)**2  if p_{i,sl} < p_min and N_{i,sl} > 0
@@ -92,7 +93,7 @@ TOL = 1e-20
  #    logL_term = logL_term(min_p) + S * (p-min_p) + S2 * (p-min_p)**2
  #   and hlogL == d/d1 ( d/d2 ( logl ) )  -- i.e. dp2 is the *first* derivative performed...
  #
- # For cubit interpolation, use function F(p) (derived by Robin: match value, 1st-deriv, 2nd-deriv at p == r, and require min at p == 0):
+ # For cubic interpolation, use function F(p) (derived by Robin: match value, 1st-deriv, 2nd-deriv at p == r, and require min at p == 0):
  #  Given a radius r << 1 (but r>0):
  #   F(p) = piecewise{ if( p>r ) then p; else -(1/3)*p^3/r^2 + p^2/r + (1/3)*r }
  #  OLD: quadratic that doesn't match 2nd-deriv:
@@ -100,7 +101,7 @@ TOL = 1e-20
 
 
 
-@smart_cached
+#@smart_cached
 def logl_terms(gateset, dataset, gatestring_list=None,
                minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
                poissonPicture=True, check=False, gateLabelAliases=None,
@@ -131,8 +132,10 @@ def logl_terms(gateset, dataset, gatestring_list=None,
         evalTree = evaltree_cache['evTree']
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
+        #tree_gatestring_list = evalTree.generate_gatestring_list()
+        # Note: this is != gatestring_list, as the tree hold *compiled* gatestrings
     else:
-        evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list)
+        evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list, dataset=dataset)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
@@ -146,11 +149,23 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     ds_gatestring_list = _lt.find_replace_tuple_list(
         gatestring_list, gateLabelAliases)
 
-    countVecMx = _np.empty(nEls, 'd' )
-    totalCntVec = _np.empty(nEls, 'd' )
-    for (i,gateStr) in enumerate(ds_gatestring_list):
-        totalCntVec[ lookup[i] ] = dataset[gateStr].total
-        countVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
+    if evaltree_cache and 'cntVecMx' in evaltree_cache:
+        countVecMx = evaltree_cache['cntVecMx']
+        totalCntVec = evaltree_cache['totalCntVec']
+    else:
+        countVecMx = _np.empty(nEls, 'd' )
+        totalCntVec = _np.empty(nEls, 'd' )
+        for (i,gateStr) in enumerate(ds_gatestring_list):
+            cnts = dataset[gateStr].counts
+            totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
+            countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
+
+        #could add to cache, but we don't have option of gateStringWeights
+        # here yet, so let's be conservative and not do this:
+        #if evaltree_cache is not None:
+        #    evaltree_cache['cntVecMx'] = countVecMx
+        #    evaltree_cache['totalCntVec'] = totalCntVec
+
 
     #OLD
     #freqs = countVecMx / totalCntVec[None,:]
@@ -195,7 +210,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     return terms
 
 
-@smart_cached
+#@smart_cached
 def logl(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
          poissonPicture=True, check=False, gateLabelAliases=None,
@@ -272,7 +287,8 @@ def logl(gateset, dataset, gatestring_list=None,
 
 def logl_jacobian(gateset, dataset, gatestring_list=None,
                   minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
-                  poissonPicture=True, check=False, gateLabelAliases=None):
+                  poissonPicture=True, check=False, comm=None,
+                  memLimit=None, gateLabelAliases=None, verbosity=0):
     """
     The jacobian of the log-likelihood function.
 
@@ -315,12 +331,22 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
         If True, perform extra checks within code to verify correctness.  Used
         for testing, and runs much slower when True.
 
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
+
     gateLabelAliases : dictionary, optional
         Dictionary whose keys are gate label "aliases" and whose values are tuples
         corresponding to what that gate label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
+    verbosity : int, optional
+        How much detail to print to stdout.
 
     Returns
     -------
@@ -328,17 +354,31 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
       array of shape (M,), where M is the length of the vectorized gateset.
     """
 
-    nP = gateset.num_params()
-    jac = _np.zeros([1,nP])
-
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
+
+    C = 1.0/1024.0**3; nP = gateset.num_params()
+    persistentMem = 8*nP + 8*len(gatestring_list)*(nP+1) # in bytes
+
+    if memLimit is not None and memLimit < persistentMem:
+        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit*C) +
+                          "< memory required to hold final results (%g GB)"
+                          % (persistentMem*C))
+
+
+    #OLD: evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list)
+    mlim = None if (memLimit is None) else memLimit-persistentMem
+    dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
+    evalTree, blkSize, _, lookup, outcomes_lookup = \
+        gateset.bulk_evaltree_from_resources(
+            gatestring_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
+            dstree, verbosity)
 
     a = radius # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
 
-    evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list)
-
+    #  Allocate persistent memory
+    jac = _np.zeros([1,nP])
     nEls = evalTree.num_final_elements()
     probs = _np.empty( nEls, 'd' )
     dprobs = _np.empty( (nEls,nP), 'd' )
@@ -349,8 +389,9 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     countVecMx = _np.empty(nEls, 'd' )
     totalCntVec = _np.empty(nEls, 'd' )
     for (i,gateStr) in enumerate(ds_gatestring_list):
-        totalCntVec[ lookup[i] ] = dataset[gateStr].total
-        countVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
+        cnts = dataset[gateStr].counts
+        totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
+        countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
     #OLD
     #freqs = cntVecMx / totalCntVec[None,:]
@@ -361,7 +402,8 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
 
 
     gateset.bulk_fill_dprobs(dprobs, evalTree, prMxToFill=probs,
-                             clipTo=probClipInterval, check=check)
+                             clipTo=probClipInterval, check=check, comm=comm,
+                             wrtBlockSize=blkSize) # FUTURE: set gatherMemLimit=?
 
 
     pos_probs = _np.where(probs < min_p, min_p, probs)
@@ -398,7 +440,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
         jac = dprobs * dprobs_factor[:,None] # (KM,N) * (KM,1)   (N = dim of vectorized gateset)
 
     # jac[iSpamLabel,iGateString,iGateSetParam] contains all d(logl)/d(gatesetParam) contributions
-    return _np.sum(jac, axis=(0,1)) # sum over spam label and gate string dimensions
+    return _np.sum(jac, axis=0) # sum over spam label and gate string dimensions
 
 
 def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
@@ -487,10 +529,11 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     #  - figure out how many row & column partitions are needed
     #    to fit computation within available memory (and use all cpus)
     mlim = None if (memLimit is None) else memLimit-persistentMem
+    dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
     evalTree, blkSize1, blkSize2, lookup, outcomes_lookup = \
         gateset.bulk_evaltree_from_resources(
             gatestring_list, comm, mlim, "deriv", ['bulk_hprobs_by_block'],
-            verbosity)
+            dstree, verbosity)
     
     rowParts = int(round(nP / blkSize1)) if (blkSize1 is not None) else 1
     colParts = int(round(nP / blkSize2)) if (blkSize2 is not None) else 1
@@ -602,8 +645,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     ds_subtree_gatestring_list = _lt.find_replace_tuple_list(
         gatestring_list, gateLabelAliases)
     for (i,gateStr) in enumerate(ds_subtree_gatestring_list):
-        totalCntVec_all[ lookup[i] ] = dataset[gateStr].total
-        cntVecMx_all[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
+        cnts = dataset[gateStr].counts
+        totalCntVec_all[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
+        cntVecMx_all[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
     tStart = _time.time()
 
@@ -685,9 +729,173 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
 
     return final_hessian # (N,N)
 
-@smart_cached
+
+def logl_approximate_hessian(gateset, dataset, gatestring_list=None,
+                             minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
+                             poissonPicture=True, check=False, comm=None,
+                             memLimit=None, gateLabelAliases=None, verbosity=0):
+    """
+    An approximate Hessian of the log-likelihood function.
+
+    An approximation to the true Hessian is computed using just the Jacobian
+    (and *not* the Hessian) of the probabilities w.r.t. the gate set
+    parameters.  Let `J = d(probs)/d(params)` and denote the Hessian of the
+    log-likelihood w.r.t. the probabilities as `d2(logl)/dprobs2` (a *diagonal*
+    matrix indexed by the term, i.e. probability, of the log-likelihood). Then
+    this function computes:
+
+    `H = J * d2(logl)/dprobs2 * J.T`
+
+    Which simply neglects the `d2(probs)/d(params)2` terms of the true Hessian.
+    Since this curvature is expected to be small at the MLE point, this
+    approximation can be useful for computing approximate error bars.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        Gateset of parameterized gates (including SPAM)
+
+    dataset : DataSet
+        Probability data
+
+    gatestring_list : list of (tuples or GateStrings), optional
+        Each element specifies a gate string to include in the log-likelihood
+        sum.  Default value of None implies all the gate strings in dataset
+        should be used.
+
+    minProbClip : float, optional
+        The minimum probability treated normally in the evaluation of the log-likelihood.
+        A penalty function replaces the true log-likelihood for probabilities that lie
+        below this threshold so that the log-likelihood never becomes undefined (which improves
+        optimizer performance).
+
+    probClipInterval : 2-tuple or None, optional
+        (min,max) values used to clip the probabilities predicted by gatesets during MLEGST's
+        search for an optimal gateset (if not None).  if None, no clipping is performed.
+
+    radius : float, optional
+        Specifies the severity of rounding used to "patch" the zero-frequency
+        terms of the log-likelihood.
+
+    evalTree : evaluation tree, optional
+        given by a prior call to bulk_evaltree for the same gatestring_list.
+        Significantly speeds up evaluation of log-likelihood derivatives, even
+        more so when accompanied by countVecMx (see below).  Defaults to None.
+
+    poissonPicture : boolean, optional
+        Whether the Poisson-picutre log-likelihood should be differentiated.
+
+    check : boolean, optional
+        If True, perform extra checks within code to verify correctness.  Used
+        for testing, and runs much slower when True.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
+    verbosity : int, optional
+        How much detail to print to stdout.
+
+    Returns
+    -------
+    numpy array
+      array of shape (M,M), where M is the length of the vectorized gateset.
+    """
+
+    if gatestring_list is None:
+        gatestring_list = list(dataset.keys())
+
+    C = 1.0/1024.0**3; nP = gateset.num_params()
+    persistentMem = 8*nP**2 + 8*len(gatestring_list)*(nP+1) # in bytes
+
+    if memLimit is not None and memLimit < persistentMem:
+        raise MemoryError("DLogL Memory limit (%g GB) is " % (memLimit*C) +
+                          "< memory required to hold final results (%g GB)"
+                          % (persistentMem*C))
+
+
+    #OLD: evalTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gatestring_list)
+    mlim = None if (memLimit is None) else memLimit-persistentMem
+    dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
+    evalTree, blkSize, _, lookup, outcomes_lookup = \
+        gateset.bulk_evaltree_from_resources(
+            gatestring_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
+            dstree, verbosity)
+
+    a = radius # parameterizes "roundness" of f == 0 terms
+    min_p = minProbClip
+
+    #  Allocate persistent memory
+    #hessian = _np.zeros( (nP,nP), 'd') # allocated below by assignment
+    nEls = evalTree.num_final_elements()
+    probs = _np.empty( nEls, 'd' )
+    dprobs = _np.empty( (nEls,nP), 'd' )
+
+    ds_gatestring_list = _lt.find_replace_tuple_list(
+        gatestring_list, gateLabelAliases)
+
+    cntVecMx = _np.empty(nEls, 'd' )
+    totalCntVec = _np.empty(nEls, 'd' )
+    for (i,gateStr) in enumerate(ds_gatestring_list):
+        cnts = dataset[gateStr].counts
+        totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
+        cntVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
+
+    gateset.bulk_fill_dprobs(dprobs, evalTree, prMxToFill=probs,
+                             clipTo=probClipInterval, check=check, comm=comm,
+                             wrtBlockSize=blkSize) # FUTURE: set gatherMemLimit=?
+
+    pos_probs = _np.where(probs < min_p, min_p, probs)
+
+    #Note: these approximate-hessian formula are similar to (but simpler than) the
+    # computations done by the `hessian_from_probs` functions in `logl_hessian(...)`.
+    # They compute just the hessian of the log-likelihood w.r.t. the probabilities -
+    # which correspond to just the `dprobs12_coeffs` variable of the aforementioned
+    # functions.  This is so b/c in this case the "dp1" and "dp2" terms are delta
+    # functions and "hp==0" (b/c the "params" here are just the probabilities
+    # themselves) - so only the X*dp1*dp2 terms survive the general expressions
+    # found above.
+    if poissonPicture:
+        totCnts = totalCntVec  #shorthand
+        S = cntVecMx / min_p - totCnts # slope term that is derivative of logl at min_p
+        S2 = -0.5 * cntVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
+
+        dprobs12_coeffs = \
+            _np.where(probs < min_p, 2*S2, -cntVecMx / pos_probs**2)
+        zfc = _np.where(probs >= a, 0.0, -totCnts*((-2.0/a**2)*probs+2.0/a))
+        dprobs12_coeffs = _np.where(cntVecMx == 0, zfc, dprobs12_coeffs)
+          # a 1D array of the diagonal of d2(logl)/dprobs2; shape = (nEls,)
+
+    else:
+        S = cntVecMx / min_p # slope term that is derivative of logl at min_p
+        S2 = -0.5 * cntVecMx / (min_p**2) # 2nd derivative of logl term at min_p
+        dprobs12_coeffs = \
+            _np.where(probs < min_p, 2*S2, -cntVecMx / pos_probs**2)
+        dprobs12_coeffs = _np.where(cntVecMx == 0, 0.0, dprobs12_coeffs)
+            # a 1D array of the diagonal of d2(logl)/dprobs2; shape = (nEls,)
+
+    # In notation in docstring:
+    # J = dprobs.T (shape nEls,nP)
+    # diagonal of d2(logl)/dprobs2 = dprobs12_coeffs (var name kept to preserve
+    #                similarity w/functions in logl_hessian)
+    # So H = J * d2(logl)/dprobs2 * J.T becomes:
+    hessian = _np.dot( dprobs.T, dprobs12_coeffs[:,None]*dprobs )
+    return hessian
+
+
+#@smart_cached
 def logl_max(gateset, dataset, gatestring_list=None, poissonPicture=True,
-             check=False, gateLabelAliases=None):
+             check=False, gateLabelAliases=None, evaltree_cache=None):
     """
     The maximum log-likelihood possible for a DataSet.  That is, the
     log-likelihood obtained by a maximal model that can fit perfectly
@@ -719,12 +927,19 @@ def logl_max(gateset, dataset, gatestring_list=None, poissonPicture=True,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
+    evaltree_cache : dict, optional
+        A dictionary which server as a cache for the computed EvalTree used
+        in this computation.  If an empty dictionary is supplied, it is filled
+        with cached values to speed up subsequent executions of this function
+        which use the *same* `gateset` and `gatestring_list`.
+
     Returns
     -------
     float
     """
     maxLogLTerms = logl_max_terms(gateset, dataset, gatestring_list,
-                                  poissonPicture, gateLabelAliases)
+                                  poissonPicture, gateLabelAliases,
+                                  evaltree_cache)
     
     # maxLogLTerms[iSpamLabel,iGateString] contains all logl-upper-bound contributions
     maxLogL = _np.sum(maxLogLTerms) # sum over *all* dimensions
@@ -747,9 +962,10 @@ def logl_max(gateset, dataset, gatestring_list=None, poissonPicture=True,
 
     return maxLogL
 
-@smart_cached
+#@smart_cached
 def logl_max_terms(gateset, dataset, gatestring_list=None,
-                   poissonPicture=True, gateLabelAliases=None):
+                   poissonPicture=True, gateLabelAliases=None,
+                   evaltree_cache=None):
     """
     The vector of maximum log-likelihood contributions for each gate string,
     aggregated over outcomes.
@@ -767,20 +983,47 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
         gate string aggregated over outcomes.
     """
 
-    if gatestring_list is None:
-        gatestring_list = list(dataset.keys())
+    if evaltree_cache and 'evTree' in evaltree_cache:
+        evalTree = evaltree_cache['evTree']
+        lookup = evaltree_cache['lookup']
+        outcomes_lookup = evaltree_cache['outcomes_lookup']
 
-    raw_dict, lookup, outcomes_lookup, nEls = \
-        gateset.compile_gatestrings(gatestring_list)
+        #construct raw_dict & nEls from tree (holds keys & vals separately)
+        #tree_gatestring_list = evalTree.generate_gatestring_list()
+        # Note: this is != gatestring_list, as the tree hold *compiled* gatestrings
+        raw_dict = _OrderedDict(list(zip(gatestring_list,
+                                         evalTree.compiled_gatestring_spamTuples)))
+        nEls = evalTree.num_final_elements()
+    else:
+        if gatestring_list is None:
+            gatestring_list = list(dataset.keys())
+
+        raw_dict, lookup, outcomes_lookup, nEls = \
+            gateset.compile_gatestrings(gatestring_list, dataset)
+        #Note: we don't actually need an evaltree, so we
+        # won't make one here and so won't fill an empty
+        # evaltree_cache.
         
     gatestring_list = _lt.find_replace_tuple_list(
         gatestring_list, gateLabelAliases)
 
-    countVecMx = _np.empty(nEls, 'd' )
-    totalCntVec = _np.empty(nEls, 'd' )
-    for (i,gateStr) in enumerate(gatestring_list):
-        totalCntVec[ lookup[i] ] = dataset[gateStr].total
-        countVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
+    if evaltree_cache and 'cntVecMx' in evaltree_cache:
+        countVecMx = evaltree_cache['cntVecMx']
+        totalCntVec = evaltree_cache['totalCntVec']
+    else:
+        countVecMx = _np.empty(nEls, 'd' )
+        totalCntVec = _np.empty(nEls, 'd' )
+        for (i,gateStr) in enumerate(gatestring_list):
+            cnts = dataset[gateStr].counts
+            totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
+            countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
+
+        #could add to cache, but we don't have option of gateStringWeights
+        # here yet, so let's be conservative and not do this:
+        #if evaltree_cache is not None:
+        #    evaltree_cache['cntVecMx'] = countVecMx
+        #    evaltree_cache['totalCntVec'] = totalCntVec
+
         
     freqs = countVecMx / totalCntVec
     freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
@@ -933,7 +1176,7 @@ def cptp_penalty(gateset, include_spam_penalty=True):
                      for e in povm.values() ])
     return ret
 
-@smart_cached
+#@smart_cached
 def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     """
     Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding

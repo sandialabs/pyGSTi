@@ -16,6 +16,7 @@ import warnings as _warnings
 from ..tools import gatetools as _gt
 from ..tools import basistools as _bt
 from ..tools import compattools as _compat
+from ..tools import internalgates as _itgs
 from ..objects import gate as _gate
 from ..objects import spamvec as _spamvec
 from ..objects import povm as _povm
@@ -1081,7 +1082,7 @@ def build_alias_gateset(gs_primitives, alias_dict):
     return gs_new
 
 
-def build_nqubit_gateset(nQubits, gatedict, availability=None,
+def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
                          parameterization='static', evotype="auto",
                          sim_type="auto", on_construction_error='raise'):
     """
@@ -1108,7 +1109,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
         `availability`.
 
     availability : dict, optional
-        If not None, a dictionary whose keys are the same gate names as in
+        A dictionary whose keys are the same gate names as in
         `gatedict` and whose values are lists of qubit-label-tuples.  Each
         qubit-label-tuple must have length equal to the number of qubits
         the corresponding gate acts upon, and causes that gate to be
@@ -1122,8 +1123,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
         imply, equate to all possible permutations and combinations of the 
         appropriate number of qubit labels (deterined by the gate's dimension).
         If a gate name (a key of `gatedict`) is not present in `availability`,
-        the default is `"all-permutations"`.  If `availability` is None, this is
-        equivalent to the empty dictionary (all gates get `"all-permutations"`).
+        the default is `"all-permutations"`.
 
     parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
                         "H+S clifford terms", "clifford"}
@@ -1160,7 +1160,8 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
         `availability`).  For instance, the gate label for the `"Gx"` gate on
         qubit 2 might be `Label("Gx",1)`.
     """
-    if availability is None: availability = {}
+    if qubit_labels is None:
+        qubit_labels = list(range(nQubits))
 
     if evotype == "auto": # Note: this same logic is repeated in build_nqubit_standard_gateset
         if parameterization == "clifford": evotype = "stabilizer"
@@ -1191,7 +1192,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
 
     gs = _gateset.GateSet(default_param = parameterization, # "full", "TP" or "static", "clifford", ...
                           sim_type = sim_type)              # "matrix", "map", "termorder:X"
-    gs.stateSpaceLabels = _ld.StateSpaceLabels(tuple(range(nQubits)))
+    gs.stateSpaceLabels = _ld.StateSpaceLabels(tuple(qubit_labels))
     gs._evotype = evotype # set this to ensure we create the types of gateset element we expect to.
 
     #Set "sub-type" as in GateSet.set_all_parameterizations
@@ -1231,9 +1232,9 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
         
         availList = availability.get(gateName, 'all-permutations')
         if availList == 'all-combinations': 
-            availList = list(_itertools.combinations(list(range(nQubits)), gate_nQubits))
+            availList = list(_itertools.combinations(qubit_labels, gate_nQubits))
         elif availList == 'all-permutations': 
-            availList = list(_itertools.permutations(list(range(nQubits)), gate_nQubits))
+            availList = list(_itertools.permutations(qubit_labels, gate_nQubits))
             
         for inds in availList:
             try:
@@ -1247,64 +1248,9 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
             
     return gs
 
-
-def get_standard_gate_unitaries():
-    """
-    Constructs and returns a dictionary of unitary matrices describing the
-    action of "standard" gates.  These gates (also the keys of the returned
-    dictionary) are:
-
-    - 'Gi' : the 1Q idle operation
-    - 'Gx','Gy','Gz' : 1Q pi/2 rotations
-    - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
-    - 'Gh' : Hadamard
-    - 'Gp' : phase
-    - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
-
-    Returns
-    -------
-    dict of numpy.ndarray objects.
-    """
-    std_unitaries = {}
-    
-    # The idle gate.
-    std_unitaries['Gi'] = _np.array([[1.,0.],[0.,1.]],complex)
-
-    # Non-idle single qubit gates
-    std_unitaries['Gxpi'] = _np.array([[0.,1.],[1.,0.]],complex)
-    std_unitaries['Gypi'] = _np.array([[0.,-1j],[1j,0.]],complex)
-    std_unitaries['Gzpi'] = _np.array([[1.,0.],[0.,-1.]],complex)
-
-    sigmax = _np.array([[0,1],[1,0]])
-    sigmay = _np.array([[0,-1.0j],[1.0j,0]])
-    sigmaz = _np.array([[1,0],[0,-1]])
-    def Ugate(exp):
-        return _np.array(_spl.expm(-1j * exp/2),complex) # 1j prefactor?
-    
-    std_unitaries['Gx'] = Ugate(_np.pi/2 * sigmax)
-    std_unitaries['Gy'] = Ugate(_np.pi/2 * sigmay)
-    std_unitaries['Gz'] = Ugate(_np.pi/2 * sigmaz)
-
-    
-    H = (1/_np.sqrt(2))*_np.array([[1.,1.],[1.,-1.]],complex) 
-    P = _np.array([[1.,0.],[0.,1j]],complex)
-    
-    std_unitaries['Gh'] =  H  
-    std_unitaries['Gp'] = P
-    std_unitaries['Ghp'] = _np.dot(H,P)
-    std_unitaries['Gph'] = _np.dot(P,H)
-    std_unitaries['Ghph'] = _np.dot(H,_np.dot(P,H))
- 
-    # Two-qubit gates
-    std_unitaries['Gcphase'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.],[0.,0.,0.,-1.]],complex)
-    std_unitaries['Gcnot'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,0.,1.],[0.,0.,1.,0.]],complex)
-    std_unitaries['Gswap'] = _np.array([[1.,0.,0.,0.],[0.,0.,1.,0.],[0.,1.,0.,0.],[0.,0.,0.,1.]],complex)
-    return std_unitaries
-
-
-def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=None,
-                                  availability=None, parameterization='static',
-                                  evotype="auto", sim_type="auto", on_construction_error='raise'):
+def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries={}, availability={}, 
+                                  qubit_labels=None, parameterization='static', evotype="auto", 
+                                  sim_type="auto", on_construction_error='raise'):
     """
     Creates a "standard" n-qubit gate set, usually of ideal gates.
 
@@ -1333,7 +1279,7 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
         The total number of qubits.
 
     gate_names : list
-        I list of string-type gate names (e.g. `"Gx"`) either taken from
+        A list of string-type gate names (e.g. `"Gx"`) either taken from
         the list of builtin "standard" gate names given above or from the
         keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
         gates that are repeatedly embedded (based on `availability`) to form
@@ -1344,9 +1290,8 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
         of the gate names given by the dictionary's keys.
 
     availability : dict, optional
-        If not None, a dictionary whose keys are gate names and whose values
-        are lists of qubit-label-tuples.  See :function:`built_nqubit_gateset`
-        for more details.
+        A dictionary whose keys are gate names and whose values are lists of 
+        qubit-label-tuples.  See :function:`built_nqubit_gateset` for more details.
 
     parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
                         "H+S clifford terms", "clifford"}
@@ -1375,7 +1320,6 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
         into `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
         may be useful.
 
-
     Returns
     -------
     GateSet
@@ -1384,8 +1328,7 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
         `availability`).  For instance, the gate label for the `"Gx"` gate on
         qubit 2 might be `Label("Gx",1)`.
     """
-    if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
-    std_unitaries = get_standard_gate_unitaries()
+    std_unitaries = _itgs.get_standard_gatename_unitaries()
 
     if evotype == "auto": # same logic as in build_nqubit_gateset
         if parameterization == "clifford": evotype = "stabilizer"
@@ -1409,7 +1352,7 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
             assert(evotype in ("statevec","stabilizer")), "Invalid evotype: %s" % evotype
             gatedict[name] = U
 
-    return build_nqubit_gateset(nQubits,gatedict,availability,parameterization,
+    return build_nqubit_gateset(nQubits,gatedict,availability,qubit_labels,parameterization,
                                 evotype,sim_type,on_construction_error)
 
 

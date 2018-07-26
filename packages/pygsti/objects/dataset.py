@@ -25,7 +25,7 @@ from . import gatestring as _gs
 from . import labeldicts as _ld
 #from . import dataset as _ds
 
-Oindex_type = _np.uint8
+Oindex_type = _np.uint32
 Time_type = _np.float64
 Repcount_type = _np.float32
  # thought: _np.uint16 but doesn't play well with rescaling
@@ -38,13 +38,17 @@ class DataSet_KeyValIterator(object):
         oliData = self.dataset.oliData
         timeData = self.dataset.timeData
         repData = self.dataset.repData
+        cntcache = self.dataset.cnt_cache
+
+        def getcache(gs):
+            return dataset.cnt_cache[gs] if dataset.bStatic else None
       
         if repData is None:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None)
-                             for gsi in self.dataset.gsIndex.values() )
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gs))
+                             for gs,gsi in self.dataset.gsIndex.items() )
         else:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ])
-                             for gsi in self.dataset.gsIndex.values() )
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(gs))
+                             for gs,gsi in self.dataset.gsIndex.items() )
         #Note: gsi above will be an index for a non-static dataset and
         #  a slice for a static dataset.
 
@@ -64,13 +68,17 @@ class DataSet_ValIterator(object):
         oliData = self.dataset.oliData
         timeData = self.dataset.timeData
         repData = self.dataset.repData
-    
+        cntcache = self.dataset.cnt_cache
+
+        def getcache(gs):
+            return dataset.cnt_cache[gs] if dataset.bStatic else None
+        
         if repData is None:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None)
-                             for gsi in self.dataset.gsIndex.values() )
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gs))
+                             for gs,gsi in self.dataset.gsIndex.items() )
         else:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ])
-                             for gsi in self.dataset.gsIndex.values() )
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(gs))
+                             for gs,gsi in self.dataset.gsIndex.items() )
         #Note: gsi above will be an index for a non-static dataset and
         #  a slice for a static dataset.
 
@@ -89,11 +97,12 @@ class DataSetRow(object):
     looks similar to a list with `(outcome_label, time_index, repetition_count)`
     tuples as the values.
     """
-    def __init__(self, dataset, rowOliData, rowTimeData, rowRepData):
+    def __init__(self, dataset, rowOliData, rowTimeData, rowRepData, cached_cnts):
         self.dataset = dataset
         self.oli = rowOliData
         self.time = rowTimeData
         self.reps = rowRepData
+        self._cntcache = cached_cnts
 
     @property
     def outcomes(self):
@@ -166,7 +175,16 @@ class DataSetRow(object):
         elif isinstance(indexOrOutcomeLabel, _numbers.Real): #timestamp
             return self.counts_at_time(indexOrOutcomeLabel)
         else:
-            return self.counts[indexOrOutcomeLabel]
+            try:
+                return self.counts[indexOrOutcomeLabel]
+            except KeyError:
+                # if outcome label isn't in counts but *is* in the dataset's
+                # outcome labels then return 0 (~= return self.allcounts[...])
+                key = indexOrOutcomeLabel
+                key = (key,) if _compat.isstr(key) else tuple(key) # as in OutcomeLabelDict
+                if key in self.dataset.get_outcome_labels(): return 0
+                raise KeyError("%s is not an index, timestamp, or outcome label!"
+                               % str(indexOrOutcomeLabel))
             
     def __setitem__(self,indexOrOutcomeLabel,val):
         if isinstance(indexOrOutcomeLabel, _numbers.Integral):
@@ -223,7 +241,11 @@ class DataSetRow(object):
 
     @property
     def counts(self):
-        return self._get_counts()
+        if self._cntcache: return self._cntcache # if not None *and* len > 0
+        ret = self._get_counts()
+        if self._cntcache is not None: # == and empty dict {}
+            self._cntcache.update(ret)
+        return ret
 
     @property
     def allcounts(self):
@@ -251,9 +273,9 @@ class DataSetRow(object):
     #TODO: remove in favor of fractions property?
     def fraction(self,outcomelabel):
         """ Returns the fraction of total counts for `outcomelabel`."""
-        if outcomelabel not in self.outcomes:
-            return 0.0 # Note: similar to an "all_outcomes=True" default
         d = self.counts
+        if outcomelabel not in d:
+            return 0.0 # Note: similar to an "all_outcomes=True" default
         total = sum(d.values())
         return d[outcomelabel]/total
 
@@ -321,12 +343,14 @@ class DataSetRow(object):
 
     def scale(self, factor):
         """ Scales all the counts of this row by the given factor """
+        if self.dataset.bStatic: raise ValueError("Cannot scale rows of a *static* DataSet.")
         if self.reps is None:
             raise ValueError(("Cannot scale a DataSet without repetition "
                               "counts. Call DataSet.build_repetition_counts()"
                               " and try this again."))
         for i,cnt in enumerate(self.reps):
             self.reps[i] = cnt*factor
+        
 
     def as_dict(self):
         """ Returns the (outcomeLabel,count) pairs as a dictionary."""
@@ -589,6 +613,12 @@ class DataSet(object):
         self.oliType  = Oindex_type
         self.timeType = Time_type
         self.repType  = Repcount_type
+
+        # count cache (only used when static; not saved/loaded from disk)
+        if bStatic:
+            self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
+        else:
+            self.cnt_cache = None
   
   
     def __iter__(self):
@@ -645,7 +675,8 @@ class DataSet(object):
         repData = self.repData[ self.gsIndex[gatestring] ] \
                   if (self.repData is not None) else None
         return DataSetRow(self, self.oliData[ self.gsIndex[gatestring] ],
-                          self.timeData[ self.gsIndex[gatestring] ], repData)
+                          self.timeData[ self.gsIndex[gatestring] ], repData,
+                          self.cnt_cache[ gatestring ] if self.bStatic else None)
 
     def set_row(self, gatestring, outcomeDictOrSeries, occurrence=0):
         """
@@ -803,9 +834,10 @@ class DataSet(object):
             
         nDOF = 0
         for gstr in gateStringList:
-            cur_t = self[gstr].time[0]
+            dsRow = self[gstr]
+            cur_t = dsRow.time[0]
             cur_outcomes = set() # holds *distinct* outcomes at current time
-            for ol,t,rep in self[gstr]:
+            for ol,t,rep in dsRow:
                 if t == cur_t: cur_outcomes.add(ol)
                 else:
                     #assume final outcome at each time is constrained
@@ -844,7 +876,8 @@ class DataSet(object):
             self.repData.append( _np.ones(len(oliAr), self.repType) )
 
     
-    def add_count_dict(self, gateString, countDict, overwriteExisting=True):
+    def add_count_dict(self, gateString, countDict, overwriteExisting=True,
+                       recordZeroCnts=False):
         """
         Add a single gate string's counts to this DataSet
 
@@ -861,12 +894,16 @@ class DataSet(object):
             `False`, add this count data with the next non-negative integer
             timestamp.
 
+        recordZeroCnts : bool, optional
+            Whether zero-counts are actually recorded (stored) in this DataSet.
+            If False, then zero counts are ignored, except for potentially
+            registering new outcome labels.
+
         Returns
         -------
         None
         """
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-
 
         #Convert input to an OutcomeLabelDict
         if isinstance(countDict, _ld.OutcomeLabelDict):
@@ -892,11 +929,12 @@ class DataSet(object):
             timeStampList = [0]*len(countList)
 
         self.add_raw_series_data(gateString, outcomeLabelList, timeStampList,
-                             countList, overwriteExisting)
+                                 countList, overwriteExisting, recordZeroCnts)
 
 
     def add_raw_series_data(self, gateString, outcomeLabelList, timeStampList,
-                            repCountList=None, overwriteExisting=True):
+                            repCountList=None, overwriteExisting=True,
+                            recordZeroCnts=True):
         """ 
         Add a single gate string's counts to this DataSet
         
@@ -920,6 +958,16 @@ class DataSet(object):
             by `outcomeLabelList` occurred at the time given by `timeStampList`.
             If None, then all counts are assumed to be 1.  When not None, must
             be the same length as `outcomeLabelList`.
+
+        overwriteExisting : bool, optional
+            Whether to overwrite the data for `gatestring` (if it exists).  If
+            False, then the given lists are appended (added) to existing data.
+
+        recordZeroCnts : bool, optional
+            Whether zero-counts (elements of `repCountList` that are zero) are
+            actually recorded (stored) in this DataSet.  If False, then zero 
+            counts are ignored, except for potentially registering new outcome
+            labels.
 
         Returns
         -------
@@ -957,6 +1005,14 @@ class DataSet(object):
                 # so we need to build this up for all existings sequences:
                 self.build_repetition_counts()
             repArray = _np.array(repCountList, self.repType)
+
+        if not recordZeroCnts:
+            # Go through repArray and remove any zeros, along with
+            # corresponding elements of oliArray and timeArray
+            mask = repArray != 0 # boolean array (note: == float comparison *is* desired)
+            repArray  = repArray[mask]
+            oliArray  = oliArray[mask]
+            timeArray = timeArray[mask]
             
         if gateString in self.gsIndex:
             gateStringIndx = self.gsIndex[gateString]
@@ -1228,12 +1284,14 @@ class DataSet(object):
         -------
         None
         """
+        if self.bStatic: raise ValueError("Cannot process_gate_strings on a static DataSet object")
         new_gsIndex = _OrderedDict()
         for gstr,indx in self.gsIndex.items():
             new_gstr = processor_fn(gstr)
             assert(isinstance(new_gstr, _gs.GateString)), "`processor_fn` must return a GateString!"
             new_gsIndex[ new_gstr  ] = indx
         self.gsIndex = new_gsIndex
+        #Note: self.cnt_cache just remains None (a non-static DataSet)
 
 
     def copy(self):
@@ -1253,6 +1311,7 @@ class DataSet(object):
             copyOfMe.oliType  =self.oliType
             copyOfMe.timeType = self.timeType
             copyOfMe.repType  = self.repType
+            copyOfMe.cnt_cache = None
             return copyOfMe
 
 
@@ -1274,6 +1333,7 @@ class DataSet(object):
             copyOfMe.oliType  =self.oliType
             copyOfMe.timeType = self.timeType
             copyOfMe.repType  = self.repType
+            copyOfMe.cnt_cache = None
             return copyOfMe
         else:
             return self.copy()
@@ -1323,7 +1383,8 @@ class DataSet(object):
             self.timeData = _np.empty( (0,), self.timeType)
             if self.repData is not None:
                 self.repData = _np.empty( (0,), self.repType)
-          
+
+        self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
         self.bStatic = True
         self.uuid = _uuid.uuid4()
 
@@ -1336,9 +1397,9 @@ class DataSet(object):
                      'oliData': self.oliData,
                      'timeData': self.timeData,
                      'repData': self.repData,
-                     'oliType': self.oliType,
-                     'timeType': self.timeType,
-                     'repType': self.repType,
+                     'oliType': _np.dtype(self.oliType).str,
+                     'timeType': _np.dtype(self.timeType).str,
+                     'repType': _np.dtype(self.repType).str,
                      'collisionAction': self.collisionAction,
                      'uuid' : self.uuid }
         return toPickle
@@ -1379,9 +1440,12 @@ class DataSet(object):
             self.oliData  = state_dict['oliData']
             self.timeData = state_dict['timeData']
             self.repData  = state_dict['repData']
-            self.oliType  = state_dict['oliType']
-            self.timeType = state_dict['timeType']
-            self.repType  = state_dict['repType']
+            self.oliType  = _np.dtype(state_dict['oliType'])
+            self.timeType = _np.dtype(state_dict['timeType'])
+            self.repType  = _np.dtype(state_dict['repType'])
+            if bStatic: #always empty - don't save this, just init
+                self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
+            else: self.cnt_cache = None
             
         self.collisionAction = state_dict.get('collisionAction','aggregate')
         self.uuid = state_dict.get('uuid',None)
@@ -1491,6 +1555,7 @@ class DataSet(object):
             self.timeData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
             if useReps:
                 self.repData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
+            self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex } # init cnt_cache afresh
         else:
             self.oliData = []
             for _ in range(state_dict['nRows']):
@@ -1506,5 +1571,6 @@ class DataSet(object):
                     self.repData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
             else:
                 self.repData = None
+            self.cnt_cache = None
         
         if bOpen: f.close()

@@ -121,6 +121,7 @@ class StdInputParser(object):
                 f = float(p)
                 counts.append(f)
             except:
+                if 'G' in p: break # somewhat a hack - if there's a 'G' in it, then it's not a count column
                 try: # "expanded" ColonContainingLabels:count
                     t = p.split(':')
                     assert(len(t) > 1)
@@ -536,18 +537,21 @@ class StdInputParser(object):
         countCols, freqCols, impliedCounts1Q = fillInfo
 
         for dsLabel,outcomeLabel,iCol in countCols:
+            if colValues[iCol] == '--': continue
             if colValues[iCol] > 0 and colValues[iCol] < 1:
                 raise ValueError("Count column (%d) contains value(s) " % iCol +
                                  "between 0 and 1 - could this be a frequency?")
             countDicts[dsLabel][outcomeLabel] = colValues[iCol]
 
         for dsLabel,outcomeLabel,iCol,iTotCol in freqCols:
+            if colValues[iCol] == '--': continue
             if colValues[iCol] < 0 or colValues[iCol] > 1.0:
                 raise ValueError("Frequency column (%d) contains value(s) " % iCol +
                                  "outside of [0,1.0] interval - could this be a count?")
             countDicts[dsLabel][outcomeLabel] = colValues[iCol] * colValues[iTotCol]
 
         for dsLabel,outcomeLabel,iTotCol in impliedCounts1Q:
+            if colValues[iTotCol] == '--': raise ValueError("Mising total (== '--')!")
             if outcomeLabel == '0':
                 countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
             elif outcomeLabel == '1':
@@ -726,7 +730,7 @@ def read_gateset(filename):
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
             ham_basis = proj_basis
             nonham_basis = proj_basis
-            nonham_diagonal_only = False; cptp = True; truncate=True
+            nonham_diagonal_only = False; cptp = True; truncate=False
             gs.gates[cur_label] = _objs.LindbladParameterizedGate.from_gate_matrix(
                 qty, unitary_post, ham_basis, nonham_basis,
                 cptp, nonham_diagonal_only, truncate, basis)

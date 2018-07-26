@@ -261,6 +261,12 @@ class LabelTup(Label,tuple):
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelTup, (self[0],self[1:]), None)
 
+    def tonative(self):
+        """ Returns this label as native python types.  Useful for 
+            faster serialization.
+        """
+        return tuple(self)
+
     __hash__ = tuple.__hash__ # this is why we derive from tuple - using the
                               # native tuple.__hash__ directly == speed boost
 
@@ -304,7 +310,7 @@ class LabelStr(Label,str):
     @property
     def qubits(self): #Used in Circuit
         """An alias for sslbls, since commonly these are just qubit indices"""
-        return ()
+        return None
 
     @property
     def number_of_qubits(self): #Used in Circuit
@@ -362,6 +368,12 @@ class LabelStr(Label,str):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelStr, (str(self),), None)
+
+    def tonative(self):
+        """ Returns this label as native python types.  Useful for 
+            faster serialization.
+        """
+        return str(self)
 
     __hash__ = str.__hash__ # this is why we derive from tuple - using the
                               # native tuple.__hash__ directly == speed boost
@@ -500,6 +512,13 @@ class LabelTupTup(Label,tuple):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelTupTup, (self[:],), None)
+
+    def tonative(self):
+        """ Returns this label as native python types.  Useful for 
+            faster serialization.
+        """
+        return tuple((x.tonative() for x in self))
+
 
     __hash__ = tuple.__hash__ # this is why we derive from tuple - using the
                               # native tuple.__hash__ directly == speed boost

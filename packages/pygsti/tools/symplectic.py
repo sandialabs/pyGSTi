@@ -250,13 +250,11 @@ def check_valid_clifford(s,p):
 
 def construct_valid_phase_vector(s,pseed):
     """
-    # Todo : fix this docstring
-    #
     Constructs a phase vector that, when paired with the provided symplectic matrix, defines
-    a Clifford gate. Any sympletic matrix is a representation of some Clifford when paired
-    with ...... This finds any such phase vector, starting from the provided
-    seed. If the seed phase vector is -- along with s -- a representation of some Clifford
-    this seed is returned.
+    a Clifford gate. If the seed phase vector, when paired with `s`, represents some Clifford
+    this seed is returned. Otherwise 1 mod 4 is added to the required elements of the `pseed`
+    in order to make it at valid phase vector (which is one of many possible phase vectors
+    that, together with s, define a valid Clifford).
     
     Parameters
     ----------
@@ -269,8 +267,7 @@ def construct_valid_phase_vector(s,pseed):
     Returns
     -------
     numpy array
-        Some p such that (s,p) is the symplectic representation of some Clifford.
-        
+        Some p such that (s,p) is the symplectic representation of some Clifford.        
     """    
     pout = pseed.copy()    
     n = _np.shape(s)[0]//2
@@ -294,7 +291,7 @@ def construct_valid_phase_vector(s,pseed):
        
     return pout
 
-def find_postmultipled_pauli(s,p_implemented,p_target):
+def find_postmultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     """
     If some circuit implements the clifford described by the symplectic matrix s and
     the vector p_implemented, this function returns the Pauli layer that should be
@@ -316,31 +313,40 @@ def find_postmultipled_pauli(s,p_implemented,p_target):
         the Clifford that you want to implement. Together with `s`, this vector must
         define a valid Clifford.
 
+    qubit_labels : list, optional
+        A list of qubit labels, that are strings or ints. The length of this list should
+        be equal to the number of qubits the Clifford acts on. The ith element of the 
+        list is the label corresponding to the qubit at the ith index of `s` and the two
+        phase vectors. If None, defaults to the integers from 0 to number of qubits - 1.
+
     Returns
     -------
     list
         A list that defines a Pauli layer, with the ith element containig one of the
-        4 tuples ('I',i), ('X',i), ('Y',i), ('Z',i).
+        4 tuples (P,qubit_labels[i]) with P = 'I', 'Z', 'Y' and 'Z'
         
     """
     n = _np.shape(s)[0]//2
     s_form = symplectic_form(n)
     vec = _mtx.dotmod2(s,_np.dot(s_form, (p_target - p_implemented)//2))
+
+    if qubit_labels is None:
+        qubit_labels = list(range(n))    
     
     pauli_layer = []
     for q in range(0,n):
         if vec[q] == 0 and vec[q+n] == 0:
-            pauli_layer.append(('I',q))
+            pauli_layer.append(('I',qubit_labels[q]))
         elif vec[q] == 0 and vec[q+n] == 1:
-            pauli_layer.append(('Z',q))
+            pauli_layer.append(('Z',qubit_labels[q]))
         elif vec[q] == 1 and vec[q+n] == 0:
-            pauli_layer.append(('X',q))
+            pauli_layer.append(('X',qubit_labels[q]))
         elif vec[q] == 1 and vec[q+n] == 1:
-            pauli_layer.append(('Y',q))
+            pauli_layer.append(('Y',qubit_labels[q]))
     
     return pauli_layer
 
-def find_premultipled_pauli(s,p_implemented,p_target):
+def find_premultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     """
     If some circuit implements the clifford described by the symplectic matrix s and
     the vector p_implemented, this function returns the Pauli layer that should be
@@ -362,6 +368,12 @@ def find_premultipled_pauli(s,p_implemented,p_target):
         the Clifford that you want to implement. Together with `s`, this vector must
         define a valid Clifford.
 
+    qubit_labels : list, optional
+        A list of qubit labels, that are strings or ints. The length of this list should
+        be equal to the number of qubits the Clifford acts on. The ith element of the 
+        list is the label corresponding to the qubit at the ith index of `s` and the two
+        phase vectors. If None, defaults to the integers from 0 to number of qubits - 1.
+
     Returns
     -------
     list
@@ -371,18 +383,21 @@ def find_premultipled_pauli(s,p_implemented,p_target):
     """
     n = _np.shape(s)[0]//2
     s_form = symplectic_form(n)
-    vec = _mtx.dotmod2(s_form, (p_target - p_implemented)//2)      
+    vec = _mtx.dotmod2(s_form, (p_target - p_implemented)//2)  
+
+    if qubit_labels is None:
+        qubit_labels = list(range(n))    
 
     pauli_layer = []
-    for q in range(0,n):
+    for q in range(n):
         if vec[q] == 0 and vec[q+n] == 0:
-            pauli_layer.append(('I',q))
+            pauli_layer.append(('I',qubit_labels[q]))
         elif vec[q] == 0 and vec[q+n] == 1:
-            pauli_layer.append(('Z',q))
+            pauli_layer.append(('Z',qubit_labels[q]))
         elif vec[q] == 1 and vec[q+n] == 0:
-            pauli_layer.append(('X',q))
+            pauli_layer.append(('X',qubit_labels[q]))
         elif vec[q] == 1 and vec[q+n] == 1:
-            pauli_layer.append(('Y',q))
+            pauli_layer.append(('Y',qubit_labels[q]))
     
     return pauli_layer
 
@@ -443,8 +458,6 @@ def compose_cliffords(s1,p1,s2,p2):
     
     return s, p
 
-
-
 def symplectic_kronecker(sp_factors):
     """ 
     Construct a single `(s,p)` symplectic (or stabilizer) representation that
@@ -487,8 +500,6 @@ def symplectic_kronecker(sp_factors):
 
     return sout, pout
 
-
-
 def prep_stabilizer_state(nqubits, zvals=None):
     """
     Contruct the `(s,p)` stabilizer representation for a computational 
@@ -517,7 +528,7 @@ def prep_stabilizer_state(nqubits, zvals=None):
     p = _np.zeros(2*n,int)
     if zvals:
         for i,z in enumerate(zvals):
-            p[i] = p[i+n] = 2 if bool(z) else 0 # TODO: check this is right -- (how to update the destabilizers?)
+            p[i] = p[i+n] = 2 if bool(z) else 0 # EGN TODO: check this is right -- (how to update the destabilizers?)
     return s,p
 
 def apply_clifford_to_stabilizer_state(s,p,state_s,state_p):
@@ -553,7 +564,7 @@ def apply_clifford_to_stabilizer_state(s,p,state_s,state_p):
     assert(_np.shape(state_s) == (two_n, two_n)), "Clifford and state must be for the same number of qubits!"
     assert(_np.shape(state_p) == (two_n,)), "Invalid stabilizer state representation"
     assert(check_valid_clifford(s,p)), "The `s`,`p` matrix-vector pair is not a valid Clifford!"
-    #TODO: check valid stabilizer state?
+    #EGN TODO: check valid stabilizer state?
     
     # Below we calculate the s and p for the output state using the formulas from
     # Hostens and De Moor PRA 71, 042315 (2005).
@@ -581,14 +592,14 @@ def apply_clifford_to_stabilizer_state(s,p,state_s,state_p):
     #    out_p[slc] = state_p[slc] + vec1 + vec2
     #    out_p[slc] = out_p[slc] % 4
     
-    #TODO: check for valid stabilizer state
+    #EGN TODO: check for valid stabilizer state
     
     return out_s, out_p
 
 
 def pauli_z_measurement(state_s, state_p, qubit_index):
     """ 
-    Computes the probabilities of +/- outcomes from measuring a 
+    Computes the probabilities of 0/1 (+/-) outcomes from measuring a 
     Pauli operator on a stabilizer state.
 
     Parameters
@@ -604,14 +615,14 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
 
     Returns
     -------
-    pminus, pplus : float
-        Probabilities of - and + outcomes.
+    p0, p1 : float
+        Probabilities of 0 (+ eigenvalue) and 1 (- eigenvalue) outcomes.
 
-    state_s_minus, state_s_plus : numpy array
+    state_s_0, state_s_1: numpy array
         Matrix over the integers mod 2 representing the output stabilizer
         states.
 
-    state_p_minus, state_p_plus : numpy array
+    state_p_0, state_p_1 : numpy array
         Phase vectors over the integers mod 4 representing the output
         stabilizer states.
     """
@@ -678,7 +689,6 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
         assert(icount == 2) # should never get 1 or 3 (low bit should always be 0)
         return (0.0, 1.0, state_s, state_s, state_p, state_p)
 
-
 #OLD TODO REMOVE
 #def colsum_g(x1,z1,x2,z2):
 #    """ TODO: -- see PRA -- but different b/c 11 := XZ = -iY here, but 11 := Y in PRA
@@ -735,7 +745,7 @@ def colsum(i,j,s,p,n):
     for k in range(n):
         s[k,i] = s[k,j] ^ s[k,i]
         s[k+n,i] = s[k+n,j] ^ s[k+n,i]
-        #TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
+        #EGN TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
     return
 
 def colsum_acc(acc_s,acc_p,j,s,p,n):
@@ -784,9 +794,8 @@ def colsum_acc(acc_s,acc_p,j,s,p,n):
     for k in range(n):
         acc_s[k] = s[k,j] ^ acc_s[k]
         acc_s[k+n] = s[k+n,j] ^ acc_s[k+n]
-        #TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
+        #EGN TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
     return
-
 
 def stabilizer_measurement_prob(state_sp_tuple, moutcomes, qubit_filter=None,
                                 return_state=False):
@@ -838,7 +847,6 @@ def stabilizer_measurement_prob(state_sp_tuple, moutcomes, qubit_filter=None,
             
     return (p, state_s, state_p) if return_state else p
 
-
 def embed_clifford(s,p,qubit_inds,n):
     """
     Embeds the `(s,p)` Clifford symplectic representation into 
@@ -883,14 +891,13 @@ def embed_clifford(s,p,qubit_inds,n):
             
     return s_out, p_out
 
-
-def standard_symplectic_representations(gllist=None):
+def get_internal_gate_symplectic_representations(gllist=None):
     """
     Returns dictionaries containing the symplectic matrices and phase vectors that represent
     the specified 'standard' Clifford gates, or the representations of all the standard gates
     if no list of gate labels is supplied. These 'standard' Clifford gates are those gates that
     are already known to the code gates (e.g., the label 'CNOT' has a specfic meaning in the
-    code).
+    code), and are recorded as unitaries in "internalgates.py".
     
     Parameters
     ----------
@@ -930,19 +937,65 @@ def standard_symplectic_representations(gllist=None):
     complete_s_dict['P'] = _np.array([[1,0],[1,1]],int)
     complete_s_dict['PH'] = _np.array([[0,1],[1,1]],int)
     complete_s_dict['HP'] = _np.array([[1,1],[1,0]],int)
-    complete_s_dict['HPH'] = _np.array([[1,1],[0,1]],int)
-    
+    complete_s_dict['HPH'] = _np.array([[1,1],[0,1]],int)   
     complete_p_dict['H'] = _np.array([0,0],int)
     complete_p_dict['P'] = _np.array([1,0],int)
     complete_p_dict['PH'] = _np.array([0,1],int)
     complete_p_dict['HP'] = _np.array([3,0],int)
     complete_p_dict['HPH'] = _np.array([0,3],int)
-       
+    # The full 1-qubit Cliffor group, using the same labelling as in extras.rb.group
+    complete_s_dict['C0'] = _np.array([[1,0],[0,1]],int)
+    complete_p_dict['C0'] = _np.array([0,0],int)
+    complete_s_dict['C1'] = _np.array([[1,1],[1,0]],int)
+    complete_p_dict['C1'] = _np.array([1,0],int)
+    complete_s_dict['C2'] = _np.array([[0,1],[1,1]],int)
+    complete_p_dict['C2'] = _np.array([0,1],int)
+    complete_s_dict['C3'] = _np.array([[1,0],[0,1]],int)
+    complete_p_dict['C3'] = _np.array([0,2],int)
+    complete_s_dict['C4'] = _np.array([[1,1],[1,0]],int)
+    complete_p_dict['C4'] = _np.array([1,2],int)
+    complete_s_dict['C5'] = _np.array([[0,1],[1,1]],int)
+    complete_p_dict['C5'] = _np.array([0,3],int)
+    complete_s_dict['C6'] = _np.array([[1,0],[0,1]],int)
+    complete_p_dict['C6'] = _np.array([2,2],int)
+    complete_s_dict['C7'] = _np.array([[1,1],[1,0]],int)
+    complete_p_dict['C7'] = _np.array([3,2],int)
+    complete_s_dict['C8'] = _np.array([[0,1],[1,1]],int)
+    complete_p_dict['C8'] = _np.array([2,3],int)
+    complete_s_dict['C9'] = _np.array([[1,0],[0,1]],int)
+    complete_p_dict['C9'] = _np.array([2,0],int)
+    complete_s_dict['C10'] = _np.array([[1,1],[1,0]],int)
+    complete_p_dict['C10'] = _np.array([3,0],int)
+    complete_s_dict['C11'] = _np.array([[0,1],[1,1]],int)
+    complete_p_dict['C11'] = _np.array([2,1],int)
+    complete_s_dict['C12'] = _np.array([[0,1],[1,0]],int)
+    complete_p_dict['C12'] = _np.array([0,0],int)
+    complete_s_dict['C13'] = _np.array([[1,1],[0,1]],int)
+    complete_p_dict['C13'] = _np.array([0,1],int)
+    complete_s_dict['C14'] = _np.array([[1,0],[1,1]],int)
+    complete_p_dict['C14'] = _np.array([1,0],int)
+    complete_s_dict['C15'] = _np.array([[0,1],[1,0]],int)
+    complete_p_dict['C15'] = _np.array([0,2],int)
+    complete_s_dict['C16'] = _np.array([[1,1],[0,1]],int)
+    complete_p_dict['C16'] = _np.array([0,3],int)
+    complete_s_dict['C17'] = _np.array([[1,0],[1,1]],int)
+    complete_p_dict['C17'] = _np.array([1,2],int)
+    complete_s_dict['C18'] = _np.array([[0,1],[1,0]],int)
+    complete_p_dict['C18'] = _np.array([2,2],int)
+    complete_s_dict['C19'] = _np.array([[1,1],[0,1]],int)
+    complete_p_dict['C19'] = _np.array([2,3],int)
+    complete_s_dict['C20'] = _np.array([[1,0],[1,1]],int)
+    complete_p_dict['C20'] = _np.array([3,2],int)
+    complete_s_dict['C21'] = _np.array([[0,1],[1,0]],int)
+    complete_p_dict['C21'] = _np.array([2,0],int)
+    complete_s_dict['C22'] = _np.array([[1,1],[0,1]],int)
+    complete_p_dict['C22'] = _np.array([2,1],int)
+    complete_s_dict['C23'] = _np.array([[1,0],[1,1]],int)
+    complete_p_dict['C23'] = _np.array([3,0],int)      
     # The CNOT gate, CPHASE gate, and SWAP gate.
     complete_s_dict['CNOT'] = _np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int)    
     complete_s_dict['CPHASE'] = _np.array([[1,0,0,0],[0,1,0,0],[0,1,1,0],[1,0,0,1]])
-    complete_s_dict['SWAP'] = _np.array([[0,1,0,0],[1,0,0,0],[0,0,0,1],[0,0,1,0]])
-    
+    complete_s_dict['SWAP'] = _np.array([[0,1,0,0],[1,0,0,0],[0,0,0,1],[0,0,1,0]])   
     complete_p_dict['CNOT'] = _np.array([0,0,0,0],int)
     complete_p_dict['CPHASE'] = _np.array([0,0,0,0],int)
     complete_p_dict['SWAP'] = _np.array([0,0,0,0],int)
@@ -956,10 +1009,6 @@ def standard_symplectic_representations(gllist=None):
     srep_dict = { k: (complete_s_dict[k],complete_p_dict[k]) for k in keys }
     return srep_dict
 
-
-#
-# Todo : update docstring to include pspec
-#
 def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     """
     Returns the symplectic representation of the composite Clifford implemented by 
@@ -976,7 +1025,16 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         If not None, a dictionary providing the (symplectic matrix, phase vector)
         tuples associated with each gate label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this 
-        may be None. Otherwise it must be specified.
+        may be None. Alternatively, if `pspec` is specifed and it contains the 
+        gates in `circuit` in a Clifford gateset, it also does not need to be 
+        specified (and it is ignored if it is specified). Otherwise it must be 
+        specified.
+
+    pspec : ProcessorSpec, optional
+        A ProcessorSpec that contains a Clifford gateset that defines the symplectic
+        action of all of the gates in `circuit`. If this is not None it over-rides
+        `srep_dict`. Both `pspec` and `srep_dict` can only be None if the circuit
+        contains only gates with names that are hard-coded into pyGSTi.
         
     Returns
     -------
@@ -984,10 +1042,9 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         The symplectic matrix representing the Clifford implement by the input circuit
         
     p : dictionary of numpy arrays
-        The phase vector representing the Clifford implement by the input circuit
-        
+        The phase vector representing the Clifford implement by the input circuit     
     """
-    n = circuit.number_of_lines
+    n = circuit.number_of_lines()
     depth = circuit.depth()
     
     if pspec is not None:
@@ -997,18 +1054,21 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     s = _np.identity(2*n,int)
     p = _np.zeros(2*n,int)
     
-    for i in range(0,depth):        
-        layer = circuit.get_circuit_layer(i)
-        layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, srep_dict)
+    for i in range(0,depth):     
+        # This relies on the circuit having a valid self.identity identifier -- as those gates are
+        # not returned in the layer. Note that the layer contains each gate only once.   
+        layer = circuit.get_layer(i)
+        # future : update so that we don't use this function, because it slower than necessary (possibly much slower).
+        layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict)
         s, p = compose_cliffords(s, p, layer_s, layer_p)
     
     return s, p
 
-
-def symplectic_rep_of_clifford_layer(layer, n, srep_dict=None):
+def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None):
     """
     Returns the symplectic representation of the n-qubit Clifford implemented by a
-    single quantum circuit layer (gates in layer must act on disjoint sets of qubits).
+    single quantum circuit layer (gates in the layer must act on disjoint sets of qubits;
+    not all qubits need to be acted upon in the layer).
     
     Parameters
     ----------
@@ -1016,14 +1076,24 @@ def symplectic_rep_of_clifford_layer(layer, n, srep_dict=None):
         The Clifford gates to calculate the global action of, input as a
         list of Label objects.
 
-    n : int
-        The total number of qubits.
+    n : int, optional
+        The total number of qubits. Must be specified if `Qlabels` is None.
+
+    Qlabels : list, optional
+        A list of all the qubit labels. If the layer is over qubits that are not
+        labelled by integers 0 to n-1 then it is necessary to specify this list.
+        Note that this should contain *all* the qubit labels for the circuit that
+        this is a layer from, and they should be ordered as in that circuit, otherwise
+        the symplectic rep returned might not be of the correct dimension or of the
+        correct order.
         
     srep_dict : dict, optional
         If not None, a dictionary providing the (symplectic matrix, phase vector)
         tuples associated with each gate label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this 
-        may be None. Otherwise it must be specified.
+        may be None. Otherwise it must be specified. If the layer contains some 
+        standard gates it is not necesary to specify the symplectic represenation
+        for those gates.
 
     Returns
     -------
@@ -1035,71 +1105,62 @@ def symplectic_rep_of_clifford_layer(layer, n, srep_dict=None):
         The phase vector representing the Clifford implement by specified 
         circuit layer
     """
-    #
-    # Todo: this method is currently pretty stupid. It is probably useful to keep it, but for
-    # the circuit function above to not use it, and instead just perform the action of each 
-    # gate.
-    #
-    sreps = standard_symplectic_representations()
-
-    #WRONG
-    # sreps = {} #list of available symplectic reps for gates
-    # # add template integer qubit labels to standard gate names
-    # #  so, e.g. "CNOT" => Label("CNOT",(0,1))
-    # std_sreps = standard_symplectic_representations()
-    # for gname, srep in std_sreps.items(): 
-    #     nQ = len(srep[1]) // 2 # number of qubits
-    #     sreps[_Label(gname, tuple(range(nQ)))] = srep
-    
+    # This method uses a brute-force matrix construction. Future: perhaps this should be updated.
+    sreps = get_internal_gate_symplectic_representations()    
     if srep_dict is not None: sreps.update(srep_dict)
-            
+    
+    if Qlabels is None:
+        assert(n is not None), "The number of qubits must be specified if `Qlabels` is None!"
+        Qlabels = list(range(n))
+    elif n is None:
+        assert(Qlabels is not None), "Cannot have both `n` and `Qlabels` as None!"
+        n = len(Qlabels)
+    else:
+        assert(len(Qlabels) == n), "`n` and `Qlabels` are inconsistent!"
+
     s = _np.identity(2*n,int)
     p = _np.zeros(2*n,int)
 
     for gatelbl in layer:
         for sub_gl in gatelbl.components:
-        
-            # Checks below are commented out as they are very inefficient, so it is probably
-            # better to just allow a key error.
-            #assert(gate.label in list(s_dict.keys())), "Symplectic matrix for some gate labels not provided!"
-            #assert(gate.label in list(p_dict.keys())), "Phase vector for some gate labels not provided!"
-            matrix, phase = sreps[sub_gl.name]
-            
-            assert(sub_gl.number_of_qubits == 1 or sub_gl.number_of_qubits == 2), "Only 1 and 2 qubit gates are allowed!"
-            
-            if sub_gl.number_of_qubits == 1:
+
+            matrix, phase = sreps[sub_gl.name]           
+            nforgate = sub_gl.number_of_qubits
+            sub_gl_qubits = sub_gl.qubits if (sub_gl.qubits is not None) else Qlabels
+            for ind1, qlabel1 in enumerate(sub_gl_qubits):
+                qindex1 = Qlabels.index(qlabel1)
+                for ind2, qlabel2 in enumerate(sub_gl_qubits):
+                    qindex2 = Qlabels.index(qlabel2)
+                    # Put in the symp matrix elements
+                    s[qindex1,qindex2] = matrix[ind1,ind2]
+                    s[qindex1,qindex2+n] = matrix[ind1,ind2+nforgate]
+                    s[qindex1+n,qindex2] = matrix[ind1+nforgate,ind2]
+                    s[qindex1+n,qindex2+n] = matrix[ind1+nforgate,ind2+nforgate]
                 
-                q = sub_gl.qubits[0]
-                s[q,q] = matrix[0,0]
-                s[q,q+n] = matrix[0,1]
-                s[q+n,q] = matrix[1,0]
-                s[q+n,q+n] = matrix[1,1]
-                p[q] = phase[0]
-                p[q+n] = phase[1]
-                
-            else:
-                
-                q1 = sub_gl.qubits[0]
-                q2 = sub_gl.qubits[1]
-                for i in [0,1]:
-                    for j in [0,1]:
-                        s[q1+i*n,q1+j*n] = matrix[0+2*i,0+2*j]
-                        s[q1+i*n,q2+j*n] = matrix[0+2*i,1+2*j]
-                        s[q2+i*n,q1+j*n] = matrix[1+2*i,0+2*j]
-                        s[q2+i*n,q2+j*n] = matrix[1+2*i,1+2*j]
-                        
-                p[q1] = phase[0]
-                p[q2] = phase[1]
-                p[q1+n] = phase[2]
-                p[q2+n] = phase[3]
+                # Put in the phase elements
+                p[qindex1] = phase[ind1] 
+                p[qindex1+n] = phase[ind1+nforgate]                      
                 
     return s, p
 
-def single_qubit_clifford_symplectic_group_relations():
-    
-    #
-    # TODO : docstring (TIM), and think about whether this function does what we want or not.
-    #
+def oneQclifford_symplectic_group_relations():
+    """
+    Returns a dictionary containing the group relationship between
+    the 'I', 'H', 'P' 'HP', 'PH', and 'HPH' up-to-Paulis operators.
+    The returned dictionary contains keys (A,B) for all A and B in
+    the above list. The value for key (A,B) is C if BA = C x some 
+    Pauli operator. E,g, ('P','P') = 'I'.
+
+    This dictionary is important for Compiling multi-qubit Clifford 
+    gates without unneccessary 1-qubit gate over-heads. But note that
+    this dictionary should not be used for compressing circuits containing
+    these gates when the exact action of the circuit is of importance (not
+    only the up-to-Paulis action of the circuit).
+
+    Returns
+    -------
+    dict
+    """
     group_relations = {}
     
     group_relations['I','I'] = 'I'
@@ -1146,7 +1207,16 @@ def single_qubit_clifford_symplectic_group_relations():
     
     return group_relations
 
-def unitary_to_symplectic_1Q(u,flagnonclifford=True):
+def unitary_is_a_clifford(unitary):
+    """
+    Returns True if the unitary is a Clifford gate (w.r.t the standard
+    basis), and False otherwise.
+    """
+    s, p = unitary_to_symplectic(unitary,flagnonclifford=False)
+    if s is None: return False
+    else: return True
+
+def _unitary_to_symplectic_1Q(u,flagnonclifford=True):
     """
     Returns the symplectic representation of a single qubit Clifford unitary, 
     input as a complex matrix in the standard computational basis.
@@ -1216,7 +1286,7 @@ def unitary_to_symplectic_1Q(u,flagnonclifford=True):
     return s, p
 
     
-def unitary_to_symplectic_2Q(u,flagnonclifford=True):
+def _unitary_to_symplectic_2Q(u,flagnonclifford=True):
     """
     Returns the symplectic representation of a two-qubit Clifford unitary, 
     input as a complex matrix in the standard computational basis.
@@ -1327,9 +1397,9 @@ def unitary_to_symplectic(u,flagnonclifford=True):
     assert(_np.shape(u) == (2,2) or _np.shape(u) == (4,4)), "Input must be a one or two qubit unitary!"
     
     if _np.shape(u) == (2,2):
-        s, p = unitary_to_symplectic_1Q(u,flagnonclifford)
+        s, p = _unitary_to_symplectic_1Q(u,flagnonclifford)
     if _np.shape(u) == (4,4):
-        s, p = unitary_to_symplectic_2Q(u,flagnonclifford)
+        s, p = _unitary_to_symplectic_2Q(u,flagnonclifford)
         
     return s, p
 
@@ -1395,7 +1465,27 @@ def random_clifford(n):
     return s,p
 
 def random_phase_vector(s,n):
-    # Todo : docstring
+    """
+    Generates a uniformly random phase vector that, together with the 
+    provided symplectic matrix, define a valid n-qubit Clifford. In 
+    combination with a uniformly random `s` the returned `p` defines
+    a uniformly random Clifford gate.
+
+    Parameters
+    ----------
+    n : int 
+        The number of qubits the Clifford group is over.
+    
+    s : numpy array
+        The symplectic matrix to construct a random phase vector
+    
+    Returns
+    -------
+    p : numpy array
+        A phase vector sampled uniformly at random from all those phase
+        vectors that, as a pair with `s`, define a valid n-qubit Clifford.
+             
+    """
     p = _np.zeros(2*n,int)
             
     # A matrix to hold all possible phase vectors -- half of which do not, when
@@ -1431,84 +1521,74 @@ def random_phase_vector(s,n):
     return p
 
 def bitstring_for_pauli(p):
-    
+    """
+    The state, represented by a bitstring, that the Pauli operator represented by
+    the phase-vector p creates when acting on the standard input state.
+    """
     n = len(p)//2
     bitstring = p[n:]
-    bitstring[bitstring>0] = 1
-    
+    bitstring[bitstring>0] = 1   
     return list(bitstring)
 
-def symplectic_action(m, glabel, qlist, optype='row'):
+def apply_internal_gate_to_symplectic(s, gate_name, qindex_list, optype='row'):
     """
-    TODO: docstring (TIM)
+    Applies the Clifford gate, specified by the internally hard-coded name
+    `gate_name`, to the n-qubit Clifford gate specified by the 2n x 2n symplectic
+    matrix. This gate is applied to the qubits with *indices* in `qindex_list`,
+    where these indices are  w.r.t to indeices of `s`. This gate is applied from 
+    the left (right) of `s` if `optype` is 'row' ('column'), and has a row-action
+    (column-action) on `s`. E.g., the Hadmard ('H') on qubit with index i swaps 
+    the ith row (or column) with the (i+n)th row (or column) of `s`; CNOT adds
+    rows, etc.
+
+    Note that this function *updates* `s`, and returns None.
+
+    Parameters
+    ----------
+    s : np.array
+        A even-dimension square array over [0,1] that is the symplectic representation
+        of some (normally multi-qubit) Clifford gate.
+
+    gate_name : str
+        The gate name. Should be one of the gate-names of the hard-coded gates
+        used internally in pyGSTi that is also a Clifford gate. Currently not
+        all of those gates are supported, and `gate_name` must be one of:
+        'H', 'P', 'CNOT', 'SWAP'.
+
+    Returns
+    -------
+    None
     
-    """
-    assert(optype == 'row' or optype == 'column'), "optype must be 'row' or 'column'."
-    
-    #
-    # Todo: add the option of also updating a phase vector
-    # Todo: add all other 'standard' gate actions here
-    #
-    
-    d = _np.shape(m)[0]//2         
-    out = m.copy()
-       
-    if glabel == 'H':
-        
-        i = qlist[0]
-        
+    """    
+    n = _np.shape(s)[0]//2 
+
+    if gate_name == 'H':      
+        i = qindex_list[0]        
+        if optype == 'row': s[[i+n, i],:]  = s[[i, i+n],:] 
+        elif optype == 'column': s[:,[i+n, i]]  = s[:,[i, i+n]] 
+        else: raise ValueError("optype must be 'row' or 'column'!")                 
+    elif gate_name == 'P':       
+        i = qindex_list[0]       
+        if optype == 'row': s[i+n,:] = s[i,:] ^ s[i+n,:]
+        elif optype == 'column': s[:,i] = s[:,i] ^ s[:,i+n]
+        else: raise ValueError("optype must be 'row' or 'column'!")     
+    elif gate_name == 'CNOT':
+        control = qindex_list[0]
+        target = qindex_list[1]       
         if optype == 'row':
-            i = qlist[0]
-            out[i,:] = m[i+d,:]   
-            out[i+d,:] = m[i,:]
-        if optype == 'column':
-            i = qlist[0]
-            out[:,i] = m[:,i+d]   
-            out[:,i+d] = m[:,i]       
-            
-    elif glabel == 'P':
-        
-        i = qlist[0]        
-        
-        if optype == 'row':
-            out[i+d,:] = m[i,:] ^ m[i+d,:]
-        if optype == 'column':
-            out[:,i+d] = m[:,i] ^ m[:,i+d]
-            
-    elif glabel == 'CNOT':
-        
-        i = qlist[0]
-        j = qlist[1]
-        
-        if optype == 'row':
-            out[j,:] = m[j,:] ^ m[i,:]    
-            out[i+d,:] = m[j+d,:] ^ m[i+d,:]  
-            # IS THIS WRONG? POSSIBLY.
-        if optype == 'column':
-            print("WARNING : TIM THINKS THIS IS CURRENTLY WRONG! IT NEEDS CHECKING")
-            out[:,j] = m[:,j] ^ m[:,i]    
-            out[:,i+d] = m[:,j+d] ^ m[:,i+d]    
-                            
-    elif glabel == 'SWAP':
-        
-        i = qlist[0]
-        j = qlist[1]
-        
-        if optype == 'row':
-            out[j,:] = m[i,:]
-            out[i,:] = m[j,:] 
-            out[i+d,:] = m[j+d,:] 
-            out[j+d,:] = m[i+d,:]
-        if optype == 'column':
-            out[:,j] = m[:,i]
-            out[:,i] = m[:,j] 
-            out[:,i+d] = m[:,j+d] 
-            out[:,j+d] = m[:,i+d]  
-    
+            s[target,:] = s[target,:] ^ s[control,:]    
+            s[control+n,:] = s[target+n,:] ^ s[control+n,:]  
+        elif optype == 'column':
+            s[:,control] = s[:,control] ^ s[:,target]  
+            s[:,target+n] = s[:,target+n] ^ s[:,control+n]  
+        else: raise ValueError("optype must be 'row' or 'column'!")                    
+    elif gate_name == 'SWAP':        
+        i = qindex_list[0]
+        j = qindex_list[1]       
+        if optype == 'row': s[[i, j, i+n, j+n],:] = s[[j, i, j+n, i+n],:]
+        if optype == 'column': s[:,[i, j, i+n, j+n]] = s[:,[j, i, j+n, i+n]]   
     else:
-        raise ValueError("Label is not valid or currently supported")
-        
-    return out
+        raise ValueError("This gate name is incorrect or not currently supported!")
 
 # The code below is taken from the appendix of "How to efficiently select an arbitrary Clifford 
 # group element", by Robert Koenig and John A. Smolin. It is almost exactly the same as that code, 
@@ -1610,8 +1690,6 @@ def bitstring_to_int(b,nn):
         tmp = tmp*2 
         
     return output
-
-
 
 def find_symplectic_transvection(x,y):
     """

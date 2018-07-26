@@ -13,7 +13,7 @@ def chi2_terms(gateset, dataset, gateStrings=None,
                minProbClipForWeighting=1e-4, clipTo=None,
                useFreqWeightedChiSq=False, check=False,
                memLimit=None, gateLabelAliases=None,
-               evaltree_cache=None):
+               evaltree_cache=None, comm=None):
     """
     Computes the chi^2 contributions from a set of gate strings.
 
@@ -45,9 +45,10 @@ def chi2_terms(gateset, dataset, gateStrings=None,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
+        dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
         evTree, _,_, lookup, outcomes_lookup = \
             gateset.bulk_evaltree_from_resources(
-            gateStrings, None, memLimit, "deriv", ['bulk_fill_probs'])
+            gateStrings, None, memLimit, "deriv", ['bulk_fill_probs'], dstree)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
@@ -79,7 +80,7 @@ def chi2_terms(gateset, dataset, gateStrings=None,
         N[ lookup[i] ] = dataset[gateStr].total
         f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
 
-    gateset.bulk_fill_probs(probs, evTree, clipTo, check)
+    gateset.bulk_fill_probs(probs, evTree, clipTo, check, comm)
 
     cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
     v = N * ((probs - f)**2/cprobs)
@@ -101,7 +102,8 @@ def chi2(gateset, dataset, gateStrings=None,
          minProbClipForWeighting=1e-4, clipTo=None,
          useFreqWeightedChiSq=False, check=False,
          memLimit=None, gateLabelAliases=None,
-         evaltree_cache=None):
+         evaltree_cache=None, comm=None,
+         approximateHessian=False):
     """
     Computes the total chi^2 for a set of gate strings.
 
@@ -156,6 +158,17 @@ def chi2(gateset, dataset, gateStrings=None,
         with cached values to speed up subsequent executions of this function
         which use the *same* `gateset` and `gatestring_list`.
 
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    approximateHessian : bool, optional
+        Whether, when `returnHessian == True`, an *approximate* version of
+        the Hessian should be returned.  This approximation neglects 
+        terms proportional to the Hessian of the probabilities w.r.t. the
+        gate parameters (which can take a long time to compute).  See
+        `logl_approximate_hessian` for details on the analogous approximation
+        for the log-likelihood Hessian.
 
     Returns
     -------
@@ -206,8 +219,9 @@ def chi2(gateset, dataset, gateStrings=None,
 
     #  Estimate & check persistent memory (from allocs directly below)
     persistentMem = 8* (3*nEls) # in bytes
+    compute_hprobs = bool(returnHessian and not approximateHessian) # don't need hprobs for approx-Hessian
     if returnGradient or returnHessian: persistentMem += 8*nEls*ne
-    if returnHessian: persistentMem += 8*nEls*ne**2
+    if compute_hprobs: persistentMem += 8*nEls*ne**2
     if memLimit is not None and memLimit < persistentMem:
         raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit*C) +
                           "< memory required to hold final results (%g GB)"
@@ -220,14 +234,14 @@ def chi2(gateset, dataset, gateStrings=None,
 
     if returnGradient or returnHessian:
         dprobs = _np.empty( (nEls,vec_gs_len), 'd')
-    if returnHessian:
+    if compute_hprobs:
         hprobs = _np.empty( (nEls,vec_gs_len,vec_gs_len), 'd')
 
     #  Estimate & check intermediate memory
     #    - maybe make GateSet methods get intermediate estimates?
     intermedMem = 8*ng*gd**2 # ~ bulk_product
     if returnGradient: intermedMem += 8*ng*gd**2*ne # ~ bulk_dproduct
-    if returnHessian: intermedMem += 8*ng*gd**2*ne**2 # ~ bulk_hproduct
+    if compute_hprobs: intermedMem += 8*ng*gd**2*ne**2 # ~ bulk_hproduct
     if memLimit is not None and memLimit < intermedMem:
         reductionFactor = float(intermedMem) / float(memLimit)
         maxEvalSubTreeSize = int(ng / reductionFactor)
@@ -256,15 +270,15 @@ def chi2(gateset, dataset, gateStrings=None,
         N[ lookup[i] ] = dataset[gateStr].total
         f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
 
-    if returnHessian:
+    if compute_hprobs:
         gateset.bulk_fill_hprobs(hprobs, evTree,
-                                probs, dprobs, clipTo, check)
+                                 probs, dprobs, clipTo, check, comm)
     elif returnGradient:
         gateset.bulk_fill_dprobs(dprobs, evTree,
-                                probs, clipTo, check)
+                                 probs, clipTo, check, comm)
     else:
         gateset.bulk_fill_probs(probs, evTree,
-                                clipTo, check)
+                                clipTo, check, comm)
 
 
     #cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting) #clipped probabilities (also clip derivs to 0?)
@@ -281,9 +295,15 @@ def chi2(gateset, dataset, gateStrings=None,
         dprobs_p = dprobs[:,None,:] # (KM,1,N)
         t = ((probs - f)/cprobs)[:,None,None] # (iElement, 0,0) = (KM,1,1)
         dt = ((1.0/cprobs - (probs-f)/cprobs**2)[:,None] * dprobs)[:,:,None] # (KM,1) * (KM,N) = (KM,N) => (KM,N,1)
-        d2chi2 = N[:,None,None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p + t * (2 - t) * hprobs)
+
+        if approximateHessian: # neglect all hprobs-proportional terms
+            d2chi2 = N[:,None,None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p)
+        else: # we have hprobs and can compute the true Hessian
+            d2chi2 = N[:,None,None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p + t * (2 - t) * hprobs)
+
         d2chi2 = _np.sum( d2chi2, axis=0 ) # sum over gate strings and spam labels => (N1,N2)
         # (KM,1,1) * ( (KM,N1,1) * (KM,1,1) * (KM,1,N2) + (KM,1,1) * (KM,N1,1) * (KM,1,N2) + (KM,1,1) * (KM,1,1) * (KM,N1,N2) )
+
 
     if returnGradient:
         return (chi2, dchi2, d2chi2) if returnHessian else (chi2, dchi2)
