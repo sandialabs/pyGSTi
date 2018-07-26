@@ -806,19 +806,76 @@ def _fas(a, inds, rhs, add=False):
         # proper assignment:
         b = []
         for ii,i in enumerate(inds):
-            if isinstance(i,int): b.append([i])
+            if isinstance(i,int): b.append( _np.array([i],_np.int64) )
             elif isinstance(i,slice):
-                b.append( list(range(*i.indices(a.shape[ii]))) )
+                b.append( _np.array(list(range(*i.indices(a.shape[ii]))),_np.int64) )
             else:
-                b.append( list(i) )
+                b.append( _np.array(i,_np.int64) )
 
-        indx_tups = list(_itertools.product(*b))
-        if len(indx_tups) > 0: # b/c a[()] just returns the entire array!
-            inds = tuple(zip(*indx_tups)) # un-zips to one list per dim
-            if add:
-                a[inds] += rhs.flatten()
+        nDims = len(b)
+        if nDims > 0 and all([len(x)>0 for x in b]): # b/c a[()] just returns the entire array!
+
+            if _fastcalc is not None:
+                assert(a.flags['C_CONTIGUOUS'])
+                assert(rhs.flags['C_CONTIGUOUS'])
+                #Note: we may not really need these arrays to be contiguous, since we can just
+                # use their strides (FUTURE) - in ptic assumption that we can just inc by 1
+                # the rhs_index in fast_fas_helper_Xd would need to be updated at least.
+
+                if nDims == 1:
+                    _fastcalc.fast_fas_helper_1d(a, rhs, b[0])
+                elif nDims == 2:
+                    _fastcalc.fast_fas_helper_2d(a, rhs, b[0],b[1])
+                elif nDims == 3:
+                    _fastcalc.fast_fas_helper_3d(a, rhs, b[0],b[1],b[2])
+                else:
+                    raise NotImplementedError("No fas helper for nDims=%d" % nDims)
             else:
-                a[inds] = rhs.flatten()
+                indx_tups = list(_itertools.product(*b))
+                inds = tuple(zip(*indx_tups)) # un-zips to one list per dim
+                if add:
+                    a[inds] += rhs.flatten()
+                else:
+                    a[inds] = rhs.flatten()
+
+            #OLD DEBUG: just a reference for building the C-implementation (this is very slow in python!)
+            ##Alt: C-able impl
+            #indsPerDim = b # list of indices per dimension
+            #nDims = len(inds)
+            #b = [0]*nDims
+            #a_strides = []; stride = 1
+            #for s in reversed(a.shape):
+            #    a_strides.insert(0,stride)
+            #    stride *= s
+            #rhs_dims = rhs.shape
+            #
+            #a_indx = 0
+            #for i in range(nDims):
+            #    a_indx += indsPerDim[i][0] * a_strides[i]
+            #rhs_indx = 0
+            #
+            #while(True):
+            #
+            #    #a.flat[a_indx] = rhs.flat[rhs_indx]
+            #    assert(_np.isclose(a.flat[a_indx],rhs.flat[rhs_indx]))
+            #    rhs_indx += 1 # always increments by 1
+            #
+            #    #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+            #    for i in range(nDims-1,-1,-1):
+            #        if b[i]+1 < rhs_dims[i]:
+            #            a_indx -= indsPerDim[i][b[i]] * a_strides[i]
+            #            b[i] += 1
+            #            a_indx += indsPerDim[i][b[i]] * a_strides[i]
+            #            break
+            #        else:
+            #            a_indx -= indsPerDim[i][b[i]] * a_strides[i]
+            #            b[i] = 0
+            #            a_indx += indsPerDim[i][b[i]] * a_strides[i]
+            #    else:
+            #        break # can't increment anything - break while(True) loop
+
+                
+        
 
     return a
 
