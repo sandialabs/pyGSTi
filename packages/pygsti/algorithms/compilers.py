@@ -197,6 +197,10 @@ def compile_clifford(s, p, pspec=None, subsetQs=None, iterations=20, algorithm='
     # Prefix or post-fix the Pauli circuit to the main symplectic-generating circuit.
     if prefixpaulis: circuit.prefix_circuit(pauli_circuit)
     else: circuit.append_circuit(pauli_circuit)
+
+    # If we aren't Pauli-randomizing, do a final bit of depth compression
+    if pspec is not None: circuit.compress_depth(oneQgate_relations=pspec.oneQgate_relations, verbosity=0)
+    else: circuit.compress_depth(verbosity=0)
     
     # Check that the correct Clifford has been compiled. This should never fail, but could if 
     # the compilation provided for the internal gates is incorrect (the alternative is a mistake in this algorithm).

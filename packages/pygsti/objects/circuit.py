@@ -1388,14 +1388,14 @@ class Circuit(_gstr.GateString):
         depth = self.depth()
         for i in range(0,self.number_of_lines()):
             for j in range(0,depth):
-                gate = self.line_items[i][j]
+                gatelbl = self.line_items[i][j]
                 
                 # So that we don't include multi-qubit gates more than once.
-                if gate.qubits is None:
+                if gatelbl.qubits is None:
                     if i == 0: 
-                        f = f*(1-gate_error_probabilities[gate])
+                        f = f*(1-gate_error_probabilities[gatelbl])
                 elif gatelbl.qubits[0] == self.line_labels[i]:
-                    f = f*(1-gate_error_probabilities[gate])       
+                    f = f*(1-gate_error_probabilities[gatelbl])       
         return 1 - f
 
     def __str__(self):
