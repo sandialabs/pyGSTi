@@ -1126,9 +1126,10 @@ def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None
 
             matrix, phase = sreps[sub_gl.name]           
             nforgate = sub_gl.number_of_qubits
-            for ind1, qlabel1 in enumerate(sub_gl.qubits):
+            sub_gl_qubits = sub_gl.qubits if (sub_gl.qubits is not None) else Qlabels
+            for ind1, qlabel1 in enumerate(sub_gl_qubits):
                 qindex1 = Qlabels.index(qlabel1)
-                for ind2, qlabel2 in enumerate(sub_gl.qubits):
+                for ind2, qlabel2 in enumerate(sub_gl_qubits):
                     qindex2 = Qlabels.index(qlabel2)
                     # Put in the symp matrix elements
                     s[qindex1,qindex2] = matrix[ind1,ind2]

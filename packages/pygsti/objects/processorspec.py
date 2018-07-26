@@ -204,6 +204,7 @@ class ProcessorSpec(object):
             for gatelabel in self.models['clifford'].gates:
                 # This treats non-entangling 2-qubit gates as making qubits connected. Stopping that is
                 # something we may need to do at some point.
+                if gatelabel.number_of_qubits is None: continue # skip "global" gates in connectivity consideration?
                 if gatelabel.number_of_qubits > 1:
                     for p in _itertools.permutations(gatelabel.qubits, 2):
                         connectivity[self.qubit_labels.index(p[0]),self.qubit_labels.index(p[1])] = True
@@ -215,6 +216,7 @@ class ProcessorSpec(object):
             # Compute the gate labels that act on an entire set of qubits
             self.clifford_gates_on_qubits =  _collections.defaultdict(list)
             for gl in self.models['clifford'].gates:
+                if gl.qubits is None: continue # skip "global" gates (?)
                 for p in _itertools.permutations(gl.qubits):
                     self.clifford_gates_on_qubits[p].append(gl)
         else:
