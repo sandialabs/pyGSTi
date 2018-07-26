@@ -13,12 +13,14 @@ import uuid as _uuid
 #import scipy.fftpack as _fft
 #from scipy.integrate import quad as _quad
 #from scipy.interpolate import interp1d as _interp1d
-import pickle as _pickle
+
+# Needed to load dill-packaged pickles? - LSaldyt
+#import dill
+#import pickle as _pickle
+import dill as _pickle
 import copy as _copy
 import warnings as _warnings
 
-# Needed to load dill-packaged pickles? - LSaldyt
-import dill
 
 from collections import OrderedDict as _OrderedDict
 

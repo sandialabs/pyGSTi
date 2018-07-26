@@ -23,9 +23,6 @@ from .objects import Basis
 from .tools import *
 from .drivers import *
 
-# A test :)
-import dill
-
 #NUMPY BUG FIX (imported from tools)
 from .tools.compattools import _numpy14einsumfix
 _numpy14einsumfix()

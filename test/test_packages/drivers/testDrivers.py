@@ -1,5 +1,4 @@
 import unittest
-import dill
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 from pygsti.construction import std2Q_XYICNOT as std2Q
