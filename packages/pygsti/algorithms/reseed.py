@@ -24,7 +24,7 @@ _dummy_profiler = _DummyProfiler()
 
 from .core import *
 
-def do_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
+def do_reseed_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                        maxiter=100000, maxfev=None, tol=1e-6,
                        cptp_penalty_factor=0, spam_penalty_factor=0,
                        minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
@@ -188,16 +188,7 @@ def do_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSetsToUse
         maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval, radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
         return 2*(logL_ub - maxLogL)
 
-    if seeds is None:
-        seeds = [(mleGateset, calc_2qlogl(mleGateset))]
-        for i in range(nSeeds):
-            seed = mleGateset.copy()
-            if i == 0:
-                seeds.append(seed)
-            else:
-                depol_amount = 1 / 10 ** i
-                seed = seed.depolarize(gate_noise=_random.uniform(0, depol_amount))
-                seeds.append(seed, calc_2dlogl(seed))
+    seeds = [(startGateset, calc_2qlogl(mleGateset))]
 
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):
@@ -247,7 +238,7 @@ def do_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSetsToUse
 
                 printer.log("2*Delta(log(L)) = %g" % (two_d_logl),2)
 
-                seeds[j] = (mleGateset, two_d_logl)
+                seeds = [(startGateset, calc_2qlogl(mleGateset))]
 
                 tNxt = _time.time();
                 profiler.add_time('do_iterative_mlgst: iter %d logl-comp' % (i+1),tRef2)
@@ -257,7 +248,7 @@ def do_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSetsToUse
 
                 if i == len(gateStringLists)-1 and not alwaysPerformMLE: #on the last iteration, do ML
                     # pick the seed which worked best
-                    mleGateset, _ = min(seeds, key=lambda t : t[1])
+                    mleGateset = startGateset.copy()
                     printer.log("Switching to ML objective (last iteration)",2)
 
                     mleGateset.basis = startGateset.basis
@@ -275,11 +266,7 @@ def do_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSetsToUse
                         mleGateset = mleGateset_p
                     else:
                         printer.warning("MLGST failed to improve logl: retaining chi2-objective estimate")
-                    bestSeed, seed_logl = min(seeds, key=lambda t : t[1])
-                    if seed_logl > maxLogL: #if do_mlgst improved the maximum log-likelihood
-                        maxLogL = seed_logl
-                        mleGateset = bestSeed
-                        printer.log('Improved final iteration estimate by selecting a previous gateset')
+                        mleGateset = startGateset.copy()
 
                     tNxt = _time.time();
                     profiler.add_time('do_iterative_mlgst: iter %d logl-opt' % (i+1),tRef)
