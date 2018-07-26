@@ -2036,6 +2036,8 @@ def get_kcoverage_template(n, k, debug=0):
             for existing_cols in _itertools.combinations(range(a),k-1):
                 vals = set(range(k)) #the values the k-1 existing + a-th columns need to take
                 vals = vals - set([cols[i][m] for i in existing_cols])
+                if len(vals) > 1: continue # if our chosen existing cols don't
+                  # even cover all but one val then don't cast a vote
                 assert(len(vals) == 1)
                 val = vals.pop() # pops the *only* element
                 votes[val] += 1
@@ -2124,6 +2126,19 @@ def get_kcoverage_template(n, k, debug=0):
                         cols[i].append( cols[i][matching_rows[0]] )
                     col_a.append(v)
                     nRows += 1
+
+        #Check for any remaining open rows that we never needed to use.
+        # (the a-th column can then be anything we want, so as heuristic
+        #  choose a least-common value in the row already)
+        for m in range(nRows):
+            if col_a[m] is None:
+                cnts = { v:0 for v in range(k) } #count of each possible value
+                for i in range(a): cnts[ cols[i][m] ] += 1
+                val = 0; mincnt = cnts[ 0 ]
+                for v,cnt in cnts.items(): # get value with minimal count
+                    if cnt < mincnt:
+                        val = v; mincnt = cnt
+                col_a[m] = {'value': val, 'alternate_rows': "N/A" }
                         
         # a-th column is complete; "cement" it by replacing 
         # value/alternative_rows dicts with just the values
