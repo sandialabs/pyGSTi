@@ -1,9 +1,9 @@
 """ Defines the DataSet class and supporting classes and functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
 import numpy as _np
@@ -16,6 +16,10 @@ import uuid as _uuid
 import pickle as _pickle
 import copy as _copy
 import warnings as _warnings
+
+# Needed to load dill-packaged pickles? - LSaldyt
+import dill
+
 from collections import OrderedDict as _OrderedDict
 
 from ..tools import listtools as _lt
@@ -42,7 +46,7 @@ class DataSet_KeyValIterator(object):
 
         def getcache(gs):
             return dataset.cnt_cache[gs] if dataset.bStatic else None
-      
+
         if repData is None:
             self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gs))
                              for gs,gsi in self.dataset.gsIndex.items() )
@@ -59,7 +63,7 @@ class DataSet_KeyValIterator(object):
         return next(self.gsIter), DataSetRow(self.dataset, *(next(self.tupIter)) )
 
     next = __next__
-  
+
 
 class DataSet_ValIterator(object):
     """ Iterator class for DataSetRow values of a DataSet """
@@ -72,7 +76,7 @@ class DataSet_ValIterator(object):
 
         def getcache(gs):
             return dataset.cnt_cache[gs] if dataset.bStatic else None
-        
+
         if repData is None:
             self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gs))
                              for gs,gsi in self.dataset.gsIndex.items() )
@@ -92,7 +96,7 @@ class DataSet_ValIterator(object):
 
 
 class DataSetRow(object):
-    """ 
+    """
     Encapsulates DataSet time series data for a single gate string.  Outwardly
     looks similar to a list with `(outcome_label, time_index, repetition_count)`
     tuples as the values.
@@ -106,7 +110,7 @@ class DataSetRow(object):
 
     @property
     def outcomes(self):
-        """ 
+        """
         Returns this row's sequence of outcome labels, one per "bin" of repetition
         counts (returned by :method:`get_counts`).
         """
@@ -117,7 +121,7 @@ class DataSetRow(object):
         raise ValueError("outcomes property is read-only")
 
     def get_expanded_ol(self):
-        """ 
+        """
         Returns this row's sequence of outcome labels, with repetition counts
         expanded, so there's one element in the returned list for *each* count.
         """
@@ -130,7 +134,7 @@ class DataSetRow(object):
         else: return self.outcomes
 
     def get_expanded_oli(self):
-        """ 
+        """
         Returns this row's sequence of outcome label indices, with repetition counts
         expanded, so there's one element in the returned list for *each* count.
         """
@@ -143,7 +147,7 @@ class DataSetRow(object):
         else: return self.oli.copy()
 
     def get_expanded_times(self):
-        """ 
+        """
         Returns this row's sequence of time stamps, with repetition counts
         expanded, so there's one element in the returned list for *each* count.
         """
@@ -156,7 +160,7 @@ class DataSetRow(object):
         else: return self.time.copy()
 
     def __iter__(self):
-        if self.reps is not None:      
+        if self.reps is not None:
             return ( (self.dataset.ol[i],t,n) for (i,t,n) in zip(self.oli,self.time,self.reps) )
         else:
             return ( (self.dataset.ol[i],t,1) for (i,t) in zip(self.oli,self.time) )
@@ -164,7 +168,7 @@ class DataSetRow(object):
     def has_key(self, outcomeLabel):
         """ Checks whether data counts for `outcomelabel` are available."""
         return outcomeLabel in self.counts
-        
+
     def __getitem__(self,indexOrOutcomeLabel):
         if isinstance(indexOrOutcomeLabel, _numbers.Integral): #raw index
             i = indexOrOutcomeLabel
@@ -185,7 +189,7 @@ class DataSetRow(object):
                 if key in self.dataset.get_outcome_labels(): return 0
                 raise KeyError("%s is not an index, timestamp, or outcome label!"
                                % str(indexOrOutcomeLabel))
-            
+
     def __setitem__(self,indexOrOutcomeLabel,val):
         if isinstance(indexOrOutcomeLabel, _numbers.Integral):
             index = indexOrOutcomeLabel; tup = val
@@ -193,7 +197,7 @@ class DataSetRow(object):
             ol = (tup[0],) if _compat.isstr(tup[0]) else tup[0] #strings -> tuple outcome labels
             self.oli[index] = self.dataset.olIndex[ ol ]
             self.time[index] = tup[1]
-      
+
             if self.reps is not None:
                 self.reps[index] = tup[2] if len(tup) == 3 else 1
             else:
@@ -201,7 +205,7 @@ class DataSetRow(object):
         else:
             outcomeLbl = indexOrOutcomeLabel; count = val
             if _compat.isstr(outcomeLbl): outcomeLbl = (outcomeLbl,) #strings -> tuple outcome labels
-            
+
             assert( all([t == self.time[0] for t in self.time]) ), \
                 "Cannot set outcome counts directly on a DataSet with non-trivially timestamped data"
             assert(self.reps is not None), \
@@ -213,9 +217,9 @@ class DataSetRow(object):
                     self.reps[i] = count; break
             else: # need to add a new label & entry to reps[]
                 raise NotImplementedError("Cannot create new outcome labels by assignment")
-                    
+
     def _get_counts(self, timestamp=None, all_outcomes=False):
-        """ 
+        """
         Returns this row's sequence of "repetition counts", that is, the number of
         repetitions of each outcome label in the `outcomes` list, or
         equivalently, each outcome label index in this rows `.oli` member.
@@ -227,7 +231,7 @@ class DataSetRow(object):
         if timestamp is not None:
             tslc = _np.where(_np.isclose(self.time,timestamp))[0]
         else: tslc = slice(None)
-        
+
         if self.reps is None:
             for ol,i in self.dataset.olIndex.items():
                 cnt = float(_np.count_nonzero( _np.equal(self.oli[tslc],i) ))
@@ -253,7 +257,7 @@ class DataSetRow(object):
 
     @property
     def fractions(self, all_outcomes=False):
-        """ 
+        """
         Returns this row's sequence of "repetition counts", that is, the number of
         repetitions of each outcome label in the `outcomes` list, or
         equivalently, each outcome label index in this rows `.oli` member.
@@ -284,7 +288,7 @@ class DataSetRow(object):
         return self._get_counts(timestamp)
 
     def timeseries(self, outcomelabel, timestamps=None):
-        """ 
+        """
         Returns timestamps and counts for a single outcome label
         or for aggregated counts if `outcomelabel == "all"`.
 
@@ -292,7 +296,7 @@ class DataSetRow(object):
         ----------
         outcomelabel : str or tuple
             The outcome label to extract a series for.  If the special value
-            `"all"` is used, total (aggregated over all outcomes) counts are 
+            `"all"` is used, total (aggregated over all outcomes) counts are
             returned.
 
         timestamps : list or array, optional
@@ -310,10 +314,10 @@ class DataSetRow(object):
             outcomelabel = (outcomelabel,) if _compat.isstr(outcomelabel) \
                            else tuple(outcomelabel)
             olis = [self.dataset.olIndex[outcomelabel]]
-            
+
         times = []
         counts = []
-        last_t = -1e100            
+        last_t = -1e100
         tsIndx = 0
         for i,(t,oli) in enumerate(zip(self.time,self.oli)):
 
@@ -323,7 +327,7 @@ class DataSetRow(object):
                     times.append(timestamps[tsIndx])
                     counts.append(0)
                     tsIndx += 1
-                
+
             if oli in olis and (timestamps is None or _np.isclose(t,timestamps[tsIndx])):
                 if not _np.isclose(t,last_t):
                     times.append(t); tsIndx += 1
@@ -350,7 +354,7 @@ class DataSetRow(object):
                               " and try this again."))
         for i,cnt in enumerate(self.reps):
             self.reps[i] = cnt*factor
-        
+
 
     def as_dict(self):
         """ Returns the (outcomeLabel,count) pairs as a dictionary."""
@@ -363,10 +367,10 @@ class DataSetRow(object):
         Parameters
         ----------
         mode : {"auto","time-dependent","time-independent"}
-            Whether to display the data as time-series of outcome counts 
+            Whether to display the data as time-series of outcome counts
             (`"time-dependent"`) or to report per-outcome counts aggregated over
             time (`"time-independent"`).  If `"auto"` is specified, then the
-            time-independent mode is used only if all time stamps in the 
+            time-independent mode is used only if all time stamps in the
             DataSetRow are equal (trivial time dependence).
 
         Returns
@@ -406,7 +410,7 @@ def _round_int_repcnt(nreps):
         return int(round(nreps))
 
 
-  
+
 
 
 class DataSet(object):
@@ -432,9 +436,9 @@ class DataSet(object):
                  outcomeLabels=None, outcomeLabelIndices=None,
                  bStatic=False, fileToLoadFrom=None, collisionAction="aggregate",
                  comment=None):
-        """ 
+        """
         Initialize a DataSet.
-        
+
         Parameters
         ----------
         oliData : list or numpy.ndarray
@@ -453,34 +457,34 @@ class DataSet(object):
             for each "data bin" (i.e. (outcome,time) pair).  If all repetitions
             equal 1 ("single-shot" timestampted data), then `repData` can be
             `None` (no repetitions).
-        
+
         gateStrings : list of (tuples or GateStrings)
             Each element is a tuple of gate labels or a GateString object.  Indices for these strings
             are assumed to ascend from 0.  These indices must correspond to the time series of spam-label
             indices (above).   Only specify this argument OR gateStringIndices, not both.
-        
+
         gateStringIndices : ordered dictionary
             An OrderedDict with keys equal to gate strings (tuples of gate labels) and values equal to
             integer indices associating a row/element of counts with the gate string.  Only
             specify this argument OR gateStrings, not both.
-        
+
         outcomeLabels : list of strings
             Specifies the set of spam labels for the DataSet.  Indices for the spam labels
             are assumed to ascend from 0, starting with the first element of this list.  These
             indices will associate each elememtn of `timeseries` with a spam label.  Only
             specify this argument OR outcomeLabelIndices, not both.
-        
+
         outcomeLabelIndices : ordered dictionary
-            An OrderedDict with keys equal to spam labels (strings) and value equal to 
-            integer indices associating a spam label with given index.  Only 
+            An OrderedDict with keys equal to spam labels (strings) and value equal to
+            integer indices associating a spam label with given index.  Only
             specify this argument OR outcomeLabels, not both.
-        
+
         bStatic : bool
             When True, create a read-only, i.e. "static" DataSet which cannot be modified. In
               this case you must specify the timeseries data, gate strings, and spam labels.
             When False, create a DataSet that can have time series data added to it.  In this case,
               you only need to specify the spam labels.
-          
+
         fileToLoadFrom : string or file object
             Specify this argument and no others to create a static DataSet by loading
             from a file (just like using the load(...) function).
@@ -494,10 +498,10 @@ class DataSet(object):
             functions.
 
         comment : string, optional
-            A user-specified comment string that gets carried around with the 
+            A user-specified comment string that gets carried around with the
             data.  A common use for this field is to attach to the data details
             regarding its collection.
-        
+
         Returns
         -------
         DataSet
@@ -505,7 +509,7 @@ class DataSet(object):
         """
         # uuid for efficient hashing (set when done adding data or loading from file)
         self.uuid = None
-        
+
         #Optionally load from a file
         if fileToLoadFrom is not None:
             assert(oliData is None and timeData is None and repData is None \
@@ -513,7 +517,7 @@ class DataSet(object):
                    and outcomeLabels is None and outcomeLabelIndices is None)
             self.load(fileToLoadFrom)
             return
-        
+
         # self.gsIndex  :  Ordered dictionary where keys = GateString objects,
         #   values = slices into oli, time, & rep arrays (static case) or
         #            integer list indices (non-static case)
@@ -529,7 +533,7 @@ class DataSet(object):
             else:
                 self.gsIndex = _OrderedDict()
         else: raise ValueError("Must specify gateStringIndices when creating a static DataSet")
-        
+
         # self.olIndex  :  Ordered dictionary where
         #                  keys = outcome labels (strings or tuples),
         #                  values = integer indices mapping oliData (integers) onto
@@ -542,37 +546,37 @@ class DataSet(object):
             self.olIndex = _OrderedDict( [(ol,i) for (i,ol) in enumerate(tup_outcomeLabels) ] )
         else:
             self.olIndex = _OrderedDict() #OK, as outcome labels are added as they appear
-        
+
         # self.ol :  Ordered dictionary where keys = integer indices, values = outcome
         #            labels (strings or tuples) -- just the reverse of self.olIndex
         self.ol = _OrderedDict( [(i,ol) for (ol,i) in self.olIndex.items()] )
-        
+
         # sanity checks that indices are >= 0
         if not bStatic: #otherwise values() below are slices
             if self.gsIndex:  assert( min(self.gsIndex.values()) >= 0)
             if self.olIndex:  assert( min(self.olIndex.values()) >= 0)
-        
+
         # self.oliData : when bStatic == True a 1D numpy array containing concatenated outcome label indices.
         #                when bStatic == False a list of 1D numpy arrays, one array per gate sequence.
-        
+
         # self.timeData : when bStatic == True a 1D numpy array containing concatenated time stamps.
         #                 when bStatic == False a list of 1D numpy arrays, one array per gate sequence.
-        
+
         # self.repData : when bStatic == True a 1D numpy array containing concatenated repetition counts.
         #                when bStatic == False a list of 1D numpy arrays, one array per gate sequence.
         #   (can be None, in which case no repetitions are assumed)
-        
+
         if oliData is not None:
-        
+
             # check that sizes/lengths all match
             assert(len(timeData) == len(oliData)), "timeData must be same size as oliData"
             if repData is not None:
                 assert(len(repData) == len(oliData)), "repData must be same size as oliData"
-            
+
             self.oliData = oliData
             self.timeData = timeData
             self.repData = repData
-            
+
             if len(self.gsIndex) > 0:
                 maxOlIndex = max(self.olIndex.values())
                 if bStatic:
@@ -584,7 +588,7 @@ class DataSet(object):
                     if len(self.oliData) > 0:
                         assert( all( [ max(oliSeries) <= maxOlIndex for oliSeries in self.oliData ] ) )
             #else gsIndex has length 0 so there are no gate strings in this dataset (even though oliData can contain data)
-        
+
         elif not bStatic:
             assert( timeData is None ), "timeData must be None when oliData is"
             assert( repData is None ), "repData must be None when oliData is"
@@ -592,23 +596,23 @@ class DataSet(object):
             self.oliData = []
             self.timeData = []
             self.repData = None
-        
+
         else:
             raise ValueError("Series data must be specified when creating a static DataSet")
-        
+
         # self.bStatic
         self.bStatic = bStatic
-        
+
         # collision action
         assert(collisionAction in ('aggregate','keepseparate'))
         self.collisionAction = collisionAction
-        
+
         # comment
         self.comment = comment
-        
+
         # self.ffdata : fourier filtering data
         self.ffdata = {}
-        
+
         #data types - should stay in sync with MultiDataSet
         self.oliType  = Oindex_type
         self.timeType = Time_type
@@ -619,35 +623,35 @@ class DataSet(object):
             self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
         else:
             self.cnt_cache = None
-  
-  
+
+
     def __iter__(self):
         return self.gsIndex.__iter__() #iterator over gate strings
-  
+
     def __len__(self):
         return len(self.gsIndex)
-  
+
     def __contains__(self, gatestring):
         return self.has_key(gatestring)
-  
+
     def __hash__(self):
         if self.uuid is not None:
             return hash(self.uuid)
         else:
             raise TypeError('Use digest hash')
-  
+
     def __getitem__(self, gatestring):
         return self.get_row(gatestring)
-  
+
     def __setitem__(self, gatestring, outcomeDictOrSeries):
         return self.set_row(gatestring, outcomeDictOrSeries)
-    
+
     def get_row(self, gatestring, occurrence=0):
         """
         Get a row of data from this DataSet.  This gives the same
         functionality as [ ] indexing except you can specify the
         occurrence number separately from the gate sequence.
-        
+
         Parameters
         ----------
         gatestring : GateString or tuple
@@ -667,8 +671,8 @@ class DataSet(object):
         # so key lookups need to be done at least with tuples of Labels.
         if not isinstance(gatestring,_gs.GateString):
             gatestring = _gs.GateString(gatestring)
-            
-        if occurrence > 0: 
+
+        if occurrence > 0:
             gatestring = gatestring + _gs.GateString(("#%d" % occurrence,))
 
         #Note: gsIndex value is either an int (non-static) or a slice (static)
@@ -683,7 +687,7 @@ class DataSet(object):
         Set the counts for a row of this DataSet.  This gives the same
         functionality as [ ] indexing except you can specify the
         occurrence number separately from the gate sequence.
-        
+
         Parameters
         ----------
         gatestring : GateString or tuple
@@ -699,17 +703,17 @@ class DataSet(object):
         if not isinstance(gatestring,_gs.GateString):
             gatestring = _gs.GateString(gatestring)
 
-        if occurrence > 0: 
+        if occurrence > 0:
             gatestring = _gs.GateString(gatestring) + _gs.GateString(("#%d" % occurrence,))
-            
+
         if isinstance(outcomeDictOrSeries, dict): # a dict of counts
             self.add_count_dict(gatestring, outcomeDictOrSeries)
-            
+
         else: # a tuple of lists
             assert(len(outcomeDictOrSeries) >= 2), \
                 "Must minimally set with (outcome-label-list, time-stamp-list)"
             self.add_raw_series_data(gatestring, *outcomeDictOrSeries)
-            
+
 
     def keys(self, stripOccurrenceTags=False):
         """
@@ -728,26 +732,26 @@ class DataSet(object):
         -------
         list
             A list of GateString objects which index the data
-            counts within this data set.            
+            counts within this data set.
         """
         if stripOccurrenceTags and self.collisionAction == "keepseparate":
             # Note: assumes keys are GateStrings containing Labels
-            return [ (gs[:-1] if (len(gs)>0 and gs[-1].name.startswith("#")) else gs) 
+            return [ (gs[:-1] if (len(gs)>0 and gs[-1].name.startswith("#")) else gs)
                      for gs in self.gsIndex.keys() ]
         else:
             return list(self.gsIndex.keys())
 
-        
+
     def has_key(self, gatestring):
-        """ 
+        """
         Test whether data set contains a given gate string.
-    
+
         Parameters
         ----------
         gatestring : tuple or GateString
-            A tuple of gate labels or a GateString instance 
+            A tuple of gate labels or a GateString instance
             which specifies the the gate string to check for.
-    
+
         Returns
         -------
         bool
@@ -759,63 +763,63 @@ class DataSet(object):
 
 
     def items(self):
-        """ 
+        """
         Iterator over (gateString, timeSeries) pairs,
         where gateString is a tuple of gate labels
-        and timeSeries is a DataSetRow instance, 
+        and timeSeries is a DataSetRow instance,
         which behaves similarly to a list of
-        spam labels whose index corresponds to 
+        spam labels whose index corresponds to
         the time step.
         """
         return DataSet_KeyValIterator(self)
-    
+
     def values(self):
-        """ 
+        """
         Iterator over DataSetRow instances corresponding
         to the time series data for each gate string.
         """
         return DataSet_ValIterator(self)
-    
+
 
     def get_outcome_labels(self):
-        """ 
+        """
         Get a list of *all* the outcome labels contained in this DataSet.
-        
+
         Returns
         -------
         list of strings or tuples
-          A list where each element is an outcome label (which can 
+          A list where each element is an outcome label (which can
           be a string or a tuple of strings).
         """
         return list(self.olIndex.keys())
 
 
     def get_gate_labels(self, prefix='G'):
-        """ 
+        """
         Get a list of all the distinct gate labels used
         in the gate strings of this dataset.
-        
+
         Parameters
         ----------
         prefix : str
             Filter the gate string labels so that only elements beginning with
             this prefix are returned.  `None` performs no filtering.
-        
+
         Returns
         -------
         list of strings
             A list where each element is a gate label.
         """
-        gateLabels = [ ] 
+        gateLabels = [ ]
         for gateLabelString in self:
             for gateLabel in gateLabelString:
                 if not prefix or gateLabel.name.startswith(prefix):
                     if gateLabel not in gateLabels: gateLabels.append(gateLabel)
         return gateLabels
 
-    
+
     def get_degrees_of_freedom(self, gateStringList=None):
-        """ 
+        """
         Returns the number of independent degrees of freedom in the data for
         the gate strings in `gateStringList`.
 
@@ -824,14 +828,14 @@ class DataSet(object):
         gateStringList : list of GateStrings
             The list of gate strings to count degrees of freedom for.  If `None`
             then all of the `DataSet`'s strings are used.
-        
+
         Returns
         -------
         int
         """
         if gateStringList is None:
             gateStringList = list(self.keys())
-            
+
         nDOF = 0
         for gstr in gateStringList:
             dsRow = self[gstr]
@@ -858,14 +862,14 @@ class DataSet(object):
                 i+=1; tagged_gateString = gateString + _gs.GateString(("#%d" % i,))
             #add data for a new (duplicate) gatestring
             gateString = tagged_gateString
-            
+
         return gateString
 
     def build_repetition_counts(self):
         """
         Build internal repetition counts if they don't exist already.
 
-        This method is usually unnecessary, as repetition counts are 
+        This method is usually unnecessary, as repetition counts are
         almost always build as soon as they are needed.
         """
         if self.repData is not None: return
@@ -875,7 +879,7 @@ class DataSet(object):
         for oliAr in self.oliData:
             self.repData.append( _np.ones(len(oliAr), self.repType) )
 
-    
+
     def add_count_dict(self, gateString, countDict, overwriteExisting=True,
                        recordZeroCnts=False):
         """
@@ -920,7 +924,7 @@ class DataSet(object):
 
         # if "keepseparate" mode, add tag onto end of gateString
         gateString = self._keepseparate_update_gatestr(gateString)
-            
+
         if not overwriteExisting and gateString in self:
             iNext = int(max(self[gateString].time)) + 1 \
                     if (len(self[gateString].time) > 0) else 0
@@ -935,9 +939,9 @@ class DataSet(object):
     def add_raw_series_data(self, gateString, outcomeLabelList, timeStampList,
                             repCountList=None, overwriteExisting=True,
                             recordZeroCnts=True):
-        """ 
+        """
         Add a single gate string's counts to this DataSet
-        
+
         Parameters
         ----------
         gateString : tuple or GateString
@@ -965,7 +969,7 @@ class DataSet(object):
 
         recordZeroCnts : bool, optional
             Whether zero-counts (elements of `repCountList` that are zero) are
-            actually recorded (stored) in this DataSet.  If False, then zero 
+            actually recorded (stored) in this DataSet.  If False, then zero
             counts are ignored, except for potentially registering new outcome
             labels.
 
@@ -980,7 +984,7 @@ class DataSet(object):
 
         #strings -> tuple outcome labels
         tup_outcomeLabelList = [ ((ol,) if _compat.isstr(ol) else ol)
-                                 for ol in outcomeLabelList] 
+                                 for ol in outcomeLabelList]
 
         #Add any new outcome labels
         added = False
@@ -990,12 +994,12 @@ class DataSet(object):
                 self.olIndex[ol] = iNext; added=True
         if added: #rebuild self.ol because olIndex has changed
             self.ol = _OrderedDict( [(i,sl) for (sl,i) in self.olIndex.items()] )
-            
+
         oliArray = _np.array([ self.olIndex[ol] for ol in tup_outcomeLabelList ] , self.oliType)
         timeArray = _np.array(timeStampList, self.timeType)
         assert(oliArray.shape == timeArray.shape), \
             "Outcome-label and time stamp lists must have the same length!"
-        
+
         if repCountList is None:
             if self.repData is None: repArray = None
             else: repArray = _np.ones(len(oliArray), self.repType)
@@ -1013,7 +1017,7 @@ class DataSet(object):
             repArray  = repArray[mask]
             oliArray  = oliArray[mask]
             timeArray = timeArray[mask]
-            
+
         if gateString in self.gsIndex:
             gateStringIndx = self.gsIndex[gateString]
             if overwriteExisting:
@@ -1025,7 +1029,7 @@ class DataSet(object):
                 self.timeData[ gateStringIndx ] = _np.concatenate((self.timeData[gateStringIndx],timeArray))
                 if repArray is not None:
                     self.repData[ gateStringIndx ] = _np.concatenate((self.repData[gateStringIndx],repArray))
-      
+
         else:
             #add data for a new gatestring
             assert( len(self.oliData) == len(self.timeData) ), "OLI and TIME data are out of sync!!"
@@ -1038,16 +1042,16 @@ class DataSet(object):
 
     def add_series_data(self, gateString, countDictList, timeStampList,
                         overwriteExisting=True):
-        """ 
+        """
         Add a single gate string's counts to this DataSet
-        
+
         Parameters
         ----------
         gateString : tuple or GateString
             A tuple of gate labels specifying the gate string or a GateString object
 
         countDictList : list
-            A list of dictionaries holding the outcome-label:count pairs for each 
+            A list of dictionaries holding the outcome-label:count pairs for each
             time step (times given by `timeStampList`.
 
         timeStampList : list
@@ -1095,16 +1099,16 @@ class DataSet(object):
         """
         return self.add_series_from_dataset(otherDataSet)
 
-      
+
     def add_series_from_dataset(self, otherDataSet):
-        """ 
+        """
         Append another DataSet's series data to this DataSet
-    
+
         Parameters
         ----------
         otherDataSet : DataSet
             The dataset to take time series data from.
-    
+
         Returns
         -------
         None
@@ -1113,10 +1117,10 @@ class DataSet(object):
         for gateString,dsRow in otherDataSet.items():
             self.add_raw_series_data(gateString, dsRow.outcomes, dsRow.time, dsRow.reps, False)
 
-      
+
     def __str__(self):
         return self.to_str()
-    
+
     def to_str(self, mode="auto"):
         """
         Render this DataSet as a string.
@@ -1124,23 +1128,23 @@ class DataSet(object):
         Parameters
         ----------
         mode : {"auto","time-dependent","time-independent"}
-            Whether to display the data as time-series of outcome counts 
+            Whether to display the data as time-series of outcome counts
             (`"time-dependent"`) or to report per-outcome counts aggregated over
             time (`"time-independent"`).  If `"auto"` is specified, then the
-            time-independent mode is used only if all time stamps in the 
+            time-independent mode is used only if all time stamps in the
             DataSet are equal to zero (trivial time dependence).
 
         Returns
         -------
         str
         """
-        if mode == "auto":            
+        if mode == "auto":
             if all([_np.all(self.timeData[gsi] == 0) for gsi in self.gsIndex.values()]):
                 mode = "time-independent"
             else: mode = "time-dependent"
 
         assert(mode in ('time-dependent','time-independent')),"Invalid `mode` argument: %s" % mode
-        
+
         if mode == "time-dependent":
             s = "Dataset outcomes: " + str(self.olIndex) + "\n"
             for gateString in self: # tuple-type gate label strings are keys
@@ -1154,42 +1158,42 @@ class DataSet(object):
 
 
     def truncate(self, listOfGateStringsToKeep, bThrowErrorIfStringIsMissing=True):
-        """ 
+        """
         Create a truncated dataset comprised of a subset of the gate strings
         in this dataset.
-    
+
         Parameters
         ----------
         listOfGateStringsToKeep : list of (tuples or GateStrings)
             A list of the gate strings for the new returned dataset.  If a
-            gate string is given in this list that isn't in the original 
+            gate string is given in this list that isn't in the original
             data set, bThrowErrorIfStringIsMissing determines the behavior.
-    
+
         bThrowErrorIfStringIsMissing : bool, optional
             When true, a ValueError exception is raised when a strin)g
             if verbosity > 0:
             in listOfGateStringsToKeep is not in the data set.
-            
+
         Returns
         -------
         DataSet
             The truncated data set.
         """
-        if self.bStatic: 
+        if self.bStatic:
             gateStringIndices = []
             gateStrings = []
             for gs in listOfGateStringsToKeep:
                 gateString = gs if isinstance(gs, _gs.GateString) else _gs.GateString(gs)
-                
+
                 if gateString not in self.gsIndex:
                     if bThrowErrorIfStringIsMissing:
                         raise ValueError("Gate string %s was not found in dataset begin truncated and bThrowErrorIfStringIsMissing == True" % str(gateString))
                     else: continue
-      
+
                 #only keep track of gate strings if they could be different from listOfGateStringsToKeep
-                if not bThrowErrorIfStringIsMissing: gateStrings.append( gateString )  
+                if not bThrowErrorIfStringIsMissing: gateStrings.append( gateString )
                 gateStringIndices.append( self.gsIndex[gateString] )
-    
+
             if bThrowErrorIfStringIsMissing: gateStrings = listOfGateStringsToKeep
             trunc_gsIndex = _OrderedDict( zip(gateStrings, gateStringIndices) )
             trunc_dataset = DataSet(self.oliData, self.timeData, self.repData,
@@ -1206,27 +1210,27 @@ class DataSet(object):
                                                    self.timeData[ gateStringIndx ].copy(), repData) #Copy operation so truncated dataset can be modified
                 elif bThrowErrorIfStringIsMissing:
                     raise ValueError("Gate string %s was not found in dataset begin truncated and bThrowErrorIfStringIsMissing == True" % str(gateString))
-    
+
         return trunc_dataset
 
 
     def time_slice(self, startTime, endTime, aggregateToTime=None):
-        """ 
+        """
         Creates a DataSet by aggregating the counts within the
         [`startTime`,`endTime`) interval.
-      
+
         Parameters
         ----------
         startTime, endTime : float or int
             The time-stamps to use for the beginning (inclusive) and end
             (exclusive) of the time interval.
-      
+
         aggregateToTime : float, optional
             If not None, a single timestamp to give all the data in
-            the specified range, resulting in time-independent 
+            the specified range, resulting in time-independent
             `DataSet`.  If None, then the original timestamps are
             preserved.
-  
+
         Returns
         -------
         DataSet
@@ -1234,15 +1238,15 @@ class DataSet(object):
         tot = 0
         ds = DataSet(outcomeLabelIndices=self.olIndex)
         for gateStr,dsRow in self.items():
-            
+
             if dsRow.reps is None:
                 reps = _np.ones(dsRow.oli.shape, self.repType)
             else: reps = dsRow.reps
-        
+
             count_dict = {ol: 0 for ol in self.olIndex.keys()}
             times = []; ols = []; repCnts = []
             for oli, t, rep in zip(dsRow.oli, dsRow.time, reps):
-                
+
                 ol = self.ol[oli] # index -> outcome label
                 if startTime <= t < endTime:
                     if aggregateToTime is not None:
@@ -1257,17 +1261,17 @@ class DataSet(object):
                 ols = [ k for k in count_dict.keys() if count_dict[k] > 0 ]
                 repCnts = [ count_dict[k] for k in ols ]
                 times = [ aggregateToTime ]*len(repCnts)
-                
+
             ds.add_raw_series_data(gateStr, ols, times, repCnts)
-    
+
         if tot == 0:
             _warnings.warn("No counts in the requested time range: empty DataSet created")
-        ds.done_adding_data()                                                                                                         
-        return ds         
+        ds.done_adding_data()
+        return ds
 
 
     def process_gate_strings(self, processor_fn):
-        """ 
+        """
         Manipulate this DataSet's gate sequences according to `processor_fn`.
 
         All of the DataSet's gate sequence labels are updated by running each
@@ -1296,7 +1300,7 @@ class DataSet(object):
 
     def copy(self):
         """ Make a copy of this DataSet. """
-        if self.bStatic: 
+        if self.bStatic:
             return self # doesn't need to be copied since data can't change
         else:
             copyOfMe = DataSet(outcomeLabels=self.get_outcome_labels(),
@@ -1307,7 +1311,7 @@ class DataSet(object):
             if self.repData is not None:
                 copyOfMe.repData = [ el.copy() for el in self.repData ]
             else: copyOfMe.repData = None
-            
+
             copyOfMe.oliType  =self.oliType
             copyOfMe.timeType = self.timeType
             copyOfMe.repType  = self.repType
@@ -1317,11 +1321,11 @@ class DataSet(object):
 
     def copy_nonstatic(self):
         """ Make a non-static copy of this DataSet. """
-        if self.bStatic: 
+        if self.bStatic:
             copyOfMe = DataSet(outcomeLabels=self.get_outcome_labels(),
                                collisionAction=self.collisionAction)
             copyOfMe.gsIndex = _OrderedDict([ (gstr,i) for i,gstr in enumerate(self.gsIndex.keys()) ])
-            copyOfMe.oliData = [] 
+            copyOfMe.oliData = []
             copyOfMe.timeData = []
             copyOfMe.repData = None if (self.repData is None) else []
             for slc in self.gsIndex.values():
@@ -1329,7 +1333,7 @@ class DataSet(object):
                 copyOfMe.timeData.append( self.timeData[slc].copy() )
                 if self.repData is not None:
                     copyOfMe.repData.append( self.repData[slc].copy() )
-      
+
             copyOfMe.oliType  =self.oliType
             copyOfMe.timeType = self.timeType
             copyOfMe.repType  = self.repType
@@ -1340,17 +1344,17 @@ class DataSet(object):
 
 
     def done_adding_data(self):
-        """ 
+        """
         Promotes a non-static DataSet to a static (read-only) DataSet.  This
          method should be called after all data has been added.
-        """     
+        """
         if self.bStatic: return
         #Convert normal dataset to static mode.
         #  olIndex stays the same
         #  gsIndex changes to hold slices into 1D arrays
         #  oliData, timeData, & repData change from being lists of arrays to
         #    single 1D arrays.
-        
+
         if len(self.oliData) > 0:
             new_gsIndex = _OrderedDict()
             curIndx = 0
@@ -1359,24 +1363,24 @@ class DataSet(object):
             to_concat_rep = []
             for gatestring, indx in self.gsIndex.items():
                 seriesLen = len(self.oliData[indx])
-            
+
                 to_concat_oli.append( self.oliData[indx] )   #just build up lists of
                 to_concat_time.append( self.timeData[indx] ) # reference, not copies
                 assert(seriesLen == len(self.timeData[indx])), "TIME & OLI out of sync!"
-                
+
                 if self.repData is not None:
                     to_concat_rep.append( self.repData[indx] )
                     assert(seriesLen == len(self.repData[indx])), "REP & OLI out of sync!"
-                  
+
                 new_gsIndex[gatestring] = slice(curIndx, curIndx+seriesLen)
                 curIndx += seriesLen
-        
+
             self.gsIndex = new_gsIndex
             self.oliData = _np.concatenate( to_concat_oli )
             self.timeData = _np.concatenate( to_concat_time )
             if self.repData is not None:
                 self.repData = _np.concatenate( to_concat_rep )
-            
+
         else:
             #leave gsIndex alone (should be empty anyway?)
             self.oliData = _np.empty( (0,), self.oliType)
@@ -1420,7 +1424,7 @@ class DataSet(object):
             self.oliData = []
             self.timeData = []
             self.repData = []
-            
+
             self.oliType  = Oindex_type
             self.timeType = Time_type
             self.repType  = Repcount_type
@@ -1431,7 +1435,7 @@ class DataSet(object):
                 count_dict = _OrderedDict( [(ol,count_row[i]) for ol,i in self.olIndex.items()] )
                 self.add_count_dict(gstr, count_dict)
             if not self.bStatic: self.done_adding_data()
-                    
+
         else:  #Normal case
             self.bStatic = bStatic
             self.gsIndex = gsIndex
@@ -1446,27 +1450,27 @@ class DataSet(object):
             if bStatic: #always empty - don't save this, just init
                 self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
             else: self.cnt_cache = None
-            
+
         self.collisionAction = state_dict.get('collisionAction','aggregate')
         self.uuid = state_dict.get('uuid',None)
-        
+
 
 
     def save(self, fileOrFilename):
-        """ 
+        """
         Save this DataSet to a file.
-    
+
         Parameters
         ----------
         fileOrFilename : string or file object
-            If a string,  interpreted as a filename.  If this filename ends 
+            If a string,  interpreted as a filename.  If this filename ends
             in ".gz", the file will be gzip compressed.
-    
+
         Returns
         -------
         None
         """
-    
+
         toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, self.gsIndex.keys())) if self.gsIndex else [],
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'olIndex': self.olIndex,
@@ -1479,7 +1483,7 @@ class DataSet(object):
                      'collisionAction': self.collisionAction,
                      'uuid' : self.uuid} #Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.oliData)
-        
+
         bOpen = _compat.isstr(fileOrFilename)
         if bOpen:
             if fileOrFilename.endswith(".gz"):
@@ -1487,16 +1491,16 @@ class DataSet(object):
                 f = _gzip.open(fileOrFilename,"wb")
             else:
                 f = open(fileOrFilename,"wb")
-        else: 
+        else:
             f = fileOrFilename
-    
+
         _pickle.dump(toPickle,f)
-        if self.bStatic:  
+        if self.bStatic:
             _np.save(f, self.oliData)
             _np.save(f, self.timeData)
             if self.repData is not None:
                 _np.save(f, self.repData)
-        else: 
+        else:
             for row in self.oliData: _np.save(f, row)
             for row in self.timeData: _np.save(f, row)
             if self.repData is not None:
@@ -1506,13 +1510,13 @@ class DataSet(object):
     def load(self, fileOrFilename):
         """
         Load DataSet from a file, clearing any data is contained previously.
-        
+
         Parameters
         ----------
         fileOrFilename string or file object.
-            If a string,  interpreted as a filename.  If this filename ends 
+            If a string,  interpreted as a filename.  If this filename ends
             in ".gz", the file will be gzip uncompressed as it is read.
-        
+
         Returns
         -------
         None
@@ -1524,19 +1528,19 @@ class DataSet(object):
                 f = _gzip.open(fileOrFilename,"rb")
             else:
                 f = open(fileOrFilename,"rb")
-        else: 
+        else:
             f = fileOrFilename
-        
+
         state_dict = _pickle.load(f)
         def expand(x): #to be backward compatible
             """ Expand a compressed gate string """
             if isinstance(x,_gs.CompressedGateString): return x.expand()
-            else: 
+            else:
                 _warnings.warn("Deprecated dataset format.  Please re-save " +
                                "this dataset soon to avoid future incompatibility.")
                 return _gs.GateString(_gs.CompressedGateString.expand_gate_label_tuple(x))
         gsIndexKeys = [ expand(cgs) for cgs in state_dict['gsIndexKeys'] ]
-        
+
         #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
         self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
         self.olIndex = state_dict['olIndex']
@@ -1547,9 +1551,9 @@ class DataSet(object):
         self.repType = state_dict['repType']
         self.collisionAction = state_dict['collisionAction']
         self.uuid    = state_dict['uuid']
-        
+
         useReps = state_dict['useReps']
-        
+
         if self.bStatic:
             self.oliData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
             self.timeData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
@@ -1560,11 +1564,11 @@ class DataSet(object):
             self.oliData = []
             for _ in range(state_dict['nRows']):
                 self.oliData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
-        
+
             self.timeData = []
             for _ in range(state_dict['nRows']):
                 self.timeData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
-        
+
             if useReps:
                 self.repData = []
                 for _ in range(state_dict['nRows']):
@@ -1572,5 +1576,5 @@ class DataSet(object):
             else:
                 self.repData = None
             self.cnt_cache = None
-        
+
         if bOpen: f.close()
