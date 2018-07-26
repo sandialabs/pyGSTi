@@ -34,7 +34,7 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
                        gateLabelAliases=None, memLimit=None,
                        profiler=None, comm=None, distributeMethod = "deriv",
                        alwaysPerformMLE=False, evaltree_cache=None, nSeeds=10, seeds=None,
-                       earlyIteration=7):
+                       earlyIteration=7, skip_mc2=False):
     """
     Performs Iterative Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
@@ -155,6 +155,9 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
     nseeds : int, optional
         The number of perturb seeds used at each iteration
 
+    skip_mc2 : bool, optional
+        Option to skip the min-chi^2 optimization (experimental)
+
     Returns
     -------
     gateset               if returnAll == False and returnMaxLogL == False
@@ -223,12 +226,13 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
                   #set basis in case of CPTP constraints
 
                 evt_cache = {} # get the eval tree that's created so we can reuse it
-                _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
-                                          maxiter, maxfev, tol, cptp_penalty_factor,
-                                          spam_penalty_factor, minProbClip, probClipInterval,
-                                          useFreqWeightedChiSq, 0,printer-1, check,
-                                          check, gatestringWeights, gateLabelAliases,
-                                          memLimit, comm, distributeMethod, profiler, evt_cache)
+                if not skip_mc2:
+                    _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
+                                              maxiter, maxfev, tol, cptp_penalty_factor,
+                                              spam_penalty_factor, minProbClip, probClipInterval,
+                                              useFreqWeightedChiSq, 0,printer-1, check,
+                                              check, gatestringWeights, gateLabelAliases,
+                                              memLimit, comm, distributeMethod, profiler, evt_cache)
 
                 if alwaysPerformMLE:
                     _, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,

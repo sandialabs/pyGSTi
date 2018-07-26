@@ -597,6 +597,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         args['radius'] = advancedOptions.get('radius',1e-4)
         args['alwaysPerformMLE'] = advancedOptions.get('alwaysPerformMLE',False)
         algorithm = advancedOptions.get('algorithm', 'default')
+        skip_mc2 = advancedOptions.get('skip_mc2', False)
         if algorithm == 'anneal':
             gs_lsgst_list = _alg.do_annealed_iterative_mlgst(**args)
         elif algorithm == 'seed_selection':
@@ -604,7 +605,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         elif algorithm == 'intermediate_seed_selection':
             gs_lsgst_list = _alg.do_intermediate_seed_selection_iterative_mlgst(**args)
         elif algorithm == 'early_seed_selection':
-            gs_lsgst_list = _alg.do_early_seed_selection_iterative_mlgst(**args)
+            gs_lsgst_list = _alg.do_early_seed_selection_iterative_mlgst( skip_mc2=skip_mc2, **args)
         else:
             gs_lsgst_list = _alg.do_iterative_mlgst(**args)
     else:
