@@ -2838,379 +2838,379 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
         return ReportFigure(go.Figure(data=data, layout=layout),
                             None, pythonVal)
     
+# Future : possibly to be updated to work with new RB code.
+# class RandomizedBenchmarkingPlot(WorkspacePlot):
+#     """ Plot of RB Decay curve """
+#     def __init__(self, ws, rbR,xlim=None, ylim=None,
+#                  fit='standard', Magesan_zeroth=False, Magesan_first=False,
+#                  exact_decay=False,L_matrix_decay=False, Magesan_zeroth_SEB=False,
+#                  Magesan_first_SEB=False, L_matrix_decay_SEB=False,gs=False,
+#                  gs_target=False,group=False, group_to_gateset=None, norm='1to1', legend=True,
+#                  title='Randomized Benchmarking Decay', scale=1.0):
+#         """
+#         Plot RB decay curve, as a function of some the sequence length
+#         computed using the `gstyp` gate-label-set.
 
-class RandomizedBenchmarkingPlot(WorkspacePlot):
-    """ Plot of RB Decay curve """
-    def __init__(self, ws, rbR,xlim=None, ylim=None,
-                 fit='standard', Magesan_zeroth=False, Magesan_first=False,
-                 exact_decay=False,L_matrix_decay=False, Magesan_zeroth_SEB=False,
-                 Magesan_first_SEB=False, L_matrix_decay_SEB=False,gs=False,
-                 gs_target=False,group=False, group_to_gateset=None, norm='1to1', legend=True,
-                 title='Randomized Benchmarking Decay', scale=1.0):
-        """
-        Plot RB decay curve, as a function of some the sequence length
-        computed using the `gstyp` gate-label-set.
+#         Parameters
+#         ----------
+#         rbR : RBResults
+#             The RB results object containing all the relevant RB data.
 
-        Parameters
-        ----------
-        rbR : RBResults
-            The RB results object containing all the relevant RB data.
+#         gstyp : str, optional
+#             The gate-label-set specifying which translation (i.e. strings with
+#             which gate labels) to use when computing sequence lengths.
 
-        gstyp : str, optional
-            The gate-label-set specifying which translation (i.e. strings with
-            which gate labels) to use when computing sequence lengths.
+#         xlim : tuple, optional
+#             The x-range as (xmin,xmax).
 
-        xlim : tuple, optional
-            The x-range as (xmin,xmax).
+#         ylim : tuple, optional
+#             The y-range as (ymin,ymax).
 
-        ylim : tuple, optional
-            The y-range as (ymin,ymax).
-
-        save_fig_path : str, optional
-            If not None, the filename where the resulting plot should be saved.
+#         save_fig_path : str, optional
+#             If not None, the filename where the resulting plot should be saved.
             
-        fitting : str, optional
-            Allowed values are 'standard', 'first order' or 'all'. Specifies 
-            whether the zeroth or first order fitting model results are plotted,
-            or both.
+#         fitting : str, optional
+#             Allowed values are 'standard', 'first order' or 'all'. Specifies 
+#             whether the zeroth or first order fitting model results are plotted,
+#             or both.
             
-        Magesan_zeroth : bool, optional
-            If True, plots the decay predicted by the 'zeroth order' theory of Magesan
-            et al. PRA 85 042311 2012. Requires gs and gs_target to be specified.
+#         Magesan_zeroth : bool, optional
+#             If True, plots the decay predicted by the 'zeroth order' theory of Magesan
+#             et al. PRA 85 042311 2012. Requires gs and gs_target to be specified.
             
-        Magesan_first : bool, optional
-            If True, plots the decay predicted by the 'first order' theory of Magesan
-            et al. PRA 85 042311 2012. Requires gs and gs_target to be specified.
+#         Magesan_first : bool, optional
+#             If True, plots the decay predicted by the 'first order' theory of Magesan
+#             et al. PRA 85 042311 2012. Requires gs and gs_target to be specified.
             
-        Magesan_zeroth_SEB : bool, optional
-            If True, plots the systematic error bound for the 'zeroth order' theory 
-            predicted decay. This is the region around the zeroth order decay in which
-            the exact RB average survival probabilities are guaranteed to fall.
+#         Magesan_zeroth_SEB : bool, optional
+#             If True, plots the systematic error bound for the 'zeroth order' theory 
+#             predicted decay. This is the region around the zeroth order decay in which
+#             the exact RB average survival probabilities are guaranteed to fall.
         
-        Magesan_first_SEB : bool, optional
-            As above, but for 'first order' theory.
+#         Magesan_first_SEB : bool, optional
+#             As above, but for 'first order' theory.
             
-        exact_decay : bool, optional
-            If True, plots the exact RB decay, as predicted by the 'R matrix' theory
-            of arXiv:1702.01853. Requires gs and group to be specified
+#         exact_decay : bool, optional
+#             If True, plots the exact RB decay, as predicted by the 'R matrix' theory
+#             of arXiv:1702.01853. Requires gs and group to be specified
             
-        L_matrix_decay : bool, optional
-            If True, plots the RB decay, as predicted by the approximate 'L matrix'
-            theory of arXiv:1702.01853. Requires gs and gs_target to be specified.
+#         L_matrix_decay : bool, optional
+#             If True, plots the RB decay, as predicted by the approximate 'L matrix'
+#             theory of arXiv:1702.01853. Requires gs and gs_target to be specified.
             
-        L_matrix_decay_SEB : bool, optional
-            If True, plots the systematic error bound for approximate 'L matrix'
-            theory of arXiv:1702.01853. This is the region around predicted decay
-            in which the exact RB average survival probabilities are guaranteed 
-            to fall.
+#         L_matrix_decay_SEB : bool, optional
+#             If True, plots the systematic error bound for approximate 'L matrix'
+#             theory of arXiv:1702.01853. This is the region around predicted decay
+#             in which the exact RB average survival probabilities are guaranteed 
+#             to fall.
             
-        gs : gateset, optional
-            Required, if plotting any of the theory decays. The gateset for which 
-            these decays should be plotted for.
+#         gs : gateset, optional
+#             Required, if plotting any of the theory decays. The gateset for which 
+#             these decays should be plotted for.
             
-        gs_target : Gateset, optional
-            Required, if plotting certain theory decays. The target gateset for which 
-            these decays should be plotted for. 
+#         gs_target : Gateset, optional
+#             Required, if plotting certain theory decays. The target gateset for which 
+#             these decays should be plotted for. 
             
-        group : MatrixGroup, optional
-            Required, if plotting R matrix theory decay. The matrix group that gs
-            is an implementation of.
+#         group : MatrixGroup, optional
+#             Required, if plotting R matrix theory decay. The matrix group that gs
+#             is an implementation of.
 
-        group_to_gateset : dict, optional
-            If not None, a dictionary that maps labels of group elements to labels
-            of gs. Only used if subset_sampling is not None. If subset_sampling is 
-            not None and the gs and group elements have the same labels, this dictionary
-            is not required. Otherwise it is necessary.
+#         group_to_gateset : dict, optional
+#             If not None, a dictionary that maps labels of group elements to labels
+#             of gs. Only used if subset_sampling is not None. If subset_sampling is 
+#             not None and the gs and group elements have the same labels, this dictionary
+#             is not required. Otherwise it is necessary.
 
-        norm : str, optional
-            The norm used for calculating the Magesan theory bounds.
+#         norm : str, optional
+#             The norm used for calculating the Magesan theory bounds.
             
-        legend : bool, optional
-            Specifies whether a legend is added to the graph
+#         legend : bool, optional
+#             Specifies whether a legend is added to the graph
             
-        title : str, optional
-            Specifies a title for the graph
+#         title : str, optional
+#             Specifies a title for the graph
             
-        Returns
-        -------
-        None
-        """
-#         loc : str, optional
-#            Specifies the location of the legend.
-        super(RandomizedBenchmarkingPlot,self).__init__(
-            ws, self._create, rbR, xlim, ylim, fit, Magesan_zeroth,
-            Magesan_first, exact_decay, L_matrix_decay, Magesan_zeroth_SEB,
-            Magesan_first_SEB, L_matrix_decay_SEB, gs, gs_target, group,
-            group_to_gateset, norm, legend, title, scale)
+#         Returns
+#         -------
+#         None
+#         """
+# #         loc : str, optional
+# #            Specifies the location of the legend.
+#         super(RandomizedBenchmarkingPlot,self).__init__(
+#             ws, self._create, rbR, xlim, ylim, fit, Magesan_zeroth,
+#             Magesan_first, exact_decay, L_matrix_decay, Magesan_zeroth_SEB,
+#             Magesan_first_SEB, L_matrix_decay_SEB, gs, gs_target, group,
+#             group_to_gateset, norm, legend, title, scale)
         
-    def _create(self, rbR, xlim, ylim, fit, Magesan_zeroth,
-                Magesan_first, exact_decay, L_matrix_decay, Magesan_zeroth_SEB,
-                Magesan_first_SEB, L_matrix_decay_SEB, gs, gs_target, group,
-                group_to_gateset, norm, legend, title, scale):
+#     def _create(self, rbR, xlim, ylim, fit, Magesan_zeroth,
+#                 Magesan_first, exact_decay, L_matrix_decay, Magesan_zeroth_SEB,
+#                 Magesan_first_SEB, L_matrix_decay_SEB, gs, gs_target, group,
+#                 group_to_gateset, norm, legend, title, scale):
 
-        from ..extras.rb import rbutils as _rbutils
-        #TODO: maybe move the computational/fitting part of this function
-        #  back to the RBResults object to reduce the logic (and dependence
-        #  on rbutils) here.
+#         from ..extras.rb import rbutils as _rbutils
+#         #TODO: maybe move the computational/fitting part of this function
+#         #  back to the RBResults object to reduce the logic (and dependence
+#         #  on rbutils) here.
  
-        #newplot = _plt.figure(figsize=(8, 4))
-        #newplotgca = newplot.gca()
+#         #newplot = _plt.figure(figsize=(8, 4))
+#         #newplotgca = newplot.gca()
 
-        # Note: minus one to get xdata that discounts final Clifford-inverse
-        xdata = _np.asarray(rbR.results['lengths']) - 1
-        ydata = _np.asarray(rbR.results['successes'])
-        A = rbR.results['A']
-        B = rbR.results['B']
-        f = rbR.results['f']
-        if fit == 'first order':
-            C = rbR.results['C']
-        pre_avg = rbR.pre_avg
+#         # Note: minus one to get xdata that discounts final Clifford-inverse
+#         xdata = _np.asarray(rbR.results['lengths']) - 1
+#         ydata = _np.asarray(rbR.results['successes'])
+#         A = rbR.results['A']
+#         B = rbR.results['B']
+#         f = rbR.results['f']
+#         if fit == 'first order':
+#             C = rbR.results['C']
+#         pre_avg = rbR.pre_avg
         
-        if (Magesan_zeroth_SEB is True) and (Magesan_zeroth is False):
-            print("As Magesan_zeroth_SEB is True, Setting Magesan_zeroth to True\n")
-            Magesan_zeroth = True
-        if (Magesan_first_SEB is True) and (Magesan_first is False):
-            print("As Magesan_first_SEB is True, Setting Magesan_first to True\n")
-            Magesan_first = True
+#         if (Magesan_zeroth_SEB is True) and (Magesan_zeroth is False):
+#             print("As Magesan_zeroth_SEB is True, Setting Magesan_zeroth to True\n")
+#             Magesan_zeroth = True
+#         if (Magesan_first_SEB is True) and (Magesan_first is False):
+#             print("As Magesan_first_SEB is True, Setting Magesan_first to True\n")
+#             Magesan_first = True
                 
-        if (Magesan_zeroth is True) or (Magesan_first is True):
-            if (gs is False) or (gs_target is False):
-                raise ValueError("To plot Magesan et al theory decay curves a gateset" +
-                           " and a target gateset is required.")
-            else:
-                MTP = _rbutils.Magesan_theory_parameters(gs, gs_target, 
-                                                success_outcomelabel=rbR.success_outcomelabel,
-                                                         norm=norm,d=rbR.d)
-                f_an = MTP['p']
-                A_an = MTP['A']
-                B_an = MTP['B']
-                A1_an = MTP['A1']
-                B1_an = MTP['B1']
-                C1_an = MTP['C1']
-                delta = MTP['delta']
+#         if (Magesan_zeroth is True) or (Magesan_first is True):
+#             if (gs is False) or (gs_target is False):
+#                 raise ValueError("To plot Magesan et al theory decay curves a gateset" +
+#                            " and a target gateset is required.")
+#             else:
+#                 MTP = _rbutils.Magesan_theory_parameters(gs, gs_target, 
+#                                                 success_outcomelabel=rbR.success_outcomelabel,
+#                                                          norm=norm,d=rbR.d)
+#                 f_an = MTP['p']
+#                 A_an = MTP['A']
+#                 B_an = MTP['B']
+#                 A1_an = MTP['A1']
+#                 B1_an = MTP['B1']
+#                 C1_an = MTP['C1']
+#                 delta = MTP['delta']
                 
-        if exact_decay is True:
-            if (gs is False) or (group is False):
-                raise ValueError("To plot the exact decay curve a gateset" +
-                                 " and the target group are required.")
-            else:
-                mvalues,ASPs = _rbutils.exact_RB_ASPs(gs,group,max(xdata),m_min=1,m_step=1,
-                                                      d=rbR.d, group_to_gateset=group_to_gateset,
-                                                      success_outcomelabel=rbR.success_outcomelabel)
+#         if exact_decay is True:
+#             if (gs is False) or (group is False):
+#                 raise ValueError("To plot the exact decay curve a gateset" +
+#                                  " and the target group are required.")
+#             else:
+#                 mvalues,ASPs = _rbutils.exact_RB_ASPs(gs,group,max(xdata),m_min=1,m_step=1,
+#                                                       d=rbR.d, group_to_gateset=group_to_gateset,
+#                                                       success_outcomelabel=rbR.success_outcomelabel)
                 
-        if L_matrix_decay is True:
-            if (gs is False) or (gs_target is False):
-                raise ValueError("To plot the L matrix theory decay curve a gateset" +
-                           " and a target gateset is required.")
-            else:
-                mvalues, LM_ASPs, LM_ASPs_SEB_lower, LM_ASPs_SEB_upper = \
-                _rbutils.L_matrix_ASPs(gs,gs_target,max(xdata),m_min=1,m_step=1,d=rbR.d,
-                                       success_outcomelabel=rbR.success_outcomelabel, error_bounds=True)
+#         if L_matrix_decay is True:
+#             if (gs is False) or (gs_target is False):
+#                 raise ValueError("To plot the L matrix theory decay curve a gateset" +
+#                            " and a target gateset is required.")
+#             else:
+#                 mvalues, LM_ASPs, LM_ASPs_SEB_lower, LM_ASPs_SEB_upper = \
+#                 _rbutils.L_matrix_ASPs(gs,gs_target,max(xdata),m_min=1,m_step=1,d=rbR.d,
+#                                        success_outcomelabel=rbR.success_outcomelabel, error_bounds=True)
 
-        xlabel = 'Sequence length'
+#         xlabel = 'Sequence length'
 
-        data = [] # list of traces
-        data.append( go.Scatter(
-            x = xdata, y = ydata,
-            mode = 'markers',
-            marker = dict(
-                color = "rgb(0,0,0)",
-                size = 6 if pre_avg else 3
-            ),
-            name = 'Averaged RB data' if pre_avg else 'RB data',
-        ))
+#         data = [] # list of traces
+#         data.append( go.Scatter(
+#             x = xdata, y = ydata,
+#             mode = 'markers',
+#             marker = dict(
+#                 color = "rgb(0,0,0)",
+#                 size = 6 if pre_avg else 3
+#             ),
+#             name = 'Averaged RB data' if pre_avg else 'RB data',
+#         ))
         
-        if fit=='standard' or fit=='first order':
-            fit_label_1='Fit'
-            fit_label_2='Fit'
-            color2 = "black"
+#         if fit=='standard' or fit=='first order':
+#             fit_label_1='Fit'
+#             fit_label_2='Fit'
+#             color2 = "black"
 
-        theory_color2 = "green"
-        theory_fill2 = "rgba(0,128,0,0.1)"
-        if Magesan_zeroth is True and Magesan_first is True:
-            theory_color2 = "magenta"
-            theory_fill2 = "rgba(255,0,255,0.1)"
+#         theory_color2 = "green"
+#         theory_fill2 = "rgba(0,128,0,0.1)"
+#         if Magesan_zeroth is True and Magesan_first is True:
+#             theory_color2 = "magenta"
+#             theory_fill2 = "rgba(255,0,255,0.1)"
                     
-        if fit=='standard':
-            data.append( go.Scatter(
-                x = _np.arange(max(xdata)),
-                y = _rbutils.standard_fit_function(_np.arange(max(xdata)),A,B,f),
-                mode = 'lines',
-                line = dict(width=1, color="black"),
-                name = fit_label_1,
-                showlegend=legend,
-            ))
+#         if fit=='standard':
+#             data.append( go.Scatter(
+#                 x = _np.arange(max(xdata)),
+#                 y = _rbutils.standard_fit_function(_np.arange(max(xdata)),A,B,f),
+#                 mode = 'lines',
+#                 line = dict(width=1, color="black"),
+#                 name = fit_label_1,
+#                 showlegend=legend,
+#             ))
           
-        if fit=='first order':
-            data.append( go.Scatter(
-                x = _np.arange(max(xdata)),
-                y = _rbutils.first_order_fit_function(_np.arange(max(xdata)),A,B,C,f),
-                mode = 'lines',
-                line = dict(width=1, color=color2),
-                name = fit_label_2,
-                showlegend=legend,
-            ))
+#         if fit=='first order':
+#             data.append( go.Scatter(
+#                 x = _np.arange(max(xdata)),
+#                 y = _rbutils.first_order_fit_function(_np.arange(max(xdata)),A,B,C,f),
+#                 mode = 'lines',
+#                 line = dict(width=1, color=color2),
+#                 name = fit_label_2,
+#                 showlegend=legend,
+#             ))
 
-        if Magesan_zeroth is True:
-            data.append( go.Scatter(
-                x = _np.arange(max(xdata)),
-                y = _rbutils.standard_fit_function(_np.arange(max(xdata)),A_an,B_an,f_an),
-                mode = 'lines',
-                line = dict(width=2, color="green", dash='dash'),
-                name = '0th order theory',
-                showlegend=legend,
-            ))
+#         if Magesan_zeroth is True:
+#             data.append( go.Scatter(
+#                 x = _np.arange(max(xdata)),
+#                 y = _rbutils.standard_fit_function(_np.arange(max(xdata)),A_an,B_an,f_an),
+#                 mode = 'lines',
+#                 line = dict(width=2, color="green", dash='dash'),
+#                 name = '0th order theory',
+#                 showlegend=legend,
+#             ))
 
-            if Magesan_zeroth_SEB is True:
-                data.append( go.Scatter(
-                    x = _np.arange(max(xdata)),
-                    y = _rbutils.seb_upper(
-                        _rbutils.standard_fit_function(_np.arange(max(xdata)),A_an,B_an,f_an), 
-                        _np.arange(max(xdata)), delta, order='zeroth'),
-                    mode = 'lines',
-                    line = dict(width=0.5, color="green"),
-                    name = '0th order bound',
-                    fill='tonexty',
-                    fillcolor='rgba(0,128,0,0.1)',
-                    showlegend=False,
-                ))
-                data.append( go.Scatter(
-                    x = _np.arange(max(xdata)),
-                    y = _rbutils.seb_lower( 
-                        _rbutils.standard_fit_function(_np.arange(max(xdata)),A_an,B_an,f_an),
-                        _np.arange(max(xdata)), delta, order='zeroth'),
-                    mode = 'lines',
-                    line = dict(width=0.5, color="green"),
-                    name = '0th order bound',
-                    showlegend=False,
-                ))
-
-
-        if Magesan_first is True:
-            data.append( go.Scatter(
-                x = _np.arange(max(xdata)),
-                y = _rbutils.first_order_fit_function(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
-                mode = 'lines',
-                line = dict(width=2, color=theory_color2, dash='dash'),
-                name = '1st order theory',
-                showlegend=legend,
-            ))
-
-            if Magesan_first_SEB is True:
-                data.append( go.Scatter(
-                    x = _np.arange(max(xdata)),
-                    y = _rbutils.seb_upper(
-                        _rbutils.first_order_fit_function(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
-                        _np.arange(max(xdata)), delta, order='first'),
-                    mode = 'lines',
-                    line = dict(width=0.5, color=theory_color2), #linewidth=4?
-                    name = '1st order bound',
-                    fill='tonexty',
-                    fillcolor=theory_fill2,
-                    showlegend=False,
-                ))
-                data.append( go.Scatter(
-                    x = _np.arange(max(xdata)),
-                    y = _rbutils.seb_lower( 
-                        _rbutils.first_order_fit_function(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
-                        _np.arange(max(xdata)), delta, order='first'),
-                    mode = 'lines',
-                    line = dict(width=0.5, color=theory_color2),
-                    name = '1st order bound',
-                    showlegend=False,
-                ))
+#             if Magesan_zeroth_SEB is True:
+#                 data.append( go.Scatter(
+#                     x = _np.arange(max(xdata)),
+#                     y = _rbutils.seb_upper(
+#                         _rbutils.standard_fit_function(_np.arange(max(xdata)),A_an,B_an,f_an), 
+#                         _np.arange(max(xdata)), delta, order='zeroth'),
+#                     mode = 'lines',
+#                     line = dict(width=0.5, color="green"),
+#                     name = '0th order bound',
+#                     fill='tonexty',
+#                     fillcolor='rgba(0,128,0,0.1)',
+#                     showlegend=False,
+#                 ))
+#                 data.append( go.Scatter(
+#                     x = _np.arange(max(xdata)),
+#                     y = _rbutils.seb_lower( 
+#                         _rbutils.standard_fit_function(_np.arange(max(xdata)),A_an,B_an,f_an),
+#                         _np.arange(max(xdata)), delta, order='zeroth'),
+#                     mode = 'lines',
+#                     line = dict(width=0.5, color="green"),
+#                     name = '0th order bound',
+#                     showlegend=False,
+#                 ))
 
 
-        if exact_decay is True:
-            data.append( go.Scatter(
-                x = mvalues,
-                y = ASPs,
-                mode = 'lines',
-                line = dict(width=2, color="blue",dash='dash'),
-                name = 'Exact decay',
-                showlegend=legend,
-            ))
+#         if Magesan_first is True:
+#             data.append( go.Scatter(
+#                 x = _np.arange(max(xdata)),
+#                 y = _rbutils.first_order_fit_function(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
+#                 mode = 'lines',
+#                 line = dict(width=2, color=theory_color2, dash='dash'),
+#                 name = '1st order theory',
+#                 showlegend=legend,
+#             ))
+
+#             if Magesan_first_SEB is True:
+#                 data.append( go.Scatter(
+#                     x = _np.arange(max(xdata)),
+#                     y = _rbutils.seb_upper(
+#                         _rbutils.first_order_fit_function(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
+#                         _np.arange(max(xdata)), delta, order='first'),
+#                     mode = 'lines',
+#                     line = dict(width=0.5, color=theory_color2), #linewidth=4?
+#                     name = '1st order bound',
+#                     fill='tonexty',
+#                     fillcolor=theory_fill2,
+#                     showlegend=False,
+#                 ))
+#                 data.append( go.Scatter(
+#                     x = _np.arange(max(xdata)),
+#                     y = _rbutils.seb_lower( 
+#                         _rbutils.first_order_fit_function(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
+#                         _np.arange(max(xdata)), delta, order='first'),
+#                     mode = 'lines',
+#                     line = dict(width=0.5, color=theory_color2),
+#                     name = '1st order bound',
+#                     showlegend=False,
+#                 ))
+
+
+#         if exact_decay is True:
+#             data.append( go.Scatter(
+#                 x = mvalues,
+#                 y = ASPs,
+#                 mode = 'lines',
+#                 line = dict(width=2, color="blue",dash='dash'),
+#                 name = 'Exact decay',
+#                 showlegend=legend,
+#             ))
         
-        if L_matrix_decay is True:
-            data.append( go.Scatter(
-                x = mvalues,
-                y = LM_ASPs,
-                mode = 'lines',
-                line = dict(width=2, color="cyan",dash='dash'),
-                name = 'L matrix decay',
-                showlegend=legend,
-            ))
-            if L_matrix_decay_SEB is True:
-                data.append( go.Scatter(
-                    x = mvalues,
-                    y = LM_ASPs_SEB_upper,
-                    mode = 'lines',
-                    line = dict(width=0.5, color="cyan"),
-                    name = 'LM bound',
-                    fill='tonexty',
-                    fillcolor='rgba(0,255,255,0.1)',
-                    showlegend=False,
-                ))
-                data.append( go.Scatter(
-                    x = mvalues,
-                    y = LM_ASPs_SEB_lower,
-                    mode = 'lines',
-                    line = dict(width=0.5, color="cyan"),
-                    name = 'LM bound',
-                    showlegend=False,
-                ))
+#         if L_matrix_decay is True:
+#             data.append( go.Scatter(
+#                 x = mvalues,
+#                 y = LM_ASPs,
+#                 mode = 'lines',
+#                 line = dict(width=2, color="cyan",dash='dash'),
+#                 name = 'L matrix decay',
+#                 showlegend=legend,
+#             ))
+#             if L_matrix_decay_SEB is True:
+#                 data.append( go.Scatter(
+#                     x = mvalues,
+#                     y = LM_ASPs_SEB_upper,
+#                     mode = 'lines',
+#                     line = dict(width=0.5, color="cyan"),
+#                     name = 'LM bound',
+#                     fill='tonexty',
+#                     fillcolor='rgba(0,255,255,0.1)',
+#                     showlegend=False,
+#                 ))
+#                 data.append( go.Scatter(
+#                     x = mvalues,
+#                     y = LM_ASPs_SEB_lower,
+#                     mode = 'lines',
+#                     line = dict(width=0.5, color="cyan"),
+#                     name = 'LM bound',
+#                     showlegend=False,
+#                 ))
 
-        ymin = min([min(trace['y']) for trace in data])
-        ymin -= 0.1*abs(1.0-ymin) #pad by 10%
+#         ymin = min([min(trace['y']) for trace in data])
+#         ymin -= 0.1*abs(1.0-ymin) #pad by 10%
         
-        layout = go.Layout(
-            width=800*scale,
-            height=400*scale,
-            title=title,
-            titlefont=dict(size=16),
-            xaxis=dict(
-                title=xlabel,
-                titlefont=dict(size=14),
-                range=xlim if xlim else [0,max(xdata)],
-            ),
-            yaxis=dict(
-                title='Mean survival probability',
-                titlefont=dict(size=14),
-                range=ylim if ylim else [ymin,1.0],
-            ),
-            legend=dict(
-                font=dict(
-                    size=13,
-                ),
-            )
-        )
+#         layout = go.Layout(
+#             width=800*scale,
+#             height=400*scale,
+#             title=title,
+#             titlefont=dict(size=16),
+#             xaxis=dict(
+#                 title=xlabel,
+#                 titlefont=dict(size=14),
+#                 range=xlim if xlim else [0,max(xdata)],
+#             ),
+#             yaxis=dict(
+#                 title='Mean survival probability',
+#                 titlefont=dict(size=14),
+#                 range=ylim if ylim else [ymin,1.0],
+#             ),
+#             legend=dict(
+#                 font=dict(
+#                     size=13,
+#                 ),
+#             )
+#         )
 
-        pythonVal = {}
-        for i,tr in enumerate(data):
-            key = tr['name'] if ("name" in tr) else "trace%d" % i
-            pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
+#         pythonVal = {}
+#         for i,tr in enumerate(data):
+#             key = tr['name'] if ("name" in tr) else "trace%d" % i
+#             pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
         
-        #reverse order of data so z-ordering is nicer
-        return ReportFigure(go.Figure(data=list(reversed(data)), layout=layout),
-                            None, pythonVal)
+#         #reverse order of data so z-ordering is nicer
+#         return ReportFigure(go.Figure(data=list(reversed(data)), layout=layout),
+#                             None, pythonVal)
 
-        #newplotgca.set_xlabel(xlabel, fontsize=15)
-        #newplotgca.set_ylabel('Mean survival probability',fontsize=15)
-        #if title==True:
-        #    newplotgca.set_title('Randomized Benchmarking Decay', fontsize=18)  
-        #newplotgca.set_frame_on(True)
-        #newplotgca.yaxis.grid(False)
-        #newplotgca.tick_params(axis='x', top='off', labelsize=12)
-        #newplotgca.tick_params(axis='y', left='off', right='off', labelsize=12)
+#         #newplotgca.set_xlabel(xlabel, fontsize=15)
+#         #newplotgca.set_ylabel('Mean survival probability',fontsize=15)
+#         #if title==True:
+#         #    newplotgca.set_title('Randomized Benchmarking Decay', fontsize=18)  
+#         #newplotgca.set_frame_on(True)
+#         #newplotgca.yaxis.grid(False)
+#         #newplotgca.tick_params(axis='x', top='off', labelsize=12)
+#         #newplotgca.tick_params(axis='y', left='off', right='off', labelsize=12)
         
-        #if legend==True:
-        #    leg = _plt.legend(fancybox=True, loc=loc)
-        #    leg.get_frame().set_alpha(0.9)
+#         #if legend==True:
+#         #    leg = _plt.legend(fancybox=True, loc=loc)
+#         #    leg.get_frame().set_alpha(0.9)
         
-        #newplotgca.spines["top"].set_visible(False)
-        #newplotgca.spines["right"].set_visible(False)    
-        #newplotgca.spines["bottom"].set_alpha(.7)
-        #newplotgca.spines["left"].set_alpha(.7)  
+#         #newplotgca.spines["top"].set_visible(False)
+#         #newplotgca.spines["right"].set_visible(False)    
+#         #newplotgca.spines["bottom"].set_alpha(.7)
+#         #newplotgca.spines["left"].set_alpha(.7)  
 
     
 
