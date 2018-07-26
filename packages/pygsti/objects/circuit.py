@@ -265,17 +265,16 @@ class Circuit(_gstr.GateString):
                     
                     # look at the j+kth gate and include in this layer
                     gate = gatestring[j+k] # really a gate *label*
-                    # If it's a label with no qubits specified, we enforce that the
-                    # qubits attribute is *all* of the lines in the circuit. Because
-                    # Labels in a circuit always need to point to some lines.
-                    if (gate.qubits is () or gate.qubits is None):
-                        gate = _Label(gate.name,self.line_labels) # then gate uses *all* lines
-                        
-                    if len(used_qubits.intersection(gate.qubits)) > 0:
+
+                    # Label *can* have None as its .qubits, this in interpeted
+                    # to mean the label applies to all the lines.
+                    gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
+                    
+                    if len(used_qubits.intersection(gate_qubits)) > 0:
                         break # `gate` can't fit in this layer
                         
                     layer.append(gate)
-                    used_qubits.update(gate.qubits)                    
+                    used_qubits.update(gate_qubits)                    
                         
                     # look at the next gate in the list, which will be
                     # added to the layer if it does not act on any qubits
@@ -284,11 +283,6 @@ class Circuit(_gstr.GateString):
             else: # just add the next gate label as the next layer
                 k = 1 # The number of gates beyond j that are going into this layer.
                 gate = gatestring[j]
-                # If it's a label with no qubits specified, we enforce that the
-                # qubits attribute is *all* of the lines in the circuit. Because
-                # Labels in a circuit always need to point to some lines.
-                if (gate.qubits is () or gate.qubits is None):
-                    gate = _Label(gate.name,self.line_labels)
                 layer.append(gate)
                 
             # Insert the layer into the circuit.
@@ -321,8 +315,9 @@ class Circuit(_gstr.GateString):
         """
         assert(not self._static),"Cannot edit a read-only circuit!"       
         # If all lines have idles on them in this layer, we put it into this layer, without moving
-        # gate on other lines around. But otherwise we add in an idle layer at this point.   
-        if not self.lines_are_idle_at_layer(gatelbl.qubits,j):    
+        # gate on other lines around. But otherwise we add in an idle layer at this point.
+        gatelbl_qubits = gatelbl.qubits if (gatelbl.qubits is not None) else self.line_labels
+        if not self.lines_are_idle_at_layer(gatelbl_qubits,j):    
             # Add an idle layer.
             for i in range(0,self.number_of_lines()):
                 self.line_items[i].insert(j,_Label(self.identity,self.line_labels[i]))
@@ -363,8 +358,10 @@ class Circuit(_gstr.GateString):
         assert(not self._static),"Cannot edit a read-only circuit!"
         gate_to_replace = self.line_items[q][j]
 
-        # Replace the gate with identity 
-        for q in gate_to_replace.qubits:
+        # Replace the gate with identity
+        gate_qubits = self.line_labels if (gate_to_replace.qubits is None) \
+                      else gate_to_replace.qubits
+        for q in gate_qubits:
             self.line_items[self.line_labels.index(q)][j] = _Label(self.identity,q)
         
         # Inserts the circuit after the layer this gate was in.
@@ -630,9 +627,10 @@ class Circuit(_gstr.GateString):
         depth = self.depth()
         for q in range(self.number_of_lines()):
             for l in range(depth):
-                if self.line_items[q][l].name == old_gatename:
-                    #self.line_items[q][l].name = new_gatename # This doesn't work now for some reason.
-                    self.line_items[q][l] = _Label(new_gatename, self.line_items[q][l].qubits)
+                gatelbl = self.line_items[q][l]
+                if gatelbl.name == old_gatename:
+                    self.line_items[q][l] = _Label(new_gatename, gatelbl.qubits)
+                      #Note: OK if gatelbl.qubits is None
 
         self._tup_dirty = self._str_dirty = True
 
@@ -783,7 +781,9 @@ class Circuit(_gstr.GateString):
         for i in range(0,self.number_of_lines()):
             for j in range(0,depth):
                 gate = self.line_items[i][j]
-                self.line_items[i][j] = _Label(gate.name,tuple([mapper_func(l) for l in gate.qubits]))
+                gate_qubits = [mapper_func(l) for l in gate.qubits] \
+                              if (gate.qubits is not None) else None
+                self.line_items[i][j] = _Label(gate.name,gate_qubits)
 
         self._tup_dirty = self._str_dirty = True
 
@@ -930,7 +930,10 @@ class Circuit(_gstr.GateString):
                 # This is the label of the current gate that we are trying to combine with later gates.
                 k = j
                 # Check that the gate is a 1-qubit gate, because this function can only combine pairs of 1-qubit gates.
-                if self.line_items[q][k].number_of_qubits == 1:
+                nqubits = self.line_items[q][k].number_of_qubits
+                if nqubits is None: nqubits = len(self.line_labels)
+                
+                if nqubits == 1:
                     # Loop through the gates following this gate on qubit q.
                     for i in range(k+1,self.depth()):
                         # For each gate we try and combine we iterate j by 1: so we'll start the next loop at the gate
@@ -938,7 +941,9 @@ class Circuit(_gstr.GateString):
                         j += 1
                         # If the next gate is not a 1-qubit gate, we leave the loop and try to combine the gate after it
                         # (the jth gate) with later gates. So we iterate j by 1 before leaving the loop
-                        if self.line_items[q][i].number_of_qubits > 1:
+                        nqubits2 = self.line_items[q][i].number_of_qubits
+                        if nqubits2 is None: nqubits2 = len(self.line_labels)
+                        if nqubits2 > 1:
                             j += 1
                             break
                         # If the next gate is a 1-qubit gate, we see if we can compress it with gate k.
@@ -1013,6 +1018,8 @@ class Circuit(_gstr.GateString):
             for q in range(0,self.number_of_lines()):
                 #print(j,q)
                 gate = self.line_items[q][j]
+                gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
+                
                 # If the gate isn't the identity, we try and move it forward. If it
                 # is the identity, we don't change can_move_to_layer[q].
                 if gate.name != self.identity:
@@ -1021,7 +1028,7 @@ class Circuit(_gstr.GateString):
                     move_to_layer = 0
                     # Look at each qubit in the gate, and find out how far forward we
                     # can move a gate on that qubit
-                    for qlabel in gate.qubits:
+                    for qlabel in gate_qubits:
                         qindex = self.line_labels.index(qlabel)
                         # Update the layer we can move to to the worst-case out of the
                         # qubits the gate acts on -- as it has to be shifted forward on
@@ -1031,7 +1038,7 @@ class Circuit(_gstr.GateString):
                     # If the layer we can move it to isn't the current layer we do that.
                     if move_to_layer < j:
                         # Go through the qubits the gate acts on and move it for all of them
-                        for qlabel in gate.qubits:
+                        for qlabel in gate_qubits:
                             qindex = self.line_labels.index(qlabel)
                             # Write the gate in where it is move to
                             self.line_items[qindex][move_to_layer] = self.line_items[qindex][j]
@@ -1049,7 +1056,7 @@ class Circuit(_gstr.GateString):
                     # as the gate we are considering trying to move forward unless this corresponds to
                     # an idle laye (it stops iterating foward as soon as we hit an idle layer on the qubit).
                     else:
-                        for qlabel in gate.qubits:
+                        for qlabel in gate_qubits:
                             qindex = self.line_labels.index(qlabel)
                             can_move_to_layer[qindex] = j + 1
 
@@ -1183,17 +1190,19 @@ class Circuit(_gstr.GateString):
         for i in range(0,self.number_of_lines()):
             
             gate = self.line_items[i][j]
+            gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
+            
             # Checks every element is a Label object.
             assert((isinstance(gate,_Label))), "The elements of the layer should be Label objects!"
             # Checks that a Label appears in all the lines it should act on.
-            for q in gate.qubits:
+            for q in gate_qubits:
                 assert(self.line_items[self.line_labels.index(q)][j] == gate), "This is an invalid circuit layer!"
 
             # We only record non-identity gates.
             if gate not in layer and gate.name != self.identity:
                 # Checks that we have not already assigned a gate to this qubit
-                assert(not set(gate.qubits).issubset(set(qubits_used))), "There is more than one gate on some qubits in the layer; layer invalid!"
-                qubits_used += [q for q in gate.qubits]
+                assert(not set(gate_qubits).issubset(set(qubits_used))), "There is more than one gate on some qubits in the layer; layer invalid!"
+                qubits_used.extend( gate_qubits )
                 layer.append(gate)
             
         return layer
@@ -1327,7 +1336,9 @@ class Circuit(_gstr.GateString):
         count = 0
         for q in range(0,self.number_of_lines()):
             for j in range(0,self.depth()):
-                if self.line_items[q][j].number_of_qubits == 2:
+                nqubits = self.line_items[q][j].number_of_qubits
+                if nqubits is None: nqubits = len(self.line_labels)
+                if nqubits == 2:
                     count += 1
         return count//2
 
@@ -1344,8 +1355,12 @@ class Circuit(_gstr.GateString):
         count = 0
         for q in range(0,self.number_of_lines()):
             for j in range(0,self.depth()):
-                if self.line_items[q][j].number_of_qubits >= 2:
-                    if self.line_items[q][j].qubits[0] == self.line_labels[q]:
+                gatelbl = self.line_items[q][j]
+                if gatelbl.number_of_qubits is None:
+                    if q == 0 and self.number_of_lines() > 1:
+                        count += 1
+                elif gatelbl.number_of_qubits >= 2:
+                    if gatelbl.qubits[0] == self.line_labels[q]:
                         count += 1
         return count
     
@@ -1374,8 +1389,12 @@ class Circuit(_gstr.GateString):
         for i in range(0,self.number_of_lines()):
             for j in range(0,depth):
                 gate = self.line_items[i][j]
+                
                 # So that we don't include multi-qubit gates more than once.
-                if self.line_labels.index(gate.qubits[0]) == i:
+                if gate.qubits is None:
+                    if i == 0: 
+                        f = f*(1-gate_error_probabilities[gate])
+                elif gatelbl.qubits[0] == self.line_labels[i]:
                     f = f*(1-gate_error_probabilities[gate])       
         return 1 - f
 
@@ -1387,18 +1406,20 @@ class Circuit(_gstr.GateString):
 
         def abbrev(lbl,k): #assumes a simple label w/ name & qubits
             """ Returns what to print on line 'k' for label 'lbl' """
-            if lbl.number_of_qubits == 1:
+            lbl_qubits = lbl.qubits if (lbl.qubits is not None) else self.line_labels
+            nqubits = len(lbl_qubits)
+            if nqubits == 1:
                 return lbl.name
-            elif lbl.name in ('CNOT','Gcnot'): # qubit indices = (control,target)
-                if k == self.line_labels.index(lbl.qubits[0]):
-                    return  '\u25CF' + str(lbl.qubits[1]) # was "C"
+            elif lbl.name in ('CNOT','Gcnot') and nqubits == 2: # qubit indices = (control,target)
+                if k == self.line_labels.index(lbl_qubits[0]):
+                    return  '\u25CF' + str(lbl_qubits[1]) # was "C"
                 else:
-                    return '\u2295' + str(lbl.qubits[0]) # was "T"
-            elif lbl.name in ('CPHASE', 'Gcphase'):
-                if k == self.line_labels.index(lbl.qubits[0]):
-                    otherqubit = lbl.qubits[1]
+                    return '\u2295' + str(lbl_qubits[0]) # was "T"
+            elif lbl.name in ('CPHASE', 'Gcphase') and nqubits == 2:
+                if k == self.line_labels.index(lbl_qubits[0]):
+                    otherqubit = lbl_qubits[1]
                 else:
-                    otherqubit = lbl.qubits[0]
+                    otherqubit = lbl_qubits[0]
                 return '\u25CF' + str(otherqubit)
             else:
                 return str(lbl)
@@ -1456,16 +1477,18 @@ class Circuit(_gstr.GateString):
             # The quantum wire for qubit q
             circuit_for_q = self.line_items[q]
             for gate in circuit_for_q:
+                gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
+                nqubits = len(gate_qubits)
                 if gate.name == self.identity:
                     qstring += ' \qw &'
-                elif gate.name == 'CNOT' or gate.name == 'Gcnot':
-                    if gate.qubits[0] == q:
-                        qstring += ' \ctrl{'+str(gate.qubits[1]-q)+'} &'
+                elif gate.name in ('CNOT','Gcnot') and nqubits == 2:
+                    if gate_qubits[0] == q:
+                        qstring += ' \ctrl{'+str(gate_qubits[1]-q)+'} &'
                     else:
                         qstring += ' \\targ &'
-                elif gate.name == 'CPHASE' or gate.name == 'Gcphase':
-                    if gate.qubits[0] == q:
-                        qstring += ' \ctrl{'+str(gate.qubits[1]-q)+'} &'
+                elif gate.name in ('CPHASE','Gcphase') and nqubits == 2:
+                    if gate_qubits[0] == q:
+                        qstring += ' \ctrl{'+str(gate_qubits[1]-q)+'} &'
                     else:
                         qstring += ' \control \qw &'
             
@@ -1538,11 +1561,12 @@ class Circuit(_gstr.GateString):
             
             # Go through the (non-self.identity) gates in the layer and convert them to quil
             for gate in layer:
-                assert(len(gate.qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
+                gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
+                assert(len(gate_qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
                 
                 # Find the quil for the gate.
                 quil_for_gate = gatename_conversion[gate.name]
-                for q in gate.qubits: quil_for_gate += ' ' + str(qubit_conversion[q]) 
+                for q in gate_qubits: quil_for_gate += ' ' + str(qubit_conversion[q]) 
                 quil_for_gate += '\n'
                 # Add the quil for the gate to the quil string.
                 quil += quil_for_gate
@@ -1550,8 +1574,8 @@ class Circuit(_gstr.GateString):
                 # Keeps track of the qubits that have been accounted for, and checks that hadn't been used
                 # although that should already be checked in the .get_layer(), which checks for its a valid 
                 # circuit layer.
-                assert(not set(gate.qubits).issubset(set(qubits_used)))
-                qubits_used += list(gate.qubits)
+                assert(not set(gate_qubits).issubset(set(qubits_used)))
+                qubits_used.extend(gate_qubits)
             
             # All gates that don't have a non-idle gate acting on them get an idle in the layer.
             for q in self.line_labels:
@@ -1631,13 +1655,14 @@ class Circuit(_gstr.GateString):
             
             # Go through the (non-self.identity) gates in the layer and convert them to openqasm
             for gate in layer:
-                assert(len(gate.qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
+                gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
+                assert(len(gate_qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
                 
                 # Find the openqasm for the gate.
                 openqasm_for_gate = gatename_conversion[gate.name]
-                for q in gate.qubits: 
+                for q in gate_qubits: 
                     openqasm_for_gate += ' q[' + str(qubit_conversion[q])+']'
-                    if q != gate.qubits[-1]:
+                    if q != gate_qubits[-1]:
                         openqasm_for_gate += ', '
                 openqasm_for_gate += ';\n'
                 # Add the openqasm for the gate to the openqasm string.
@@ -1646,8 +1671,8 @@ class Circuit(_gstr.GateString):
                 # Keeps track of the qubits that have been accounted for, and checks that hadn't been used
                 # although that should already be checked in the .get_layer(), which checks for its a valid 
                 # circuit layer.
-                assert(not set(gate.qubits).issubset(set(qubits_used)))
-                qubits_used += list(gate.qubits)
+                assert(not set(gate_qubits).issubset(set(qubits_used)))
+                qubits_used.extend(gate_qubits)
             
             # All gates that don't have a non-idle gate acting on them get an idle in the layer.
             for q in self.line_labels:
