@@ -816,12 +816,7 @@ def _fas(a, inds, rhs, add=False):
         if nDims > 0 and all([len(x)>0 for x in b]): # b/c a[()] just returns the entire array!
 
             if _fastcalc is not None:
-                assert(a.flags['C_CONTIGUOUS'])
-                assert(rhs.flags['C_CONTIGUOUS'])
-                #Note: we may not really need these arrays to be contiguous, since we can just
-                # use their strides (FUTURE) - in ptic assumption that we can just inc by 1
-                # the rhs_index in fast_fas_helper_Xd would need to be updated at least.
-
+                #Note: we do not require these arrays to be contiguous
                 if nDims == 1:
                     _fastcalc.fast_fas_helper_1d(a, rhs, b[0])
                 elif nDims == 2:

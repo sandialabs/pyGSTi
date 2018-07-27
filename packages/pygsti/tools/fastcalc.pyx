@@ -827,6 +827,7 @@ def csr_subtract_identity(np.ndarray[double, ndim=1] Adata,
 def fast_fas_helper_1d(np.ndarray[double, mode="c", ndim=1] a,
                        np.ndarray[double, mode="c", ndim=1] rhs,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds0):
+    #Note: can retain mode="c" for a and rhs above since they're 1D
     
     cdef INT nDims = 1
     cdef INT b[1]
@@ -847,7 +848,7 @@ def fast_fas_helper_1d(np.ndarray[double, mode="c", ndim=1] a,
 
     while(True):
         a_ptr[a_indx] = rhs_ptr[rhs_indx]
-        rhs_indx += 1 # always increments by 1
+        rhs_indx += 1 # always increments by 1 (1D and contiguous)
 
         #increment b ~ itertools.product        
         if b[0]+1 < rhs_dims[0]: # "i = 0" loop
@@ -870,14 +871,15 @@ def fast_fas_helper_1d(np.ndarray[double, mode="c", ndim=1] a,
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-def fast_fas_helper_2d(np.ndarray[double, mode="c", ndim=2] a,
-                       np.ndarray[double, mode="c", ndim=2] rhs,
+def fast_fas_helper_2d(np.ndarray[double, ndim=2] a,
+                       np.ndarray[double, ndim=2] rhs,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds0,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds1):
     
     cdef INT nDims = 2
     cdef INT b[2]
     cdef INT a_strides[2]
+    cdef INT rhs_strides[2]
     cdef INT rhs_dims[2]
     cdef INT rhs_indx = 0
     cdef INT a_indx = 0
@@ -885,6 +887,7 @@ def fast_fas_helper_2d(np.ndarray[double, mode="c", ndim=2] a,
     for i in range(nDims):
         b[i] = 0
         a_strides[i] = a.strides[i] // a.itemsize
+        rhs_strides[i] = rhs.strides[i] // rhs.itemsize
         rhs_dims[i] = rhs.shape[i]
 
     a_indx += inds0[0] * a_strides[0]
@@ -893,64 +896,12 @@ def fast_fas_helper_2d(np.ndarray[double, mode="c", ndim=2] a,
     cdef double* a_ptr = <double*>a.data
     cdef double* rhs_ptr = <double*>rhs.data
 
-    while(True):
-        a_ptr[a_indx] = rhs_ptr[rhs_indx]
-        rhs_indx += 1 # always increments by 1
-
-        #increment b ~ itertools.product
-        if b[1]+1 < rhs_dims[1]: # "i = 1" loop
-            a_indx += (inds1[b[1]+1]-inds1[b[1]]) * a_strides[1]
-            b[1] += 1
-        else:
-            a_indx += (inds1[0]-inds1[b[1]]) * a_strides[1]
-            b[1] = 0
-            if b[0]+1 < rhs_dims[0]: # "i = 0" loop
-                a_indx += (inds0[b[0]+1]-inds0[b[0]]) * a_strides[0]
-                b[0] += 1
-            else:
-                break # can't increment anything - break while(True) loop
-
-
-@cython.boundscheck(False) # turn off bounds-checking for entire function
-@cython.wraparound(False)  # turn off negative index wrapping for entire function
-def fast_fas_helper_3d(np.ndarray[double, mode="c", ndim=3] a,
-                       np.ndarray[double, mode="c", ndim=3] rhs,
-                       np.ndarray[np.int64_t, mode="c", ndim=1] inds0,
-                       np.ndarray[np.int64_t, mode="c", ndim=1] inds1,
-                       np.ndarray[np.int64_t, mode="c", ndim=1] inds2):
+    if rhs.flags['C_CONTIGUOUS']:
+        while(True):
+            a_ptr[a_indx] = rhs_ptr[rhs_indx]
+            rhs_indx += 1 # always increments by 1
     
-    cdef INT nDims = 3
-    cdef INT b[3]
-    cdef INT a_strides[3]
-    cdef INT rhs_dims[3]
-    cdef INT rhs_indx = 0
-    cdef INT a_indx = 0
-    
-    for i in range(nDims):
-        b[i] = 0
-        a_strides[i] = a.strides[i] // a.itemsize
-        rhs_dims[i] = rhs.shape[i]
-    
-    #for i in range(nDims):
-    #    a_indx += indsPerDim[i][0] * a_strides[i]
-    a_indx += inds0[0] * a_strides[0]
-    a_indx += inds1[0] * a_strides[1]
-    a_indx += inds2[0] * a_strides[2]
-
-    cdef double* a_ptr = <double*>a.data
-    cdef double* rhs_ptr = <double*>rhs.data
-
-    while(True):
-        a_ptr[a_indx] = rhs_ptr[rhs_indx]
-        rhs_indx += 1 # always increments by 1
-
-        #increment b ~ itertools.product
-        if b[2]+1 < rhs_dims[2]: # "i = 2" loop
-            a_indx += (inds2[b[2]+1]-inds2[b[2]]) * a_strides[2]
-            b[2] += 1
-        else:
-            a_indx += (inds2[0]-inds2[b[2]]) * a_strides[2]
-            b[2] = 0
+            #increment b ~ itertools.product
             if b[1]+1 < rhs_dims[1]: # "i = 1" loop
                 a_indx += (inds1[b[1]+1]-inds1[b[1]]) * a_strides[1]
                 b[1] += 1
@@ -962,3 +913,108 @@ def fast_fas_helper_3d(np.ndarray[double, mode="c", ndim=3] a,
                     b[0] += 1
                 else:
                     break # can't increment anything - break while(True) loop
+                
+    else: # rhs is *not* c-contiguous, so need to use its strides
+        while(True):
+            a_ptr[a_indx] = rhs_ptr[rhs_indx]
+    
+            #increment b ~ itertools.product
+            if b[1]+1 < rhs_dims[1]: # "i = 1" loop
+                a_indx += (inds1[b[1]+1]-inds1[b[1]]) * a_strides[1]
+                rhs_indx += rhs_strides[1]
+                b[1] += 1
+            else:
+                a_indx += (inds1[0]-inds1[b[1]]) * a_strides[1]
+                rhs_indx -= b[1]*rhs_strides[1]
+                b[1] = 0
+                if b[0]+1 < rhs_dims[0]: # "i = 0" loop
+                    a_indx += (inds0[b[0]+1]-inds0[b[0]]) * a_strides[0]
+                    rhs_indx += rhs_strides[0]
+                    b[0] += 1
+                else:
+                    break # can't increment anything - break while(True) loop
+        
+
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_fas_helper_3d(np.ndarray[double, ndim=3] a,
+                       np.ndarray[double, ndim=3] rhs,
+                       np.ndarray[np.int64_t, mode="c", ndim=1] inds0,
+                       np.ndarray[np.int64_t, mode="c", ndim=1] inds1,
+                       np.ndarray[np.int64_t, mode="c", ndim=1] inds2):
+    
+    cdef INT nDims = 3
+    cdef INT b[3]
+    cdef INT a_strides[3]
+    cdef INT rhs_strides[3]
+    cdef INT rhs_dims[3]
+    cdef INT rhs_indx = 0
+    cdef INT a_indx = 0
+    
+    for i in range(nDims):
+        b[i] = 0
+        a_strides[i] = a.strides[i] // a.itemsize
+        rhs_strides[i] = rhs.strides[i] // rhs.itemsize
+        rhs_dims[i] = rhs.shape[i]
+    
+    #for i in range(nDims):
+    #    a_indx += indsPerDim[i][0] * a_strides[i]
+    a_indx += inds0[0] * a_strides[0]
+    a_indx += inds1[0] * a_strides[1]
+    a_indx += inds2[0] * a_strides[2]
+
+    cdef double* a_ptr = <double*>a.data
+    cdef double* rhs_ptr = <double*>rhs.data
+
+    if rhs.flags['C_CONTIGUOUS']:
+        while(True):
+            a_ptr[a_indx] = rhs_ptr[rhs_indx]
+            rhs_indx += 1 # always increments by 1
+    
+            #increment b ~ itertools.product
+            if b[2]+1 < rhs_dims[2]: # "i = 2" loop
+                a_indx += (inds2[b[2]+1]-inds2[b[2]]) * a_strides[2]
+                b[2] += 1
+            else:
+                a_indx += (inds2[0]-inds2[b[2]]) * a_strides[2]
+                b[2] = 0
+                if b[1]+1 < rhs_dims[1]: # "i = 1" loop
+                    a_indx += (inds1[b[1]+1]-inds1[b[1]]) * a_strides[1]
+                    b[1] += 1
+                else:
+                    a_indx += (inds1[0]-inds1[b[1]]) * a_strides[1]
+                    b[1] = 0
+                    if b[0]+1 < rhs_dims[0]: # "i = 0" loop
+                        a_indx += (inds0[b[0]+1]-inds0[b[0]]) * a_strides[0]
+                        b[0] += 1
+                    else:
+                        break # can't increment anything - break while(True) loop
+
+    else: # rhs is *not* c-contiguous, so need to use its strides
+        while(True):
+            a_ptr[a_indx] = rhs_ptr[rhs_indx]
+    
+            #increment b ~ itertools.product
+            if b[2]+1 < rhs_dims[2]: # "i = 2" loop
+                a_indx += (inds2[b[2]+1]-inds2[b[2]]) * a_strides[2]
+                rhs_indx += rhs_strides[2]
+                b[2] += 1
+            else:
+                a_indx += (inds2[0]-inds2[b[2]]) * a_strides[2]
+                rhs_indx -= b[2]*rhs_strides[2]
+                b[2] = 0
+                if b[1]+1 < rhs_dims[1]: # "i = 1" loop
+                    a_indx += (inds1[b[1]+1]-inds1[b[1]]) * a_strides[1]
+                    rhs_indx += rhs_strides[1]
+                    b[1] += 1
+                else:
+                    a_indx += (inds1[0]-inds1[b[1]]) * a_strides[1]
+                    rhs_indx -= b[1]*rhs_strides[1]
+                    b[1] = 0
+                    if b[0]+1 < rhs_dims[0]: # "i = 0" loop
+                        a_indx += (inds0[b[0]+1]-inds0[b[0]]) * a_strides[0]
+                        rhs_indx += rhs_strides[0]
+                        b[0] += 1
+                    else:
+                        break # can't increment anything - break while(True) loop
