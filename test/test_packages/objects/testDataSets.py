@@ -786,6 +786,27 @@ Gy 11001100
         with open(temp_files + "/repickle_old_dataset.pkl.%s" % vs,'wb') as f:
             pickle.dump(ds, f)
 
+    def test_auxinfo(self):
+        # creating and loading a text-format dataset file w/auxiliary info
+        dataset_txt = \
+"""## Columns = 0 count, 1 count
+{} 0 100 # 'test':45
+Gx 10 90 # (3,4): "value"
+GxGy 40 60 # "can be": "anything", "allowed in": "a python dict", 4: {"example": "this"}
+Gx^4 20 80
+"""
+        with open(temp_files + "/AuxDataset.txt","w") as output:
+            output.write(dataset_txt)
+        ds = pygsti.io.load_dataset(temp_files + "/AuxDataset.txt")
+        self.assertEqual(ds[()][('0',)], 0)
+        self.assertEqual(ds[('Gx','Gy')][('1',)], 60)
+
+        self.assertEqual(ds[()].aux, {"test":45})
+        self.assertEqual(ds[('Gx','Gy')].aux, {"can be": "anything", "allowed in": "a python dict", 4: {"example": "this"}})
+        self.assertEqual(ds[('Gx',)].aux, { (3,4): "value" })
+        self.assertEqual(ds[('Gx','Gx','Gx','Gx')].aux, {})
+
+
 
 
 #OLD
