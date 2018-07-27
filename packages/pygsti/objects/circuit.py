@@ -1607,9 +1607,9 @@ class Circuit(_gstr.GateString):
             # Add in a barrier after every circuit layer. Todo: Should make this optional at some
             # point and/or to agree with the "barriers" in the circuit (to be added).
             openqasm += 'barrier '
-            for qidx in range(num_qubits-1):
-                openqasm += 'q[{0}], '.format(str(qidx))
-            openqasm += 'q[{0}];\n'.format(str(qidx+1))
+            for q in self.line_labels[:-1]:
+                openqasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+            openqasm += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
 #            openqasm += ';'
         
         # Add in a measurement at the end.
