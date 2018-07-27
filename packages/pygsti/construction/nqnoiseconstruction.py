@@ -1010,7 +1010,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfi
 
     # Assert that gateset uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
-    assert(gateset._sim_type == "termorder" and gateset._sim_args[0] == 1), \
+    assert(gateset._sim_type == "termorder" and gateset._sim_args[0] == '1'), \
         '`gateset` must use "termorder:1" simulation type!'
     
     printer = _VerbosityPrinter.build_printer(verbosity)
@@ -1180,7 +1180,7 @@ def test_amped_polys_for_syntheticidle(fidpairs, idleStr, gateset,  prepLbl=None
     """
     #Assert that gateset uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
-    assert(gateset._sim_type == "termorder" and gateset._sim_args[0] == 1), \
+    assert(gateset._sim_type == "termorder" and gateset._sim_args[0] == '1'), \
         '`gateset` must use "termorder:1" simulation type!'
 
     printer = _VerbosityPrinter.build_printer(verbosity)
@@ -1340,7 +1340,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
 
     #Assert that gateset uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
-    assert(gateset._sim_type == "termorder" and gateset._sim_args[0] == 1), \
+    assert(gateset._sim_type == "termorder" and gateset._sim_args[0] == '1'), \
         '`gateset` must use "termorder:1" simulation type!'
 
     printer = _VerbosityPrinter.build_printer(verbosity)
