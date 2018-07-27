@@ -145,7 +145,6 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
                           addIdleNoiseToAllGates=True,
                           return_clouds=False, verbosity=0): #, debug=False):
     """ 
-    TODO: docstring (cnot_edges)
     Create a noisy n-qubit gateset using a low-weight and geometrically local
     error model with a common idle gate.  
 
@@ -158,8 +157,16 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
     nQubits : int
         The number of qubits
     
-    geometry : {"line","ring","grid","torus"}
-        The type of connectivity among the qubits.
+    geometry : {"line","ring","grid","torus"} or QubitGraph
+        The type of connectivity among the qubits, specifying a
+        graph used to define neighbor relationships.  Alternatively,
+        a :class:`QubitGraph` object with 0-`nQubits-1` node labels
+        may be passed directly.
+
+    cnot_edges : list, optional
+        A list of 2-tuples of (control,target) qubit indices for each
+        CNOT gate to be included in the returned GateSet.  If None, then
+        the (directed) edges of the `geometry` graph are used.
 
     maxIdleWeight : int, optional
         The maximum-weight for errors on the global idle gate.
@@ -888,15 +895,124 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfi
                                        wrtParams=None, algorithm="greedy", require_all_amped=True,
                                        verbosity=0):
     """
-    TODO: docstring
-    prepLbl : Label
-    effectLbls : list of Labels
-    singleQfiducials : list of gate-name-string 1-qubit fiducial sequences
-    idle_fidpairs: list of (prep,meas) fiducial pairs (each a GateString) designed to 
-         probe an operation that has some maximal weight error (that idleStr is known to have fewer than)
+    Find fiducial pairs which amplify the parameters of a synthetic idle gate.
+
+    This routine is primarily used internally within higher-level n-qubit
+    sequence selection routines.
+
+    Parameters
+    ----------
+    qubit_filter : list
+        A list specifying which qubits fiducial pairs should be placed upon.
+        Typically this is a subset of all the qubits, as the synthetic idle
+        is composed of nontrivial gates acting on a localized set of qubits
+        and noise/errors are localized around these.
+
+    idleStr : GateString
+        The gate string specifying the idle operation to consider.  This may
+        just be a single idle gate, or it could be multiple non-idle gates
+        which together act as an idle.
+
+    gateset : GateSet
+        The gate set used to compute the polynomial expressions of probabilities
+        to first-order.  Thus, this gate set should always have (simulation)
+        type "termorder:1".
+
+    singleQfiducials : list, optional
+        A list of gate-name tuples (e.g. `('Gx',)`) which specify a set of single-
+        qubit fiducials to use when trying to amplify gate parameters.  Note that
+        no qubit "state-space" label is required here (i.e. *not* `(('Gx',1),)`);
+        the tuples just contain single-qubit gate *names*.  If None, then
+        `[(), ('Gx',), ('Gy',)]` is used by default.
+
+    prepLbl : Label, optional
+        The state preparation label to use.  If None, then the first (and
+        usually the only) state prep label of `gateset` is used, so it's
+        usually fine to leave this as None.
+
+    effectLbls : list, optional
+        The list of POVM effect labels to use, as a list of `Label` objects.
+        These are *compiled* POVM effect labels, so something like "Mdefault_0",
+        and if None the default is all the effect labels of the first POVM of
+        `gateset`, which is usually what you want.
+
+    initJ : numpy.ndarray, optional
+        An initial Jacobian giving the derivatives of some other polynomials
+        with respect to the same `wrtParams` that this function is called with.
+        This acts as a starting point, and essentially informs the fiducial-pair
+        selection algorithm that some parameters (or linear combos of them) are
+        *already* amplified (e.g. by some other germ that's already been
+        selected) and for which fiducial pairs are not needed.
+
+    initJrank : int, optional
+        The rank of `initJ`.  The function could compute this from `initJ`
+        but in practice one usually has the rank of `initJ` lying around and
+        so this saves a call to `np.linalg.matrix_rank`.
+
+    wrtParams : slice, optional
+        The parameters to consider for amplification.  (This function seeks
+        fiducial pairs that amplify these parameters.)  If None, then pairs
+        which amplify all of `gateset`'s parameters are searched for.
+    
+    algorithm : {"greedy","sequential"}
+        Which algorithm is used internally to find fiducial pairs.  "greedy" 
+        will give smaller sets of fiducial pairs (better) but takes longer.
+        Usually it's worth the wait and you should use the default ("greedy").
+
+    require_all_amped : bool, optional
+        If True and AssertionError is raised when fewer than all of the
+        requested parameters (in `wrtParams`) are amplifed by the final set of
+        fiducial pairs.
+                       
+    verbosity : int, optional
+        The level of detail printed to stdout.  0 means silent.
+
+
+    Returns
+    -------
+    J : numpy.ndarray
+        The final jacobian with rows equal to the number of chosen amplified
+        polynomials (note there is one row per fiducial pair *including* the
+        outcome - so there will be two different rows for two different
+        outcomes) and one column for each parameter specified by `wrtParams`.
+
+    Jrank : int
+        The rank of the jacobian `J`, equal to the number of amplified 
+        parameters (at most the number requested).
+
+    fidpair_lists : list
+        The selected fiducial pairs, each in "gatename-fidpair-list" format.
+        Elements of `fidpair_lists` are themselves lists, all of length=#qubits.
+        Each element of these lists is a (prep1Qnames, meas1Qnames) 2-tuple 
+        specifying the 1-qubit gates (by *name* only) on the corresponding qubit.
+        For example, the single fiducial pair prep=Gx:1Gy:2, meas=Gx:0Gy:0 in a
+        3-qubit system would have `fidpair_lists` equal to:
+        `[ [ [(),('Gx','Gy')], [('Gx',), ()   ], [('Gy',), ()   ] ] ]`
+        `    < Q0 prep,meas >, < Q1 prep,meas >, < Q2 prep,meas >`
     """
-    #TODO: Assert that gateset uses termorder:1, as doing L1-L0 to extract the "amplified" part
+    #Note: "useful" fiducial pairs are identified by looking at the rank of a
+    # Jacobian matrix.  Each row of this Jacobian is the derivative of the
+    # "amplified polynomial" - the L=1 polynomial for a fiducial pair (i.e.
+    # pr_poly(F1*(germ)*F2) ) minus the L=0 polynomial (i.e. pr_poly(F1*F2) ).
+    # When the gateset only gives probability polynomials to first order in
+    # the error rates this gives the L-dependent and hence amplified part
+    # of the polynomial expression for the probability of F1*(germ^L)*F2.
+    # This derivative of an amplified polynomial, taken with respect to
+    # all the parameters we care about (i.e. wrtParams) would ideally be
+    # kept as a polynomial and the "rank" of J would be the number of
+    # linearly independent polynomials within the rows of J (each poly
+    # would be a vector in the space of polynomials).  We currently take
+    # a cheap/HACK way out and evaluate the derivative-polynomial at a
+    # random dummy value which should yield linearly dependent vectors
+    # in R^n whenever the polynomials are linearly indepdendent - then
+    # we can use the usual scipy/numpy routines for computing a matrix
+    # rank, etc.
+
+    # Assert that gateset uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
+    assert(gateset._sim_type == "termorder" and gateset._sim_args[0] == 1), \
+        '`gateset` must use "termorder:1" simulation type!'
+    
     printer = _VerbosityPrinter.build_printer(verbosity)
     
     if prepLbl is None:
@@ -1017,10 +1133,56 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfi
 def test_amped_polys_for_syntheticidle(fidpairs, idleStr, gateset,  prepLbl=None, effectLbls=None,
                                        wrtParams=None, verbosity=0):
     """
-    TODO: docstring
+    Compute the number of gate set parameters amplified by a given (synthetic)
+    idle sequence.
+
+    Parameters
+    ----------
+    fidpairs : list
+        A list of `(prep,meas)` 2-tuples, where `prep` and `meas` are 
+        :class:`GateString` objects, specifying the fiducial pairs to test.
+
+    idleStr : GateString
+        The gate string specifying the idle operation to consider.  This may
+        just be a single idle gate, or it could be multiple non-idle gates
+        which together act as an idle.
+
+    gateset : GateSet
+        The gate set used to compute the polynomial expressions of probabilities
+        to first-order.  Thus, this gate set should always have (simulation)
+        type "termorder:1".
+
+    prepLbl : Label, optional
+        The state preparation label to use.  If None, then the first (and
+        usually the only) state prep label of `gateset` is used, so it's
+        usually fine to leave this as None.
+
+    effectLbls : list, optional
+        The list of POVM effect labels to use, as a list of `Label` objects.
+        These are *compiled* POVM effect labels, so something like "Mdefault_0",
+        and if None the default is all the effect labels of the first POVM of
+        `gateset`, which is usually what you want.
+
+    wrtParams : slice, optional
+        The parameters to consider for amplification.  If None, then pairs
+        which amplify all of `gateset`'s parameters are searched for.
+
+    verbosity : int, optional
+        The level of detail printed to stdout.  0 means silent.
+
+    Returns
+    -------
+    nAmplified : int
+        The number of parameters amplified.
+
+    nTotal : int
+        The total number of parameters considered for amplification.
     """
-    #TODO: Assert that gateset uses termorder:1, as doing L1-L0 to extract the "amplified" part
+    #Assert that gateset uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
+    assert(gateset._sim_type == "termorder" and gateset._sim_args[0] == 1), \
+        '`gateset` must use "termorder:1" simulation type!'
+
     printer = _VerbosityPrinter.build_printer(verbosity)
     
     if prepLbl is None:
@@ -1049,7 +1211,8 @@ def test_amped_polys_for_syntheticidle(fidpairs, idleStr, gateset,  prepLbl=None
             J[i*nEffectLbls+k,:] = Jrow
 
     rank = _np.linalg.matrix_rank(J)
-    print("Rank = %d, num params = %d" % (rank, Np))
+    #print("Rank = %d, num params = %d" % (rank, Np))
+    return rank, Np
 
     
 def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueIdlePairs, idleStr, maxWt,
@@ -1057,15 +1220,129 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
                                                 prepLbl=None, effectLbls=None, initJ=None, initJrank=None,
                                                 wrtParams=None, verbosity=0):
     """
-    TODO: docstring
-    prepLbl : Label
-    effectLbls : list of Labels
-    singleQfiducials : list of gate-name-string 1-qubit fiducial sequences
-    idle_fidpairs: list of (prep,meas) fiducial pairs (each a GateString) designed to 
-         probe an operation that has some maximal weight error (that idleStr is known to have fewer than)
+    Similar to :function:`find_amped_polys_for_syntheticidle` but
+    specialized to "qubit cloud" processing case used in higher-level 
+    functions and assumes that `idleStr` is composed of Clifford gates only
+    which act on a "core" of qubits (given by `core_filter`).
+
+    In particular, we assume that we already know the fiducial pairs needed
+    to amplify all the errors of a "true" (non-synthetic) idle on various
+    number of qubits (i.e. max-weights of idle error).  Furthermore, we 
+    assume that the errors found by these true-idle fiducial pairs are
+    of the same kind as those afflicting the synthetic idle, so that 
+    by restricting our search to just certain true-idle pairs we're able
+    to amplify all the parameters of the synthetic idle.  
+
+    Because of these assumptions and pre-computed information, this 
+    function often takes considerably less time to run than 
+    :function:`find_amped_polys_for_syntheticidle`.
+    
+
+    Parameters
+    ----------
+    qubit_filter : list
+        A list specifying which qubits fiducial pairs should be placed upon.
+        Typically this is a subset of all the qubits, as the synthetic idle
+        is composed of nontrivial gates acting on a localized set of qubits
+        and noise/errors are localized around these.  Within the "cloud"
+        picture, `qubit_filter` specifies *all* the qubits in the cloud, not
+        just the "core".
+
+    core_filter : list
+        A list specifying the "core" qubits - those which the non-idle
+        gates within `idleStr` ideally act upon.  This is often a proper subset
+        of `qubit_filter` since errors are allowed on qubits which neighbor
+        the core qubits in addition to the core qubits themselves.
+
+    trueIdlePairs : dict
+        A dictionary whose keys are integer max-weight values and whose values
+        are lists of fiducial pairs, each in "gatename-fidpair-list" format,
+        whcih give the fiducial pairs needed to amplify all the parameters of
+        a non-synthetic idle gate on max-weight qubits.
+
+    idleStr : GateString
+        The gate string specifying the idle operation to consider.  This may
+        just be a single idle gate, or it could be multiple non-idle gates
+        which together act as an idle.
+
+    maxWt : int
+        The maximum weight such that the pairs given by `trueIdlePairs[maxWt]`
+        will amplify all the possible errors on `idleStr`.  This must account
+        for the fact that the nontrivial comprising `idleStr` may increase the
+        weight of errors.  For instance if `idleStr` contains CNOT gates 
+        on qubits 0 and 1 (the "core") and the noise model allows insertion of
+        up to weight-2 errors at any location, then a single weight-2 error
+        (recall termorder:1 means there can be only 1 error per circuit) on
+        qubits 1 and 2 followed by a CNOT on 0 and 1 could yield an weight-3
+        error on qubits 0,1, and 2.
+
+    gateset : GateSet
+        The gate set used to compute the polynomial expressions of probabilities
+        to first-order.  Thus, this gate set should always have (simulation)
+        type "termorder:1".
+
+    singleQfiducials : list, optional
+        A list of gate-name tuples (e.g. `('Gx',)`) which specify a set of single-
+        qubit fiducials to use when trying to amplify gate parameters.  Note that
+        no qubit "state-space" label is required here (i.e. *not* `(('Gx',1),)`);
+        the tuples just contain single-qubit gate *names*.  If None, then
+        `[(), ('Gx',), ('Gy',)]` is used by default.
+
+    prepLbl : Label, optional
+        The state preparation label to use.  If None, then the first (and
+        usually the only) state prep label of `gateset` is used, so it's
+        usually fine to leave this as None.
+
+    effectLbls : list, optional
+        The list of POVM effect labels to use, as a list of `Label` objects.
+        These are *compiled* POVM effect labels, so something like "Mdefault_0",
+        and if None the default is all the effect labels of the first POVM of
+        `gateset`, which is usually what you want.
+
+    initJ : numpy.ndarray, optional
+        An initial Jacobian giving the derivatives of some other polynomials
+        with respect to the same `wrtParams` that this function is called with.
+        This acts as a starting point, and essentially informs the fiducial-pair
+        selection algorithm that some parameters (or linear combos of them) are
+        *already* amplified (e.g. by some other germ that's already been
+        selected) and for which fiducial pairs are not needed.
+
+    initJrank : int, optional
+        The rank of `initJ`.  The function could compute this from `initJ`
+        but in practice one usually has the rank of `initJ` lying around and
+        so this saves a call to `np.linalg.matrix_rank`.
+
+    wrtParams : slice, optional
+        The parameters to consider for amplification.  (This function seeks
+        fiducial pairs that amplify these parameters.)  If None, then pairs
+        which amplify all of `gateset`'s parameters are searched for.
+
+    verbosity : int, optional
+        The level of detail printed to stdout.  0 means silent.
+
+
+    Returns
+    -------
+    J : numpy.ndarray
+        The final jacobian with rows equal to the number of chosen amplified
+        polynomials (note there is one row per fiducial pair *including* the
+        outcome - so there will be two different rows for two different
+        outcomes) and one column for each parameter specified by `wrtParams`.
+
+    Jrank : int
+        The rank of the jacobian `J`, equal to the number of amplified 
+        parameters (at most the number requested).
+
+    fidpair_lists : list
+        The selected fiducial pairs, each in "gatename-fidpair-list" format.
+        See :function:`find_amped_polys_for_syntheticidle` for details.
     """
-    #TODO: Assert that gateset uses termorder:1, as doing L1-L0 to extract the "amplified" part
+
+    #Assert that gateset uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
+    assert(gateset._sim_type == "termorder" and gateset._sim_args[0] == 1), \
+        '`gateset` must use "termorder:1" simulation type!'
+
     printer = _VerbosityPrinter.build_printer(verbosity)
     
     if prepLbl is None:
@@ -1214,7 +1491,87 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
                                               singleQfiducials=None, prepLbl=None, effectLbls=None,
                                               wrtParams=None, verbosity=0):
     """
-    TODO: docstring
+    Computes the fiducial pairs needed to amplify the known-amplifiable
+    polynomials corresponding to fiducialpair+germ probabilities.
+
+    This function works within the "cloud" picture of a core of qubits where
+    there is nontrivial *ideal* action and a larger set of qubits upon which
+    errors may exist.
+
+    This function is used to find, after we know which directions in parameter
+    -space are amplifiable by a germ (via analyzing its synthetic idle
+    counterpart), which fiducial pairs are needed to amplify these directions
+    when a non-synthetic-idle power of the germ is used.
+
+    Parameters
+    ----------
+    qubit_filter : list
+        A list specifying which qubits fiducial pairs should be placed upon.
+        Typically this is a subset of all the qubits, and a "cloud" around
+        the qubits being ideally acted upon.
+
+    core_filter : list
+        A list specifying the "core" qubits - those which the gates in 
+        `germPowerStr` ideally act upon.  This is often a proper subset
+        of `qubit_filter` since errors are allowed on qubits which neighbor
+        the core qubits in addition to the core qubits themselves.
+
+    germPowerStr : GateString
+        The (non-synthetic-idle) germ power string under consideration.
+
+    amped_polyJ : numpy.ndarray
+        A jacobian matrix whose rowspace gives the space of amplifiable 
+        parameters.  The shape of this matrix is `(Namplified, Np)`, where
+        `Namplified` is the number of independent amplified parameters and 
+        `Np` is the total number of parameters under consideration (the 
+        length of `wrtParams`).  This function seeks to find fiducial pairs
+        which amplify this same space of parameters.
+
+    idle_gatename_fidpair_lists : list
+        A list of the fiducial pairs which amplify the entire space given
+        by `amped_polyJ` for the germ when it is repeated enough to be a
+        synthetic idle.  The strategy for finding fiducial pairs in the
+        present case it to just monkey with the *core-qubit* parts of the
+        *measurement* idle fiducials (non-core qubits are ideally the idle,
+        and one can either modify the prep or the measure to "catch" what 
+        the non-idle `germPowerStr` does to the amplified portion of the 
+        state space).
+
+    gateset : GateSet
+        The gate set used to compute the polynomial expressions of probabilities
+        to first-order.  Thus, this gate set should always have (simulation)
+        type "termorder:1".
+
+    singleQfiducials : list, optional
+        A list of gate-name tuples (e.g. `('Gx',)`) which specify a set of single-
+        qubit fiducials to use when trying to amplify gate parameters.  Note that
+        no qubit "state-space" label is required here (i.e. *not* `(('Gx',1),)`);
+        the tuples just contain single-qubit gate *names*.  If None, then
+        `[(), ('Gx',), ('Gy',)]` is used by default.
+
+    prepLbl : Label, optional
+        The state preparation label to use.  If None, then the first (and
+        usually the only) state prep label of `gateset` is used, so it's
+        usually fine to leave this as None.
+
+    effectLbls : list, optional
+        The list of POVM effect labels to use, as a list of `Label` objects.
+        These are *compiled* POVM effect labels, so something like "Mdefault_0",
+        and if None the default is all the effect labels of the first POVM of
+        `gateset`, which is usually what you want.
+
+    wrtParams : slice, optional
+        The parameters being considered for amplification.  (This should be
+        the same as that used to produce `idle_gatename_fidpair_lists`).
+
+    verbosity : int, optional
+        The level of detail printed to stdout.  0 means silent.
+
+    Returns
+    -------
+    fidpair_lists : list
+        The selected fiducial pairs, each in "gatename-fidpair-list" format.
+        See :function:`find_amped_polys_for_syntheticidle` for details.
     """
     printer = _VerbosityPrinter.build_printer(verbosity)
     
@@ -1353,7 +1710,35 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
     
 def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
     """
-    TODO: docstring
+    "Tile" a set of fiducial pairs sufficient for amplifying all the true-idle
+    errors on `maxIdleWeight` qubits (so with weight up to `maxIdleWeight` 
+    onto `nQubits` qubits.
+
+    This function essentaily converts fiducial pairs that amplify all 
+    up-to-weight-k errors on k qubits to fiducial pairs that amplify all
+    up-to-weight-k errors on `nQubits` qubits (where `k = maxIdleWeight`).
+
+    Parameters
+    ----------
+    nQubits : int
+        The number of final qubits.
+
+    idle_gatename_fidpair_lists : list
+        A list of the fiducial pairs which amplify the errors on 
+        `maxIdleWeight` qubits (so with weight up to `maxIdleWeight`).
+        Each element of this list is a fiducial pair in 
+        "gatename-fidpair-list" format.  These are the fiducial pairs
+        to "tile".
+
+    maxIdleWeight : int
+        The number of qubits and maximum amplified error weight for
+        the fiducial pairs given by `idle_gatename_fidpair_lists`.
+    
+    Returns
+    -------
+    fidpairs : list
+        A list of `(prep,meas)` 2-tuples, where `prep` and `meas` are
+        :class:`GateString` objects, giving the tiled fiducial pairs.
     """
 
     # "Tile w/overlap" the fidpairs for a k-qubit subset (where k == maxIdleWeight)
@@ -1396,7 +1781,51 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
     
 def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, template_germ, clouds):
     """
-    TODO: docstring
+    Take a "cloud template", giving the fiducial pairs for a germ power acting
+    on qubits labeled 0 to `cloudsize-1`, and map those fiducial pairs into
+    fiducial pairs for all the qubits by placing in parallel the pairs for
+    as many non-overlapping clouds as possible.  This function performs a
+    function analogous to :function:`tile_idle_fidpairs` except here we tile
+    fiducial pairs for non-idle operations.
+
+    Parameters
+    ----------
+    template_gatename_fidpair_lists : list 
+        A list of the fiducial pairs for the given template - that is, the
+        pairs with which amplify all the desired errors for `template_germPower`
+        (acting on qubits labeled by the integers 0 to the cloud size minus one).
+
+    template_germPower : GateString
+        The germ power string under consideration.  This gives the action on
+        the "core" qubits of the clouds, and is needed to construct the 
+        final fiducial + germPower + fiducial sequences returned by this 
+        function.
+
+    L : int
+        The maximum length used to construct template_germPower.  This is only 
+        needed to tag elements of the returned `sequences` list.
+
+    template_germ : GateString
+        The germ string under consideration.  This is only needed to tag
+        elements of the returned `sequences` list and place elements in 
+        the returned `germs` list.
+
+    clouds : list
+        A list of `(cloud_dict, template_to_cloud_map)` tuples specifying the
+        set of equivalent clouds corresponding to the template.
+
+    Returns
+    -------
+    sequences : list
+        A list of (GateString, L, germ, "XX","XX") tuples specifying the final
+        "tiled" fiducial pairs sandwiching `germPowerStr` for as many clouds in
+        parallel as possible.  Actual qubit labels (not the always-integer
+        labels used in templates) are used in these strings. The "XX" elements
+        are placeholders for future use. There are no duplicates in this list.
+
+    germs : list
+        A list of GateString objects giving all the germs (with appropriate
+        qubit labels).
     """    
     unused_clouds = list(clouds)
     sequences = []
@@ -1441,6 +1870,7 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
 
                 germStr.extend( list(germ) )
                 germPowerStr.extend( list(germPower) )
+                #TODO: use parallel gate labels when possible here?
                 
             germs.append( _objs.GateString(germStr) )
             sequences.append( (_objs.GateString(prepStr + germPowerStr + measStr), L, germs[-1], "XX", "XX") )
@@ -1452,8 +1882,31 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
     
 def reps_for_synthetic_idle(gateset, germStr, nqubits, core_qubits):
     """
-    TODO: docstring
-    Returns germStr repeated to that it forms an idle operation
+    Return the number of times `germStr` must be repeated to form a synthetic
+    idle gate.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        A gate set containing matrix representations of all the gates
+        in `germStr`.
+
+    germStr : GateString
+        The germ gate string to repeat.
+
+    nqubits : int
+        The total number of qubits that `gateset` acts on.  This
+        is used primarily for sanity checks.
+
+    core_qubits : list
+        A list of the qubit labels upon which `germStr` ideally acts 
+        nontrivially.  This could be inferred from `germStr` but serves
+        as a sanity check and more concrete specification of what
+        state space the gate action takes place within.
+
+    Returns
+    -------
+    int
     """
     # First, get a dense representation of germStr on core_qubits
     # Note: only works with one level of embedding...
@@ -1501,10 +1954,47 @@ def reps_for_synthetic_idle(gateset, germStr, nqubits, core_qubits):
         
     return reps
 
-def get_candidates_for_core(gateset, core_qubits, candidate_counts, seedStart): # or for cloud - so we can check that gates for all "equivalent" clouds exist?
+
+def get_candidates_for_core(gateset, core_qubits, candidate_counts, seedStart):
     """
-    TODO: docstring
+    Returns a list of candidate germs which act on a given set of "core" qubits.
+
+    This function figures out what gates within `gateset` are available to act
+    (only) on `core_qubits` and then randomly selects a set of them based on 
+    `candidate_counts`.  In each candidate germ, at least one gate will act 
+    on *all* of the core qubits (if the core is 2 qubits then this function
+    won't return a germ consisting of just 1-qubit gates).
+
+    This list serves as the inital candidate list when a new cloud template is
+    created within create_nqubit_sequences.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gate set specifying the gates allowed to be in the germs.
+
+    core_qubits : list
+        A list of the qubit labels.  All returned candidate germs (ideally) act
+        nontrivially only on these qubits.
+    
+    candidate_counts : dict
+        A dictionary specifying how many germs of each length to include in the
+        returned set.  Thus both keys and values are integers (key specifies 
+        germ length, value specifies number).  The special value `"all upto"`
+        means that all possible candidate germs up to the corresponding key's
+        value should be included.  A typical value for this argument might be
+        `{4: 'all upto', 5: 10, 6: 10 }`.
+
+    seedStart : int 
+        A *initial* random number generator seed value to use.  Incrementally
+        greater seeds are used for the different keys of `candidate_counts`.
+
+    Returns
+    -------
+    list : candidate_germs
+        A list of GateString objects.
     """
+    # or should this be ...for_cloudbank - so then we can check that gates for all "equivalent" clouds exist?
 
     # collect gates that only act on core_qubits.
     gatelabel_list = []; full_core_list = []
@@ -1524,22 +2014,128 @@ def get_candidates_for_core(gateset, core_qubits, candidate_counts, seedStart): 
         else:
             candidate_germs.extend( _gsc.list_random_gatestrings_onelen(
                     gatelabel_list, germLength, count, seed=seedStart+i))
-    
+
+    #filter: make sure there's at least one gate in each germ that acts on the *entire* core
     candidate_germs = [ g for g in candidate_germs if any([(gl in g) for gl in full_core_list]) ] # filter?
+    
     return candidate_germs
+
 
 def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWeight=1, maxhops=0,
                             extraWeight1Hops=0, extraGateWeight=0, sparse=False, verbosity=0,
                             cache=None, idleOnly=False, algorithm="greedy"):
     """ 
-    TODO: docstring
+    Generate a list of sequences sufficient for amplifying all of the errors
+    given by a geometrically local noise model defined by a graph and various
+    maximum weights and maximum hoppings.  This noise model corresponds to the
+    :class:`GateSet` returned by :function:`build_nqnoise_gateset` when it is
+    given similar arguments.
 
-    cloudbanks == list of "cloudsbanks"
-    cloudbank = list of *equivalent* (by-translation) clouds
-    cloud = dict w/ 'qubits' and 'core' keys that are lists/tuples of integers giving 
-        the indices of all the qubits in the cloud and the subset of "core" qubits 
+    Parameters
+    ----------
+    nQubits : int
+        The number of qubits
+
+    maxLengths : list
+        A list of integers specifying the different maximum lengths for germ
+        powers.  Typically these values start a 1 and increase by powers of
+        2, e.g. `[1,2,4,8,16]`.
     
+    geometry : {"line","ring","grid","torus"} or QubitGraph
+        The type of connectivity among the qubits, specifying a
+        graph used to define neighbor relationships.  Alternatively,
+        a :class:`QubitGraph` object with 0-`nQubits-1` node labels
+        may be passed directly.
+
+    cnot_edges : list, optional
+        A list of 2-tuples of (control,target) qubit indices for each
+        CNOT gate to be included in the returned GateSet.  If None, then
+        the (directed) edges of the `geometry` graph are used.
+
+    maxIdleWeight : int, optional
+        The maximum-weight for errors on the global idle gate.
+
+    maxhops : int
+        The locality constraint: for a gate, errors (of weight up to the
+        maximum weight for the gate) are allowed to occur on the gate's
+        target qubits and those reachable by hopping at most `maxhops` times
+        from a target qubit along nearest-neighbor links (defined by the 
+        `geometry`).  
+    
+    extraWeight1Hops : int, optional
+        Additional hops (adds to `maxhops`) for weight-1 errors.  A value > 0
+        can be useful for allowing just weight-1 errors (of which there are 
+        relatively few) to be dispersed farther from a gate's target qubits.
+        For example, a crosstalk-detecting model might use this.
+    
+    extraGateWeight : int, optional
+        Addtional weight, beyond the number of target qubits (taken as a "base
+        weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
+        this equals 1, for instance, then 1-qubit gates can have up to weight-2
+        errors and 2-qubit gates can have up to weight-3 errors.
+
+    sparse : bool, optional
+        Whether the embedded Lindblad-parameterized gates within the constructed
+        `nQubits`-qubit gates are sparse or not.  (This is determied by whether
+        they are constructed using sparse basis matrices.)  When sparse, these
+        Lindblad gates take up less memory, but their action is slightly slower.
+        Usually it's fine to leave this as the default (False), except when
+        considering particularly high-weight terms (b/c then the Lindblad gates
+        are higher dimensional and sparsity has a significant impact).
+
+    verbosity : int, optional
+        The level of detail printed to stdout.  0 means silent.
+
+    cache : dict, optional
+        A cache dictionary which holds template information so that repeated 
+        calls to `create_nqubit_sequences` can draw on the same pool of
+        templates.
+
+    idleOnly : bool, optional
+        If True, only sequences for the idle germ are returned.  This is useful
+        for idle tomography in particular.
+
+    algorithm : {"greedy","sequential"}
+        The algorithm is used internall by 
+        :function:`find_amped_polys_for_syntheticidle`.  You should leave this 
+        as the default unless you know what you're doing.
+
+    Returns
+    -------
+    sequences : list
+        A list of (GateString, L, germ, "XX","XX") tuples specifying the 
+        final sequences categorized by max-length (L) and germ.
+
+    germs : list
+        A list of GateString objects specifying all the germs found in
+        `sequences`.
     """
+
+    #The algorithm here takes the following basic structure:
+    # - compute idle fiducial pairs with a max-weight appropriate for
+    #   the true idle gate.
+    # - Add the idle germ + fiducial pairs, which amplify all the "idle
+    #   parameters" (the parameters of the Gi gate)
+    # - precompute other idle fiducial pairs needed for 1 & 2Q synthetic
+    #   idles (with maxWeight = gate-error-weight + spreading potential)
+    # - To amplify the remaining parameters iterat through the "clouds"
+    #   constructed by build_nqnoise_gateset (these essentially give
+    #   the areas of the qubit graph where non-Gi gates should act and where
+    #   they aren't supposted to act but can have errors).  For each cloud
+    #   we either create a new "cloud template" for it and find a set of
+    #   germs and fiducial pairs (for all requested L values) such that all
+    #   the parameters of gates acting on the *entire* core of the cloud
+    #   are amplified (not counting any Gi parameters which are already
+    #   amplified) OR we identify that the cloud is equivalent to one
+    #   we already computed sequences for and just associate the cloud
+    #   with the existing cloud's template; we "add it to a cloudbank".
+    #   I this latter case, we compute the template sequences for any
+    #   needed additional L values not already present in the template.
+    # - Once there exist templates for all the clouds which support all
+    #   the needed L values, we simply iterate through the cloudbanks
+    #   and "tile" the template sequences, converting them to real
+    #   sequences with as many clouds in parallel as possible.
+    
     if cache is None: cache = {}
     if 'Idle gatename fidpair lists' not in cache:
         cache['Idle gatename fidpair lists'] = {}
@@ -1707,9 +2303,11 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
         #                 - values = gatename-fidpair lists (on cloud qubits)
 
         def get_cloud_key(cloud, maxhops, extraWeight1Hops, extraGateWeight):
+            """ Get the cache key we use for a cloud """
             return (len(cloud['qubits']), len(cloud['core']), maxhops, extraWeight1Hops, extraGateWeight)
 
         def map_cloud_template(cloud, gatelabels, graph, template):
+            """ Attempt to map `cloud` onto the cloud template `template`"""
             template_glabels, template_graph, _ = template
             #Note: number of total & core qubits should be the same,
             # since cloud is in the same "class" as template
@@ -1990,8 +2588,40 @@ def _get_kcoverage_template_k2(n):
     return half + other_half
 
 
-def get_kcoverage_template(n, k, debug=0):
-    """ TODO: docstring """
+def get_kcoverage_template(n, k, verbosity=0):
+    """
+    Get a template for how to create a "k-coverage" set of length-`n` sequences.
+
+    Consider a set of length-`n` words from a `k`-letter alphabet.  These words
+    (sequences of letters) have the "k-coverage" property if, for any choice of
+    `k` different letter positions (indexed from 0 to `n-1`), every permutation
+    of the `k` distinct letters (symbols) appears in those positions for at 
+    least one element (word) in the set.  Such a set of sequences is returned
+    by this function, namely a list length-`n` lists containing the integers
+    0 to `n-1`.
+
+    This notion has application to idle-gate fiducial pair tiling, when we have
+    found a set of fiducial pairs for `k` qubits and want to find a set of
+    sequences on `n > k` qubits such that any subset of `k` qubits experiences
+    the entire set of (`k`-qubit) fiducial pairs.  Simply take the k-coverage
+    template and replace the letters (0 to `k-1`) with the per-qubit 1Q pieces
+    of each k-qubit fiducial pair.
+    
+    Parameters
+    ----------
+    n, k : int
+        The sequence (word) length and letter count as described above.
+
+    verbosity : int, optional
+        Amount of detail to print to stdout.
+
+    Returns
+    -------
+    list
+        A list of length-`n` lists containing the integers 0 to `k-1`.
+        The length of the outer lists depends on the particular values 
+        of `n` and `k` and is not guaranteed to be minimal.
+    """
     #n = total number of qubits
     #indices run 0->(k-1)
     assert(n >= k), "Total number of qubits must be >= k"
@@ -2005,11 +2635,11 @@ def get_kcoverage_template(n, k, debug=0):
         for i in range(k): 
             cols[i].append(row[i])
     nRows = len(cols[0])
-    if debug > 0: print("get_template(n=%d,k=%d):" % (n,k))
+    if verbosity > 0: print("get_template(n=%d,k=%d):" % (n,k))
 
     # Now add cols k to n-1:
     for a in range(k,n): # a is index of column we're adding
-        if debug > 1: print(" - Adding column %d: currently %d rows" % (a,nRows))
+        if verbosity > 1: print(" - Adding column %d: currently %d rows" % (a,nRows))
         
         #We know that columns 0..(a-1) satisfy the property that
         # the values of any k of them contain every permutation 
@@ -2050,7 +2680,7 @@ def get_kcoverage_template(n, k, debug=0):
 
         
         for existing_cols in _itertools.combinations(range(a-1,-1,-1),k-1): # reverse-range(a) == heuristic
-            if debug > 2: print("  - check perms are present for cols %s" % str(existing_cols + (a,)) )
+            if verbosity > 2: print("  - check perms are present for cols %s" % str(existing_cols + (a,)) )
             
             #make sure cols existing_cols + [a] take on all the needed permutations
             # Since existing_cols already takes on all permuations minus the last
@@ -2069,7 +2699,7 @@ def get_kcoverage_template(n, k, debug=0):
                     if col_a[m] is None:
                         open_rows.append(m)
                 
-                if debug > 3: print("   - perm %s: %d rows, %d match perm, %d open"
+                if verbosity > 3: print("   - perm %s: %d rows, %d match perm, %d open"
                                 % (str(desired_row), nRows, len(matching_rows), len(open_rows)) )
                 v = {'value': desired_row[k-1], 'alternate_rows': matching_rows}
                 placed = False
@@ -2078,21 +2708,21 @@ def get_kcoverage_template(n, k, debug=0):
                 for m in matching_rows:
                     if col_a[m] and col_a[m]['value'] == desired_row[k-1]: # a perfect match! - no need to take an open slot
                         updated_alts = [ i for i in col_a[m]['alternate_rows'] if i in matching_rows ]
-                        if debug > 3: print("    -> existing row (index %d) perfectly matches!" % m)
+                        if verbosity > 3: print("    -> existing row (index %d) perfectly matches!" % m)
                         col_a[m]['alternate_rows'] = updated_alts; placed=True; break
                 if placed: continue
 
                 #Better: find an open row that prefers the value we want to place in it
                 for m in matching_rows:
                     if col_a[m] is None and pref_a[m] == desired_row[k-1]: # slot is open & prefers the value we want to place in it - take it!
-                        if debug > 3: print("    -> open preffered row (index %d) matches!" % m)
+                        if verbosity > 3: print("    -> open preffered row (index %d) matches!" % m)
                         col_a[m] = v; placed=True; break
                 if placed: continue
 
                 #Good: find any open row (FUTURE: maybe try to shift for preference first?)
                 for m in matching_rows:
                     if col_a[m] is None: # slot is open - take it!
-                        if debug > 3: print("    -> open row (index %d) matches!" % m)
+                        if verbosity > 3: print("    -> open row (index %d) matches!" % m)
                         col_a[m] = v; placed=True; break
                 if placed: continue
                         
@@ -2112,7 +2742,7 @@ def get_kcoverage_template(n, k, debug=0):
                             # move value in row m to m2, then put v into the now-open m-th row
                             col_a[m2] = col_a[m]
                             col_a[m] = v
-                            if debug > 3: print("    -> row %d >> row %d, and row %d matches!" % (m,m2,m))
+                            if verbosity > 3: print("    -> row %d >> row %d, and row %d matches!" % (m,m2,m))
                             shift_soln_found = True
                             break
                             
@@ -2121,7 +2751,7 @@ def get_kcoverage_template(n, k, debug=0):
                     # so we just create a new row equal to desired_row on existing_cols.
                     # How do we choose the non-(existing & last) colums? For now, just
                     # replicate the first element of matching_rows:
-                    if debug > 3: print("    -> creating NEW row.")
+                    if verbosity > 3: print("    -> creating NEW row.")
                     for i in range(a):
                         cols[i].append( cols[i][matching_rows[0]] )
                     col_a.append(v)
@@ -2151,23 +2781,39 @@ def get_kcoverage_template(n, k, debug=0):
     for i in range(len(cols[0])):
         rows.append( [ cols[j][i] for j in range(n)] )
         
-    if debug > 0: print(" Done: %d rows total" % len(rows))
+    if verbosity > 0: print(" Done: %d rows total" % len(rows))
     return rows
         
 
-def check_kcoverage_template(rows, n, k, debug=0):
-    """ TODO: docstring """
-    if debug > 0: print("check_template(n=%d,k=%d)" % (n,k))
+def check_kcoverage_template(rows, n, k, verbosity=0):
+    """ 
+    Verify that `rows` satisfies the `k`-coverage conditions for length-`n`
+    sequences.  Raises an AssertionError if the check fails.
+
+    Parameters
+    ----------
+    rows : list
+        A list of k-coverage words.  The same as whas is returned by
+        :function:`get_kcoverage_template`.
+
+    n, k : int
+        The k-coverate word length and letter count.
+
+    verbosity : int, optional
+        Amount of detail to print to stdout.
+    """
+    if verbosity > 0: print("check_template(n=%d,k=%d)" % (n,k))
     
     #for each set of k qubits (of the total n qubits)
     for cols_to_check in _itertools.combinations(range(n),k):
-        if debug > 1: print(" - checking cols %s" % str(cols_to_check))
+        if verbosity > 1: print(" - checking cols %s" % str(cols_to_check))
         for perm in _itertools.permutations(range(k),k):
             for m,row in enumerate(rows):
                 if all([ row[i] == perm[i] for i in range(k) ]):
-                    if debug > 2: print("  - perm %s: found at row %d" % (str(perm),m))
+                    if verbosity > 2: print("  - perm %s: found at row %d" % (str(perm),m))
                     break
             else:
-                assert(False),                     "Permutation %s on qubits (cols) %s is not present!" % (str(perm),str(cols_to_check))
-    if debug > 0: print(" check succeeded!")                                                             
+                assert(False), \
+                    "Permutation %s on qubits (cols) %s is not present!" % (str(perm),str(cols_to_check))
+    if verbosity > 0: print(" check succeeded!")                                                             
     
