@@ -1,5 +1,6 @@
 import unittest
 import itertools
+import collections
 import pygsti
 import numpy as np
 import warnings
@@ -7,10 +8,12 @@ import pickle
 import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
-from pygsti.objects.gatemapcalc import GateMapCalc
+#from pygsti.objects.gatemapcalc import GateMapCalc
 
 #Note: calcs expect tuples (or GateStrings) of *Labels*
 from pygsti.objects import Label as L
+
+from pygsti.construction import std1Q_XYI
 
 def Ls(*args):
     """ Convert args to a tuple to Labels """
@@ -44,7 +47,8 @@ class GateSetTestCase(BaseTestCase):
             parameterization="static")
 
         self.mgateset = self.gateset.copy()
-        self.mgateset._calcClass = GateMapCalc
+        #self.mgateset._calcClass = GateMapCalc
+        self.mgateset.set_simtype('map')
 
 
 class TestGateSetMethods(GateSetTestCase):
@@ -1403,6 +1407,64 @@ class TestGateSetMethods(GateSetTestCase):
         gs.gates['Gnew3'] = pygsti.obj.FullyParameterizedGate( np.identity(4,'d') )
         del gs.gates['Gnew3'] #this causes update of Gnew2 indices
         del gs.gates['Gnew2']
+
+    def test_ondemand_probabilities(self):
+        #First create a "sparse" dataset
+        # # Columns = 0 count, 1 count 
+        dataset_txt = \
+"""# Test Sparse format data set
+{}    0:0  1:100
+Gx    0:10 1:90 2:0
+GxGy  0:40 1:60
+Gx^4  0:100
+"""
+        with open(temp_files + "/SparseDataset.txt",'w') as f:
+            f.write(dataset_txt)
+
+        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset.txt")
+        self.assertEqual(ds.get_outcome_labels(), [('0',), ('1',), ('2',)])
+        self.assertEqual(ds[()].outcomes, [('1',)]) # only nonzero count is 1-count
+        self.assertEqual(ds[()]['2'], 0) # but we can query '2' since it's a valid outcome label
+
+        gstrs = list(ds.keys())
+        raw_dict, elIndices, outcome_lookup, ntotal = std1Q_XYI.gs_target.compile_gatestrings(gstrs, ds)
+
+        print("Raw gs -> spamtuple dict:\n","\n".join(["%s: %s" % (str(k),str(v)) for k,v in raw_dict.items()]))
+        print("\nElement indices lookup (orig gstr index -> element indices):\n",elIndices)
+        print("\nOutcome lookup (orig gstr index -> list of outcome for each element):\n",outcome_lookup)
+        print("\ntotal elements = ", ntotal)
+
+        self.assertEqual(raw_dict[()], [(L('rho0'), L('Mdefault_1'))])
+        self.assertEqual(raw_dict[('Gx',)], [(L('rho0'), L('Mdefault_0')),(L('rho0'), L('Mdefault_1'))])
+        self.assertEqual(raw_dict[('Gx','Gy')], [(L('rho0'), L('Mdefault_0')),(L('rho0'), L('Mdefault_1'))])
+        self.assertEqual(raw_dict[('Gx',)*4], [(L('rho0'), L('Mdefault_0'))])
+
+        self.assertEqual(elIndices, collections.OrderedDict(
+            [(0, slice(0, 1, None)), (1, slice(1, 3, None)), (2, slice(3, 5, None)), (3, slice(5, 6, None))]) )
+
+        self.assertEqual(outcome_lookup, collections.OrderedDict(
+            [(0, [('1',)]), (1, [('0',), ('1',)]), (2, [('0',), ('1',)]), (3, [('0',)])]) )
+
+        self.assertEqual(ntotal, 6)
+
+
+        #A sparse dataset loading test using the more common format:
+        dataset_txt2 = \
+"""## Columns = 0 count, 1 count
+{} 0 100
+Gx 10 90
+GxGy 40 60
+Gx^4 100 0
+"""
+
+        with open(temp_files + "/SparseDataset2.txt",'w') as f:
+            f.write(dataset_txt2)
+
+        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset2.txt")
+        self.assertEqual(ds.get_outcome_labels(), [('0',), ('1',)])
+        self.assertEqual(ds[()].outcomes, [('1',)]) # only nonzero count is 1-count
+        with self.assertRaises(KeyError):
+            ds[()]['2'] # *can't* query '2' b/c it's NOT a valid outcome label here
 
         
 

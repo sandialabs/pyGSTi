@@ -528,7 +528,7 @@ def prep_stabilizer_state(nqubits, zvals=None):
     p = _np.zeros(2*n,int)
     if zvals:
         for i,z in enumerate(zvals):
-            p[i] = p[i+n] = 2 if bool(z) else 0 # TODO: check this is right -- (how to update the destabilizers?)
+            p[i] = p[i+n] = 2 if bool(z) else 0 # EGN TODO: check this is right -- (how to update the destabilizers?)
     return s,p
 
 def apply_clifford_to_stabilizer_state(s,p,state_s,state_p):
@@ -564,7 +564,7 @@ def apply_clifford_to_stabilizer_state(s,p,state_s,state_p):
     assert(_np.shape(state_s) == (two_n, two_n)), "Clifford and state must be for the same number of qubits!"
     assert(_np.shape(state_p) == (two_n,)), "Invalid stabilizer state representation"
     assert(check_valid_clifford(s,p)), "The `s`,`p` matrix-vector pair is not a valid Clifford!"
-    #TODO: check valid stabilizer state?
+    #EGN TODO: check valid stabilizer state?
     
     # Below we calculate the s and p for the output state using the formulas from
     # Hostens and De Moor PRA 71, 042315 (2005).
@@ -592,14 +592,14 @@ def apply_clifford_to_stabilizer_state(s,p,state_s,state_p):
     #    out_p[slc] = state_p[slc] + vec1 + vec2
     #    out_p[slc] = out_p[slc] % 4
     
-    #TODO: check for valid stabilizer state
+    #EGN TODO: check for valid stabilizer state
     
     return out_s, out_p
 
 
 def pauli_z_measurement(state_s, state_p, qubit_index):
     """ 
-    Computes the probabilities of +/- outcomes from measuring a 
+    Computes the probabilities of 0/1 (+/-) outcomes from measuring a 
     Pauli operator on a stabilizer state.
 
     Parameters
@@ -615,14 +615,14 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
 
     Returns
     -------
-    pminus, pplus : float
-        Probabilities of - and + outcomes.
+    p0, p1 : float
+        Probabilities of 0 (+ eigenvalue) and 1 (- eigenvalue) outcomes.
 
-    state_s_minus, state_s_plus : numpy array
+    state_s_0, state_s_1: numpy array
         Matrix over the integers mod 2 representing the output stabilizer
         states.
 
-    state_p_minus, state_p_plus : numpy array
+    state_p_0, state_p_1 : numpy array
         Phase vectors over the integers mod 4 representing the output
         stabilizer states.
     """
@@ -745,7 +745,7 @@ def colsum(i,j,s,p,n):
     for k in range(n):
         s[k,i] = s[k,j] ^ s[k,i]
         s[k+n,i] = s[k+n,j] ^ s[k+n,i]
-        #TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
+        #EGN TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
     return
 
 def colsum_acc(acc_s,acc_p,j,s,p,n):
@@ -794,7 +794,7 @@ def colsum_acc(acc_s,acc_p,j,s,p,n):
     for k in range(n):
         acc_s[k] = s[k,j] ^ acc_s[k]
         acc_s[k+n] = s[k+n,j] ^ acc_s[k+n]
-        #TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
+        #EGN TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
     return
 
 def stabilizer_measurement_prob(state_sp_tuple, moutcomes, qubit_filter=None,
@@ -1042,8 +1042,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         The symplectic matrix representing the Clifford implement by the input circuit
         
     p : dictionary of numpy arrays
-        The phase vector representing the Clifford implement by the input circuit
-        
+        The phase vector representing the Clifford implement by the input circuit     
     """
     n = circuit.number_of_lines()
     depth = circuit.depth()
@@ -1059,7 +1058,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         # This relies on the circuit having a valid self.identity identifier -- as those gates are
         # not returned in the layer. Note that the layer contains each gate only once.   
         layer = circuit.get_layer(i)
-        # todo : update so that we don't use this function : because it is much slower than necessary.
+        # future : update so that we don't use this function, because it slower than necessary (possibly much slower).
         layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict)
         s, p = compose_cliffords(s, p, layer_s, layer_p)
     
@@ -1106,7 +1105,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None
         The phase vector representing the Clifford implement by specified 
         circuit layer
     """
-    # This method uses a brute-force matrix construction; perhaps this should be updated.
+    # This method uses a brute-force matrix construction. Future: perhaps this should be updated.
     sreps = get_internal_gate_symplectic_representations()    
     if srep_dict is not None: sreps.update(srep_dict)
     
@@ -1127,9 +1126,10 @@ def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None
 
             matrix, phase = sreps[sub_gl.name]           
             nforgate = sub_gl.number_of_qubits
-            for ind1, qlabel1 in enumerate(sub_gl.qubits):
+            sub_gl_qubits = sub_gl.qubits if (sub_gl.qubits is not None) else Qlabels
+            for ind1, qlabel1 in enumerate(sub_gl_qubits):
                 qindex1 = Qlabels.index(qlabel1)
-                for ind2, qlabel2 in enumerate(sub_gl.qubits):
+                for ind2, qlabel2 in enumerate(sub_gl_qubits):
                     qindex2 = Qlabels.index(qlabel2)
                     # Put in the symp matrix elements
                     s[qindex1,qindex2] = matrix[ind1,ind2]
@@ -1209,14 +1209,12 @@ def oneQclifford_symplectic_group_relations():
 
 def unitary_is_a_clifford(unitary):
     """
-    Returns True if the unitary is a Clifford gate, and False
-    otherwise.
+    Returns True if the unitary is a Clifford gate (w.r.t the standard
+    basis), and False otherwise.
     """
     s, p = unitary_to_symplectic(unitary,flagnonclifford=False)
-    if s is None and p is None:
-        return False
-    else:
-        return Trye
+    if s is None: return False
+    else: return True
 
 def _unitary_to_symplectic_1Q(u,flagnonclifford=True):
     """

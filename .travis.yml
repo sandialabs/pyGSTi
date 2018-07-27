@@ -33,7 +33,8 @@ before_install:
 #- pip install --global-option=build_ext --global-option="-I/usr/include/suitesparse" cvxpy cvxopt
 install:
   - travis_retry travis_wait pip install -r requirements.txt
-  - pip install ipython mpi4py zmq coverage msgpack-python cython dill psutil >/dev/null
+  - pip install ipython mpi4py zmq coverage msgpack-python cython psutil >/dev/null
+  - pip install dill 
   - pip install -e . >/dev/null
   
 cache:

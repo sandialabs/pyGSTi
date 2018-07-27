@@ -482,7 +482,21 @@ class Estimate(object):
     def misfit_sigma(self, use_accurate_Np=False, evaltree_cache=None, comm=None):
         """
         Returns the number of standard deviations (sigma) of model violation.
-        TODO: docstring
+
+        Parameters
+        ----------
+        use_accurate_Np : bool, optional
+            Whether to use the more accurate number of *non-gauge* parameters
+            (but more expensive to compute), or just use the total number of
+            gate set parameters.
+
+        evaltree_cache : dict, optional
+            A dictionary which server as a cache for the computed EvalTree used
+            in this computation.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
 
         Returns
         -------

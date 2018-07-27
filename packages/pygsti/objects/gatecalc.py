@@ -55,17 +55,12 @@ class GateCalc(object):
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
-        spamdefs : OrderedDict
-            A dictionary whose keys are the allowed SPAM labels, and whose
-            values are 2-tuples comprised of a state preparation label
-            followed by a POVM effect label (both of which are strings,
-            and keys of preps and effects, respectively, except for the
-            special case when both are set to "remainder").
-
         paramvec : ndarray
             The parameter vector of the GateSet.
 
-        autogator : TODO docstring
+        autogator : AutoGator
+            An auto-gator object that may be used to construct virtual gates
+            for use in computations.
         """
         self.dim = dim
         self.gates = gates
@@ -1400,7 +1395,7 @@ class GateCalc(object):
         for i, gstr in enumerate(gatestrings):
             elInds = _slct.indices(elIndices[i]) \
                      if isinstance(elIndices[i],slice) else elIndices[i]
-            ret[gstr] = _collections.OrderedDict(
+            ret[gstr] = _ld.OutcomeLabelDict(
                 [(outLbl,vp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
@@ -1568,10 +1563,10 @@ class GateCalc(object):
             elInds = _slct.indices(elIndices[i]) \
                      if isinstance(elIndices[i],slice) else elIndices[i]
             if returnPr:
-                ret[gstr] = _collections.OrderedDict(
+                ret[gstr] = _ld.OutcomeLabelDict(
                     [(outLbl,(vdp[ei],vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
             else:
-                ret[gstr] = _collections.OrderedDict(
+                ret[gstr] = _ld.OutcomeLabelDict(
                     [(outLbl,vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
@@ -1774,7 +1769,7 @@ class GateCalc(object):
         for i, gstr in enumerate(gatestrings):
             elInds = _slct.indices(elIndices[i]) \
                      if isinstance(elIndices[i],slice) else elIndices[i]
-            outcomeQtys = _collections.OrderedDict()
+            outcomeQtys = _ld.OutcomeLabelDict()
             for ei, outLbl in zip(elInds, outcomes[i]):
                 if returnDeriv:
                     if vdp2 is None:

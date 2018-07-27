@@ -534,8 +534,8 @@ class SVGateRep_Embedded(SVGateRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i]*bInd
                 inds.append(offset + vec_index)
-            embedded_instate = SVStateRep( state[inds] )
-            emedded_outstate= self.embedded_gate.adjoint_acton( embedded_instate )
+            embedded_instate = SVStateRep( state.data[inds] )
+            embedded_outstate= self.embedded_gate.adjoint_acton( embedded_instate )
             output_state.data[ inds ] += embedded_outstate.data
 
         #act on other blocks trivially:
@@ -672,28 +672,37 @@ class SBGateRep_Clifford(SBGateRep):
 
 # Other classes
 class PolyRep(dict):
-    """ Encapsulates a polynomial """
-    def __init__(self, int_coeffs, max_order, max_num_vars):
-        """ TODO: docstring
-        """
+    """ 
+    Representation class for a polynomial.
 
-        ##TODO REMOVE - b/c coeffs have integer keys already?
-        ## Set max_order (determines based on coeffs if necessary)
-        #coeffs_max_order = 0 if not coeffs else \
-        #                   max([ len(k) for k in coeffs.keys()])
-        #if max_order is None:
-        #    max_order = coeffs_max_order
-        #else:
-        #    assert(coeffs_max_order <= max_order)
-        #
-        #
-        ## Set max_num_vars (determines based on coeffs if necessary)
-        #coeffs_max_vars = 0 if not coeffs else \
-        #                  max([ (max(k)+1 if k else 0) for k in coeffs.keys()])
-        #if max_num_vars is None:
-        #    max_num_vars = coeffs_max_vars
-        #else:
-        #    assert(coeffs_max_vars <= max_num_vars)
+    This is similar to a full Polynomial
+    dictionary, but lacks some functionality and is optimized for computation
+    speed.  In particular, the keys of this dict are not tuples of variable 
+    indices (as in Polynomial) but simple integers encoded from such tuples.
+    To perform this mapping, one must specify a maximum order and number of
+    variables.
+    """
+
+    def __init__(self, int_coeffs, max_order, max_num_vars):
+        """
+        Create a new PolyRep object.
+
+        Parameters
+        ----------
+        int_coeffs : dict
+            A dictionary of coefficients whose keys are already-encoded
+            integers corresponding to variable-index-tuples (i.e poly
+            terms).
+
+        max_order : int
+            The maximum order (exponent) allowed for any single variable
+            in each monomial term.
+
+        max_num_vars : int
+            The maximum number of variables allowed.  For example, if
+            set to 2, then only "x0" and "x1" are allowed to appear
+            in terms.
+        """
 
         self.max_order = max_order
         self.max_num_vars = max_num_vars
@@ -704,9 +713,27 @@ class PolyRep(dict):
 
     @property
     def coeffs(self): # so we can convert back to python Polys
+        """ The coefficient dictionary (with encoded integer keys) """
         return dict(self) #for compatibility w/C case which can't derive from dict...
 
     def set_maximums(self, max_num_vars=None, max_order=None):
+        """
+        Alter the maximum order and number of variables (and hence the
+        tuple-to-int mapping) for this polynomial representation.
+
+        Parameters
+        ----------
+        max_num_vars : int
+            The maximum number of variables allowed.
+
+        max_order : int
+            The maximum order (exponent) allowed for any single variable
+            in each monomial term.
+
+        Returns
+        -------
+        None
+        """
         coeffs = { self._int_to_vinds(i): v for k,v in self.items() }
         if max_num_vars is not None: self.max_num_vars = max_num_vars
         if max_order is not None: self.max_order = max_order
@@ -715,6 +742,7 @@ class PolyRep(dict):
         self.update(int_coeffs)
 
     def _vinds_to_int(self, vinds):
+        """ Maps tuple of variable indices to encoded int """
         assert(len(vinds) <= self.max_order), "max_order is too low!"
         ret = 0; m = 1
         for i in vinds: # last tuple index is most significant
@@ -724,6 +752,7 @@ class PolyRep(dict):
         return ret
 
     def _int_to_vinds(self, indx):
+        """ Maps encoded int to tuple of variable indices """
         ret = []
         while indx != 0:
             nxt = indx // (self.max_num_vars+1)
@@ -733,6 +762,20 @@ class PolyRep(dict):
         return tuple(sorted(ret))
 
     def deriv(self, wrtParam):
+        """
+        Take the derivative of this polynomial representation with respect to 
+        the single variable `wrtParam`.
+        
+        Parameters
+        ----------
+        wrtParam : int
+            The variable index to differentiate with respect to (can be
+            0 to the `max_num_vars-1` supplied to `__init__`.
+
+        Returns
+        -------
+        PolyRep
+        """
         dcoeffs = {}
         for i,coeff in self.items():
             ivar = self._int_to_vinds(i)
@@ -745,7 +788,21 @@ class PolyRep(dict):
         return PolyRep(int_dcoeffs, self.max_order, self.max_num_vars)
 
     def evaluate(self, variable_values):
-        """ TODO: docstring -- and make this function smarter (Russian peasant) """
+        """
+        Evaluate this polynomial at the given variable values.
+
+        Parameters
+        ----------
+        variable_values : iterable
+            The values each variable will be evaluated at.  Must have
+            length at least equal to the number of variables present
+            in this `PolyRep`.
+
+        Returns
+        -------
+        float or complex
+        """
+        #FUTURE and make this function smarter (Russian peasant)?
         ret = 0
         for i,coeff in self.items():
             ivar = self._int_to_vinds(i)
@@ -753,7 +810,21 @@ class PolyRep(dict):
         return ret
 
     def compact(self):
-        """ TODO docstring Returns compact representation of (vtape, ctape) 1D nupy arrays """
+        """
+        Returns a compact representation of this polynomial as a 
+        `(variable_tape, coefficient_tape)` 2-tuple of 1D nupy arrays.
+
+        Such compact representations are useful for storage and later 
+        evaluation, but not suited to polynomial manipulation.
+        
+        Returns
+        -------
+        vtape : numpy.ndarray
+            A 1D array of integers (variable indices).
+        ctape : numpy.ndarray
+            A 1D array of coefficients; can have either real
+            or complex data type.
+        """
         iscomplex = any([ abs(_np.imag(x)) > 1e-12 for x in self.values() ])
         nTerms = len(self)
         vinds = [ self._int_to_vinds(i) for i in self.keys() ]
@@ -773,19 +844,50 @@ class PolyRep(dict):
         return vtape, ctape
 
     def copy(self):
+        """
+        Make a copy of this polynomial representation.
+        
+        Returns
+        -------
+        PolyRep
+        """
         cpy = PolyRep(None, self.max_order, self.max_num_vars)
         cpy.update(self) # constructor expects dict w/var-index keys, not ints like self has
         return cpy
 
     def map_indices(self, mapfn):
-        """ TODO: docstring - mapfn should map old->new variable-index-tuples """
+        """
+        Map the variable indices in this `PolyRep`.
+        This allows one to change the "labels" of the variables.
+
+        Parameters
+        ----------
+        mapfn : function
+            A single-argument function that maps old variable-index tuples
+            to new ones.  E.g. `mapfn` might map `(0,1)` to `(10,11)` if 
+            we were increasing each variable index by 10.
+
+        Returns
+        -------
+        None
+        """
         new_items = { self._vinds_to_int(mapfn(self._int_to_vinds(k))): v
                       for k,v in self.items() }
         self.clear()
         self.update(new_items)
 
     def mult(self,x):
-        """ Does self * x where x is a polynomial """
+        """ 
+        Returns `self * x` where `x` is another polynomial representation.
+
+        Parameters
+        ----------
+        x : PolyRep
+        
+        Returns
+        -------
+        PolyRep
+        """
         assert(self.max_order == x.max_order and self.max_num_vars == x.max_num_vars)
         newpoly = PolyRep(None, self.max_order, self.max_num_vars) # assume same *fixed* max_order, even during mult
         for k1,v1 in self.items():
@@ -796,12 +898,34 @@ class PolyRep(dict):
         return newpoly
 
     def scale(self, x):
+        """
+        Performs `self = self * x` where `x` is a scalar.
+        
+        Parameters
+        ----------
+        x : float or complex
+
+        Returns
+        -------
+        None
+        """
         # assume a scalar that can multiply values
         newpoly = self.copy()
         for k in self:
             self[k] *= x
 
     def scalar_mult(self, x):
+        """
+        Returns `self * x` where `x` is a scalar.
+        
+        Parameters
+        ----------
+        x : float or complex
+
+        Returns
+        -------
+        PolyRep
+        """
         # assume a scalar that can multiply values
         newpoly = self.copy()
         newpoly.scale(x)
@@ -1019,7 +1143,39 @@ def SB_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=Non
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
 def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None, fastmode=True):
     """
-    TODO: docstring - computes polynomials of the probabilities for multiple spam-tuples of `gatestring`
+    Computes polynomials of the probabilities for multiple spam-tuples of `gatestring`
+    
+    Parameters
+    ----------
+    calc : GateTermCalculator
+        The calculator object holding vital information for the computation.
+
+    rholabel : Label
+        Prep label for *all* the probabilities to compute.
+
+    elabels : list
+        List of effect labels, one per probability to compute.  The ordering
+        of `elabels` determines the ordering of the returned probability 
+        polynomials.
+
+    gatestring : GateString
+        The gate sequence to sandwich between the prep and effect labels.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes.
+
+    fastmode : bool, optional
+        A switch between a faster, slighty more memory hungry mode of
+        computation (`fastmode=True`)and a simpler slower one (`=False`).
+
+    Returns
+    -------
+    list
+        A list of PolyRep objects, one per element of `elabels`.
     """
     #print("PRS_AS_POLY gatestring = ",gatestring)
     #print("DB: prs_as_polys(",spamTuple,gatestring,calc.max_order,")")

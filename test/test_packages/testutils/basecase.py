@@ -17,6 +17,14 @@ except ImportError:
 
 class BaseTestCase(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        try:
+            basestring #Only defined in Python 2
+            cls.versionsuffix = "" #Python 2
+        except NameError:
+            cls.versionsuffix = "v3" #Python 3
+    
     def setUp(self):
         # move working directories
         try:
@@ -38,11 +46,12 @@ class BaseTestCase(unittest.TestCase):
         #enable extra paramter-vector integrity checking
         pygsti.objects.GateSet._pcheck = True
 
-        try:
-            basestring #Only defined in Python 2
-            self.versionsuffix = "" #Python 2
-        except NameError:
-            self.versionsuffix = "v3" #Python 3
+        #Moved to setUpClass so derived class setUpClass methods can use it.
+        #try:
+        #    basestring #Only defined in Python 2
+        #    self.versionsuffix = "" #Python 2
+        #except NameError:
+        #    self.versionsuffix = "v3" #Python 3
 
 
     def tearDown(self):

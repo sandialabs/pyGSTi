@@ -531,7 +531,20 @@ class QubitGraph(object):
         """
         Return a graph that includes only `nodes_to_keep` and 
         the edges between them. 
-        TODO: docstring
+
+        Parameters
+        ----------
+        nodes_to_keep : list
+            A list of node labels defining the subgraph to return.
+
+        reset_nodes : bool, optional
+            If True, nodes of returned subgraph are relabelled to
+            be the integers starting at 0 (in 1-1 correspondence
+            with the ordering in `nodes_to_keep`).
+
+        Returns
+        -------
+        QubitGraph
         """
         if reset_nodes:
             qubit_labels = list(range(len(nodes_to_keep)))

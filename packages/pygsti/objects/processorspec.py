@@ -9,15 +9,15 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import itertools as _itertools
 import collections as _collections
-#from scipy.sparse.csgraph import floyd_warshall as _fw
+import warnings as _warnings
 
 from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
 from .qubitgraph import QubitGraph as _QubitGraph
 from ..baseobjs import Label as _Label
-from . import gate as _gate
 from ..tools import gatetools as _gt
 from ..tools import internalgates as _itgs
+from ..tools import symplectic as _symp
 
 class ProcessorSpec(object):
     """
@@ -79,7 +79,10 @@ class ProcessorSpec(object):
             (e.g., the device does not have all-to-all connectivity).
 
         construct_models : tuple, optional
-            Erik todo : write this bit.
+            Standard model for the gates to add. 
+                - If 'target' is in the tuple, "target" process matrices corresponding to ideal gates are added. 
+                - If 'clifford' is in the tuple, the Clifford gates in the gateset are represented in their efficient-in-n 
+                symplectic form (these are reps. of perfect gates).
 
         construct_clifford_compilations : dict, optional
             The compilations for "standard" Clifford gates that are constructed. These are mostly only of importance for
@@ -115,11 +118,14 @@ class ProcessorSpec(object):
 
         # Records the name of the identity gate, if there is one, as this is useful information to have to hand. If there
         # isn't one we use the default 'I' label.
-        self.identity = 'I'
+        self.identity = None
         for gn in self.root_gate_names:
             if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'I'):
                 self.identity = gn
                 break
+        if self.identity is None:
+            _warnings.warn(("There is no identity gate in the gateset! This may cause some unusual behave with, e.g., circuit compilers."))
+            self.identity = 'I'
 
         # If no qubit labels are provided it defaults to integers from 0 to nQubits-1.    
         if qubit_labels is None:
@@ -134,13 +140,9 @@ class ProcessorSpec(object):
         # Compilations are stored here.
         self.compilations = _collections.OrderedDict()
 
-        #Compiler-cost variables (set in construct_compiler_costs)
+        # The connectivity graph of the device, for the "clifford" gateset (future: perhaps this should not only be for
+        # Clifford gates, or there should be a qubitgraph for each gateset.)
         self.qubitgraph = None
-        # todo : delete these if not using them.
-        # self.qubitcosts = None
-        # self.costorderedqubits = None
-        #self.connectivity['clifford'] =
-        #self.compiler
 
         # Holds a dictionary with keys that are 1Q gatename pairs (gn1, gn2), with a value gn3 that is the 1Q that
         # these gates combine to when gn1 is applied first and then gn2. There is no key for a pair if they don't
@@ -188,7 +190,7 @@ class ProcessorSpec(object):
                         if subctype == 'paulis':
                             oneQgates += ['I','X','Y','Z']
                         elif subctype == '1Qcliffords':
-                            oneQgates += ['C'+str(q) for q in range(24)] # todo : implement this.
+                            oneQgates += ['C'+str(q) for q in range(24)]
                         else:
                             raise ValueError("One of the values for the key `" + ctype + "` to `construct_clifford_compilations` is not a valid option!")
                     self.add_std_compilations(ctype, oneQgates, twoQgates, verbosity)
@@ -202,17 +204,19 @@ class ProcessorSpec(object):
             for gatelabel in self.models['clifford'].gates:
                 # This treats non-entangling 2-qubit gates as making qubits connected. Stopping that is
                 # something we may need to do at some point.
+                if gatelabel.number_of_qubits is None: continue # skip "global" gates in connectivity consideration?
                 if gatelabel.number_of_qubits > 1:
                     for p in _itertools.permutations(gatelabel.qubits, 2):
                         connectivity[self.qubit_labels.index(p[0]),self.qubit_labels.index(p[1])] = True
             
-            self.qubitgraph = _QubitGraph(list(range(self.number_of_qubits)), connectivity)
+            self.qubitgraph = _QubitGraph(self.qubit_labels, connectivity)
 
-        # todo : store this in a less clumsy way.
+        #future : store this in a less clumsy way.
         if 'clifford' in self.models:
             # Compute the gate labels that act on an entire set of qubits
             self.clifford_gates_on_qubits =  _collections.defaultdict(list)
             for gl in self.models['clifford'].gates:
+                if gl.qubits is None: continue # skip "global" gates (?)
                 for p in _itertools.permutations(gl.qubits):
                     self.clifford_gates_on_qubits[p].append(gl)
         else:
@@ -226,8 +230,11 @@ class ProcessorSpec(object):
         return # done with __init__(...)
                
     def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+        # Erik future : improve docstring.
         """ 
-        Erik todo: docstring 
+        Adds a standard model for the gates. For example, "target" process matrices are added 
+        if model_name = 'target_name';  Target Clifford gates, represented in their efficient-in-n 
+        symplectic form, are added if model_name = 'clifford'.
         """
         from .. import construction as _cnst
         if model_name == 'clifford':
@@ -291,7 +298,7 @@ class ProcessorSpec(object):
             - 'CNOT' : the CNOT gate.
 
         add_nonlocal_twoQgates : bool, optional
-            Tim todo 
+            Whether to add compilations for CNOT gates between non-neighbouring qubits.
 
         verbosity : int, optional
             If > 0, information about the compilation generation is printed to screen.
@@ -303,7 +310,7 @@ class ProcessorSpec(object):
         # For printing to screen what the compiler is doing.
         descs = {'paulieq': 'up to paulis', 'absolute':''}
         # Lists that are all the hard-coded 1-qubit and 2-qubit gates.
-        # todo: should probably import these from _itgss somehow.
+        # future: should probably import these from _itgss somehow.
         hardcoded_oneQgates = ['I', 'X', 'Y', 'Z', 'H', 'P', 'HP', 'PH', 'HPH' ] + ['C'+str(i) for i in range(24)]
         hardcoded_twoQgates = ['CNOT','CPHASE','SWAP']
 
@@ -473,17 +480,13 @@ class ProcessorSpec(object):
                             self.gate_inverse[gname1] = gname2
                             self.gate_inverse[gname2] = gname1
            
-    # Tim is going to replace this at some point with a useful way to specify how "costly" using different qubits/gates is estimated to be, so that
-    # Clifford compilers etc can take this into account.                        
+    # Future : replace this with a way to specify how "costly" using different qubits/gates is estimated to be, so that
+    # Clifford compilers etc can take this into account by auto-generating a costfunction from this information.                        
     # def construct_compiler_costs(self, custom_connectivity=None):
     #     """ 
 
     #     """
     #     self.qubitcosts = {}
-        
-    #     #
-    #     # todo -- I'm not sure whether this makes sense when the graph is directed.
-    #     #
     #     distances = self.qubitgraph.shortest_path_distance_matrix()
     #     for i in range(0,self.number_of_qubits):
     #         self.qubitcosts[i] = _np.sum(distances[i,:])
@@ -507,5 +510,4 @@ class ProcessorSpec(object):
     #             if len(temp_distances) == 0:
     #                 break
         
-    #         self.costorderedqubits.append(qubits_at_this_distance)
-           
+    #         self.costorderedqubits.append(qubits_at_this_distance)      

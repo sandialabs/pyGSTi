@@ -145,7 +145,7 @@ class CompilationLibrary(_collections.OrderedDict):
                 return max([lbl.number_of_qubits for lbl in template_labels]) == 2
             else:
                 # >2Q gates need to make sure there's some connected path
-                return True # TODO LATER, using graphs stuff?
+                return True # future: update using graphs stuff?
                                           
         template_to_use = None
         
@@ -409,7 +409,6 @@ class CompilationLibrary(_collections.OrderedDict):
                 for layer in all_layers:
                         
                     # Calculate the symp rep of this parallel gate
-                    # todo -- this might not work with qubit labels differing from integers?
                     sadd, padd = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
                     key = seq + layer # tuple/GateString concatenation
                         
@@ -782,7 +781,7 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         Circuit
         """
-        # first try and compile the gate locally. Future todo: this will not work properly if the allowed_filter removes gates that
+        # first try and compile the gate locally. Future: this will not work properly if the allowed_filter removes gates that
         # the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence should be removed somehow.
         try:
             # We don't have to account for `force` manually here, because it is dealt with inside this function
@@ -834,7 +833,7 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         None
         """
-        # first try and compile the gate locally. Future todo: this will not work properly if the allowed_filter removes gates that
+        # first try and compile the gate locally. Future: this will not work properly if the allowed_filter removes gates that
         # the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence should be removed somehow.
         try:
             # We don't have to account for `force` manually here, because it is dealt with inside this function

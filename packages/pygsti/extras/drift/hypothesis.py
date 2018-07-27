@@ -42,6 +42,7 @@ def sidak_correction(confidence,numtests):
 
 def generalized_bonferroni_correction(confidence, weights, numtests=None,
                                      nested_method='bonferroni',tol=1e-10):
+
     """
     Todo: docstring
     
