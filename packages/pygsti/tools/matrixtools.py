@@ -805,8 +805,12 @@ def _fas(a, inds, rhs, add=False):
         # these lists, and flatten the right hand side to get the
         # proper assignment:
         b = []
+        single_int_inds = [] # for Cython, a and rhs must have the same
+                             # number of dims.  This keeps track of single-ints
         for ii,i in enumerate(inds):
-            if isinstance(i,int): b.append( _np.array([i],_np.int64) )
+            if isinstance(i,int):
+                b.append( _np.array([i],_np.int64) )
+                single_int_inds.append(ii)
             elif isinstance(i,slice):
                 b.append( _np.array(list(range(*i.indices(a.shape[ii]))),_np.int64) )
             else:
@@ -815,14 +819,25 @@ def _fas(a, inds, rhs, add=False):
         nDims = len(b)
         if nDims > 0 and all([len(x)>0 for x in b]): # b/c a[()] just returns the entire array!
 
-            if _fastcalc is not None:
+            if _fastcalc is not None and not add:
+                #Note: we rarely/never use add=True, so don't bother implementing in Cython yet...
+
+                if len(single_int_inds) > 0:
+                    remove_single_int_dims = [ b[i][0] if (i in single_int_inds) else slice(None)
+                                               for i in range(nDims) ] # e.g. [:,2,:] if index 1 is a single int
+                    for ii in reversed(single_int_inds): del b[ii] # remove single-int els of b
+                    av = a[remove_single_int_dims] # a view into a
+                    nDims -= len(single_int_inds) # for cython routines below
+                else:
+                    av = a
+                
                 #Note: we do not require these arrays to be contiguous
                 if nDims == 1:
-                    _fastcalc.fast_fas_helper_1d(a, rhs, b[0])
+                    _fastcalc.fast_fas_helper_1d(av, rhs, b[0])
                 elif nDims == 2:
-                    _fastcalc.fast_fas_helper_2d(a, rhs, b[0],b[1])
+                    _fastcalc.fast_fas_helper_2d(av, rhs, b[0],b[1])
                 elif nDims == 3:
-                    _fastcalc.fast_fas_helper_3d(a, rhs, b[0],b[1],b[2])
+                    _fastcalc.fast_fas_helper_3d(av, rhs, b[0],b[1],b[2])
                 else:
                     raise NotImplementedError("No fas helper for nDims=%d" % nDims)
             else:
