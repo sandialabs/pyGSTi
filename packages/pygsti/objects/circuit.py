@@ -14,6 +14,7 @@ from . import gatestring as _gstr
 from . import labeldicts as _ld
 from ..baseobjs import Label as _Label
 from ..tools import internalgates as _itgs
+from ..tools import compattools as _compat
 
 
 class Circuit(_gstr.GateString):
@@ -78,7 +79,7 @@ class Circuit(_gstr.GateString):
             of the circuit, unless the relationship between the gates is given to 
             a method of circuit.        
         """
-        assert(type(identity) == str), "The identity name must be a string!"
+        assert(_compat.isstr(identity)), "The identity name must be a string!"
         self.identity = identity
 
         assert((line_items is not None) or (gatestring is not None) or (num_lines is not None) or (line_labels is not None)), \
