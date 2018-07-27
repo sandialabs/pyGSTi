@@ -822,8 +822,8 @@ def csr_subtract_identity(np.ndarray[double, ndim=1] Adata,
         
     return nxt
 
-#@cython.boundscheck(False) # turn off bounds-checking for entire function
-#@cython.wraparound(False)  # turn off negative index wrapping for entire function
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 def fast_fas_helper_1d(np.ndarray[double, mode="c", ndim=1] a,
                        np.ndarray[double, mode="c", ndim=1] rhs,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds0):
@@ -868,6 +868,8 @@ def fast_fas_helper_1d(np.ndarray[double, mode="c", ndim=1] a,
         #else:
         #    break # can't increment anything - break while(True) loop
 
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 def fast_fas_helper_2d(np.ndarray[double, mode="c", ndim=2] a,
                        np.ndarray[double, mode="c", ndim=2] rhs,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds0,
@@ -908,9 +910,11 @@ def fast_fas_helper_2d(np.ndarray[double, mode="c", ndim=2] a,
             else:
                 break # can't increment anything - break while(True) loop
 
-            
-def fast_fas_helper_3d(np.ndarray[double, mode="c", ndim=2] a,
-                       np.ndarray[double, mode="c", ndim=2] rhs,
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_fas_helper_3d(np.ndarray[double, mode="c", ndim=3] a,
+                       np.ndarray[double, mode="c", ndim=3] rhs,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds0,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds1,
                        np.ndarray[np.int64_t, mode="c", ndim=1] inds2):
