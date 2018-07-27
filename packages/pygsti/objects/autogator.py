@@ -12,12 +12,31 @@ from ..baseobjs import label as _label
 
 class AutoGator(_gsm.GateSetChild):
     """
-    TODO: docstrings in this module
-    Currently this class is essentially a function,
-    but we want allow room for future expansion.
-    """
+    The base class for "auto-gator" objects.
 
+    An auto-gator is an object that generates "virtual", i.e. temporary,
+    gates for a GateCalculator object to facilitate building variants or 
+    combinations of gates which aren't permanently stored in the GateSet.
+    
+    Often, auto-gator objects can be used to generate gates for "parallel
+    gate labels" (gate labels corresponding to multiple "elementary" gates
+    performed simultaneously) from the elementary gates stored in a gate
+    set.
+
+    Auto-gators behave in some ways like a function, in that their main
+    method is __call__, which is asked to construct a Gate for a given
+    label given a set of existing permanent Gate objects.
+    """
     def __init__(self,parent):
+        """
+        Create a new AutoGator
+
+        Parameters
+        ----------
+        parent : GateSet
+            The parent gate set within which this AutoGator is contained.
+
+        """
         super(AutoGator,self).__init__(parent)
         
     def __call__(self, existing_gates, gatelabel):
@@ -43,11 +62,18 @@ class AutoGator(_gsm.GateSetChild):
 
 class SimpleCompositionAutoGator(AutoGator):
     """
-    TODO: docstring
-    Just composes existing gates together to form 
+    An auto-gator that creates virtual gates for parallel
+    gate labels by simply composing elementary gates
     """
 
     def __init__(self, parent):
+        """
+        Create a new SimpleCompositionAutoGator
+
+        Parameters
+        ----------
+        parent : GateSet
+        """
         super(SimpleCompositionAutoGator,self).__init__(parent)
 
     def __call__(self, existing_gates, gatelabel):
@@ -67,7 +93,6 @@ class SimpleCompositionAutoGator(AutoGator):
         -------
         Gate
         """
-
         dense = bool(self.parent._sim_type == "matrix") # whether dense matrix gates should be created
         Composed = _gate.ComposedGate if dense else _gate.ComposedGateMap
         #print("DB: SimpleCompositionAutoGator building gate %s for %s" %
@@ -82,9 +107,16 @@ class SimpleCompositionAutoGator(AutoGator):
     
 class SharedIdleAutoGator(AutoGator):
     """
-    TODO: docstring
+    An auto-gator that creates virtual gates for parallel
+    gate labels by composing the non-identity parts of
+    elementary gates and keeping just a single instance of
+    the identity-noise component which is assumed to be 
+    contained within every gate. 
 
-    Assumes each non-idle gate is a ComposedGateMap of the form
+    This autogator assumes a that the exisitng gates have a
+    certain structure - that contained in the GateSet given by
+    :function:`build_nqnoise_gateset`.  In particular, it assumes
+    each non-idle gate is a ComposedGateMap of the form
     `Composed([fullTargetOp,fullIdleErr,fullLocalErr])`, and that
     parallel gates should be combined by composing the target ops
     and local errors but keeping just a single idle error (which
@@ -92,6 +124,13 @@ class SharedIdleAutoGator(AutoGator):
     """
 
     def __init__(self, parent):
+        """
+        Create a new SharedIdleAutoGator
+
+        Parameters
+        ----------
+        parent : GateSet
+        """
         super(SimpleCompositionAutoGator,self).__init__(parent)
 
     def __call__(self, existing_gates, gatelabel):
@@ -111,7 +150,6 @@ class SharedIdleAutoGator(AutoGator):
         -------
         Gate
         """
-
         dense = bool(self.parent._sim_type == "matrix") # whether dense matrix gates should be created
         Composed = _gate.ComposedGate if dense else _gate.ComposedGateMap
         #print("DB: SharedIdleAutoGator building gate %s for %s" %

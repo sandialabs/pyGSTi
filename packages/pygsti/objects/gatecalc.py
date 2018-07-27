@@ -55,17 +55,12 @@ class GateCalc(object):
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
-        spamdefs : OrderedDict
-            A dictionary whose keys are the allowed SPAM labels, and whose
-            values are 2-tuples comprised of a state preparation label
-            followed by a POVM effect label (both of which are strings,
-            and keys of preps and effects, respectively, except for the
-            special case when both are set to "remainder").
-
         paramvec : ndarray
             The parameter vector of the GateSet.
 
-        autogator : TODO docstring
+        autogator : AutoGator
+            An auto-gator object that may be used to construct virtual gates
+            for use in computations.
         """
         self.dim = dim
         self.gates = gates

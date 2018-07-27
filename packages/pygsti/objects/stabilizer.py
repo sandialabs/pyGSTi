@@ -705,8 +705,7 @@ class StabilizerFrame(object):
                 # (this shouldn't happen if Umx is unitary!)
                     
 
-    def measurement_probability(self, zvals, qubit_filter=None, return_state=False, check=True):
-        # TODO docstring: change default check=False !!!
+    def measurement_probability(self, zvals, qubit_filter=None, return_state=False, check=False):
         """
         Extract the probability of obtaining a given
         computation-basis-measurement outcome.

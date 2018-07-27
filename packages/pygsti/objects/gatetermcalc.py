@@ -59,7 +59,6 @@ class GateTermCalc(GateCalc):
     def __init__(self, dim, gates, preps, effects, paramvec, autogator, max_order, cache=None):
         """
         Construct a new GateTermCalc object.
-        TODO: docstring - fix this one and maybe other calcs?
 
         Parameters
         ----------
@@ -72,15 +71,25 @@ class GateTermCalc(GateCalc):
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
-        spamdefs : OrderedDict
-            A dictionary whose keys are the allowed SPAM labels, and whose
-            values are 2-tuples comprised of a state preparation label
-            followed by a POVM effect label (both of which are strings,
-            and keys of preps and effects, respectively, except for the
-            special case when both are set to "remainder").
-
         paramvec : ndarray
             The parameter vector of the GateSet.
+
+        autogator : AutoGator
+            An auto-gator object that may be used to construct virtual gates
+            for use in computations.
+
+        max_order : int 
+            The maximum order of error-rate terms to include in probability
+            computations.
+
+        cache : dict, optional
+            A dictionary of pre-computed compact polynomial objects.  Keys are
+            `(max_order, rholabel, elabel, gatestring)` tuples, where 
+            `max_order` is an integer, `rholabel` and `elabel` are
+            :class:`Label` objects, and `gatestring` is a :class:`GateString`.
+            Computed values are added to any dictionary that is supplied, so
+            supplying an empty dictionary and using this calculator will cause
+            the dictionary to be filled with values.
         """
         # self.unitary_evolution = False # Unused - idea was to have this flag
         #    allow unitary-evolution calcs to be term-based, which essentially
