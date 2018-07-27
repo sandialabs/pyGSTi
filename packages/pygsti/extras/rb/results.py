@@ -87,10 +87,6 @@ class RBSummaryDataset(object):
 
         descriptor :  str, optional
             A string that describes what the data is for.
-            
-        Returns
-        -------
-        An RBSummaryDataset object.
         """       
         assert(not (success_counts == None and success_probabilities == None)), "Either success probabilities or success counts must be provided!"
         assert(not (success_counts != None and success_probabilities != None)), "Success probabilities *and* success counts should not both be provided!"
@@ -282,12 +278,46 @@ class RBSummaryDataset(object):
    
 class FitResults(object):
     """
-    Todo docstring
+    An object to contain the results from fitting RB data. Currently just a
+    container for the results, and does not include any methods.
     """
     def __init__(self, fittype, seed, rtype, success, estimates, variable, stds=None,  
                  bootstraps=None, bootstraps_failrate=None):
         """
-        Todo docstring
+        Initialize a FitResults object.
+
+        Parameters
+        ----------
+        fittype : str
+            A string to identity the type of fit.
+
+        seed : list
+            The seed used in the fitting.
+
+        rtype : {'IE','AGI'}
+            The type of RB error rate that the 'r' in these fit results corresponds to.
+
+        success : bool
+            Whether the fit was successful.
+
+        estimates : dict
+            A dictionary containing the estimates of all parameters
+
+        variable : dict
+            A dictionary that specifies which of the parameters in "estimates" where variables
+            to estimate (set to True for estimated parameters, False for fixed constants). This
+            is useful when fitting to A + B*p^m and fixing one or more of these parameters: because
+            then the "estimates" dict can still be queried for all three parameters.
+
+        stds : dict, optional
+            Estimated standard deviations for the parameters.
+
+        bootstraps : dict, optional
+            Bootstrapped values for the estimated parameters, from which the standard deviations
+            were calculated.
+
+        bootstraps_failrate : float, optional
+            The proporition of the estimates of the parameters from bootstrapped dataset failed. 
         """
         self.fittype = fittype
         self.seed = seed
@@ -303,29 +333,75 @@ class FitResults(object):
 
 class RBResults(object):
     """
-    Todo :docstring
+    An object to contain the results of an RB analysis
     """
     def __init__(self, data, rtype, fits):
         """
-        Todo :docstring
+        Initialize an RBResults object.
+
+        Parameters
+        ----------
+        data : RBSummaryDataset
+            The RB summary data that the analysis was performed for.
+
+        rtype : {'IE','AGI'}
+            The type of RB error rate, corresponding to different dimension-dependent
+            re-scalings of (1-p), where p is the RB decay constant in A + B*p^m.
+
+        fits : dict
+            A dictionary containing FitResults objects, obtained from one or more
+            fits of the data (e.g., a fit with all A, B and p as free parameters and
+            a fit with A fixed to 1/2^n).
         """
         self.data = data
         self.rtype = rtype
         self.fits = fits
 
-    def plot(self, fitkey='auto', decay=True, success_probabilities=True, size=(8,5), ylim=None, xlim=None, 
+    def plot(self, fitkey=None, decay=True, success_probabilities=True, size=(8,5), ylim=None, xlim=None, 
              figpath=None, title=None):
         """
-        Todo doctstring.
+        Plots RB data and, optionally, a fitted exponential decay.
+
+        Parameters
+        ----------
+        fitkey : dict key, optional
+            The key of the self.fits dictionary to plot the fit for. If None, will
+            look for a 'full' key (the key for a full fit to A + Bp^m if the standard
+            analysis functions are used) and plot this if possible. It otherwise checks
+            that there is only one key in the dict and defaults to this. If there are
+            multiple keys and none of them are 'full', `fitkey` must be specified when
+            `decay` is True.
+
+        decay : bool, optional
+            Whether to plot a fit, or just the data.
+
+        success_probabilities : bool, optional
+            Whether to plot the success probabilities distribution, as a violin plot. (as well
+            as the *average* success probabilities at each length).
+
+        size : tuple, optional
+            The figure size
+
+        ylim, xlim : tuple, optional
+            The x and y limits for the figure.
+
+        title : str, optional
+            A title to put on the figure.
+
+        figpath : str, optional
+            If specified, the figure is saved with this filename.
         """
+        
         # Future : change to a plotly plot.
         try: import matplotlib.pyplot as _plt
         except ImportError: raise ValueError("This function requires you to install matplotlib!")
 
-        if fitkey == 'auto':
-            allfitkeys = list(self.fits.keys()) #[0]
+        if decay and fitkey is None:
+            allfitkeys = list(self.fits.keys())
             if 'full' in allfitkeys: fitkey = 'full'
-            else: fitkey = allfitkeys[0]
+            else: 
+                assert(len(allfitkeys) == 1), "There are multiple fits and none have the key 'full'. Please specify the fit to plot!"
+                fitkey = allfitkeys[0]
         
         _plt.figure(figsize=size)
         _plt.plot(self.data.lengths,self.data.ASPs,'o')

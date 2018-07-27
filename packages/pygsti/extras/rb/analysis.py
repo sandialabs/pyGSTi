@@ -83,66 +83,39 @@ def marginalize(results, keepqubits, allqubits):
 
     return mresults
 
-# #
-# # FUNCTIONS FROM OLD CODE
-# # FUNCTIONS FROM OLD CODE
-# # FUNCTIONS FROM OLD CODE
-# #
-# # ---- Fitting functions and related ----#
-# def standard_fit_function(m,A,B,p):
-#     """
-#     The standard RB decay fitting function P_m = A + B * p^m. This is 
-#     used in standard RB, and also variants on this (e.g., interleaved RB).
+def magesan_first_order_fit_function(m, A, B, C, p):
+    """
+    The 'first order' fitting function P_m = A + (B + m * C) * p^m, from
+    "Scalable and Robust Randomized Benchmarking of Quantum Processes" , 
+    Magesan et al. PRL 106 180504 (2011). This is a simplified verion of 
+    the 'first order' in that paper (see Eq. 3), as the model therein has 
+    one too many parameters for fitting. The conversion is
     
-#     Parameters
-#     ----------
-#     m : integer
-#         Length of random RB sequence (not including the inversion gate).
-    
-#     A,B,p : float
+    A = B_1
+    B = A_1 - C_1(q/p^(-2) - 1)
+    C = C_1(q/p^(-2) - 1)
 
-#     Returns
-#     -------
-#     float
-#     """
-#     return A+B*p**m
+    where the LHS (RHS) quantites in this equation are those of our (Magesan 
+    et al.'s) fitting function.
 
-# def first_order_fit_function(m,A,B,C,p):
-#     """
-#     The 'first order' fitting function P_m = A + (B + m * C) * p^m, from
-#     "Scalable and Robust Randomized Benchmarking of Quantum Processes" 
-#     (http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504).
-#     This is a simplified verion of the 'first order' in that paper (see Eq. 3),
-#     as the model therein has 1 too many parameters for fitting. The conversion is
-#     A = B_1
-#     B = A_1 - C_1(q/p^(-2) - 1)
-#     C = C_1(q/p^(-2) - 1)
-#     where the LHS (RHS) quantites in this equation are those of our (Magesan 
-#     et al.'s) fitting function.
+    Parameters
+    ----------
+    m : integer
+        The RB length of the random RB sequence.
 
-#     Parameters
-#     ----------
-#     m : integer
-#         Length of random RB sequence (not including the inversion gate).
-    
-#     A,B,C,p : float
+    A,B,C,p : float
 
-#     Returns
-#     -------
-#     float
-#     """
-#     return A+(B+C*m)*p**m
-# #
-# # END OF FUNCTIONS FROM OLD CODE
-# # END OF FUNCTIONS FROM OLD CODE
-# # END OF FUNCTIONS FROM OLD CODE
-# #
+    Returns
+    -------
+    float
+        A + (B + m * C) * p^m.
+    """
+    return A+(B+C*m)*p**m
 
 def rescaling_factor(lengths, quantity, offset=2):
     """
     Todo : docstring.
-    """
-    
+    """  
     rescaling_factor = []
     
     for i in range(len(lengths)):
@@ -160,8 +133,8 @@ def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=200,  a
     """  
     lengths = RBSdataset.lengths
     ASPs = RBSdataset.ASPs
-    successcounts = RBSdataset.successcounts
-    totalcounts = RBSdataset.totalcounts
+    success_counts = RBSdataset.success_counts
+    total_counts = RBSdataset.total_counts
     n = RBSdataset.number_of_qubits
 
     if asymptote == 'std':

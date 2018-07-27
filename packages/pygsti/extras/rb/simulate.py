@@ -82,8 +82,10 @@ def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, erro
 
     return results
 
-def  oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, errormodel):
-    
+def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, errormodel):
+    """
+    todo : docstring                             
+    """
     n = circuit.number_of_lines
     depth = circuit.depth()
     sout, pout = _symp.prep_stabilizer_state(n, zvals=None)
@@ -140,8 +142,7 @@ def  oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, ps
 def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, filename=None, rbtype='DRB', rbspec =[], 
                          idle_name='Gi', returndata=True, appenddata=False, verbosity=0):
     """
-    
-
+    todo
     """      
     assert(rbtype == 'CRB' or rbtype == 'DRB' or rbtype == 'MRB'), "RB type not valid!"
 
