@@ -1,6 +1,6 @@
 from pygsti.extras import rb
 
-def test_rb_io_and_results():
+def test_rb_io_results_and_analysis():
 
     # Just checks that we can succesfully import the standard data type.
     data = rb.io.import_rb_summary_data(['testfiles/rb_io_test.txt',])

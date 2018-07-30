@@ -358,7 +358,7 @@ class RBResults(object):
         self.fits = fits
 
     def plot(self, fitkey=None, decay=True, success_probabilities=True, size=(8,5), ylim=None, xlim=None, 
-             figpath=None, title=None):
+             legend=True, title=None, figpath=None):
         """
         Plots RB data and, optionally, a fitted exponential decay.
 
@@ -385,6 +385,9 @@ class RBResults(object):
         ylim, xlim : tuple, optional
             The x and y limits for the figure.
 
+        legend : bool, optional
+            Whether to show a legend.
+
         title : str, optional
             A title to put on the figure.
 
@@ -404,24 +407,27 @@ class RBResults(object):
                 fitkey = allfitkeys[0]
         
         _plt.figure(figsize=size)
-        _plt.plot(self.data.lengths,self.data.ASPs,'o')
+        _plt.plot(self.data.lengths,self.data.ASPs,'o', label='Average success probabilities')
         
         if decay:
             lengths = _np.linspace(0,max(self.data.lengths),200)
             A = self.fits[fitkey].estimates['A']
             B = self.fits[fitkey].estimates['B']
             p = self.fits[fitkey].estimates['p']
-            _plt.plot(lengths,A+B*p**lengths)
+            _plt.plot(lengths,A+B*p**lengths, label = 'Fit, r = {:.2} +/- {:.1}'.format(self.fits[fitkey].estimates['r'],
+                                                                                  self.fits[fitkey].stds['r']))
     
         if success_probabilities:
             _plt.violinplot(list(self.data.success_probabilities),self.data.lengths, points=10, widths=1., showmeans=False, 
-                                 showextrema=False, showmedians=False)
+                                 showextrema=False, showmedians=False) #, label='Success probabilities')
         
-        if title is not None: plt.title(title)
+        if title is not None: _plt.title(title)
         _plt.ylabel("Success probability")
         _plt.xlabel("RB sequence length $(m)$")
         _plt.ylim(ylim)
         _plt.xlim(xlim)
+
+        if legend: _plt.legend()
         
         if figpath is not None: _plt.savefig(figpath,dpi=1000)
         else: _plt.show()

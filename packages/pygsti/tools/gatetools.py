@@ -352,7 +352,7 @@ def jtracedist(A, B, mxBasis=None): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
 def process_fidelity(A, B, mxBasis=None):
     """
     Returns the process fidelity between gate
-      matrices A and B given by :
+    matrices A and B given by :
 
       F = Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
 
@@ -387,14 +387,14 @@ def process_fidelity(A, B, mxBasis=None):
 
 def average_gate_fidelity(A ,B, mxBasis=None):
     """
-    Computes the average gate infidelity (AGI) between two gates. 
+    Computes the average gate fidelity (AGF) between two gates. 
     Average gate fidelity (F_g) is related to entanglement fidelity 
     (F_p), which is referred to as "process fidelity" in pyGSTi, via: 
     
-    F_g = (d * F_p + 1)/(1 + d), 
+      F_g = (d * F_p + 1)/(1 + d), 
     
     where d is the Hilbert space dimension. This formula, and the
-    definition of AGI, can be found in Phys. Lett. A 303 249-252 (2002).
+    definition of AGF, can be found in Phys. Lett. A 303 249-252 (2002).
 
     Parameters
     ----------
@@ -418,6 +418,64 @@ def average_gate_fidelity(A ,B, mxBasis=None):
     PF = process_fidelity(A,B,mxBasis=mxBasis)
     AGF = (d*PF + 1)/(1+d)
     return float(AGF)
+
+def average_gate_infidelity(A ,B, mxBasis="gm"):
+    """
+    Computes the average gate infidelity (AGI) between two gates. 
+    Average gate infidelity is related to entanglement infidelity 
+    (EI), which is referred to as "process fidelity" in pyGSTi, via: 
+    
+      AGI = (d * (1-EI) + 1)/(1 + d), 
+    
+    where d is the Hilbert space dimension. This formula, and the
+    definition of AGI, can be found in Phys. Lett. A 303 249-252 (2002).
+
+    Parameters
+    ----------
+    A : array or gate
+        The gate to compute the AGI to B of. E.g., an imperfect
+        implementation of B.
+        
+    B : array or gate
+        The gate to compute the AGI to A of. E.g., the target gate
+        corresponding to A.
+
+    mxBasis : {"std","gm","pp"} or Basis object, optional
+        The basis of the matrices.
+
+    Returns
+    ----------
+    AGI : float
+        The AGI of A to B.
+    """
+    return 1 - average_gate_fidelity(A ,B, mxBasis)
+
+def entanglement_infidelity(A, B, mxBasis=None):
+    """
+    Returns the entanglement infidelity (EI) between gate
+    matrices A and B given by :
+
+      EI = 1 - Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
+
+    where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
+    to it's corresponding Choi Matrix.
+
+    Parameters
+    ----------
+    A, B : numpy array
+        The matrices to compute the fidelity between.
+
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
+    Returns
+    ----------
+    EI : float
+        The EI of A to B.
+    """
+    return 1 - float(process_fidelity(A, B, mxBasis))
 
 def unitarity(A, mxBasis="gm"):
     """
