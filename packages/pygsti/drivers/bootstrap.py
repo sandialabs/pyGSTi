@@ -483,10 +483,10 @@ def to_rms_gateset(gsList,target_gs):
 ##    print output
 #    return output
 #
-#def gateset_process_fidelity(gs,gs_target):
+#def gateset_entanglement_fidelity(gs,gs_target):
 #    output = _np.zeros(3,dtype=float)
 #    for i, gate in enumerate(gs_target.gates.keys()):
-#        output[i] = _tools.process_fidelity(gs.gates[gate],gs_target.gates[gate])
+#        output[i] = _tools.entanglement_fidelity(gs.gates[gate],gs_target.gates[gate])
 #    return output
 #
 #def gateset_decomp_angle(gs):

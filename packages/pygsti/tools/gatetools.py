@@ -45,7 +45,7 @@ def fidelity(A, B):
 
     To compute process fidelity, pass this function the
     Choi matrices of the two processes, or just call
-    the process_fidelity function with the gate matrices.
+    :function:`entanglement_fidelity` with the gate matrices.
 
     Parameters
     ----------
@@ -349,10 +349,10 @@ def jtracedist(A, B, mxBasis=None): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
     return tracedist(JA,JB)
 
 
-def process_fidelity(A, B, mxBasis=None):
+def entanglement_fidelity(A, B, mxBasis=None):
     """
-    Returns the process fidelity between gate
-      matrices A and B given by :
+    Returns the "entanglement" process fidelity between gate
+    matrices A and B given by :
 
       F = Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
 
@@ -365,9 +365,9 @@ def process_fidelity(A, B, mxBasis=None):
         The matrices to compute the fidelity between.
 
     mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-        The source and destination basis, respectively.  Allowed
-        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-        and Qutrit (qt) (or a custom basis object).
+        The basis of the matrices.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
     """
     d2 = A.shape[0]
     def isTP(x): return _np.isclose(x[0,0],1.0) and all(
@@ -389,7 +389,7 @@ def average_gate_fidelity(A ,B, mxBasis=None):
     """
     Computes the average gate infidelity (AGI) between two gates. 
     Average gate fidelity (F_g) is related to entanglement fidelity 
-    (F_p), which is referred to as "process fidelity" in pyGSTi, via: 
+    (F_p), via:
     
     F_g = (d * F_p + 1)/(1 + d), 
     
@@ -410,14 +410,54 @@ def average_gate_fidelity(A ,B, mxBasis=None):
         The basis of the matrices.
 
     Returns
-    ----------
+    -------
     AGI : float
         The AGI of A to B.
     """
     d = int(round(_np.sqrt(A.shape[0])))
-    PF = process_fidelity(A,B,mxBasis=mxBasis)
+    PF = entanglement_fidelity(A,B,mxBasis=mxBasis)
     AGF = (d*PF + 1)/(1+d)
     return float(AGF)
+
+def average_gate_infidelity(A ,B, mxBasis="gm"):
+    """
+    1.0 - :function:`average_gate_fidelity`
+
+    Parameters
+    ----------
+    A,B : array or gate
+        The gates to compute the AGI with respect to.  Usually `A` is an
+        imperfect implementation of B.
+        
+    mxBasis : {"std","gm","pp"} or Basis object, optional
+        The basis of the matrices.
+
+    Returns
+    -------
+    float
+    """
+    return 1 - _tls.average_gate_fidelity(A ,B, mxBasis)
+
+
+def entanglement_infidelity(A, B, mxBasis=None):
+    """
+    1.0 - :function:`entanglement_fidelity`
+
+    Parameters
+    ----------
+    A, B : numpy array
+        The matrices to compute the fidelity between.
+
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis of the matrices.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
+
+    Returns
+    -------
+    float
+    """
+    return 1 - float(_tls.entanglement_fidelity(A, B, mxBasis))
 
 def unitarity(A, mxBasis="gm"):
     """
@@ -581,7 +621,7 @@ def povm_fidelity(gateset, targetGateset, povmlbl):
     """
     povm_mx = get_povm_map(gateset, povmlbl)
     target_povm_mx = get_povm_map(targetGateset, povmlbl)
-    return process_fidelity(povm_mx, target_povm_mx, targetGateset.basis)
+    return entanglement_fidelity(povm_mx, target_povm_mx, targetGateset.basis)
 
 
 def povm_jtracedist(gateset, targetGateset, povmlbl):

@@ -15,18 +15,6 @@ from ... import algorithms as _algs
 import numpy as _np
 import warnings as _warnings
 
-def average_gate_infidelity(A ,B, mxBasis="gm"):
-    """
-    Todo : docstring. Copy from average_gate_fidelity?
-    """
-    return 1 - _tls.average_gate_fidelity(A ,B, mxBasis)
-
-def entanglement_infidelity(A, B, mxBasis=None):
-    """
-    Todo : docstring. Copy from process_fidelity?
-    """
-    return 1 - float(_tls.process_fidelity(A, B, mxBasis))
-
 def gateset_infidelity(gs, gs_target, itype = 'EI', 
                        weights=None, mxBasis=None):
     """
@@ -77,9 +65,9 @@ def gateset_infidelity(gs, gs_target, itype = 'EI',
     I_list = []
     for gate in list(gs_target.gates.keys()):
         if itype == 'AGI':
-            I = average_gate_infidelity(gs[gate],gs_target[gate], mxBasis=mxBasis)
+            I = _tls.average_gate_infidelity(gs[gate],gs_target[gate], mxBasis=mxBasis)
         if itype == 'EI':
-            I = entanglement_infidelity(gs[gate],gs_target[gate], mxBasis=mxBasis)
+            I = _tls.entanglement_infidelity(gs[gate],gs_target[gate], mxBasis=mxBasis)
         if weights is None:
             w = 1
         else:
@@ -937,7 +925,7 @@ def gate_dependence_of_errormaps(gs, gs_target, norm='diamond', mxBasis=None):
 #    B_1 = pr_R_I
 #    A_1 = (pr_Q_p/p) - pr_L_p + ((p -1)*pr_L_I/p) + ((pr_R_p - pr_R_I)/p)
 #    C_1 = pr_L_p - pr_L_I
-#    q = average_gate_infidelity(error_gs.gates['GQ2'],_np.identity(d**2,float))
+#    q = _tls.average_gate_infidelity(error_gs.gates['GQ2'],_np.identity(d**2,float))
 #    q = _analysis.r_to_p(q,d,rtype='AGI')
 #    
 #    if order  == 'zeroth':

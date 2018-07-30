@@ -519,7 +519,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                 elif gatesMetric == "fidelity":
                     for gateLbl in gs.gates:
                         wt = itemWeights.get(gateLbl, gateWeight)
-                        ret += wt * (1.0 - _tools.process_fidelity(
+                        ret += wt * (1.0 - _tools.entanglement_fidelity(
                                 targetGateset.gates[gateLbl], gs.gates[gateLbl]))**2
 
                 elif gatesMetric == "tracedist":

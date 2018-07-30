@@ -521,14 +521,14 @@ Angles_btwn_rotn_axes = _gsf.gatesetfn_factory(angles_btwn_rotn_axes)
 
 def entanglement_fidelity(A, B, mxBasis):
     """Entanglement fidelity between A and B"""
-    return _tools.process_fidelity(A, B, mxBasis)
+    return _tools.entanglement_fidelity(A, B, mxBasis)
 Entanglement_fidelity = _gsf.gatesfn_factory(entanglement_fidelity)
 # init args == (gateset1, gateset2, gateLabel)
 
 
 def entanglement_infidelity(A, B, mxBasis):
     """Entanglement infidelity between A and B"""
-    return 1 - _tools.process_fidelity(A, B, mxBasis)
+    return 1 - _tools.entanglement_fidelity(A, B, mxBasis)
 Entanglement_infidelity = _gsf.gatesfn_factory(entanglement_infidelity)
 # init args == (gateset1, gateset2, gateLabel)
 
