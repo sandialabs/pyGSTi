@@ -2852,8 +2852,158 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
         return ReportFigure(go.Figure(data=data, layout=layout),
                             None, pythonVal)
     
-# Future : possibly to be updated to work with new RB code.
-# class RandomizedBenchmarkingPlot(WorkspacePlot):
+
+class RandomizedBenchmarkingPlot(WorkspacePlot):
+    """ Plot of RB Decay curve """
+    def __init__(self, ws, rbR, fitkey=None, decay=True,
+                 success_probabilities=True, ylim=None, xlim=None,
+                 showpts=True, legend=True, title=None, scale=1.0):
+        """
+        Plot RB decay curve, as a function of sequence length.  Optionally 
+        includes a fitted exponential decay.
+        
+        Parameters
+        ----------
+        rbR : RBResults
+            The RB results object containing all the relevant RB data.
+
+        fitkey : dict key, optional
+            The key of the self.fits dictionary to plot the fit for. If None, will
+            look for a 'full' key (the key for a full fit to A + Bp^m if the standard
+            analysis functions are used) and plot this if possible. It otherwise checks
+            that there is only one key in the dict and defaults to this. If there are
+            multiple keys and none of them are 'full', `fitkey` must be specified when
+            `decay` is True.
+    
+        decay : bool, optional
+            Whether to plot a fit, or just the data.
+    
+        success_probabilities : bool, optional
+            Whether to plot the success probabilities distribution, as a
+            "box & whisker" plot.
+        
+        ylim, xlim : tuple, optional
+            The x and y limits for the figure.
+
+        showpts : bool, optional
+            When `success_probabilities == True`, whether individual points
+            should be shown along with a "box & whisker".
+    
+        legend : bool, optional
+            Whether to show a legend.
+    
+        title : str, optional
+            A title to put on the figure.
+           
+        Returns
+        -------
+        None
+        """
+        super(RandomizedBenchmarkingPlot,self).__init__(
+            ws, self._create, rbR, fitkey, decay, success_probabilities,
+            ylim, xlim, showpts, legend, title, scale)
+       
+    def _create(self, rbR, fitkey, decay, success_probabilities, ylim, xlim,
+                showpts, legend, title, scale):
+
+        if decay and fitkey is None:
+            allfitkeys = list(rbR.fits.keys())
+            if 'full' in allfitkeys:
+                fitkey = 'full'
+            elif len(allfitkeys) ==  1:
+                fitkey = allfitkeys[0]
+            else:
+                raise ValueError(("There are multiple fits and none have the "
+                                  "key 'full'. Please specify the fit to plot!"))
+
+        xdata = _np.asarray(rbR.data.lengths)
+        ydata = _np.asarray(rbR.data.ASPs)
+
+        xlabel = 'Sequence length'
+
+        data = [] # list of traces
+        data.append( go.Scatter(
+            x = xdata, y = ydata,
+            mode = 'markers',
+            marker = dict(
+                color = "rgb(0,0,0)",
+                size = 5
+            ),
+            name = 'Average success probabilities',
+            showlegend=legend,
+         ))
+        
+        if decay:
+            lengths = _np.linspace(0,max(rbR.data.lengths),200)
+            A = rbR.fits[fitkey].estimates['A']
+            B = rbR.fits[fitkey].estimates['B']
+            p = rbR.fits[fitkey].estimates['p']
+
+            data.append( go.Scatter(
+                 x = lengths,
+                 y = A+B*p**lengths,
+                 mode = 'lines',
+                 line = dict(width=1, color="rgb(120,120,120)"),
+                 name = 'Fit, r = {:.2} +/- {:.1}'.format(rbR.fits[fitkey].estimates['r'],
+                                                          rbR.fits[fitkey].stds['r']),
+                 showlegend=legend,
+             ))
+    
+        if success_probabilities:
+            for length,prob_dist in zip(rbR.data.lengths, rbR.data.success_probabilities):
+                data.append( go.Box(
+                    x0=length, y=prob_dist, 
+                    whiskerwidth=0.2, opacity=0.7, showlegend=False,
+                    boxpoints='all' if showpts else False,
+                    pointpos=0, jitter=0.5,
+                    boxmean=False, # or True or 'sd'
+                    hoveron="boxes", hoverinfo="all",
+                    name='m=%d' % length) )
+
+        #pad by 10%
+        ymin = min(ydata)
+        ymin -= 0.1*abs(1.0-ymin) 
+        xmin = -0.1*max(xdata)
+        xmax = max(xdata)*1.1
+
+        layout = go.Layout(
+            width=800*scale,
+            height=400*scale,
+            title=title,
+            titlefont=dict(size=16),
+            xaxis=dict(
+                title="RB sequence length (m)",
+                titlefont=dict(size=14),
+                range=xlim if xlim else [xmin,xmax],
+            ),
+            yaxis=dict(
+                title="Success probability",
+                titlefont=dict(size=14),
+                range=ylim if ylim else [ymin,1.0],
+            ),
+            legend=dict(
+                x=0.5, y=1.2,
+                font=dict(
+                    size=13
+                ),
+            )
+        )
+
+        pythonVal = {}
+        for i,tr in enumerate(data):
+            if 'x0' in tr: continue # don't put boxes in python val for now
+            key = tr['name'] if ("name" in tr) else "trace%d" % i
+            pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
+       
+        #reverse order of data so z-ordering is nicer
+        return ReportFigure(go.Figure(data=list(data), layout=layout),
+                            None, pythonVal)
+
+
+#This older version on an RB decay plot contained a lot more theory detail
+# compared with the current one - so we'll keep it around (commented out)
+# in case we want to steal/revive pieces of it in the future.
+#class OLDRandomizedBenchmarkingPlot(WorkspacePlot):
 #     """ Plot of RB Decay curve """
 #     def __init__(self, ws, rbR,xlim=None, ylim=None,
 #                  fit='standard', Magesan_zeroth=False, Magesan_first=False,
@@ -2864,87 +3014,87 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #         """
 #         Plot RB decay curve, as a function of some the sequence length
 #         computed using the `gstyp` gate-label-set.
-
+#
 #         Parameters
 #         ----------
 #         rbR : RBResults
 #             The RB results object containing all the relevant RB data.
-
+#
 #         gstyp : str, optional
 #             The gate-label-set specifying which translation (i.e. strings with
 #             which gate labels) to use when computing sequence lengths.
-
+#
 #         xlim : tuple, optional
 #             The x-range as (xmin,xmax).
-
+#
 #         ylim : tuple, optional
 #             The y-range as (ymin,ymax).
-
+#
 #         save_fig_path : str, optional
 #             If not None, the filename where the resulting plot should be saved.
-            
+#           
 #         fitting : str, optional
 #             Allowed values are 'standard', 'first order' or 'all'. Specifies 
 #             whether the zeroth or first order fitting model results are plotted,
 #             or both.
-            
+#           
 #         Magesan_zeroth : bool, optional
 #             If True, plots the decay predicted by the 'zeroth order' theory of Magesan
 #             et al. PRA 85 042311 2012. Requires gs and gs_target to be specified.
-            
+#           
 #         Magesan_first : bool, optional
 #             If True, plots the decay predicted by the 'first order' theory of Magesan
 #             et al. PRA 85 042311 2012. Requires gs and gs_target to be specified.
-            
+#           
 #         Magesan_zeroth_SEB : bool, optional
 #             If True, plots the systematic error bound for the 'zeroth order' theory 
 #             predicted decay. This is the region around the zeroth order decay in which
 #             the exact RB average survival probabilities are guaranteed to fall.
-        
+#       
 #         Magesan_first_SEB : bool, optional
 #             As above, but for 'first order' theory.
-            
+#           
 #         exact_decay : bool, optional
 #             If True, plots the exact RB decay, as predicted by the 'R matrix' theory
 #             of arXiv:1702.01853. Requires gs and group to be specified
-            
+#           
 #         L_matrix_decay : bool, optional
 #             If True, plots the RB decay, as predicted by the approximate 'L matrix'
 #             theory of arXiv:1702.01853. Requires gs and gs_target to be specified.
-            
+#           
 #         L_matrix_decay_SEB : bool, optional
 #             If True, plots the systematic error bound for approximate 'L matrix'
 #             theory of arXiv:1702.01853. This is the region around predicted decay
 #             in which the exact RB average survival probabilities are guaranteed 
 #             to fall.
-            
+#           
 #         gs : gateset, optional
 #             Required, if plotting any of the theory decays. The gateset for which 
 #             these decays should be plotted for.
-            
+#           
 #         gs_target : Gateset, optional
 #             Required, if plotting certain theory decays. The target gateset for which 
 #             these decays should be plotted for. 
-            
+#           
 #         group : MatrixGroup, optional
 #             Required, if plotting R matrix theory decay. The matrix group that gs
 #             is an implementation of.
-
+#
 #         group_to_gateset : dict, optional
 #             If not None, a dictionary that maps labels of group elements to labels
 #             of gs. Only used if subset_sampling is not None. If subset_sampling is 
 #             not None and the gs and group elements have the same labels, this dictionary
 #             is not required. Otherwise it is necessary.
-
+#
 #         norm : str, optional
 #             The norm used for calculating the Magesan theory bounds.
-            
+#           
 #         legend : bool, optional
 #             Specifies whether a legend is added to the graph
-            
+#           
 #         title : str, optional
 #             Specifies a title for the graph
-            
+#           
 #         Returns
 #         -------
 #         None
@@ -2956,20 +3106,20 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #             Magesan_first, exact_decay, L_matrix_decay, Magesan_zeroth_SEB,
 #             Magesan_first_SEB, L_matrix_decay_SEB, gs, gs_target, group,
 #             group_to_gateset, norm, legend, title, scale)
-        
+#       
 #     def _create(self, rbR, xlim, ylim, fit, Magesan_zeroth,
 #                 Magesan_first, exact_decay, L_matrix_decay, Magesan_zeroth_SEB,
 #                 Magesan_first_SEB, L_matrix_decay_SEB, gs, gs_target, group,
 #                 group_to_gateset, norm, legend, title, scale):
-
+#
 #         from ..extras.rb import rbutils as _rbutils
 #         #TODO: maybe move the computational/fitting part of this function
 #         #  back to the RBResults object to reduce the logic (and dependence
 #         #  on rbutils) here.
- 
+#
 #         #newplot = _plt.figure(figsize=(8, 4))
 #         #newplotgca = newplot.gca()
-
+#
 #         # Note: minus one to get xdata that discounts final Clifford-inverse
 #         xdata = _np.asarray(rbR.results['lengths']) - 1
 #         ydata = _np.asarray(rbR.results['successes'])
@@ -2979,14 +3129,14 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #         if fit == 'first order':
 #             C = rbR.results['C']
 #         pre_avg = rbR.pre_avg
-        
+#       
 #         if (Magesan_zeroth_SEB is True) and (Magesan_zeroth is False):
 #             print("As Magesan_zeroth_SEB is True, Setting Magesan_zeroth to True\n")
 #             Magesan_zeroth = True
 #         if (Magesan_first_SEB is True) and (Magesan_first is False):
 #             print("As Magesan_first_SEB is True, Setting Magesan_first to True\n")
 #             Magesan_first = True
-                
+#               
 #         if (Magesan_zeroth is True) or (Magesan_first is True):
 #             if (gs is False) or (gs_target is False):
 #                 raise ValueError("To plot Magesan et al theory decay curves a gateset" +
@@ -3002,7 +3152,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #                 B1_an = MTP['B1']
 #                 C1_an = MTP['C1']
 #                 delta = MTP['delta']
-                
+#               
 #         if exact_decay is True:
 #             if (gs is False) or (group is False):
 #                 raise ValueError("To plot the exact decay curve a gateset" +
@@ -3011,7 +3161,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #                 mvalues,ASPs = _rbutils.exact_RB_ASPs(gs,group,max(xdata),m_min=1,m_step=1,
 #                                                       d=rbR.d, group_to_gateset=group_to_gateset,
 #                                                       success_outcomelabel=rbR.success_outcomelabel)
-                
+#               
 #         if L_matrix_decay is True:
 #             if (gs is False) or (gs_target is False):
 #                 raise ValueError("To plot the L matrix theory decay curve a gateset" +
@@ -3020,9 +3170,9 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #                 mvalues, LM_ASPs, LM_ASPs_SEB_lower, LM_ASPs_SEB_upper = \
 #                 _rbutils.L_matrix_ASPs(gs,gs_target,max(xdata),m_min=1,m_step=1,d=rbR.d,
 #                                        success_outcomelabel=rbR.success_outcomelabel, error_bounds=True)
-
+#
 #         xlabel = 'Sequence length'
-
+#
 #         data = [] # list of traces
 #         data.append( go.Scatter(
 #             x = xdata, y = ydata,
@@ -3033,18 +3183,18 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #             ),
 #             name = 'Averaged RB data' if pre_avg else 'RB data',
 #         ))
-        
+#       
 #         if fit=='standard' or fit=='first order':
 #             fit_label_1='Fit'
 #             fit_label_2='Fit'
 #             color2 = "black"
-
+#
 #         theory_color2 = "green"
 #         theory_fill2 = "rgba(0,128,0,0.1)"
 #         if Magesan_zeroth is True and Magesan_first is True:
 #             theory_color2 = "magenta"
 #             theory_fill2 = "rgba(255,0,255,0.1)"
-                    
+#                   
 #         if fit=='standard':
 #             data.append( go.Scatter(
 #                 x = _np.arange(max(xdata)),
@@ -3054,7 +3204,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #                 name = fit_label_1,
 #                 showlegend=legend,
 #             ))
-          
+#         
 #         if fit=='first order':
 #             data.append( go.Scatter(
 #                 x = _np.arange(max(xdata)),
@@ -3064,7 +3214,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #                 name = fit_label_2,
 #                 showlegend=legend,
 #             ))
-
+#
 #         if Magesan_zeroth is True:
 #             data.append( go.Scatter(
 #                 x = _np.arange(max(xdata)),
@@ -3074,7 +3224,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #                 name = '0th order theory',
 #                 showlegend=legend,
 #             ))
-
+#
 #             if Magesan_zeroth_SEB is True:
 #                 data.append( go.Scatter(
 #                     x = _np.arange(max(xdata)),
@@ -3098,8 +3248,8 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #                     name = '0th order bound',
 #                     showlegend=False,
 #                 ))
-
-
+#
+#
 #         if Magesan_first is True:
 #             data.append( go.Scatter(
 #                 x = _np.arange(max(xdata)),
@@ -3109,7 +3259,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #                 name = '1st order theory',
 #                 showlegend=legend,
 #             ))
-
+#
 #             if Magesan_first_SEB is True:
 #                 data.append( go.Scatter(
 #                     x = _np.arange(max(xdata)),
@@ -3133,8 +3283,8 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #                     name = '1st order bound',
 #                     showlegend=False,
 #                 ))
-
-
+#
+#
 #         if exact_decay is True:
 #             data.append( go.Scatter(
 #                 x = mvalues,
@@ -3144,7 +3294,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #                 name = 'Exact decay',
 #                 showlegend=legend,
 #             ))
-        
+#       
 #         if L_matrix_decay is True:
 #             data.append( go.Scatter(
 #                 x = mvalues,
@@ -3173,10 +3323,10 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #                     name = 'LM bound',
 #                     showlegend=False,
 #                 ))
-
+#
 #         ymin = min([min(trace['y']) for trace in data])
 #         ymin -= 0.1*abs(1.0-ymin) #pad by 10%
-        
+#       
 #         layout = go.Layout(
 #             width=800*scale,
 #             height=400*scale,
@@ -3198,16 +3348,16 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #                 ),
 #             )
 #         )
-
+#
 #         pythonVal = {}
 #         for i,tr in enumerate(data):
 #             key = tr['name'] if ("name" in tr) else "trace%d" % i
 #             pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
-        
+#       
 #         #reverse order of data so z-ordering is nicer
 #         return ReportFigure(go.Figure(data=list(reversed(data)), layout=layout),
 #                             None, pythonVal)
-
+#
 #         #newplotgca.set_xlabel(xlabel, fontsize=15)
 #         #newplotgca.set_ylabel('Mean survival probability',fontsize=15)
 #         #if title==True:
@@ -3216,11 +3366,11 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
 #         #newplotgca.yaxis.grid(False)
 #         #newplotgca.tick_params(axis='x', top='off', labelsize=12)
 #         #newplotgca.tick_params(axis='y', left='off', right='off', labelsize=12)
-        
+#       
 #         #if legend==True:
 #         #    leg = _plt.legend(fancybox=True, loc=loc)
 #         #    leg.get_frame().set_alpha(0.9)
-        
+#       
 #         #newplotgca.spines["top"].set_visible(False)
 #         #newplotgca.spines["right"].set_visible(False)    
 #         #newplotgca.spines["bottom"].set_alpha(.7)

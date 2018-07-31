@@ -64,33 +64,33 @@ class RBTestCase(BaseTestCase):
                                           gatesetname = 'target')
         self.assertEqual(layer[0].name, 'Gxpi')
     
-        # Tests for the sampling by Co2QGs function
+        # Tests for the sampling by co2Qgates function
         C01 = Label('Gcnot',('Q0','Q1'))
         C23 = Label('Gcnot',('Q2','Q3'))
-        Co2QGs = [[],[C01,C23]]
-        layer = rb.sample.circuit_layer_by_Co2QGs(pspec_1, None, Co2QGs, Co2QGsprob='uniform', twoQprob=1.0, 
+        co2Qgates = [[],[C01,C23]]
+        layer = rb.sample.circuit_layer_by_co2Qgates(pspec_1, None, co2Qgates, co2Qgatesprob='uniform', twoQprob=1.0, 
                                                    oneQgatenames='all', gatesetname='clifford')
         self.assertTrue(len(layer) == n_1 or len(layer) == n_1//2)
-        layer = rb.sample.circuit_layer_by_Co2QGs(pspec_1, None, Co2QGs, Co2QGsprob=[0.,1.], twoQprob=1.0, 
+        layer = rb.sample.circuit_layer_by_co2Qgates(pspec_1, None, co2Qgates, co2Qgatesprob=[0.,1.], twoQprob=1.0, 
                                                    oneQgatenames='all', gatesetname='clifford')
         self.assertEqual(len(layer), n_1//2)
-        layer = rb.sample.circuit_layer_by_Co2QGs(pspec_1, None, Co2QGs, Co2QGsprob=[1.,0.], twoQprob=1.0, 
+        layer = rb.sample.circuit_layer_by_co2Qgates(pspec_1, None, co2Qgates, co2Qgatesprob=[1.,0.], twoQprob=1.0, 
                                                    oneQgatenames=['Gx',], gatesetname='clifford')
         self.assertEqual(len(layer), n_1)
         self.assertEqual(layer[0].name, 'Gx')
         
-        Co2QGs = [[],[C23,]]
-        layer = rb.sample.circuit_layer_by_Co2QGs(pspec_1, ['Q2','Q3'], Co2QGs, Co2QGsprob=[0.25,0.75], twoQprob=0.5, 
+        co2Qgates = [[],[C23,]]
+        layer = rb.sample.circuit_layer_by_co2Qgates(pspec_1, ['Q2','Q3'], co2Qgates, co2Qgatesprob=[0.25,0.75], twoQprob=0.5, 
                                                    oneQgatenames='all', gatesetname='clifford')
-        Co2QGs = [[C01,]]
-        layer = rb.sample.circuit_layer_by_Co2QGs(pspec_1, None, Co2QGs, Co2QGsprob=[1.], twoQprob=1.0, 
+        co2Qgates = [[C01,]]
+        layer = rb.sample.circuit_layer_by_co2Qgates(pspec_1, None, co2Qgates, co2Qgatesprob=[1.], twoQprob=1.0, 
                                                    oneQgatenames='all', gatesetname='clifford')
         self.assertEqual(layer[0].name, 'Gcnot')
         self.assertEqual(len(layer), 3)
         
-        # Tests the nested Co2QGs option.
-        Co2QGs = [[],[[C01,C23],[C01,]]]
-        layer = rb.sample.circuit_layer_by_Co2QGs(pspec_1, None, Co2QGs, Co2QGsprob='uniform', twoQprob=1.0, 
+        # Tests the nested co2Qgates option.
+        co2Qgates = [[],[[C01,C23],[C01,]]]
+        layer = rb.sample.circuit_layer_by_co2Qgates(pspec_1, None, co2Qgates, co2Qgatesprob='uniform', twoQprob=1.0, 
                                                    oneQgatenames='all', gatesetname='clifford')
         # Tests for the sampling a layer of 1Q gates.
         layer = rb.sample.circuit_layer_of_oneQgates(pspec_1, oneQgatenames='all', pdist='uniform',
@@ -111,7 +111,7 @@ class RBTestCase(BaseTestCase):
         
         C01 = Label('Gcnot',('Q0','Q1'))
         C23 = Label('Gcnot',('Q2','Q3'))
-        Co2QGs = [[],[[C01,C23],[C01,]]]
+        co2Qgates = [[],[[C01,C23],[C01,]]]
         circuit = rb.sample.random_circuit(pspec_1, length=100, sampler='Qelimination')
         self.assertEqual(circuit.depth(), 100)
         circuit = rb.sample.random_circuit(pspec_2, length=100, sampler='Qelimination', samplerargs=[0.1,], addlocal = True)
@@ -120,8 +120,8 @@ class RBTestCase(BaseTestCase):
         circuit = rb.sample.random_circuit(pspec_1, length=100, sampler='pairingQs')
         circuit = rb.sample.random_circuit(pspec_1, length=10, sampler='pairingQs', samplerargs=[0.1,['Gx',]])
     
-        circuit = rb.sample.random_circuit(pspec_1, length=100, sampler='Co2QGs', samplerargs=[Co2QGs])
-        circuit = rb.sample.random_circuit(pspec_1, length=100, sampler='Co2QGs', samplerargs=[Co2QGs,[0.1,0.2],0.1], 
+        circuit = rb.sample.random_circuit(pspec_1, length=100, sampler='co2Qgates', samplerargs=[co2Qgates])
+        circuit = rb.sample.random_circuit(pspec_1, length=100, sampler='co2Qgates', samplerargs=[co2Qgates,[0.1,0.2],0.1], 
                                     addlocal = True, lsargs=[['Gx',]])
         self.assertEqual(circuit.depth(), 201)
         circuit = rb.sample.random_circuit(pspec_1, length=5, sampler='local')
@@ -138,7 +138,7 @@ class RBTestCase(BaseTestCase):
                                             cliffordtwirl=False, conditionaltwirl=False, citerations=2, partitioned=True,
                                             verbosity=0)
         
-        exp = rb.sample.direct_rb_experiment(pspec_2, lengths, circuits_per_length, subsetQs=[0,1], sampler='Co2QGs',
+        exp = rb.sample.direct_rb_experiment(pspec_2, lengths, circuits_per_length, subsetQs=[0,1], sampler='co2Qgates',
                                              samplerargs = [[[],[Label('Gcphase',(0,1)),]],[0.,1.]],
                                             cliffordtwirl=False, conditionaltwirl=False, citerations=2, partitioned=True,
                                             verbosity=0)
@@ -364,8 +364,14 @@ class RBTestCase(BaseTestCase):
         # successfully run the analysis on it.
         out = rb.analysis.std_practice_analysis(data,bootstrap_samples=100)
         # Checks plotting works. This requires matplotlib, so should do a try/except
-        out.plot()
-        
+
+        from pygsti.report import workspace
+        w = workspace.Workspace()
+        w.init_notebook_mode(connected=False)
+        plt = w.RandomizedBenchmarkingPlot(out)
+        plt.saveas(temp_files + "/rbdecay_plot.pdf")
+
+        out.plot() # matplotlib version (keep around for now)
         return
 
 
