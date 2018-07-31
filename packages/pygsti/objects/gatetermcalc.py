@@ -24,6 +24,10 @@ from .termevaltree import TermEvalTree as _TermEvalTree
 from .gatecalc import GateCalc
 from .polynomial import Polynomial as _Polynomial
 
+# For debug: sometimes helpful as it prints (python-only) tracebacks from segfaults
+#import faulthandler
+#faulthandler.enable()
+
 try:
     from . import fastreplib as replib
 except ImportError:
