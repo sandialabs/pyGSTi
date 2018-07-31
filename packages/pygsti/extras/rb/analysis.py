@@ -137,16 +137,24 @@ def rescaling_factor(lengths, quantity, offset=2):
         A list of the RB lengths, which each value in 'quantity' will be rescaled by.
 
     quantity : list
-        A list of the same length as `lengths` that contains the values of the quantity
-        that the rescaling factor is extracted from
+        A list, of the same length as `lengths`, that contains lists of values of the quantity
+        that the rescaling factor is extracted from.
 
     offset : int, optional 
         A constant offset to add to lengths.
 
     Returns
-        mean[quantity/(lengths+offset)]
-    """     
-    return _np.mean(_np.array(quantity)/(_np.array(lengths)+offset))
+        mean over i of [mean(quantity[i])/(lengths[i]+offset)]
+    """
+    assert(len(lengths)==len(quantity)), "Data format incorrect!"
+    rescaling_factor = []
+    
+    for i in range(len(lengths)):   
+        rescaling_factor.append(_np.mean(_np.array(quantity[i])/(lengths[i]+offset)))
+    
+    rescaling_factor = _np.mean(_np.array(rescaling_factor))
+
+    return rescaling_factor
 
 def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=200,  asymptote='std', rtype='EI'):
     """
