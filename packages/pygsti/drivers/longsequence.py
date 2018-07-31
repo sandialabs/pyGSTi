@@ -131,7 +131,7 @@ def do_model_test(modelGateFilenameOrSet,
     ds = _load_dataset(dataFilenameOrSet, comm, verbosity)
 
     #Construct GateString lists
-    lsgstLists = _get_lsgst_lists(ds, gs_target, prepStrs, effectStrs, germs,
+    lsgstLists = get_lsgst_lists(ds, gs_target, prepStrs, effectStrs, germs,
                                   maxLengths, advancedOptions, verbosity)
 
     if gaugeOptParams is None: gaugeOptParams = {}
@@ -372,7 +372,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ds = _load_dataset(dataFilenameOrSet, comm, printer)
 
     #Construct GateString lists
-    lsgstLists = _get_lsgst_lists(ds, gs_target, prepStrs, effectStrs, germs,
+    lsgstLists = get_lsgst_lists(ds, gs_target, prepStrs, effectStrs, germs,
                                   maxLengths, advancedOptions, printer)
 
     return do_long_sequence_gst_base(ds, gs_target, lsgstLists, gaugeOptParams,
@@ -1112,7 +1112,7 @@ def _load_dataset(dataFilenameOrSet, comm, verbosity):
     return ds
 
 
-def _get_lsgst_lists(dschk, gs_target, prepStrs, effectStrs, germs,
+def get_lsgst_lists(dschk, gs_target, prepStrs, effectStrs, germs,
                      maxLengths, advancedOptions, verbosity):
     """
     Sequence construction logic, fatctored into this separate
