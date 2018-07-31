@@ -564,6 +564,8 @@ class EvalTree(list):
                     iFirstNonFinal = iLastFinal # move boundary to make k's new location non-final
 
             subTreeNumFinal = iFirstNonFinal # the final <-> non-final boundary
+            if subTreeNumFinal == 0: continue # this subtree only contributes non-final elements -> skip
+
             parentIndexRevPerm.extend( subTreeIndices[0:subTreeNumFinal] )
             subTreeIndicesList.append( subTreeIndices )
             numFinalList.append( subTreeNumFinal )
