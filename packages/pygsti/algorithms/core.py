@@ -2647,7 +2647,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                        verbosity=0, check=False, gatestringWeightsDict=None,
                        gateLabelAliases=None, memLimit=None,
                        profiler=None, comm=None, distributeMethod = "deriv",
-                       alwaysPerformMLE=False, evaltree_cache=None):
+                       alwaysPerformMLE=False, evaltree_cache=None, skip_mc2=False):
     """
     Performs Iterative Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
@@ -2797,6 +2797,13 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     tStart = _time.time()
     tRef = tStart
 
+    def calc_2dlogl(gs, strs):
+        logL_ub = _tools.logl_max(gs, dataset, strs, poissonPicture, check, gateLabelAliases)
+        maxLogL = _tools.logl(gs, dataset, strs, minProbClip, probClipInterval,
+                              radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
+        return 2*(logL_ub - maxLogL)
+
+
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):
             extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
@@ -2818,28 +2825,17 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             mleGateset.basis = startGateset.basis
               #set basis in case of CPTP constraints
 
-            # DUPLICATED CODE MAKE FUNCTION
+            pre2dlogl = calc_2dlogl(mleGateset, stringsToEstimate)
 
-            logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases)
-            maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                                  radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
+            if not skip_mc2:
+                _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
+                                          maxiter, maxfev, tol, cptp_penalty_factor,
+                                          spam_penalty_factor, minProbClip, probClipInterval,
+                                          useFreqWeightedChiSq, 0,printer-1, check,
+                                          check, gatestringWeights, gateLabelAliases,
+                                          memLimit, comm, distributeMethod, profiler, evt_cache)
 
-            pre2dlogl = 2*(logL_ub - maxLogL)
-
-            _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
-                                      maxiter, maxfev, tol, cptp_penalty_factor,
-                                      spam_penalty_factor, minProbClip, probClipInterval,
-                                      useFreqWeightedChiSq, 0,printer-1, check,
-                                      check, gatestringWeights, gateLabelAliases,
-                                      memLimit, comm, distributeMethod, profiler, evt_cache)
-
-            # DUPLICATED CODE MAKE FUNCTION
-
-            logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases)
-            maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                                  radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
-
-            mid2dlogl = 2*(logL_ub - maxLogL)
+            mid2dlogl = calc_2dlogl(mleGateset, stringsToEstimate)
 
             if alwaysPerformMLE:
                 _, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
@@ -2854,12 +2850,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
             tRef2=tNxt
 
-            logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases)
-            maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                                  radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
-
-            post2dlogl = 2*(logL_ub - maxLogL)
-            printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
+            post2dlogl = calc_2dlogl(mleGateset,  stringsToEstimate)
+            printer.log("2*Delta(log(L)) = %g" % (post2dlogl,),2)
 
             tNxt = _time.time();
             profiler.add_time('do_iterative_mlgst: iter %d logl-comp' % (i+1),tRef2)
@@ -2878,7 +2870,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                     poissonPicture, printer-1, check, gatestringWeights, gateLabelAliases,
                     memLimit, comm, distributeMethod, profiler, evt_cache)
 
-                printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
+                printer.log("2*Delta(log(L)) = %g" % (calc_2dlogl(mleGateset_p, stringsToEstimate)),2)
 
                 if maxLogL_p > maxLogL: #if do_mlgst improved the maximum log-likelihood
                     maxLogL = maxLogL_p

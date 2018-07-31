@@ -605,11 +605,11 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         elif algorithm == 'intermediate_seed_selection':
             gs_lsgst_list = _alg.do_intermediate_seed_selection_iterative_mlgst(**args)
         elif algorithm == 'early_seed_selection':
-            gs_lsgst_list = _alg.do_early_seed_selection_iterative_mlgst( skip_mc2=skip_mc2, **args)
+            gs_lsgst_list = _alg.do_early_seed_selection_iterative_mlgst(skip_mc2=skip_mc2, **args)
         elif algorithm == 'reseed':
             gs_lsgst_list = _alg.do_reseed_iterative_mlgst(skip_mc2=skip_mc2, **args)
         else:
-            gs_lsgst_list = _alg.do_iterative_mlgst(**args)
+            gs_lsgst_list = _alg.do_iterative_mlgst(skip_mc2=skip_mc2, **args)
     else:
         raise ValueError("Invalid objective: %s" % objective)
 
