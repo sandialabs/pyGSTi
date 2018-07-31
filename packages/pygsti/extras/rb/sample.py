@@ -14,6 +14,7 @@ from ... import construction as _cnst
 from ... import objects as _objs
 from ... import io as _io
 from ... import tools as _tools
+from ...tools import compattools as _compat
 
 import numpy as _np
 import copy as _copy
@@ -98,9 +99,9 @@ def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgate
     
     # Basic variables required for sampling the circuit layer.
     if subsetQs is None:
-        qubits = pspec.qubit_labels.copy()
+        qubits = pspec.qubit_labels[:] # copy this list
     else:
-        qubits = subsetQs.copy()
+        qubits = subsetQs[:] # copy this list
     sampled_layer = []
     num_oneQgatenames = len(oneQgatenames)
     num_twoQgatenames = len(twoQgatenames)
@@ -198,10 +199,10 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
     """
     if subsetQs is None:
         n = pspec.number_of_qubits
-        qubits = pspec.qubit_labels.copy()
+        qubits = pspec.qubit_labels[:] # copy this list
     else:
         n = len(subsetQs)   
-        qubits = subsetQs.copy()
+        qubits = subsetQs[:] # copy this list
 
     # If oneQgates is specified, use the given list.
     if oneQgates != 'all':
@@ -422,7 +423,7 @@ def circuit_layer_by_Co2QGs(pspec, subsetQs, Co2QGs, Co2QGsprob='uniform', twoQp
     if len(twoqubitgates_or_nestedCo2QGs) == 0:
           twoqubitgates = twoqubitgates_or_nestedCo2QGs
     # If it's a nested sector, sample uniformly from the nested Co2QGs.
-    elif type(twoqubitgates_or_nestedCo2QGs[0]) == list:
+    elif isinstance(twoqubitgates_or_nestedCo2QGs[0],list):
         twoqubitgates = twoqubitgates_or_nestedCo2QGs[_np.random.randint(0,len(twoqubitgates_or_nestedCo2QGs))]
     # If it's not a list of "Co2QGs" (lists) then this is the list of gates to use.
     else:
@@ -431,9 +432,9 @@ def circuit_layer_by_Co2QGs(pspec, subsetQs, Co2QGs, Co2QGsprob='uniform', twoQp
     # Prep the sampling variables
     sampled_layer = []
     if subsetQs is not None:    
-        remaining_qubits = subsetQs.copy()
+        remaining_qubits = subsetQs[:] # copy this list
     else:
-        remaining_qubits = pspec.qubit_labels.copy()
+        remaining_qubits = pspec.qubit_labels[:] # copy this list
     
     # Go through the 2-qubit gates in the sector, and apply each one with probability twoQprob
     for i in range(0,len(twoqubitgates)):
@@ -515,12 +516,12 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
         A list of gate Labels that defines a "complete" circuit layer (there is one and 
         only one gate acting on each qubit).       
     """
-    if subsetQs is not None: qubits = subsetQs.copy()
-    else: qubits = pspec.qubit_labels.copy()
+    if subsetQs is not None: qubits = subsetQs[:] # copy this list
+    else: qubits = pspec.qubit_labels[:] # copy this list
 
     sampled_layer = []
     
-    if type(pdist) == str: assert(pdist == 'uniform'), "If pdist is not a list or numpy.array it must be 'uniform'"
+    if _compat.isstr(pdist): assert(pdist == 'uniform'), "If pdist is not a list or numpy.array it must be 'uniform'"
     
     if oneQgatenames == 'all':
         assert(pdist == 'uniform'), "If `oneQgatenames` = 'all', pdist must be 'uniform'"
@@ -535,7 +536,7 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
     
     else:
         # A basic check for the validity of pdist.
-        if type(pdist) != str: assert(len(pdist) == len(oneQgatenames)), "The pdist probability distribution is invalid!"
+        if not _compat.isstr(pdist): assert(len(pdist) == len(oneQgatenames)), "The pdist probability distribution is invalid!"
         
         # Find out how many 1-qubit gate names there are
         num_oneQgatenames = len(oneQgatenames)
@@ -544,7 +545,7 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
         for i in qubits:
             
             # If 'uniform', then sample according to the uniform dist.
-            if isinstance(pdist,str): sampled_gatename = oneQgatenames[_np.random.randint(0,num_oneQgatenames)]
+            if _compat.isstr(pdist): sampled_gatename = oneQgatenames[_np.random.randint(0,num_oneQgatenames)]
             # If not 'uniform', then sample according to the user-specified dist.
             else:
                 pdist = _np.array(pdist)/sum(pdist)
@@ -621,7 +622,7 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
         A random circuit of length `length` (if not addlocal) or length 2*`length`+1 (if addlocal)
         with layers independently sampled using the specified sampling distribution.        
     """ 
-    if type(sampler) == str:
+    if _compat.isstr(sampler):
         
         if sampler == 'pairingQs': sampler = circuit_layer_by_pairing_qubits
         elif sampler == 'Qelimination': sampler = circuit_layer_by_Qelimination
@@ -632,9 +633,9 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
         else: raise ValueError("Sampler type not understood!")
 
     if subsetQs is not None:
-        qubits = subsetQs.copy()
+        qubits = subsetQs[:] # copy this list
     else:
-        qubits = pspec.qubit_labels.copy()
+        qubits = pspec.qubit_labels[:] # copy this list
     
     # If we can, we use the identity in the pspec.
     if pspec.identity is not None:
@@ -1135,8 +1136,8 @@ def clifford_rb_circuit(pspec, length, subsetQs=None, randomizeout=False, citera
         qubit on the ith wire of the output circuit.
     """
     # Find the labels of the qubits to create the circuit for.
-    if subsetQs is not None: qubits = subsetQs.copy()
-    else: qubits = pspec.qubit_labels.copy()
+    if subsetQs is not None: qubits = subsetQs[:] # copy this list
+    else: qubits = pspec.qubit_labels[:] # copy this list
     # The number of qubits the circuit is over.
     n = len(qubits)
       
@@ -1337,8 +1338,8 @@ def pauli_layer_as_compiled_circuit(pspec, subsetQs=None):
     """
     if pspec.identity is not None: identity = pspec.identity
     else: identity = 'I'
-    if subsetQs is not None:qubits = subsetQs.copy()
-    else: qubits = pspec.qubit_labels.copy()
+    if subsetQs is not None:qubits = subsetQs[:] # copy this list
+    else: qubits = pspec.qubit_labels[:] # copy this list
     n = len(qubits)
 
     # The hard-coded notation for that Pauli operators
@@ -1380,10 +1381,10 @@ def oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=None):
         identity = 'I'
     if subsetQs is not None:
         n = len(subsetQs)
-        qubits = subsetQs.copy()
+        qubits = subsetQs[:] # copy this list
     else:
         n = pspec.number_of_qubits
-        qubits = pspec.qubit_labels.copy()
+        qubits = pspec.qubit_labels[:] # copy this list
 
     # The hard-coded notation for the 1Q clifford operators
     oneQcliffords = ['C'+str(i) for i in range(24)]
@@ -1504,7 +1505,7 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         allqubits = subsetQs
     else:
         n = pspec.number_of_qubits
-        allqubits = pspec.qubit_labels.copy()
+        allqubits = pspec.qubit_labels[:] # copy this list
 
     # Check that the inverse of every gate is in the gateset:
     for gname in pspec.root_gate_names:

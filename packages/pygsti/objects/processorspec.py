@@ -102,7 +102,7 @@ class ProcessorSpec(object):
 
         #Store inputs for adding models later
         self.number_of_qubits = nQubits
-        self.root_gate_names = gate_names.copy()
+        self.root_gate_names = gate_names[:] # copy this list
         self.nonstd_gate_unitaries = nonstd_gate_unitaries.copy()
         self.root_gate_names += list(self.nonstd_gate_unitaries.keys())    
         self.availability = availability.copy()

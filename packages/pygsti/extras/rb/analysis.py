@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
 from . import results as _results
+from ...tools import compattools as _compat
   
 def p_to_r(p, d, rtype='EI'):
     """
@@ -187,7 +188,7 @@ def std_practice_analysis(RBSdataset, seed=[0.8,0.95], bootstrap_samples=200,  a
     total_counts = RBSdataset.total_counts
     n = RBSdataset.number_of_qubits
 
-    if isinstance(asymptote,str):
+    if _compat.isstr(asymptote):
         assert(asymptote == 'std'), "If `asympotote` is a string it must be 'std'!"
         asymptote = 1/2**n
 
@@ -461,12 +462,13 @@ def custom_least_squares_data_fitting(lengths, ASPs, n, A=None, B=None, seed=Non
                 success = True
             except:
                 success = False
-   
+
     estimates = {}
-    estimates['A'] = A
-    estimates['B'] = B
-    estimates['p'] = p
-    estimates['r'] = p_to_r(p,2**n)
+    if success:
+        estimates['A'] = A
+        estimates['B'] = B
+        estimates['p'] = p
+        estimates['r'] = p_to_r(p,2**n)
 
     results = {}
     results['estimates'] = estimates

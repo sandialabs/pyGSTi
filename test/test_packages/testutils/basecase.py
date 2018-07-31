@@ -60,6 +60,8 @@ class BaseTestCase(unittest.TestCase):
     def assertArraysAlmostEqual(self,a,b,places=7):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0, places=places )
 
+    def assertArraysEqual(self,a,b,places=7):
+        self.assertTrue(np.array_equal(a,b)) 
 
     def assertWarns(self, callable, *args, **kwds):
         with warnings.catch_warnings(record=True) as warning_list:

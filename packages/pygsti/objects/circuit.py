@@ -500,7 +500,7 @@ class Circuit(_gstr.GateString):
         assert(not self._static),"Cannot edit a read-only circuit!" 
 
         # Keeps track of lines that are not in the circuit to insert -- so we can pad them with identities
-        lines_to_pad = self.line_labels.copy()
+        lines_to_pad = self.line_labels[:] # copy this list
         for q in range(circuit.number_of_lines()):
             llabel = circuit.line_labels[q]
             # If there are lines in the circuit to insert that aren't in this circuit, we go in here.

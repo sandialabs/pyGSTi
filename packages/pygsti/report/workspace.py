@@ -329,7 +329,7 @@ class Workspace(object):
         self.FitComparisonBoxPlot = makefactory(_wp.FitComparisonBoxPlot)
         self.DatasetComparisonHistogramPlot = makefactory(_wp.DatasetComparisonHistogramPlot)
         self.DatasetComparisonSummaryPlot = makefactory(_wp.DatasetComparisonSummaryPlot)
-        #self.RandomizedBenchmarkingPlot = makefactory(_wp.RandomizedBenchmarkingPlot)
+        self.RandomizedBenchmarkingPlot = makefactory(_wp.RandomizedBenchmarkingPlot)
 
         #Text blocks
         self.StdoutText = makefactory(_wtxt.StdoutText)

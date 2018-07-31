@@ -13,6 +13,7 @@ from ..objects.circuit import Circuit as _Circuit
 from ..baseobjs import Label as _Label
 from ..tools import symplectic as _symp
 from ..tools import matrixmod2 as _mtx
+from ..tools import compattools as _compat
 
 def create_standard_cost_function(name):
     """
@@ -326,7 +327,7 @@ def compile_symplectic(s, pspec=None, subsetQs=None, iterations=20, algorithms=[
     circuits = []
 
     # If the costfunction is a string, create the relevant "standard" costfunction function.
-    if isinstance(costfunction, str):
+    if _compat.isstr(costfunction):
         costfunction = create_standard_cost_function(costfunction)
         
     # Deterministic basic global Gaussian elimination
@@ -484,7 +485,7 @@ def compile_symplectic_using_ROGGE_algorithm(s, pspec=None, subsetQs=None, ctype
     # The number of qubits the symplectic matrix is on. 
     n = _np.shape(s)[0]//2   
     # If the costfunction is a string, create the relevant "standard" costfunction function.
-    if isinstance(costfunction, str):
+    if _compat.isstr(costfunction):
         costfunction = create_standard_cost_function(costfunction)
 
     # The elimination order in terms of qubit *index*, which is randomized below.
@@ -946,7 +947,7 @@ def compile_symplectic_using_RiAG_algoritm(s, pspec, subsetQs=None, iterations=2
         A circuit implementing the input symplectic matrix.    
     """   
     # If the costfunction is a string, create the relevant "standard" costfunction function.
-    if isinstance(costfunction, str): costfunction = create_standard_cost_function(costfunction)
+    if _compat.isstr(costfunction): costfunction = create_standard_cost_function(costfunction)
     
     mincost = _np.inf
     for i in range(iterations):
@@ -1809,7 +1810,7 @@ def compile_stabilizer_state(s, p, pspec, subsetQs=None, iterations=20, pauliran
     assert(n == len(qubitlabels)), "The input `s` is the wrong size for the number of qubits specified by `pspec` or `subsetQs`!"
 
     # If the costfunction is a string, create the relevant "standard" costfunction function.
-    if isinstance(costfunction, str): costfunction = create_standard_cost_function(costfunction)
+    if _compat.isstr(costfunction): costfunction = create_standard_cost_function(costfunction)
 
     #Import the single-qubit Cliffords up-to-Pauli algebra
     oneQgate_relations = _symp.oneQclifford_symplectic_group_relations()
@@ -1961,7 +1962,7 @@ def compile_stabilizer_measurement(s, p, pspec, subsetQs=None, iterations=20, pa
     sin, pin = _symp.inverse_clifford(s,p)
 
     # If the costfunction is a string, create the relevant "standard" costfunction function.
-    if isinstance(costfunction, str): costfunction = create_standard_cost_function(costfunction)
+    if _compat.isstr(costfunction): costfunction = create_standard_cost_function(costfunction)
 
     #Import the single-qubit Cliffords up-to-Pauli algebra
     oneQgate_relations = _symp.oneQclifford_symplectic_group_relations()

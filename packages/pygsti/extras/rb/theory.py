@@ -67,9 +67,9 @@ def gateset_infidelity(gs, gs_target, itype = 'EI',
     I_list = []
     for gate in list(gs_target.gates.keys()):
         if itype == 'AGI':
-            I = _tls.average_gate_infidelity(gs[gate],gs_target[gate], mxBasis=mxBasis)
+            I = _tls.average_gate_infidelity(gs.gates[gate],gs_target.gates[gate], mxBasis=mxBasis)
         if itype == 'EI':
-            I = _tls.entanglement_infidelity(gs[gate],gs_target[gate], mxBasis=mxBasis)
+            I = _tls.entanglement_infidelity(gs.gates[gate],gs_target.gates[gate], mxBasis=mxBasis)
         if weights is None:
             w = 1
         else:
