@@ -21,7 +21,21 @@ from .workspace import WorkspacePlot
 from .figure import ReportFigure
 from . import colormaps as _colormaps
 from . import plothelpers as _ph
+
+#Plotly v3 changes heirarchy of graph objects
+# Do this to avoid deprecation warning is plotly 3+
+import plotly
 import plotly.graph_objs as go
+if int(plotly.__version__.split('.')[0]) >= 3: # Plotly 3+
+    go_XAxis = go.layout.XAxis
+    go_YAxis = go.layout.YAxis
+    go_Margin = go.layout.Margin
+    go_Annotation = go.layout.Annotation
+else:
+    go_XAxis = go.XAxis
+    go_YAxis = go.YAxis
+    go_Margin = go.Margin
+    go_Annotation = go.Annotation
 
 
 #DEBUG
@@ -114,7 +128,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
     #trace = dict(type='heatmapgl', **heatmapArgs)
     data = [trace]
 
-    xaxis = go.XAxis(
+    xaxis = go_XAxis(
         showgrid=False,
         zeroline=False,
         showline=True,
@@ -124,7 +138,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
         linewidth=2,
         range=[-0.5, plt_data.shape[1]-0.5]
         )
-    yaxis = go.YAxis(
+    yaxis = go_YAxis(
         showgrid=False,
         zeroline=False,
         showline=True,
@@ -466,7 +480,7 @@ def generate_boxplot(subMxs,
         
         pfig['layout'].update(width=width,
                              height=height,
-                             margin=go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin))
+                             margin=go_Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin))
         
     else: # fig is None => use a "No data to display" placeholder figure
         trace = go.Heatmap(z=_np.zeros((10,10),'d'),
@@ -474,7 +488,7 @@ def generate_boxplot(subMxs,
                            showscale=False,zmin=0,zmax=1,hoverinfo='none')
         layout = go.Layout(
             width = 100, height = 100,
-            annotations = [ go.Annotation(x=5,y=5,text="NO DATA", showarrow=False,
+            annotations = [ go_Annotation(x=5,y=5,text="NO DATA", showarrow=False,
                                           font={'size': 20, 'color': "black"},
                                           xref='x', yref='y') ],
             xaxis=dict(showline=False, zeroline=False,
@@ -777,12 +791,12 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
     else:
         trace['hoverinfo'] = 'none'
 
-    xaxis = go.XAxis(
+    xaxis = go_XAxis(
         title='sequence length',
         showline=False,
         zeroline=True,
         )
-    yaxis = go.YAxis(
+    yaxis = go_YAxis(
         title=ylabel
         )
 
@@ -1115,7 +1129,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     #trace = dict(type='heatmapgl', z=colormap.normalize(flipped_mx),
     #             colorscale=colormap.get_colorscale(),
     #             showscale=colorbar, zmin=colormap.hmin,
-    #             zmax=colormap.hmax, hoverinfo='z')
+    #             zmax=colormap.hmax, hoverinfo='text', text=hoverLabels) #hoverinfo='z')
     
     data = [trace]
     
@@ -1230,7 +1244,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
         titlefont=dict(size=10*scale),
         width = width,
         height = height,
-        margin = go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin), #pad=0
+        margin = go_Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin), #pad=0
         xaxis=dict(
             side="top",
             title=xlabel,
@@ -1379,7 +1393,7 @@ class BoxKeyPlot(WorkspacePlot):
             ),
             shapes = gridlines,
             annotations = [
-                go.Annotation(
+                go_Annotation(
                     x=0.5,
                     y=1.2,
                     showarrow=False,
@@ -1387,7 +1401,7 @@ class BoxKeyPlot(WorkspacePlot):
                     font={'size': 12*scale, 'color': "black"},
                     xref='paper',
                     yref='paper'),
-                go.Annotation(
+                go_Annotation(
                     x=-0.2,
                     y=0.5,
                     showarrow=False,
@@ -1399,7 +1413,7 @@ class BoxKeyPlot(WorkspacePlot):
                 )
             ]
         )
-        # margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
+        # margin = go_Margin(l=50,r=50,b=50,t=50) #pad=0
         return ReportFigure( go.Figure(data=data, layout=layout),
                              None, "No data in box key plot!",
                              special='keyplot', args=(prepStrs, effectStrs, xlabel, ylabel))
@@ -2299,7 +2313,7 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
         layout = go.Layout(
             width = width, 
             height = height,
-            margin=go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin),
+            margin=go_Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin),
             xaxis = dict(
                 title="index",
                 tickvals=xs
@@ -2505,7 +2519,7 @@ class FitComparisonBarPlot(WorkspacePlot):
         layout = go.Layout(
             width = width, 
             height = height,
-            margin=go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin),
+            margin=go_Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin),
             xaxis = dict(
                 title=Xlabel,
                 tickvals=xs,
@@ -2693,7 +2707,7 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
         h = combined_fig.plotlyfig['layout']['height']
         exr = 0 if w > 240 else 240-w # extend to right
         combined_fig.plotlyfig['layout'].update(
-            margin=go.Margin(l=m['l'],r=m['r']+exr,b=m['b']+40,t=m['t']),
+            margin=go_Margin(l=m['l'],r=m['r']+exr,b=m['b']+40,t=m['t']),
             width=w+exr,
             height=h+40
         )
