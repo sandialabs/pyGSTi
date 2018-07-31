@@ -387,14 +387,14 @@ def entanglement_fidelity(A, B, mxBasis=None):
 
 def average_gate_fidelity(A ,B, mxBasis=None):
     """
-    Computes the average gate infidelity (AGI) between two gates. 
+    Computes the average gate fidelity (AGF) between two gates. 
     Average gate fidelity (F_g) is related to entanglement fidelity 
     (F_p), via:
     
-    F_g = (d * F_p + 1)/(1 + d), 
+      F_g = (d * F_p + 1)/(1 + d), 
     
     where d is the Hilbert space dimension. This formula, and the
-    definition of AGI, can be found in Phys. Lett. A 303 249-252 (2002).
+    definition of AGF, can be found in Phys. Lett. A 303 249-252 (2002).
 
     Parameters
     ----------
@@ -421,27 +421,44 @@ def average_gate_fidelity(A ,B, mxBasis=None):
 
 def average_gate_infidelity(A ,B, mxBasis="gm"):
     """
-    1.0 - :function:`average_gate_fidelity`
+    Computes the average gate infidelity (AGI) between two gates. 
+    Average gate infidelity is related to entanglement infidelity 
+    (EI) via: 
+    
+      AGI = (d * (1-EI) + 1)/(1 + d), 
+    
+    where d is the Hilbert space dimension. This formula, and the
+    definition of AGI, can be found in Phys. Lett. A 303 249-252 (2002).
 
     Parameters
     ----------
-    A,B : array or gate
-        The gates to compute the AGI with respect to.  Usually `A` is an
-        imperfect implementation of B.
+    A : array or gate
+        The gate to compute the AGI to B of. E.g., an imperfect
+        implementation of B.
         
+    B : array or gate
+        The gate to compute the AGI to A of. E.g., the target gate
+        corresponding to A.
+
     mxBasis : {"std","gm","pp"} or Basis object, optional
         The basis of the matrices.
 
     Returns
-    -------
-    float
+    ----------
+    AGI : float
+        The AGI of A to B.
     """
-    return 1 - _tls.average_gate_fidelity(A ,B, mxBasis)
-
+    return 1 - average_gate_fidelity(A ,B, mxBasis)
 
 def entanglement_infidelity(A, B, mxBasis=None):
     """
-    1.0 - :function:`entanglement_fidelity`
+    Returns the entanglement infidelity (EI) between gate
+    matrices A and B given by :
+
+      EI = 1 - Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
+
+    where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
+    to it's corresponding Choi Matrix.
 
     Parameters
     ----------
@@ -455,9 +472,11 @@ def entanglement_infidelity(A, B, mxBasis=None):
 
     Returns
     -------
-    float
+    EI : float
+        The EI of A to B.
     """
-    return 1 - float(_tls.entanglement_fidelity(A, B, mxBasis))
+    return 1 - float(entanglement_fidelity(A, B, mxBasis))
+
 
 def unitarity(A, mxBasis="gm"):
     """

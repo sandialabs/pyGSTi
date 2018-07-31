@@ -816,7 +816,7 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         # If we want to randomize the expected output then randomize the p vector, otherwise
         # it is left as p. Note that, unlike with compile_clifford, we don't invert (s,p)
         # before handing it to the stabilizer measurement function.
-        if randomizeout: p_for_measurement = _symp.random_phase_vector(s,n)
+        if randomizeout: p_for_measurement = _symp.random_phase_vector(s_composite,n)
         else: p_for_measurement =  p_composite
         inversion_circuit = _cmpl.compile_stabilizer_measurement(s_composite, p_for_measurement, pspec, subsetQs,
                                                                  citerations, *compilerargs)   
@@ -1710,7 +1710,19 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
                      group_inverse_only=False, group_prep=False, compilation=None,
                      generated_group=None, gateset_to_group_labels=None, seed=None, randState=None):
     """
-    Makes a random 1-qubit RB sequence. This function is todo: docstring and test.
+    Makes a random 1-qubit RB sequence, with RB over an arbitrary group and with a range of other
+    options that allow circuits for many types of RB to be generated, including:
+    
+    - Clifford RB
+    - Direct RB
+    - Interleaved Clifford or direct RB
+    - Unitarity Clifford or direct RB
+
+    The function can in-principle be used beyond 1-qubit RB, but it relies on explicit matrix representation
+    of a group, which is infeasble for, e.g., the many-qubit Clifford group.
+
+    Note that this function has *not* been carefully tested. This will be rectified in the future,
+    or this function will be replaced.
     
     Parameters
     ----------
@@ -1757,7 +1769,6 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
         m + 1 if inverse = True, interleaved = None
         2m if inverse = False, interleaved not None
         2m + 1 if inverse = True, interleaved not None
-
     """   
     assert hasattr(group_or_gateset, 'gates') or hasattr(group_or_gateset, 
                    'product'), 'group_or_gateset must be a MatrixGroup of Gateset'    
@@ -1813,6 +1824,7 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
                 interleaved_indices = interleaved_index*_np.ones((m,2),int)
                 interleaved_indices[:,0] = rndm_indices
                 rndm_indices = interleaved_indices.flatten()
+
         # This bit of code is a quick hashed job. Needs to be checked at somepoint
         if group_prep:
             rndm_group_index = rndm.randint(0,len(generated_group))
@@ -1840,9 +1852,7 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
             inversion_group_element = generated_group.product([inversion_group_element,pauli_keys[rndm_index]])
             
         inversion_sequence = compilation[inversion_group_element]
-        #print(inversion_sequence)
         random_string.extend(inversion_sequence)
-        #print(random_string)
         
     if not inverse:
         if gateset:
@@ -1869,88 +1879,90 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
     if random_pauli:
         return _objs.GateString(random_string), bitflip
 
-def oneQ_generalized_rb_experiment(m_list, K_m, group_or_gateset, inverse=True, 
-                              interleaved = None, alias_maps=None, seed=None, 
-                              randState=None):
-    """
-    Makes a list of random RB sequences.
+# Future : possibly add this back in, but only if the other function it is a wrap-around
+# for has been tested.
+# def oneQ_generalized_rb_experiment(m_list, K_m, group_or_gateset, inverse=True, 
+#                               interleaved = None, alias_maps=None, seed=None, 
+#                               randState=None):
+#     """
+#     Makes a list of random RB sequences.
     
-    Parameters
-    ----------
-    m_list : list or array of ints
-        The set of lengths for the random sequences (with the total
-        number of Cliffords in each sequence given by m_list + 1). Minimal
-        allowed length is therefore 1 (a random CLifford followed by its 
-        inverse).
+#     Parameters
+#     ----------
+#     m_list : list or array of ints
+#         The set of lengths for the random sequences (with the total
+#         number of Cliffords in each sequence given by m_list + 1). Minimal
+#         allowed length is therefore 1 (a random CLifford followed by its 
+#         inverse).
 
-    clifford_group : MatrixGroup
-        Which Clifford group to use.
+#     clifford_group : MatrixGroup
+#         Which Clifford group to use.
 
-    K_m : int or dict
-        If an integer, the fixed number of Clifford sequences to be sampled at
-        each length m.  If a dictionary, then a mapping from Clifford
-        sequence length m to number of Cliffords to be sampled at that length.
+#     K_m : int or dict
+#         If an integer, the fixed number of Clifford sequences to be sampled at
+#         each length m.  If a dictionary, then a mapping from Clifford
+#         sequence length m to number of Cliffords to be sampled at that length.
     
-    alias_maps : dict of dicts, optional
-        If not None, a dictionary whose keys name other gate-label-sets, e.g.
-        "primitive" or "canonical", and whose values are "alias" dictionaries 
-        which map the clifford labels (defined by `clifford_group`) to those
-        of the corresponding gate-label-set.  For example, the key "canonical"
-        might correspond to a dictionary "clifford_to_canonical" for which 
-        (as one example) clifford_to_canonical['Gc1'] == ('Gy_pi2','Gy_pi2').
+#     alias_maps : dict of dicts, optional
+#         If not None, a dictionary whose keys name other gate-label-sets, e.g.
+#         "primitive" or "canonical", and whose values are "alias" dictionaries 
+#         which map the clifford labels (defined by `clifford_group`) to those
+#         of the corresponding gate-label-set.  For example, the key "canonical"
+#         might correspond to a dictionary "clifford_to_canonical" for which 
+#         (as one example) clifford_to_canonical['Gc1'] == ('Gy_pi2','Gy_pi2').
             
-    seed : int, optional
-        Seed for random number generator; optional.
+#     seed : int, optional
+#         Seed for random number generator; optional.
 
-    randState : numpy.random.RandomState, optional
-        A RandomState object to generate samples from. Can be useful to set
-        instead of `seed` if you want reproducible distribution samples across
-        multiple random function calls but you don't want to bother with
-        manually incrementing seeds between those calls.
+#     randState : numpy.random.RandomState, optional
+#         A RandomState object to generate samples from. Can be useful to set
+#         instead of `seed` if you want reproducible distribution samples across
+#         multiple random function calls but you don't want to bother with
+#         manually incrementing seeds between those calls.
     
-    Returns
-    -------
-    dict or list
-        If `alias_maps` is not None, a dictionary of lists-of-gatestring-lists
-        whose keys are 'clifford' and all of the keys of `alias_maps` (if any).
-        Values are lists of `GateString` lists, one for each K_m value.  If
-        `alias_maps` is None, then just the list-of-lists corresponding to the 
-        clifford gate labels is returned.
-    """
+#     Returns
+#     -------
+#     dict or list
+#         If `alias_maps` is not None, a dictionary of lists-of-gatestring-lists
+#         whose keys are 'clifford' and all of the keys of `alias_maps` (if any).
+#         Values are lists of `GateString` lists, one for each K_m value.  If
+#         `alias_maps` is None, then just the list-of-lists corresponding to the 
+#         clifford gate labels is returned.
+#     """
 
-    if randState is None:
-        rndm = _np.random.RandomState(seed) # ok if seed is None
-    else:
-        rndm = randState
+#     if randState is None:
+#         rndm = _np.random.RandomState(seed) # ok if seed is None
+#     else:
+#         rndm = randState
         
-    assert hasattr(group_or_gateset, 'gates') or hasattr(group_or_gateset, 
-           'product'), 'group_or_gateset must be a MatrixGroup or Gateset'
+#     assert hasattr(group_or_gateset, 'gates') or hasattr(group_or_gateset, 
+#            'product'), 'group_or_gateset must be a MatrixGroup or Gateset'
     
     
-    if inverse:
-        if hasattr(group_or_gateset, 'gates'):
-            group_or_gateset = _rbobjs.MatrixGroup(group_or_gateset.gates.values(),
-                                  group_or_gateset.gates.keys())
-    if isinstance(K_m,int):
-        K_m_dict = {m : K_m for m in m_list }
-    else: K_m_dict = K_m
-    assert hasattr(K_m_dict, 'keys'),'K_m must be a dict or int!'
+#     if inverse:
+#         if hasattr(group_or_gateset, 'gates'):
+#             group_or_gateset = _rbobjs.MatrixGroup(group_or_gateset.gates.values(),
+#                                   group_or_gateset.gates.keys())
+#     if isinstance(K_m,int):
+#         K_m_dict = {m : K_m for m in m_list }
+#     else: K_m_dict = K_m
+#     assert hasattr(K_m_dict, 'keys'),'K_m must be a dict or int!'
 
-    string_lists = {'uncompiled': []} # GateStrings with uncompiled labels
-    if alias_maps is not None:
-        for gstyp in alias_maps.keys(): string_lists[gstyp] = []
+#     string_lists = {'uncompiled': []} # GateStrings with uncompiled labels
+#     if alias_maps is not None:
+#         for gstyp in alias_maps.keys(): string_lists[gstyp] = []
 
-    for m in m_list:
-        K = K_m_dict[m]
-        strs_for_this_m = [ create_random_gatestring(m, group_or_gateset,
-            inverse=inverse,interleaved=interleaved,randState=rndm) for i in range(K) ]
-        string_lists['uncompiled'].append(strs_for_this_m)
-        if alias_maps is not None:
-            for gstyp,alias_map in alias_maps.items(): 
-                string_lists[gstyp].append(
-                    _cnst.translate_gatestring_list(strs_for_this_m,alias_map))
+#     for m in m_list:
+#         K = K_m_dict[m]
+#         strs_for_this_m = [ create_random_gatestring(m, group_or_gateset,
+#             inverse=inverse,interleaved=interleaved,randState=rndm) for i in range(K) ]
+#         string_lists['uncompiled'].append(strs_for_this_m)
+#         if alias_maps is not None:
+#             for gstyp,alias_map in alias_maps.items(): 
+#                 string_lists[gstyp].append(
+#                     _cnst.translate_gatestring_list(strs_for_this_m,alias_map))
 
-    if alias_maps is None:
-        return string_lists['uncompiled'] #only list of lists is uncompiled one
-    else:
-        return string_lists #note we also return this if alias_maps == {}
+#     if alias_maps is None:
+#         return string_lists['uncompiled'] #only list of lists is uncompiled one
+#     else:
+#         return string_lists #note we also return this if alias_maps == {}

@@ -1,3 +1,4 @@
+import pygsti
 from pygsti.extras import rb
 
 def test_rb_group():
