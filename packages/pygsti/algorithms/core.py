@@ -2801,7 +2801,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
         logL_ub = _tools.logl_max(gs, dataset, strs, poissonPicture, check, gateLabelAliases)
         maxLogL = _tools.logl(gs, dataset, strs, minProbClip, probClipInterval,
                               radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
-        return 2*(logL_ub - maxLogL)
+        return 2*(logL_ub - maxLogL), maxLogL, logL_ub
 
 
     with printer.progress_logging(1):
@@ -2825,7 +2825,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             mleGateset.basis = startGateset.basis
               #set basis in case of CPTP constraints
 
-            pre2dlogl = calc_2dlogl(mleGateset, stringsToEstimate)
+            pre2dlogl, _, _ = calc_2dlogl(mleGateset, stringsToEstimate)
 
             if not skip_mc2:
                 _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
@@ -2835,7 +2835,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                           check, gatestringWeights, gateLabelAliases,
                                           memLimit, comm, distributeMethod, profiler, evt_cache)
 
-            mid2dlogl = calc_2dlogl(mleGateset, stringsToEstimate)
+            mid2dlogl, _, _ = calc_2dlogl(mleGateset, stringsToEstimate)
 
             if alwaysPerformMLE:
                 _, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
@@ -2850,7 +2850,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
             tRef2=tNxt
 
-            post2dlogl = calc_2dlogl(mleGateset,  stringsToEstimate)
+            post2dlogl, _, _ = calc_2dlogl(mleGateset,  stringsToEstimate)
             printer.log("2*Delta(log(L)) = %g" % (post2dlogl,),2)
 
             tNxt = _time.time();
@@ -2870,7 +2870,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                     poissonPicture, printer-1, check, gatestringWeights, gateLabelAliases,
                     memLimit, comm, distributeMethod, profiler, evt_cache)
 
-                printer.log("2*Delta(log(L)) = %g" % (calc_2dlogl(mleGateset_p, stringsToEstimate)),2)
+                final2dlogl, maxLogL, logL_ub = calc_2dlogl(mleGateset_p, stringsToEstimate)
+                printer.log("2*Delta(log(L)) = %g" % (final2dlogl),2)
 
                 if maxLogL_p > maxLogL: #if do_mlgst improved the maximum log-likelihood
                     maxLogL = maxLogL_p
