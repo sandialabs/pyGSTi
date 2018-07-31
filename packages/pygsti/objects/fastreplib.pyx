@@ -1220,11 +1220,13 @@ def SV_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=Non
         for jj,indx in enumerate(inds):
             E_cindices[ii][jj] = <INT>indx
 
+    #Note: term calculator "dim" is the full density matrix dim
+    stateDim = int(round(np.sqrt(calc.dim)))
             
     #Call C-only function (which operates with C-representations only)
     cdef vector[PolyCRep*] polys = sv_prs_as_polys(
         cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
-        E_cindices, numEs, calc.max_order, mpo, mpv, calc.dim, <bool>fastmode)
+        E_cindices, numEs, calc.max_order, mpo, mpv, stateDim, <bool>fastmode)
 
     return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
 
