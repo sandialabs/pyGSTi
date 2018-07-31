@@ -59,7 +59,7 @@ def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, erro
     dict
         A dictionary of simulated measurement outcome counts.   
     """    
-    n = circuit.number_of_lines
+    n = circuit.number_of_lines()
     #if circuit.identity != idle_name:
     #    circuit.replace_gatename(circuit.identity,idle_name)
     results = {}

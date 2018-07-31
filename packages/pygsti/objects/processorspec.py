@@ -357,7 +357,8 @@ class ProcessorSpec(object):
                     H_name = gn
                     break
 
-            # If we've failed to find a 
+            # If we've failed to find a Hadamard gate, we try but we only need paulieq compilation, we try
+            # to find a gate that is Pauli-equivalent to Hadamard.
             if H_name is None and compile_type is 'paulieq':
                 for gn in self.root_gate_names:
                     if _symp.unitary_is_a_clifford(self.root_gate_unitaries[gn]):
@@ -369,7 +370,7 @@ class ProcessorSpec(object):
                 library.templates['CNOT'] = [(_Label(cnot_name,(0,1)),)]
                 # If Hadamard is also available, add the standard conjugation as template for reversed CNOT.
                 if H_name is not None:
-                    library.templates['CNOT'].append((_Label(H_name, 0),_Label(H_name, 1),_Label(cnot_name, (0, 1)), _Label(H_name, 0),_Label( H_name, 1)))
+                    library.templates['CNOT'].append((_Label(H_name, 0),_Label(H_name, 1),_Label(cnot_name, (1, 0)), _Label(H_name, 0),_Label( H_name, 1)))
 
             # If CNOT isn't available, look to see if we have CPHASE gate in the gateset (with any name). If we do *and* we have 
             # Hadamards, we add the obvious construction of CNOT from CPHASE and Hadamards as a template
