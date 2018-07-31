@@ -317,23 +317,23 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
     
     return sampled_layer
 
-def circuit_layer_by_Co2QGs(pspec, subsetQs, Co2QGs, Co2QGsprob='uniform', twoQprob=1.0, 
+def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='uniform', twoQprob=1.0, 
                             oneQgatenames='all', gatesetname='clifford'):
     """
     Samples a random circuit layer using the specified list of "compatible two-qubit gates"
-    (Co2QGs). That is, the user inputs a list (`Co2QGs`) specifying 2-qubit gates that are
+    (co2Qgates). That is, the user inputs a list (`co2Qgates`) specifying 2-qubit gates that are
     "compatible" -- meaning that they can be implemented simulatenously -- and a distribution 
     over the different compatible sets, and a layer is sampled from this via:
 
     1. Pick a set of compatible two-qubit gates from this list `Co2GCs`, according to the
-    distribution specified by `Co2QGsprob`.
+    distribution specified by `co2Qgatesprob`.
     2. For each 2-qubit gate in the chosen set of compatible gates, with probability `twoQprob`
     add this gate to the layer.
     3. Uniformly sample 1-qubit gates for any qubits that don't yet have a gate on them,
     from those 1-qubit gates specified by `oneQgatenames`.
 
-    For example, consider 4 qubits with linear connectivity. a valid `Co2QGs` list is
-    Co2QGs = [[,],[Label(Gcphase,(0,1)),Label(Gcphase,(2,3))]] which consists of an 
+    For example, consider 4 qubits with linear connectivity. a valid `co2Qgates` list is
+    co2Qgates = [[,],[Label(Gcphase,(0,1)),Label(Gcphase,(2,3))]] which consists of an 
     element containing zero 2-qubit gates and an element containing  two 2-qubit gates 
     that can be applied in parallel. In this example there are 5 possible sets of compatible 
     2-qubit gates:
@@ -344,17 +344,17 @@ def circuit_layer_by_Co2QGs(pspec, subsetQs, Co2QGs, Co2QGsprob='uniform', twoQp
     4. [Label(Gcphase,(2,3)),] (one of the three 2-qubit gate)
     5. [Label(Gcphase,(0,1)), Label(Gcphase,(2,3)),] (the only compatible pair of 2-qubit gates).
 
-    The list of compatible two-qubit gates `Co2QGs` can be any list containing anywhere
+    The list of compatible two-qubit gates `co2Qgates` can be any list containing anywhere
     from 1 to all 5 of these lists.
 
     In order to allow for convenient sampling of some commonly useful distributions, 
-    `Co2QGs` can be a list of lists of lists of compatible 2-qubit gates ("nested" sampling). 
+    `co2Qgates` can be a list of lists of lists of compatible 2-qubit gates ("nested" sampling). 
     In this case, a list of lists of compatible 2-qubit gates is picked according to the distribution 
-    `Co2QGsprob`, and then one of the sublists of compatible 2-qubit gates in the selected list is 
+    `co2Qgatesprob`, and then one of the sublists of compatible 2-qubit gates in the selected list is 
     then chosen uniformly at random. For example, this is useful for sampling a layer containing one
     uniformly random 2-qubit gate with probability p and a layer of 1-qubit gates with probability
     1-p. Here, we can specify `Co2GQs` as [[],[[the 1st 2Q-gate,],[the 2nd 2Q-gate,], ...]] and
-    set `twoQprob=1` and `Co2QGsprob  = [1-p,p].
+    set `twoQprob=1` and `co2Qgatesprob  = [1-p,p].
 
     Parameters
     ----------
@@ -367,32 +367,32 @@ def circuit_layer_by_Co2QGs(pspec, subsetQs, Co2QGs, Co2QGsprob='uniform', twoQp
         `pspec.qubit_labels`. If None, the circuit layer is sampled to act on all the qubits 
         in `pspec`.
        
-    Co2QGs : list
+    co2Qgates : list
         This is either:
 
             1. A list of lists of 2-qubit gate Labels that can be applied in parallel.
             2. A list of lists of lists of 2-qubit gate Labels that can be applied in parallel.
 
-        In case (1) each list in `Co2QGs` should contain 2-qubit gates, in the form of Labels, 
+        In case (1) each list in `co2Qgates` should contain 2-qubit gates, in the form of Labels, 
         that can be applied in parallel and act only on the qubits in `pspec` if `subsetQs` is None, 
         or act only on the qubits in  `subsetQs` if `subsetQs` is not None.  The sampler then picks 
-        one of these compatible sets of gates (with probability specified by `Co2QGsprob`, and converts 
+        one of these compatible sets of gates (with probability specified by `co2Qgatesprob`, and converts 
         this into a circuit layer by applying the 2-qubit gates it contains with the user-specified 
         probability `twoQprob`, and augmenting these 2-qubit gates with 1-qubit gates on all other qubits.
 
-        In case (2) a sublist of lists is sampled from `Co2QGs` according to `Co2QGsprob` and then we
-        proceed as in case (1) but as though `Co2QGsprob` is the uniform distribution.
+        In case (2) a sublist of lists is sampled from `co2Qgates` according to `co2Qgatesprob` and then we
+        proceed as in case (1) but as though `co2Qgatesprob` is the uniform distribution.
         
-    Co2QGsprob : str or list of floats
-        If a list, they are unnormalized probabilities to sample each of the elements of `Co2QGs`. So it
-        is a list of non-negative floats of the same length as `Co2QGs`. If 'uniform', then the uniform 
+    co2Qgatesprob : str or list of floats
+        If a list, they are unnormalized probabilities to sample each of the elements of `co2Qgates`. So it
+        is a list of non-negative floats of the same length as `co2Qgates`. If 'uniform', then the uniform 
         distribution is used.
 
     twoQprob : float, optional
         The probability for each two-qubit gate to be applied to a pair of qubits, after a
         set of compatible 2-qubit gates has been chosen. The expected number of 2-qubit
         gates in a layer is `twoQprob` times the expected number of 2-qubit gates in a
-        set of compatible 2-qubit gates sampled according to `Co2QGsprob`.
+        set of compatible 2-qubit gates sampled according to `co2Qgatesprob`.
                 
     oneQgatenames : 'all' or list of strs, optional
         If not 'all', a list of the names of the 1-qubit gates to be sampled from when applying 
@@ -412,22 +412,22 @@ def circuit_layer_by_Co2QGs(pspec, subsetQs, Co2QGs, Co2QGsprob='uniform', twoQp
     """
     assert(gatesetname == 'clifford'), "This function currently assumes sampling from a Clifford gateset!"
     # Pick the sector.
-    if Co2QGsprob == 'uniform':
-        twoqubitgates_or_nestedCo2QGs = Co2QGs[_np.random.randint(0,len(Co2QGs))]            
+    if co2Qgatesprob == 'uniform':
+        twoqubitgates_or_nestedco2Qgates = co2Qgates[_np.random.randint(0,len(co2Qgates))]            
     else:
-        Co2QGsprob = Co2QGsprob/_np.sum(Co2QGsprob)
-        x = list(_np.random.multinomial(1,Co2QGsprob))
-        twoqubitgates_or_nestedCo2QGs = Co2QGs[x.index(1)]
+        co2Qgatesprob = co2Qgatesprob/_np.sum(co2Qgatesprob)
+        x = list(_np.random.multinomial(1,co2Qgatesprob))
+        twoqubitgates_or_nestedco2Qgates = co2Qgates[x.index(1)]
     
-    # The special case where the selected Co2QGs contains no gates or Co2QGs.
-    if len(twoqubitgates_or_nestedCo2QGs) == 0:
-          twoqubitgates = twoqubitgates_or_nestedCo2QGs
-    # If it's a nested sector, sample uniformly from the nested Co2QGs.
-    elif isinstance(twoqubitgates_or_nestedCo2QGs[0],list):
-        twoqubitgates = twoqubitgates_or_nestedCo2QGs[_np.random.randint(0,len(twoqubitgates_or_nestedCo2QGs))]
-    # If it's not a list of "Co2QGs" (lists) then this is the list of gates to use.
+    # The special case where the selected co2Qgates contains no gates or co2Qgates.
+    if len(twoqubitgates_or_nestedco2Qgates) == 0:
+          twoqubitgates = twoqubitgates_or_nestedco2Qgates
+    # If it's a nested sector, sample uniformly from the nested co2Qgates.
+    elif type(twoqubitgates_or_nestedco2Qgates[0]) == list:
+        twoqubitgates = twoqubitgates_or_nestedco2Qgates[_np.random.randint(0,len(twoqubitgates_or_nestedco2Qgates))]
+    # If it's not a list of "co2Qgates" (lists) then this is the list of gates to use.
     else:
-        twoqubitgates = twoqubitgates_or_nestedCo2QGs
+        twoqubitgates = twoqubitgates_or_nestedco2Qgates
     
     # Prep the sampling variables
     sampled_layer = []
@@ -440,7 +440,7 @@ def circuit_layer_by_Co2QGs(pspec, subsetQs, Co2QGs, Co2QGsprob='uniform', twoQp
     for i in range(0,len(twoqubitgates)):
         if _np.random.binomial(1,twoQprob) == 1:
             gate = twoqubitgates[i]
-            # If it's a nested Co2QGs:
+            # If it's a nested co2Qgates:
             sampled_layer.append(gate)
             # Delete the qubits that have been assigned a gate.
             del remaining_qubits[remaining_qubits.index(gate.qubits[0])]
@@ -580,7 +580,7 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
         in `pspec`.
 
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates. If this is a
@@ -626,9 +626,9 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
         
         if sampler == 'pairingQs': sampler = circuit_layer_by_pairing_qubits
         elif sampler == 'Qelimination': sampler = circuit_layer_by_Qelimination
-        elif sampler == 'Co2QGs':
-            sampler = circuit_layer_by_Co2QGs
-            assert(len(samplerargs) >= 1), "The samplerargs must at least a 1-element list with the first element the 'Co2QGs' argument of the Co2QGs sampler."
+        elif sampler == 'co2Qgates':
+            sampler = circuit_layer_by_co2Qgates
+            assert(len(samplerargs) >= 1), "The samplerargs must at least a 1-element list with the first element the 'co2Qgates' argument of the co2Qgates sampler."
         elif sampler == 'local': sampler = circuit_layer_of_oneQgates            
         else: raise ValueError("Sampler type not understood!")
 
@@ -702,7 +702,7 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         in `pspec`.
         
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not 
@@ -906,7 +906,7 @@ def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
         in `pspec`.
         
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not 
@@ -1441,7 +1441,7 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         irrelevant.
         
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
@@ -1633,7 +1633,7 @@ def mirror_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
         irrelevant.
         
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not

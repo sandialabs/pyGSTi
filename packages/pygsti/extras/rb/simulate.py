@@ -59,7 +59,7 @@ def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, erro
     dict
         A dictionary of simulated measurement outcome counts.   
     """    
-    n = circuit.number_of_lines
+    n = circuit.number_of_lines()
     #if circuit.identity != idle_name:
     #    circuit.replace_gatename(circuit.identity,idle_name)
     results = {}
@@ -153,8 +153,8 @@ def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, psp
 
     return output
 
-def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, filename=None, rbtype='DRB', rbspec =[],
-                         returndata=True, appenddata=False, verbosity=0):
+def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, filename=None, rbtype='DRB', 
+                         rbspec =[], returndata=True, appenddata=False, verbosity=0):
     """
     Simulates RB with Pauli errors. Can be used to simulated Clifford RB, direct RB and mirror RB. This
     function:
@@ -193,6 +193,10 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, filename=None, r
 
     counts : int
         The number of counts for each circuit.
+
+    subsetQs : list
+        If not None, a list of qubit labels that the RB experiment should be over, that is a subset of the
+        qubits in `pspec`.
 
     filename : str, optional
         A filename for where to save the data (if None, the data is not saved to file).
@@ -243,15 +247,15 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, filename=None, r
             lengthslist.append(l)
 
             if verbosity > 0: 
-                print("Circuit {} of {} at length {}".format(i,k,l))
+                print("Circuit {} of {} at length {}".format(i+1,k,l))
                 print(" - Sampling circuit...",end='')
            
             if rbtype == 'DRB':
-                c, idealout = _samp.direct_rb_circuit(pspec, l, *rbspec)
+                c, idealout = _samp.direct_rb_circuit(pspec, l, subsetQs, *rbspec)
             elif rbtype == 'CRB':
-                c, idealout = _samp.clifford_rb_circuit(pspec, l, *rbspec)
+                c, idealout = _samp.clifford_rb_circuit(pspec, l, subsetQs, *rbspec)
             elif rbtype == 'MRB':
-                c, idealout = _samp.mirror_rb_circuit(pspec, l, *rbspec)
+                c, idealout = _samp.mirror_rb_circuit(pspec, l, subsetQs, *rbspec)
 
             if verbosity > 0: 
                 print(" complete")

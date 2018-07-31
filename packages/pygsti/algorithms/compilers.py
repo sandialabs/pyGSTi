@@ -1130,8 +1130,11 @@ def compile_cnot_circuit(s, pspec, subsetQs=None, algorithm='COiCAGE', clname=No
         Whether to check the output is correct.
 
     aargs : list, optional
-        A list or arguments handed to the CNOT compiler algorithm. For some choices of algorithm (e.g., 'OCAGE') this
-        list must not be empty.
+        A list of arguments handed to the CNOT compiler algorithm. For some choices of algorithm (e.g., 'OCAGE') this
+        list must not be empty. For algorithms where there are X non-optional arguements *after* `s` and `pspec`
+        these are specified as the first X arguments of aargs. The remaining elements in `aargs`, if any, are handed
+        to the algorithm as the arguments after the optional `subsetQs` and `check` arguments (the first of which is 
+        set by the input `subsetQs` in this function).
 
     Returns
     -------
