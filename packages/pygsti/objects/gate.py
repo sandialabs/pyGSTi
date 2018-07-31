@@ -3306,7 +3306,8 @@ def _dexpSeries(X, dX):
     assert( (tr-2) in (1,2)), "Currently, dX can only have 1 or 2 derivative dimensions"
     #assert( len( (_np.isnan(dX)).nonzero()[0] ) == 0 ) # NaN debugging
     #assert( len( (_np.isnan(X)).nonzero()[0] ) == 0 ) # NaN debugging
-    series = last_commutant = term = dX; i=2
+    series = dX.copy() # accumulates results, so *need* a separate copy
+    last_commutant = term = dX; i=2
 
     #take d(matrix-exp) using series approximation
     while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
@@ -3330,9 +3331,11 @@ def _d2expSeries(X, dX, d2X):
     tr = len(dX.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
     tr2 = len(d2X.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
     assert( (tr-2,tr2-2) in [(1,2),(2,4)]), "Current support for only 1 or 2 derivative dimensions"
-    
-    series = term = last_commutant = dX
-    series2 = last_commutant2 = term2 = d2X
+
+    series = dX.copy() # accumulates results, so *need* a separate copy
+    series2 = d2X.copy() # accumulates results, so *need* a separate copy
+    term = last_commutant = dX
+    last_commutant2 = term2 = d2X
     i=2
 
     #take d(matrix-exp) using series approximation
