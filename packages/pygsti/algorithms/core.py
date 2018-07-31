@@ -2825,7 +2825,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             mleGateset.basis = startGateset.basis
               #set basis in case of CPTP constraints
 
-            pre2dlogl, _, _ = calc_2dlogl(mleGateset, stringsToEstimate)
+            pre2dlogl, maxLogL, logL_ub = calc_2dlogl(mleGateset, stringsToEstimate)
 
             if not skip_mc2:
                 _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
@@ -2835,7 +2835,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                           check, gatestringWeights, gateLabelAliases,
                                           memLimit, comm, distributeMethod, profiler, evt_cache)
 
-            mid2dlogl, _, _ = calc_2dlogl(mleGateset, stringsToEstimate)
+            mid2dlogl, maxLogL, logL_ub = calc_2dlogl(mleGateset, stringsToEstimate)
 
             if alwaysPerformMLE:
                 _, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
@@ -2850,7 +2850,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
             tRef2=tNxt
 
-            post2dlogl, _, _ = calc_2dlogl(mleGateset,  stringsToEstimate)
+            post2dlogl, maxLogL, logL_ub = calc_2dlogl(mleGateset,  stringsToEstimate)
             printer.log("2*Delta(log(L)) = %g" % (post2dlogl,),2)
 
             tNxt = _time.time();
