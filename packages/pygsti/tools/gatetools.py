@@ -510,7 +510,7 @@ def unitarity(A, mxBasis="gm"):
         
     """
     d = int(round(_np.sqrt(A.shape[0])))
-    basisMxs = basis_matrices(mxBasis, d)
+    basisMxs = _basis_matrices(mxBasis, d)
 
     if _np.allclose( basisMxs[0], _np.identity(d,'d') ):
         B = A

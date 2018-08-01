@@ -130,16 +130,18 @@ class ColormapTests(BaseTestCase):
                                     colorscale=[ [0, 'white'], [1, 'black'] ],
                                     showscale=False, zmin=0,zmax=1,hoverinfo='none') ]
         seqcmap = cmap.SequentialColormap(0, 10.0, "whiteToBlack")
-        del layout['xaxis']['type']  # heatmaps don't play well with
-        del layout['yaxis']['type']  # log scales
+        layout['xaxis']['type'] = "linear"  # heatmaps don't play well with
+        layout['yaxis']['type'] = "linear"  # log scales
         heatmap_fig = ReportFigure(go.Figure(data=heatmap_data, layout=layout), seqcmap, plt_data=np.ones((nY,nX),'d'))
         plotly_to_matplotlib(heatmap_fig, temp_files + "/testMPLHeatmap.pdf")
 
         #bad mode
-        data = [ go.Scatter(x = [0,1,2], y = [3,4,5],
-                            mode = 'foobar') ]
-        fig = ReportFigure(go.Figure(data=data, layout=layout))
         with self.assertRaises(ValueError):
+            data = [ go.Scatter(x = [0,1,2], y = [3,4,5],
+                                mode = 'foobar') ] # invalid mode
+
+            #Can't always test plotly_to_matplotlib w/bad mode now b/c plotly v3 validates it above
+            fig = ReportFigure(go.Figure(data=data, layout=layout))
             plotly_to_matplotlib(fig) #invalid mode
 
 

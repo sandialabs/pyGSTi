@@ -90,7 +90,7 @@ class TestDriversMethods(DriversTestCase):
                                 maxLens, advancedOptions={'truncScheme': ts,
                                                           'profile': 2,
                                                           'verbosity': 10,
-                                                          'memoryLimitInBytes': 1000**3})
+                                                          'memoryLimitInBytes': 2*1000**3})
                         # Also try profile=2 and deprecated advanced options here (above)
 
         #check invalid profile options

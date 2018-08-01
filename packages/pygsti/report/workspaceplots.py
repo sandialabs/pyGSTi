@@ -1800,7 +1800,10 @@ class ColorBoxPlot(WorkspacePlot):
                 fig = newfig
             else:
                 newfig.plotlyfig['data'][0].update(visible=False)
-                fig.plotlyfig['data'].append(newfig.plotlyfig['data'][0])
+                combined_fig_data = list(fig.plotlyfig['data']) + [ newfig.plotlyfig['data'][0] ]
+                fig = ReportFigure( go.Figure(data=combined_fig_data, layout=fig.plotlyfig['layout']),
+                                     fig.colormap, fig.pythonvalue ) # just add newfig's data
+                  #Note: can't do fig.plotlyfig['data'].append(newfig.plotlyfig['data'][0]) as of plotly v3
 
         nTraces = len(fig.plotlyfig['data'])
         assert(nTraces >= len(plottypes)) # not == b/c histogram adds line trace
@@ -2678,9 +2681,11 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
             boxLabels=True, prec=1, colormap=colormap, scale=scale)
         
         #Combine plotly figures into one
-        combined_fig = nSigma_fig
-        logL_fig.plotlyfig['data'][0].update(visible=False)
-        combined_fig.plotlyfig['data'].append(logL_fig.plotlyfig['data'][0])
+        combined_fig_data = list(nSigma_fig.plotlyfig['data']) + [ logL_fig.plotlyfig['data'][0] ]
+        combined_fig_data[-1].update(visible=False)
+        combined_fig = ReportFigure( go.Figure(data=combined_fig_data, layout=nSigma_fig.plotlyfig['layout']),
+                                     nSigma_fig.colormap, nSigma_fig.pythonvalue )
+        
         annotations = [ nSigma_fig.plotlyfig['layout']['annotations'],
                         logL_fig.plotlyfig['layout']['annotations'] ]
         
