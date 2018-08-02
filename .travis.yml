@@ -31,11 +31,10 @@ before_install:
 
 # I'm attempting to remove this..? (LSaldyt)
 #- pip install --global-option=build_ext --global-option="-I/usr/include/suitesparse" cvxpy cvxopt
+# - travis_retry travis_wait pip install -r requirements.txt # not needed w/[complete]
 install:
-  - travis_retry travis_wait pip install -r requirements.txt
-  - pip install ipython mpi4py zmq coverage msgpack-python cython psutil >/dev/null
-  - pip install dill 
-  - pip install -e . >/dev/null
+  - pip install zmq coverage >/dev/null
+  - pip install -e .[complete]
   
 cache:
   pip: true
