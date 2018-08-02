@@ -2792,6 +2792,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
     #Run extended MLGST iteratively on given sets of estimatable strings
     logLDiffs = []
+    vecs = []
     mleGatesets = [ ]; maxLogLs = [ ] #for returnAll == True case
     mleGateset = startGateset.copy(); nIters = len(gateStringLists)
     tStart = _time.time()
@@ -2825,6 +2826,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             mleGateset.basis = startGateset.basis
               #set basis in case of CPTP constraints
 
+            prevec = mleGateset.to_vector()
+
             pre2dlogl, maxLogL, logL_ub = calc_2dlogl(mleGateset, stringsToEstimate)
 
             if not skip_mc2:
@@ -2836,6 +2839,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                           memLimit, comm, distributeMethod, profiler, evt_cache)
 
             mid2dlogl, maxLogL, logL_ub = calc_2dlogl(mleGateset, stringsToEstimate)
+
+            midvec = mleGateset.to_vector()
 
             if alwaysPerformMLE:
                 _, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
@@ -2851,6 +2856,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             tRef2=tNxt
 
             post2dlogl, maxLogL, logL_ub = calc_2dlogl(mleGateset,  stringsToEstimate)
+            postvec = mleGateset.to_vector()
             printer.log("2*Delta(log(L)) = %g" % (post2dlogl,),2)
 
             tNxt = _time.time();
@@ -2892,12 +2898,13 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 mleGatesets.append(mleGateset)
                 maxLogLs.append(maxLogL)
                 logLDiffs.append((pre2dlogl, mid2dlogl, post2dlogl))
+                vecs.append((prevec, midvec, postvec))
 
     printer.log('Iterative MLGST Total Time: %.1fs' % (_time.time()-tStart))
     profiler.add_time('do_iterative_mlgst: total time', tStart)
 
     if returnDiffs:
-        return (maxLogLs, logLDiffs, mleGatesets) if returnAll else (maxLogL, mleGateset)
+        return (maxLogLs, logLDiffs, vecs, mleGatesets) if returnAll else (maxLogL, mleGateset)
     elif returnMaxLogL:
         return (maxLogLs, mleGatesets) if returnAll else (maxLogL, mleGateset)
     else:

@@ -160,7 +160,7 @@ class GateSet(object):
         if sim_type == "termorder":
             cache = calc_cache if (calc_cache is not None) else {} # make a temp cache if none is given
             self._sim_args.append(cache) # add calculation cache as another argument
-            
+
 
 
 
@@ -843,11 +843,11 @@ class GateSet(object):
         #print("DEBUG: Done rebuild: %d params" % len(v))
 
     def _init_virtual_obj(self, obj):
-        """ 
+        """
         Initializes a "virtual object" - an object (e.g. Gate) that *could* be a
         member of the GateSet but won't be, as it's just built for temporary
         use (e.g. the parallel action of several "base" gates).  As such
-        we need to fully initialize its parent and gpindices members so it 
+        we need to fully initialize its parent and gpindices members so it
         knows it belongs to this GateSet BUT it's not allowed to add any new
         parameters (they'd just be temporary).  It's also assumed that virtual
         objects don't need to be to/from-vectored as there are already enough
@@ -1156,7 +1156,7 @@ class GateSet(object):
 
                 # OLD: now allow "gate-level" labels which can contain
                 # multiple (parallel) instrument labels
-                #if gate_label in self.instruments: 
+                #if gate_label in self.instruments:
                 #    #we've found an instrument - recurse!
                 #    for inst_el_lbl in self.instruments[gate_label]:
                 #        compiled_el_lbl = gate_label + "_" + inst_el_lbl
@@ -1173,7 +1173,7 @@ class GateSet(object):
                                 for inst_el_lbl in self.instruments[sub_gl].keys()])
                         else:
                             sublabel_tups_to_iter.append( [(sub_gl,None)] ) # just a single element
-                            
+
                     for sublabel_tups in _itertools.product(*sublabel_tups_to_iter):
                         sublabels = [] # the sub-labels of the overall gate label to add
                         outcomes = [] # the outcome tuple associated with this overall label
@@ -1183,13 +1183,13 @@ class GateSet(object):
                                 outcomes.append(inst_el_lbl)
                             else:
                                 sublabels.append(sub_gl)
-                                
+
                         compiled_el_lbl = _Label(sublabels)
                         compiled_el_outcomes = tuple(outcomes)
                         process(s[0:i] + _gs.GateString((compiled_el_lbl,)) + s[i+1:],
                                 spamtuples, elIndsToOutcomes, gate_outcomes + compiled_el_outcomes, i+1)
                     break
-                    
+
             else: #no instruments -- add "raw" gate string s
                 if s in raw_spamTuples_dict:
                     assert(gate_outcomes == raw_gateOutcomes_dict[s]) #DEBUG
@@ -3518,7 +3518,7 @@ class GateSet(object):
                               # symplectic rep for the *embedded* gate
                 srep = (gate.embedded_gate.smatrix,gate.embedded_gate.svector)
             elif isinstance(gate, _gate.CliffordGate):
-                lbl = gl.name 
+                lbl = gl.name
                 srep = (gate.smatrix,gate.svector)
             else:
                 lbl = srep = None
