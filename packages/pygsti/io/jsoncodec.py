@@ -55,6 +55,12 @@ def encode_obj(py_obj, binary):
     is_pygsti_class = isinstance(py_obj,type) and hasattr(py_obj,'__module__') \
                       and py_obj.__module__.startswith('pygsti')
 
+    is_plotly_fig = hasattr(py_obj,'__class__') and \
+                    hasattr(py_obj.__class__,'__module__') and \
+                    py_obj.__class__.__module__ == 'plotly.graph_objs._figure' and \
+                    py_obj.__class__.__name__ == "Figure"
+      # just needed for v3 plotly where figures aren't dicts...
+
     # Pygsti class encoding
     if is_pygsti_class: # or class_hasattr(py_obj, '__pygsti_getstate__')
         return {'__pygsticlass__': (py_obj.__module__,py_obj.__name__)}
@@ -123,6 +129,11 @@ def encode_obj(py_obj, binary):
         #    raise e
             
         return d
+
+    #Special case: a plotly Figure object - these need special help being serialized
+    elif is_plotly_fig and hasattr(py_obj,'to_dict'):
+        return { '__plotlyfig__': encode_std_obj(py_obj.to_dict(), binary) }
+    
     else:
         return encode_std_obj(py_obj, binary)
 
@@ -267,6 +278,11 @@ def decode_obj(json_obj, binary):
                 decode_std_base(json_obj[B('__std_base__')], instance, binary)
 
             return instance
+
+        elif B('__plotlyfig__') in json_obj:
+            import plotly.graph_objs as go
+            return go.Figure(decode_obj(json_obj[B('__plotlyfig__')],binary))
+        
         else:
             return decode_std_obj(json_obj, binary)
     else:

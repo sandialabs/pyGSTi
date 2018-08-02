@@ -237,8 +237,10 @@ class TestCodecs(CodecsTestCase):
                          list(self.results.estimates['default'].confidence_region_factories.keys()))
 
         # Workspace
+        pygsti.report.workspace.enable_plotly_pickling() # b/c workspace cache may contain plotly figures
         s = pickle.dumps(self.ws)
         x = pickle.loads(s)
+        pygsti.report.workspace.disable_plotly_pickling()
          #TODO: comparison (?)
 
         #Misc other objects

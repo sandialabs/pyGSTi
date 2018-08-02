@@ -14,10 +14,7 @@ import uuid as _uuid
 #from scipy.integrate import quad as _quad
 #from scipy.interpolate import interp1d as _interp1d
 
-# Needed to load dill-packaged pickles? - LSaldyt
-#import dill
-#import pickle as _pickle
-import dill as _pickle
+import pickle as _pickle
 import copy as _copy
 import warnings as _warnings
 

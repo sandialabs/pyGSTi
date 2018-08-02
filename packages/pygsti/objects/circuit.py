@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numbers as _numbers
 import numpy as _np
 import copy as _copy
+import sys as _sys
 
 from . import gatestring as _gstr
 from . import labeldicts as _ld
@@ -1444,6 +1445,8 @@ class Circuit(_gstr.GateString):
         A text rendering of the circuit.
         """
         s = ''
+        Ctxt = 'C' if _sys.version_info <= (3, 0) else '\u25CF' # No unicode in
+        Ttxt = 'T' if _sys.version_info <= (3, 0) else '\u2295' #  Python 2
 
         def abbrev(lbl,k): #assumes a simple label w/ name & qubits
             """ Returns what to print on line 'k' for label 'lbl' """
@@ -1453,15 +1456,15 @@ class Circuit(_gstr.GateString):
                 return lbl.name
             elif lbl.name in ('CNOT','Gcnot') and nqubits == 2: # qubit indices = (control,target)
                 if k == self.line_labels.index(lbl_qubits[0]):
-                    return  '\u25CF' + str(lbl_qubits[1]) # was "C"
+                    return Ctxt + str(lbl_qubits[1])
                 else:
-                    return '\u2295' + str(lbl_qubits[0]) # was "T"
+                    return Ttxt + str(lbl_qubits[0])
             elif lbl.name in ('CPHASE', 'Gcphase') and nqubits == 2:
                 if k == self.line_labels.index(lbl_qubits[0]):
                     otherqubit = lbl_qubits[1]
                 else:
                     otherqubit = lbl_qubits[0]
-                return '\u25CF' + str(otherqubit)
+                return Ctxt + str(otherqubit)
             else:
                 return str(lbl)
         
