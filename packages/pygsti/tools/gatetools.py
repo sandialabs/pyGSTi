@@ -21,6 +21,7 @@ from . import basistools as _bt
 from ..baseobjs import Basis as _Basis
 from ..baseobjs.basis import basis_matrices as _basis_matrices
 
+    
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
 def _mut(i,j,N):
@@ -210,7 +211,17 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
     mxBasis = _bt.build_basis_for_matrix(A, mxBasis)
 
     #currently cvxpy is only needed for this function, so don't import until here
-    import cvxpy as _cvxpy
+
+
+    import sys as _sys
+    if _sys.version_info < (3, 0):
+        #Attempt "safe" import of cvxpy so that pickle isn't messed up...
+        import pickle as _pickle
+        p = _pickle.Pickler.dispatch.copy()
+        import cvxpy as _cvxpy
+        _pickle.Pickler.dispatch = p
+    else: # no need to do this in python3
+        import cvxpy as _cvxpy
 
     # This SDP implementation is a modified version of Kevin's code
 

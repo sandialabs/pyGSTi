@@ -21,6 +21,19 @@ from ..baseobjs import Basis as _Basis
 from ..objects.reportableqty import ReportableQty as _ReportableQty
 from ..objects import gatesetfunction as _gsf
 
+try:
+    import sys as _sys
+    if _sys.version_info < (3, 0):
+        #Attempt "safe" import of cvxpy so that pickle isn't messed up...
+        import pickle as _pickle
+        p = _pickle.Pickler.dispatch.copy()
+        import cvxpy as _cvxpy
+        _pickle.Pickler.dispatch = p
+    else:
+        import cvxpy as _cvxpy
+except ImportError:
+    _cvxpy = None
+    
 FINITE_DIFF_EPS = 1e-7
 
 def _nullFn(*arg):
@@ -270,8 +283,7 @@ def gatestring_jt_diff(gatesetA, gatesetB, gatestring):
 Gatestring_jt_diff = _gsf.gatesetfn_factory(gatestring_jt_diff)
 # init args == (gatesetA, gatesetB, gatestring)
 
-try:
-    import cvxpy as _cvxpy # pylint: disable=unused-import
+if _cvxpy:
 
     class Gatestring_half_diamond_norm(_gsf.GateSetFunction):
         """ 1/2 diamond norm of difference between productA(gatestring)
@@ -306,7 +318,7 @@ try:
     #Gatestring_half_diamond_norm = _gsf.gatesetfn_factory(gatestring_half_diamond_norm)
     #  # init args == (gatesetA, gatesetB, gatestring)
 
-except ImportError:
+else:
     gatestring_half_diamond_norm = None
     Gatestring_half_diamond_norm = _nullFn
 
@@ -412,8 +424,7 @@ def povm_jt_diff(gatesetA, gatesetB, povmlbl):
 POVM_jt_diff = _gsf.povmfn_factory(povm_jt_diff)
 # init args == (gateset1, gatesetB, povmlbl)
 
-try:
-    import cvxpy as _cvxpy # pylint: disable=unused-import
+if _cvxpy:
 
     def povm_half_diamond_norm(gatesetA, gatesetB, povmlbl):
         """ 
@@ -424,7 +435,7 @@ try:
         """
         return 0.5 * _tools.povm_diamonddist(gatesetA, gatesetB, povmlbl)
     POVM_half_diamond_norm = _gsf.povmfn_factory(povm_half_diamond_norm)
-except ImportError:
+else:
     povm_half_diamond_norm = None
     POVM_half_diamond_norm = _nullFn
 
@@ -567,8 +578,7 @@ Jt_diff = _gsf.gatesfn_factory(jt_diff)
 # init args == (gateset1, gateset2, gateLabel)
 
 
-try:
-    import cvxpy as _cvxpy # pylint: disable=unused-import
+if _cvxpy:
 
     class Half_diamond_norm(_gsf.GateSetFunction):
         """Half the diamond distance bewteen `gatesetA.gates[gateLabel]` and
@@ -601,7 +611,7 @@ try:
     #Half_diamond_norm = _gsf.gatesfn_factory(half_diamond_norm)
     ## init args == (gateset1, gateset2, gateLabel)
 
-except ImportError:
+else:
     half_diamond_norm = None
     Half_diamond_norm = _nullFn
 
