@@ -393,8 +393,8 @@ class RBTestCase(BaseTestCase):
         out = rb.simulate.rb_with_pauli_errors(pspec,errormodel,[0,2,4],2,3,filename=temp_files + '/simtest_CRB.txt',rbtype='CRB',
                                         returndata=True, verbosity=0)
     
-        errormodel = rb.simulate.create_locally_gate_independent_pauli_error_model(pspec, [0.0,0.01,0.02], 
-                                                                                   [0.0,0.1,0.01],ptype='uniform')
+        errormodel = rb.simulate.create_locally_gate_independent_pauli_error_model(pspec, {0: 0.0, 1: 0.01, 2: 0.02}, 
+                                                                                   {0: 0.0, 1: 0.1, 2: 0.01},ptype='uniform')
     
         out = rb.simulate.rb_with_pauli_errors(pspec,errormodel,[0,10,20],2,2,filename=temp_files + '/simtest_DRB.txt',rbtype='DRB',
                                         returndata=True, verbosity=0)

@@ -412,11 +412,11 @@ def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='unifor
     """
     assert(gatesetname == 'clifford'), "This function currently assumes sampling from a Clifford gateset!"
     # Pick the sector.
-    if isinstance(co2Qgatesprob,str):
+    if _compat.isstr(co2Qgatesprob):
         assert(co2Qgatesprob == 'uniform'), "If `co2Qgatesprob` is a string it must be 'uniform!'"
         twoqubitgates_or_nestedco2Qgates = co2Qgates[_np.random.randint(0,len(co2Qgates))]            
     else:
-        co2Qgatesprob = co2Qgatesprob/_np.sum(co2Qgatesprob)
+        co2Qgatesprob = _np.array(co2Qgatesprob)/_np.sum(co2Qgatesprob)
         x = list(_np.random.multinomial(1,co2Qgatesprob))
         twoqubitgates_or_nestedco2Qgates = co2Qgates[x.index(1)]
     
@@ -429,7 +429,7 @@ def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='unifor
     # If it's not a list of "co2Qgates" (lists) then this is the list of gates to use.
     else:
         twoqubitgates = twoqubitgates_or_nestedco2Qgates
-    
+        
     # Prep the sampling variables
     sampled_layer = []
     if subsetQs is not None:    
