@@ -1208,6 +1208,46 @@ class Circuit(_gstr.GateString):
             
         return layer
 
+    def get_layer_with_idles(self,j):
+        """
+        Returns the layer, as a list, at depth j. This list contains all gates
+        in the layer *including* self.identity gates, and contains each gate only
+        once (although multi-qubit gates appear on multiple lines of the circuit).
+        To get a layer without the self.identity gates, use the `get_layer()` method.
+
+        Parameters
+        ----------
+        j : int
+            The index (depth) of the layer to be returned
+
+        Returns
+        -------
+        List of Labels
+            Each gate in the layer, except self.identity gates, once and only once.
+        """      
+        assert(j >= 0 and j < self.depth()), "Circuit layer label invalid! Circuit is only of depth {}".format(self.depth())
+        
+        layer = []
+        qubits_used = []
+        for i in range(0,self.number_of_lines()):
+            
+            gate = self.line_items[i][j]
+            gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
+            
+            # Checks every element is a Label object.
+            assert((isinstance(gate,_Label))), "The elements of the layer should be Label objects!"
+            # Checks that a Label appears in all the lines it should act on.
+            for q in gate_qubits:
+                assert(self.line_items[self.line_labels.index(q)][j] == gate), "This is an invalid circuit layer!"
+
+            if gate not in layer:
+                # Checks that we have not already assigned a gate to this qubit
+                assert(not set(gate_qubits).issubset(set(qubits_used))), "There is more than one gate on some qubits in the layer; layer invalid!"
+                qubits_used.extend( gate_qubits )
+                layer.append(gate)
+            
+        return layer
+
     def is_valid_circuit(self):
         """
         Checks whether the circuit satisfies all of the criteria to be a valid circuit. These are:
