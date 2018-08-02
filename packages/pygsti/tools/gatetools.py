@@ -223,6 +223,9 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
     else: # no need to do this in python3
         import cvxpy as _cvxpy
 
+    #Check if using version < 1.0
+    old_cvxpy = bool(tuple(map(int,_cvxpy.__version__.split('.'))) < (1,0))
+
     # This SDP implementation is a modified version of Kevin's code
 
     #Compute the diamond norm
@@ -291,13 +294,23 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
     K = jamiolkowski_matrix.real # J.real
     L = jamiolkowski_matrix.imag # J.imag
 
-    Y = _cvxpy.Variable(dim, dim) # X.real
-    Z = _cvxpy.Variable(dim, dim) # X.imag
+    if old_cvxpy:
+        Y = _cvxpy.Variable(dim, dim) # X.real
+        Z = _cvxpy.Variable(dim, dim) # X.imag
 
-    sig0 = _cvxpy.Variable(smallDim,smallDim) # rho0.real
-    sig1 = _cvxpy.Variable(smallDim,smallDim) # rho1.real
-    tau0 = _cvxpy.Variable(smallDim,smallDim) # rho1.imag
-    tau1 = _cvxpy.Variable(smallDim,smallDim) # rho1.imag
+        sig0 = _cvxpy.Variable(smallDim,smallDim) # rho0.real
+        sig1 = _cvxpy.Variable(smallDim,smallDim) # rho1.real
+        tau0 = _cvxpy.Variable(smallDim,smallDim) # rho1.imag
+        tau1 = _cvxpy.Variable(smallDim,smallDim) # rho1.imag
+
+    else:
+        Y = _cvxpy.Variable(shape=(dim, dim)) # X.real
+        Z = _cvxpy.Variable(shape=(dim, dim)) # X.imag
+
+        sig0 = _cvxpy.Variable(shape=(smallDim, smallDim)) # rho0.real
+        sig1 = _cvxpy.Variable(shape=(smallDim, smallDim)) # rho1.real
+        tau0 = _cvxpy.Variable(shape=(smallDim, smallDim)) # rho1.imag
+        tau1 = _cvxpy.Variable(shape=(smallDim, smallDim)) # rho1.imag
 
     ident = _np.identity(smallDim, 'd')
 
@@ -323,8 +336,11 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
         prob.solve(solver="CVXOPT")
 #       prob.solve(solver="ECOS")
 #       prob.solve(solver="SCS")#This always fails
+    except _cvxpy.error.SolverError as e:
+        _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
+        return (-2, _np.zeros((dim,dim))) if return_x else -2
     except:
-        _warnings.warn("CVXOPT failed - diamonddist returning -2!")
+        _warnings.warn("CVXOPT failed (uknown err) - diamonddist returning -2!")
         return (-2, _np.zeros((dim,dim))) if return_x else -2
 
     if return_x:
