@@ -369,9 +369,10 @@ class RBTestCase(BaseTestCase):
         w = workspace.Workspace()
         w.init_notebook_mode(connected=False)
         plt = w.RandomizedBenchmarkingPlot(out)
-        plt.saveas(temp_files + "/rbdecay_plot.pdf")
 
-        out.plot() # matplotlib version (keep around for now)
+        # TravisCI doesn't install matplotlib
+        #plt.saveas(temp_files + "/rbdecay_plot.pdf") 
+        #out.plot() # matplotlib version (keep around for now)
         return
 
 
