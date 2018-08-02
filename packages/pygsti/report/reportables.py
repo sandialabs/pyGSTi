@@ -21,6 +21,19 @@ from ..baseobjs import Basis as _Basis
 from ..objects.reportableqty import ReportableQty as _ReportableQty
 from ..objects import gatesetfunction as _gsf
 
+try:
+    import sys as _sys
+    if _sys.version_info < (3, 0):
+        #Attempt "safe" import of cvxpy so that pickle isn't messed up...
+        import pickle as _pickle
+        p = _pickle.Pickler.dispatch.copy()
+        import cvxpy as _cvxpy
+        _pickle.Pickler.dispatch = p
+    else:
+        import cvxpy as _cvxpy
+except ImportError:
+    _cvxpy = None
+    
 FINITE_DIFF_EPS = 1e-7
 
 def _nullFn(*arg):
@@ -119,7 +132,7 @@ class Gate_eigenvalues(_gsf.GateSetFunction):
     """Gate eigenvalues"""
     def __init__(self, gateset, gatelabel):
         self.gatelabel = gatelabel
-        _gsf.GateSetFunction.__init__(self, gateset, ["gate:" + gatelabel])
+        _gsf.GateSetFunction.__init__(self, gateset, ["gate:" + str(gatelabel)])
             
     def evaluate(self, gateset):
         """Evaluate at `gateset`"""
@@ -270,8 +283,7 @@ def gatestring_jt_diff(gatesetA, gatesetB, gatestring):
 Gatestring_jt_diff = _gsf.gatesetfn_factory(gatestring_jt_diff)
 # init args == (gatesetA, gatesetB, gatestring)
 
-try:
-    import cvxpy as _cvxpy # pylint: disable=unused-import
+if _cvxpy:
 
     class Gatestring_half_diamond_norm(_gsf.GateSetFunction):
         """ 1/2 diamond norm of difference between productA(gatestring)
@@ -306,7 +318,7 @@ try:
     #Gatestring_half_diamond_norm = _gsf.gatesetfn_factory(gatestring_half_diamond_norm)
     #  # init args == (gatesetA, gatesetB, gatestring)
 
-except ImportError:
+else:
     gatestring_half_diamond_norm = None
     Gatestring_half_diamond_norm = _nullFn
 
@@ -412,8 +424,7 @@ def povm_jt_diff(gatesetA, gatesetB, povmlbl):
 POVM_jt_diff = _gsf.povmfn_factory(povm_jt_diff)
 # init args == (gateset1, gatesetB, povmlbl)
 
-try:
-    import cvxpy as _cvxpy # pylint: disable=unused-import
+if _cvxpy:
 
     def povm_half_diamond_norm(gatesetA, gatesetB, povmlbl):
         """ 
@@ -424,7 +435,7 @@ try:
         """
         return 0.5 * _tools.povm_diamonddist(gatesetA, gatesetB, povmlbl)
     POVM_half_diamond_norm = _gsf.povmfn_factory(povm_half_diamond_norm)
-except ImportError:
+else:
     povm_half_diamond_norm = None
     POVM_half_diamond_norm = _nullFn
 
@@ -521,14 +532,14 @@ Angles_btwn_rotn_axes = _gsf.gatesetfn_factory(angles_btwn_rotn_axes)
 
 def entanglement_fidelity(A, B, mxBasis):
     """Entanglement fidelity between A and B"""
-    return _tools.process_fidelity(A, B, mxBasis)
+    return _tools.entanglement_fidelity(A, B, mxBasis)
 Entanglement_fidelity = _gsf.gatesfn_factory(entanglement_fidelity)
 # init args == (gateset1, gateset2, gateLabel)
 
 
 def entanglement_infidelity(A, B, mxBasis):
     """Entanglement infidelity between A and B"""
-    return 1 - _tools.process_fidelity(A, B, mxBasis)
+    return 1 - _tools.entanglement_fidelity(A, B, mxBasis)
 Entanglement_infidelity = _gsf.gatesfn_factory(entanglement_infidelity)
 # init args == (gateset1, gateset2, gateLabel)
 
@@ -567,8 +578,7 @@ Jt_diff = _gsf.gatesfn_factory(jt_diff)
 # init args == (gateset1, gateset2, gateLabel)
 
 
-try:
-    import cvxpy as _cvxpy # pylint: disable=unused-import
+if _cvxpy:
 
     class Half_diamond_norm(_gsf.GateSetFunction):
         """Half the diamond distance bewteen `gatesetA.gates[gateLabel]` and
@@ -601,16 +611,15 @@ try:
     #Half_diamond_norm = _gsf.gatesfn_factory(half_diamond_norm)
     ## init args == (gateset1, gateset2, gateLabel)
 
-except ImportError:
+else:
     half_diamond_norm = None
     Half_diamond_norm = _nullFn
 
 
 def std_unitarity(A,B, mxBasis):
     """ A gauge-invariant quantity that behaves like the unitarity """
-    from ..extras.rb import rbutils as _rbutils
     Lambda = _np.dot(A, _np.linalg.inv(B))
-    return _rbutils.unitarity( Lambda, mxBasis )
+    return _tools.unitarity( Lambda, mxBasis )
 
 def eigenvalue_unitarity(A,B):
     """ A gauge-invariant quantity that behaves like the unitarity """
@@ -701,8 +710,7 @@ Eigenvalue_nonunitary_diamondnorm = _gsf.gatesfn_factory(eigenvalue_nonunitary_d
 def avg_gate_infidelity(A, B, mxBasis):
     """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
     d = _np.sqrt(A.shape[0])
-    from ..extras.rb import rbutils as _rbutils
-    return _rbutils.average_gate_infidelity(A,B, d, mxBasis)
+    return _tools.average_gate_infidelity(A,B,mxBasis)
 Avg_gate_infidelity = _gsf.gatesfn_factory(avg_gate_infidelity)
 # init args == (gateset1, gateset2, gateLabel)
 
@@ -1014,6 +1022,7 @@ def general_decomposition(gatesetA, gatesetB):
     for gl in gateLabels:
         gate = gatesetA.gates[gl]
         targetGate = gatesetB.gates[gl]
+        gl = str(gl) # Label -> str for decomp-dict keys
 
         target_evals = _np.linalg.eigvals(targetGate)
         if _np.any(_np.isclose(target_evals,-1.0)):
@@ -1048,18 +1057,18 @@ def general_decomposition(gatesetA, gatesetB):
 
     for gl in gateLabels:
         for gl_other in gateLabels:            
-            rotnAngle = decomp[gl + ' angle']
-            rotnAngle_other = decomp[gl_other + ' angle']
+            rotnAngle = decomp[str(gl) + ' angle']
+            rotnAngle_other = decomp[str(gl_other) + ' angle']
 
             if gl == gl_other or abs(rotnAngle) < 1e-4 or abs(rotnAngle_other) < 1e-4:
-                decomp[gl + "," + gl_other + " axis angle"] = 10000.0 #sentinel for irrelevant angle
+                decomp[str(gl) + "," + str(gl_other) + " axis angle"] = 10000.0 #sentinel for irrelevant angle
     
             real_dot = _np.clip(
-                _np.real(_np.dot(decomp[gl + ' axis'].flatten(),
-                                 decomp[gl_other + ' axis'].flatten())),
+                _np.real(_np.dot(decomp[str(gl) + ' axis'].flatten(),
+                                 decomp[str(gl_other) + ' axis'].flatten())),
             -1.0, 1.0)
             angle = _np.arccos( real_dot ) / _np.pi
-            decomp[gl + "," + gl_other + " axis angle"] = angle
+            decomp[str(gl) + "," + str(gl_other) + " axis angle"] = angle
 
     return decomp
 General_decomposition = _gsf.gatesetfn_factory(general_decomposition)
@@ -1069,8 +1078,8 @@ General_decomposition = _gsf.gatesetfn_factory(general_decomposition)
 def average_gateset_infidelity(gatesetA, gatesetB):
     """ Average gate set infidelity """
     # B is target gateset usually but must be "gatesetB" b/c of decorator coding...
-    from ..extras.rb import rbutils as _rbutils
-    return _rbutils.average_gateset_infidelity(gatesetA,gatesetB)
+    from ..extras.rb import theory as _rbtheory
+    return _rbtheory.gateset_infidelity(gatesetA,gatesetB)
 Average_gateset_infidelity = _gsf.gatesetfn_factory(average_gateset_infidelity)
 # init args == (gatesetA, gatesetB)
 
@@ -1079,8 +1088,8 @@ def predicted_rb_number(gatesetA, gatesetB):
     """ 
     Prediction of RB number based on estimated (A) and target (B) gate sets
     """
-    from ..extras.rb import rbutils as _rbutils
-    return _rbutils.predicted_RB_number(gatesetA, gatesetB)
+    from ..extras.rb import theory as _rbtheory
+    return _rbtheory.predicted_RB_number(gatesetA, gatesetB)
 Predicted_rb_number = _gsf.gatesetfn_factory(predicted_rb_number)
 # init args == (gatesetA, gatesetB)
 

@@ -29,7 +29,7 @@ def is_sparse_basis(nameOrBasis):
           # (could test for a sparse matrix list in the FUTURE)
         return False
 
-def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
+def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
     """
     Convert a gate matrix from one basis of a density matrix space
     to another.
@@ -58,18 +58,26 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
     if len(mx.shape) not in (1, 2):
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
+    #Get `dim` for constructing Basis objects below
     if dimOrBlockDims is None:
-        dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
-        #assert( dimOrBlockDims**2 == mx.shape[0] )
+        if not (isinstance(from_basis,Basis) and isinstance(to_basis,Basis)):
+            #then we need to get dim for construction
+            dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+            assert( dimOrBlockDims**2 == mx.shape[0] )
+            dim = Dim(dimOrBlockDims)
+        else:
+            # we don't need dim - can leave it as None, which is preferable b/c
+            # the int(round()) method above assumes a *single* tensor-prod-block
+            dim = None
+    else:
+        dim = Dim(dimOrBlockDims)
 
     #if either basis is sparse, attempt to construct sparse bases
     try_for_sparse = is_sparse_basis(from_basis) or is_sparse_basis(to_basis)
-        
-    dim        = Dim(dimOrBlockDims)
     from_basis = Basis(from_basis, dim, sparse=try_for_sparse)
     to_basis   = Basis(to_basis, dim, sparse=try_for_sparse)
     #TODO: check for 'unknown' basis here and display meaningful warning - otherwise just get 0-dimensional basis...
-        
+
     if from_basis.dim.gateDim != to_basis.dim.gateDim:
         raise ValueError('Automatic basis expanding/contracting is disabled: use flexible_change_basis')
 
@@ -78,7 +86,7 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
 
     toMx   = from_basis.transform_matrix(to_basis)
     fromMx = to_basis.transform_matrix(from_basis)
-    
+
     isMx = len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]
     if isMx:
         # want ret = toMx.dot( _np.dot(mx, fromMx)) but need to deal
@@ -140,10 +148,10 @@ def build_basis_pair(mx, from_basis, to_basis):
         square.
 
     from_basis, to_basis: {'std', 'gm', 'pp', 'qt'} or Basis object
-        The two bases (named as they are because usually they're the 
+        The two bases (named as they are because usually they're the
         source and destination basis for a basis change).  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-        and Qutrit (qt) (or a custom basis object).  If a custom basis 
+        and Qutrit (qt) (or a custom basis object).  If a custom basis
         object is provided, it's dimension should be equal to
         `sqrt(mx.shape[0]) == sqrt(mx.shape[1])`.
 
@@ -157,7 +165,10 @@ def build_basis_pair(mx, from_basis, to_basis):
         from_basis = to_basis.equivalent(from_basis)
     else: # neither or both from_basis & to_basis are Basis objects - so
           # no need to worry about setting sparse flag in construction
-        dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+        if not isinstance(from_basis, Basis): # then *neither* are Basis objs
+            dimOrBlockDims = int(round(_np.sqrt(mx.shape[0]))) # so infer dimension
+        else: dimOrBlockDims = None # not needed and int(round()) only works for
+                                    # the *single* tensor-product-block case
         to_basis = Basis(to_basis, dimOrBlockDims)
         from_basis = Basis(from_basis, dimOrBlockDims)
     return from_basis, to_basis
@@ -168,7 +179,7 @@ def build_basis_for_matrix(mx, basis):
     Construct a Basis object with type given by `basis` and dimension (if it's
     not given by `basis`) approprate for transforming `mx`, that is, equal to
     `sqrt(mx.shape[0])`.
-    
+
     Parameters
     ----------
     mx : numpy.ndarray
@@ -199,8 +210,8 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     This is possible when the two 'std'-type bases have the same "embedding
     dimension", equal to the sum of their block dimensions.  If, for example,
     `stdBasis1` has block dimensions (kite structure) of (4,2,1) then `mx`,
-    expressed as a sum of `4^2 + 2^2 + 1^2 = 21` basis elements, can be 
-    "embedded" within a larger 'std' basis having a single block with 
+    expressed as a sum of `4^2 + 2^2 + 1^2 = 21` basis elements, can be
+    "embedded" within a larger 'std' basis having a single block with
     dimension 7 (`7^2 = 49` elements).
 
     When `stdBasis2` is smaller than `stdBasis1` the reverse happens and `mx`
@@ -214,7 +225,7 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
 
     resize : {'expand','contract'}
         Whether `mx` can be expanded or contracted.
-    
+
     stdBasis1 : Basis
         The 'std'-type basis that `mx` is currently in.
 
@@ -241,7 +252,7 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     return mid
 
 def flexible_change_basis(mx, startBasis, endBasis):
-    """ 
+    """
     Change `mx` from `startBasis` to `endBasis` allowing embedding expansion
     and contraction if needed (see :func:`resize_std_mx` for more details).
 
@@ -271,7 +282,7 @@ def flexible_change_basis(mx, startBasis, endBasis):
     return end
 
 def resize_mx(mx, dimOrBlockDims=None, resize=None):
-    """ 
+    """
     Wrapper for :func:`resize_std_mx` that first constructs two 'std'-type bases
     using `dimOrBlockDims` and `sum(dimOrBlockDims)`.  The matrix `mx` is converted
     from the former to the latter when `resize == "expand"`, and from the latter to
@@ -321,7 +332,7 @@ def state_to_stdmx(state_vec):
         given by the length-`d` array, `state_vec`.
     """
     st_vec = state_vec.view(); st_vec.shape = (len(st_vec),1) #column vector
-    dm_mx = _np.kron( _np.conjugate(_np.transpose(st_vec)), st_vec ) 
+    dm_mx = _np.kron( _np.conjugate(_np.transpose(st_vec)), st_vec )
     return dm_mx #density matrix in standard (sigma-z) basis
 
 
@@ -358,7 +369,7 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     Returns
     -------
     numpy array
-        The matrix, 2x2 or 4x4 depending on nqubits 
+        The matrix, 2x2 or 4x4 depending on nqubits
     """
     dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
     basis = Basis(basis, dim)

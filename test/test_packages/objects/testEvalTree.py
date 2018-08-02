@@ -29,7 +29,7 @@ class EvalTreeTestCase(BaseTestCase):
     def test_base_tree(self):
         raw_tree = pygsti.obj.EvalTree()
         with self.assertRaises(NotImplementedError):
-            raw_tree.initialize(None,None)
+            raw_tree.initialize(None)
         with self.assertRaises(NotImplementedError):
             raw_tree.generate_gatestring_list()
         with self.assertRaises(NotImplementedError):
@@ -58,9 +58,10 @@ class EvalTreeTestCase(BaseTestCase):
 
         compiled_gatestrings, lookup, outcome_lookup, nEls = \
                     gs_target.compile_gatestrings(strs)
+        self.assertTrue(isinstance(compiled_gatestrings, dict))
 
         t = TreeClass()
-        t.initialize([""] + gateLabels, compiled_gatestrings)
+        t.initialize(compiled_gatestrings)
         nStrs = t.num_final_strings()
         self.assertEqual(nStrs, len(compiled_gatestrings))
         self.assertEqual(t.final_slice(None),slice(0,nStrs)) #trivial since t is not split
@@ -96,12 +97,13 @@ class EvalTreeTestCase(BaseTestCase):
         else: # specific tests for MatrixEvalTree?
             t.get_min_tree_size() #just make sure it runs...
 
-            #Creation failure b/c of unknown gate labels (for now just matrix eval tree)
-            with self.assertRaises(AssertionError):
-                tbad = TreeClass()
-                compiled_strs,_,_,_ =gs_target.compile_gatestrings([ (), ('Gnotpresent',)])
-                tbad.initialize([""] + gateLabels, compiled_strs )
-
+            #REMOVED - this error isn't applicable now, since an eval tree computes the
+            #  distinct gate labels in the gatestrings it's given.
+            ##Creation failure b/c of unknown gate labels (for now just matrix eval tree)
+            #with self.assertRaises(AssertionError):
+            #    tbad = TreeClass()
+            #    compiled_strs,_,_,_ =gs_target.compile_gatestrings([ (), ('Gnotpresent',)])
+            #    tbad.initialize(compiled_strs )
 
         #Split using numSubTrees
         gsl1 = t.generate_gatestring_list()
@@ -129,7 +131,7 @@ class EvalTreeTestCase(BaseTestCase):
         maxSize = 25
         print("Splitting with max subtree size = ",maxSize)
         t2 = TreeClass()
-        t2.initialize([""] + gateLabels, compiled_gatestrings)
+        t2.initialize(compiled_gatestrings)
 
         gsl1 = t.generate_gatestring_list()
         lookup2 = t2.split(lookup, maxSubTreeSize=maxSize)
@@ -150,7 +152,7 @@ class EvalTreeTestCase(BaseTestCase):
             
         #Test invalid split arguments
         t3 = TreeClass()
-        t3.initialize([""] + gateLabels, compiled_gatestrings)            
+        t3.initialize(compiled_gatestrings)            
         with self.assertRaises(ValueError):
             t3.split(lookup, maxSubTreeSize=10, numSubTrees=10) #can't specify both
         with self.assertRaises(ValueError):
@@ -169,7 +171,7 @@ class EvalTreeTestCase(BaseTestCase):
             compiled_gatestrings2, lookup2, outcome_lookup2, nEls2 = \
                         gs_target.compile_gatestrings(strs_with_dups)
             tdup = TreeClass()
-            tdup.initialize([""] + gateLabels, compiled_gatestrings2)
+            tdup.initialize(compiled_gatestrings2)
         
         
 

@@ -165,8 +165,8 @@ formatDict['Vec'] = {
     'python'  : _no_format }
 
 formatDict['GateString'] = {
-    'html'  : _Formatter(lambda s,specs : '.'.join(s) if s is not None else ''),
-    'latex' : _Formatter(lambda s,specs : ''          if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s]))),
+    'html'  : _Formatter(lambda s,specs : '.'.join(map(str,s)) if s is not None else ''),
+    'latex' : _Formatter(lambda s,specs : '' if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % str(gl)) for gl in s]))),
     'python'  : _no_format }
 
 '''

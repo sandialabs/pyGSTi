@@ -14,11 +14,15 @@ import itertools as _itertools
 
 from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
+from ..baseobjs import label as _lbl
 from . import gatestringconstruction as _gstrc
+
+from pprint import pprint
 
 def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                        sampleError="none", seed=None, randState=None,
-                       aliasDict=None, collisionAction="aggregate", comm=None):
+                       aliasDict=None, collisionAction="aggregate",
+                       comm=None, memLimit=None):
     """Creates a DataSet using the probabilities obtained from a gateset.
 
     Parameters
@@ -81,6 +85,9 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         across multiple processors and ensuring that the *same* dataset is
         generated on each processor.
 
+    memLimit : int, optional
+        A rough memory limit in bytes which is used to determine job allocation
+        when there are multiple processors.
 
     Returns
     -------
@@ -88,29 +95,37 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
        A static data set filled with counts for the specified gate strings.
 
     """
-    TOL = 1e-10
+    NTOL = 10
+    TOL = 1 / (10**-NTOL)
 
     if isinstance(gatesetOrDataset, _ds.DataSet):
         dsGen = gatesetOrDataset
         gsGen = None
-        dataset = _ds.DataSet( collisionAction=collisionAction )
+        dataset = _ds.DataSet( collisionAction=collisionAction,
+                               outcomeLabelIndices = dsGen.olIndex ) # keep same outcome labels
     else:
         gsGen = gatesetOrDataset
         dsGen = None
         dataset = _ds.DataSet( collisionAction=collisionAction )
 
+                
+    if aliasDict:
+        aliasDict = { _lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
+                      for ky,val in aliasDict.items() } # convert to use Labels
+
+    if gsGen:
+        trans_gatestring_list = [ _gstrc.translate_gatestring(s, aliasDict)
+                                  for s in gatestring_list ]
+        all_probs = gsGen.bulk_probs(trans_gatestring_list, comm=comm, memLimit=memLimit)
+        #all_dprobs = gsGen.bulk_dprobs(gatestring_list) #DEBUG - not needed here!!!
+
     if comm is None or comm.Get_rank() == 0: # only root rank computes
+                
         if sampleError in ("binomial","multinomial"):
             if randState is None:
                 rndm = _rndm.RandomState(seed) # ok if seed is None
             else:
                 rndm = randState
-
-        if gsGen:
-            trans_gatestring_list = [ _gstrc.translate_gatestring(s, aliasDict)
-                                      for s in gatestring_list ]
-            all_probs = gsGen.bulk_probs(trans_gatestring_list)
-            #all_dprobs = gsGen.bulk_dprobs(gatestring_list) #DEBUG - not needed here!!!
 
         for k,s in enumerate(gatestring_list):
 
@@ -143,29 +158,17 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                 if psum < 1-TOL:
                     adjusted = True
                     _warnings.warn("Adjusting sum(probs) < 1 to 1")
-                # The following while loop is needed if the data generating gateset
-                # is bad enough that one loop over the probabilities is not enough
+
+                # A cleaner probability cleanup.. lol
                 OVERTOL  = 1.0 + TOL
                 UNDERTOL = 1.0 - TOL
                 normalized = lambda : UNDERTOL <= sum(ps.values()) <= OVERTOL
-                while not normalized():
-                    if psum > 1:
-                        extra_p = (psum-1.0) * OVERTOL
-                        for lbl in ps:
-                            if extra_p > 0:
-                                x = min(ps[lbl],extra_p)
-                                ps[lbl] -= x; extra_p -= x
-                            else: break
-                    elif psum < 1:
-                        needed_p = abs((psum-1.0) * UNDERTOL)
-                        for lbl in ps:
-                            if needed_p > 0:
-                                x = min(ps[lbl], needed_p)
-                                ps[lbl] += x # ADD here rather than subtract
-                                needed_p -= x
-                            else: break
-                    psum = sum(ps.values())
-                assert normalized(), 'psum={}'.format(psum)
+                if not normalized():
+                    m = max(ps.values())
+                    ps = {lbl : round(p/m, NTOL) for lbl, p in ps.items()}
+                    print(sum(ps.values()))
+
+                assert normalized(), 'psum={}'.format(sum(ps.values()))
                 if adjusted:
                     _warnings.warn('Adjustment finished')
 
@@ -185,19 +188,23 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                 nWeightedSamples = N
 
             counts = {} #don't use an ordered dict here - add_count_dict will sort keys
-            labels = sorted(list(ps.keys())) # "outcome labels" - sort for consistent generation
+            labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1]) ]
+              # "outcome labels" - sort by prob for consistent generation
             if sampleError == "binomial":
-                assert(len(labels) == 2)
-                ol0,ol1 = labels[0], labels[1]
-                counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
-                counts[ol1] = nWeightedSamples - counts[ol0]
+                
+                if len(labels) == 1: #Special case when labels[0] == 1.0 (100%)
+                    counts[labels[0]] = nWeightedSamples
+                else:
+                    assert(len(labels) == 2)
+                    ol0,ol1 = labels[0], labels[1]
+                    counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
+                    counts[ol1] = nWeightedSamples - counts[ol0]
 
             elif sampleError == "multinomial":
                 countsArray = rndm.multinomial(nWeightedSamples,
-                        sorted([ps[ol] for ol in labels]), size=1) # well-ordered list of probs
+                        [ps[ol] for ol in labels], size=1) # well-ordered list of probs
                 for i,ol in enumerate(labels):
                     counts[ol] = countsArray[0,i]
-
             else:
                 for outcomeLabel,p in ps.items():
                     pc = _np.clip(p,0,1)
@@ -251,7 +258,7 @@ def merge_outcomes(dataset,label_merge_dict):
         for new_outcome in new_outcomes:
             count_dict[new_outcome] = 0
             for old_outcome in label_merge_dict[new_outcome]:
-                count_dict[new_outcome] += linecounts[old_outcome]
+                count_dict[new_outcome] += linecounts.get(old_outcome,0)
         merged_dataset.add_count_dict(key,count_dict)
     merged_dataset.done_adding_data()
     return merged_dataset

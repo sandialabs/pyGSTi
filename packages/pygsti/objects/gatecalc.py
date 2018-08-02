@@ -40,7 +40,7 @@ class GateCalc(object):
     fundamental operations.
     """
 
-    def __init__(self, dim, gates, preps, effects, paramvec):
+    def __init__(self, dim, gates, preps, effects, paramvec, autogator):
         """
         Construct a new GateCalc object.
 
@@ -55,23 +55,44 @@ class GateCalc(object):
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
-        spamdefs : OrderedDict
-            A dictionary whose keys are the allowed SPAM labels, and whose
-            values are 2-tuples comprised of a state preparation label
-            followed by a POVM effect label (both of which are strings,
-            and keys of preps and effects, respectively, except for the
-            special case when both are set to "remainder").
-
         paramvec : ndarray
             The parameter vector of the GateSet.
+
+        autogator : AutoGator
+            An auto-gator object that may be used to construct virtual gates
+            for use in computations.
         """
         self.dim = dim
         self.gates = gates
         self.preps = preps
         self.effects = effects
+        self.autogator = autogator
+
+        #Conversion of labels -> integers for speed & C-compatibility
+        #self.gate_lookup = { lbl:i for i,lbl in enumerate(gates.keys()) }
+        #self.prep_lookup = { lbl:i for i,lbl in enumerate(preps.keys()) }
+        #self.effect_lookup = { lbl:i for i,lbl in enumerate(effects.keys()) }
+        #
+        #self.gatereps = { i:self.gates[lbl].torep() for lbl,i in self.gate_lookup.items() }
+        #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
+        #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
+        
+
         self.paramvec = paramvec
         self.Np = len(paramvec)
 
+        #assume consistency in evotypes, so just use the first one we find
+        self.evotype = None
+        if len(gates)>0: self.evotype = next(iter(gates.values()))._evotype
+        if len(preps)>0: self.evotype = next(iter(preps.values()))._evotype
+        if len(effects)>0: self.evotype = next(iter(effects.values()))._evotype
+
+    def _getgate(self, lbl):
+        """ Don't just access self.gates anymore - if `lbl` isn't found use
+            the "auto-gator" """
+        if lbl in self.gates: return self.gates[lbl]
+        if self.autogator: return self.autogator(self.gates, lbl)
+        raise KeyError("%s is not a recognized gate label!" % repr(lbl))
 
     def to_vector(self):
         """
@@ -99,6 +120,13 @@ class GateCalc(object):
         self.paramvec = v.copy()
         for _,obj in self.iter_objs():
             obj.from_vector( v[obj.gpindices] )
+
+        #Re-init reps for computation
+        #self.gatereps = { i:self.gates[lbl].torep() for lbl,i in self.gate_lookup.items() }
+        #self.gatereps = { lbl:g.torep() for lbl,g in gates.items() }
+        #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
+        #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
+
 
             
     def iter_objs(self):
@@ -146,7 +174,7 @@ class GateCalc(object):
            any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.preps.values()]) or \
            any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.effects.values()]):
             raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
-                                       "parameters for GateSets with sparse "
+                                       "parameters for GateSets with non-dense "
                                        "member representations"))
 
         bSkipEcs = True #Whether we should artificially skip complement-type
@@ -192,9 +220,9 @@ class GateCalc(object):
             for j in range(dim):  # *generator* mx, not gauge mx itself
                 unitMx = _bt.mut(i,j,dim)
                 for lbl,rhoVec in self.preps.items():
-                    gsDeriv_preps[lbl] = _np.dot(unitMx, rhoVec.toarray())
+                    gsDeriv_preps[lbl] = _np.dot(unitMx, rhoVec.todense())
                 for lbl,EVec in self.effects.items():
-                    gsDeriv_effects[lbl] = -_np.dot(EVec.toarray().T, unitMx).T
+                    gsDeriv_effects[lbl] = -_np.dot(EVec.todense().T, unitMx).T
 
                 for lbl,gate in self.gates.items():
                     #if isinstance(gate,_gate.GateMatrix):
@@ -1367,7 +1395,7 @@ class GateCalc(object):
         for i, gstr in enumerate(gatestrings):
             elInds = _slct.indices(elIndices[i]) \
                      if isinstance(elIndices[i],slice) else elIndices[i]
-            ret[gstr] = _collections.OrderedDict(
+            ret[gstr] = _ld.OutcomeLabelDict(
                 [(outLbl,vp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
@@ -1535,10 +1563,10 @@ class GateCalc(object):
             elInds = _slct.indices(elIndices[i]) \
                      if isinstance(elIndices[i],slice) else elIndices[i]
             if returnPr:
-                ret[gstr] = _collections.OrderedDict(
+                ret[gstr] = _ld.OutcomeLabelDict(
                     [(outLbl,(vdp[ei],vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
             else:
-                ret[gstr] = _collections.OrderedDict(
+                ret[gstr] = _ld.OutcomeLabelDict(
                     [(outLbl,vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
@@ -1741,7 +1769,7 @@ class GateCalc(object):
         for i, gstr in enumerate(gatestrings):
             elInds = _slct.indices(elIndices[i]) \
                      if isinstance(elIndices[i],slice) else elIndices[i]
-            outcomeQtys = _collections.OrderedDict()
+            outcomeQtys = _ld.OutcomeLabelDict()
             for ei, outLbl in zip(elInds, outcomes[i]):
                 if returnDeriv:
                     if vdp2 is None:
@@ -2140,4 +2168,4 @@ class GateCalc(object):
                 nSummands += Evec.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
-        return max(dists) + spamVal
+        return max(dists) + spamVal                

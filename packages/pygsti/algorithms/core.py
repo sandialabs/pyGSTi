@@ -52,7 +52,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
 
     targetGateset : GateSet
         A gateset used to specify which gate labels should be estimated, a
-        guess for which gauge these estimates should be returned in, and 
+        guess for which gauge these estimates should be returned in, and
         used to compile gate sequences.
 
     gateLabels : list, optional
@@ -140,7 +140,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
     # are determined by the number of outcomes obtained by compiling the
     # all prepStr * effectStr sequences:
     nRhoSpecs, nESpecs, povmLbls, povmLens = _lgst_matrix_dims(
-        targetGateset, prepStrs, effectStrs)    
+        targetGateset, prepStrs, effectStrs)
     K = min(nRhoSpecs, nESpecs)
 
     #Create truncation projector -- just trims columns (Pj) or rows (Pjt) of a matrix.
@@ -183,7 +183,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
                               dataset, gateLabelAliases)  # shape (nVariants, nESpecs, nRhoSpecs)
 
         X_ps = []
-        for X in Xs:  
+        for X in Xs:
             X2 = _np.dot(Ud, _np.dot(X, Vd)) # shape (K,K) this should be close to rank "svdTruncateTo" (which is <= K) -- TODO: check this
 
             #if svdTruncateTo > 0:
@@ -222,7 +222,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
                 EVec[0,i] = dsRow.fraction( (effectLabel,) ) #outcome labels should just be effect labels (no instruments!)
             EVec_p = _np.dot( _np.dot(EVec, Vd), Pj ) #truncate Evec => Evec', shape (1,trunc)
             povm_effects.append( (effectLabel, _np.transpose(EVec_p)) )
-        lgstGateset.povms[povmLabel] = _objs.UnconstrainedPOVM( povm_effects ) 
+        lgstGateset.povms[povmLabel] = _objs.UnconstrainedPOVM( povm_effects )
           # unconstrained POVM for now - wait until after guess gauge for TP-constraining)
 
     # Form rhoVecs
@@ -259,12 +259,12 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
         guess_ABMat = _np.dot(AMat,BMat)
         _, guess_s, _ = _np.linalg.svd(guess_ABMat, full_matrices=False)
 
-        printer.log("Singular values of target I_tilde (truncating to first %d of %d) = " 
+        printer.log("Singular values of target I_tilde (truncating to first %d of %d) = "
                     % (guessTrunc,len(guess_s)), 2)
         for sval in guess_s: printer.log(sval,2)
         printer.log('',2)
         lgstGateset._check_paramvec()
-        
+
         if guessTrunc < trunc:  # if the dimension of the gauge-guess gateset is smaller than the matrices being estimated, pad B with identity
             printer.log("LGST: Padding target B with sqrt of low singular values of I_tilde: \n", 2)
             printer.log(s[guessTrunc:trunc], 2)
@@ -278,7 +278,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
         else:
             ggEl = _objs.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
             lgstGateset.transform(ggEl)
-            
+
         lgstGateset._check_paramvec()
         # Force lgstGateset to have gates, preps, & effects parameterized in the same way as those in
         # guessGatesetForGauge, but we only know how to do this when the dimensions of the target and
@@ -296,19 +296,19 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
                     new_vec = guessGatesetForGauge.preps[prepLabel].copy()
                     _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.preps[prepLabel])
                     lgstGateset.preps[ prepLabel ] = new_vec
-    
+
             for povmLabel in povmLabelsToEstimate:
                 if povmLabel in guessGatesetForGauge.povms:
                     povm = guessGatesetForGauge.povms[povmLabel]
                     new_effects = []
-                    
+
                     if isinstance(povm, _objs.TPPOVM): #preserve *identity* of guess
                         for effectLabel,EVec in povm.items():
                             if effectLabel == povm.complement_label: continue
                             new_vec = EVec.copy()
                             _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.povms[povmLabel][effectLabel])
                             new_effects.append( (effectLabel,new_vec) )
-                        
+
                         # Construct identity vector for complement effect vector
                         #  Pad with zeros if needed (ROBIN - is this correct?)
                         identity = povm[povm.complement_label].identity
@@ -321,12 +321,12 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
                         comp_effect = padded_identityVec - sum([v for k,v in new_effects])
                         new_effects.append( (povm.complement_label, comp_effect) ) #add complement
                         lgstGateset.povms[povmLabel] = _objs.TPPOVM( new_effects )
-                        
+
                     else: #just create an unconstrained POVM
                         for effectLabel,EVec in povm.items():
                             new_vec = EVec.copy()
                             _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.povms[povmLabel][effectLabel])
-                            new_effects.append( (effectLabel,new_vec) )                            
+                            new_effects.append( (effectLabel,new_vec) )
                         lgstGateset.povms[povmLabel] = _objs.UnconstrainedPOVM( new_effects )
 
                     lgstGateset._check_paramvec()
@@ -355,13 +355,13 @@ def _lgst_matrix_dims(gs, prepStrs, effectStrs):
     povmLbls = [ gs.split_gatestring(s,('povm',))[2] #povm_label
                  for s in effectStrs]
     povmLens = ([ len(gs.povms[l]) for l in povmLbls ])
-    nESpecs = sum(povmLens)    
+    nESpecs = sum(povmLens)
     return nRhoSpecs, nESpecs, povmLbls, povmLens
 
 def _constructAB(prepStrs, effectStrs, gateset, dataset, gateLabelAliases=None):
     nRhoSpecs, nESpecs, povmLbls, povmLens = _lgst_matrix_dims(
-        gateset, prepStrs, effectStrs)    
-    
+        gateset, prepStrs, effectStrs)
+
     AB = _np.empty( (nESpecs, nRhoSpecs) )
     eoff = 0
     for i,(estr,povmLen) in enumerate(zip(effectStrs,povmLens)):
@@ -372,7 +372,7 @@ def _constructAB(prepStrs, effectStrs, gateset, dataset, gateLabelAliases=None):
             assert(len(raw_dict) == 1), "No instruments are allowed in LGST fiducials!"
             unique_key = list(raw_dict.keys())[0]
             assert(len(raw_dict[unique_key]) == povmLen)
-            
+
             dsRow = dataset[dsStr]
             AB[eoff:eoff+povmLen,j] = [ dsRow.fraction(ol) for ol in outcomes ]
         eoff += povmLen
@@ -381,7 +381,7 @@ def _constructAB(prepStrs, effectStrs, gateset, dataset, gateLabelAliases=None):
 
 def _constructXMatrix(prepStrs, effectStrs, gateset, gateLabelTuple, dataset, gateLabelAliases=None):
     nRhoSpecs, nESpecs, povmLbls, povmLens = _lgst_matrix_dims(
-        gateset, prepStrs, effectStrs)    
+        gateset, prepStrs, effectStrs)
 
     nVariants = 1
     for g in gateLabelTuple:
@@ -406,22 +406,22 @@ def _constructXMatrix(prepStrs, effectStrs, gateset, gateLabelTuple, dataset, ga
                     dsRow.fraction(ol) for ol in outcomes[ooff:ooff+len(spamtups)] ]
                 ooff += len(spamtups)
         eoff += povmLen
-                
+
     return X
 
 def _constructA(effectStrs, gs):
     _, n, povmLbls, povmLens = _lgst_matrix_dims(
-        gs, [], effectStrs)    
+        gs, [], effectStrs)
 
     dim = gs.get_dimension()
     A = _np.empty( (n,dim) )
     st = _np.empty( dim, 'd')
-                
+
     basis_st = _np.zeros( (dim,1), 'd'); eoff = 0
     for k,(estr,povmLbl,povmLen) in enumerate(zip(effectStrs,povmLbls,povmLens)):
         #Build fiducial < E_k | := < EVec[ effectSpec[0] ] | Gatestring(effectSpec[1:])
         #st = dot(Ek.T, Estr) = ( dot(Estr.T,Ek)  ).T
-        #A[k,:] = st[0,:] # E_k == kth row of A                    
+        #A[k,:] = st[0,:] # E_k == kth row of A
         for i in range(dim): # propagate each basis initial state
             basis_st[i] = 1.0
             gs.preps['rho_LGST_tmp'] = basis_st
@@ -460,8 +460,8 @@ def _constructB(prepStrs, gs):
 
 def _constructTargetAB(prepStrs, effectStrs, targetGateset):
     nRhoSpecs, nESpecs, povmLbls, povmLens = _lgst_matrix_dims(
-        targetGateset, prepStrs, effectStrs)    
-    
+        targetGateset, prepStrs, effectStrs)
+
     AB = _np.empty( (nESpecs, nRhoSpecs) )
     eoff = 0
     for i,(estr,povmLbl,povmLen) in enumerate(zip(effectStrs,povmLbls,povmLens)):
@@ -560,7 +560,7 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, prepStrs,
     svdTruncateTo : int, optional
         The Hilbert space dimension to truncate the gate matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
-        the I_tildle LGST matrix. 0 causes no truncation, and default is 
+        the I_tildle LGST matrix. 0 causes no truncation, and default is
         `targetGateset.dim`.
 
     maxiter : int, optional
@@ -825,7 +825,7 @@ def do_iterative_exlgst(
     svdTruncateTo : int, optional
         The Hilbert space dimension to truncate the gate matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
-        the I_tildle LGST matrix. 0 causes no truncation, and default is 
+        the I_tildle LGST matrix. 0 causes no truncation, and default is
         `targetGateset.dim`.
 
     maxiter : int, optional
@@ -935,7 +935,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
               regularizeFactor=0, verbosity=0, check=False,
               check_jacobian=False, gatestringWeights=None,
               gateLabelAliases=None, memLimit=None, comm=None,
-              distributeMethod = "deriv", profiler=None):
+              distributeMethod = "deriv", profiler=None,
+              evaltree_cache=None):
     """
     Performs Least-Squares Gate Set Tomography on the dataset.
 
@@ -963,7 +964,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     tol : float or dict, optional
         The tolerance for the chi^2 optimization.  If a dict, allowed keys are
-        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then 
+        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then
         `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
 
     cptp_penalty_factor : float, optional
@@ -1033,6 +1034,13 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     profiler : Profiler, optional
         A profiler object used for to track timing and memory usage.
 
+    evaltree_cache : dict, optional
+        A dictionary which server as a cache for the computed EvalTree used
+        in this computation.  If an empty dictionary is supplied, it is filled
+        with cached values to speed up subsequent executions of this function
+        which use the *same* `startGateset`, `gateStringsToUse`, `memLimit`,
+        `comm`, and `distributeMethod`.
+
 
     Returns
     -------
@@ -1085,14 +1093,31 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         curMem = _baseobjs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1*(memLimit-persistentMem))
         mlim = memLimit-persistentMem-gthrMem-curMem
+        assert mlim > 0, 'Not enough memory, exiting..'
         printer.log("Memory limit = %.2fGB" % (memLimit*C))
         printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
                     (curMem*C, persistentMem*C, gthrMem*C))
     else: gthrMem = mlim = None
-    
-    evTree, wrtBlkSize,_, lookup, outcomes_lookup = gs.bulk_evaltree_from_resources(
-        gateStringsToUse, comm, mlim, distributeMethod,
-        ["bulk_fill_probs","bulk_fill_dprobs"], printer-1) 
+
+    if evaltree_cache and 'evTree' in evaltree_cache \
+       and 'wrtBlkSize' in evaltree_cache:
+        evTree = evaltree_cache['evTree']
+        wrtBlkSize = evaltree_cache['wrtBlkSize']
+        lookup = evaltree_cache['lookup']
+        outcomes_lookup = evaltree_cache['outcomes_lookup']
+    else:
+        dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
+        evTree, wrtBlkSize,_, lookup, outcomes_lookup = gs.bulk_evaltree_from_resources(
+            gateStringsToUse, comm, mlim, distributeMethod,
+            ["bulk_fill_probs","bulk_fill_dprobs"], dstree, printer-1) 
+
+        #Fill cache dict if one was given
+        if evaltree_cache is not None:
+            evaltree_cache['evTree'] = evTree
+            evaltree_cache['wrtBlkSize'] = wrtBlkSize
+            evaltree_cache['lookup'] = lookup
+            evaltree_cache['outcomes_lookup'] = outcomes_lookup
+
     profiler.add_time("do_mc2gst: pre-opt treegen",tStart)
 
     KM = evTree.num_final_elements() #shorthand for combined spam+gatestring dimension
@@ -1109,42 +1134,53 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         if cptp_penalty_factor != 0: ex += _cptp_penalty_size(gs)
         if spam_penalty_factor != 0: ex += _spam_penalty_size(gs)
 
-    #  Allocate peristent memory 
+    #  Allocate peristent memory
     #  (must be AFTER possible gate string permutation by
     #   tree and initialization of dsGateStringsToUse)
     probs  = _np.empty( KM, 'd' )
     jac    = _np.empty( (KM+ex,vec_gs_len), 'd')
-
-    N =_np.empty( KM, 'd') 
-    f =_np.empty( KM, 'd')
-    fweights = _np.empty( KM, 'd')
     z = _np.zeros( KM, 'd') # for deriv below
+    
+    if evaltree_cache and 'cntVecMx' in evaltree_cache \
+       and useFreqWeightedChiSq == False: # b/c we don't cache fweights
+        cntVecMx = evaltree_cache['cntVecMx']
+        N = evaltree_cache['totalCntVec']
+        fweights = None
+    else:
+        N =_np.empty( KM, 'd') # totalCntVec
+        cntVecMx =_np.empty( KM, 'd')
+        fweights = _np.empty( KM, 'd') if useFreqWeightedChiSq else None # usually not used
 
-    #NOTE on chi^2 expressions:
-    #in general case:   chi^2 = sum (p_i-f_i)^2/p_i  (for i summed over outcomes)
-    #in 2-outcome case: chi^2 = (p+ - f+)^2/p+ + (p- - f-)^2/p-
-    #                         = (p - f)^2/p + (1-p - (1-f))^2/(1-p)
-    #                         = (p - f)^2 * (1/p + 1/(1-p))
-    #                         = (p - f)^2 * ( ((1-p) + p)/(p*(1-p)) )
-    #                         = 1/(p*(1-p)) * (p - f)^2
-
-    for (i,gateStr) in enumerate(dsGateStringsToUse):
-        N[ lookup[i] ] = dataset[gateStr].total
-        f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
-        if useFreqWeightedChiSq:
-            wts = []
-            for x in outcomes_lookup[i]:
-                Nx = dataset[gateStr].total
-                f1 = dataset[gateStr].fraction(x); f2 = (f1+1)/(Nx+2)
-                wts.append( _np.sqrt( Nx / (f2*(1-f2)) ) )
-            fweights[ lookup[i] ] = wts
-
-    if gatestringWeights is not None:
-        for i in range(len(gateStringsToUse)):
+        #NOTE on chi^2 expressions:
+        #in general case:   chi^2 = sum (p_i-f_i)^2/p_i  (for i summed over outcomes)
+        #in 2-outcome case: chi^2 = (p+ - f+)^2/p+ + (p- - f-)^2/p-
+        #                         = (p - f)^2/p + (1-p - (1-f))^2/(1-p)
+        #                         = (p - f)^2 * (1/p + 1/(1-p))
+        #                         = (p - f)^2 * ( ((1-p) + p)/(p*(1-p)) )
+        #                         = 1/(p*(1-p)) * (p - f)^2
+    
+        for (i,gateStr) in enumerate(dsGateStringsToUse):
+            cnts = dataset[gateStr].counts
+            N[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
+            cntVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
             if useFreqWeightedChiSq:
-                fweights[ lookup[i] ] *= gatestringWeights[i] #b/c we necessarily used unweighted N[i]'s above
-            N[ lookup[i] ] *= gatestringWeights[i] #multiply N's by weights
+                wts = []
+                for x in outcomes_lookup[i]:
+                    Nx = dataset[gateStr].total
+                    f1 = dataset[gateStr].fraction(x); f2 = (f1+1)/(Nx+2)
+                    wts.append( _np.sqrt( Nx / (f2*(1-f2)) ) )
+                fweights[ lookup[i] ] = wts    
+    
+        if gatestringWeights is not None:
+            for i in range(len(gateStringsToUse)):
+                cntVecMx[ lookup[i] ] *= gatestringWeights[i] # dim KM (K = nSpamLabels, M = nGateStrings )
+                N[ lookup[i] ] *= gatestringWeights[i] #multiply N's by weights
 
+        if evaltree_cache is not None:
+            evaltree_cache['cntVecMx'] = cntVecMx
+            evaltree_cache['totalCntVec'] = N
+
+    f = cntVecMx / N
     maxGateStringLength = max([len(x) for x in gateStringsToUse])
 
     if useFreqWeightedChiSq:
@@ -1202,7 +1238,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                 if spam_penalty_factor > 0:
                     spamPenaltyVec = _spam_penalty(gs,spam_penalty_factor,gateBasis)
                 else: spamPenaltyVec = [] # so concatenate ignores
-                
+
                 profiler.add_time("do_mc2gst: OBJECTIVE",tm)
                 return _np.concatenate( (v, cpPenaltyVec, spamPenaltyVec) )
 
@@ -1233,7 +1269,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                 if cptp_penalty_factor != 0:
                     cpPenaltyVec = _cptp_penalty(gs,cptp_penalty_factor,gateBasis)
                 else: cpPenaltyVec = []
-            
+
                 if spam_penalty_factor != 0:
                     spamPenaltyVec = _spam_penalty(gs,spam_penalty_factor,gateBasis)
                 else: spamPenaltyVec = []
@@ -1243,7 +1279,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                 profiler.add_time("do_mc2gst: OBJECTIVE",tm)
                 assert(v.shape == (KM,))
                 return v
-    
+
 
 
     # Jacobian function
@@ -1263,7 +1299,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                   # (KM,N) * (KM,1)   (N = dim of vectorized gateset)
                   # this multiply also computes jac, which is just dprobs
                   # with a different shape (jac.shape == [KM,vec_gs_len])
-                
+
                 if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
 
                 # dpr has shape == (nGateStrings, nDerivCols), weights has shape == (nGateStrings,)
@@ -1346,14 +1382,14 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
             else:
                 off = 0
-                if cptp_penalty_factor != 0:                    
+                if cptp_penalty_factor != 0:
                     off += _cptp_penalty_jac_fill(jac[KM+off:,:], gs, cptp_penalty_factor,
                                                   gateBasis)
 
                 if spam_penalty_factor != 0:
                     off += _spam_penalty_jac_fill(jac[KM+off:,:], gs, spam_penalty_factor,
                                                   gateBasis)
-                
+
             #Zero-out insignificant entries in jacobian -- seemed to help some, but leaving this out, thinking less complicated == better
             #absJac = _np.abs(jac);  maxabs = _np.max(absJac)
             #jac[ absJac/maxabs < 5e-8 ] = 0.0
@@ -1366,7 +1402,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
             #U,s,V = _np.linalg.svd(jac)
             #print "DEBUG: s-vals of jac %s = " % (str(jac.shape)), s
 
-            nClipped = len((_np.logical_or(probs < minProbClipForWeighting, 
+            nClipped = len((_np.logical_or(probs < minProbClipForWeighting,
                                            probs > (1-minProbClipForWeighting))).nonzero()[0])
             printer.log("MC2-JAC: jac in (%g,%g)\n" % (_np.min(jac), _np.max(jac)) +
                         "         pr in (%g,%g)\n" % (_np.min(probs), _np.max(probs)) +
@@ -1412,7 +1448,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     full_minErrVec = _objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
     minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  #don't include "extra" regularization terms
-    soln_gs = gs.copy();
+    soln_gs = gs.copy()
     profiler.add_time("do_mc2gst: leastsq",tm)
 
     #soln_gs.log("MC2GST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
@@ -1427,7 +1463,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         nGateStrings = len(gateStringsToUse)
         nDataParams  = dataset.get_degrees_of_freedom(dsGateStringsToUse) #number of independent parameters
                                                                           # in dataset (max. model # of params)
-                                                                     
+
         #Don't compute num gauge params if it's expensive (>10% of mem limit)
         memForNumGaugeParams = gs.num_elements() * (gs.num_params()+gs.dim**2) \
             * FLOATSIZE # see GateSet._buildup_dPG (this is mem for dPG)
@@ -1498,7 +1534,7 @@ def do_mc2gst_with_model_selection(
 
     tol : float, optional
         The tolerance for the chi^2 optimization.  If a dict, allowed keys are
-        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then 
+        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then
         `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
 
     cptp_penalty_factor : float, optional
@@ -1687,8 +1723,8 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                         returnAll=False, gateStringSetLabels=None, verbosity=0,
                         check=False, check_jacobian=False,
                         gatestringWeightsDict=None, gateLabelAliases=None,
-                        memLimit=None, profiler=None, comm=None, 
-                        distributeMethod = "deriv"):
+                        memLimit=None, profiler=None, comm=None,
+                        distributeMethod = "deriv", evaltree_cache=None):
     """
     Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset.
 
@@ -1716,7 +1752,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
     tol : float, optional
         The tolerance for the chi^2 optimization.  If a dict, allowed keys are
-        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then 
+        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then
         `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
 
     cptp_penalty_factor : float, optional
@@ -1797,6 +1833,10 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
         when comm is not None).  "gatestrings" will divide the list of
         gatestrings; "deriv" will divide the columns of the jacobian matrix.
 
+    evaltree_cache : dict, optional
+        An empty dictionary which gets filled with the *final* computed EvalTree
+        (and supporting info) used in this computation.
+
 
     Returns
     -------
@@ -1823,7 +1863,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
     #Run MC2GST iteratively on given sets of estimatable strings
     lsgstGatesets = [ ]; minErrs = [ ] #for returnAll == True case
-    lsgstGateset = startGateset.copy(); nIters = len(gateStringLists)    
+    lsgstGateset = startGateset.copy(); nIters = len(gateStringLists)
     tStart = _time.time()
     tRef = tStart
 
@@ -1913,7 +1953,7 @@ def do_iterative_mc2gst_with_model_selection(
 
     tol : float, optional
         The tolerance for the chi^2 optimization.  If a dict, allowed keys are
-        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then 
+        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then
         `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
 
     cptp_penalty_factor : float, optional
@@ -2060,7 +2100,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
              poissonPicture=True, verbosity=0, check=False,
              gatestringWeights=None, gateLabelAliases=None,
              memLimit=None, comm=None,
-             distributeMethod = "deriv", profiler=None):
+             distributeMethod = "deriv", profiler=None,
+             evaltree_cache=None):
 
     """
     Performs Maximum Likelihood Estimation Gate Set Tomography on the dataset.
@@ -2082,7 +2123,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     tol : float, optional
         The tolerance for the logL optimization.  If a dict, allowed keys are
-        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then 
+        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then
         `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
 
     cptp_penalty_factor : float, optional
@@ -2146,6 +2187,13 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     profiler : Profiler, optional
         A profiler object used for to track timing and memory usage.
 
+    evaltree_cache : dict, optional
+        A dictionary which server as a cache for the computed EvalTree used
+        in this computation.  If an empty dictionary is supplied, it is filled
+        with cached values to speed up subsequent executions of this function
+        which use the *same* `startGateset`, `gateStringsToUse`, `memLimit`,
+        `comm`, and `distributeMethod`.
+
 
     Returns
     -------
@@ -2158,7 +2206,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
                           maxfev, tol,cptp_penalty_factor, spam_penalty_factor, minProbClip,
                           probClipInterval, radius, poissonPicture, verbosity,
                           check, gatestringWeights, gateLabelAliases, memLimit,
-                          comm, distributeMethod, profiler, None, None)
+                          comm, distributeMethod, profiler, evaltree_cache, None)
 
 
 def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
@@ -2169,11 +2217,10 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
                    gatestringWeights=None, gateLabelAliases=None,
                    memLimit=None, comm=None,
                    distributeMethod = "deriv", profiler=None,
-                   evaltree_cache=None, forcefn_grad=None,
-                   shiftFctr=100):
-    """ 
+                   evaltree_cache=None, forcefn_grad=None, shiftFctr=100):
+    """
     Same args and behavior as do_mlgst, but with additional:
-    
+
     Parameters
     ----------
     evaltree_cache : dict, optional
@@ -2182,7 +2229,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         with cached values to speed up subsequent executions of this function
         which use the *same* `startGateset`, `gateStringsToUse`, `memLimit`,
         `comm`, and `distributeMethod`.
-       
+
     forcefn_grad : numpy array, optional
         An array of shape `(D,nParams)`, where `D` is the dimension of the
         (unspecified) forcing function and `nParams=startGateset.num_params()`.
@@ -2192,7 +2239,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
 
     shiftFctr : float
         A tuning parameter used to ensure the positivity of the forcing term.
-        This should be > 1, and the larger the value the more positive-shift 
+        This should be > 1, and the larger the value the more positive-shift
         is applied to keep the forcing term positive.  Thus, if you receive
         an "Inadequate forcing shift" error, make this value larger.
     """
@@ -2220,7 +2267,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         if forcefn_grad is not None:
             forcefn_cmp = comm.bcast(forcefn_grad if (comm.Get_rank() == 0) else None, root=0)
             normdiff = _np.linalg.norm(forcefn_cmp - forcefn_grad)
-            if normdiff > 1e-6: 
+            if normdiff > 1e-6:
                 #printer.warning("forcefn_grad norm mismatch = ",normdiff) #only prints on rank0
                 _warnings.warn("Rank %d: forcefn_grad norm mismatch = %g" % (comm.Get_rank(),normdiff)) # pragma: no cover
             #assert(normdiff <= 1e-6)
@@ -2246,11 +2293,12 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         curMem = _baseobjs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1*(memLimit-persistentMem))
         mlim = memLimit-persistentMem-gthrMem-curMem
-        printer.log("Memory: limit = %.2fGB" % (memLimit*C) + 
+        assert mlim > 0, 'Not enough memory, exiting..'
+        printer.log("Memory: limit = %.2fGB" % (memLimit*C) +
                     "(cur, persist, gthr = %.2f, %.2f, %.2f GB)" %
                     (curMem*C, persistentMem*C, gthrMem*C))
     else: gthrMem = mlim = None
-    
+
     if evaltree_cache and 'evTree' in evaltree_cache \
             and 'wrtBlkSize' in evaltree_cache:
         #use cache dictionary to speed multiple calls which use
@@ -2260,10 +2308,11 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
+        dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
         evTree, wrtBlkSize,_,lookup,outcomes_lookup = gs.bulk_evaltree_from_resources(
             gateStringsToUse, comm, mlim, distributeMethod,
-            ["bulk_fill_probs","bulk_fill_dprobs"], printer-1)
-        
+            ["bulk_fill_probs","bulk_fill_dprobs"], dstree, printer-1)
+
         #Fill cache dict if one was given
         if evaltree_cache is not None:
             evaltree_cache['evTree'] = evTree
@@ -2273,44 +2322,53 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
 
 
     KM = evTree.num_final_elements() #shorthand for combined spam+gatestring dimension
-    
+
     #Expand gate label aliases used in DataSet lookups
     dsGateStringsToUse = _tools.find_replace_tuple_list(
         gateStringsToUse, gateLabelAliases)
 
-    #Compute "extra" (i.e. beyond the (gatestring,spamlable)) rows of jacobian        
+    #Compute "extra" (i.e. beyond the (gatestring,spamlable)) rows of jacobian
     ex = 0
     if cptp_penalty_factor != 0: ex += _cptp_penalty_size(gs)
     if spam_penalty_factor != 0: ex += _spam_penalty_size(gs)
     if forcefn_grad is not None: ex += forcefn_grad.shape[0]
 
     #Allocate peristent memory
-    cntVecMx = _np.empty( KM, 'd' )
     probs = _np.empty( KM, 'd' )
     jac    = _np.empty( (KM+ex,vec_gs_len), 'd' )
 
+    if evaltree_cache and 'cntVecMx' in evaltree_cache:
+        cntVecMx = evaltree_cache['cntVecMx']
+        totalCntVec = evaltree_cache['totalCntVec']
+    else:
+        cntVecMx = _np.empty(KM, 'd' )
+        totalCntVec = _np.empty(KM, 'd' )
+        for (i,gateStr) in enumerate(dsGateStringsToUse):
+            cnts = dataset[gateStr].counts
+            totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[gateStr].total
+            cntVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
+            # OLD: totalCntVec[ lookup[i] ] = dataset[gateStr].total
+            # OLD: cntVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
 
-    cntVecMx = _np.empty(KM, 'd' )
-    totalCntVec = _np.empty(KM, 'd' )
-    for (i,gateStr) in enumerate(dsGateStringsToUse):
-        totalCntVec[ lookup[i] ] = dataset[gateStr].total
-        cntVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
+        if gatestringWeights is not None:
+            #From this point downward, scaling cntVecMx, totalCntVec and
+            # minusCntVecMx will scale the corresponding logL terms, as desired.
+            for i in range(len(gateStringsToUse)):
+                cntVecMx[ lookup[i] ] *= gatestringWeights[i] # dim KM (K = nSpamLabels, M = nGateStrings )
+                totalCntVec[ lookup[i] ] *= gatestringWeights[i] #multiply N's by weights
 
+        if evaltree_cache is not None:
+            evaltree_cache['cntVecMx'] = cntVecMx
+            evaltree_cache['totalCntVec'] = totalCntVec
+
+            
     logL_upperbound = _tools.logl_max(gs, dataset, dsGateStringsToUse,
-                                      poissonPicture) # The theoretical upper bound on the log(likelihood)
+                                      poissonPicture, check, gateLabelAliases, evaltree_cache) # The theoretical upper bound on the log(likelihood)
     minusCntVecMx = -1.0 * cntVecMx
 
     freqs = cntVecMx / totalCntVec
     freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
-
-    if gatestringWeights is not None:
-        #From this point downward, scaling cntVecMx, totalCntVec and
-        # minusCntVecMx will scale the corresponding logL terms, as desired.
-        for i in range(len(gateStringsToUse)):
-            cntVecMx[ lookup[i] ] *= gatestringWeights[i] # dim KM (K = nSpamLabels,
-            minusCntVecMx[ lookup[i] ] *= gatestringWeights[i] #    M = nGateStrings )
-            totalCntVec[ lookup[i] ] *= gatestringWeights[i] #multiply N's by weights
-
+    
     if poissonPicture:
         freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 )
     else:
@@ -2358,7 +2416,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p + totalCntVec
             S2 = -0.5 * minusCntVecMx / (min_p**2)
-            v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec*pos_probs # dims K x M (K = nSpamLabels, M = nGateStrings)                    
+            v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec*pos_probs # dims K x M (K = nSpamLabels, M = nGateStrings)
             v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
             v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
             v = _np.where( minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
@@ -2368,7 +2426,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             if cptp_penalty_factor != 0:
                 cpPenaltyVec = _cptp_penalty(gs,cptp_penalty_factor,gateBasis)
             else: cpPenaltyVec = []
-            
+
             if spam_penalty_factor != 0:
                 spamPenaltyVec = _spam_penalty(gs,spam_penalty_factor,gateBasis)
             else: spamPenaltyVec = []
@@ -2379,7 +2437,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
                 forceVec = forceShift - _np.dot(forcefn_grad,vectorGS)
                 assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
                 v = _np.concatenate( (v, _np.sqrt(forceVec)) )
-            
+
             profiler.add_time("do_mlgst: OBJECTIVE",tm)
             return v #Note: no test for whether probs is in [0,1] so no guarantee that
                      #      sqrt is well defined unless probClipInterval is set within [0,1].
@@ -2424,7 +2482,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             if spam_penalty_factor != 0:
                 off += _spam_penalty_jac_fill(jac[KM+off:,:], gs, spam_penalty_factor,
                                               gateBasis)
-                
+
             if forcefn_grad is not None:
                 jac[forceOffset:,:] = -forcefn_grad
 
@@ -2466,11 +2524,11 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             if cptp_penalty_factor != 0:
                 cpPenaltyVec = _cptp_penalty(gs,cptp_penalty_factor,gateBasis)
             else: cpPenaltyVec = []
-            
+
             if spam_penalty_factor != 0:
                 spamPenaltyVec = _spam_penalty(gs,spam_penalty_factor,gateBasis)
             else: spamPenaltyVec = []
-            
+
             v = _np.concatenate( (v, cpPenaltyVec, spamPenaltyVec) )
 
             if forcefn_grad is not None:
@@ -2607,11 +2665,11 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                        poissonPicture=True,returnMaxLogL=False,returnAll=False,
                        gateStringSetLabels=None, useFreqWeightedChiSq=False,
                        verbosity=0, check=False, gatestringWeightsDict=None,
-                       gateLabelAliases=None, memLimit=None, 
+                       gateLabelAliases=None, memLimit=None,
                        profiler=None, comm=None, distributeMethod = "deriv",
-                       alwaysPerformMLE=False):
+                       alwaysPerformMLE=False, evaltree_cache=None):
     """
-    Performs Iterative Maximum Liklihood Estimation Gate Set Tomography on the dataset.
+    Performs Iterative Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
     Parameters
     ----------
@@ -2637,7 +2695,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
     tol : float, optional
         The tolerance for the logL optimization.  If a dict, allowed keys are
-        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then 
+        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then
         `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
 
     cptp_penalty_factor : float, optional
@@ -2723,6 +2781,10 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
         not just the final one.  When False, chi2 minimization is used for all
         except the final iteration (for improved numerical stability).
 
+    evaltree_cache : dict, optional
+        An empty dictionary which gets filled with the *final* computed EvalTree
+        (and supporting info) used in this computation.
+
 
     Returns
     -------
@@ -2771,15 +2833,16 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                         gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
             else: gatestringWeights = None
 
-            mleGateset.basis = startGateset.basis 
+            mleGateset.basis = startGateset.basis
               #set basis in case of CPTP constraints
 
+            evt_cache = {} # get the eval tree that's created so we can reuse it
             _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
                                       maxiter, maxfev, tol, cptp_penalty_factor,
                                       spam_penalty_factor, minProbClip, probClipInterval,
                                       useFreqWeightedChiSq, 0,printer-1, check,
                                       check, gatestringWeights, gateLabelAliases,
-                                      memLimit, comm, distributeMethod, profiler)
+                                      memLimit, comm, distributeMethod, profiler, evt_cache)
 
             if alwaysPerformMLE:
                 _, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
@@ -2787,16 +2850,16 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                          cptp_penalty_factor, spam_penalty_factor,
                                          minProbClip, probClipInterval, radius,
                                          poissonPicture, printer-1, check, gatestringWeights,
-                                         gateLabelAliases, memLimit, comm, distributeMethod, profiler)
+                                         gateLabelAliases, memLimit, comm, distributeMethod, profiler, evt_cache)
 
 
             tNxt = _time.time();
             profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
             tRef2=tNxt
 
-            logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases)
+            logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases, evt_cache)
             maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                                  radius, poissonPicture, check, gateLabelAliases)  #get maxLogL from chi2 estimate
+                                  radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
 
             printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
 
@@ -2809,13 +2872,13 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             if i == len(gateStringLists)-1 and not alwaysPerformMLE: #on the last iteration, do ML
                 printer.log("Switching to ML objective (last iteration)",2)
 
-                mleGateset.basis = startGateset.basis 
-    
+                mleGateset.basis = startGateset.basis
+
                 maxLogL_p, mleGateset_p = do_mlgst(
-                  dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
-                  cptp_penalty_factor, spam_penalty_factor, minProbClip, probClipInterval, radius,
-                  poissonPicture, printer-1, check, gatestringWeights, gateLabelAliases,
-                  memLimit, comm, distributeMethod, profiler)
+                    dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
+                    cptp_penalty_factor, spam_penalty_factor, minProbClip, probClipInterval, radius,
+                    poissonPicture, printer-1, check, gatestringWeights, gateLabelAliases,
+                    memLimit, comm, distributeMethod, profiler, evt_cache)
 
                 printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
 
@@ -2830,6 +2893,9 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 printer.log("Final MLGST took %.1fs" % (tNxt-tRef),2)
                 printer.log('',2) #extra newline
                 tRef=tNxt
+
+                if evaltree_cache is not None:
+                    evaltree_cache.update(evt_cache) # final evaltree cache
 
             if returnAll:
                 mleGatesets.append(mleGateset)
@@ -2863,7 +2929,7 @@ def _cptp_penalty(gs,prefactor,gateBasis):
     -------
     numpy array
         a (real) 1D array of length len(gs.gates).
-    """        
+    """
     return prefactor*_np.sqrt( _np.array( [_tools.tracenorm(
                     _tools.fast_jamiolkowski_iso_std(gate, gateBasis)
                     ) for gate in gs.gates.values()], 'd') )
@@ -2879,7 +2945,7 @@ def _spam_penalty(gs,prefactor,gateBasis):
     -------
     numpy array
         a (real) 1D array of length len(gs.gates).
-    """        
+    """
     return prefactor* ( _np.sqrt(
         _np.array( [
             _tools.tracenorm(
@@ -2889,7 +2955,7 @@ def _spam_penalty(gs,prefactor,gateBasis):
             _tools.tracenorm(
                 _tools.vec_to_stdmx(gs.povms[plbl][elbl], gateBasis)
             ) for plbl in gs.povms for elbl in gs.povms[plbl] ], 'd')
-    ))        
+    ))
 
 
 
@@ -2898,7 +2964,7 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, gateBasis):
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape (len(gs.gates), nParams).
     """
-    
+
     # d( sqrt(|chi|_Tr) ) = (0.5 / sqrt(|chi|_Tr)) * d( |chi|_Tr )
     for i,gate in enumerate(gs.gates.values()):
         nP = gate.num_params()
@@ -2951,7 +3017,7 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, gateBasis):
         cpPenaltyVecGradToFill[i,gate.gpindices] = v.real #indexing w/array OR
                                          #slice works as expected in this case
         chi = sgnchi = dGdp = MdGdp_std = v = None #free mem
-        
+
     return len(gs.gates) #the number of leading-dim indicies we filled in
 
 
@@ -2971,7 +3037,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, gateBasis):
       # separate, independent degrees of freedom) A.r*B.r + A.i*B.i = 2*Re(A*B.C) -- so
       # we need to conjugate the "B" matrix, which is ddenMxdV or dEMxdV below.
 
-    
+
     # d( sqrt(|denMx|_Tr) ) = (0.5 / sqrt(|denMx|_Tr)) * d( |denMx|_Tr )
     for i,prepvec in enumerate(gs.preps.values()):
         nP = prepvec.num_params()
@@ -3010,33 +3076,33 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, gateBasis):
         # directly wrt parent GateSet parameters
         for _,effectvec in povm.compile_effects(povmlbl).items():
             nP = effectvec.num_params()
-    
+
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
             EMx = _tools.vec_to_stdmx(effectvec, gateBasis)
             dmDim = EMx.shape[0]
             assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
                 "EMx should be Hermitian!"
-    
+
             sgnE = _tools.matrix_sign(EMx)
             assert(_np.linalg.norm(sgnE - sgnE.T.conjugate()) < 1e-4), \
                 "sgnE should be Hermitian!"
-    
+
             # get d(prepvec)/dp in gateBasis [shape == (nP,dim)]
             dVdp = effectvec.deriv_wrt_params() #shape (dim, nP)
             assert(dVdp.shape == (gs.dim,nP))
-    
+
             # EMx = sum( spamvec[i] * Bmx[i] )
-    
+
             #contract to get (note contract along both mx indices b/c treat like a mx basis):
             # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
             # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, nP]
             v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
             v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx))) #add 0.5/|EMx|_Tr factor
             assert(_np.linalg.norm(v.imag) < 1e-4)
-    
+
             spamPenaltyVecGradToFill[i,:] = 0.0
             spamPenaltyVecGradToFill[i,effectvec.gpindices] = v.real
-            
+
             sgnE = dVdp = v = None #free mem
 
     #return the number of leading-dim indicies we filled in

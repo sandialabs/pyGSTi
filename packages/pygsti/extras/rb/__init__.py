@@ -6,7 +6,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from .rbcore import *
-from .rbobjs import *
-from .rbutils import * 
-from . import rbstd1Q as std1Q
+from . import group
+from . import theory
+from . import sample
+from . import io
+from . import simulate
+from . import analysis

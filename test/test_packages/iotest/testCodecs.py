@@ -26,21 +26,21 @@ class CodecsTestCase(BaseTestCase):
         std.gs_target._check_paramvec()
         super(CodecsTestCase, self).setUp()
         self.gateset = std.gs_target
-
+        
         self.germs = pygsti.construction.gatestring_list( [('Gx',), ('Gy',) ] ) #abridged for speed
         self.fiducials = std.fiducials
         self.maxLens = [1,2]
         self.gateLabels = list(self.gateset.gates.keys())
-
+        
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
             self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLens )
-
+        
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
         test = self.datagen_gateset.copy()
         self.ds = pygsti.construction.generate_fake_data(
             self.datagen_gateset, self.lsgstStrings[-1],
             nSamples=1000,sampleError='binomial', seed=100)
-
+        
         #Make an gateset with instruments
         E = self.datagen_gateset.povms['Mdefault']['0']
         Erem = self.datagen_gateset.povms['Mdefault']['1']
@@ -49,23 +49,23 @@ class CodecsTestCase(BaseTestCase):
         self.gs_withInst = self.datagen_gateset.copy()
         self.gs_withInst.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         self.gs_withInst.instruments['Iztp'] = pygsti.obj.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
-
+        
         self.results = self.runSilent(pygsti.do_long_sequence_gst,
                                      self.ds, std.gs_target, self.fiducials, self.fiducials,
                                      self.germs, self.maxLens)
-
+        
         #make a confidence region factory
         estLbl = "default"
         crfact = self.results.estimates[estLbl].add_confidence_region_factory('go0', 'final')
         crfact.compute_hessian(comm=None)
         crfact.project_hessian('std')
-
+        
         #create a Workspace object
         self.ws = pygsti.report.create_standard_report(self.results, None, 
                                                        title="GST Codec TEST Report",
                                                        confidenceLevel=95)
         std.gs_target._check_paramvec()
-
+        
         #create miscellaneous other objects
         self.miscObjects = []
         self.miscObjects.append( pygsti.objects.labeldicts.OutcomeLabelDict(
@@ -237,8 +237,10 @@ class TestCodecs(CodecsTestCase):
                          list(self.results.estimates['default'].confidence_region_factories.keys()))
 
         # Workspace
+        pygsti.report.workspace.enable_plotly_pickling() # b/c workspace cache may contain plotly figures
         s = pickle.dumps(self.ws)
         x = pickle.loads(s)
+        pygsti.report.workspace.disable_plotly_pickling()
          #TODO: comparison (?)
 
         #Misc other objects

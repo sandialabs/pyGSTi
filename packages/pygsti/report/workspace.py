@@ -39,48 +39,69 @@ def enable_plotly_pickling():
     :func:`enable_plotly_pickling` and :func:`disable_plotly_pickling`.
     """
     import plotly
-    def setitem(self, key, value, _raise=True):
-        """Sets an item of a dict using the standard dict's  __setitem__ 
-           to restore normal dict behavior"""
-        return dict.__setitem__(self,key,value)
+
+    if int(plotly.__version__.split(".")[0]) >= 3: # plotly version 3 or higher    
+        BLT = plotly.basedatatypes.BaseLayoutType   
+        def fix_getattr(self, prop):
+            if '_subplotid_props' not in self.__dict__:
+                self._subplotid_props = set()
+            return self.__saved_getattr__(prop)
+        if hasattr(BLT, '__getattr__'):
+            BLT.__saved_getattr__ = BLT.__getattr__
+            del BLT.__getattr__
+        BLT.__getattr__ = fix_getattr
+            
+    else:
+        def setitem(self, key, value, _raise=True):
+            """Sets an item of a dict using the standard dict's  __setitem__ 
+               to restore normal dict behavior"""
+            return dict.__setitem__(self,key,value)
+        
+        plotlyDictClass = plotly.graph_objs.Figure.__bases__[0]
+        if hasattr(plotlyDictClass,'__setitem__'):
+            plotlyDictClass.__saved_setitem__ = plotlyDictClass.__setitem__
+        if hasattr(plotlyDictClass,'__getattr__'):
+            plotlyDictClass.__saved_getattr__ = plotlyDictClass.__getattr__
+            del plotlyDictClass.__getattr__
+        if hasattr(plotlyDictClass,'__setattr__'):
+            plotlyDictClass.__saved_setattr__ = plotlyDictClass.__setattr__
+            del plotlyDictClass.__setattr__
+        plotlyDictClass.__setitem__ = setitem
     
-    plotlyDictClass = plotly.graph_objs.Figure.__bases__[0]
-    if hasattr(plotlyDictClass,'__setitem__'):
-        plotlyDictClass.__saved_setitem__ = plotlyDictClass.__setitem__
-    if hasattr(plotlyDictClass,'__getattr__'):
-        plotlyDictClass.__saved_getattr__ = plotlyDictClass.__getattr__
-        del plotlyDictClass.__getattr__
-    if hasattr(plotlyDictClass,'__setattr__'):
-        plotlyDictClass.__saved_setattr__ = plotlyDictClass.__setattr__
-        del plotlyDictClass.__setattr__
-    plotlyDictClass.__setitem__ = setitem
-
-    #Extra Python2 code b/c of Python2.7 pickling issues
-    def getstate(self):
-        to_pkl = self.__dict__.copy(); del to_pkl['_parent']
-        return to_pkl
-
-    def doreduce(self):
-        return (plotly.graph_objs.graph_objs.Figure,
-                (), self.__dict__)
-
-    if _sys.version_info < (3, 0):
-        plotly.graph_objs.graph_objs.Figure.__reduce__ = doreduce
-        plotlyDictClass.__getstate__ = getstate
+        #Extra Python2 code b/c of Python2.7 pickling issues
+        def getstate(self):
+            to_pkl = self.__dict__.copy(); del to_pkl['_parent']
+            return to_pkl
+    
+        def doreduce(self):
+            return (plotly.graph_objs.graph_objs.Figure,
+                    (), self.__dict__)
+    
+        if _sys.version_info < (3, 0):
+            plotly.graph_objs.graph_objs.Figure.__reduce__ = doreduce
+            plotlyDictClass.__getstate__ = getstate
     
 def disable_plotly_pickling():
     """ Reverses the effect of :func:`enable_plotly_pickling` """
     import plotly
-    plotlyDictClass = plotly.graph_objs.Figure.__bases__[0]
-    if hasattr(plotlyDictClass, '__saved_setitem__'):
-        plotlyDictClass.__setitem__ = plotlyDictClass.__saved_setitem__
-        del plotlyDictClass.__saved_setitem__
-    if hasattr(plotlyDictClass, '__saved_getattr__'):
-        plotlyDictClass.__getattr__ = plotlyDictClass.__saved_getattr__
-        del plotlyDictClass.__saved_getattr__
-    if hasattr(plotlyDictClass, '__saved_setattr__'):
-        plotlyDictClass.__setattr__ = plotlyDictClass.__saved_setattr__
-        del plotlyDictClass.__saved_setattr__
+
+    if int(plotly.__version__.split(".")[0]) >= 3: # plotly version 3 or higher    
+        BLT = plotly.basedatatypes.BaseLayoutType
+        if hasattr(BLT, '__saved_getattr__'):
+            BLT.__getattr__ = BLT.__saved_getattr__
+            del BLT.__saved_getattr__
+
+    else:
+        plotlyDictClass = plotly.graph_objs.Figure.__bases__[0]
+        if hasattr(plotlyDictClass, '__saved_setitem__'):
+            plotlyDictClass.__setitem__ = plotlyDictClass.__saved_setitem__
+            del plotlyDictClass.__saved_setitem__
+        if hasattr(plotlyDictClass, '__saved_getattr__'):
+            plotlyDictClass.__getattr__ = plotlyDictClass.__saved_getattr__
+            del plotlyDictClass.__saved_getattr__
+        if hasattr(plotlyDictClass, '__saved_setattr__'):
+            plotlyDictClass.__setattr__ = plotlyDictClass.__saved_setattr__
+            del plotlyDictClass.__saved_setattr__
 
 def ws_custom_digest(md5, v):
     """ A "digest" function for hashing several special types"""
@@ -256,7 +277,7 @@ class Workspace(object):
 
         self.Switchboard = makefactory(Switchboard)
         self.NotApplicable = makefactory(NotApplicable)
-
+        
         #Tables
           # Gate sequences
         self.GatestringTable = makefactory(_wt.GatestringTable)
@@ -715,10 +736,10 @@ class Switchboard(_collections.OrderedDict):
                           for i in range(len(switches))]
         self.positionLabels = positions
         if initial_pos is None:
-            self.initialPositions = _np.array([0]*len(switches),'i')
+            self.initialPositions = _np.array([0]*len(switches),_np.int64)
         else:
             assert(len(initial_pos) == len(switches))
-            self.initialPositions = _np.array(initial_pos,'i')
+            self.initialPositions = _np.array(initial_pos,_np.int64)
 
         self.descriptions = descriptions
         

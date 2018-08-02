@@ -11,6 +11,7 @@ import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 import warnings as _warnings
+import collections as _collections
 
 from . import jamiolkowski as _jam
 from . import matrixtools as _mt
@@ -19,6 +20,9 @@ from . import compattools as _compat
 from . import basistools as _bt
 from ..baseobjs import Basis as _Basis
 from ..baseobjs.basis import basis_matrices as _basis_matrices
+
+    
+IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
 def _mut(i,j,N):
     mx = _np.zeros( (N,N), 'd'); mx[i,j] = 1.0
@@ -42,7 +46,7 @@ def fidelity(A, B):
 
     To compute process fidelity, pass this function the
     Choi matrices of the two processes, or just call
-    the process_fidelity function with the gate matrices.
+    :function:`entanglement_fidelity` with the gate matrices.
 
     Parameters
     ----------
@@ -207,7 +211,17 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
     mxBasis = _bt.build_basis_for_matrix(A, mxBasis)
 
     #currently cvxpy is only needed for this function, so don't import until here
-    import cvxpy as _cvxpy
+
+
+    import sys as _sys
+    if _sys.version_info < (3, 0):
+        #Attempt "safe" import of cvxpy so that pickle isn't messed up...
+        import pickle as _pickle
+        p = _pickle.Pickler.dispatch.copy()
+        import cvxpy as _cvxpy
+        _pickle.Pickler.dispatch = p
+    else: # no need to do this in python3
+        import cvxpy as _cvxpy
 
     # This SDP implementation is a modified version of Kevin's code
 
@@ -346,10 +360,10 @@ def jtracedist(A, B, mxBasis=None): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
     return tracedist(JA,JB)
 
 
-def process_fidelity(A, B, mxBasis=None):
+def entanglement_fidelity(A, B, mxBasis=None):
     """
-    Returns the process fidelity between gate
-      matrices A and B given by :
+    Returns the "entanglement" process fidelity between gate
+    matrices A and B given by :
 
       F = Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
 
@@ -362,9 +376,9 @@ def process_fidelity(A, B, mxBasis=None):
         The matrices to compute the fidelity between.
 
     mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-        The source and destination basis, respectively.  Allowed
-        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-        and Qutrit (qt) (or a custom basis object).
+        The basis of the matrices.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
     """
     d2 = A.shape[0]
     def isTP(x): return _np.isclose(x[0,0],1.0) and all(
@@ -382,6 +396,141 @@ def process_fidelity(A, B, mxBasis=None):
     JB = _jam.jamiolkowski_iso(B, mxBasis)
     return fidelity(JA,JB)
 
+def average_gate_fidelity(A ,B, mxBasis=None):
+    """
+    Computes the average gate fidelity (AGF) between two gates. 
+    Average gate fidelity (F_g) is related to entanglement fidelity 
+    (F_p), via:
+    
+      F_g = (d * F_p + 1)/(1 + d), 
+    
+    where d is the Hilbert space dimension. This formula, and the
+    definition of AGF, can be found in Phys. Lett. A 303 249-252 (2002).
+
+    Parameters
+    ----------
+    A : array or gate
+        The gate to compute the AGI to B of. E.g., an imperfect
+        implementation of B.
+        
+    B : array or gate
+        The gate to compute the AGI to A of. E.g., the target gate
+        corresponding to A.
+
+    mxBasis : {"std","gm","pp"} or Basis object, optional
+        The basis of the matrices.
+
+    Returns
+    -------
+    AGI : float
+        The AGI of A to B.
+    """
+    d = int(round(_np.sqrt(A.shape[0])))
+    PF = entanglement_fidelity(A,B,mxBasis=mxBasis)
+    AGF = (d*PF + 1)/(1+d)
+    return float(AGF)
+
+def average_gate_infidelity(A ,B, mxBasis="gm"):
+    """
+    Computes the average gate infidelity (AGI) between two gates. 
+    Average gate infidelity is related to entanglement infidelity 
+    (EI) via: 
+    
+      AGI = (d * (1-EI) + 1)/(1 + d), 
+    
+    where d is the Hilbert space dimension. This formula, and the
+    definition of AGI, can be found in Phys. Lett. A 303 249-252 (2002).
+
+    Parameters
+    ----------
+    A : array or gate
+        The gate to compute the AGI to B of. E.g., an imperfect
+        implementation of B.
+        
+    B : array or gate
+        The gate to compute the AGI to A of. E.g., the target gate
+        corresponding to A.
+
+    mxBasis : {"std","gm","pp"} or Basis object, optional
+        The basis of the matrices.
+
+    Returns
+    ----------
+    AGI : float
+        The AGI of A to B.
+    """
+    return 1 - average_gate_fidelity(A ,B, mxBasis)
+
+def entanglement_infidelity(A, B, mxBasis=None):
+    """
+    Returns the entanglement infidelity (EI) between gate
+    matrices A and B given by :
+
+      EI = 1 - Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
+
+    where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
+    to it's corresponding Choi Matrix.
+
+    Parameters
+    ----------
+    A, B : numpy array
+        The matrices to compute the fidelity between.
+
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis of the matrices.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
+
+    Returns
+    -------
+    EI : float
+        The EI of A to B.
+    """
+    return 1 - float(entanglement_fidelity(A, B, mxBasis))
+
+
+def unitarity(A, mxBasis="gm"):
+    """
+    Returns the "unitarity" of a channel, as defined in Wallman et al, 
+    ``Estimating the Coherence of noise'' NJP 17 113020 (2015). The 
+    unitarity is given by (Prop 1 in Wallman et al):
+    
+    u(A) = Tr( A_u^{\dagger} A_u ) / (d^2  - 1), 
+    
+    where A_u is the unital submatrix of A, and d is the dimension of
+    the Hilbert space. When A is written in any basis for which the 
+    first element is the  normalized identity (e.g., the pp or gm 
+    bases), The unital submatrix of A is the matrix obtained when the 
+    top row and left hand column is removed from A. 
+    
+    Parameters
+    ----------
+    A : array or gate
+        The gate for which the unitarity is to be computed. 
+                    
+    mxBasis : {"std","gm","pp"} or a Basis object, optional
+        The basis of the matrix.
+        
+    d : int, optional
+        The dimension of the Hilbert space.
+
+    Returns
+    ----------
+    u : float
+        The unitarity of the gate A.
+        
+    """
+    d = int(round(_np.sqrt(A.shape[0])))
+    basisMxs = _basis_matrices(mxBasis, d)
+
+    if _np.allclose( basisMxs[0], _np.identity(d,'d') ):
+        B = A
+    else:
+        B = _bt.change_basis(A, mxBasis, "gm") #everything should be able to be put in the "gm" basis
+    
+    unital = B[1:d**2,1:d**2]
+    u = _np.trace(_np.dot(_np.conj(_np.transpose(unital)),unital)) / (d**2-1)
+    return u
 
 def fidelity_upper_bound(gateMx):
     """
@@ -502,7 +651,7 @@ def povm_fidelity(gateset, targetGateset, povmlbl):
     """
     povm_mx = get_povm_map(gateset, povmlbl)
     target_povm_mx = get_povm_map(targetGateset, povmlbl)
-    return process_fidelity(povm_mx, target_povm_mx, targetGateset.basis)
+    return entanglement_fidelity(povm_mx, target_povm_mx, targetGateset.basis)
 
 
 def povm_jtracedist(gateset, targetGateset, povmlbl):
@@ -721,7 +870,64 @@ def decompose_gate_matrix(gateMx):
                  'isUnitary': False,
                  'msg': "Unsupported number of qubits: %d" % nQubits }
 
+    
+def state_to_dmvec(psi):
+    """
+    Compute the vectorized density matrix which acts as the state `psi`.
 
+    This is just the outer product map |psi> => |psi><psi| with the 
+    output flattened, i.e. `dot(psi, conjugate(psi).T)`.
+
+    Parameters
+    ----------
+    psi : numpy array
+        The state vector.
+
+    Returns
+    -------
+    numpy array
+       The vectorized density matrix.
+    """
+    psi = psi.reshape((psi.size,1)) # convert to (N,1) shape if necessary
+    dm = _np.dot(psi, _np.conjugate(psi.T))
+    return dm.flatten()
+
+
+def dmvec_to_state(dmvec, tol=1e-6):
+    """
+    Compute the pure state describing the action of density matrix vector `dmvec`.
+
+    If `dmvec` represents a mixed state, ValueError is raised.
+
+    Parameters
+    ----------
+    dmvec : numpy array
+        The vectorized density matrix, assumed to be in the standard (matrix
+        unit) basis.
+
+    tol : float, optional
+        tolerance for determining whether an eigenvalue is zero.
+
+    Returns
+    -------
+    numpy array
+       The pure state, as a column vector of shape = (N,1)
+    """
+    d2 = dmvec.size; d = int(round(_np.sqrt(d2)))
+    dm = dmvec.reshape((d,d))
+    evals,evecs = _np.linalg.eig(dm)
+
+    k = None
+    for i,ev in enumerate(evals):
+        if abs(ev) > tol:
+            if k is None: k = i
+            else: raise ValueError("Cannot convert mixed dmvec to pure state!")
+    if k is None: raise ValueError("Cannot convert zero dmvec to puse state!")
+    psi = evecs[:,k] * _np.sqrt(evals[k])
+    psi.shape = (d,1)
+    return psi
+
+    
 def unitary_to_process_mx(U):
     """
     Compute the super-operator which acts on (row)-vectorized
@@ -792,6 +998,58 @@ def process_mx_to_unitary(superop):
         U[:,i] = Ui
         
     return U
+
+def spam_error_generator(spamvec, target_spamvec, mxBasis, typ="logGTi"):
+    """
+    Construct an error generator from a SPAM vector and it's target.
+
+    Computes the value of the error generator given by
+    `errgen = log( diag(spamvec / target_spamvec) )`, where division is
+    element-wise.  This results in a (non-unique) error generator matrix
+    `E` such that `spamvec = exp(E) * target_spamvec`.
+
+    Note: This is currently of very limited use, as the above algorithm fails
+    whenever `target_spamvec` has zero elements where `spamvec` doesn't.
+
+    Parameters
+    ----------
+    spamvec : ndarray
+      The SPAM vector.
+
+    target_spamvec : ndarray
+      The target SPAM vector.
+
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
+    typ : {"logGTi"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logGTi" : errgen = log( diag(spamvec / target_spamvec) )
+
+    Returns
+    -------
+    errgen : ndarray
+      The error generator.
+    """
+    # Compute error generator for rho:   rho = exp(E)rho0 => rho = A*rho0 => A = diag(rho/rho0)
+    assert(typ == "logGTi"), "Only logGTi type is supported so far"
+    
+    d2 = len(spamvec)
+    errgen = _np.zeros((d2,d2),'d') # type assumes this is density-mx evolution
+    diags = []
+    for a,b in zip(spamvec,target_spamvec):
+        if _np.isclose(b,0.0):
+            if _np.isclose(a,b): d = 1
+            else: raise ValueError("Cannot take spam_error_generator")
+        else:
+            d = a/b
+        diags.append(d)
+    errgen[_np.diag_indices(d2)] = diags
+    return _spl.logm(errgen)
+
 
 
 def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
@@ -1344,12 +1602,12 @@ def lindblad_errgen_projections(errgen, ham_basis,
       The error generator matrix to project.
 
     ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-        The basis is used to construct the Stochastic-type lindblad error
+        The basis used to construct the Hamiltonian-type lindblad error
         Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
     other_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-        The basis is used to construct the Stochastic-type lindblad error
+        The basis used to construct the Stochastic-type lindblad error
         Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt), list of numpy arrays, or a custom basis object.
       
@@ -1538,6 +1796,377 @@ def lindblad_errgen_projections(errgen, ham_basis,
         return hamProjs, otherProjs, hamGens, otherGens
     else:
         return hamProjs, otherProjs
+
+def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
+                                  other_diagonal_only=False):
+    """
+    Converts the projections of an error generator onto basis elements into
+    the Lindblad-term and basis dictionaries used to individually specify 
+    Lindblad terms.
+
+    Parameters
+    ----------
+    hamProjs : numpy.ndarray
+        An array of length d-1, where d is the dimension of the projected error
+        generator, giving the projections onto the Hamiltonian-type Lindblad
+        terms.
+
+    otherProjs : numpy.ndarray
+        An array of shape (d-1,d-1), where d is the dimension of the projected
+        error generator, giving the projections onto the Stochastic-type (or,
+        more accurately, the non-Hamiltonian-type) Lindblad terms.
+
+    ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis used to construct `hamProjs`.  Allowed values are Matrix-unit
+        (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt), list of
+        numpy arrays, or a custom basis object.
+
+    other_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis used to construct `otherProjs`.  Allowed values are
+        Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt),
+        list of numpy arrays, or a custom basis object.
+
+    other_diagonal_only : bool, optional
+        Whether `otherProjs` includes all or only the diagonal elements of a
+        full Lindblad expansion.
+
+    Returns
+    -------
+    Ltermdict : dict
+        Keys are `(termType, basisLabel1, <basisLabel2>)`
+        tuples, where `termType` is `"H"` (Hamiltonian) or `"S"`
+        (Stochastic).  Hamiltonian terms always have a single basis label 
+        (so key is a 2-tuple) whereas Stochastic tuples have 1 basis label
+        to indicate a *diagonal* term and otherwise have 2 basis labels to
+        specify off-diagonal non-Hamiltonian Lindblad terms.  Basis labels
+        are integers starting at 0.  Values are complex coefficients (the 
+        projections).
+
+    basisdict : dict
+        A dictionary mapping the integer basis labels used in the
+        keys of `Ltermdict` to basis matrices (elements of `ham_basis` and
+        `other_basis`).
+    """
+
+    # Make None => length-0 arrays so iteration code works below (when basis is None)
+    if hamProjs is None: hamProjs = _np.empty(0,'d') 
+    if otherProjs is None:
+        otherProjs = _np.empty(0,'d') if other_diagonal_only \
+                     else _np.empty((0,0),'d')
+
+
+    # Construct a pair of dictionaries describing all of the
+    # Lindblad-terms:
+    #   Ltermdict keys= ('H',basisLbl), ('S',basisLbl), or ('S',bLbl1,bLbl2)
+    #             vals= coefficients of these terms (projections from errgen)
+    #   basisdict keys= basis labels (just has to match Ltermdict keys)
+    #             vals= basis matrices - can be either sparse or dense
+    Ltermdict = _collections.OrderedDict()
+    basisdict = _collections.OrderedDict()
+    nextLbl = 0
+    def get_basislbl(bmx, nxt_blbl):
+        """ Retrieves or creates a basis-element "label" (just an integer) from `basisdict` """
+        for l,b in basisdict.items():
+            if _mt.safenorm(b-bmx) < 1e-8: return l,nxt_blbl
+        basisdict[nxt_blbl] = bmx
+        nxt_blbl += 1
+        return nxt_blbl-1, nxt_blbl # <assigned basis lbl>, <new next-basis-label>
+
+    #Add Hamiltonian error elements
+    ham_mxs = ham_basis.get_composite_matrices() #can be sparse
+    assert(len(ham_mxs[1:]) == len(hamProjs))
+    for coeff, bmx in zip(hamProjs,ham_mxs[1:]): # skip identity
+        Ltermdict[('H',nextLbl)] = coeff
+        basisdict[nextLbl] = bmx # no need to call get_basislbl yet
+        nextLbl += 1
+
+    #Add "other" error elements
+    other_mxs = other_basis.get_composite_matrices() #can be sparse
+    if other_diagonal_only:
+        assert(len(other_mxs[1:]) == len(otherProjs))
+        for coeff, bmx in zip(otherProjs,other_mxs[1:]): # skip identity
+            blbl,nextLbl = get_basislbl(bmx,nextLbl)
+            Ltermdict[('S',blbl)] = coeff
+    else:
+        assert((len(other_mxs[1:]),len(other_mxs[1:])) == otherProjs.shape)
+        for i, bmx1 in enumerate(other_mxs[1:]): # skip identity
+            blbl1,nextLbl = get_basislbl(bmx1,nextLbl)
+            for j, bmx2 in enumerate(other_mxs[1:]): # skip identity
+                blbl2,nextLbl = get_basislbl(bmx2,nextLbl)
+                Ltermdict[('S',blbl1,blbl2)] = otherProjs[i,j]
+
+    #DEBUG: print("DB: Ltermdict = ",Ltermdict)
+    #DEBUG: print("DB: basisdict = ")
+    #DEBUG: for k,v in basisdict.items():
+    #DEBUG:     print(k,":")
+    #DEBUG:     print(v)
+    return Ltermdict, basisdict
+
+
+def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal_only=False):
+    """
+    Convert a set of Lindblad terms into a dense matrix/grid of projections.
+
+    Essentially the inverse of :function:`projections_to_lindblad_terms`.
+
+    Parameters
+    ----------
+    Ltermdict : dict
+        A dictionary specifying which Linblad terms are present in the gate
+        parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
+        tuples, where `termType` can be `"H"` (Hamiltonian) or `"S"`
+        (Stochastic).  Hamiltonian terms always have a single basis label 
+        (so key is a 2-tuple) whereas Stochastic tuples with 1 basis label
+        indicate a *diagonal* term, and are the only types of terms allowed
+        when `other_diagonal_only=True`.  Otherwise, Stochastic term tuples
+        can include 2 basis labels to specify "off-diagonal" non-Hamiltonian
+        Lindblad terms.  Basis labels can be strings or integers.  Values
+        are floating point coefficients (error rates).
+
+    basisdict : dict
+        A dictionary mapping the basis labels (strings or ints) used in the
+        keys of `Ltermdict` to basis matrices (numpy arrays or Scipy sparse
+        matrices).
+
+    basisdim : int
+        The dimension of the basis elements (2 for single-qubit).  Required
+        for the case when `basisdict` is empty.
+
+    other_diagonal_only : boolean, optional
+        If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
+        allowed in `Ltermdict`.
+
+    Returns
+    -------
+    hamProjs : numpy.ndarray
+        An array of length `basisdim^2-1`, giving the projections onto a 
+        full set of the Hamiltonian-type Lindblad terms (onto each element of
+        `ham_basis`).
+
+    otherProjs : numpy.ndarray
+        An array of shape (d-1,d-1), where d=`basisdim^2`, giving the
+        projections onto a full set of Stochastic-type (or more accurately,
+        non-Hamiltonian-type) Lindblad terms.
+
+    ham_basis: Basis
+        The basis used to construct `hamProjs`.
+
+    other_basis : Basis
+        The basis used to construct `otherProjs`.
+
+    hamBasisIndices : OrderedDict
+        A dictionary mapping the some or all of the basis labels of `basisdict`
+        to the integers 0 to `len(ham_basis)`.  These are indices into
+        `hamProjs`, giving the projection associated with each Hamiltonian 
+        basis element.
+
+    otherBasisIndices : OrderedDict
+        A dictionary mapping the some or all of the basis labels of `basisdict`
+        to the integers 0 to `len(other_basis)`.  These are row and column
+        indices into `otherProjs`, giving the projection associated with each
+        pair of "other" basis elements (or single basis element if
+        `other_diagonal_only=True`).
+    """
+
+    d = basisdim
+
+    #Separately enumerate the (distinct) basis elements used for Hamiltonian
+    # and Stochasitic error terms
+    hamBasisIndices = _collections.OrderedDict()  # holds index of each basis element
+    otherBasisIndices = _collections.OrderedDict() # in coefficient/projection arrays
+    for termLbl,coeff in Ltermdict.items():
+        termType = termLbl[0]
+        if termType == "H": # Hamiltonian
+            assert(len(termLbl) == 2),"Hamiltonian term labels should have form ('H',<basis element label>)"
+            if termLbl[1] not in hamBasisIndices:
+                hamBasisIndices[ termLbl[1] ] = len(hamBasisIndices)
+                
+        elif termType == "S": # Stochastic                
+            if other_diagonal_only:
+                assert(len(termLbl) == 2),"Stochastic term labels should have form ('S',<basis element label>)"
+                if termLbl[1] not in otherBasisIndices:
+                    otherBasisIndices[ termLbl[1] ] = len(otherBasisIndices)
+            else:
+                assert(len(termLbl) == 3),"Stochastic term labels should have form ('S',<bel1>, <bel2>)"
+                if termLbl[1] not in otherBasisIndices:
+                    otherBasisIndices[ termLbl[1] ] = len(otherBasisIndices)
+                if termLbl[2] not in otherBasisIndices:
+                    otherBasisIndices[ termLbl[2] ] = len(otherBasisIndices)
+
+    #Construct bases
+    ham_basis_mxs = [ basisdict[bl] for bl in hamBasisIndices ] # requires OrderedDict
+    other_basis_mxs = [ basisdict[bl] for bl in otherBasisIndices ] # requires OrderedDict
+
+    if len(ham_basis_mxs) > 0: sparse = _sps.issparse(ham_basis_mxs[0])
+    elif len(other_basis_mxs) > 0: sparse = _sps.issparse(other_basis_mxs[0])
+    else: sparse = False
+
+    # Note: these lists of basis matrices shouldn't contain the identity, since
+    # the terms above shouldn't contain identity terms - so add identity els
+    # to non-empty bases (empty bases stay empty!) to be consistent with the
+    # rest of the framework (bases *have* Ids)
+    # TODO: could assert this?
+    Id = _sps.identity(d,'complex','csr')/_np.sqrt(d) if sparse \
+         else _np.identity(d,'complex')/_np.sqrt(d)
+    if len(ham_basis_mxs) > 0: ham_basis_mxs = [Id] + ham_basis_mxs
+    if len(other_basis_mxs) > 0: other_basis_mxs = [Id] + other_basis_mxs
+
+    #Special check: update basis name to "pp" if we have a Pauli Basis 
+    # (for small d when this isn't too expensive)
+    if d <= 16 and all([_mt.safenorm(b0-b1) < 1e-8 for b0,b1 in
+                        zip(_basis_matrices("pp",d,sparse),ham_basis_mxs)]):
+        ham_name = "pp"
+    else: ham_name = None
+    if d <= 16 and all([_mt.safenorm(b0-b1) < 1e-8 for b0,b1 in
+                        zip(_basis_matrices("pp",d,sparse),other_basis_mxs)]):
+        other_name = "pp"
+    else: other_name = None
+    
+    ham_basis = _Basis(ham_name,matrices=ham_basis_mxs,dim=d,sparse=sparse)
+    other_basis = _Basis(other_name,matrices=other_basis_mxs,dim=d,sparse=sparse)
+    bsH, bsO = len(ham_basis), len(other_basis)
+
+    #Create projection (term coefficient) arrays - or return None if
+    # the corresponding basis is empty (as per our convention)
+    hamProjs = _np.zeros(bsH-1, 'complex') if bsH > 0 else None
+    if bsO > 0:
+        if other_diagonal_only:  # OK if this runs for 'auto' too since then len(otherBasisIndices) == 0
+            otherProjs = _np.zeros(bsO-1,'complex')
+        else:
+            otherProjs = _np.zeros((bsO-1,bsO-1),'complex')
+    else: otherProjs = None
+
+    #Fill arrays
+    for termLbl,coeff in Ltermdict.items():
+        termType = termLbl[0]
+        if termType == "H": # Hamiltonian
+            k = hamBasisIndices[termLbl[1]] #index of coefficient in array
+            hamProjs[k] = coeff
+        elif termType == "S": # Stochastic
+            if other_diagonal_only:
+                k = otherBasisIndices[termLbl[1]] #index of coefficient in array
+                otherProjs[k] = coeff
+            else:
+                k = otherBasisIndices[termLbl[1]] #index of row in "other" coefficient matrix
+                j = otherBasisIndices[termLbl[2]] #index of col in "other" coefficient matrix
+                otherProjs[k,j] = coeff
+                
+    return hamProjs, otherProjs, ham_basis, other_basis, hamBasisIndices, otherBasisIndices
+
+
+def lindblad_projections_to_paramvals(hamProjs, otherProjs, cptp=True,
+                                      other_diagonal_only=False, truncate=True):
+    """
+    Construct the array of Lindblad-gate parameter values from the separate 
+    arrays of Hamiltonian and non-Hamiltonian Lindblad-term projections.
+
+    When `cptp=True`, this function handles parameterizing the projections 
+    to that for (real) parameter values correspond to projections for a valid
+    CPTP gate (e.g. by parameterizing the Cholesky decomposition of `otherProjs`
+    instead of otherProjs itself).  This function is closely related to
+    implementation details of the LindbladParameterizedGateMap class.
+
+    Parameters
+    ----------
+    hamProjs : numpy.ndarray
+        An array of length d-1, where d is the gate dimension, giving the
+        projections onto a full set of the Hamiltonian-type Lindblad terms.
+
+    otherProjs : numpy.ndarray
+        An array of shape (d-1,d-1) or (d-1,) where d is the gate dimension,
+        giving the projections onto a full set of non-Hamiltonian-type Lindblad
+        terms.  See `other_diagonal_only` below.
+
+    cptp : bool, optional
+        Whether or not the parameterization should be setup with a CPTP
+        constraint (see above). If True, see behavior or `truncate`.
+
+    other_diagonal_only : boolean, optional
+        If True, only *diagonal* non-Hamiltonain terms are given by 
+        `otherProjs`, which is then expected bo be a 1D array of length
+        d-1.
+
+    truncate : bool, optional
+        Whether to truncate the projections onto the Lindblad terms in
+        order to preserve CPTP (when necessary).  If False, then an 
+        error is thrown when `cptp == True` and when the given `otherProjs`
+        result in a non-positive-definite matrix of non-Hamiltonian term
+        coefficients.
+
+    Returns
+    -------
+    numpy.ndarray
+        A 1D array of real parameter values consisting of d-1 Hamiltonian 
+        values followed by either (d-1)^2 or just d-1 non-Hamiltonian
+        values (the latter when `other_diagonal_only=True`).
+    """
+    if hamProjs is not None:
+        assert(_np.isclose(_np.linalg.norm(hamProjs.imag),0)), \
+            "Hamiltoian projections (coefficients) are not all real!"
+        hamParams = hamProjs.real
+    else:
+        hamParams = _np.empty(0,'d')
+        
+    if otherProjs is not None:
+        if other_diagonal_only:
+            assert(_np.isclose(_np.linalg.norm(_np.imag(otherProjs)),0)), \
+                "Diagonal stochastic projections (coefficients) are not all real!"
+
+            if cptp: #otherParams is a 1D vector of the sqrts of diagonal els
+                assert(truncate or all([v >= -1e-12 for v in otherProjs])), \
+                    "Lindblad coefficients are not CPTP (truncate == False)!"
+                otherProjs = otherProjs.clip(1e-16,1e100)
+                otherParams = _np.sqrt(otherProjs.real) # shape (bsO-1,)
+            else: #otherParams is a 1D vector of the real diagonal els of otherProjs
+                otherParams = otherProjs.real # shape (bsO-1,)
+        else:
+            assert(_np.isclose(_np.linalg.norm(otherProjs-otherProjs.T.conjugate())
+                               ,0)), "Other projection/coefficient mx is not Hermitian!"
+
+            bsO = otherProjs.shape[0]+1 # +1 to keep convention that this is the basis (w/Identity) size
+            otherParams = _np.empty((bsO-1,bsO-1),'d')
+
+            if cptp: #otherParams mx stores Cholesky decomp
+
+                #push any slightly negative evals of otherProjs positive so that
+                # the Cholesky decomp will work.
+                evals,U = _np.linalg.eig(otherProjs)
+                Ui = _np.linalg.inv(U)
+
+                assert(truncate or all([ev >= -1e-12 for ev in evals])), \
+                    "Lindblad coefficients are not CPTP (truncate == False)!"
+
+                pos_evals = evals.clip(1e-16,1e100)
+                otherProjs = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
+                try:
+                    Lmx = _np.linalg.cholesky(otherProjs)
+
+                # if Lmx not postitive definite, try again with 1e-12 (same lines as above)
+                except _np.linalg.LinAlgError:                         # pragma: no cover
+                    pos_evals = evals.clip(1e-12,1e100)                # pragma: no cover
+                    otherProjs = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))# pragma: no cover
+                    Lmx = _np.linalg.cholesky(otherProjs)                  # pragma: no cover
+
+                for i in range(bsO-1):
+                    assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
+                    otherParams[i,i] = Lmx[i,i].real
+                    for j in range(i):
+                        otherParams[i,j] = Lmx[i,j].real
+                        otherParams[j,i] = Lmx[i,j].imag
+
+            else: #otherParams mx stores otherProjs (hermitian) directly
+                for i in range(bsO-1):
+                    assert(_np.linalg.norm(_np.imag(otherProjs[i,i])) < IMAG_TOL)
+                    otherParams[i,i] = otherProjs[i,i].real
+                    for j in range(i):
+                        otherParams[i,j] = otherProjs[i,j].real
+                        otherParams[j,i] = otherProjs[i,j].imag
+    else:
+        otherParams = _np.empty(0,'d')
+
+    return _np.concatenate( (hamParams, otherParams.flat) )
+
+
 
 #TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
 # calls to this one and unitary_to_processmx
@@ -1779,7 +2408,6 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
     
 
 
-#TODO: remove later? deprecate?
 def unitary_to_pauligate(U):
     """
     Get the linear operator on (vectorized) density
