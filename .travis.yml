@@ -42,10 +42,11 @@ script:
   - cd test
   # Output something every 10 minutes or Travis kills the job
   - while sleep 540; do echo "=====[ $SECONDS seconds still running ]====="; done &
-  - python travisTests.py # Tests may take some time!
-  # Killing background sleep loop
-  - kill %1
-  - cd ..
+  - python travisTests.py # produces test_packages/testCmd.sh
+  - cd test_packages
+  - bash testCmd.sh  
+  - kill %1 # Killing background sleep loop
+  - cd ../..
 
 jobs:
   include:

@@ -54,7 +54,7 @@ elif doMPI:
 
 print('Running travis tests with python%s.%s' % (sys.version_info[0], sys.version_info[1]))
 
-coverage = False # DEBUG
+coverage = False # b/c get_branchname gives names like "detachedfrom8fc7bed" now...
 
 branchname = get_branchname()
 print('Branchname is %s' % branchname)
@@ -64,6 +64,7 @@ threshold = 0 # Isn't representative of full coverage anyways
 if branchname == 'develop':
     coverage  = False
 
-run_tests(tests, parallel=parallel, coverage=coverage, threshold=threshold, outputfile=None, package=package)
+run_tests(tests, parallel=parallel, coverage=coverage, threshold=threshold, outputfile=None,
+          package=package, scriptfile="testCmd.sh")
  # Note: outputfile was '../output/test.out', but we don't need it to be saved and it's useful
  #       to have it print out as tests run for debugging purposes and so TravisCI doesn't terminate the job.

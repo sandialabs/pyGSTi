@@ -9,11 +9,11 @@ import pygsti
 
 from pygsti.extras import drift
 from pygsti.construction import std1Q_XYI
-try:
-    import matplotlib
-    bMPL = True
-except ImportError:
-    bMPL = False
+#try:
+#    import matplotlib
+#    bMPL = True
+#except ImportError:
+bMPL = False
 
 class DriftTestCase(BaseTestCase):
 
