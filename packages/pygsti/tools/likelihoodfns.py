@@ -100,13 +100,13 @@ TOL = 1e-20
 
 
 
-@smart_cached
+#@smart_cached
 def logl_terms(gateset, dataset, gatestring_list=None,
                minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
                poissonPicture=True, check=False, gateLabelAliases=None,
                evaltree_cache=None, comm=None):
     """
-    The vector of log-likelihood contributions for each gate string, 
+    The vector of log-likelihood contributions for each gate string,
     aggregated over outcomes.
 
     Parameters
@@ -139,8 +139,8 @@ def logl_terms(gateset, dataset, gatestring_list=None,
             evaltree_cache['evTree'] = evalTree
             evaltree_cache['lookup'] = lookup
             evaltree_cache['outcomes_lookup'] = outcomes_lookup
-        
-    nEls = evalTree.num_final_elements()    
+
+    nEls = evalTree.num_final_elements()
     probs = _np.empty( nEls, 'd' )
 
     ds_gatestring_list = _lt.find_replace_tuple_list(
@@ -187,7 +187,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     #Aggregate over outcomes:
     # v[iElement] contains all logl contributions - now aggregate over outcomes
     # terms[iGateString] wiil contain logl contributions for each original gate
-    # string (aggregated over outcomes)    
+    # string (aggregated over outcomes)
     nGateStrings = len(gatestring_list)
     terms = _np.empty(nGateStrings , 'd')
     for i in range(nGateStrings):
@@ -195,7 +195,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     return terms
 
 
-@smart_cached
+#@smart_cached
 def logl(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
          poissonPicture=True, check=False, gateLabelAliases=None,
@@ -471,7 +471,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
 
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
-    
+
     #  Estimate & check persistent memory (from allocs directly below)
     C = 1.0/1024.0**3; nP = gateset.num_params()
     persistentMem = 8*nP**2 # in bytes
@@ -491,7 +491,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
         gateset.bulk_evaltree_from_resources(
             gatestring_list, comm, mlim, "deriv", ['bulk_hprobs_by_block'],
             verbosity)
-    
+
     rowParts = int(round(nP / blkSize1)) if (blkSize1 is not None) else 1
     colParts = int(round(nP / blkSize2)) if (blkSize2 is not None) else 1
 
@@ -516,8 +516,8 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
             #                             - (totalCntVec[None,:] * ((-1.0/a**2)*probs**2 + 2*probs/a))[:,:,None,None] * hprobs )
             #hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
             #hessian = _np.where( (cntVecMx == 0)[:,:,None,None], hprobs_zerofreq, hessian) # (K,M,N,N')
-            
-            #Accomplish the same thing as the above commented-out lines, 
+
+            #Accomplish the same thing as the above commented-out lines,
             # but with more memory effiency:
             dprobs12_coeffs = \
                 _np.where(probs < min_p, 2*S2, -cntVecMx / pos_probs**2)
@@ -527,7 +527,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
             hprobs_coeffs = \
                 _np.where(probs < min_p, S + 2*S2*(probs - min_p),
                           cntVecMx / pos_probs - totCnts)
-            zfc = _np.where(probs >= a, -totCnts, 
+            zfc = _np.where(probs >= a, -totCnts,
                             -totCnts * ((-1.0/a**2)*probs**2 + 2*probs/a))
             hprobs_coeffs = _np.where(cntVecMx == 0, zfc, hprobs_coeffs)
 
@@ -559,7 +559,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
             #hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
             #hessian = _np.where( (cntVecMx == 0)[:,:,None,None], 0.0, hessian) # (K,M,N,N')
 
-            #Accomplish the same thing as the above commented-out lines, 
+            #Accomplish the same thing as the above commented-out lines,
             # but with more memory effiency:
             dprobs12_coeffs = \
                 _np.where(probs < min_p, 2*S2, -cntVecMx / pos_probs**2)
@@ -646,7 +646,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
         loc_iBlks, blkOwners, blkComm = \
             _mpit.distribute_indices(list(range(len(sliceTupList))), mySubComm)
         mySliceTupList = [ sliceTupList[i] for i in loc_iBlks ]
-       
+
         subtree_hessian = _np.zeros( (nP,nP), 'd')
 
         k,kmax = 0,len(mySliceTupList)
@@ -658,7 +658,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
                 iSub = mySubTreeIndices.index(iSubTree)
                 print("rank %d: %gs: block %d/%d, sub-tree %d/%d, sub-tree-len = %d"
                       % (rank,_time.time()-tStart,k,kmax,iSub,
-                         len(mySubTreeIndices), len(evalSubTree)))            
+                         len(mySubTreeIndices), len(evalSubTree)))
                 _sys.stdout.flush(); k += 1
 
             subtree_hessian[slice1,slice2] = \
@@ -673,11 +673,11 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
 
     #gather (add together) final_hessians from different processors
     if comm is not None and len(set(subTreeOwners.values())) > 1:
-        if comm.Get_rank() not in subTreeOwners.values(): 
+        if comm.Get_rank() not in subTreeOwners.values():
             # this proc is not the "owner" of its subtrees and should not send a contribution to the sum
             final_hessian[:,:] = 0.0 #zero out hessian so it won't contribute
         final_hessian = comm.allreduce(final_hessian)
-        
+
     #copy upper triangle to lower triangle (we only compute upper)
     for i in range(final_hessian.shape[0]):
         for j in range(i+1,final_hessian.shape[1]):
@@ -685,7 +685,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
 
     return final_hessian # (N,N)
 
-@smart_cached
+#@smart_cached
 def logl_max(gateset, dataset, gatestring_list=None, poissonPicture=True,
              check=False, gateLabelAliases=None):
     """
@@ -725,7 +725,7 @@ def logl_max(gateset, dataset, gatestring_list=None, poissonPicture=True,
     """
     maxLogLTerms = logl_max_terms(gateset, dataset, gatestring_list,
                                   poissonPicture, gateLabelAliases)
-    
+
     # maxLogLTerms[iSpamLabel,iGateString] contains all logl-upper-bound contributions
     maxLogL = _np.sum(maxLogLTerms) # sum over *all* dimensions
 
@@ -747,7 +747,7 @@ def logl_max(gateset, dataset, gatestring_list=None, poissonPicture=True,
 
     return maxLogL
 
-@smart_cached
+#@smart_cached
 def logl_max_terms(gateset, dataset, gatestring_list=None,
                    poissonPicture=True, gateLabelAliases=None):
     """
@@ -772,7 +772,7 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
 
     raw_dict, lookup, outcomes_lookup, nEls = \
         gateset.compile_gatestrings(gatestring_list)
-        
+
     gatestring_list = _lt.find_replace_tuple_list(
         gatestring_list, gateLabelAliases)
 
@@ -781,7 +781,7 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
     for (i,gateStr) in enumerate(gatestring_list):
         totalCntVec[ lookup[i] ] = dataset[gateStr].total
         countVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
-        
+
     freqs = countVecMx / totalCntVec
     freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
 
@@ -795,7 +795,7 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
     #Aggregate over outcomes:
     # maxLogLTerms[iElement] contains all logl-upper-bound contributions
     # terms[iGateString] wiil contain contributions for each original gate
-    # string (aggregated over outcomes)    
+    # string (aggregated over outcomes)
     nGateStrings = len(gatestring_list)
     terms = _np.empty(nGateStrings , 'd')
     for i in range(nGateStrings):
@@ -869,7 +869,7 @@ def prep_penalty(rhoVec, basis):
     tracePenalty = abs(rhoVec[0,0]-(1.0/_np.sqrt(rhoMx.shape[0])))
       # 0th el is coeff of I(dxd)/sqrt(d) which has trace sqrt(d)
     #print "Sum of neg = ",sumOfNeg  #DEBUG
-    #print "Trace Penalty = ",tracePenalty  #DEBUG    
+    #print "Trace Penalty = ",tracePenalty  #DEBUG
     return sumOfNeg +  tracePenalty
 
 def effect_penalty(EVec, basis):
@@ -933,7 +933,7 @@ def cptp_penalty(gateset, include_spam_penalty=True):
                      for e in povm.values() ])
     return ret
 
-@smart_cached
+#@smart_cached
 def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     """
     Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding
@@ -966,15 +966,15 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     # fiducial pair reduction may pass inputs with nan's legitimately and the desired
     # behavior is to just let the nan's pass through to nan's in the output.
     cp  = _np.clip(p,minProbClip,1e10) #effectively no upper bound
-    
+
     nan_indices = _np.isnan(f) # get indices of invalid entries
-    if not _np.isscalar(f): f[nan_indices] = 0.0 
+    if not _np.isscalar(f): f[nan_indices] = 0.0
       #set nan's to zero to avoid RuntimeWarnings (invalid value)
 
     zf  = _np.where(f < 1e-10, 0.0, f) #set zero-freqs to zero
     nzf = _np.where(f < 1e-10, 1.0, f) #set zero-freqs to one -- together
-                                       # w/above line makes 0 * log(0) == 0    
-    if not _np.isscalar(f): 
+                                       # w/above line makes 0 * log(0) == 0
+    if not _np.isscalar(f):
         zf[nan_indices] = _np.nan  #set nan indices back to nan
         nzf[nan_indices] = _np.nan #set nan indices back to nan
 
