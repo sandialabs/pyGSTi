@@ -65,6 +65,6 @@ if branchname == 'develop':
     coverage  = False
 
 run_tests(tests, parallel=parallel, coverage=coverage, threshold=threshold, outputfile=None,
-          package=package, scriptfile="runTravisTests.sh")
+          package=package, scriptfile="runTravisTests.sh", timer=True)
  # Note: outputfile was '../output/test.out', but we don't need it to be saved and it's useful
  #       to have it print out as tests run for debugging purposes and so TravisCI doesn't terminate the job.
