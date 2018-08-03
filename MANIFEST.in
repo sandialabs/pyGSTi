@@ -1,5 +1,7 @@
 include README COPYING license.txt
-include install_locally.py 
+include install_locally.py
+include requirements.txt
+include optional-requirements.txt
 include jupyter_notebooks/Tutorials/*.ipynb
 include jupyter_notebooks/Examples/*.ipynb
 include jupyter_notebooks/FAQ.ipynb

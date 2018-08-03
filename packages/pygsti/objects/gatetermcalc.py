@@ -44,12 +44,8 @@ try:
         else:
             return _np.real( _fastgatecalc.fast_bulk_eval_compact_polys(
                 vtape, ctape, paramvec, dest_shape) )
-    #from .fastgatecalc import fast_bulk_eval_compact_polys as _fastbulk_eval_compact_polys
 except ImportError:
     from .polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
-
-#from . import fastgatecalc as _fastgatecalc
-#_fastgatecalc.test_map("Hi")
 
 _dummy_profiler = _DummyProfiler()
 

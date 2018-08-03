@@ -11,6 +11,7 @@ from ...tools import symplectic as _symp
 from . import sample as _samp
 from . import results as _res
 
+# todo : update the docstring to explain reduced error models.
 def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, errormodel, counts, alloutcomes=False):
     """
     A Clifford circuit simulator for an error model whereby each gate in the circuit induces independent Pauli 
@@ -62,6 +63,25 @@ def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, erro
     n = circuit.number_of_lines()
     #if circuit.identity != idle_name:
     #    circuit.replace_gatename(circuit.identity,idle_name)
+
+    if set(circuit.line_labels) != set(pspec.qubit_labels):
+        assert(set(circuit.line_labels).issubset(set(pspec.qubit_labels)))
+        reduced_errormodel = errormodel.copy()
+        mask = _np.zeros(pspec.number_of_qubits,bool)
+        for i in range(pspec.number_of_qubits):
+            if pspec.qubit_labels[i] in circuit.line_labels:
+                mask[i] = True
+        for key in list(reduced_errormodel.keys()):
+            errormatrix = reduced_errormodel[key]
+            assert(_np.shape(errormatrix)[0] == pspec.number_of_qubits), "Format of `errormodel` incorrect!"
+            if len(_np.shape(errormatrix)) == 2:
+                reduced_errormodel[key] = errormatrix[mask,:]
+            elif len(_np.shape(errormatrix)) == 1:
+                reduced_errormodel[key] = errormatrix[mask]
+            else: raise ValueError("Format of `errormodel` incorrect!")
+    else:
+        reduced_errormodel = errormodel
+
     results = {}
     
     if alloutcomes:
@@ -70,7 +90,7 @@ def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, erro
             results[result] = 0
  
     for i in range(0,counts):
-        result = oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, errormodel)
+        result = oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, reduced_errormodel)
         try: results[result] += 1
         except: results[result] = 1
 
@@ -114,8 +134,8 @@ def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, psp
     
     for l in range(depth):
         
-        layer = circuit.get_layer(l)
-        s, p = _symp.symplectic_rep_of_clifford_layer(layer,n,srep_dict=srep)        
+        layer = circuit.get_layer_with_idles(l)
+        s, p = _symp.symplectic_rep_of_clifford_layer(layer,n,Qlabels=circuit.line_labels,srep_dict=srep)        
         # Apply the perfect layer to the current state.
         sout, pout = _symp.apply_clifford_to_stabilizer_state(s, p, sout, pout)
         
@@ -232,7 +252,8 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, f
             with open(filename,'w') as f:
                 f.write('# Results from a {} simulation\n'.format(rbtype))
                 f.write('# Number of qubits\n')
-                f.write(str(pspec.number_of_qubits))
+                if subsetQs is None: f.write(str(pspec.number_of_qubits))
+                else:  f.write(str(len(subsetQs)))
                 f.write('\n# RB length // Success counts // Total counts // Circuit depth // Circuit two-qubit gate count\n')
             
     n = pspec.number_of_qubits
@@ -285,9 +306,8 @@ def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, 
                                  measurement_errorrate=0., ptype='uniform'):
     """
     Returns a dictionary encoding a Pauli-stochastic error model whereby the errors are the same on all the
-    1-qubit gates, and the same on all 2-qubit gates.
-    `gate_errorrate_list`. The probability of the 3 different Pauli errors on each qubit is specified by 
-    `ptype` and can either be uniform, or always X, Y, or Z errors.
+    1-qubit gates, and the same on all 2-qubit gates. The probability of the 3 different Pauli errors on each 
+    qubit is specified by `ptype` and can either be uniform, or always X, Y, or Z errors.
 
     The dictionary returned is in the appropriate format for the `circuit_simulator_for_tensored_independent_pauli_errors()` 
     circuit simulator function.
@@ -357,26 +377,24 @@ def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, 
         elif gate.number_of_qubits == 1:
             q = gate.qubits[0]
             
-            if gate.name == pspec.identity:
-                er = idle_errorrate
-            else:
-                er = oneQgate_errorrate
+            if gate.name == pspec.identity: er = idle_errorrate
+            else: er = oneQgate_errorrate
             
             errormodel[gate][q,:] =  error_row(er)
 
         else:    
             raise ValueError("The ProcessorSpec must only contain 1- and 2- qubit gates!")
  
-    errormodel['measure'] = [ measurement_errorrate for q in range(n)]
+    errormodel['measure'] = _np.array([ measurement_errorrate for q in range(n)])
 
     return errormodel
 
-def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_list, measurement_errorrate_list=None, 
+def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict, measurement_errorrate_dict={}, 
                                                       ptype='uniform'):
     """
     Returns a dictionary encoding a Pauli-stochastic error model whereby the errors are independent of the gates,
-    with a qubit subject to an error after a circuit layer with the probabilities  specified by the list
-    `gate_errorrate_list`. The probability of the 3 different Pauli errors on each qubit is specified by 
+    with a qubit subject to an error after a circuit layer with the probabilities specified by the dict
+    `gate_errorrate_dict`. The probability of the 3 different Pauli errors on each qubit is specified by 
     `ptype` and can either be uniform, or always X, Y, or Z errors.
 
     The dictionary returned is in the appropriate format for the `circuit_simulator_for_tensored_independent_pauli_errors()` 
@@ -387,13 +405,14 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_list
     pspec : ProcessorSpec
         The ProcessorSpec that defines the device.
 
-    gate_errorrate_list : list 
-        A list of length pspec.number_of_qubits of floats in [0,1]. The qth element is the error probability
-        for the qth qubit.
+    gate_errorrate_dict : dict
+        A dict where the keys are elements of pspec.qubit_labels and the values are floats in [0,1]. 
+        The element for qubit with label `q` is the error probability for that qubit.
 
-    measurement_errorrate_list : list
-        A list of length pspec.number_of_qubits of floats in [0,1]. The qth element is the measurement bit-flip
-        error probability for the qth qubit.
+    measurement_errorrate_dict : dict
+        A dict where the keys are elements of pspec.qubit_labels and the values are floats in [0,1]. 
+        The element for qubit with label `q` is the measurement bit-flip error probability for that qubit.
+        All qubits that do not have a measurement error rate specified are assumed to have perfect measurements.
 
     ptype : str, optional
         Can be 'uniform', 'X', 'Y' or 'Z'. If 'uniform' then 3 Pauli errors are equally likely, if 'X', 'Y' or
@@ -421,8 +440,6 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_list
         raise ValueError("Error model type not understood! Set `ptype` to a valid option.")
 
     n = pspec.number_of_qubits
-    if measurement_errorrate_list is None:
-        measurement_errorrate_list = [0. for i in range(n)]
 
     errormodel = {}
     for gate in list(pspec.models['clifford'].gates.keys()):
@@ -430,10 +447,86 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_list
         errormodel[gate][:,0] = _np.ones(n,float)
     
         for q in gate.qubits:
-            er = gate_errorrate_list[q]
-            errormodel[gate][q] =  error_row(er)
-    if measurement_errorrate_list is not None:       
-        errormodel['measure'] = measurement_errorrate_list
+            er = gate_errorrate_dict[q]
+            errormodel[gate][pspec.qubit_labels.index(q)] =  error_row(er)     
+    
+    errormodel['measure'] = _np.array([measurement_errorrate_dict.get(q,0.) for q in pspec.qubit_labels])
+
+    return errormodel
+
+
+def create_local_pauli_error_model(pspec, oneQgate_errorrate_dict, twoQgate_errorrate_dict,
+                                  measurement_errorrate_dict={}, ptype='uniform'):
+    """
+    Returns a dictionary encoding a Pauli-stochastic error model whereby the errors caused by a gate act
+    only on the "target" qubits of the gate, all the 1-qubit gates on a qubit have the same error rate,
+    and all the 2-qubit gates on a qubit have the same error rate. The probability of the 3 different Pauli 
+    errors on each qubit is specified by `ptype` and can either be uniform, or always X, Y, or Z errors.
+
+    The dictionary returned is in the appropriate format for the `circuit_simulator_for_tensored_independent_pauli_errors()` 
+    circuit simulator function.
+
+    Parameters
+    ----------
+    pspec : ProcessorSpec
+        The ProcessorSpec that defines the device.
+
+    oneQgate_errorrate_dict : dict
+        A dict where the keys are elements of pspec.qubit_labels and the values are floats in [0,1]. 
+        The element for qubit with label `q` is the error probability for all 1-qubit gates on that qubit
+
+    twoQgate_errorrate_dict : dict
+        A dict where the keys are 2-qubit gates in pspec and the values are floats in [0,1]. This is the
+        error probability for the 2-qubit gate, split evenly into independent Pauli errors on each of the
+        qubits the gate is intended to act on.
+
+    measurement_errorrate_dict : dict
+        A dict where the keys are elements of pspec.qubit_labels and the values are floats in [0,1]. 
+        The element for qubit with label `q` is the measurement bit-flip error probability for that qubit.
+        All qubits that do not have a measurement error rate specified are assumed to have perfect measurements.
+
+
+    ptype : str, optional
+        Can be 'uniform', 'X', 'Y' or 'Z'. If 'uniform' then 3 Pauli errors are equally likely, if 'X', 'Y' or
+        'Z' then the errors are always Pauli X, Y or Z errors, respectively.
+    
+    Returns
+    -------
+    dict
+        An dict that encodes the error model described above in the format required for the simulator
+        `circuit_simulator_for_tensored_independent_pauli_errors()`.
+
+    """
+    if ptype == 'uniform':
+        def error_row(er): return _np.array([1-er,er/3,er/3,er/3])
+
+    elif ptype == 'X':
+        def error_row(er): return _np.array([1-er,er,0.,0.])
+
+    elif ptype == 'Y':
+        def error_row(er): return _np.array([1-er,0.,er,0.])
+
+    elif ptype == 'Z':
+        def error_row(er): return _np.array([1-er,0.,0.,er])
     else:
-        errormodel['measure'] = [0 for q in range(n)]
+        raise ValueError("Error model type not understood! Set `ptype` to a valid option.")
+
+    n = pspec.number_of_qubits
+
+    errormodel = {}
+    for gate in list(pspec.models['clifford'].gates.keys()):
+        errormodel[gate] = _np.zeros((n,4),float)
+        errormodel[gate][:,0] = _np.ones(n,float)
+    
+        if gate.number_of_qubits == 1: 
+            er = oneQgate_errorrate_dict[gate.qubits[0]]
+        elif gate.number_of_qubits == 2: 
+            er = 1-(1-twoQgate_errorrate_dict[gate])**(0.5)
+        else: raise ValueError("Only 1- and 2-qubit gates supported!")
+
+        for q in gate.qubits:
+            errormodel[gate][pspec.qubit_labels.index(q)] =  error_row(er)  
+
+    errormodel['measure'] = _np.array([measurement_errorrate_dict.get(q,0.) for q in pspec.qubit_labels])
+
     return errormodel

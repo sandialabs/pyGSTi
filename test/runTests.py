@@ -37,7 +37,7 @@ slowtests = ['report', 'drivers']
 
 def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
               parallel=False, failed=False, cores=None, coverdir='../output/coverage', html=False,
-              threshold=90, outputfile=None, package='pygsti'):
+              threshold=90, outputfile=None, package='pygsti', scriptfile=None):
 
     with directory('test_packages'):
 
@@ -106,6 +106,13 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
         if len(testnames) > 0:
             commands = pythoncommands + testnames + postcommands
             print(' '.join(commands))
+
+            if scriptfile:
+                with open(scriptfile, 'w') as script:
+                    print("#!/usr/bin/bash",file=script)
+                    print(' '.join(commands),file=script)
+                print("Wrote script file %s" % scriptfile)
+                sys.exit(0)
 
             if outputfile is None:
                 returned = subprocess.call(commands)
@@ -177,10 +184,13 @@ if __name__ == "__main__":
                         help='coverage percentage to beat')
     parser.add_argument('--output', type=str, default=None,
                         help='outputfile')
+    parser.add_argument('--script', type=str, default=None,
+                        help='scriptfile')
+
 
     parsed = parser.parse_args(sys.argv[1:])
 
     # With this many arguments, maybe this function should be refactored?
     run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.cover,
               parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir,
-              parsed.html, parsed.threshold, parsed.output, parsed.package)
+              parsed.html, parsed.threshold, parsed.output, parsed.package, parsed.script)

@@ -412,10 +412,11 @@ def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='unifor
     """
     assert(gatesetname == 'clifford'), "This function currently assumes sampling from a Clifford gateset!"
     # Pick the sector.
-    if co2Qgatesprob == 'uniform':
+    if _compat.isstr(co2Qgatesprob):
+        assert(co2Qgatesprob == 'uniform'), "If `co2Qgatesprob` is a string it must be 'uniform!'"
         twoqubitgates_or_nestedco2Qgates = co2Qgates[_np.random.randint(0,len(co2Qgates))]            
     else:
-        co2Qgatesprob = co2Qgatesprob/_np.sum(co2Qgatesprob)
+        co2Qgatesprob = _np.array(co2Qgatesprob)/_np.sum(co2Qgatesprob)
         x = list(_np.random.multinomial(1,co2Qgatesprob))
         twoqubitgates_or_nestedco2Qgates = co2Qgates[x.index(1)]
     
@@ -428,7 +429,7 @@ def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='unifor
     # If it's not a list of "co2Qgates" (lists) then this is the list of gates to use.
     else:
         twoqubitgates = twoqubitgates_or_nestedco2Qgates
-    
+        
     # Prep the sampling variables
     sampled_layer = []
     if subsetQs is not None:    
@@ -1317,7 +1318,7 @@ def clifford_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, r
 
     return experiment_dict
 
-def pauli_layer_as_compiled_circuit(pspec, subsetQs=None):
+def pauli_layer_as_compiled_circuit(pspec, subsetQs=None, keepidle=False):
     """
     Samples a uniformly random n-qubit Pauli and then converts
     it to the native gate-set of `pspec`.
@@ -1330,6 +1331,9 @@ def pauli_layer_as_compiled_circuit(pspec, subsetQs=None):
     subsetQs : list, optional
         If not None, a list of a subset of the qubits from `pspec` that 
         the pauli circuit should act on.
+
+    keepidle : bool, optional
+        Whether to always have the circuit at-least depth 1.
 
     Returns
     -------
@@ -1351,6 +1355,10 @@ def pauli_layer_as_compiled_circuit(pspec, subsetQs=None):
     # Converts the layer to a circuit, and changes to the native gateset.
     pauli_circuit = _cir.Circuit(gatestring=pauli_layer_std_lbls, parallelize=True, line_labels=qubits, identity='I')
     pauli_circuit.change_gate_library(pspec.compilations['absolute'], identity=identity)
+    if keepidle:
+        if pauli_circuit.depth() == 0:
+            pauli_circuit.insert_layer([_lbl.Label(identity,qubits[0]),],0)
+
     return pauli_circuit
 
 def oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=None):
@@ -1510,9 +1518,7 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     # Check that the inverse of every gate is in the gateset:
     for gname in pspec.root_gate_names:
         assert(gname in list(pspec.gate_inverse.keys())), "Not every gate has its inverse in the gate-set! MRB is not possible!"
-
-    # The hard-coded notation for that Pauli operators
-    paulis = ['I','X','Y','Z']   
+ 
     # Find a random circuit according to the sampling specified; this is the "out" circuit.
     circuit = random_circuit(pspec, random_natives_circuit_length, subsetQs=subsetQs, sampler=sampler, samplerargs=samplerargs)
     # Copy the circuit, to create the "back" circuit from the "out" circuit.
@@ -1533,9 +1539,9 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     # every layer in the "out" and "back" circuits. If the circuits are length 0 we do nothing here.
     if paulirandomize:
         for i in range(random_natives_circuit_length):            
-            pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
+            pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)
             circuit.insert_circuit(pauli_circuit,random_natives_circuit_length-i)
-            pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
+            pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)
             circuit_inv.insert_circuit(pauli_circuit,random_natives_circuit_length-i)
         
     # We then append the "back" circuit to the "out" circuit. At length 0 this will be a length 0 circuit.
@@ -1545,7 +1551,7 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     # length 0 circuit we now end up with a length 1 circuit (or longer, if compiled Paulis). So, there is always
     # a random Pauli.
     if paulirandomize:
-        pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
+        pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)
         circuit.insert_circuit(pauli_circuit,0)
 
     # If we start with a random layer of 1-qubit Cliffords, we sample this here.
