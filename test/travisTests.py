@@ -54,7 +54,7 @@ elif doMPI:
 
 print('Running travis tests with python%s.%s' % (sys.version_info[0], sys.version_info[1]))
 
-coverage = True
+coverage = False # DEBUG
 
 branchname = get_branchname()
 print('Branchname is %s' % branchname)

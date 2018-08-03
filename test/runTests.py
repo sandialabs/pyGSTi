@@ -108,7 +108,7 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
             print(' '.join(commands))
 
             if outputfile is None:
-                returned = subprocess.call(commands)
+                returned = subprocess.call(commands, stdout=sys.stdout, stderr=sys.stderr)
 
             else:
                 with open(outputfile, 'w') as testoutput:
