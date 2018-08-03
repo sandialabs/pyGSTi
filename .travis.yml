@@ -40,7 +40,11 @@ cache:
 #Script For default "test" stage
 script:
   - cd test
+  # Output something every 10 minutes or Travis kills the job
+  - while sleep 540; do echo "=====[ $SECONDS seconds still running ]====="; done &
   - python travisTests.py # Tests may take some time!
+  # Killing background sleep loop
+  - kill %1
   - cd ..
 
 jobs:
