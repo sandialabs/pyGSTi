@@ -103,7 +103,8 @@ setup(name='pyGSTi',
            'generating report notebooks': ['ipython','notebook'],
            'read/write message pack format': ['msgpack'],
 	   'extension modules': ['cython'],
-           'complete': ['nose','cython','cvxpy','cvxopt','psutil','mpi4py','pandas','matplotlib','ipython','notebook','msgpack']
+           'complete': ['nose','cython','cvxpy','cvxopt','psutil','mpi4py','pandas','matplotlib','ipython','notebook','msgpack'],
+           'travisci': ['nose','cython','cvxpy','cvxopt','psutil','mpi4py','pandas','msgpack']
       },
       platforms = ["any"],      
       url = 'http://www.pygsti.info',

@@ -31,7 +31,7 @@ before_install:
 
 install:
   - pip install zmq coverage >/dev/null
-  - pip install -e .[complete]
+  - pip install -e .[travisci]
   
 cache:
   pip: true
@@ -40,12 +40,9 @@ cache:
 #Script For default "test" stage
 script:
   - cd test
-  # Output something every 10 minutes or Travis kills the job
-  - while sleep 540; do echo "=====[ $SECONDS seconds still running ]====="; done &
-  - python travisTests.py # produces test_packages/testCmd.sh
+  - python travisTests.py # just produce test_packages/runTravisTests.sh
   - cd test_packages
-  - bash testCmd.sh  
-  - kill %1 # Killing background sleep loop
+  - source runTravisTests.sh # no need for travis_wait (always outputs every 9m)
   - cd ../..
 
 jobs:

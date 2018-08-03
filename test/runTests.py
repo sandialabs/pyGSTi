@@ -105,14 +105,23 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
         returned = 0
         if len(testnames) > 0:
             commands = pythoncommands + testnames + postcommands
-            print(' '.join(commands))
-
+            commandStr = ' '.join(commands)
+            
             if scriptfile:
+                #Script file runs command directly from shell so output works normally
+                # (using subprocess on TravisCI gives incomplete output sometimes).  It
+                # uses a sleep loop to ensure some output is printed every 9 minutes,
+                # as TravisCI terminates a process when it goes 10m without output.
                 with open(scriptfile, 'w') as script:
                     print("#!/usr/bin/bash",file=script)
-                    print(' '.join(commands),file=script)
-                print("Wrote script file %s" % scriptfile)
+                    print('echo "%s"' % commandStr, file=script)
+                    print('while sleep 540; do echo "=====[ $SECONDS seconds ]====="; done &', file=script)
+                    print(commandStr,file=script)
+                    print('kill %1', file=script) # Kill background sleep loop
+                print("Wrote script file %s" % os.path.join('test_packages',scriptfile)) # cwd == 'test_packages'
                 sys.exit(0)
+            else:
+                print(commandStr)
 
             if outputfile is None:
                 returned = subprocess.call(commands)
