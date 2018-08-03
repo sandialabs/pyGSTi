@@ -40,7 +40,7 @@ cache:
 #Script For default "test" stage
 script:
   - cd test
-  - travis_wait 50 python travisTests.py # Tests may take some time!
+  - python travisTests.py # Tests may take some time!
   - cd ..
 
 jobs:
