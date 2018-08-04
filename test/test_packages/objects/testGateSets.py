@@ -1251,8 +1251,10 @@ class TestGateSetMethods(GateSetTestCase):
         dgflat = rawCalc.dgate(L('Gx'), flat=True)
 
         rawCalc.hproduct(Ls('Gx','Gx'), flat=True, wrtFilter1=[0,1], wrtFilter2=[1,2,3])
-        rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1))
-        rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
+        #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1))
+        #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
+        rawCalc.prs( L('rho0'), [L('Mdefault_0')], Ls('Gx','Gx'), clipTo=(-1,1))
+        rawCalc.prs( L('rho0'), [L('Mdefault_0')], Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
 
         custom_spamTuple = ( np.zeros((4,1),'d'), np.zeros((4,1),'d') )
         rawCalc._rhoE_from_spamTuple(custom_spamTuple)
@@ -1294,8 +1296,10 @@ class TestGateSetMethods(GateSetTestCase):
         rawCalc = self.mgateset._calc()
         
         #Make call variants that aren't called by GateSet routines
-        rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1))
-        rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
+        #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1))
+        #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
+        rawCalc.prs( L('rho0'),[L('Mdefault_0')], Ls('Gx','Gx'), clipTo=(-1,1))
+        rawCalc.prs( L('rho0'),[L('Mdefault_0')], Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
         rawCalc.hpr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), False,False, clipTo=(-1,1))
         rawCalc.hpr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), True,True, clipTo=(-1,1))
 

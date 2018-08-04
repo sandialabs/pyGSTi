@@ -37,7 +37,7 @@ slowtests = ['report', 'drivers']
 
 def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
               parallel=False, failed=False, cores=None, coverdir='../output/coverage', html=False,
-              threshold=90, outputfile=None, package='pygsti', scriptfile=None):
+              threshold=90, outputfile=None, package='pygsti', scriptfile=None, timer=False):
 
     with directory('test_packages'):
 
@@ -101,6 +101,9 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
                                '--cover-erase',
                                '--cover-package={}'.format(package),
                                '--cover-min-percentage={}'.format(threshold)]
+
+        if timer:
+            pythoncommands.append('--with-timer')
 
         returned = 0
         if len(testnames) > 0:
@@ -195,11 +198,14 @@ if __name__ == "__main__":
                         help='outputfile')
     parser.add_argument('--script', type=str, default=None,
                         help='scriptfile')
-
+    parser.add_argument('--with-timer', '-t', action='store_true',
+                        help='run tests in parallel')
+        
 
     parsed = parser.parse_args(sys.argv[1:])
 
     # With this many arguments, maybe this function should be refactored?
     run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.cover,
               parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir,
-              parsed.html, parsed.threshold, parsed.output, parsed.package, parsed.script)
+              parsed.html, parsed.threshold, parsed.output, parsed.package,
+              parsed.script, parsed.with_timer)

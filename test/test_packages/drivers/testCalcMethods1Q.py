@@ -109,9 +109,13 @@ class CalcMethods1QTestCase(BaseTestCase):
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 3.0, delta=2.0)
         gs_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_std_exact.gateset"))
-        
-        print(results.estimates['default'].gatesets['go0'].strdiff(gs_compare))
-        self.assertAlmostEqual( results.estimates['default'].gatesets['go0'].frobeniusdist(gs_compare), 0, places=3)
+
+        #gauge opt before compare
+        gsEstimate = results.estimates['default'].gatesets['go0'].copy()
+        gsEstimate.set_all_parameterizations("full")
+        gsEstimate = pygsti.algorithms.gaugeopt_to_target(gsEstimate, gs_compare)
+        print(gsEstimate.strdiff(gs_compare))
+        self.assertAlmostEqual( gsEstimate.frobeniusdist(gs_compare), 0, places=3)
 
 
     def test_stdgst_map(self):
@@ -125,7 +129,11 @@ class CalcMethods1QTestCase(BaseTestCase):
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 3.0, delta=2.0)
         gs_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_std_exact.gateset"))
-        self.assertAlmostEqual( results.estimates['default'].gatesets['go0'].frobeniusdist(gs_compare), 0, places=0)
+
+        gsEstimate = results.estimates['default'].gatesets['go0'].copy()
+        gsEstimate.set_all_parameterizations("full")
+        gsEstimate = pygsti.algorithms.gaugeopt_to_target(gsEstimate, gs_compare)
+        self.assertAlmostEqual( gsEstimate.frobeniusdist(gs_compare), 0, places=0)
          # with low tolerance (1e-6), "map" tends to go for more iterations than "matrix",
          # resulting in a gateset that isn't exactly the same as the "matrix" one
 
@@ -146,6 +154,19 @@ class CalcMethods1QTestCase(BaseTestCase):
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 5, delta=1.0)
         gs_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_std_terms.gateset"))
+
+        # can't easily gauge opt b/c term-based gatesets can't be converted to "full"
+        #gs_compare.set_all_parameterizations("full")
+        #
+        #gsEstimate = results.estimates['default'].gatesets['go0'].copy()
+        #gsEstimate.set_all_parameterizations("full")
+        #gsEstimate = pygsti.algorithms.gaugeopt_to_target(gsEstimate, gs_compare)
+        #self.assertAlmostEqual( gsEstimate.frobeniusdist(gs_compare), 0, places=0)
+
+        #A direct vector comparison works if python (&numpy?) versions are identical, but
+        # gauge freedoms make this incorrectly fail in other cases - so just check sigmas
+        print("VEC DIFF = ",(results.estimates['default'].gatesets['go0'].to_vector()
+                                               - gs_compare.to_vector()))
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].gatesets['go0'].to_vector()
                                                - gs_compare.to_vector()), 0, places=3)
 
