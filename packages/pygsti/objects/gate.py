@@ -2647,6 +2647,9 @@ class LindbladParameterizedGateMap(Gate):
         Return this gate as a dense matrix.
         """
         if self.sparse: raise NotImplementedError("todense() not implemented for sparse LindbladParameterizedGateMap objects")
+        if self._evotype in ("svterm","cterm"): 
+            raise NotImplementedError("todense() not implemented for term-based LindbladParameterizedGateMap objects")
+
         if self.unitary_postfactor is not None:
             dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
         else:
