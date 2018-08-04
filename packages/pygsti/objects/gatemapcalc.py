@@ -141,15 +141,85 @@ class GateMapCalc(GateCalc):
     #    return rho
 
 
-    def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
+    #TODO REMOVE (UNUSED)
+    #def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
+    #    """
+    #    Compute probability of a single "outcome" (spam-tuple) for a single
+    #    gate string.
+    #
+    #    Parameters
+    #    ----------
+    #    spamTuple : (rho_label, compiled_effect_label)
+    #        Specifies the prep and POVM effect used to compute the probability.
+    #
+    #    gatestring : GateString or tuple
+    #        A tuple-like object of *compiled* gates (e.g. may include
+    #        instrument elements like 'Imyinst_0')
+    #
+    #    clipTo : 2-tuple
+    #      (min,max) to clip returned probability to if not None.
+    #      Only relevant when prMxToFill is not None.
+    #
+    #    bUseScaling : bool, optional
+    #      Whether to use a post-scaled product internally.  If False, this
+    #      routine will run slightly faster, but with a chance that the
+    #      product will overflow and the subsequent trace operation will
+    #      yield nan as the returned probability.
+    #
+    #    Returns
+    #    -------
+    #    probability: float
+    #    """
+    #    rholabel,elabel = spamTuple # can't handle custom rho/e -- this seems ok...
+    #    rhorep = self.preps[rholabel].torep('prep')
+    #    erep = self.effects[elabel].torep('effect')
+    #    rhorep = replib.propagate_staterep(rhorep, [self._getgate(gl).torep() for gl in gatestring])
+    #    p = erep.probability(rhorep) #outcome probability
+    #
+    #    #OLD DEPRECATED REPS TODO REMOVE
+    #    #rho,E = self._rhoE_from_spamTuple(spamTuple)
+    #    #rho = self.propagate_state(rho, gatestring)
+    #    ## DEBUG print( " - state = ", rho.s)
+    #    ## DEBUG print( "         = ", rho.ps)
+    #    ## DEBUG print( "         = ", rho.a)
+    #    #if self.evotype == "statevec":
+    #    #    p_old = float(abs(_np.dot(E,rho))**2)
+    #    #elif self.evotype == "densitymx":
+    #    #    p_old = float(_np.dot(E,rho))
+    #    #else: # evotype == "stabilizer"
+    #    #    #print("MEASURE!!")
+    #    #    p_old = rho.measurement_probability(E.outcomes)
+    #    #    #a_old = rho.extract_amplitude(E.outcomes)
+    #    #    # DEBUG print("AMP DEBUG COMP = ",amp,a_old)
+    #    #    #assert(_np.isclose(amp,a_old)),"New code is giving a different amplitude result!"
+    #    #if not (_np.isnan(p) and _np.isnan(p_old)):
+    #    #    assert(_np.isclose(p,p_old)),"New code is giving a different result!"
+    #
+    #    if _np.isnan(p):
+    #        if len(gatestring) < 10:
+    #            strToPrint = str(gatestring)
+    #        else:
+    #            strToPrint = str(gatestring[0:10]) + " ... (len %d)" % len(gatestring)
+    #        _warnings.warn("pr(%s) == nan" % strToPrint)
+    #
+    #    if clipTo is not None:
+    #        return _np.clip(p,clipTo[0],clipTo[1])
+    #    else: return p
+
+        
+    def prs(self, rholabel, elabels, gatestring, clipTo, bUseScaling=False):
         """
-        Compute probability of a single "outcome" (spam-tuple) for a single
-        gate string.
+        Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
+        gate string.  The spam tuples may only vary in their effect-label (their
+        prep labels must be the same)
 
         Parameters
         ----------
-        spamTuple : (rho_label, compiled_effect_label)
-            Specifies the prep and POVM effect used to compute the probability.
+        rholabel : Label
+            The state preparation label.
+        
+        elabels : list
+            A list of :class:`Label` objects giving the *compiled* effect labels.
 
         gatestring : GateString or tuple
             A tuple-like object of *compiled* gates (e.g. may include
@@ -160,41 +230,21 @@ class GateMapCalc(GateCalc):
           Only relevant when prMxToFill is not None.
 
         bUseScaling : bool, optional
-          Whether to use a post-scaled product internally.  If False, this
-          routine will run slightly faster, but with a chance that the
-          product will overflow and the subsequent trace operation will
-          yield nan as the returned probability.
+          Unused.  Present to match function signature of other calculators.
 
         Returns
         -------
-        probability: float
+        numpy.ndarray
+            An array of floating-point probabilities, corresponding to
+            the elements of `elabels`.
         """
-        rholabel,elabel = spamTuple # can't handle custom rho/e -- this seems ok...
         rhorep = self.preps[rholabel].torep('prep')
-        erep = self.effects[elabel].torep('effect')
+        ereps = [ self.effects[elabel].torep('effect') for elabel in elabels ]
         rhorep = replib.propagate_staterep(rhorep, [self._getgate(gl).torep() for gl in gatestring])
-        p = erep.probability(rhorep) #outcome probability
+        ps = _np.array([ erep.probability(rhorep) for erep in ereps ], 'd')
+          #outcome probabilities
 
-        #OLD DEPRECATED REPS TODO REMOVE
-        #rho,E = self._rhoE_from_spamTuple(spamTuple)
-        #rho = self.propagate_state(rho, gatestring)
-        ## DEBUG print( " - state = ", rho.s)
-        ## DEBUG print( "         = ", rho.ps)
-        ## DEBUG print( "         = ", rho.a)
-        #if self.evotype == "statevec":
-        #    p_old = float(abs(_np.dot(E,rho))**2)
-        #elif self.evotype == "densitymx":
-        #    p_old = float(_np.dot(E,rho))
-        #else: # evotype == "stabilizer"
-        #    #print("MEASURE!!")
-        #    p_old = rho.measurement_probability(E.outcomes)
-        #    #a_old = rho.extract_amplitude(E.outcomes)
-        #    # DEBUG print("AMP DEBUG COMP = ",amp,a_old)
-        #    #assert(_np.isclose(amp,a_old)),"New code is giving a different amplitude result!"
-        #if not (_np.isnan(p) and _np.isnan(p_old)):
-        #    assert(_np.isclose(p,p_old)),"New code is giving a different result!"
-
-        if _np.isnan(p):
+        if _np.any(_np.isnan(ps)):
             if len(gatestring) < 10:
                 strToPrint = str(gatestring)
             else:
@@ -202,8 +252,8 @@ class GateMapCalc(GateCalc):
             _warnings.warn("pr(%s) == nan" % strToPrint)
 
         if clipTo is not None:
-            return _np.clip(p,clipTo[0],clipTo[1])
-        else: return p
+            return _np.clip(ps,clipTo[0],clipTo[1])
+        else: return ps
 
         
     def dpr(self, spamTuple, gatestring, returnPr, clipTo):
@@ -240,14 +290,14 @@ class GateMapCalc(GateCalc):
         
         #Finite difference derivative
         eps = 1e-7 #hardcoded?
-        p = self.pr(spamTuple, gatestring, clipTo)
+        p = self.prs(spamTuple[0], [spamTuple[1]], gatestring, clipTo)[0]
         dp = _np.empty( (1,self.Np), 'd' )
 
         orig_vec = self.to_vector().copy()
         for i in range(self.Np):
             vec = orig_vec.copy(); vec[i] += eps
             self.from_vector(vec)
-            dp[0,i] = (self.pr(spamTuple, gatestring, clipTo)-p)/eps
+            dp[0,i] = (self.prs(spamTuple[0], [spamTuple[1]], gatestring, clipTo)-p)[0]/eps
         self.from_vector(orig_vec)
                 
         if returnPr:

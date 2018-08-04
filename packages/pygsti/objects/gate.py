@@ -2878,7 +2878,7 @@ class LindbladParameterizedGateMap(Gate):
         
     def __str__(self):
         s = "Lindblad Parameterized gate map with dim = %d, num params = %d\n" % \
-            (self.err_gen.shape[0], self.num_params())
+            (self.dim, self.num_params())
         return s
 
 
@@ -4647,10 +4647,17 @@ class CliffordGate(Gate):
             # compute symplectic rep from unitary
             self.smatrix, self.svector = _symp.unitary_to_symplectic(self.unitary, flagnonclifford=True)
 
+        #Cached upon first usage
+        self.inv_smatrix = None
+        self.inv_svector = None
+
         nQubits = len(self.svector) // 2
         dim = 2**nQubits # "stabilizer" is a "unitary evolution"-type mode
         Gate.__init__(self, dim, "stabilizer")
 
+        
+    #NOTE: if this gate had parameters, we'd need to clear inv_smatrix & inv_svector
+    # whenever the smatrix or svector changed, respectively (probably in from_vector?)
 
     def torep(self):
         """
@@ -4663,7 +4670,11 @@ class CliffordGate(Gate):
         -------
         GateRep
         """
-        invs, invp = _symp.inverse_clifford(self.smatrix, self.svector)
+        if self.inv_smatrix is None or self.inv_svector is None:
+            self.inv_smatrix, self.inv_svector = _symp.inverse_clifford(
+                self.smatrix, self.svector) #cache inverse since it's expensive
+
+        invs, invp = self.inv_smatrix, self.inv_svector
         U = self.unitary.todense() if isinstance(self.unitary, Gate) else self.unitary
         return replib.SBGateRep_Clifford(_np.ascontiguousarray(self.smatrix,_np.int64),
                                          _np.ascontiguousarray(self.svector,_np.int64),

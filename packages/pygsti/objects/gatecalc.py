@@ -733,7 +733,7 @@ class GateCalc(object):
 #            
 #    def _hpr_nr(self, spamLabel, gatestring, returnPr, returnDeriv, clipTo):
 #        """ non-remainder version of hpr(...) overridden by derived clases """
-#        raise NotImplementedError("_hpr_nr must be implemented by the derived class") 
+#        raise NotImplementedError("_hpr_nr must be implemented by the derived class")
 
 
     def probs(self, compiled_gatestring, clipTo=None):
@@ -759,11 +759,27 @@ class GateCalc(object):
         probs = _ld.OutcomeLabelDict()
         raw_dict, outcomeLbls = compiled_gatestring
         iOut = 0 #outcome index
+
         for raw_gatestring, spamTuples in raw_dict.items():
+            rholabel = None # current prep label
+            elabels = [] # a list of effect labels to evaluate cur_rholabel with
             for spamTuple in spamTuples:
-                probs[outcomeLbls[iOut]] = self.pr(
-                    spamTuple, raw_gatestring, clipTo, False)
-                iOut += 1
+                if spamTuple[0] == rholabel: elabels.append(spamTuple[1])
+                else:
+                    if len(elabels) > 0:
+                        # evaluate spamTuples w/same rholabel together
+                        for pval in self.prs(rholabel,elabels,raw_gatestring,clipTo,False):
+                            probs[outcomeLbls[iOut]] = pval; iOut += 1
+                    rholabel, raw_gstr = spamTuple[0], raw_gatestring # make "current"
+                    elabels = [ spamTuple[1] ]
+            if len(elabels) > 0:
+                for pval in self.prs(rholabel,elabels,raw_gatestring,clipTo,False):
+                    probs[outcomeLbls[iOut]] = pval; iOut += 1
+            #OLD
+            #for spamTuple in spamTuples:
+            #    probs[outcomeLbls[iOut]] = self.pr(
+            #        spamTuple, raw_gatestring, clipTo, False)
+            #    iOut += 1
         return probs
 
 
