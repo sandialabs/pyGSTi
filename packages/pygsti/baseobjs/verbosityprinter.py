@@ -8,7 +8,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from contextlib import contextmanager as _contextmanager
 from copy       import deepcopy as _dc
-import os   as _os
 import sys  as _sys
 import math as _math # used for digit formatting
 
@@ -119,9 +118,8 @@ class VerbosityPrinter(object):
     _commFileExt  = '.txt'
 
     def _create_file(self, filename):
-        if _os.path.isfile(filename):
-            with open(filename, 'w') as newFile:
-                newFile.close()
+        with open(filename, 'w') as newFile:
+            newFile.close()
 
     def _get_comm_file(self, comm_id):
         if len(VerbosityPrinter._commFileName) == 0: return ''
@@ -129,7 +127,7 @@ class VerbosityPrinter(object):
 
     # The printer is initialized with a set verbosity, and an optional filename.
     # If a filename is not provided, VerbosityPrinter writes to stdout
-    def __init__(self, verbosity=1, filename=None, comm=None, warnings=True, split=False):
+    def __init__(self, verbosity=1, filename=None, comm=None, warnings=True, split=False, clearFile=True):
         '''
         Customize a verbosity printer object
 
@@ -150,7 +148,7 @@ class VerbosityPrinter(object):
                 filename = self._get_comm_file(comm.Get_rank())
         self.verbosity = verbosity
         self.filename  = filename
-        if filename is not None and len(filename) > 0:
+        if filename is not None and len(filename) > 0 and clearFile:
             self._create_file(filename)
         self._comm            = comm
         self.progressLevel    = 0 # Used for queuing output while a progress bar is being shown
@@ -167,7 +165,7 @@ class VerbosityPrinter(object):
         '''
         Instead of deepcopy, initialize a new printer object and feed it some select deepcopied members
         '''
-        p = VerbosityPrinter(self.verbosity, self.filename, self._comm, self.warnings)
+        p = VerbosityPrinter(self.verbosity, self.filename, self._comm, self.warnings, clearFile=False)
 
         p.defaultVerbosity = self.defaultVerbosity
         p.progressLevel    = self.progressLevel
