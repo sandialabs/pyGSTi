@@ -8,8 +8,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from contextlib import contextmanager as _contextmanager
 from copy       import deepcopy as _dc
-import sys         as _sys
-import math        as _math # used for digit formatting
+import os   as _os
+import sys  as _sys
+import math as _math # used for digit formatting
 
 from ..tools import compattools as _compat
 
@@ -118,8 +119,9 @@ class VerbosityPrinter(object):
     _commFileExt  = '.txt'
 
     def _create_file(self, filename):
-        with open(filename, 'w') as newFile:
-            newFile.close()
+        if _os.path.isfile(filename):
+            with open(filename, 'w') as newFile:
+                newFile.close()
 
     def _get_comm_file(self, comm_id):
         if len(VerbosityPrinter._commFileName) == 0: return ''
