@@ -264,6 +264,8 @@ def get_standard_gatenames_quil_conversions():
     std_gatenames_to_quil['Gzpi2'] = 'RZ(pi/2)'
     std_gatenames_to_quil['Gzmpi2'] = 'RZ(-pi/2)'
     std_gatenames_to_quil['Gzpi'] = 'Z'
+    std_gatenames_to_quil['Gypi2'] = 'RY(pi/2)'
+    std_gatenames_to_quil['Gympi2'] = 'RY(-pi/2)'
     std_gatenames_to_quil['Gypi'] = 'Y'
     std_gatenames_to_quil['Gp'] = 'RZ(pi/2)' # todo : check that this is correct, and shouldn't instead be -pi/2
     std_gatenames_to_quil['Gpdag'] = 'RZ(-pi/2)' # todo : check that this is correct, and shouldn't instead be +pi/2
