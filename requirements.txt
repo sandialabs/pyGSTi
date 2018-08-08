@@ -3,8 +3,3 @@ numpy
 scipy
 plotly
 ply
-nose
-msgpack # For IO specifically.. make optional?
-# Since this is needed to complete unit tests, I'm making it fully required - LSaldyt
-cvxopt
-cvxpy~=0.2.28

@@ -6,6 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 from ..baseobjs import Label as _Label
+from ..baseobjs import smart_cached
 from . import matrixmod2 as _mtx
 
 import numpy as _np
@@ -1364,7 +1365,8 @@ def _unitary_to_symplectic_2Q(u,flagnonclifford=True):
             p = None
         
     return s, p
-    
+
+@smart_cached
 def unitary_to_symplectic(u,flagnonclifford=True):
     """
     Returns the symplectic representation of a one-qubit or two-qubit Clifford 

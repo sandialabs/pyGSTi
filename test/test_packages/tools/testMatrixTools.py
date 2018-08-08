@@ -124,10 +124,10 @@ class MatrixBaseTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(a[0:2,0:2,0], twoByTwo)
 
         #complex case: some/all indices are integer arrays
-        mt._fas(a, ([0,1],[0,1],0), twoByTwo) # a[0:2,0:2,0] = twoByTwo - but a[[0,1],[0,1],0] wouldn't do this!
+        mt._fas(a, ([0,1],[0,1],0), twoByTwo[:,:]) # a[0:2,0:2,0] = twoByTwo - but a[[0,1],[0,1],0] wouldn't do this!
         self.assertArraysAlmostEqual(a[0:2,0:2,0], twoByTwo)
 
-        mt._fas(a, ([0,1],[0,1],0), twoByTwo, add=True) # a[0:2,0:2,0] = twoByTwo - but a[[0,1],[0,1],0] wouldn't do this!
+        mt._fas(a, ([0,1],[0,1],0), twoByTwo[:,:], add=True) # a[0:2,0:2,0] = twoByTwo - but a[[0,1],[0,1],0] wouldn't do this!
         self.assertArraysAlmostEqual(a[0:2,0:2,0], 2*twoByTwo)
 
         # Fancy indexing (without assignment)
@@ -137,6 +137,7 @@ class MatrixBaseTestCase(BaseTestCase):
         self.assertEqual( mt._findx(a, ([0,1],[0,1],0)).shape, (2,2))
         self.assertEqual( mt._findx(a, ([],[0,1],0)).shape, (0,2))
 
+        
     def test_safe_ops(self):
         mx = np.array([[1+1j, 0],
                        [2+2j, 3+3j]], 'complex')

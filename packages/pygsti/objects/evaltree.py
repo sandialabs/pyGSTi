@@ -191,7 +191,7 @@ class EvalTree(list):
         else:
             sl = [slice(None)] * a.ndim
             sl[axis] = slice(0,self.num_final_strings())
-            ret = a[sl]
+            ret = a[tuple(sl)]
             assert(ret.base is a or ret.base is a.base) #check that what is returned is a view
             assert(ret.size == 0 or _np.may_share_memory(ret,a))
             return ret
@@ -332,7 +332,7 @@ class EvalTree(list):
 
         def _mkindx(i):
             mi = [slice(None)]*a.ndim; mi[axis] = i
-            return mi
+            return tuple(mi)
 
         if self.original_index_lookup is not None:
             for iorig,icur in self.original_index_lookup.items():                
@@ -371,7 +371,7 @@ class EvalTree(list):
 
         def _mkindx(i):
             mi = [slice(None)]*a.ndim; mi[axis] = i
-            return mi
+            return tuple(mi)
 
         if self.original_index_lookup is not None:
             for iorig,icur in self.original_index_lookup.items():                
@@ -564,6 +564,8 @@ class EvalTree(list):
                     iFirstNonFinal = iLastFinal # move boundary to make k's new location non-final
 
             subTreeNumFinal = iFirstNonFinal # the final <-> non-final boundary
+            if subTreeNumFinal == 0: continue # this subtree only contributes non-final elements -> skip
+
             parentIndexRevPerm.extend( subTreeIndices[0:subTreeNumFinal] )
             subTreeIndicesList.append( subTreeIndices )
             numFinalList.append( subTreeNumFinal )

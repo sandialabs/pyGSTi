@@ -14,6 +14,7 @@ from ... import construction as _cnst
 from ... import objects as _objs
 from ... import io as _io
 from ... import tools as _tools
+from ...tools import compattools as _compat
 
 import numpy as _np
 import copy as _copy
@@ -98,9 +99,9 @@ def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgate
     
     # Basic variables required for sampling the circuit layer.
     if subsetQs is None:
-        qubits = pspec.qubit_labels.copy()
+        qubits = pspec.qubit_labels[:] # copy this list
     else:
-        qubits = subsetQs.copy()
+        qubits = subsetQs[:] # copy this list
     sampled_layer = []
     num_oneQgatenames = len(oneQgatenames)
     num_twoQgatenames = len(twoQgatenames)
@@ -198,10 +199,10 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
     """
     if subsetQs is None:
         n = pspec.number_of_qubits
-        qubits = pspec.qubit_labels.copy()
+        qubits = pspec.qubit_labels[:] # copy this list
     else:
         n = len(subsetQs)   
-        qubits = subsetQs.copy()
+        qubits = subsetQs[:] # copy this list
 
     # If oneQgates is specified, use the given list.
     if oneQgates != 'all':
@@ -316,23 +317,23 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
     
     return sampled_layer
 
-def circuit_layer_by_Co2QGs(pspec, subsetQs, Co2QGs, Co2QGsprob='uniform', twoQprob=1.0, 
+def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='uniform', twoQprob=1.0, 
                             oneQgatenames='all', gatesetname='clifford'):
     """
     Samples a random circuit layer using the specified list of "compatible two-qubit gates"
-    (Co2QGs). That is, the user inputs a list (`Co2QGs`) specifying 2-qubit gates that are
+    (co2Qgates). That is, the user inputs a list (`co2Qgates`) specifying 2-qubit gates that are
     "compatible" -- meaning that they can be implemented simulatenously -- and a distribution 
     over the different compatible sets, and a layer is sampled from this via:
 
     1. Pick a set of compatible two-qubit gates from this list `Co2GCs`, according to the
-    distribution specified by `Co2QGsprob`.
+    distribution specified by `co2Qgatesprob`.
     2. For each 2-qubit gate in the chosen set of compatible gates, with probability `twoQprob`
     add this gate to the layer.
     3. Uniformly sample 1-qubit gates for any qubits that don't yet have a gate on them,
     from those 1-qubit gates specified by `oneQgatenames`.
 
-    For example, consider 4 qubits with linear connectivity. a valid `Co2QGs` list is
-    Co2QGs = [[,],[Label(Gcphase,(0,1)),Label(Gcphase,(2,3))]] which consists of an 
+    For example, consider 4 qubits with linear connectivity. a valid `co2Qgates` list is
+    co2Qgates = [[,],[Label(Gcphase,(0,1)),Label(Gcphase,(2,3))]] which consists of an 
     element containing zero 2-qubit gates and an element containing  two 2-qubit gates 
     that can be applied in parallel. In this example there are 5 possible sets of compatible 
     2-qubit gates:
@@ -343,17 +344,17 @@ def circuit_layer_by_Co2QGs(pspec, subsetQs, Co2QGs, Co2QGsprob='uniform', twoQp
     4. [Label(Gcphase,(2,3)),] (one of the three 2-qubit gate)
     5. [Label(Gcphase,(0,1)), Label(Gcphase,(2,3)),] (the only compatible pair of 2-qubit gates).
 
-    The list of compatible two-qubit gates `Co2QGs` can be any list containing anywhere
+    The list of compatible two-qubit gates `co2Qgates` can be any list containing anywhere
     from 1 to all 5 of these lists.
 
     In order to allow for convenient sampling of some commonly useful distributions, 
-    `Co2QGs` can be a list of lists of lists of compatible 2-qubit gates ("nested" sampling). 
+    `co2Qgates` can be a list of lists of lists of compatible 2-qubit gates ("nested" sampling). 
     In this case, a list of lists of compatible 2-qubit gates is picked according to the distribution 
-    `Co2QGsprob`, and then one of the sublists of compatible 2-qubit gates in the selected list is 
+    `co2Qgatesprob`, and then one of the sublists of compatible 2-qubit gates in the selected list is 
     then chosen uniformly at random. For example, this is useful for sampling a layer containing one
     uniformly random 2-qubit gate with probability p and a layer of 1-qubit gates with probability
     1-p. Here, we can specify `Co2GQs` as [[],[[the 1st 2Q-gate,],[the 2nd 2Q-gate,], ...]] and
-    set `twoQprob=1` and `Co2QGsprob  = [1-p,p].
+    set `twoQprob=1` and `co2Qgatesprob  = [1-p,p].
 
     Parameters
     ----------
@@ -366,32 +367,32 @@ def circuit_layer_by_Co2QGs(pspec, subsetQs, Co2QGs, Co2QGsprob='uniform', twoQp
         `pspec.qubit_labels`. If None, the circuit layer is sampled to act on all the qubits 
         in `pspec`.
        
-    Co2QGs : list
+    co2Qgates : list
         This is either:
 
             1. A list of lists of 2-qubit gate Labels that can be applied in parallel.
             2. A list of lists of lists of 2-qubit gate Labels that can be applied in parallel.
 
-        In case (1) each list in `Co2QGs` should contain 2-qubit gates, in the form of Labels, 
+        In case (1) each list in `co2Qgates` should contain 2-qubit gates, in the form of Labels, 
         that can be applied in parallel and act only on the qubits in `pspec` if `subsetQs` is None, 
         or act only on the qubits in  `subsetQs` if `subsetQs` is not None.  The sampler then picks 
-        one of these compatible sets of gates (with probability specified by `Co2QGsprob`, and converts 
+        one of these compatible sets of gates (with probability specified by `co2Qgatesprob`, and converts 
         this into a circuit layer by applying the 2-qubit gates it contains with the user-specified 
         probability `twoQprob`, and augmenting these 2-qubit gates with 1-qubit gates on all other qubits.
 
-        In case (2) a sublist of lists is sampled from `Co2QGs` according to `Co2QGsprob` and then we
-        proceed as in case (1) but as though `Co2QGsprob` is the uniform distribution.
+        In case (2) a sublist of lists is sampled from `co2Qgates` according to `co2Qgatesprob` and then we
+        proceed as in case (1) but as though `co2Qgatesprob` is the uniform distribution.
         
-    Co2QGsprob : str or list of floats
-        If a list, they are unnormalized probabilities to sample each of the elements of `Co2QGs`. So it
-        is a list of non-negative floats of the same length as `Co2QGs`. If 'uniform', then the uniform 
+    co2Qgatesprob : str or list of floats
+        If a list, they are unnormalized probabilities to sample each of the elements of `co2Qgates`. So it
+        is a list of non-negative floats of the same length as `co2Qgates`. If 'uniform', then the uniform 
         distribution is used.
 
     twoQprob : float, optional
         The probability for each two-qubit gate to be applied to a pair of qubits, after a
         set of compatible 2-qubit gates has been chosen. The expected number of 2-qubit
         gates in a layer is `twoQprob` times the expected number of 2-qubit gates in a
-        set of compatible 2-qubit gates sampled according to `Co2QGsprob`.
+        set of compatible 2-qubit gates sampled according to `co2Qgatesprob`.
                 
     oneQgatenames : 'all' or list of strs, optional
         If not 'all', a list of the names of the 1-qubit gates to be sampled from when applying 
@@ -411,35 +412,36 @@ def circuit_layer_by_Co2QGs(pspec, subsetQs, Co2QGs, Co2QGsprob='uniform', twoQp
     """
     assert(gatesetname == 'clifford'), "This function currently assumes sampling from a Clifford gateset!"
     # Pick the sector.
-    if Co2QGsprob == 'uniform':
-        twoqubitgates_or_nestedCo2QGs = Co2QGs[_np.random.randint(0,len(Co2QGs))]            
+    if _compat.isstr(co2Qgatesprob):
+        assert(co2Qgatesprob == 'uniform'), "If `co2Qgatesprob` is a string it must be 'uniform!'"
+        twoqubitgates_or_nestedco2Qgates = co2Qgates[_np.random.randint(0,len(co2Qgates))]            
     else:
-        Co2QGsprob = Co2QGsprob/_np.sum(Co2QGsprob)
-        x = list(_np.random.multinomial(1,Co2QGsprob))
-        twoqubitgates_or_nestedCo2QGs = Co2QGs[x.index(1)]
+        co2Qgatesprob = _np.array(co2Qgatesprob)/_np.sum(co2Qgatesprob)
+        x = list(_np.random.multinomial(1,co2Qgatesprob))
+        twoqubitgates_or_nestedco2Qgates = co2Qgates[x.index(1)]
     
-    # The special case where the selected Co2QGs contains no gates or Co2QGs.
-    if len(twoqubitgates_or_nestedCo2QGs) == 0:
-          twoqubitgates = twoqubitgates_or_nestedCo2QGs
-    # If it's a nested sector, sample uniformly from the nested Co2QGs.
-    elif type(twoqubitgates_or_nestedCo2QGs[0]) == list:
-        twoqubitgates = twoqubitgates_or_nestedCo2QGs[_np.random.randint(0,len(twoqubitgates_or_nestedCo2QGs))]
-    # If it's not a list of "Co2QGs" (lists) then this is the list of gates to use.
+    # The special case where the selected co2Qgates contains no gates or co2Qgates.
+    if len(twoqubitgates_or_nestedco2Qgates) == 0:
+          twoqubitgates = twoqubitgates_or_nestedco2Qgates
+    # If it's a nested sector, sample uniformly from the nested co2Qgates.
+    elif type(twoqubitgates_or_nestedco2Qgates[0]) == list:
+        twoqubitgates = twoqubitgates_or_nestedco2Qgates[_np.random.randint(0,len(twoqubitgates_or_nestedco2Qgates))]
+    # If it's not a list of "co2Qgates" (lists) then this is the list of gates to use.
     else:
-        twoqubitgates = twoqubitgates_or_nestedCo2QGs
-    
+        twoqubitgates = twoqubitgates_or_nestedco2Qgates
+        
     # Prep the sampling variables
     sampled_layer = []
     if subsetQs is not None:    
-        remaining_qubits = subsetQs.copy()
+        remaining_qubits = subsetQs[:] # copy this list
     else:
-        remaining_qubits = pspec.qubit_labels.copy()
+        remaining_qubits = pspec.qubit_labels[:] # copy this list
     
     # Go through the 2-qubit gates in the sector, and apply each one with probability twoQprob
     for i in range(0,len(twoqubitgates)):
         if _np.random.binomial(1,twoQprob) == 1:
             gate = twoqubitgates[i]
-            # If it's a nested Co2QGs:
+            # If it's a nested co2Qgates:
             sampled_layer.append(gate)
             # Delete the qubits that have been assigned a gate.
             del remaining_qubits[remaining_qubits.index(gate.qubits[0])]
@@ -515,12 +517,12 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
         A list of gate Labels that defines a "complete" circuit layer (there is one and 
         only one gate acting on each qubit).       
     """
-    if subsetQs is not None: qubits = subsetQs.copy()
-    else: qubits = pspec.qubit_labels.copy()
+    if subsetQs is not None: qubits = subsetQs[:] # copy this list
+    else: qubits = pspec.qubit_labels[:] # copy this list
 
     sampled_layer = []
     
-    if type(pdist) == str: assert(pdist == 'uniform'), "If pdist is not a list or numpy.array it must be 'uniform'"
+    if _compat.isstr(pdist): assert(pdist == 'uniform'), "If pdist is not a list or numpy.array it must be 'uniform'"
     
     if oneQgatenames == 'all':
         assert(pdist == 'uniform'), "If `oneQgatenames` = 'all', pdist must be 'uniform'"
@@ -535,7 +537,7 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
     
     else:
         # A basic check for the validity of pdist.
-        if type(pdist) != str: assert(len(pdist) == len(oneQgatenames)), "The pdist probability distribution is invalid!"
+        if not _compat.isstr(pdist): assert(len(pdist) == len(oneQgatenames)), "The pdist probability distribution is invalid!"
         
         # Find out how many 1-qubit gate names there are
         num_oneQgatenames = len(oneQgatenames)
@@ -544,7 +546,7 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
         for i in qubits:
             
             # If 'uniform', then sample according to the uniform dist.
-            if isinstance(pdist,str): sampled_gatename = oneQgatenames[_np.random.randint(0,num_oneQgatenames)]
+            if _compat.isstr(pdist): sampled_gatename = oneQgatenames[_np.random.randint(0,num_oneQgatenames)]
             # If not 'uniform', then sample according to the user-specified dist.
             else:
                 pdist = _np.array(pdist)/sum(pdist)
@@ -579,7 +581,7 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
         in `pspec`.
 
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates. If this is a
@@ -621,20 +623,20 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
         A random circuit of length `length` (if not addlocal) or length 2*`length`+1 (if addlocal)
         with layers independently sampled using the specified sampling distribution.        
     """ 
-    if type(sampler) == str:
+    if _compat.isstr(sampler):
         
         if sampler == 'pairingQs': sampler = circuit_layer_by_pairing_qubits
         elif sampler == 'Qelimination': sampler = circuit_layer_by_Qelimination
-        elif sampler == 'Co2QGs':
-            sampler = circuit_layer_by_Co2QGs
-            assert(len(samplerargs) >= 1), "The samplerargs must at least a 1-element list with the first element the 'Co2QGs' argument of the Co2QGs sampler."
+        elif sampler == 'co2Qgates':
+            sampler = circuit_layer_by_co2Qgates
+            assert(len(samplerargs) >= 1), "The samplerargs must at least a 1-element list with the first element the 'co2Qgates' argument of the co2Qgates sampler."
         elif sampler == 'local': sampler = circuit_layer_of_oneQgates            
         else: raise ValueError("Sampler type not understood!")
 
     if subsetQs is not None:
-        qubits = subsetQs.copy()
+        qubits = subsetQs[:] # copy this list
     else:
-        qubits = pspec.qubit_labels.copy()
+        qubits = pspec.qubit_labels[:] # copy this list
     
     # If we can, we use the identity in the pspec.
     if pspec.identity is not None:
@@ -701,7 +703,7 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         in `pspec`.
         
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not 
@@ -816,7 +818,7 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         # If we want to randomize the expected output then randomize the p vector, otherwise
         # it is left as p. Note that, unlike with compile_clifford, we don't invert (s,p)
         # before handing it to the stabilizer measurement function.
-        if randomizeout: p_for_measurement = _symp.random_phase_vector(s,n)
+        if randomizeout: p_for_measurement = _symp.random_phase_vector(s_composite,n)
         else: p_for_measurement =  p_composite
         inversion_circuit = _cmpl.compile_stabilizer_measurement(s_composite, p_for_measurement, pspec, subsetQs,
                                                                  citerations, *compilerargs)   
@@ -905,7 +907,7 @@ def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
         in `pspec`.
         
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not 
@@ -1135,8 +1137,8 @@ def clifford_rb_circuit(pspec, length, subsetQs=None, randomizeout=False, citera
         qubit on the ith wire of the output circuit.
     """
     # Find the labels of the qubits to create the circuit for.
-    if subsetQs is not None: qubits = subsetQs.copy()
-    else: qubits = pspec.qubit_labels.copy()
+    if subsetQs is not None: qubits = subsetQs[:] # copy this list
+    else: qubits = pspec.qubit_labels[:] # copy this list
     # The number of qubits the circuit is over.
     n = len(qubits)
       
@@ -1316,7 +1318,7 @@ def clifford_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, r
 
     return experiment_dict
 
-def pauli_layer_as_compiled_circuit(pspec, subsetQs=None):
+def pauli_layer_as_compiled_circuit(pspec, subsetQs=None, keepidle=False):
     """
     Samples a uniformly random n-qubit Pauli and then converts
     it to the native gate-set of `pspec`.
@@ -1330,6 +1332,9 @@ def pauli_layer_as_compiled_circuit(pspec, subsetQs=None):
         If not None, a list of a subset of the qubits from `pspec` that 
         the pauli circuit should act on.
 
+    keepidle : bool, optional
+        Whether to always have the circuit at-least depth 1.
+
     Returns
     -------
     Circuit
@@ -1337,8 +1342,8 @@ def pauli_layer_as_compiled_circuit(pspec, subsetQs=None):
     """
     if pspec.identity is not None: identity = pspec.identity
     else: identity = 'I'
-    if subsetQs is not None:qubits = subsetQs.copy()
-    else: qubits = pspec.qubit_labels.copy()
+    if subsetQs is not None:qubits = subsetQs[:] # copy this list
+    else: qubits = pspec.qubit_labels[:] # copy this list
     n = len(qubits)
 
     # The hard-coded notation for that Pauli operators
@@ -1350,6 +1355,10 @@ def pauli_layer_as_compiled_circuit(pspec, subsetQs=None):
     # Converts the layer to a circuit, and changes to the native gateset.
     pauli_circuit = _cir.Circuit(gatestring=pauli_layer_std_lbls, parallelize=True, line_labels=qubits, identity='I')
     pauli_circuit.change_gate_library(pspec.compilations['absolute'], identity=identity)
+    if keepidle:
+        if pauli_circuit.depth() == 0:
+            pauli_circuit.insert_layer([_lbl.Label(identity,qubits[0]),],0)
+
     return pauli_circuit
 
 def oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=None):
@@ -1380,10 +1389,10 @@ def oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=None):
         identity = 'I'
     if subsetQs is not None:
         n = len(subsetQs)
-        qubits = subsetQs.copy()
+        qubits = subsetQs[:] # copy this list
     else:
         n = pspec.number_of_qubits
-        qubits = pspec.qubit_labels.copy()
+        qubits = pspec.qubit_labels[:] # copy this list
 
     # The hard-coded notation for the 1Q clifford operators
     oneQcliffords = ['C'+str(i) for i in range(24)]
@@ -1440,7 +1449,7 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         irrelevant.
         
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
@@ -1504,14 +1513,12 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         allqubits = subsetQs
     else:
         n = pspec.number_of_qubits
-        allqubits = pspec.qubit_labels.copy()
+        allqubits = pspec.qubit_labels[:] # copy this list
 
     # Check that the inverse of every gate is in the gateset:
     for gname in pspec.root_gate_names:
         assert(gname in list(pspec.gate_inverse.keys())), "Not every gate has its inverse in the gate-set! MRB is not possible!"
-
-    # The hard-coded notation for that Pauli operators
-    paulis = ['I','X','Y','Z']   
+ 
     # Find a random circuit according to the sampling specified; this is the "out" circuit.
     circuit = random_circuit(pspec, random_natives_circuit_length, subsetQs=subsetQs, sampler=sampler, samplerargs=samplerargs)
     # Copy the circuit, to create the "back" circuit from the "out" circuit.
@@ -1532,9 +1539,9 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     # every layer in the "out" and "back" circuits. If the circuits are length 0 we do nothing here.
     if paulirandomize:
         for i in range(random_natives_circuit_length):            
-            pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
+            pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)
             circuit.insert_circuit(pauli_circuit,random_natives_circuit_length-i)
-            pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
+            pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)
             circuit_inv.insert_circuit(pauli_circuit,random_natives_circuit_length-i)
         
     # We then append the "back" circuit to the "out" circuit. At length 0 this will be a length 0 circuit.
@@ -1544,7 +1551,7 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     # length 0 circuit we now end up with a length 1 circuit (or longer, if compiled Paulis). So, there is always
     # a random Pauli.
     if paulirandomize:
-        pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs)
+        pauli_circuit = pauli_layer_as_compiled_circuit(pspec, subsetQs=subsetQs, keepidle=True)
         circuit.insert_circuit(pauli_circuit,0)
 
     # If we start with a random layer of 1-qubit Cliffords, we sample this here.
@@ -1632,7 +1639,7 @@ def mirror_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
         irrelevant.
         
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'Co2QGs', 'local'}.
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function 
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
@@ -1710,7 +1717,19 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
                      group_inverse_only=False, group_prep=False, compilation=None,
                      generated_group=None, gateset_to_group_labels=None, seed=None, randState=None):
     """
-    Makes a random 1-qubit RB sequence. This function is todo: docstring and test.
+    Makes a random 1-qubit RB sequence, with RB over an arbitrary group and with a range of other
+    options that allow circuits for many types of RB to be generated, including:
+    
+    - Clifford RB
+    - Direct RB
+    - Interleaved Clifford or direct RB
+    - Unitarity Clifford or direct RB
+
+    The function can in-principle be used beyond 1-qubit RB, but it relies on explicit matrix representation
+    of a group, which is infeasble for, e.g., the many-qubit Clifford group.
+
+    Note that this function has *not* been carefully tested. This will be rectified in the future,
+    or this function will be replaced.
     
     Parameters
     ----------
@@ -1757,7 +1776,6 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
         m + 1 if inverse = True, interleaved = None
         2m if inverse = False, interleaved not None
         2m + 1 if inverse = True, interleaved not None
-
     """   
     assert hasattr(group_or_gateset, 'gates') or hasattr(group_or_gateset, 
                    'product'), 'group_or_gateset must be a MatrixGroup of Gateset'    
@@ -1813,6 +1831,7 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
                 interleaved_indices = interleaved_index*_np.ones((m,2),int)
                 interleaved_indices[:,0] = rndm_indices
                 rndm_indices = interleaved_indices.flatten()
+
         # This bit of code is a quick hashed job. Needs to be checked at somepoint
         if group_prep:
             rndm_group_index = rndm.randint(0,len(generated_group))
@@ -1840,9 +1859,7 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
             inversion_group_element = generated_group.product([inversion_group_element,pauli_keys[rndm_index]])
             
         inversion_sequence = compilation[inversion_group_element]
-        #print(inversion_sequence)
         random_string.extend(inversion_sequence)
-        #print(random_string)
         
     if not inverse:
         if gateset:
@@ -1869,88 +1886,90 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
     if random_pauli:
         return _objs.GateString(random_string), bitflip
 
-def oneQ_generalized_rb_experiment(m_list, K_m, group_or_gateset, inverse=True, 
-                              interleaved = None, alias_maps=None, seed=None, 
-                              randState=None):
-    """
-    Makes a list of random RB sequences.
+# Future : possibly add this back in, but only if the other function it is a wrap-around
+# for has been tested.
+# def oneQ_generalized_rb_experiment(m_list, K_m, group_or_gateset, inverse=True, 
+#                               interleaved = None, alias_maps=None, seed=None, 
+#                               randState=None):
+#     """
+#     Makes a list of random RB sequences.
     
-    Parameters
-    ----------
-    m_list : list or array of ints
-        The set of lengths for the random sequences (with the total
-        number of Cliffords in each sequence given by m_list + 1). Minimal
-        allowed length is therefore 1 (a random CLifford followed by its 
-        inverse).
+#     Parameters
+#     ----------
+#     m_list : list or array of ints
+#         The set of lengths for the random sequences (with the total
+#         number of Cliffords in each sequence given by m_list + 1). Minimal
+#         allowed length is therefore 1 (a random CLifford followed by its 
+#         inverse).
 
-    clifford_group : MatrixGroup
-        Which Clifford group to use.
+#     clifford_group : MatrixGroup
+#         Which Clifford group to use.
 
-    K_m : int or dict
-        If an integer, the fixed number of Clifford sequences to be sampled at
-        each length m.  If a dictionary, then a mapping from Clifford
-        sequence length m to number of Cliffords to be sampled at that length.
+#     K_m : int or dict
+#         If an integer, the fixed number of Clifford sequences to be sampled at
+#         each length m.  If a dictionary, then a mapping from Clifford
+#         sequence length m to number of Cliffords to be sampled at that length.
     
-    alias_maps : dict of dicts, optional
-        If not None, a dictionary whose keys name other gate-label-sets, e.g.
-        "primitive" or "canonical", and whose values are "alias" dictionaries 
-        which map the clifford labels (defined by `clifford_group`) to those
-        of the corresponding gate-label-set.  For example, the key "canonical"
-        might correspond to a dictionary "clifford_to_canonical" for which 
-        (as one example) clifford_to_canonical['Gc1'] == ('Gy_pi2','Gy_pi2').
+#     alias_maps : dict of dicts, optional
+#         If not None, a dictionary whose keys name other gate-label-sets, e.g.
+#         "primitive" or "canonical", and whose values are "alias" dictionaries 
+#         which map the clifford labels (defined by `clifford_group`) to those
+#         of the corresponding gate-label-set.  For example, the key "canonical"
+#         might correspond to a dictionary "clifford_to_canonical" for which 
+#         (as one example) clifford_to_canonical['Gc1'] == ('Gy_pi2','Gy_pi2').
             
-    seed : int, optional
-        Seed for random number generator; optional.
+#     seed : int, optional
+#         Seed for random number generator; optional.
 
-    randState : numpy.random.RandomState, optional
-        A RandomState object to generate samples from. Can be useful to set
-        instead of `seed` if you want reproducible distribution samples across
-        multiple random function calls but you don't want to bother with
-        manually incrementing seeds between those calls.
+#     randState : numpy.random.RandomState, optional
+#         A RandomState object to generate samples from. Can be useful to set
+#         instead of `seed` if you want reproducible distribution samples across
+#         multiple random function calls but you don't want to bother with
+#         manually incrementing seeds between those calls.
     
-    Returns
-    -------
-    dict or list
-        If `alias_maps` is not None, a dictionary of lists-of-gatestring-lists
-        whose keys are 'clifford' and all of the keys of `alias_maps` (if any).
-        Values are lists of `GateString` lists, one for each K_m value.  If
-        `alias_maps` is None, then just the list-of-lists corresponding to the 
-        clifford gate labels is returned.
-    """
+#     Returns
+#     -------
+#     dict or list
+#         If `alias_maps` is not None, a dictionary of lists-of-gatestring-lists
+#         whose keys are 'clifford' and all of the keys of `alias_maps` (if any).
+#         Values are lists of `GateString` lists, one for each K_m value.  If
+#         `alias_maps` is None, then just the list-of-lists corresponding to the 
+#         clifford gate labels is returned.
+#     """
 
-    if randState is None:
-        rndm = _np.random.RandomState(seed) # ok if seed is None
-    else:
-        rndm = randState
+#     if randState is None:
+#         rndm = _np.random.RandomState(seed) # ok if seed is None
+#     else:
+#         rndm = randState
         
-    assert hasattr(group_or_gateset, 'gates') or hasattr(group_or_gateset, 
-           'product'), 'group_or_gateset must be a MatrixGroup or Gateset'
+#     assert hasattr(group_or_gateset, 'gates') or hasattr(group_or_gateset, 
+#            'product'), 'group_or_gateset must be a MatrixGroup or Gateset'
     
     
-    if inverse:
-        if hasattr(group_or_gateset, 'gates'):
-            group_or_gateset = _rbobjs.MatrixGroup(group_or_gateset.gates.values(),
-                                  group_or_gateset.gates.keys())
-    if isinstance(K_m,int):
-        K_m_dict = {m : K_m for m in m_list }
-    else: K_m_dict = K_m
-    assert hasattr(K_m_dict, 'keys'),'K_m must be a dict or int!'
+#     if inverse:
+#         if hasattr(group_or_gateset, 'gates'):
+#             group_or_gateset = _rbobjs.MatrixGroup(group_or_gateset.gates.values(),
+#                                   group_or_gateset.gates.keys())
+#     if isinstance(K_m,int):
+#         K_m_dict = {m : K_m for m in m_list }
+#     else: K_m_dict = K_m
+#     assert hasattr(K_m_dict, 'keys'),'K_m must be a dict or int!'
 
-    string_lists = {'uncompiled': []} # GateStrings with uncompiled labels
-    if alias_maps is not None:
-        for gstyp in alias_maps.keys(): string_lists[gstyp] = []
+#     string_lists = {'uncompiled': []} # GateStrings with uncompiled labels
+#     if alias_maps is not None:
+#         for gstyp in alias_maps.keys(): string_lists[gstyp] = []
 
-    for m in m_list:
-        K = K_m_dict[m]
-        strs_for_this_m = [ create_random_gatestring(m, group_or_gateset,
-            inverse=inverse,interleaved=interleaved,randState=rndm) for i in range(K) ]
-        string_lists['uncompiled'].append(strs_for_this_m)
-        if alias_maps is not None:
-            for gstyp,alias_map in alias_maps.items(): 
-                string_lists[gstyp].append(
-                    _cnst.translate_gatestring_list(strs_for_this_m,alias_map))
+#     for m in m_list:
+#         K = K_m_dict[m]
+#         strs_for_this_m = [ create_random_gatestring(m, group_or_gateset,
+#             inverse=inverse,interleaved=interleaved,randState=rndm) for i in range(K) ]
+#         string_lists['uncompiled'].append(strs_for_this_m)
+#         if alias_maps is not None:
+#             for gstyp,alias_map in alias_maps.items(): 
+#                 string_lists[gstyp].append(
+#                     _cnst.translate_gatestring_list(strs_for_this_m,alias_map))
 
-    if alias_maps is None:
-        return string_lists['uncompiled'] #only list of lists is uncompiled one
-    else:
-        return string_lists #note we also return this if alias_maps == {}
+#     if alias_maps is None:
+#         return string_lists['uncompiled'] #only list of lists is uncompiled one
+#     else:
+#         return string_lists #note we also return this if alias_maps == {}

@@ -12,4 +12,7 @@ from .loaders import *
 from .writers import *
 from .stdinput import *
 from . import json
-from . import msgpack
+
+#Users may not have msgpack, which is fine.
+try: from . import msgpack
+except ImportError: pass

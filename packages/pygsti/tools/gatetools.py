@@ -21,6 +21,7 @@ from . import basistools as _bt
 from ..baseobjs import Basis as _Basis
 from ..baseobjs.basis import basis_matrices as _basis_matrices
 
+    
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
 def _mut(i,j,N):
@@ -45,7 +46,7 @@ def fidelity(A, B):
 
     To compute process fidelity, pass this function the
     Choi matrices of the two processes, or just call
-    the process_fidelity function with the gate matrices.
+    :function:`entanglement_fidelity` with the gate matrices.
 
     Parameters
     ----------
@@ -210,7 +211,20 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
     mxBasis = _bt.build_basis_for_matrix(A, mxBasis)
 
     #currently cvxpy is only needed for this function, so don't import until here
-    import cvxpy as _cvxpy
+
+
+    import sys as _sys
+    if _sys.version_info < (3, 0):
+        #Attempt "safe" import of cvxpy so that pickle isn't messed up...
+        import pickle as _pickle
+        p = _pickle.Pickler.dispatch.copy()
+        import cvxpy as _cvxpy
+        _pickle.Pickler.dispatch = p
+    else: # no need to do this in python3
+        import cvxpy as _cvxpy
+
+    #Check if using version < 1.0
+    old_cvxpy = bool(tuple(map(int,_cvxpy.__version__.split('.'))) < (1,0))
 
     # This SDP implementation is a modified version of Kevin's code
 
@@ -280,13 +294,23 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
     K = jamiolkowski_matrix.real # J.real
     L = jamiolkowski_matrix.imag # J.imag
 
-    Y = _cvxpy.Variable(dim, dim) # X.real
-    Z = _cvxpy.Variable(dim, dim) # X.imag
+    if old_cvxpy:
+        Y = _cvxpy.Variable(dim, dim) # X.real
+        Z = _cvxpy.Variable(dim, dim) # X.imag
 
-    sig0 = _cvxpy.Variable(smallDim,smallDim) # rho0.real
-    sig1 = _cvxpy.Variable(smallDim,smallDim) # rho1.real
-    tau0 = _cvxpy.Variable(smallDim,smallDim) # rho1.imag
-    tau1 = _cvxpy.Variable(smallDim,smallDim) # rho1.imag
+        sig0 = _cvxpy.Variable(smallDim,smallDim) # rho0.real
+        sig1 = _cvxpy.Variable(smallDim,smallDim) # rho1.real
+        tau0 = _cvxpy.Variable(smallDim,smallDim) # rho1.imag
+        tau1 = _cvxpy.Variable(smallDim,smallDim) # rho1.imag
+
+    else:
+        Y = _cvxpy.Variable(shape=(dim, dim)) # X.real
+        Z = _cvxpy.Variable(shape=(dim, dim)) # X.imag
+
+        sig0 = _cvxpy.Variable(shape=(smallDim, smallDim)) # rho0.real
+        sig1 = _cvxpy.Variable(shape=(smallDim, smallDim)) # rho1.real
+        tau0 = _cvxpy.Variable(shape=(smallDim, smallDim)) # rho1.imag
+        tau1 = _cvxpy.Variable(shape=(smallDim, smallDim)) # rho1.imag
 
     ident = _np.identity(smallDim, 'd')
 
@@ -312,8 +336,11 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
         prob.solve(solver="CVXOPT")
 #       prob.solve(solver="ECOS")
 #       prob.solve(solver="SCS")#This always fails
+    except _cvxpy.error.SolverError as e:
+        _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
+        return (-2, _np.zeros((dim,dim))) if return_x else -2
     except:
-        _warnings.warn("CVXOPT failed - diamonddist returning -2!")
+        _warnings.warn("CVXOPT failed (uknown err) - diamonddist returning -2!")
         return (-2, _np.zeros((dim,dim))) if return_x else -2
 
     if return_x:
@@ -349,10 +376,10 @@ def jtracedist(A, B, mxBasis=None): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
     return tracedist(JA,JB)
 
 
-def process_fidelity(A, B, mxBasis=None):
+def entanglement_fidelity(A, B, mxBasis=None):
     """
-    Returns the process fidelity between gate
-      matrices A and B given by :
+    Returns the "entanglement" process fidelity between gate
+    matrices A and B given by :
 
       F = Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
 
@@ -365,9 +392,9 @@ def process_fidelity(A, B, mxBasis=None):
         The matrices to compute the fidelity between.
 
     mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-        The source and destination basis, respectively.  Allowed
-        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-        and Qutrit (qt) (or a custom basis object).
+        The basis of the matrices.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
     """
     d2 = A.shape[0]
     def isTP(x): return _np.isclose(x[0,0],1.0) and all(
@@ -387,11 +414,45 @@ def process_fidelity(A, B, mxBasis=None):
 
 def average_gate_fidelity(A ,B, mxBasis=None):
     """
-    Computes the average gate infidelity (AGI) between two gates. 
+    Computes the average gate fidelity (AGF) between two gates. 
     Average gate fidelity (F_g) is related to entanglement fidelity 
-    (F_p), which is referred to as "process fidelity" in pyGSTi, via: 
+    (F_p), via:
     
-    F_g = (d * F_p + 1)/(1 + d), 
+      F_g = (d * F_p + 1)/(1 + d), 
+    
+    where d is the Hilbert space dimension. This formula, and the
+    definition of AGF, can be found in Phys. Lett. A 303 249-252 (2002).
+
+    Parameters
+    ----------
+    A : array or gate
+        The gate to compute the AGI to B of. E.g., an imperfect
+        implementation of B.
+        
+    B : array or gate
+        The gate to compute the AGI to A of. E.g., the target gate
+        corresponding to A.
+
+    mxBasis : {"std","gm","pp"} or Basis object, optional
+        The basis of the matrices.
+
+    Returns
+    -------
+    AGI : float
+        The AGI of A to B.
+    """
+    d = int(round(_np.sqrt(A.shape[0])))
+    PF = entanglement_fidelity(A,B,mxBasis=mxBasis)
+    AGF = (d*PF + 1)/(1+d)
+    return float(AGF)
+
+def average_gate_infidelity(A ,B, mxBasis="gm"):
+    """
+    Computes the average gate infidelity (AGI) between two gates. 
+    Average gate infidelity is related to entanglement infidelity 
+    (EI) via: 
+    
+      AGI = (d * (1-EI) + 1)/(1 + d), 
     
     where d is the Hilbert space dimension. This formula, and the
     definition of AGI, can be found in Phys. Lett. A 303 249-252 (2002).
@@ -414,10 +475,35 @@ def average_gate_fidelity(A ,B, mxBasis=None):
     AGI : float
         The AGI of A to B.
     """
-    d = int(round(_np.sqrt(A.shape[0])))
-    PF = process_fidelity(A,B,mxBasis=mxBasis)
-    AGF = (d*PF + 1)/(1+d)
-    return float(AGF)
+    return 1 - average_gate_fidelity(A ,B, mxBasis)
+
+def entanglement_infidelity(A, B, mxBasis=None):
+    """
+    Returns the entanglement infidelity (EI) between gate
+    matrices A and B given by :
+
+      EI = 1 - Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
+
+    where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
+    to it's corresponding Choi Matrix.
+
+    Parameters
+    ----------
+    A, B : numpy array
+        The matrices to compute the fidelity between.
+
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis of the matrices.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
+
+    Returns
+    -------
+    EI : float
+        The EI of A to B.
+    """
+    return 1 - float(entanglement_fidelity(A, B, mxBasis))
+
 
 def unitarity(A, mxBasis="gm"):
     """
@@ -451,7 +537,7 @@ def unitarity(A, mxBasis="gm"):
         
     """
     d = int(round(_np.sqrt(A.shape[0])))
-    basisMxs = basis_matrices(mxBasis, d)
+    basisMxs = _basis_matrices(mxBasis, d)
 
     if _np.allclose( basisMxs[0], _np.identity(d,'d') ):
         B = A
@@ -581,7 +667,7 @@ def povm_fidelity(gateset, targetGateset, povmlbl):
     """
     povm_mx = get_povm_map(gateset, povmlbl)
     target_povm_mx = get_povm_map(targetGateset, povmlbl)
-    return process_fidelity(povm_mx, target_povm_mx, targetGateset.basis)
+    return entanglement_fidelity(povm_mx, target_povm_mx, targetGateset.basis)
 
 
 def povm_jtracedist(gateset, targetGateset, povmlbl):

@@ -9,11 +9,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numbers as _numbers
 import numpy as _np
 import copy as _copy
+import sys as _sys
 
 from . import gatestring as _gstr
 from . import labeldicts as _ld
 from ..baseobjs import Label as _Label
 from ..tools import internalgates as _itgs
+from ..tools import compattools as _compat
 
 
 class Circuit(_gstr.GateString):
@@ -78,7 +80,7 @@ class Circuit(_gstr.GateString):
             of the circuit, unless the relationship between the gates is given to 
             a method of circuit.        
         """
-        assert(type(identity) == str), "The identity name must be a string!"
+        assert(_compat.isstr(identity)), "The identity name must be a string!"
         self.identity = identity
 
         assert((line_items is not None) or (gatestring is not None) or (num_lines is not None) or (line_labels is not None)), \
@@ -499,7 +501,7 @@ class Circuit(_gstr.GateString):
         assert(not self._static),"Cannot edit a read-only circuit!" 
 
         # Keeps track of lines that are not in the circuit to insert -- so we can pad them with identities
-        lines_to_pad = self.line_labels.copy()
+        lines_to_pad = self.line_labels[:] # copy this list
         for q in range(circuit.number_of_lines()):
             llabel = circuit.line_labels[q]
             # If there are lines in the circuit to insert that aren't in this circuit, we go in here.
@@ -1207,6 +1209,46 @@ class Circuit(_gstr.GateString):
             
         return layer
 
+    def get_layer_with_idles(self,j):
+        """
+        Returns the layer, as a list, at depth j. This list contains all gates
+        in the layer *including* self.identity gates, and contains each gate only
+        once (although multi-qubit gates appear on multiple lines of the circuit).
+        To get a layer without the self.identity gates, use the `get_layer()` method.
+
+        Parameters
+        ----------
+        j : int
+            The index (depth) of the layer to be returned
+
+        Returns
+        -------
+        List of Labels
+            Each gate in the layer, except self.identity gates, once and only once.
+        """      
+        assert(j >= 0 and j < self.depth()), "Circuit layer label invalid! Circuit is only of depth {}".format(self.depth())
+        
+        layer = []
+        qubits_used = []
+        for i in range(0,self.number_of_lines()):
+            
+            gate = self.line_items[i][j]
+            gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
+            
+            # Checks every element is a Label object.
+            assert((isinstance(gate,_Label))), "The elements of the layer should be Label objects!"
+            # Checks that a Label appears in all the lines it should act on.
+            for q in gate_qubits:
+                assert(self.line_items[self.line_labels.index(q)][j] == gate), "This is an invalid circuit layer!"
+
+            if gate not in layer:
+                # Checks that we have not already assigned a gate to this qubit
+                assert(not set(gate_qubits).issubset(set(qubits_used))), "There is more than one gate on some qubits in the layer; layer invalid!"
+                qubits_used.extend( gate_qubits )
+                layer.append(gate)
+            
+        return layer
+
     def is_valid_circuit(self):
         """
         Checks whether the circuit satisfies all of the criteria to be a valid circuit. These are:
@@ -1403,6 +1445,8 @@ class Circuit(_gstr.GateString):
         A text rendering of the circuit.
         """
         s = ''
+        Ctxt = 'C' if _sys.version_info <= (3, 0) else '\u25CF' # No unicode in
+        Ttxt = 'T' if _sys.version_info <= (3, 0) else '\u2295' #  Python 2
 
         def abbrev(lbl,k): #assumes a simple label w/ name & qubits
             """ Returns what to print on line 'k' for label 'lbl' """
@@ -1412,15 +1456,15 @@ class Circuit(_gstr.GateString):
                 return lbl.name
             elif lbl.name in ('CNOT','Gcnot') and nqubits == 2: # qubit indices = (control,target)
                 if k == self.line_labels.index(lbl_qubits[0]):
-                    return  '\u25CF' + str(lbl_qubits[1]) # was "C"
+                    return Ctxt + str(lbl_qubits[1])
                 else:
-                    return '\u2295' + str(lbl_qubits[0]) # was "T"
+                    return Ttxt + str(lbl_qubits[0])
             elif lbl.name in ('CPHASE', 'Gcphase') and nqubits == 2:
                 if k == self.line_labels.index(lbl_qubits[0]):
                     otherqubit = lbl_qubits[1]
                 else:
                     otherqubit = lbl_qubits[0]
-                return '\u25CF' + str(otherqubit)
+                return Ctxt + str(otherqubit)
             else:
                 return str(lbl)
         

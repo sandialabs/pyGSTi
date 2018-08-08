@@ -29,13 +29,9 @@ before_install:
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
 
-# I'm attempting to remove this..? (LSaldyt)
-#- pip install --global-option=build_ext --global-option="-I/usr/include/suitesparse" cvxpy cvxopt
 install:
-  - travis_retry travis_wait pip install -r requirements.txt
-  - pip install ipython mpi4py zmq coverage msgpack-python cython psutil >/dev/null
-  - pip install dill 
-  - pip install -e . >/dev/null
+  - pip install zmq coverage >/dev/null
+  - pip install -e .[travisci]
   
 cache:
   pip: true
@@ -44,8 +40,10 @@ cache:
 #Script For default "test" stage
 script:
   - cd test
-  - travis_wait 50 python travisTests.py # Tests may take some time!
-  - cd ..
+  - python travisTests.py # just produce test_packages/runTravisTests.sh
+  - cd test_packages
+  - source runTravisTests.sh # no need for travis_wait (always outputs every 9m)
+  - cd ../..
 
 jobs:
   include:

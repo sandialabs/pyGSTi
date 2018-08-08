@@ -290,7 +290,7 @@ def fill_std_qtys(qtys, connected, renderMath, CSSnames):
         
     if 'plotlyLIB' not in qtys:
         qtys['plotlyLIB'] = insert_resource(
-            connected, "https://cdn.plot.ly/plotly-latest.min.js", "plotly-polarfixed.min.js")
+            connected, "https://cdn.plot.ly/plotly-latest.min.js", "plotly-latest.min.js")
 
     #if 'mathjaxLIB' not in qtys:
     #    assert(connected),"MathJax cannot be used unless connected=True."

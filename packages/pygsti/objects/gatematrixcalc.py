@@ -503,15 +503,98 @@ class GateMatrixCalc(GateCalc):
             # axes = (gateset_parameter1, gateset_parameter2, gateset_element_row, gateset_element_col)
 
 
-    def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
+    #TODO REMOVE (UNUSED)
+    #def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
+    #    """
+    #    Compute probability of a single "outcome" (spam-tuple) for a single
+    #    gate string.
+    #
+    #    Parameters
+    #    ----------
+    #    spamTuple : (rho_label, compiled_effect_label)
+    #        Specifies the prep and POVM effect used to compute the probability.
+    #
+    #    gatestring : GateString or tuple
+    #        A tuple-like object of *compiled* gates (e.g. may include
+    #        instrument elements like 'Imyinst_0')
+    #
+    #    clipTo : 2-tuple
+    #      (min,max) to clip returned probability to if not None.
+    #      Only relevant when prMxToFill is not None.
+    #
+    #    bUseScaling : bool, optional
+    #      Whether to use a post-scaled product internally.  If False, this
+    #      routine will run slightly faster, but with a chance that the
+    #      product will overflow and the subsequent trace operation will
+    #      yield nan as the returned probability.
+    #
+    #    Returns
+    #    -------
+    #    probability: float
+    #    """
+    #    rho,E = self._rhoE_from_spamTuple(spamTuple)
+    #
+    #    if bUseScaling:
+    #        old_err = _np.seterr(over='ignore')
+    #        G,scale = self.product(gatestring, True)
+    #        if self.evotype == "statevec":
+    #            p =  float(abs(_np.dot(E, _np.dot(G, rho)) * scale)**2)
+    #        else: # evotype == "densitymx"
+    #            p = float(_np.dot(E, _np.dot(G, rho)) * scale) # probability, with scaling applied (may generate overflow, but OK)
+    #
+    #        #DEBUG: catch warnings to make sure correct (inf if value is large) evaluation occurs when there's a warning
+    #        #bPrint = False
+    #        #with _warnings.catch_warnings():
+    #        #    _warnings.filterwarnings('error')
+    #        #    try:
+    #        #        test = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) ) * scale
+    #        #    except Warning: bPrint = True
+    #        #if bPrint:  print 'Warning in Gateset.pr : scale=%g, trace=%g, p=%g' % (scale,_np.dot(self.SPAMs[spamLabel],G) ), p)
+    #        _np.seterr(**old_err)
+    #
+    #    else: #no scaling -- faster but susceptible to overflow
+    #        G = self.product(gatestring, False)
+    #        if self.evotype == "statevec":
+    #            p =  float(abs(_np.dot(E, _np.dot(G, rho)))**2)
+    #        else: # evotype == "densitymx"
+    #            p = float(_np.dot(E, _np.dot(G, rho)))
+    #
+    #
+    #    if _np.isnan(p):
+    #        if len(gatestring) < 10:
+    #            strToPrint = str(gatestring)
+    #        else:
+    #            strToPrint = str(gatestring[0:10]) + " ... (len %d)" % len(gatestring)
+    #        _warnings.warn("pr(%s) == nan" % strToPrint)
+    #        #DEBUG: print "backtrace" of product leading up to nan
+    #
+    #        #G = _np.identity( self.dim ); total_exp = 0.0
+    #        #for i,lGate in enumerate(gateLabelList):
+    #        #    G = _np.dot(G,self[lGate])  # product of gates, starting with G0
+    #        #    nG = norm(G); G /= nG; total_exp += log(nG) # scale and keep track of exponent
+    #        #
+    #        #    p = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) ) * exp(total_exp) # probability
+    #        #    print "%d: p = %g, norm %g, exp %g\n%s" % (i,p,norm(G),total_exp,str(G))
+    #        #    if _np.isnan(p): raise ValueError("STOP")
+    #
+    #    if clipTo is not None:
+    #        return _np.clip(p,clipTo[0],clipTo[1])
+    #    else: return p
+
+        
+    def prs(self, rholabel, elabels, gatestring, clipTo, bUseScaling=False):
         """
-        Compute probability of a single "outcome" (spam-tuple) for a single
-        gate string.
+        Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
+        gate string.  The spam tuples may only vary in their effect-label (their
+        prep labels must be the same)
 
         Parameters
         ----------
-        spamTuple : (rho_label, compiled_effect_label)
-            Specifies the prep and POVM effect used to compute the probability.
+        rholabel : Label
+            The state preparation label.
+        
+        elabels : list
+            A list of :class:`Label` objects giving the *compiled* effect labels.
 
         gatestring : GateString or tuple
             A tuple-like object of *compiled* gates (e.g. may include
@@ -529,37 +612,31 @@ class GateMatrixCalc(GateCalc):
 
         Returns
         -------
-        probability: float
+        numpy.ndarray
+            An array of floating-point probabilities, corresponding to
+            the elements of `elabels`.
         """
-        rho,E = self._rhoE_from_spamTuple(spamTuple)
+        rho,Es = self._rhoEs_from_spamTuples(rholabel, elabels)
+          #shapes: rho = (N,1), Es = (len(elabels),N)
 
         if bUseScaling:
             old_err = _np.seterr(over='ignore')
             G,scale = self.product(gatestring, True)
             if self.evotype == "statevec":
-                p =  float(abs(_np.dot(E, _np.dot(G, rho)) * scale)**2)
+                ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)) * scale)**2)
             else: # evotype == "densitymx"
-                p = float(_np.dot(E, _np.dot(G, rho)) * scale) # probability, with scaling applied (may generate overflow, but OK)
-
-            #DEBUG: catch warnings to make sure correct (inf if value is large) evaluation occurs when there's a warning
-            #bPrint = False
-            #with _warnings.catch_warnings():
-            #    _warnings.filterwarnings('error')
-            #    try:
-            #        test = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) ) * scale
-            #    except Warning: bPrint = True
-            #if bPrint:  print 'Warning in Gateset.pr : scale=%g, trace=%g, p=%g' % (scale,_np.dot(self.SPAMs[spamLabel],G) ), p)
+                ps = _np.real(_np.dot(Es, _np.dot(G, rho)) * scale) # probability, with scaling applied (may generate overflow, but OK)
             _np.seterr(**old_err)
 
         else: #no scaling -- faster but susceptible to overflow
             G = self.product(gatestring, False)
             if self.evotype == "statevec":
-                p =  float(abs(_np.dot(E, _np.dot(G, rho)))**2)
+                ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)))**2)
             else: # evotype == "densitymx"
-                p = float(_np.dot(E, _np.dot(G, rho)))
+                ps = _np.real(_np.dot(Es, _np.dot(G, rho)))
+        ps = ps.flatten()
 
-
-        if _np.isnan(p):
+        if _np.any(_np.isnan(ps)):
             if len(gatestring) < 10:
                 strToPrint = str(gatestring)
             else:
@@ -577,8 +654,13 @@ class GateMatrixCalc(GateCalc):
             #    if _np.isnan(p): raise ValueError("STOP")
 
         if clipTo is not None:
-            return _np.clip(p,clipTo[0],clipTo[1])
-        else: return p
+            ret = _np.clip(ps,clipTo[0],clipTo[1])
+        else: ret = ps
+
+        #DEBUG CHECK
+        #check_ps = _np.array( [ self.pr( (rholabel,elabel), gatestring, clipTo, bScale) for elabel in elabels ])
+        #assert(_np.linalg.norm(ps-check_ps) < 1e-8)
+        return ps
 
 
     def dpr(self, spamTuple, gatestring, returnPr, clipTo):
@@ -1625,6 +1707,14 @@ class GateMatrixCalc(GateCalc):
             E   = _np.conjugate(_np.transpose(Eraw))
         return rho,E
 
+    def _rhoEs_from_spamTuples(self, rholabel, elabels):
+        #Note: no support for "custom" spamlabels...
+        rho = self.preps[rholabel].todense()[:,None] # This calculator uses the convention that rho has shape (N,1)
+        Es =  [self.effects[elabel].todense()[:,None] for elabel in elabels]
+        Es = _np.conjugate(_np.transpose( _np.concatenate( Es, axis=1 ))) # convention: Es has shape (len(elabels),N)
+        return rho,Es
+
+
     def _probs_from_rhoE(self, rho, E, Gs, scaleVals):
         if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
         
@@ -1894,7 +1984,7 @@ class GateMatrixCalc(GateCalc):
             gatestring_list = master_gatestring_list[gInds]
 
             if prMxToFill is not None:
-                check_vp = _np.array( [ self.pr(spamTuple, gateString, clipTo, False) for gateString in gatestring_list ] )
+                check_vp = _np.array( [ self.prs(spamTuple[0], [spamTuple[1]], gateString, clipTo, False)[0] for gateString in gatestring_list ] )
                 if _nla.norm(prMxToFill[fInds] - check_vp) > 1e-6:
                     _warnings.warn("norm(vp-check_vp) = %g - %g = %g" % \
                                (_nla.norm(prMxToFill[fInds]),

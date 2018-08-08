@@ -29,7 +29,8 @@ from ..baseobjs import Label as _Lbl
 
 from . import gatestringconstruction as _gsc
 from .gatesetconstruction import basis_build_vector as _basis_build_vector
-    
+
+RANK_TOL = 1e-9
 
 def _iter_basis_inds(weight):
     """ Iterate over product of `weight` non-identity Pauli 1Q basis indices """
@@ -1087,7 +1088,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfi
                             if _np.linalg.norm(Jrow) < 1e-8: continue  # row of zeros can fool matrix_rank
                             
                             Jtest = _np.concatenate((J,Jrow),axis=0) 
-                            testRank = _np.linalg.matrix_rank(Jtest)
+                            testRank = _np.linalg.matrix_rank(Jtest, tol=RANK_TOL)
                             if testRank > Jrank:
                                 printer.log("fidpair: %s,%s (%s) increases rank => %d" %
                                             (str(prep),str(meas),str(elbl),testRank), 4)
@@ -1104,7 +1105,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfi
                             amped = p + -1*q # the amplified poly
                             Jrows[k,:] = _np.array([[ amped.deriv(iParam).evaluate(dummy) for iParam in _slct.as_array(wrtParams)]])
                         Jtest = _np.concatenate((J,Jrows),axis=0) 
-                        testRank = _np.linalg.matrix_rank(Jtest)
+                        testRank = _np.linalg.matrix_rank(Jtest, tol=RANK_TOL)
                         rankInc = testRank - Jrank
                         if rankInc > maxRankInc:
                             maxRankInc = rankInc
@@ -1210,7 +1211,7 @@ def test_amped_polys_for_syntheticidle(fidpairs, idleStr, gateset,  prepLbl=None
             Jrow = _np.array([[ amped.deriv(iParam).evaluate(dummy) for iParam in _slct.as_array(wrtParams)]])
             J[i*nEffectLbls+k,:] = Jrow
 
-    rank = _np.linalg.matrix_rank(J)
+    rank = _np.linalg.matrix_rank(J, tol=RANK_TOL)
     #print("Rank = %d, num params = %d" % (rank, Np))
     return rank, Np
 
@@ -1467,7 +1468,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
             if _np.linalg.norm(Jrow) < 1e-8: continue  # row of zeros can fool matrix_rank
             
             Jtest = _np.concatenate((J,Jrow),axis=0) 
-            testRank = _np.linalg.matrix_rank(Jtest)
+            testRank = _np.linalg.matrix_rank(Jtest, tol=RANK_TOL)
             #print("find_amped_polys_for_syntheticidle: ",prep,meas,elbl," => rank ",testRank, " (Np=",Np,")")
             if testRank > Jrank:
                 J = Jtest
@@ -1626,7 +1627,7 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
                            % (Jrank,Namped))
             
         for gfp_list in idle_gatename_fidpair_lists:
-            #print("GFP list = ",gfp_list)
+            print("GFP list = ",gfp_list)
             prep_noncore = tuple( (gfp_list[i][0] for i in range(nQubits)) ) # just the prep-part
             meas_noncore = tuple( (gfp_list[i][1] for i in range(nQubits)) ) # just the meas-part
     
@@ -1678,7 +1679,7 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
                     if _np.linalg.norm(Jrow) < 1e-8: continue  # row of zeros can fool matrix_rank
                     
                     Jtest = _np.concatenate((J,Jrow),axis=0)  
-                    testRank = _np.linalg.matrix_rank(Jtest)
+                    testRank = _np.linalg.matrix_rank(Jtest, tol=RANK_TOL)
                     if testRank > Jrank:
                         #print("ACCESS")
                         #print("ACCESS: ",prep,meas,testRank, _np.linalg.svd(Jtest, compute_uv=False))

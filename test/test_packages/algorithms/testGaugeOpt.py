@@ -90,7 +90,7 @@ class TestCoreMethods(AlgorithmsBase):
                                             cptp_penalty_factor=1.0, gauge_group=TP_gauge_group, verbosity=10, checkJac=True)
 
         gs_lgst_tp         = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, None,
-                                                        spam_penalty_factor=1.0, verbosity=10, checkJac=True)
+                                            spam_penalty_factor=1.0, verbosity=10, checkJac=True)
 
         gs_lgst.basis = Basis("gm",2) #so CPTP optimizations can work on gs_lgst
         gs_lgst_cptp       = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, None,

@@ -2647,6 +2647,9 @@ class LindbladParameterizedGateMap(Gate):
         Return this gate as a dense matrix.
         """
         if self.sparse: raise NotImplementedError("todense() not implemented for sparse LindbladParameterizedGateMap objects")
+        if self._evotype in ("svterm","cterm"): 
+            raise NotImplementedError("todense() not implemented for term-based LindbladParameterizedGateMap objects")
+
         if self.unitary_postfactor is not None:
             dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
         else:
@@ -2878,7 +2881,7 @@ class LindbladParameterizedGateMap(Gate):
         
     def __str__(self):
         s = "Lindblad Parameterized gate map with dim = %d, num params = %d\n" % \
-            (self.err_gen.shape[0], self.num_params())
+            (self.dim, self.num_params())
         return s
 
 
@@ -3306,7 +3309,8 @@ def _dexpSeries(X, dX):
     assert( (tr-2) in (1,2)), "Currently, dX can only have 1 or 2 derivative dimensions"
     #assert( len( (_np.isnan(dX)).nonzero()[0] ) == 0 ) # NaN debugging
     #assert( len( (_np.isnan(X)).nonzero()[0] ) == 0 ) # NaN debugging
-    series = last_commutant = term = dX; i=2
+    series = dX.copy() # accumulates results, so *need* a separate copy
+    last_commutant = term = dX; i=2
 
     #take d(matrix-exp) using series approximation
     while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
@@ -3330,9 +3334,11 @@ def _d2expSeries(X, dX, d2X):
     tr = len(dX.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
     tr2 = len(d2X.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
     assert( (tr-2,tr2-2) in [(1,2),(2,4)]), "Current support for only 1 or 2 derivative dimensions"
-    
-    series = term = last_commutant = dX
-    series2 = last_commutant2 = term2 = d2X
+
+    series = dX.copy() # accumulates results, so *need* a separate copy
+    series2 = d2X.copy() # accumulates results, so *need* a separate copy
+    term = last_commutant = dX
+    last_commutant2 = term2 = d2X
     i=2
 
     #take d(matrix-exp) using series approximation
@@ -4644,10 +4650,17 @@ class CliffordGate(Gate):
             # compute symplectic rep from unitary
             self.smatrix, self.svector = _symp.unitary_to_symplectic(self.unitary, flagnonclifford=True)
 
+        #Cached upon first usage
+        self.inv_smatrix = None
+        self.inv_svector = None
+
         nQubits = len(self.svector) // 2
         dim = 2**nQubits # "stabilizer" is a "unitary evolution"-type mode
         Gate.__init__(self, dim, "stabilizer")
 
+        
+    #NOTE: if this gate had parameters, we'd need to clear inv_smatrix & inv_svector
+    # whenever the smatrix or svector changed, respectively (probably in from_vector?)
 
     def torep(self):
         """
@@ -4660,7 +4673,11 @@ class CliffordGate(Gate):
         -------
         GateRep
         """
-        invs, invp = _symp.inverse_clifford(self.smatrix, self.svector)
+        if self.inv_smatrix is None or self.inv_svector is None:
+            self.inv_smatrix, self.inv_svector = _symp.inverse_clifford(
+                self.smatrix, self.svector) #cache inverse since it's expensive
+
+        invs, invp = self.inv_smatrix, self.inv_svector
         U = self.unitary.todense() if isinstance(self.unitary, Gate) else self.unitary
         return replib.SBGateRep_Clifford(_np.ascontiguousarray(self.smatrix,_np.int64),
                                          _np.ascontiguousarray(self.svector,_np.int64),

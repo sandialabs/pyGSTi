@@ -748,8 +748,8 @@ class StabilizerFrame(object):
         #2nd method using anticommutator - but we don't know how to update
         # global phase of state here either.
         if check:
-            p_chk = sum( [ abs(a)**2 * _symp.stabilizer_measurement_prob((self.s,p), zvals)
-                           for a,p in zip(self.a,self.ps)] )
+            p_chk = sum( [ abs(a)**2 * _symp.stabilizer_measurement_prob((self.s,pr), zvals)
+                           for a,pr in zip(self.a,self.ps)] )
             assert(_np.isclose(p,p_chk)), \
                 "Stabilizer-frame meas. probability check failed: %g != %g" % (p,p_chk)
         

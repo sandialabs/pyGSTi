@@ -15,27 +15,17 @@ from ... import algorithms as _algs
 import numpy as _np
 import warnings as _warnings
 
-def average_gate_infidelity(A ,B, mxBasis="gm"):
-    """
-    Todo : docstring. Copy from average_gate_fidelity?
-    """
-    return 1 - _tls.average_gate_fidelity(A ,B, mxBasis)
-
-def entanglement_infidelity(A, B, mxBasis=None):
-    """
-    Todo : docstring. Copy from process_fidelity?
-    """
-    return 1 - float(_tls.process_fidelity(A, B, mxBasis))
-
 def gateset_infidelity(gs, gs_target, itype = 'EI', 
                        weights=None, mxBasis=None):
     """
-    Todo : update docstring. 
+    Computes the average-over-gates of the infidelity between  gates in `gs`
+    and the gates in `gs_target`. If `itype` is 'EI' then the "infidelity"
+    is the entanglement infidelity; if `itype` is 'AGI' then the "infidelity"
+    is the average gate infidelity (AGI and EI are related by a dimension 
+    dependent constant).
 
-    Computes the average-over-gates of the average gate infidelity between 
-    gates in `gs` and the gates in `gs_target`. This quantity is sometimes
-    called the "average error rate" and Proctor et al Phys. Rev. Lett. 119, 
-    130502 (2017) it is called the average gateset infidelity.
+    This is the quantity that RB error rates are sometimes claimed to be
+    related to directly related.
     
     Parameters
     ----------
@@ -66,7 +56,7 @@ def gateset_infidelity(gs, gs_target, itype = 'EI',
     Returns
     -------
     float
-        The average infidelity between the two gatesets.
+        The weighted average-over-gates infidelity between the two gatesets.
         
     """
     assert(itype == 'AGI' or itype == 'EI'), "The infidelity type must be `AGI` (average gate infidelity) or `EI` (entanglement infidelity)"
@@ -77,9 +67,9 @@ def gateset_infidelity(gs, gs_target, itype = 'EI',
     I_list = []
     for gate in list(gs_target.gates.keys()):
         if itype == 'AGI':
-            I = average_gate_infidelity(gs[gate],gs_target[gate], mxBasis=mxBasis)
+            I = _tls.average_gate_infidelity(gs.gates[gate],gs_target.gates[gate], mxBasis=mxBasis)
         if itype == 'EI':
-            I = entanglement_infidelity(gs[gate],gs_target[gate], mxBasis=mxBasis)
+            I = _tls.entanglement_infidelity(gs.gates[gate],gs_target.gates[gate], mxBasis=mxBasis)
         if weights is None:
             w = 1
         else:
@@ -95,10 +85,9 @@ def gateset_infidelity(gs, gs_target, itype = 'EI',
 
 def predicted_RB_number(gs, gs_target, weights=None, d=None, rtype='EI'):
     """
-    Predicts the RB number (aka, the RB error rate) from a gateset, 
-    using the "L-matrix" theory from Proctor et al Phys. Rev. Lett. 119, 
-    130502 (2017). Note that this gives the same predictions as the 
-    theory by Wallman Quantum 2, 47 (2018).
+    Predicts the RB error rate from a gateset, using the "L-matrix" theory from 
+    Proctor et al Phys. Rev. Lett. 119, 130502 (2017). Note that this gives the 
+    same predictions as the theory in Wallman Quantum 2, 47 (2018).
     
     This theory is valid for various types of RB, including standard 
     Clifford RB -- i.e., it will accurately predict the per-Clifford 
@@ -145,22 +134,21 @@ def predicted_RB_number(gs, gs_target, weights=None, d=None, rtype='EI'):
         p obtained from fitting to Pm = A + Bp^m. "EI" corresponds to
         an RB error rate that is associated with entanglement infidelity, which
         is the probability of error for a gate with stochastic errors. This is 
-        the RB error rate defined in the "direct RB" protocol, and is given by
+        the RB error rate defined in the "direct RB" protocol, and is given by:
+    
+            r =  (d^2 - 1)(1 - p)/d^2,
 
-        todo: update. 
-        
-        r = (....)
-         "AGI" corresponds
-        to an RB error rate that is associated with average gate infidelity. This 
-        is the more standard (but perhaps less well motivated) definition of the 
-        RB error rate.
+        The AGI-type r is given by
+
+            r =  (d - 1)(1 - p)/d,
+
+        which is the conventional r definition in Clifford RB. This r is 
+        associated with (gate-averaged) average gate infidelity.
 
     Returns
     -------
-    
     r : float.
-        The predicted RB number.
-        
+        The predicted RB number.      
     """
     if d is None: d = int(round(_np.sqrt(gs.dim)))
     p = predicted_RB_decay_parameter(gs, gs_target, weights=weights)
@@ -200,8 +188,7 @@ def predicted_RB_decay_parameter(gs, gs_target, weights=None):
         But, this weighting is flexible in the "direct RB" protocol.
 
     Returns
-    -------
-    
+    -------   
     p : float.
         The second largest eigenvalue of L. This is the RB decay parameter
         for various types of RB.
@@ -214,7 +201,7 @@ def predicted_RB_decay_parameter(gs, gs_target, weights=None):
 
     if E[1].imag > 10**(-10):
         _warnings.warn("Output may be unreliable because the RB decay constant has a significant imaginary component.")
-    p = E[1]
+    p = abs(E[1])
     return p
 
 def rb_gauge(gs, gs_target, weights=None, mxBasis=None, eigenvector_weighting=1.0):
@@ -261,8 +248,7 @@ def rb_gauge(gs, gs_target, weights=None, mxBasis=None, eigenvector_weighting=1.
     Returns
     -------    
     l_operator: array
-        The matrix defining the gauge-transformation.
-        
+        The matrix defining the gauge-transformation.       
     """                    
     gam, vecs = _np.linalg.eig(L_matrix(gs,gs_target,weights=weights))
     absgam = abs(gam)
@@ -336,8 +322,7 @@ def transform_to_rb_gauge(gs, gs_target, weights=None, mxBasis=None, eigenvector
     Returns
     -------   
     gs_in_RB_gauge: GateSet
-        The gateset `gs` transformed into the "RB gauge".
-        
+        The gateset `gs` transformed into the "RB gauge".       
     """            
     l = rb_gauge(gs,gs_target,weights=weights,mxBasis=mxBasis,
                  eigenvector_weighting=eigenvector_weighting)
@@ -382,8 +367,7 @@ def L_matrix(gs, gs_target, weights=None):
     -------
     L : float
         A weighted version of the L operator from Proctor et al Phys. Rev. Lett. 
-        119, 130502 (2017), represented as a matrix using the 'stacking' convention.  
-        
+        119, 130502 (2017), represented as a matrix using the 'stacking' convention.         
     """
     if weights is None:
         weights = {}
@@ -408,27 +392,19 @@ def R_matrix_predicted_RB_decay_parameter(gs, group, group_to_gateset=None, weig
     Parameters
     ----------
     gs : Gateset
-        The gateset to predict the RB decay paramter for. If `subset_sampling` is None 
-        or `group_to_gateset` is None, the labels of the gates in `gs` should be the 
-        same as the labels of the group elements in `group`. For Clifford RB this 
-        would be the clifford gateset, for direct RB it would be the primitive gates.
+        The gateset to predict the RB decay paramter for. If `group_to_gateset` is 
+        None, the labels of the gates in `gs` should be the  same as the labels of the 
+        group elements in `group`. For Clifford RB this would be the clifford gateset, 
+        for direct RB it would be the primitive gates.
             
     group : MatrixGroup
         The group that the `gs` gateset contains gates from (`gs` does not
         need to be the full group, and could be a subset of `group`). For
         Clifford RB and direct RB, this would be the Clifford group.
         
-    subset_sampling : list, optional
-        If not None, a list of gate labels from `gs`, for which random sequences of 
-        this subset of gates are implemented in the RB protocol. Even if this is 
-        all of the gates of `gs`, this list needs to be specified if `gs` and 
-        `group` are either (1) not labelled the same (and so `group_to_gateset` is 
-        not None), or (2) `gs` is a subset of group.
-        
     group_to_gateset : dict, optional
         If not None, a dictionary that maps labels of group elements to labels
-        of `gs`. Only used if `subset_sampling` is not None. If `subset_sampling` is 
-        not None and the `gs` and `group` elements have the same labels, this dictionary
+        of `gs`. If `gs` and `group` elements have the same labels, this dictionary
         is not required. Otherwise it is necessary.
         
     weights : dict, optional
@@ -447,8 +423,7 @@ def R_matrix_predicted_RB_decay_parameter(gs, group, group_to_gateset=None, weig
     -------
     p : float
         The predicted RB decay parameter. Valid for standard Clifford RB or direct RB
-        with trace-preserving gates, and in a range of other circumstances.
-        
+        with trace-preserving gates, and in a range of other circumstances.       
     """ 
     R = R_matrix(gs, group, group_to_gateset=group_to_gateset, weights=weights)
     E = _np.absolute(_np.linalg.eigvals(R))
@@ -470,7 +445,7 @@ def R_matrix(gs, group, group_to_gateset=None, weights=None):
         The noisy gateset (e.g., the Cliffords) to calculate the R matrix of.
         The correpsonding `target` gateset (not required in this function)
         must be equal to or a subset of (a faithful rep of) the group `group`. 
-        If group_to_gateset is None, the labels of the gates in gs should be 
+        If `group_to_gateset `is None, the labels of the gates in gs should be 
         the same as the labels of the corresponding group elements in `group`. 
         For Clifford RB `gs` should be the clifford gateset; for direct RB 
         this should be the native gateset.
@@ -499,7 +474,7 @@ def R_matrix(gs, group, group_to_gateset=None, weights=None):
         
     """    
     if group_to_gateset is None:
-        for key in list(gs.gates.keys()):
+        for key in list(gs.gates.keys()): 
             assert(key in group.labels), "Gates labels are not in `group`!"
     else: 
         for key in list(gs.gates.keys()):
@@ -538,9 +513,9 @@ def exact_RB_ASPs(gs, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0'
     """
     Calculates the exact RB average success probablilites (ASP), using some
     generalizations of the formula given Proctor et al Phys. Rev. Lett. 119, 
-    130502 (2017). This formula does not scale well with group size
-    and qubit number, and for the Clifford group it is likely only practical for 
-    a single qubit.
+    130502 (2017). This formula does not scale well with group size and qubit 
+    number, and for the Clifford group it is likely only practical for a single 
+    qubit.
     
     Parameters
     ----------
@@ -600,8 +575,7 @@ def exact_RB_ASPs(gs, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0'
         Array of sequence length values that the ASPs have been calculated for.
         
     P_m : float
-        Array containing ASP values for the specified sequence length values.
-        
+        Array containing ASP values for the specified sequence length values.        
     """    
     if compilation is None:
         for key in list(gs.gates.keys()):
@@ -639,7 +613,6 @@ def exact_RB_ASPs(gs, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0'
         Riterate = _np.dot(Rstep,Riterate)
 
     return m, P_m
-
 
 def L_matrix_ASPs(gs, gs_target, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),
                   compilation=None, group_twirled=False, weights=None, gauge_optimize=True, 
@@ -723,8 +696,7 @@ def L_matrix_ASPs(gs, gs_target, m_max, m_min=0, m_step=1, success_outcomelabel=
             Array containing lower bounds on the possible ASP values
 
         upper_bound: float
-            Array containing upper bounds on the possible ASP values
-            
+            Array containing upper bounds on the possible ASP values           
     """    
     d = int(round(_np.sqrt(gs.dim)))
         
@@ -779,18 +751,17 @@ def L_matrix_ASPs(gs, gs_target, m_max, m_min=0, m_step=1, success_outcomelabel=
     else:
         return m, P_m
     
-    
 def errormaps(gs, gs_target):
     """
     Computes the 'left-multiplied' error maps associated with a noisy gate 
     set, along with the average error map. This is the gate set [E_1,...] 
     such that 
     
-    G_i = E_iT_i, 
+        G_i = E_iT_i, 
     
     where T_i is the gate which G_i is a noisy 
     implementation of. There is an additional gate in the set, that has 
-    the key 'Gavg' and which is the average of the error maps.
+    the key 'Gavg'. This is the average of the error maps.
     
     Parameters
     ----------
@@ -804,8 +775,7 @@ def errormaps(gs, gs_target):
     -------
     errormaps : GateSet
         The left multplied error gates, along with the average error map,
-        with the key 'Gavg'.  
-        
+        with the key 'Gavg'.         
     """    
     errormaps_gate_list = []
     errormaps = gs.copy()
@@ -847,8 +817,7 @@ def gate_dependence_of_errormaps(gs, gs_target, norm='diamond', mxBasis=None):
     Returns
     -------
     delta_avg : float
-        The value of the parameter defined above.
-        
+        The value of the parameter defined above.      
     """
     error_gs = errormaps(gs, gs_target)
     delta = []
@@ -859,6 +828,8 @@ def gate_dependence_of_errormaps(gs, gs_target, norm='diamond', mxBasis=None):
     
     for gate in list(gs_target.gates.keys()):
         if norm=='diamond':
+            print(error_gs.gates[gate])
+            print(error_gs.gates['Gavg'])
             delta.append(_tls.diamonddist(error_gs.gates[gate],error_gs.gates['Gavg'],
                                           mxBasis=mxBasis))            
         elif norm=='1to1': 
@@ -870,33 +841,7 @@ def gate_dependence_of_errormaps(gs, gs_target, norm='diamond', mxBasis=None):
     delta_avg = _np.mean(delta)    
     return delta_avg
 
-
-#def first_order_fit_function(m,A,B,C,p):
-#    """
-#    The 'first order' fitting function P_m = A + (B + m * C) * p^m, from
-#    "Scalable and Robust Randomized Benchmarking of Quantum Processes" 
-#    (http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504).
-#    This is a simplified verion of the 'first order' in that paper (see Eq. 3),
-#    as the model therein has 1 too many parameters for fitting. The conversion is
-##    A = B_1
-#    B = A_1 - C_1(q/p^(-2) - 1)
-#    C = C_1(q/p^(-2) - 1)
-#    where the LHS (RHS) quantites in this equation are those of our (Magesan 
-#    et al.'s) fitting function.#
-#
-#    Parameters
-#    ----------
-#    m : integer
-#        Length of random RB sequence (not including the inversion gate).
-#    
-#    A,B,C,p : float#
-#
-    # Returns
-    # -------
-    # float
-    # """
-    # return A+(B+C*m)*p**m
-
+# Future : put these back in.
 #def Magesan_theory_predicted_decay(gs, gs_target, mlist, success_outcomelabel=('0',), 
 #                                   norm='1to1', order='zeroth', return_all = False):
 #    
@@ -937,7 +882,7 @@ def gate_dependence_of_errormaps(gs, gs_target, norm='diamond', mxBasis=None):
 #    B_1 = pr_R_I
 #    A_1 = (pr_Q_p/p) - pr_L_p + ((p -1)*pr_L_I/p) + ((pr_R_p - pr_R_I)/p)
 #    C_1 = pr_L_p - pr_L_I
-#    q = average_gate_infidelity(error_gs.gates['GQ2'],_np.identity(d**2,float))
+#    q = _tls.average_gate_infidelity(error_gs.gates['GQ2'],_np.identity(d**2,float))
 #    q = _analysis.r_to_p(q,d,rtype='AGI')
 #    
 #    if order  == 'zeroth':

@@ -37,9 +37,9 @@ class CalcMethods2QTestCase(BaseTestCase):
             std.gs_target, std.prepStrs, std.effectStrs, cls.germs, cls.maxLengths)
 
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate)
-        ds = pygsti.construction.generate_fake_data(cls.gs_datagen, cls.listOfExperiments,
-                                                    nSamples=1000, sampleError="multinomial", seed=1234)
-        ds.save(compare_files + "/calcMethods2Q.dataset%s" % cls.versionsuffix)
+        #ds = pygsti.construction.generate_fake_data(cls.gs_datagen, cls.listOfExperiments,
+        #                                            nSamples=1000, sampleError="multinomial", seed=1234)
+        #ds.save(compare_files + "/calcMethods2Q.dataset%s" % cls.versionsuffix)
         
         cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods2Q.dataset%s" % cls.versionsuffix)
         cls.advOpts = {'tolerance': 1e-2 }
@@ -66,8 +66,8 @@ class CalcMethods2QTestCase(BaseTestCase):
             cls.redmod_germs, cls.redmod_maxLs)
 
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate)
-        redmod_ds = pygsti.construction.generate_fake_data(cls.gs_redmod_datagen, expList, 1000, "round", seed=1234)
-        redmod_ds.save(compare_files + "/calcMethods2Q_redmod.dataset%s" % cls.versionsuffix)
+        #redmod_ds = pygsti.construction.generate_fake_data(cls.gs_redmod_datagen, expList, 1000, "round", seed=1234)
+        #redmod_ds.save(compare_files + "/calcMethods2Q_redmod.dataset%s" % cls.versionsuffix)
         
         cls.redmod_ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods2Q_redmod.dataset%s" % cls.versionsuffix)
 

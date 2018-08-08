@@ -14,15 +14,12 @@ import uuid as _uuid
 #from scipy.integrate import quad as _quad
 #from scipy.interpolate import interp1d as _interp1d
 
-# Needed to load dill-packaged pickles? - LSaldyt
-#import dill
-#import pickle as _pickle
-import dill as _pickle
+import pickle as _pickle
 import copy as _copy
 import warnings as _warnings
 
-
 from collections import OrderedDict as _OrderedDict
+from collections import defaultdict as _DefaultDict
 
 from ..tools import listtools as _lt
 from ..tools import compattools as _compat
@@ -45,15 +42,16 @@ class DataSet_KeyValIterator(object):
         timeData = self.dataset.timeData
         repData = self.dataset.repData
         cntcache = self.dataset.cnt_cache
+        auxInfo = dataset.auxInfo
 
         def getcache(gs):
             return dataset.cnt_cache[gs] if dataset.bStatic else None
 
         if repData is None:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gs))
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gs), auxInfo[gs])
                              for gs,gsi in self.dataset.gsIndex.items() )
         else:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(gs))
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(gs), auxInfo[gs])
                              for gs,gsi in self.dataset.gsIndex.items() )
         #Note: gsi above will be an index for a non-static dataset and
         #  a slice for a static dataset.
@@ -75,15 +73,16 @@ class DataSet_ValIterator(object):
         timeData = self.dataset.timeData
         repData = self.dataset.repData
         cntcache = self.dataset.cnt_cache
+        auxInfo = dataset.auxInfo
 
         def getcache(gs):
             return dataset.cnt_cache[gs] if dataset.bStatic else None
 
         if repData is None:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gs))
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gs), auxInfo[gs])
                              for gs,gsi in self.dataset.gsIndex.items() )
         else:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(gs))
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(gs), auxInfo[gs])
                              for gs,gsi in self.dataset.gsIndex.items() )
         #Note: gsi above will be an index for a non-static dataset and
         #  a slice for a static dataset.
@@ -103,12 +102,14 @@ class DataSetRow(object):
     looks similar to a list with `(outcome_label, time_index, repetition_count)`
     tuples as the values.
     """
-    def __init__(self, dataset, rowOliData, rowTimeData, rowRepData, cached_cnts):
+    def __init__(self, dataset, rowOliData, rowTimeData, rowRepData,
+                 cached_cnts, aux):
         self.dataset = dataset
         self.oli = rowOliData
         self.time = rowTimeData
         self.reps = rowRepData
         self._cntcache = cached_cnts
+        self.aux = aux
 
     @property
     def outcomes(self):
@@ -620,6 +621,9 @@ class DataSet(object):
         self.timeType = Time_type
         self.repType  = Repcount_type
 
+        #auxiliary info
+        self.auxInfo = _DefaultDict( dict )
+
         # count cache (only used when static; not saved/loaded from disk)
         if bStatic:
             self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
@@ -682,7 +686,8 @@ class DataSet(object):
                   if (self.repData is not None) else None
         return DataSetRow(self, self.oliData[ self.gsIndex[gatestring] ],
                           self.timeData[ self.gsIndex[gatestring] ], repData,
-                          self.cnt_cache[ gatestring ] if self.bStatic else None)
+                          self.cnt_cache[ gatestring ] if self.bStatic else None,
+                          self.auxInfo[gatestring])
 
     def set_row(self, gatestring, outcomeDictOrSeries, occurrence=0):
         """
@@ -883,7 +888,7 @@ class DataSet(object):
 
 
     def add_count_dict(self, gateString, countDict, overwriteExisting=True,
-                       recordZeroCnts=False):
+                       recordZeroCnts=False, aux=None):
         """
         Add a single gate string's counts to this DataSet
 
@@ -904,6 +909,10 @@ class DataSet(object):
             Whether zero-counts are actually recorded (stored) in this DataSet.
             If False, then zero counts are ignored, except for potentially
             registering new outcome labels.
+
+        aux : dict, optional
+            A dictionary of auxiliary meta information to be included with
+            this set of data counts (associated with `gateString`).
 
         Returns
         -------
@@ -935,12 +944,13 @@ class DataSet(object):
             timeStampList = [0]*len(countList)
 
         self.add_raw_series_data(gateString, outcomeLabelList, timeStampList,
-                                 countList, overwriteExisting, recordZeroCnts)
-
+                                 countList, overwriteExisting, recordZeroCnts,
+                                 aux)
+        
 
     def add_raw_series_data(self, gateString, outcomeLabelList, timeStampList,
                             repCountList=None, overwriteExisting=True,
-                            recordZeroCnts=True):
+                            recordZeroCnts=True, aux=None):
         """
         Add a single gate string's counts to this DataSet
 
@@ -974,6 +984,10 @@ class DataSet(object):
             actually recorded (stored) in this DataSet.  If False, then zero
             counts are ignored, except for potentially registering new outcome
             labels.
+
+        aux : dict, optional
+            A dictionary of auxiliary meta information to be included with
+            this set of data counts (associated with `gateString`).
 
         Returns
         -------
@@ -1041,9 +1055,11 @@ class DataSet(object):
             if repArray is not None: self.repData.append( repArray )
             self.gsIndex[ gateString ] = gateStringIndx
 
+        if aux is not None: self.add_auxiliary_info(gateString, aux)
+
 
     def add_series_data(self, gateString, countDictList, timeStampList,
-                        overwriteExisting=True):
+                        overwriteExisting=True, aux=None):
         """
         Add a single gate string's counts to this DataSet
 
@@ -1065,6 +1081,10 @@ class DataSet(object):
             `False`, add the count data with the next non-negative integer
             timestamp.
 
+        aux : dict, optional
+            A dictionary of auxiliary meta information to be included with
+            this set of data counts (associated with `gateString`).
+
         Returns
         -------
         None
@@ -1083,7 +1103,28 @@ class DataSet(object):
                 expanded_repList.append(cntDict[ol]) #could do this only for counts > 1
         return self.add_raw_series_data(gateString, expanded_outcomeList,
                                         expanded_timeList, expanded_repList,
-                                        overwriteExisting)
+                                        overwriteExisting, aux=aux)
+
+    
+    def add_auxiliary_info(self, gateString, aux):
+        """
+        Add auxiliary meta information to `gateString`.
+
+        Parameters
+        ----------
+        gateString : tuple or GateString
+            A tuple of gate labels specifying the gate string or a GateString object
+
+        aux : dict, optional
+            A dictionary of auxiliary meta information to be included with
+            this set of data counts (associated with `gateString`).
+
+        Returns
+        -------
+        None
+        """
+        self.auxInfo[gateString].clear() # needed? (could just update?)
+        self.auxInfo[gateString].update(aux) 
 
 
     def add_counts_from_dataset(self, otherDataSet):
@@ -1407,7 +1448,8 @@ class DataSet(object):
                      'timeType': _np.dtype(self.timeType).str,
                      'repType': _np.dtype(self.repType).str,
                      'collisionAction': self.collisionAction,
-                     'uuid' : self.uuid }
+                     'uuid' : self.uuid,
+                     'auxInfo': self.auxInfo }
         return toPickle
 
     def __setstate__(self, state_dict):
@@ -1453,6 +1495,7 @@ class DataSet(object):
                 self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
             else: self.cnt_cache = None
 
+        self.auxInfo = state_dict.get('auxInfo', _DefaultDict(dict) )
         self.collisionAction = state_dict.get('collisionAction','aggregate')
         self.uuid = state_dict.get('uuid',None)
 
@@ -1483,7 +1526,8 @@ class DataSet(object):
                      'repType': self.repType,
                      'useReps': bool(self.repData is not None),
                      'collisionAction': self.collisionAction,
-                     'uuid' : self.uuid} #Don't pickle counts numpy data b/c it's inefficient
+                     'uuid' : self.uuid,
+                     'auxInfo': self.auxInfo } #Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.oliData)
 
         bOpen = _compat.isstr(fileOrFilename)
@@ -1553,6 +1597,7 @@ class DataSet(object):
         self.repType = state_dict['repType']
         self.collisionAction = state_dict['collisionAction']
         self.uuid    = state_dict['uuid']
+        self.auxInfo = state_dict.get('auxInfo', _DefaultDict(dict)) #backward compat
 
         useReps = state_dict['useReps']
 

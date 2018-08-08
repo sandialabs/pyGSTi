@@ -89,7 +89,7 @@ class Colormap(object):
     color corresponding to a particular value and extract matplotlib
     colormap and normalization objects.
     """
-    def __init__(self, rgb_colors, hmin, hmax):
+    def __init__(self, rgb_colors, hmin, hmax, invalid_color=None):
         """
         Create a new Colormap.
 
@@ -107,9 +107,15 @@ class Colormap(object):
             heatmap.  That is, `hmin` is the value (after `normalize` has been
             called) assigned the "0.0"-valued color in `rgb_colors` and `hmax`
             similarly for the "1.0"-valued color.
+
+        invalid_color : tuple, optional
+            If not None, an (R,G,B) tuple of values in [0,1] specifying the
+            color to use for *normalized* values (which usually should be
+            in [0,1]) that lie outside the [0,1] range of `rgb_colors`.
         """
 
         self.rgb_colors = rgb_colors
+        self.invalid_color = invalid_color
         self.hmin = hmin
         self.hmax = hmax
 
@@ -202,9 +208,15 @@ class Colormap(object):
                 interp_rgb = (1.0-v)*rgb + v*next_rgb
                 break
         else:
-            val,color = self.rgb_colors[-1]
-            assert(val <= normalized_value)
-            interp_rgb = _np.array(color)
+            last_color_val,color = self.rgb_colors[-1]
+            if last_color_val <= normalized_value: # just use final color value
+                interp_rgb = _np.array(color)
+            elif self.invalid_color:
+                interp_rgb = _np.array(self.invalid_color)
+            else:
+                raise ValueError(("Normalized value %g should be >= final "
+                                  "color value (%g) or an invalid color should"
+                                  " be set") % (normalized_value,val))
         return 'rgb(%d,%d,%d)' % ( int(round(interp_rgb[0]*255)),
                                    int(round(interp_rgb[1]*255)),
                                    int(round(interp_rgb[2]*255)) )
@@ -257,7 +269,7 @@ class LinlogColormap(Colormap):
             expected distribution of each box's values is chi^2_[dof_per_box].
 
         color : {"red","blue","green","cyan","yellow","purple"}
-            the color to use for the non-grayscale part of the color scale.
+            The color to use for the non-grayscale part of the color scale.
         """
         self.N = n_boxes
         self.percentile = pcntle
@@ -305,9 +317,11 @@ class LinlogColormap(Colormap):
         else:
             raise ValueError("Unknown color: %s" % color)
 
+        invalid_color = (0.8,0.8,1.0) # a light blue?
+
         super(LinlogColormap, self).__init__(
             [ [0.0, (1.,1.,1.)], [0.499999999, gray],
-              [0.5, c], [1.0, mx] ], hmin,hmax)
+              [0.5, c], [1.0, mx] ], hmin,hmax, invalid_color)
 
     @classmethod
     def manual_transition_pt(cls, vmin, vmax, trans, color="red"):
@@ -392,6 +406,8 @@ class LinlogColormap(Colormap):
                                         (log10_norm_trans -
                                          _np.ma.log10(lin_norm_value)) /
                                         (2*log10_norm_trans) + 0.5)
+            return_value = _np.ma.array(return_value.filled(-1), # replace masked values with zeros for color mapping
+                                        mask=_np.ma.getmask(return_value))
 
         if return_value.shape==():
             return return_value.item()
