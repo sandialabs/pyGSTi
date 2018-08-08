@@ -1606,14 +1606,31 @@ class Circuit(_gstr.GateString):
             # Go through the (non-self.identity) gates in the layer and convert them to quil
             for gate in layer:
                 gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
-                assert(len(gate_qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
+                assert(len(gate_qubits) <= 2 or gate.qubits is None), 'Gate on more than 2 qubits given; this is currently not supported!'
+                
                 
                 # Find the quil for the gate.
                 quil_for_gate = gatename_conversion[gate.name]
-                for q in gate_qubits: quil_for_gate += ' ' + str(qubit_conversion[q]) 
-                quil_for_gate += '\n'
-                # Add the quil for the gate to the quil string.
-                quil += quil_for_gate
+                
+                #If gate.qubits is None, gate is assumed to be single-qubit gate
+                #acting in parallel on all qubits.
+                if gate.qubits is None:
+                    if quil_for_gate == 'I':
+                        quil += 'PRAGMA PRESERVE_BLOCK\n'
+                        for q in gate_qubits:
+                            quil += quil_for_gate + ' ' + str(qubit_conversion[q]) + '\n'
+                        quil += 'PRAGMA END_PRESERVE_BLOCK\n'
+                    else:
+                        for q in gate_qubits:
+                            quil += quil_for_gate + ' ' + str(qubit_conversion[q]) + '\n'
+                                        
+                #If gate.qubits is not None, then apply the one- or multi-qubit gate to
+                #the explicitly specified qubits.
+                else:                
+                    for q in gate_qubits: quil_for_gate += ' ' + str(qubit_conversion[q]) 
+                    quil_for_gate += '\n'
+                    # Add the quil for the gate to the quil string.
+                    quil += quil_for_gate
                 
                 # Keeps track of the qubits that have been accounted for, and checks that hadn't been used
                 # although that should already be checked in the .get_layer(), which checks for its a valid 
