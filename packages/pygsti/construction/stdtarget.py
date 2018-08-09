@@ -57,7 +57,7 @@ def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=Fal
     gs_terms.set_simtype("termorder:%d" % termOrder,my_calc_cache)
 
     comm_method = "scheduler"
-    if comm is not None and comm_method == "scheduler":
+    if comm is not None and comm.Get_size() > 1 and comm_method == "scheduler":
         from mpi4py import MPI # just needed for MPI.SOURCE below
 
         #Alternate: use rank0 as "scheduler"
