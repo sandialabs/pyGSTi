@@ -1,0 +1,5 @@
+# Some circuits to import
+{}
+[Gc11:0Gc18:1Gc12:2Gcnot:4:3][Gcnot:1:0Gc22:2Gc23:3Gc22:4][Gc12:0Gcnot:1:2Gc16:3Gc21:4]
+[Gc6:0Gc0:1Gcnot:2:3Gc9:4][Gc4:0Gc20:1Gc11:2Gc13:3Gc17:4][Gc5:0Gc23:1Gc12:2Gcnot:4:3][Gcnot:1:0Gc9:2Gc2:3Gc1:4][Gc15:0Gcnot:1:2Gc11:3Gc2:4][Gcnot:1:0Gc12:2Gc0:3Gc13:4][Gc13:0Gc12:1Gc13:2Gcnot:4:3]
+[Gc22:0Gc12:1Gc2:2Gcnot:4:3][Gc13:0Gc15:1Gc23:2Gc11:3Gc3:4][Gc17:0Gcnot:1:2Gc10:3Gc3:4][Gc9:0Gc14:1Gc21:2Gcnot:4:3][Gcnot:1:0Gc3:2Gc7:3Gc7:4][Gc7:0Gc3:1Gc9:2Gcnot:4:3][Gc20:0Gc10:1Gc5:2Gcnot:4:3][Gc21:0Gcnot:1:2Gc11:3Gc8:4][Gc14:0Gc0:1Gcnot:2:3Gc23:4][Gc17:0Gcnot:1:4Gc13:2Gc4:3][Gc11:0Gc16:1Gcnot:2:3Gc0:4][Gc13:0Gcnot:1:2Gc4:3Gc18:4][Gc6:0Gcnot:1:4Gc11:2Gc23:3][Gc13:0Gc14:1Gcnot:2:3Gc3:4][Gc6:0Gc6:1Gc1:2Gcnot:4:3][Gc22:0Gc13:1Gc11:2Gc4:3Gc16:4][Gc1:0Gcnot:1:2Gc10:3Gc13:4][Gc8:0Gc15:1Gc21:2Gc4:3Gc9:4][Gc5:0Gc16:1Gc3:2Gcnot:4:3][Gc19:0Gc12:1Gcnot:2:3Gc8:4][Gc15:0Gcnot:1:2Gc16:3Gc1:4][Gcnot:1:0Gc22:2Gc12:3Gc21:4][Gc13:0Gcnot:1:4Gc4:2Gc2:3][Gcnot:1:0Gc12:2Gc16:3Gc9:4][Gcnot:1:0Gc2:2Gc23:3Gc21:4][Gc7:0Gc11:1Gc19:2Gcnot:4:3][Gcnot:1:0Gc7:2Gc16:3Gc14:4][Gc19:0Gc18:1Gc7:2Gc19:3Gc19:4][Gc19:0Gcnot:1:4Gc21:2Gc7:3][Gc18:0Gc10:1Gc18:2Gc14:3Gc23:4]
