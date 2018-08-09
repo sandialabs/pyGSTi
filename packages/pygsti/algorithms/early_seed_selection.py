@@ -13,6 +13,7 @@ import warnings       as _warnings
 import time           as _time
 import random         as _random
 import math           as _math
+import copy           as _copy
 
 from .. import optimize     as _opt
 from .. import tools        as _tools
@@ -34,7 +35,7 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
                        gateLabelAliases=None, memLimit=None,
                        profiler=None, comm=None, distributeMethod = "deriv",
                        alwaysPerformMLE=False, evaltree_cache=None, nSeeds=10, seeds=None,
-                       earlyIteration=7, skip_mc2=False):
+                       earlyIteration=7, skip_mc2=False, intermediateSeeding=True):
     """
     Performs Iterative Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
@@ -187,13 +188,13 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
     tStart = _time.time()
     tRef = tStart
 
-    def calc_2dlogl(mleGateset):
+    def calc_2dlogl(mleGateset, stringsToEstimate):
         logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases)
         maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval, radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
         return 2*(logL_ub - maxLogL)
 
     if seeds is None:
-        seeds = [(mleGateset, calc_2qlogl(mleGateset))]
+        seeds = [(mleGateset, calc_2dlogl(mleGateset, stringsToEstimate))]
         for i in range(nSeeds):
             seed = mleGateset.copy()
             if i == 0:
@@ -201,11 +202,13 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
             else:
                 depol_amount = 1 / 10 ** (i - 1)
                 seed = seed.depolarize(gate_noise=_random.uniform(0, depol_amount))
-                seeds.append(seed, calc_2dlogl(seed))
+                seeds.append(seed, calc_2dlogl(seed, stringsToEstimate))
 
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):
-            seeds = [(gs_seed_i, calc_2dlogl(gs_seed_i)) for (gs_seed_i, _) in seeds]
+            # Re-calculate 2dlogl, since stringsToEstimate has changed
+            seeds = [(gs_seed_i, calc_2dlogl(gs_seed_i, stringsToEstimate)) for (gs_seed_i, _) in seeds]
+            nextseeds = []
             j = 0
             for j, (mleGateset, previousScore) in enumerate(
                                                   sorted(seeds, key=lambda t : t[1])[:(nSeeds if j < earlyIteration else 1)]):
@@ -255,7 +258,7 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
 
                 printer.log("2*Delta(log(L)) = %g" % (two_d_logl),2)
 
-                seeds.append((mleGateset, two_d_logl))
+                nextseeds.append((mleGateset, two_d_logl))
 
                 tNxt = _time.time();
                 profiler.add_time('do_iterative_mlgst: iter %d logl-comp' % (i+1),tRef2)
@@ -301,6 +304,11 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
                 if returnAll and j == 0:
                     mleGatesets.append(mleGateset)
                     maxLogLs.append(maxLogL)
+
+            if intermediateSeeding:
+                seeds += nextseeds
+            else:
+                seeds = _copy.deepcopy(nextseeds)
 
     printer.log('Iterative MLGST Total Time: %.1fs' % (_time.time()-tStart))
     profiler.add_time('do_iterative_mlgst: total time', tStart)
