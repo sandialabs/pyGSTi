@@ -205,6 +205,7 @@ def do_early_seed_selection_iterative_mlgst(dataset, startGateset, gateStringSet
 
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):
+            seeds = [(gs_seed_i, calc_2dlogl(gs_seed_i)) for (gs_seed_i, _) in seeds]
             j = 0
             for j, (mleGateset, previousScore) in enumerate(
                                                   sorted(seeds, key=lambda t : t[1])[:(nSeeds if j < earlyIteration else 1)]):

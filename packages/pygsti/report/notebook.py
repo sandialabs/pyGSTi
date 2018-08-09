@@ -24,7 +24,7 @@ class Notebook(object):
     def __init__(self, cells=None, notebookTextFiles=None):
         '''
         Create an IPython notebook from a list of cells, list of notebookTextFiles, or both.
-        
+
         Parameters
         ----------
         cells : list, optional
@@ -128,13 +128,13 @@ class Notebook(object):
         Parameters
         ----------
         block : str
-            Block of markdown (or HTML) 
+            Block of markdown (or HTML)
         '''
         self.add_block(block, 'markdown')
 
     def add_code_file(self, filename):
         '''
-        Add a code file to the notebook 
+        Add a code file to the notebook
 
         Parameters
         ----------
@@ -145,12 +145,12 @@ class Notebook(object):
 
     def add_markdown_file(self, filename):
         '''
-        Add a markdown file to the notebook 
+        Add a markdown file to the notebook
 
         Parameters
         ----------
         filename : str
-            name of file containing markdown 
+            name of file containing markdown
         '''
         self.add_file(filename, 'markdown')
 
@@ -164,7 +164,7 @@ class Notebook(object):
         Parameters
         ----------
         text : str
-            notebook formatted text 
+            notebook formatted text
         '''
         assert '@@' in text, 'At least one cell tag must be present for the file to be correctly parsed'
         for block in text.split('@@'):
@@ -198,7 +198,7 @@ class Notebook(object):
         Parameters
         ----------
         filename : str
-            name of file containing notebook formatted text 
+            name of file containing notebook formatted text
         '''
         with open(filename, 'r') as infile:
             self.add_notebook_text(infile.read())
@@ -210,7 +210,7 @@ class Notebook(object):
         Parameters
         ----------
         filenames : list(str)
-            names of file containing notebook formatted text 
+            names of file containing notebook formatted text
         '''
         for filename in filenames:
             self.add_notebook_text_file(filename)
@@ -222,7 +222,7 @@ class Notebook(object):
         Parameters
         ----------
         filename : str
-            ipynb file to append 
+            ipynb file to append
         '''
         with open(filename, 'r') as infile:
             notebookDict = _json.load(infile)
