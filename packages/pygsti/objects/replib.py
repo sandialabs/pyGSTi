@@ -547,7 +547,7 @@ class SVGateRep_Embedded(SVGateRep):
 class SVGateRep_Composed(SVGateRep):
     # exactly the same as DM case
     def __init__(self, factor_gate_reps):
-        assert(len(factor_gates) > 0), "Composed gates must contain at least one factor gate!"
+        assert(len(factor_gate_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factorsgates = factor_gate_reps
         super(SVGateRep_Composed,self).__init__(factor_gate_reps[0].dim)
 
@@ -628,8 +628,8 @@ class SBGateRep_Embedded(SBGateRep):
 class SBGateRep_Composed(SBGateRep):
     # exactly the same as DM case except .dim -> .n
     def __init__(self, factor_gate_reps):
-        assert(len(factor_gates) > 0), "Composed gates must contain at least one factor gate!"
-        self.factorsgates = factor_gate_reps
+        assert(len(factor_gate_reps) > 0), "Composed gates must contain at least one factor gate!"
+        self.factorgates = factor_gate_reps
         super(SBGateRep_Composed,self).__init__(factor_gate_reps[0].n)
 
     def acton(self, state):

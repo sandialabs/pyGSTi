@@ -443,13 +443,13 @@ cdef class DMGateRep_Embedded(DMGateRep):
 cdef class DMGateRep_Composed(DMGateRep):
     cdef object list_of_factors # list of DMGateRep objs?
 
-    def __cinit__(self, factor_gates):
-        self.list_of_factors = factor_gates
+    def __cinit__(self, factor_gate_reps):
+        self.list_of_factors = factor_gate_reps
         cdef INT i
-        cdef INT nfactors = len(factor_gates)
+        cdef INT nfactors = len(factor_gate_reps)
         cdef vector[DMGateCRep*] gate_creps = vector[DMGateCRep_ptr](nfactors)
         for i in range(nfactors):
-            gate_creps[i] = (<DMGateRep?>factor_gates[i]).c_gate
+            gate_creps[i] = (<DMGateRep?>factor_gate_reps[i]).c_gate
         self.c_gate = new DMGateCRep_Composed(gate_creps)
 
 
@@ -639,13 +639,13 @@ cdef class SVGateRep_Embedded(SVGateRep):
 cdef class SVGateRep_Composed(SVGateRep):
     cdef object list_of_factors # list of SVGateRep objs?
 
-    def __cinit__(self, factor_gates):
-        self.list_of_factors = factor_gates
+    def __cinit__(self, factor_gate_reps):
+        self.list_of_factors = factor_gate_reps
         cdef INT i
-        cdef INT nfactors = len(factor_gates)
+        cdef INT nfactors = len(factor_gate_reps)
         cdef vector[SVGateCRep*] gate_creps = vector[SVGateCRep_ptr](nfactors)
         for i in range(nfactors):
-            gate_creps[i] = (<SVGateRep?>factor_gates[i]).c_gate
+            gate_creps[i] = (<SVGateRep?>factor_gate_reps[i]).c_gate
         self.c_gate = new SVGateCRep_Composed(gate_creps)
 
         
@@ -746,13 +746,13 @@ cdef class SBGateRep_Embedded(SBGateRep):
 cdef class SBGateRep_Composed(SBGateRep):
     cdef object list_of_factors # list of SBGateRep objs?
 
-    def __cinit__(self, factor_gates):
-        self.list_of_factors = factor_gates
+    def __cinit__(self, factor_gate_reps):
+        self.list_of_factors = factor_gate_reps
         cdef INT i
-        cdef INT nfactors = len(factor_gates)
+        cdef INT nfactors = len(factor_gate_reps)
         cdef vector[SBGateCRep*] gate_creps = vector[SBGateCRep_ptr](nfactors)
         for i in range(nfactors):
-            gate_creps[i] = (<SBGateRep?>factor_gates[i]).c_gate
+            gate_creps[i] = (<SBGateRep?>factor_gate_reps[i]).c_gate
         self.c_gate = new SBGateCRep_Composed(gate_creps)
 
 
