@@ -188,98 +188,59 @@ def do_reseed_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstima
         maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval, radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
         return 2*(logL_ub - maxLogL)
 
-    seeds = [(startGateset, calc_2qlogl(mleGateset))]
+    # IGNORE ALL INITIAL ITERATIONS
+    i = 0
+    stringsToEstimate = gateStringLists[-1]
+    extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
+    printer.show_progress(i, nIters, verboseMessages=extraMessages,
+                          prefix="--- Iterative MLGST:",
+                          suffix=" %d gate strings ---" % len(stringsToEstimate))
 
-    with printer.progress_logging(1):
-        for (i,stringsToEstimate) in enumerate(gateStringLists):
-            for j, (mleGateset, previousScore) in enumerate(seeds):
-                extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
-                printer.show_progress(i, nIters, verboseMessages=extraMessages,
-                                      prefix="--- Iterative MLGST:",
-                                      suffix=" %d gate strings ---" % len(stringsToEstimate))
+    if gatestringWeightsDict is not None:
+        gatestringWeights = _np.ones( len(stringsToEstimate), 'd')
+        for gatestr, weight in gatestringWeightsDict.items():
+            if gatestr in stringsToEstimate:
+                gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
+    else: gatestringWeights = None
 
-                if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
+    mleGateset.basis = startGateset.basis
+    # set basis in case of CPTP constraints
 
-                if gatestringWeightsDict is not None:
-                    gatestringWeights = _np.ones( len(stringsToEstimate), 'd')
-                    for gatestr, weight in gatestringWeightsDict.items():
-                        if gatestr in stringsToEstimate:
-                            gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
-                else: gatestringWeights = None
+    evt_cache = {} # get the eval tree that's created so we can reuse it
+    _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
+                              maxiter, maxfev, tol, cptp_penalty_factor,
+                              spam_penalty_factor, minProbClip, probClipInterval,
+                              useFreqWeightedChiSq, 0,printer-1, check,
+                              check, gatestringWeights, gateLabelAliases,
+                              memLimit, comm, distributeMethod, profiler, evt_cache)
 
-                mleGateset.basis = startGateset.basis
-                  #set basis in case of CPTP constraints
+    _, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
+                             maxiter, maxfev, tol,
+                             cptp_penalty_factor, spam_penalty_factor,
+                             minProbClip, probClipInterval, radius,
+                             poissonPicture, printer-1, check, gatestringWeights,
+                             gateLabelAliases, memLimit, comm, distributeMethod, profiler, evt_cache)
 
-                evt_cache = {} # get the eval tree that's created so we can reuse it
-                _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
-                                          maxiter, maxfev, tol, cptp_penalty_factor,
-                                          spam_penalty_factor, minProbClip, probClipInterval,
-                                          useFreqWeightedChiSq, 0,printer-1, check,
-                                          check, gatestringWeights, gateLabelAliases,
-                                          memLimit, comm, distributeMethod, profiler, evt_cache)
+    tNxt = _time.time();
+    profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
+    tRef2=tNxt
 
-                if alwaysPerformMLE:
-                    _, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
-                                             maxiter, maxfev, tol,
-                                             cptp_penalty_factor, spam_penalty_factor,
-                                             minProbClip, probClipInterval, radius,
-                                             poissonPicture, printer-1, check, gatestringWeights,
-                                             gateLabelAliases, memLimit, comm, distributeMethod, profiler, evt_cache)
+    logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases)
+    maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
+                          radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
+    two_d_logl = 2*(logL_ub - maxLogL)
 
+    printer.log("2*Delta(log(L)) = %g" % (two_d_logl),2)
 
-                tNxt = _time.time();
-                profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
-                tRef2=tNxt
+    tNxt = _time.time();
+    profiler.add_time('do_iterative_mlgst: iter %d logl-comp' % (i+1),tRef2)
+    printer.log("Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
+    printer.log('',2) #extra newline
+    tRef=tNxt
 
-                logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases)
-                maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                                      radius, poissonPicture, check, gateLabelAliases, evt_cache, comm)  #get maxLogL from chi2 estimate
-                two_d_logl = 2*(logL_ub - maxLogL)
-
-                printer.log("2*Delta(log(L)) = %g" % (two_d_logl),2)
-
-                seeds = [(startGateset, calc_2qlogl(mleGateset))]
-
-                tNxt = _time.time();
-                profiler.add_time('do_iterative_mlgst: iter %d logl-comp' % (i+1),tRef2)
-                printer.log("Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
-                printer.log('',2) #extra newline
-                tRef=tNxt
-
-                if i == len(gateStringLists)-1 and not alwaysPerformMLE: #on the last iteration, do ML
-                    # pick the seed which worked best
-                    mleGateset = startGateset.copy()
-                    printer.log("Switching to ML objective (last iteration)",2)
-
-                    mleGateset.basis = startGateset.basis
-
-                    maxLogL_p, mleGateset_p = do_mlgst(
-                        dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
-                        cptp_penalty_factor, spam_penalty_factor, minProbClip, probClipInterval, radius,
-                        poissonPicture, printer-1, check, gatestringWeights, gateLabelAliases,
-                        memLimit, comm, distributeMethod, profiler, evt_cache)
-
-                    printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
-
-                    if maxLogL_p > maxLogL: #if do_mlgst improved the maximum log-likelihood
-                        maxLogL = maxLogL_p
-                        mleGateset = mleGateset_p
-                    else:
-                        printer.warning("MLGST failed to improve logl: retaining chi2-objective estimate")
-                        mleGateset = startGateset.copy()
-
-                    tNxt = _time.time();
-                    profiler.add_time('do_iterative_mlgst: iter %d logl-opt' % (i+1),tRef)
-                    printer.log("Final MLGST took %.1fs" % (tNxt-tRef),2)
-                    printer.log('',2) #extra newline
-                    tRef=tNxt
-
-                    if evaltree_cache is not None:
-                        evaltree_cache.update(evt_cache) # final evaltree cache
-
-                if returnAll and j == 0:
-                    mleGatesets.append(mleGateset)
-                    maxLogLs.append(maxLogL)
+    if returnAll and j == 0:
+        mleGatesets.append(mleGateset)
+        maxLogLs.append(maxLogL)
 
     printer.log('Iterative MLGST Total Time: %.1fs' % (_time.time()-tStart))
     profiler.add_time('do_iterative_mlgst: total time', tStart)

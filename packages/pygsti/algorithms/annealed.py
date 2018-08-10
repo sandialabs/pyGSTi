@@ -33,7 +33,7 @@ def do_annealed_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEsti
                        verbosity=0, check=False, gatestringWeightsDict=None,
                        gateLabelAliases=None, memLimit=None,
                        profiler=None, comm=None, distributeMethod = "deriv",
-                       alwaysPerformMLE=False, evaltree_cache=None):
+                       alwaysPerformMLE=False, evaltree_cache=None, schedule=None, minTolerance=1e-4):
     """
     Performs Iterative Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
@@ -185,7 +185,11 @@ def do_annealed_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEsti
 
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):
-            tol = min(1 / 10 ** i, originalTol)
+            if schedule is None:
+                tol = max(minTolerance, min(1 / (10 ** i), originalTol))
+            else:
+                assert len(schedule) == len(gateStringLists)
+                tol = schedule[i]
             extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
             printer.show_progress(i, nIters, verboseMessages=extraMessages,
                                   prefix="--- Iterative MLGST:",
@@ -238,7 +242,8 @@ def do_annealed_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEsti
 
             if i == len(gateStringLists)-1 and not alwaysPerformMLE: #on the last iteration, do ML
                 # Decrease tolerance on last iteration
-                tol = 1.0 / (10.0 * (1.0/tol))
+                #tol = 1.0 / (10.0 * (1.0/tol))
+                tol = originalTol
                 printer.log("Switching to ML objective (last iteration)",2)
 
                 mleGateset.basis = startGateset.basis
