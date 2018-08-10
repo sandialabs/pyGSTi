@@ -1049,7 +1049,7 @@ def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
                                                   citerations=citerations, compilerargs=compilerargs, partitioned=partitioned)
             experiment_dict['circuits'][l,j] = circuit
             experiment_dict['idealout'][l,j] = idealout
-            if verbosity > 0: print(j,end=',')
+            if verbosity > 0: print(j+1,end=',')
         if verbosity >0: print('')
 
     return experiment_dict
@@ -1313,7 +1313,7 @@ def clifford_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, r
                                           citerations=citerations, compilerargs=compilerargs)           
             experiment_dict['circuits'][l,j] = c
             experiment_dict['idealout'][l,j] = iout
-            if verbosity > 0: print(j,end=',')
+            if verbosity > 0: print(j+1,end=',')
         if verbosity >0: print('')
 
     return experiment_dict
