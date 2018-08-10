@@ -23,6 +23,7 @@ from ..objects import povm as _povm
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
 from ..objects import labeldicts as _ld
+from ..objects import qubitgraph as _qubitgraph
 from ..baseobjs import label as _label
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Dim as _Dim
@@ -1197,24 +1198,48 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
 
     #Set "sub-type" as in GateSet.set_all_parameterizations
     typ = parameterization
-    povmtyp = rtyp = ityp = "TP" if typ in ("CPTP","H+S","S") else typ
+    povmtyp = rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
 
-    if parameterization == "clifford":
-        # Clifford object construction is different enough we do it separately
-        gs.preps['rho0'] = _spamvec.StabilizerSPAMVec(nQubits) # creates all-0 state by default
-        gs.povms['Mdefault'] = _povm.StabilizerZPOVM(nQubits)
-    else:
+    if parameterization in ("TP","full"): # then make tensor-product spam
         prep_factors = []; povm_factors = []
         for i in range(nQubits):
             prep_factors.append(
-                _spamvec.convert(_spamvec.StaticSPAMVec(v0), rtyp, basis1Q) )
+                _spamvec.convert(_spamvec.StaticSPAMVec(v0), "TP", basis1Q) )
             povm_factors.append(
                 _povm.convert(_povm.UnconstrainedPOVM( ([
                     ('0',_spamvec.StaticSPAMVec(v0)),
-                    ('1',_spamvec.StaticSPAMVec(v1))]) ), povmtyp, basis1Q) )
+                    ('1',_spamvec.StaticSPAMVec(v1))]) ), "TP", basis1Q) )
         
         gs.preps['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
         gs.povms['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
+
+    elif parameterization == "clifford":
+        # Clifford object construction is different enough we do it separately
+        gs.preps['rho0'] = _spamvec.StabilizerSPAMVec(nQubits) # creates all-0 state by default
+        gs.povms['Mdefault'] = _povm.StabilizerZPOVM(nQubits)
+
+    elif parameterization in ("static","static unitary"):
+        #static computational basis
+        gs.preps[_Lbl('rho0')] = _spamvec.ComputationalSPAMVec([0]*nQubits, evotype))
+        gs.povms[_Lbl('Mdefault')] = _povm.ComputationalBasisPOVM(nQubits, evotype)
+
+    else:
+        # parameterization should be a type amenable to Lindblad
+        # create lindblad SPAM ops w/maxWeight == 1 (HARDCODED for now)
+        assert(evotype == "densitymx"), \
+            "Lindblad spam ops can only be created for 'densitymx' evolution type!"
+
+        import nqnoiseconstruction as _nqn
+        maxSpamWeight = 1; sparse = False; verbosity=0 #HARDCODED
+        qubitGraph = _qubitgraph.QubitGraph.common_graph(nQubits, "line") # doesn't matter while maxSpamWeight==1
+        
+        prepPure = _spamvec.PureStateSPAMVec( _objs.ComputationalSPAMVec([0]*nQubits,"statevec"), dm_basis="pp" )
+        prepNoiseMap = _nqn.build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, verbosity)
+        gs.preps[_Lbl('rho0')] = _spamvec.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep", "pp")
+
+        povmNoiseMap = _nqn.build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, verbosity)
+        gs.povms[_Lbl('Mdefault')] = _povm.LindbladParameterizedPOVM(povmNoiseMap, "pp")
+
 
     for gateName, gate in gatedict.items():
         if not isinstance(gate, _gate.Gate):

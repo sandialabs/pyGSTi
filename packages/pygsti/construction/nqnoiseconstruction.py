@@ -139,11 +139,11 @@ def nparams_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0
 
 
 def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
-                          maxIdleWeight=1, maxhops=0,
+                          maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
                           extraWeight1Hops=0, extraGateWeight=0, sparse=False,
                           gateNoise=None, prepNoise=None, povmNoise=None,
                           sim_type="matrix", parameterization="H+S",
-                          addIdleNoiseToAllGates=True,
+                          spamtype="lindblad", addIdleNoiseToAllGates=True,
                           return_clouds=False, verbosity=0): #, debug=False):
     """ 
     Create a noisy n-qubit gateset using a low-weight and geometrically local
@@ -171,6 +171,9 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
 
     maxIdleWeight : int, optional
         The maximum-weight for errors on the global idle gate.
+
+    maxSpamWeight : int, optional
+        The maximum-weight for SPAM errors when `spamtype == "linblad"`.
 
     maxhops : int
         The locality constraint: for a gate, errors (of weight up to the
@@ -222,6 +225,16 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
         using a path-integral approach designed for larger numbers of qubits,
         and are considered expert options.
 
+    spamtype : { "static", "lindblad", "tensorproduct" }
+        Specifies how the SPAM elements of the returned `GateSet` are formed.
+        Static elements are ideal (perfect) operations with no parameters, i.e.
+        no possibility for noise.  Lindblad SPAM operations are the "normal"
+        way to allow SPAM noise, in which case error terms up to weight 
+        `maxSpamWeight` are included.  Tensor-product operations require that
+        the state prep and POVM effects have a tensor-product structure; the
+        "tensorproduct" mode exists for historical reasons and is *deprecated*
+        in favor of `"lindblad"`; use it only if you know what you're doing.
+
     addIdleNoiseToAllGates: bool, optional
         Whether the global idle should be added as a factor following the 
         ideal action of each of the non-idle gates.
@@ -239,9 +252,9 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
     GateSet
     """
 
-    assert(parameterization in ("H+S","H+S terms","H+S clifford terms"))
     if sim_type == "auto":
-        if parameterization in ("H+S terms", "H+S clifford terms"): sim_type = "termorder:1"
+        evostr = ' '.join(parameterization.split()[1:])
+        if evostr in ("terms", "clifford terms"): sim_type = "termorder:1"
         else: sim_type = "map" if nQubits > 2 else "matrix"
 
     assert(sim_type in ("matrix","map") or sim_type.startswith("termorder"))
@@ -363,61 +376,100 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
 
         
     #SPAM
-    basis1Q = _Basis("pp",2)
-    prep_factors = []; povm_factors = []
+    if spamtype == "static" or maxSpamWeight == 0:
 
-    v0 = _basis_build_vector("0", basis1Q)
-    v1 = _basis_build_vector("1", basis1Q)
+        if prepNoise is not None or povmNoise is not None:
+            raise ValueError(("`spamtype == 'static'` is incompatible with "
+                              "non-None `prepNoise` or `povmNoise`"))
+        if maxSpamWeight > 0:
+            _warnings.warn(("`spamtype == 'static'` ignores the supplied "
+                            "`maxSpamWeight=%d > 0`") % maxSpamWeight )
 
-    typ = parameterization
-    povmtyp = rtyp = "TP" if typ in ("CPTP","H+S","S") else typ  # use TP until we have LindbladParameterizedSPAMVecs
+        gs.preps[_Lbl('rho0')] = _objs.ComputationalSPAMVec([0]*nQubits,"densitymx"))
+        gs.povms[_Lbl('Mdefault')] = _objs.ComputationalBasisPOVM(nQubits, "densitymx")
+        
+    elif spamtype == "tensorproduct": 
 
-    #DEBUG - make spam static for now (modified convert() in spamvec.py and povm.py for terms - see "DEBUG!!!")
-    #if debug:
-    #    if rtyp in ("TP",): rtyp = "static"
-    #    if povmtyp in ("TP",): povmtyp = "static"
+        _warnings.warn("`spamtype == 'tensorproduct'` is deprecated!")
+        basis1Q = _Basis("pp",2)
+        prep_factors = []; povm_factors = []
 
-    for i in range(nQubits):
-        prep_factors.append(
-            _objs.spamvec.convert(_objs.StaticSPAMVec(v0), rtyp, basis1Q) )
-        povm_factors.append(
-            _objs.povm.convert(_objs.UnconstrainedPOVM( ([
-                ('0',_objs.StaticSPAMVec(v0)),
-                ('1',_objs.StaticSPAMVec(v1))]) ), povmtyp, basis1Q) )
+        v0 = _basis_build_vector("0", basis1Q)
+        v1 = _basis_build_vector("1", basis1Q)
 
-    if prepNoise is not None:
-        if isinstance(prepNoise,tuple): # use as (seed, strength)
-            seed,strength = prepNoise
-            rndm = _np.random.RandomState(seed)
-            depolAmts = _np.abs(rndm.random_sample(nQubits)*strength)
+        # Historical use of TP for non-term-based cases?
+        #  - seems we could remove this. FUTURE REMOVE?
+        povmtyp = rtyp = "TP" if parameterization in \
+                         ("CPTP","H+S","S","H+S+A","S+A","H+D+A","D+A","D") \
+                         else parameterization
+        
+        for i in range(nQubits):
+            prep_factors.append(
+                _objs.spamvec.convert(_objs.StaticSPAMVec(v0), rtyp, basis1Q) )
+            povm_factors.append(
+                _objs.povm.convert(_objs.UnconstrainedPOVM( ([
+                    ('0',_objs.StaticSPAMVec(v0)),
+                    ('1',_objs.StaticSPAMVec(v1))]) ), povmtyp, basis1Q) )
+
+        if prepNoise is not None:
+            if isinstance(prepNoise,tuple): # use as (seed, strength)
+                seed,strength = prepNoise
+                rndm = _np.random.RandomState(seed)
+                depolAmts = _np.abs(rndm.random_sample(nQubits)*strength)
+            else:
+                depolAmts = prepNoise[0:nQubits]
+            for amt,vec in zip(depolAmts,prep_factors): vec.depolarize(amt)
+    
+        if povmNoise is not None:
+            if isinstance(povmNoise,tuple): # use as (seed, strength)
+                seed,strength = povmNoise
+                rndm = _np.random.RandomState(seed)
+                depolAmts = _np.abs(rndm.random_sample(nQubits)*strength)
+            else:
+                depolAmts = povmNoise[0:nQubits]
+            for amt,povm in zip(depolAmts,povm_factors): povm.depolarize(amt) 
+    
+        gs.preps[_Lbl('rho0')] = _objs.TensorProdSPAMVec('prep', prep_factors)
+        gs.povms[_Lbl('Mdefault')] = _objs.TensorProdPOVM(povm_factors)
+
+    elif spamtype == "lindblad":
+
+        prepPure = _objs.PureStateSPAMVec( _objs.ComputationalSPAMVec([0]*nQubits,"statevec"), dm_basis="pp" )
+        prepNoiseMap = build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, printer-1)
+        gs.preps[_Lbl('rho0')] = _objs.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep", "pp")
+        if prepNoise is not None:
+            # add noise to prepNoiseMap *after* assigning to GateSet just to be
+            #  sure parameters are wired correctly.
+            nP = prepNoiseMap.num_params()
+            if isinstance(prepNoise,tuple): # use as (seed, strength)
+                seed,strength = prepNoise
+                rndm = _np.random.RandomState(seed)
+                noise_params = _np.abs(rndm.random_sample(nP)*strength)
+            else:
+                noise_params = prepNoise[0:nP]
+            prepNoiseMap.from_vector(noise_params)
+            gs._update_paramvec(gs.preps[_Lbl('rho0')]) # make sure params update
+            
+
+        povmNoiseMap = build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, printer-1)
+        gs.povms[_Lbl('Mdefault')] = _objs.LindbladParameterizedPOVM(povmNoiseMap, "pp")
+        if povmNoise is not None:
+            # add noise to povmNoiseMap *after* assigning to GateSet just to be
+            #  sure parameters are wired correctly.
+            nP = povmNoiseMap.num_params()
+            if isinstance(povmNoise,tuple): # use as (seed, strength)
+                seed,strength = povmNoise
+                rndm = _np.random.RandomState(seed)
+                noise_params = _np.abs(rndm.random_sample(nP)*strength)
+            else:
+                noise_params = povmNoise[0:nP]
+            povmNoiseMap.from_vector(noise_params)
+            gs._update_paramvec(gs.povms[_Lbl('Mdefault')]) # make sure params update        
+
         else:
-            depolAmts = prepNoise[0:nQubits]
-        for amt,vec in zip(depolAmts,prep_factors): vec.depolarize(amt)
+            raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
 
-    if povmNoise is not None:
-        if isinstance(povmNoise,tuple): # use as (seed, strength)
-            seed,strength = povmNoise
-            rndm = _np.random.RandomState(seed)
-            depolAmts = _np.abs(rndm.random_sample(nQubits)*strength)
-        else:
-            depolAmts = povmNoise[0:nQubits]
-        for amt,povm in zip(depolAmts,povm_factors): povm.depolarize(amt) 
-
-    gs.preps[_Lbl('rho0')] = _objs.TensorProdSPAMVec('prep', prep_factors)
-    gs.povms[_Lbl('Mdefault')] = _objs.TensorProdPOVM(povm_factors)
-
-    # #DEBUG SPECIAL CASE: when prep and povm noise are None create a *fixed*
-    # # (no parameters) POVM of the computational basis elements. (This is just
-    # # as useful for data generation but not as useful for GST as it doesn't
-    # # give the SPAM any degrees of freedom.)
-    # if prepNoise is None and povmNoise is None:
-    #     iterover = [(0,1)]*nQubits
-    #     items = [ (''.join(map(str,outcomes)), _objs.ComputationalSPAMVec(outcomes,"densitymx"))
-    #               for outcomes in _itertools.product(*iterover) ]
-    #     gs.povms[_Lbl('Mdefault')] = _objs.UnconstrainedPOVM(items) # overwrite above
-    # # END DEBUG
-
-    #FUTURE - just return cloud keys? (gate label values are never used
+    #FUTURE - just return cloud *keys*? (gate label values are never used
     # downstream, but may still be useful for debugging, so keep for now)
     printer.log("DONE! - returning GateSet with dim=%d and gates=%s" % (gs.dim, list(gs.gates.keys())))    
     return (gs, clouds) if return_clouds else gs
@@ -426,26 +478,21 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
 def _get_Lindblad_factory(sim_type, parameterization):
     """ Returns a function that creates a Lindblad-type gate appropriate
         given the simulation type and parameterization """
-    if parameterization == "H+S":
-        evotype = "densitymx"
+    evostr = ' '.join(parameterization.split()[1:]) # e.g. "", "terms" or "clifford terms"
+    if evostr == "":  # evotype = "densitymx"
         cls = _objs.LindbladParameterizedGate if sim_type == "matrix" \
               else _objs.LindbladParameterizedGateMap
-
-    elif parameterization in ("H+S terms","H+S clifford terms"):
-        assert(sim_type.startswith("termorder"))
-        evotype = "svterm" if parameterization == "H+S terms" else "cterm"
+    elif evostr in ("terms","clifford terms"): # evotype = "svterm" if evostr == "terms" else "cterm"
+        assert(sim_type.startswith("termorder"))        
         cls = _objs.LindbladParameterizedGateMap
     else:
         raise ValueError("Cannot create Lindblad gate factory for ",sim_type, parameterization)
 
     #Just call cls.from_gate_matrix with appropriate evotype
     def _f(gateMatrix, unitaryPostfactor=None,
-          ham_basis="pp", nonham_basis="pp", cptp=True,
-          nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
-        return cls.from_gate_matrix(gateMatrix, unitaryPostfactor,
-                                    ham_basis, nonham_basis, cptp,
-                                    nonham_diagonal_only, truncate,
-                                    mxBasis, evotype)
+           proj_basis="pp", mxBasis="pp"):
+        return cls.from_gate_obj(gateMatrix, parameterization, unitaryPostfactor,
+                                 proj_basis, mxBasis, truncate)
     return _f
                                     
 
@@ -544,8 +591,7 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
 
             printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_inds,len(errbasis)), 3)
             errbasis = _Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
-            termErr = Lindblad(wtId, ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
-                               nonham_diagonal_only=True, truncate=True, mxBasis=wtBasis)
+            termErr = Lindblad(wtId, proj_basis=errbasis,  mxBasis=wtBasis)
         
             err_qubit_global_inds = err_qubit_inds
             fullTermErr = Embedded(ssAllQ, [('Q%d'%i) for i in err_qubit_global_inds],
@@ -750,7 +796,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
             fullIdleErr = idle_noise
         elif idle_noise == True:
             #build composition of 1Q idle ops
-            printer.log("Constructing independend weight-1 idle gate",3)
+            printer.log("Constructing independent weight-1 idle gate",3)
             # Id_1Q = _sps.identity(4**1,'d','csr') if sparse else  _np.identity(4**1,'d')
             Id_1Q = _np.identity(4**1,'d') #always dense for now...
             fullIdleErr = Composed(
@@ -809,10 +855,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
         ssLocQ = [tuple(['Q%d'%i for i in range(nLocal)])]
         basisLocQ = _Basis('pp', 2**nLocal, sparse=sparse)
         locId = _sps.identity(4**nLocal,'d','csr') if sparse else _np.identity(4**nLocal,'d')
-        localErr = Lindblad(locId, ham_basis=errbasis,
-                            nonham_basis=errbasis, cptp=True,
-                            nonham_diagonal_only=True, truncate=True,
-                            mxBasis=basisLocQ)
+        localErr = Lindblad(locId, proj_basis=errbasis, mxBasis=basisLocQ)
         fullLocalErr = Embedded(ssAllQ, ['Q%d'%i for i in all_possible_err_qubit_inds],
                                 localErr, basisAllQ_dim)
         printer.log("Lindblad gate w/dim=%d and %d params (from error basis of len %d) -> embedded to gate w/dim=%d" %
@@ -851,10 +894,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
                 err_qubit_global_inds = possible_err_qubit_inds[list(err_qubit_local_inds)]
                 printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_global_inds,len(errbasis)), 4)
                 errbasis = _Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
-                termErr = Lindblad(wtId, ham_basis=errbasis,
-                                   nonham_basis=errbasis, cptp=True,
-                                   nonham_diagonal_only=True, truncate=True,
-                                   mxBasis=wtBasis)
+                termErr = Lindblad(wtId, proj_basis=errbasis, mxBasis=wtBasis)
         
                 fullTermErr = Embedded(ssAllQ, ['Q%d'%i for i in err_qubit_global_inds],
                                        termErr, basisAllQ_dim)
@@ -2153,9 +2193,11 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
         printer.log("Created qubit graph:\n"+str(qubitGraph))
 
     gateset, clouds = build_nqnoise_gateset(
-        nQubits, qubitGraph, cnot_edges, maxIdleWeight, maxhops,
+        nQubits, qubitGraph, cnot_edges, maxIdleWeight, 0, maxhops,
         extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
         sim_type="termorder:1", parameterization="H+S terms", return_clouds=True)
+        #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
+        #FUTURE: allow user to specify parameterization "base" at least
     #print("DB: GATES = ",gateset.gates.keys())
     #print("DB: CLOUDS = ",clouds)
 
@@ -2166,7 +2208,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     # The 'qubits' of a cloud are all the qubits that have any action -
     # ideal or error - except that which is the same as the Gi gate.
     
-    ideal_gateset = build_nqnoise_gateset(nQubits, qubitGraph, cnot_edges, 0, 0,
+    ideal_gateset = build_nqnoise_gateset(nQubits, qubitGraph, cnot_edges, 0, 0, 0,
                                           0, 0, False, verbosity=printer-5,
                                           sim_type="map", parameterization="H+S") # for testing for synthetic idles
     
@@ -2180,7 +2222,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     # the errors of the actual n-qubit gateset...
     #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line'; no CNOTs)
     printer.log("Creating \"idle error\" gateset on %d qubits" % maxIdleWeight)
-    idle_gateset = build_nqnoise_gateset(maxIdleWeight, 'line', [], maxIdleWeight, maxhops,
+    idle_gateset = build_nqnoise_gateset(maxIdleWeight, 'line', [], maxIdleWeight, 0, maxhops,
                                          extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
                                          sim_type="termorder:1", parameterization="H+S terms")
     idle_params = idle_gateset.gates['Gi'].gpindices # these are the params we want to amplify at first...
@@ -2231,7 +2273,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
         if maxSyntheticIdleWt not in cache['Idle gatename fidpair lists']:
             printer.log("Getting sequences needed for max-weight=%d errors" % maxSyntheticIdleWt)
             printer.log(" on the idle gate (for %d-Q synthetic idles)" % gateWt)
-            sidle_gateset = build_nqnoise_gateset(maxSyntheticIdleWt, 'line', [], maxIdleWeight, maxhops,
+            sidle_gateset = build_nqnoise_gateset(maxSyntheticIdleWt, 'line', [], maxIdleWeight, 0, maxhops,
                                                   extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
                                                   sim_type="termorder:1", parameterization="H+S terms")
             idle_params = sidle_gateset.gates['Gi'].gpindices # these are the params we want to amplify...

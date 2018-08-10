@@ -212,63 +212,6 @@ def convert(gate, toType, basis, extra=None):
         else:
             raise ValueError("Cannot convert type %s to LinearlyParameterizedGate"
                              % type(gate))
-
-    elif toType in ("CPTP","H+S","S","GLND","H+S terms","H+S clifford terms"):
-        
-        RANK_TOL = 1e-6
-
-        unitary_post = None
-
-        if extra is None:
-            #Try to obtain unitary_post by getting the closest unitary
-            if isinstance(gate, LindbladParameterizedGate):
-                unitary_post = gate.unitary_postfactor
-            elif gate._evotype == "densitymx":
-                J = _jt.fast_jamiolkowski_iso_std(gate.todense(), basis) #Choi mx basis doesn't matter
-                if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
-                    unitary_post = gate # when 'gate' is unitary
-            # FUTURE: support other gate._evotypes?
-        else:
-            unitary_post = extra # assume extra info is a unitary "target" gate
-
-        nQubits = _np.log2(gate.dim)/2.0
-        bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
-        
-        proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-        ham_basis = proj_basis if toType in ("CPTP","H+S","H+S terms","H+S clifford terms") else None
-        nonham_basis = proj_basis
-        nonham_diagonal_only = bool(toType in ("H+S","S","H+S terms","H+S clifford terms") )
-        cptp = False if toType == "GLND" else True #only "General LiNDbladian" is non-cptp
-        truncate=True
-
-        if toType == "H+S terms":            evotype = "svterm"
-        elif toType == "H+S clifford terms": evotype = "cterm"
-        else:                                evotype = "densitymx"
-
-        def beq(b1,b2):
-            """ Check if bases have equal names """
-            b1 = b1.name if isinstance(b1,_Basis) else b1
-            b2 = b2.name if isinstance(b2,_Basis) else b2
-            return b1 == b2
-
-        def normeq(a,b):
-            if a is None and b is None: return True
-            return _mt.safenorm(a-b) < 1e-6 # what about possibility of Clifford gates?
-
-        LindbladGateType = LindbladParameterizedGateMap \
-                           if toType in ("H+S terms","H+S clifford terms") \
-                            else LindbladParameterizedGate
-            
-        if isinstance(gate, LindbladParameterizedGateMap) and \
-           normeq(gate.unitary_postfactor,unitary_post) \
-           and beq(ham_basis,gate.ham_basis) and beq(nonham_basis,gate.other_basis) \
-           and cptp==gate.cptp and nonham_diagonal_only==gate.nonham_diagonal_only \
-           and beq(basis,gate.matrix_basis) and gate._evotype == evotype:
-            return gate #no conversion necessary
-        else:
-            return LindbladGateType.from_gate_matrix(
-                gate, unitary_post, ham_basis, nonham_basis, cptp,
-                nonham_diagonal_only, truncate, basis, evotype)
         
     elif toType == "static":
         if isinstance(gate, StaticGate):
@@ -281,6 +224,21 @@ def convert(gate, toType, basis, extra=None):
         unitary = _gt.process_mx_to_unitary(gate_std)
         return StaticGate(unitary, "statevec")
 
+    elif toType.split()[0] in ("CPTP","H+S","S","H+S+A","S+A","H+D","D","H+D+A","D+A","GLND"):
+        # e.g. "H+S terms","H+S clifford terms"
+
+        evostr = ' '.join(toType.split()[1:]) # e.g. "", "terms" or "clifford terms"
+        LindbladGateType = LindbladParameterizedGateMap \
+                           if evostr in ("terms","clifford terms") else \
+                              LindbladParameterizedGate
+
+        nQubits = _np.log2(gate.dim)/2.0
+        bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
+        proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+
+        return LindbladGateType.from_gate_obj(gate, toType, None, proj_basis,
+                                              basis, truncate=True, lazy=True)
+    
     elif toType == "clifford":
         if isinstance(gate, CliffordGate):
             return gate #no conversion necessary
@@ -1909,9 +1867,79 @@ class LindbladParameterizedGateMap(Gate):
     """
 
     @classmethod
+    def from_gate_obj(cls, gate, paramType="GLND", unitary_postfactor=None,
+                      proj_basis="pp", mxBasis="pp", trucate=True, lazy=False):
+        """ TODO: docstring """
+        RANK_TOL = 1e-6
+
+        if not isinstance(gate, Gate):
+            gate = FullyParameterizedGate(gate) #assume gate is just a matrix
+
+        if unitary_postfactor is None:
+            #Try to obtain unitary_post by getting the closest unitary
+            if isinstance(gate, LindbladParameterizedGate):
+                unitary_postfacor = gate.unitary_postfactor
+            elif gate._evotype == "densitymx":
+                J = _jt.fast_jamiolkowski_iso_std(gate.todense(), basis) #Choi mx basis doesn't matter
+                if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
+                    unitary_postfactor = gate # when 'gate' is unitary
+            # FUTURE: support other gate._evotypes?
+            else:
+                unitary_postfactor = None
+
+        #Break paramType in to a "base" type and an evotype
+        parts = paramType.split()
+        bTyp = parts[0] # "base" type
+        evostr = " ".join(parts[1:])
+        if   evostr == "":               evotype = "densitymx"
+        elif evostr == "terms":          evotype = "svterm"
+        elif evostr == "clifford terms": evotype = "cterm"
+        else: raise ValueError("Unrecognized evotype in `paramType`=%s" % paramType)
+
+        ham_basis = proj_basis if (("H+" in bTyp) or bTyp in ("CPTP","GLND")) else None
+        nonham_basis = proj_basis
+        
+        if bTyp == "CPTP":
+            nonham_mode = "all"; param_mode = "cptp" 
+        elif bTyp in ("H+S","S"):
+            nonham_mode = "diagonal"; param_mode = "cptp" 
+        elif bTyp in ("H+S+A","S+A"):
+            nonham_mode = "diag_affine"; param_mode = "cptp" 
+        elif bTyp in ("H+D","D"):
+            nonham_mode = "diagonal"; param_mode = "depol" 
+        elif bTyp in ("H+D+A","D+A"):
+            nonham_mode = "diag_affine"; param_mode = "depol" 
+        elif bTyp == "GLND":
+            nonham_mode = "all"; param_mode = "unconstrained" 
+        else:
+            raise ValueError("Unrecognized base type in `paramType`=%s" % paramType)
+
+        def beq(b1,b2):
+            """ Check if bases have equal names """
+            b1 = b1.name if isinstance(b1,_Basis) else b1
+            b2 = b2.name if isinstance(b2,_Basis) else b2
+            return b1 == b2
+
+        def normeq(a,b):
+            if a is None and b is None: return True
+            return _mt.safenorm(a-b) < 1e-6 # what about possibility of Clifford gates?
+            
+        if isinstance(gate, LindbladParameterizedGateMap) and \
+           normeq(gate.unitary_postfactor,unitary_postfactor) \
+           and beq(ham_basis,gate.ham_basis) and beq(nonham_basis,gate.other_basis) \
+           and param_mode==gate.param_mode and nonham_mode==gate.nonham_mode \
+           and beq(basis,gate.matrix_basis) and gate._evotype == evotype and lazy:
+            return gate #no creation necessary!
+        else:
+            return cls.from_gate_matrix(
+                gate, unitary_postfactor, ham_basis, nonham_basis, param_mode,
+                nonham_mode, truncate, basis, evotype)
+
+
+    @classmethod
     def from_gate_matrix(cls, gateMatrix, unitaryPostfactor=None,
-                         ham_basis="pp", nonham_basis="pp", cptp=True,
-                         nonham_diagonal_only=False, truncate=True, mxBasis="pp",
+                         ham_basis="pp", nonham_basis="pp", param_mode="cptp",
+                         nonham_mode="all", truncate=True, mxBasis="pp",
                          evotype="densitymx"):
         """
         Creates a Lindblad-parameterized gate from a matrix and a basis which
@@ -1944,11 +1972,11 @@ class LindbladParameterizedGateMap(Gate):
             Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
-        cptp : bool, optional
+        cptp : bool, optional TODO docstring
             Whether or not the new gate should be constrained to CPTP.
             (if True, see behavior or `truncate`).
 
-        nonham_diagonal_only : boolean, optional
+        nonham_diagonal_only : boolean, optional TODO docstring
             If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
             included in the parameterization.
 
@@ -1980,7 +2008,7 @@ class LindbladParameterizedGateMap(Gate):
         #Compute a (errgen, unitaryPostfactor) pair from the given
         # (gateMatrix, unitaryPostfactor) pair.  Works with both
         # dense and sparse matrices.
-        
+
         if gateMatrix is None:
             assert(unitaryPostfactor is not None), "arguments cannot both be None"
             gateMatrix = unitaryPostfactor
@@ -1995,7 +2023,7 @@ class LindbladParameterizedGateMap(Gate):
         #Init base from error generator: sets basis members and ultimately
         # the parameters in self.paramvals
         if _sps.issparse(gateMatrix):
-            #Instead of making error_generator compatible with sparse matrices
+            #Instead of making error_generator(...) compatible with sparse matrices
             # we require sparse matrices to have trivial initial error generators
             # or we convert to dense:
             if(_mt.safenorm(gateMatrix-upost) < 1e-8):
@@ -2008,14 +2036,13 @@ class LindbladParameterizedGateMap(Gate):
             errgen = _gt.error_generator(gateMatrix, upost, mxBasis, "logGTi")
 
         return cls.from_error_generator(unitaryPostfactor, errgen, ham_basis,
-                                        nonham_basis, cptp, nonham_diagonal_only,
-                                        truncate, mxBasis, evotype)
+                                        nonham_basis, nonham_mode, truncate,
+                                        mxBasis, evotype)
 
     
     @classmethod
     def from_error_generator(cls, unitaryPostfactor, errgen,
-                             ham_basis="pp", nonham_basis="pp",
-                             cptp=True, nonham_diagonal_only=False,
+                             ham_basis="pp", nonham_basis="pp", nonham_mode="all",
                              truncate=True, mxBasis="pp", evotype="densitymx"):
         """
         Create a Lindblad-parameterized gate from an error generator and a
@@ -2052,7 +2079,7 @@ class LindbladParameterizedGateMap(Gate):
             Whether or not the new gate should be constrained to CPTP.
             (if True, see behavior or `truncate`).
 
-        nonham_diagonal_only : boolean, optional
+        nonham_diagonal_only : boolean, optional TODO docstring
             If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
             included in the parameterization.
 
@@ -2117,21 +2144,19 @@ class LindbladParameterizedGateMap(Gate):
         hamC, otherC = \
             _gt.lindblad_errgen_projections(
                 errgen, ham_basis, other_basis, matrix_basis, normalize=False,
-                return_generators=False, other_diagonal_only=nonham_diagonal_only,
-                sparse=sparse)
+                return_generators=False, other_mode=nonham_mode, sparse=sparse)
 
         # coeffs + bases => Ltermdict, basisdict
         Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
-            hamC, otherC, ham_basis, other_basis, nonham_diagonal_only)
+            hamC, otherC, ham_basis, other_basis, nonham_mode)
         
         return cls(unitaryPostfactor, Ltermdict, basisdict,
-                   cptp, nonham_diagonal_only, truncate,
-                   matrix_basis, evotype )
+                   nonham_mode, truncate, matrix_basis, evotype )
 
         
     def __init__(self, unitaryPostfactor, Ltermdict, basisdict=None,
-                 cptp=True, nonham_diagonal_only="auto",
-                 truncate=True, mxBasis="pp", evotype="densitymx"):
+                 nonham_mode="all", truncate=True, mxBasis="pp",
+                 evotype="densitymx"): 
         """
         Create a new LinbladParameterizedMap based on a set of Lindblad terms.
 
@@ -2175,7 +2200,7 @@ class LindbladParameterizedGateMap(Gate):
             Whether or not the new gate should be constrained to CPTP.
             (if True, see behavior or `truncate`).
 
-        nonham_diagonal_only : boolean or "auto", optional
+        nonham_diagonal_only : boolean or "auto", optional TODO docstring
             If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
             included in the parameterization.  The default "auto" determines
             whether off-diagonal terms are allowed by whether any are given 
@@ -2189,7 +2214,7 @@ class LindbladParameterizedGateMap(Gate):
             coefficients.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
+            The basis for this gate's linear mapping. Allowed
             values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt) (or a custom basis object).
 
@@ -2209,7 +2234,6 @@ class LindbladParameterizedGateMap(Gate):
         # maybe allow ('XY','Q1','Q4')? format when can assume single-letter labels.
         # - could add standard basis dict items so labels like "X", "XY", etc. are understood?
 
-        
         # Extract superop dimension from 'unitaryPostfactor'
         # (which can just be an integer dimension)
         if isinstance(unitaryPostfactor,_numbers.Integral): 
@@ -2225,18 +2249,14 @@ class LindbladParameterizedGateMap(Gate):
         d = int(round(_np.sqrt(d2)))
         assert(d*d == d2), "Gate dim must be a perfect square"
 
-        # Compute automatic other_diagonal_only value
-        if nonham_diagonal_only == 'auto':
-            nonham_diagonal_only = all(
-                [ len(termLbl)==2 for termLbl in Ltermdict if termLbl[0]=="S"])
-                #Note: don't really need "if..." b/c Ham terms are all length=2
+        self.nonham_mode = nonham_mode
+        self.param_mode = param_mode
         
         # Ltermdict, basisdict => bases + parameter values
         # but maybe we want Ltermdict, basisdict => basis + projections/coeffs, then projections/coeffs => paramvals?
         # since the latter is what set_errgen needs
         hamC, otherC, self.ham_basis, self.other_basis, hamBInds, otherBInds = \
-            _gt.lindblad_terms_to_projections(Ltermdict, basisdict, d,
-                                              nonham_diagonal_only)
+            _gt.lindblad_terms_to_projections(Ltermdict, basisdict, d, self.nonham_mode)
 
         self.ham_basis_size = len(self.ham_basis)
         self.other_basis_size = len(self.other_basis)
@@ -2256,9 +2276,7 @@ class LindbladParameterizedGateMap(Gate):
         self.matrix_basis = _Basis(mxBasis,d,sparse=self.sparse)
 
         self.paramvals = _gt.lindblad_projections_to_paramvals(
-            hamC, otherC, cptp, nonham_diagonal_only, truncate)
-        self.nonham_diagonal_only = nonham_diagonal_only
-        self.cptp = cptp
+            hamC, otherC, self.param_mode, self.nonham_mode, truncate)
 
         Gate.__init__(self, d2, evotype) #sets self.dim
 
@@ -2282,8 +2300,10 @@ class LindbladParameterizedGateMap(Gate):
                     all_csr_matrices.extend(self.hamGens)
 
                 if self.otherGens is not None:
-                    oList = self.otherGens if self.nonham_diagonal_only else \
-                            [ mx for mxRow in self.otherGens for mx in mxRow ]
+                    if self.nonham_mode == "diagonal":
+                        oList = self.otherGens
+                    else: # nonham_mode in ("diag_affine", "all")
+                        oList = [ mx for mxRow in self.otherGens for mx in mxRow ]                        
                     all_csr_matrices.extend(oList)
     
                 csr_sum_array, indptr, indices, N = \
@@ -2350,7 +2370,7 @@ class LindbladParameterizedGateMap(Gate):
         otherBasisMxs = _basis_matrices(self.other_basis, d, sparse=self.sparse)
         hamGens, otherGens = _gt.lindblad_error_generators(
             hamBasisMxs,otherBasisMxs,normalize=False,
-            other_diagonal_only=self.nonham_diagonal_only) # in std basis
+            other_mode=self.nonham_mode) # in std basis
 
         # Note: lindblad_error_generators will return sparse generators when
         #  given a sparse basis (or basis matrices)
@@ -2374,7 +2394,7 @@ class LindbladParameterizedGateMap(Gate):
         if otherGens is not None:
             bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
 
-            if self.nonham_diagonal_only:
+            if self.nonham_mode == "diagonal":
                 _gt._assert_shape(otherGens, (bsO-1,d2,d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
@@ -2386,6 +2406,20 @@ class LindbladParameterizedGateMap(Gate):
                 else:
                     otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
 
+            elif self.nonham_mode == "diag_affine":
+                _gt._assert_shape(otherGens, (2,bsO-1,d2,d2), self.sparse)
+
+                # apply basis change now, so we don't need to do so repeatedly later
+                if self.sparse:
+                    otherGens = [ [_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans))
+                                        for mx in mxRow ] for mxRow in otherGens ]
+
+                    for mxRow in otherGens:
+                        for mx in mxRow: mx.sort_indices()
+                          # for faster addition ops in _construct_errgen:
+                else:
+                    otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
+                                                otherGens, rightTrans)                    
             else:
                 _gt._assert_shape(otherGens, (bsO-1,bsO-1,d2,d2), self.sparse)
 
@@ -2400,7 +2434,6 @@ class LindbladParameterizedGateMap(Gate):
                         for mx in mxRow: mx.sort_indices()
                           # for faster addition ops in _construct_errgen:
                 else:
-                    preshape = otherGens.shape
                     otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
                                                 otherGens, rightTrans)
         else:
@@ -2411,6 +2444,8 @@ class LindbladParameterizedGateMap(Gate):
     
     def _init_terms(self, Ltermdict, basisdict, hamBasisLabels, otherBasisLabels, termtype):
 
+        d2 = self.dim
+        d = int(round(_np.sqrt(d2)))
         tt = termtype # shorthand - used to construct RankOneTerm objects below,
                       # as we expect `basisdict` will contain *dense* basis
                       # matrices (maybe change in FUTURE?)
@@ -2430,16 +2465,20 @@ class LindbladParameterizedGateMap(Gate):
                 Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T, tt) )
 
             elif termType == "S": # Stochastic
-                if self.nonham_diagonal_only:
-                    k = numHamParams + otherBasisLabels[termLbl[1]] #index of parameter
+                if self.nonham_mode in ("diagonal","diag_affine"):
+                    if self.param_mode == "depol": # => same single param for all stochastic terms
+                        k = numHamParams + 0 #index of parameter
+                    else:
+                        k = numHamParams + otherBasisLabels[termLbl[1]] #index of parameter
                     Lm = Ln = basisdict[termLbl[1]]
-                    pw = 2 if self.cptp else 1 # power to raise parameter to in order to get coeff
+                    pw = 2 if self.param_mode in ("cptp","depol") else 1 # power to raise parameter to in order to get coeff
 
                     Lm_dag = Lm.conjugate().T # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
                     Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw:  1.0} ), Ln, Lm_dag, tt) )
                     Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm), tt) )
                     Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT, tt) )
+                        
                 else:
                     i = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
                     j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
@@ -2447,7 +2486,8 @@ class LindbladParameterizedGateMap(Gate):
 
                     # TODO: create these polys and place below...
                     polyTerms = {}
-                    if self.cptp:
+                    assert(self.param_mode != "depol"), "`depol` mode not supported when nonham_mode=='all'"
+                    if self.param_mode == "cptp":
                         # otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
                         # coeff_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
                         #          = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
@@ -2462,7 +2502,8 @@ class LindbladParameterizedGateMap(Gate):
                                 polyTerms[ (iIm(i,k),iRe(j,k)) ] = 1.0j
                             if k < i and k < j:
                                 polyTerms[ (iIm(i,k),iIm(j,k)) ] = 1.0
-                    else: # coeff_ij = otherParam[i,j] + 1j*otherParam[j,i] (otherCoeffs is Hermitian)
+                    else: # param_mode == "unconstrained"
+                        # coeff_ij = otherParam[i,j] + 1j*otherParam[j,i] (otherCoeffs is Hermitian)
                         ijIndx = numHamParams + (i*numOtherBasisEls + j)
                         jiIndx = numHamParams + (j*numOtherBasisEls + i)
                         polyTerms = { (ijIndx,): 1.0, (jiIndx,): 1.0j }
@@ -2473,7 +2514,23 @@ class LindbladParameterizedGateMap(Gate):
                     Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm), tt) ) # adjoint(_np.dot(Lm_dag,Ln))
                     Lterms.append( _term.RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT, tt ) )
 
+            elif termType == "A": # Affine
+                assert(self.nonham_mode == "diag_affine")
+                if self.param_mode == "depol": # => same single param for all stochastic terms
+                    k = numHamParams + 1 + otherBasisLabels[termLbl[1]] #index of parameter
+                else:
+                    k = numHamParams + numOtherBasisEls + otherBasisLabels[termLbl[1]] #index of parameter
+
+                # rho -> basisdict[termLbl[1]] * I = basisdict[termLbl[1]] * 1/(d2-1)*sum{ P_i rho P_i } where Pi's are paulis
+                L = basisdict[termLbl[1]]
+                Bmxs = _bt.basis_matrices("pp",d, sparse=False) #Note: only works when `d` corresponds to integral # of qubits!
+
+                for B in Bmxs:
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,): 1.0/(d2-1.)} ), _np.dot(L,B), B, tt) )
+                    
                 #TODO: check normalization of these terms vs those used in projections.
+
+                
 
         #DEBUG
         #print("DB: params = ", list(enumerate(self.paramvals)))
@@ -2492,11 +2549,11 @@ class LindbladParameterizedGateMap(Gate):
         hamC, otherC  = \
             _gt.lindblad_errgen_projections(
                 errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
-                return_generators=False, other_diagonal_only=self.nonham_diagonal_only,
+                return_generators=False, other_mode=self.nonham_mode,
                 sparse=self.sparse) # in std basis
 
         self.paramvals = _gt.lindblad_projections_to_paramvals(
-            hamC, otherC, self.cptp, self.nonham_diagonal_only, truncate)
+            hamC, otherC, self.param_mode, self.nonham_mode, truncate)
 
             
     def _construct_errgen(self):
@@ -2515,20 +2572,38 @@ class LindbladParameterizedGateMap(Gate):
         else:
             nHam = 0
 
-        #built up otherCoeffs based on self.cptp and self.nonham_diagonal_only
+        #built up otherCoeffs based on self.param_mode and self.nonham_mode
         if bsO > 0:
-            if self.nonham_diagonal_only:
+            if self.nonham_mode == "diagonal":
                 otherParams = self.paramvals[nHam:]
-                assert(otherParams.shape == (bsO-1,))
-    
-                if self.cptp:
+                expected_shape = (1,) if (self.param_mode == "depol") else (bsO-1,)
+                assert(otherParams.shape == expected_shape)
+                
+                if self.param_mode in ("cptp","depol"):
                     otherCoeffs = otherParams**2 #Analagous to L*L_dagger
-                else:
+                else: # "unconstrained"
                     otherCoeffs = otherParams
-            else:
+                    
+            elif self.nonham_mode == "diag_affine":
+
+                if self.param_mode == "depol":
+                    otherParams = self.paramvals[nHam:].reshape((1+bsO-1,))
+                    otherCoeffs = _np.empty((2,bsO-1), 'd') #leave as real type b/c doesn't have complex entries
+                    otherCoeffs[0,:] = otherParams[0]**2
+                    otherCoeffs[1,:] = otherParams[1:]
+                else:
+                    otherParams = self.paramvals[nHam:].reshape((2,bsO-1))
+                    if self.param_mode == "cptp":
+                        otherCoeffs = otherParams.copy()
+                        otherCoeffs[0,:] = otherParams[0]**2
+                    else: # param_mode == "unconstrained"
+                        #otherCoeffs = _np.empty((2,bsO-1),'complex')
+                        otherCoeffs = otherParams
+                        
+            else: # self.nonham_mode == "all"
                 otherParams = self.paramvals[nHam:].reshape((bsO-1,bsO-1))
     
-                if self.cptp:
+                if self.param_mode == "cptp":
                     #  otherParams is an array of length (bs-1)*(bs-1) that
                     #  encodes a lower-triangular matrix "Lmx" via:
                     #  Lmx[i,i] = otherParams[i,i]
@@ -2554,7 +2629,7 @@ class LindbladParameterizedGateMap(Gate):
                     #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
                     #assert(all([ev >= -DEBUG_TOL for ev in evals]))
     
-                else:
+                else: # param_mode == "unconstrained"
                     #otherParams holds otherCoeff real and imaginary parts directly
                     otherCoeffs = _np.empty((bsO-1,bsO-1),'complex')
                     for i in range(bsO-1):
@@ -2576,15 +2651,16 @@ class LindbladParameterizedGateMap(Gate):
                 _mt.csr_sum(data,hamCoeffs, self.hamGens, self.hamCSRSumIndices)
 
             if bsO > 0:
-                if self.nonham_diagonal_only:
+                if self.nonham_mode == "diagonal":
                     # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
                     _mt.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
-                else:
+                    
+                else: # nonham_mode in ("diag_affine", "all")
                     # lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
                     #                      for c,gen in zip(cRow,genRow)])
                     _mt.csr_sum(data, otherCoeffs.flat,
-                                 [oGen for oGenRow in self.otherGens for oGen in oGenRow],
-                                 self.otherCSRSumIndices)
+                                [oGen for oGenRow in self.otherGens for oGen in oGenRow],
+                                self.otherCSRSumIndices)
             lnd_error_gen = _sps.csr_matrix( (data, indices.copy(), indptr.copy()), shape=(N,N) ) #copies needed (?)
             
 
@@ -2595,9 +2671,9 @@ class LindbladParameterizedGateMap(Gate):
                 lnd_error_gen = _np.zeros( (d2,d2), 'complex')
 
             if bsO > 0:
-                if self.nonham_diagonal_only:
+                if self.nonham_mode == "diagonal":
                     lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
-                else:
+                else: # nonham_mode in ("diag_affine", "all")
                     lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs,
                                                 self.otherGens)
 
@@ -2825,7 +2901,7 @@ class LindbladParameterizedGateMap(Gate):
         tGate = LindbladParameterizedGateMap.from_gate_matrix(
             M,self.unitary_postfactor,
             self.ham_basis, self.other_basis,
-            self.cptp,self.nonham_diagonal_only,
+            self.param_mode,self.nonham_mode,
             True, self.matrix_basis, self._evotype)
 
         #Note: truncate=True to be safe
@@ -2894,9 +2970,8 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
     form is referred to as the "projection basis".
     """
 
-
     def __init__(self, unitaryPostfactor, Ltermdict, basisdict=None,
-                 cptp=True, nonham_diagonal_only="auto",
+                 param_mode="cptp", nonham_mode="all",
                  truncate=True, mxBasis="pp", evotype="densitymx"):
         """
         Create a new LinbladParameterizedGate based on a set of Lindblad terms.
@@ -2940,7 +3015,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             Whether or not the new gate should be constrained to CPTP.
             (if True, see behavior or `truncate`).
 
-        nonham_diagonal_only : boolean or "auto", optional
+        nonham_diagonal_only : boolean or "auto", optional TODO docstring
             If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
             included in the parameterization.  The default "auto" determines
             whether off-diagonal terms are allowed by whether any are given 
@@ -2970,8 +3045,8 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         
         #Start with base class construction
         LindbladParameterizedGateMap.__init__(
-            self, unitaryPostfactor, Ltermdict, basisdict, cptp,
-            nonham_diagonal_only, truncate, mxBasis, evotype) #(sets self.dim)
+            self, unitaryPostfactor, Ltermdict, basisdict, param_mode,
+            nonham_mode, truncate, mxBasis, evotype) #(sets self.dim)
         
         GateMatrix.__init__(self, _np.identity(self.dim,'d'), "densitymx")
 
@@ -3047,19 +3122,46 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         bsH = self.ham_basis_size
         bsO = self.other_basis_size
         nHam = bsH-1 if (bsH > 0) else 0
+        d2 = self.dim
         
         assert(bsO > 0),"Cannot construct dOdp when other_basis_size == 0!"
-        if self.nonham_diagonal_only:
+        if self.nonham_mode == "diagonal":
             otherParams = self.paramvals[nHam:]
             
             # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
-            if self.cptp:
+            #  except "depol" case, when shape == [d2,d2,1]
+            if self.param_mode == "depol": # all coeffs same & == param^2
+                assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'depol' case!"
+                dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None] * 2*otherParams[0]
+            if self.param_mode == "cptp": # (coeffs = params^2)
                 dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
-            else:
+            else: # "unconstrained" (coeff == params)
                 dOdp  = _np.einsum('alj->lja', self.otherGens)
-                            
-        else: #all lindblad terms included                
-            if self.cptp:
+
+        elif self.nonham_mode == "diag_affine":
+            otherParams = self.paramvals[nHam:]
+            # Note: otherGens has shape (2,bsO-1,d2,d2) with diag-term generators
+            # in first "row" and affine generators in second row.
+            
+            # Derivative of exponent wrt other param; shape == [d2,d2,2,bs-1]
+            #  except "depol" case, when shape == [d2,d2,bs]
+            if self.param_mode == "depol": # all coeffs same & == param^2
+                diag_params, affine_params = otherParams[0:1], otherParams[1:]
+                dOdp  = _np.empty((d2,d2,bsO),'complex')
+                dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2*diag_params[0] # single diagonal term
+                dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
+            if self.param_mode == "cptp": # (coeffs = params^2)
+                diag_params, affine_params = otherParams[0:bsO-1], otherParams[bsO-1:]
+                dOdp  = _np.empty((d2,d2,2,bsO-1),'complex')
+                dOdp[:,:,0,:] = _np.einsum('alj,a->lja', self.otherGens[0], 2*diag_params)
+                dOdp[:,:,1,:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
+            else: # "unconstrained" (coeff == params)
+                dOdp  = _np.einsum('ablj->ljab', self.otherGens) # -> shape (d2,d2,2,bsO-1)
+
+        else: # nonham_mode == "all" ; all lindblad terms included
+            assert(self.param_mode in ("cptp","unconstrained"))
+            
+            if self.param_mode == "cptp":
                 L,Lbar = self.Lmx,self.Lmx.conjugate()
                 F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'))
                 F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
@@ -3069,7 +3171,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                 dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
                 dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
                 dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
-            else:
+            else: # "unconstrained"
                 F0 = _np.identity(bsO-1,'d')
                 F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'),-1)
                 F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
@@ -3101,19 +3203,43 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         d2 = self.dim
         
         assert(bsO > 0),"Cannot construct dOdp when other_basis_size == 0!"
-        if self.nonham_diagonal_only:
+        if self.nonham_mode == "diagonal":
             otherParams = self.paramvals[nHam:]
-            nP = len(otherParams); assert(nP == bsO-1)
+            nP = len(otherParams); 
             
-            # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
-            if self.cptp:
+            # Derivative of exponent wrt other param; shape == [d2,d2,nP,nP]
+            if self.param_mode == "depol":
+                assert(nP == 1)
+                d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
+            if self.param_mode == "cptp":
+                assert(nP == bsO-1)
                 d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
-            else:
+            else: # param_mode == "unconstrained"
+                assert(nP == bsO-1)
                 d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')
-                            
-        else: #all lindblad terms included
+
+        elif self.nonham_mode == "diag_affine":
+            otherParams = self.paramvals[nHam:]
+            nP = len(otherParams); 
+            
+            # Derivative of exponent wrt other param; shape == [d2,d2,nP,nP]
+            if self.param_mode == "depol":
+                assert(nP == bsO) # 1 diag param + (bsO-1) affine params
+                d2Odp2  = _np.empty((d2,d2,nP,nP),'complex')
+                d2Odp2[:,:,0,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2 # single diagonal term
+                d2Odp2[:,:,1:,1:]  = 0 # 2nd deriv wrt. all affine params == 0
+            if self.param_mode == "cptp":
+                assert(nP == 2*(bsO-1)); hnP = bsO-1 # half nP
+                d2Odp2  = _np.empty((d2,d2,nP,nP),'complex')
+                d2Odp2[:,:,0:hnP,0:hnp] = _np.einsum('alj,aq->ljaq', self.otherGens[0], 2*_np.identity(nP,'d'))
+                d2Odp2[:,:,hnP:,hnp:]   = 0 # 2nd deriv wrt. all affine params == 0
+            else: # param_mode == "unconstrained"
+                assert(nP == 2*(bsO-1))
+                d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')
+
+        else: # nonham_mode == "all" : all lindblad terms included
             nP = bsO-1
-            if self.cptp:
+            if self.param_mode == "cptp":
                 d2Odp2  = _np.zeros([d2,d2,nP,nP,nP,nP],'complex') #yikes! maybe make this SPARSE in future?
                 
                 #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
@@ -3141,7 +3267,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                 for base,b,r in iter_base_ab_qr(False,False): # Case4: base=a=q, ab=b, qr=r
                     d2Odp2[:,:,base,b,base,r] = self.otherGens[b,r] + self.otherGens[r,b]
                 
-            else:
+            else: # param_mode == "unconstrained"
                 d2Odp2  = _np.zeros([d2,d2,nP,nP,nP,nP],'d') #all params linear
 
         # apply basis transform
@@ -3188,7 +3314,8 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                                self.unitary_postfactor)
 
                 #Reshape so index as [iFlattenedGate,iOtherParam]
-                # 2nd dim will be bsO-1 or (bsO-1)**2 depending on tensor rank
+                # 2nd dim will be 1 (diagonal-depol), bsO-1 (diagonal-cptp),
+                # bsO (diag_affine-depol), 2*(bsO-1) (diag_affine-) or (bsO-1)**2 (all-) depending on tensor rank
                 dO = dexpL.reshape((d2**2,-1)) 
             else:
                 dO = _np.empty( (d2**2,0), 'd') #so concat works below
@@ -3261,6 +3388,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                 series, series2 = _d2expSeries(self.err_gen, dOdp, d2Odp2)
                 term1 = series2
                 if tr == 3: #one deriv dimension "a"
+                    nP = dOdp.shape[2] # e.g. (bsO-1)
                     term2 = _np.einsum("ija,jkq->ikaq",series,series)
                     if self.unitary_postfactor is None:
                         d2expL = _np.einsum("ikaq,kj->ijaq", term1+term2,
@@ -3268,10 +3396,11 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                     else:
                         d2expL = _np.einsum("ikaq,kl,lj->ijaq", term1+term2,
                                             self.exp_err_gen, self.unitary_postfactor)
-                    dO = d2expL.reshape((d2**2,bsO-1,bsO-1))
-                    #d2expL.shape = (d2**2,bsO-1,bsO-1); dO = d2expL
+                    dO = d2expL.reshape((d2**2,nP,nP))
+                    #d2expL.shape = (d2**2,nP,nP); dO = d2expL
 
                 elif tr == 4: #two deriv dimension "ab"
+                    nP = dOdp.shape[2]*dOdp.shape[3] # e.g. (bsO-1)**2
                     term2 = _np.einsum("ijab,jkqr->ikabqr",series,series)
                     if self.unitary_postfactor is None:
                         d2expL = _np.einsum("ikabqr,kj->ijabqr", term1+term2,
@@ -3279,8 +3408,8 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                     else:
                         d2expL = _np.einsum("ikabqr,kl,lj->ijabqr", term1+term2,
                                             self.exp_err_gen, self.unitary_postfactor)
-                    dO = d2expL.reshape((d2**2, (bsO-1)**2, (bsO-1)**2 ))
-                    #d2expL.shape = (d2**2, (bsO-1)**2, (bsO-1)**2); dO = d2expL
+                    dO = d2expL.reshape((d2**2, nP, nP ))
+                    #d2expL.shape = (d2**2, nP, nP); dO = d2expL
 
                 #dO has been reshape so index as [iFlattenedGate,iDeriv1,iDeriv2]
                 assert(_np.linalg.norm(_np.imag(dO)) < IMAG_TOL)
