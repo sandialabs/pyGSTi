@@ -325,7 +325,7 @@ def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='unifor
     "compatible" -- meaning that they can be implemented simulatenously -- and a distribution 
     over the different compatible sets, and a layer is sampled from this via:
 
-    1. Pick a set of compatible two-qubit gates from this list `Co2GCs`, according to the
+    1. Pick a set of compatible two-qubit gates from the list `co2Qgates`, according to the
     distribution specified by `co2Qgatesprob`.
     2. For each 2-qubit gate in the chosen set of compatible gates, with probability `twoQprob`
     add this gate to the layer.
@@ -353,7 +353,7 @@ def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='unifor
     `co2Qgatesprob`, and then one of the sublists of compatible 2-qubit gates in the selected list is 
     then chosen uniformly at random. For example, this is useful for sampling a layer containing one
     uniformly random 2-qubit gate with probability p and a layer of 1-qubit gates with probability
-    1-p. Here, we can specify `Co2GQs` as [[],[[the 1st 2Q-gate,],[the 2nd 2Q-gate,], ...]] and
+    1-p. Here, we can specify `co2Qgates` as [[],[[the 1st 2Q-gate,],[the 2nd 2Q-gate,], ...]] and
     set `twoQprob=1` and `co2Qgatesprob  = [1-p,p].
 
     Parameters
