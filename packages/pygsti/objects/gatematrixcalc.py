@@ -1763,6 +1763,7 @@ class GateMatrixCalc(GateCalc):
         # dp_drhos[i,J0+J] = sum_kl E[0,k] Gs[i,k,l] drhoP[l,J]
         # dp_drhos[i,J0+J] = dot(E, Gs, drhoP)[0,i,J]
         # dp_drhos[:,J0+J] = squeeze(dot(E, Gs, drhoP),axis=(0,))[:,J]
+
         dp_drhos = _np.zeros( (nGateStrings, nDerivCols ) )
         _fas(dp_drhos, [None,rho_gpindices],
              _np.squeeze(_np.dot(_np.dot(E, Gs),

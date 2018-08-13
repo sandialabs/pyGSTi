@@ -161,12 +161,6 @@ namespace CReps {
   |* DMEffectCRep_Computational                                               *|
   \****************************************************************************/
 
-    //class DMEffectCRep_Computational :public DMEffectCRep {
-    //public:
-    //INT nfactors;
-    //INT zvals_int;
-    //INT abs_elval;
-
   DMEffectCRep_Computational::DMEffectCRep_Computational(INT nfactors, INT zvals_int, double abs_elval, INT dim)
     :DMEffectCRep(dim)
   {
@@ -215,6 +209,28 @@ namespace CReps {
     return x & 1; // return the last bit (0 or 1)
   }
 
+
+  /****************************************************************************\
+  |* DMEffectCRep_Errgen                                                      *|
+  \****************************************************************************/
+
+  DMEffectCRep_Errgen::DMEffectCRep_Errgen(DMGateCRep* errgen_gaterep,
+					   DMEffectCRep* effect_rep,
+					   INT errgen_id, INT dim)
+    :DMEffectCRep(dim)
+  {
+    _errgen_ptr = errgen_gaterep;
+    _effect_ptr = effect_rep;
+    _errgen_id = errgen_id;
+  }
+  
+  DMEffectCRep_Errgen::~DMEffectCRep_Errgen() { }
+  
+  double DMEffectCRep_Errgen::probability(DMStateCRep* state) {
+    DMStateCRep outState(_dim);
+    _errgen_ptr->acton(state, &outState);
+    return _effect_ptr->probability(&outState);
+  }
 
 
   /****************************************************************************\

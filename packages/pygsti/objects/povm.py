@@ -14,6 +14,7 @@ import functools as _functools
 #from . import labeldicts as _ld
 from . import gatesetmember as _gm
 from . import spamvec as _sv
+from . import gate as _gate
 from ..tools import matrixtools as _mt
 from ..tools import basistools as _bt
 from ..tools import gatetools as _gt
@@ -101,26 +102,45 @@ def convert(povm, toType, basis, extra=None):
 
     elif toType.split()[0] in ("CPTP","H+S","S","H+S+A","S+A","H+D","D","H+D+A","D+A","GLND"):
 
-        purevecs = extra if (extra is not None) else None
-        nQubits = _np.log2(povm.dim)/2.0
+        #ensure that povm being converted is a simple computational basis POVM,
+        # since we initialize Lindblad error map as the identity below...
+        nQubits = _np.log2(povm.dim)/2.0 #Linblad ops always work on density-matrices, never states
         bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
+        assert(bQubits); nQubits = int(round(nQubits)) # only support integer# of qubits so far... FUTURE - allow qutrits at least!
         proj_basis = "pp" if (basis == "pp" or bQubits) else basis
 
-        # Create an Unconstrained POVM with LindbladParameterizedSPAMVecs
-        new_effects = []
-        for (lbl,Evec),zs in zip(povm.items(),zvals):
+        if isinstance(povm, ComputationalBasisPOVM):
+            assert(povm.nqubits == nQubits)
+        else:
+            chk_povm = ComputationalBasisPOVM(nQubits, "densitymx") # to check against
 
-            #Below is similar to spamvec convert(...) case
-            purevec = purevecs[lbl] if (purevecs is not None) else \
-                      Evec # right now, we don't try to extract a "closest pure
-                           # dmvec" to Evec - below will fail if Evec isn't pure.
-
-            new_effects.append( (lbl, _sv.LindbladParameterizedSPAMVec.from_spamvec_obj(
-                Evec, "effect", toType, purevec, proj_basis, basis,
-                truncate=True, lazy=True)) )
+            #Check if `povm` happens to be a Z-basis POVM on `nQubits`
+            for lbl, EVec in chk_povm.items():
+                if not _np.allclose(EVec.todense(), povm[lbl].todense()):
+                    raise ValueError("Cannot convert POVM into a computational Z-basis POVM")
         
-        #Always return unconstrained?? TODO FUTURE
-        return UnconstrainedPOVM( new_effects )
+        # purevecs = extra if (extra is not None) else None # UNUSED
+        cls = _gate.LindbladParameterizedGate if (povm.dim <= 64) \
+              else _gate.LindbladParameterizedGateMap
+        povmNoiseMap = cls.from_gate_obj(_np.identity(povm.dim,'d'), toType,
+                                         None, proj_basis, basis, truncate=True)
+        return LindbladParameterizedPOVM(povmNoiseMap, basis)
+        
+        #OLD TODO REMOVE # Create an Unconstrained POVM with LindbladParameterizedSPAMVecs
+        #new_effects = []
+        #for lbl,Evec in povm.items():
+        #
+        #    #Below is similar to spamvec convert(...) case
+        #    purevec = purevecs[lbl] if (purevecs is not None) else \
+        #              Evec # right now, we don't try to extract a "closest pure
+        #                   # dmvec" to Evec - below will fail if Evec isn't pure.
+        #
+        #    new_effects.append( (lbl, _sv.LindbladParameterizedSPAMVec.from_spamvec_obj(
+        #        Evec, "effect", toType, purevec, proj_basis, basis,
+        #        truncate=True, lazy=True)) )
+        #
+        ##Always return unconstrained?? TODO FUTURE
+        #return UnconstrainedPOVM( new_effects )
 
     elif toType == "clifford":
         if isinstance(povm,StabilizerZPOVM):
@@ -958,7 +978,6 @@ class ComputationalBasisPOVM(POVM):
 
         self.nqubits = nqubits
         self.qubit_filter = qubit_filter
-        dim = 2**nqubits # assume "unitary evolution"-type mode?
 
         #LATER - do something with qubit_filter here
         # qubits = self.qubit_filter if (self.qubit_filter is not None) else list(range(self.nqubits))
@@ -966,6 +985,7 @@ class ComputationalBasisPOVM(POVM):
         items = [] # init as empty (lazy creation of members)
 
         assert(evotype in ("statevec","densitymx","stabilizer"))
+        dim = 4**nqubits if (evotype == "densitymx") else 2**nqubits
         super(ComputationalBasisPOVM, self).__init__(dim, evotype, items)
 
 
@@ -1116,6 +1136,7 @@ class LindbladParameterizedPOVM(POVM):
             pureVec = _sv.ComputationalSPAMVec(outcomes, self._evotype)
             effect = _sv.LindbladParameterizedSPAMVec(pureVec, self.error_map,
                                                       "effect", self.matrix_basis)
+            effect.set_gpindices(self.error_map.gpindices, self.parent) # initialize gpindices of "child" effect (should be in compile_effects?)
             _collections.OrderedDict.__setitem__(self,key,effect)
             return effect
         else: raise KeyError("%s is not an outcome label of this StabilizerZPOVM" % key)
@@ -1125,6 +1146,61 @@ class LindbladParameterizedPOVM(POVM):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         return (LindbladParameterizedPOVM, (self.error_map.copy(), self.matrix_basis),
                 {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
+
+    def allocate_gpindices(self, startingIndex, parent):
+        """
+        Sets gpindices array for this object or any objects it
+        contains (i.e. depends upon).  Indices may be obtained
+        from contained objects which have already been initialized
+        (e.g. if a contained object is shared with other
+         top-level objects), or given new indices starting with
+        `startingIndex`.
+
+        Parameters
+        ----------
+        startingIndex : int
+            The starting index for un-allocated parameters.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        num_new: int
+            The number of *new* allocated parameters (so 
+            the parent should mark as allocated parameter
+            indices `startingIndex` to `startingIndex + new_new`).
+        """
+        num_new_params = self.error_map.allocate_gpindices( startingIndex, parent ) # *same* parent as this SPAMVec
+        _gm.GateSetMember.set_gpindices(
+            self, self.error_map.gpindices, parent)
+        return num_new_params
+
+    
+    def set_gpindices(self, gpindices, parent, memo=None):
+        """
+        Set the parent and indices into the parent's parameter vector that
+        are used by this GateSetMember object.
+
+        Parameters
+        ----------
+        gpindices : slice or integer ndarray
+            The indices of this objects parameters in its parent's array.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        None
+        """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
+        self.error_map.set_gpindices(gpindices, parent, memo)
+        self.terms = {} # clear terms cache since param indices have changed now
+        _gm.GateSetMember.set_gpindices(self, gpindices, parent)
 
 
     def compile_effects(self, prefix=""):
@@ -1190,6 +1266,24 @@ class LindbladParameterizedPOVM(POVM):
         None
         """
         self.error_map.from_vector(v)
+
+
+    def transform(self, S):
+        """
+        Update each POVM effect E as S^T * E.
+
+        Note that this is equivalent to the *transpose* of the effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.            
+        """
+        for lbl,effect in self.items():
+            effect.transform(S,'effect')
+        self.dirty = True
 
 
     def __str__(self):

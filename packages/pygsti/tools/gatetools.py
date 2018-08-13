@@ -631,7 +631,7 @@ def get_povm_map(gateset, povmlbl):
     numpy.ndarray
         The matrix of the "POVM map" in the `gateset.basis` basis.
     """
-    povmVectors = list(gateset.povms[povmlbl].values())
+    povmVectors = [v.todense()[:,None] for v in gateset.povms[povmlbl].values()]
     d = int(round(_np.sqrt(gateset.dim))) # density matrix is dxd
     nV = len(povmVectors)
     assert(d**2 == gateset.dim), "GateSet dimension (%d) is not a perfect square!" % gateset.dim
@@ -1564,7 +1564,7 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
                             otherLindbladTerms[k][i] /= norm #normalize projector
                             assert(_np.isclose(normfn(otherLindbladTerms[k][i]),1.0))
 
-        else:
+        else: # other_mode == "all"
             otherLindbladTerms = \
                 [ [ None ] * (other_nMxs-1) for i in range(other_nMxs-1)] if sparse else \
                 _np.empty( (other_nMxs-1,other_nMxs-1,d2,d2), 'complex' )

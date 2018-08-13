@@ -345,7 +345,7 @@ class UnitaryGaugeGroup(GateGaugeGroup):
         from . import gate as _gate #b/c gate.py imports gaugegroup
         gate = _gate.LindbladParameterizedGate.from_gate_matrix(
             None, _np.identity(dim,'d'), ham_basis=basis, nonham_basis=None,
-            cptp=True, mxBasis=basis)
+            param_mode="cptp", mxBasis=basis)
         GateGaugeGroup.__init__(self, gate, UnitaryGaugeGroupElement, "Unitary")
 
 class UnitaryGaugeGroupElement(GateGaugeGroupElement):

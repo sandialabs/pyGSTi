@@ -1164,10 +1164,12 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
     if qubit_labels is None:
         qubit_labels = list(range(nQubits))
 
+    evostr = " ".join(parameterization.split()[1:])
     if evotype == "auto": # Note: this same logic is repeated in build_nqubit_standard_gateset
         if parameterization == "clifford": evotype = "stabilizer"
-        elif parameterization == "H+S terms": evotype = "svterm"
-        elif parameterization == "H+S clifford terms": evotype = "cterm"
+        elif parameterization == "static unitary": evotype = "statevec"
+        elif evostr == "terms": evotype = "svterm"
+        elif evostr == "clifford terms": evotype = "cterm"
         else: evotype = "densitymx" #everything else
 
     if evotype in ("densitymx","svterm","cterm"):
@@ -1196,10 +1198,6 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
     gs.stateSpaceLabels = _ld.StateSpaceLabels(tuple(qubit_labels))
     gs._evotype = evotype # set this to ensure we create the types of gateset element we expect to.
 
-    #Set "sub-type" as in GateSet.set_all_parameterizations
-    typ = parameterization
-    povmtyp = rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
-
     if parameterization in ("TP","full"): # then make tensor-product spam
         prep_factors = []; povm_factors = []
         for i in range(nQubits):
@@ -1220,8 +1218,8 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
 
     elif parameterization in ("static","static unitary"):
         #static computational basis
-        gs.preps[_Lbl('rho0')] = _spamvec.ComputationalSPAMVec([0]*nQubits, evotype))
-        gs.povms[_Lbl('Mdefault')] = _povm.ComputationalBasisPOVM(nQubits, evotype)
+        gs.preps['rho0'] = _spamvec.ComputationalSPAMVec([0]*nQubits, evotype)
+        gs.povms['Mdefault'] = _povm.ComputationalBasisPOVM(nQubits, evotype)
 
     else:
         # parameterization should be a type amenable to Lindblad
@@ -1244,7 +1242,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
     for gateName, gate in gatedict.items():
         if not isinstance(gate, _gate.Gate):
             try:
-                gate = _gate.convert(_gate.StaticGate(gate), typ, "pp")
+                gate = _gate.convert(_gate.StaticGate(gate), parameterization, "pp")
             except Exception as e:
                 if on_construction_error == 'warn':
                     _warnings.warn("Failed to create %s gate %s. Dropping it." %

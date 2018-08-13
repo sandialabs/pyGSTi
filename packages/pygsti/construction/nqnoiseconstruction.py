@@ -385,7 +385,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
             _warnings.warn(("`spamtype == 'static'` ignores the supplied "
                             "`maxSpamWeight=%d > 0`") % maxSpamWeight )
 
-        gs.preps[_Lbl('rho0')] = _objs.ComputationalSPAMVec([0]*nQubits,"densitymx"))
+        gs.preps[_Lbl('rho0')] = _objs.ComputationalSPAMVec([0]*nQubits,"densitymx")
         gs.povms[_Lbl('Mdefault')] = _objs.ComputationalBasisPOVM(nQubits, "densitymx")
         
     elif spamtype == "tensorproduct": 
@@ -466,8 +466,8 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
             povmNoiseMap.from_vector(noise_params)
             gs._update_paramvec(gs.povms[_Lbl('Mdefault')]) # make sure params update        
 
-        else:
-            raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
+    else:
+        raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
 
     #FUTURE - just return cloud *keys*? (gate label values are never used
     # downstream, but may still be useful for debugging, so keep for now)
@@ -492,7 +492,7 @@ def _get_Lindblad_factory(sim_type, parameterization):
     def _f(gateMatrix, unitaryPostfactor=None,
            proj_basis="pp", mxBasis="pp"):
         return cls.from_gate_obj(gateMatrix, parameterization, unitaryPostfactor,
-                                 proj_basis, mxBasis, truncate)
+                                 proj_basis, mxBasis, truncate=True)
     return _f
                                     
 

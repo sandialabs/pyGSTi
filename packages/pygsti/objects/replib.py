@@ -168,6 +168,17 @@ class DMEffectRep_Computational(DMEffectRep):
         Edense = self.todense( scratch  )
         return _np.dot(Edense,state.data) # not vdot b/c data is *real*
 
+class DMEffectRep_Errgen(DMEffectRep):  #TODO!! Need to make SV version
+    def __init__(self, errgen_gaterep, effect_rep, errgen_id):
+        dim = effect_rep.dim
+        self.errgen_rep = errgen_gaterep
+        self.effect_rep = effect_rep
+        self.errgen_id = errgen_id
+        super(DMEffectRep_Errgen,self).__init__(dim)
+
+    def probability(self, state):
+        state = self.errgen_rep.acton(state) # *not* acton_adjoint
+        return self.effect_rep.probability(state)
 
 
 class DMGateRep(object):
@@ -1064,6 +1075,7 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None): 
         final_state = propagate_staterep(init_state, [gatereps[gl] for gl in remainder])
         if iCache is not None: rho_cache[iCache] = final_state # [:,0] #store this state in the cache
 
+        #HERE - current_errgen_name check?
         for j,erep in enumerate(ereps):
             ret[i,j] = erep.probability(final_state) #outcome probability
 
@@ -1281,15 +1293,27 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
 
                     # for the last index, no need to save, and need to construct
                     # and apply effect vector
-                    # Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-                    for f in reversed(factors[-1].post_ops):
-                        rhoVecL = f.adjoint_acton(rhoVecL)
+                    
+                    #HERE - add something like:
+                    #  if factors[-1].opname == cur_effect_opname: (or opint in C-case)
+                    #      <skip application of post_ops & preops - just load from (new) saved slot get pLeft & pRight>
+
+                    #OLD TODO REMOVE (now in effect terms, i.e. factors[-1], pre/post ops are interpreted acting
+                    # on the *state* -- that is, they're already reversed and adjointed from what would act on the effect covector)
+                    ## Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
+                    #for f in reversed(factors[-1].post_ops):
+                    #    rhoVecL = f.adjoint_acton(rhoVecL)
+
+                    for f in factors[-1].post_ops:
+                        rhoVecL = f.acton(rhoVecL)
                     E = factors[-1].post_effect # effect representation
                     pLeft = E.amplitude(rhoVecL)
 
                     #Same for pre_ops and rhoVecR
-                    for f in reversed(factors[-1].pre_ops):
-                        rhoVecR = f.adjoint_acton(rhoVecR)
+                    #OLD: for f in reversed(factors[-1].pre_ops):
+                    #OLD:    rhoVecR = f.adjoint_acton(rhoVecR)
+                    for f in factors[-1].pre_ops:
+                        rhoVecR = f.acton(rhoVecR)
                     E = factors[-1].pre_effect
                     pRight = _np.conjugate(E.amplitude(rhoVecR))
 
@@ -1340,9 +1364,12 @@ def _unitary_sim_pre(complete_factors, comm, memLimit):
     for f in _itertools.chain(*[f.pre_ops for f in complete_factors[1:-1]]):
         rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
 
-    # Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-    for f in reversed(complete_factors[-1].post_ops):
-        rhoVec = f.adjoint_acton(rhoVec)
+    #OLD: # Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
+    #OLD: for f in reversed(complete_factors[-1].post_ops):
+    #OLD:     rhoVec = f.adjoint_acton(rhoVec)
+    for f in complete_factors[-1].post_ops:
+        rhoVec = f.acton(rhoVec)
+
     EVec = complete_factors[-1].post_effect
     return EVec.amplitude(rhoVec)
 
@@ -1354,8 +1381,10 @@ def _unitary_sim_post(complete_factors, comm, memLimit):
     for f in _itertools.chain(*[f.post_ops for f in complete_factors[1:-1]]):
         rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
 
-    # Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-    for f in reversed(complete_factors[-1].pre_ops):
-        rhoVec = f.adjoint_acton(rhoVec)
+    #OLD: # Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
+    #OLD: for f in reversed(complete_factors[-1].pre_ops):
+    #OLD:     rhoVec = f.adjoint_acton(rhoVec)
+    for f in complete_factors[-1].pre_ops:
+        rhoVec = f.acton(rhoVec)
     EVec = complete_factors[-1].pre_effect
     return _np.conjugate(EVec.amplitude(rhoVec)) # conjugate for same reason as above

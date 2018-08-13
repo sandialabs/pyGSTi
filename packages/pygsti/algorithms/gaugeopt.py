@@ -441,7 +441,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                 #   Note: (S_inv * rho) is transformed rho
                 wt   = itemWeights.get(lbl, spamWeight)
                 Sinv_dS  = _np.dot(S_inv, dS) # shape (d1,n,d2)
-                result = -1 * _np.dot(Sinv_dS, rho).squeeze(2) # shape (d,n,1) => (d,n)
+                result = -1 * _np.dot(Sinv_dS, rho.todense()) # shape (d,n)
                 my_jacMx[start:start+d] = wt * result
                 start += d
 
@@ -452,7 +452,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                 for lbl,E in povm.items():
                     # d(ET_term) = E.T * dS
                     wt   = itemWeights.get(povmlbl+"_"+lbl, spamWeight)
-                    result = _np.dot(E.T, dS).T  # shape (1,n,d2).T => (d2,n,1)
+                    result = _np.dot(E.todense()[None,:], dS).T  # shape (1,n,d2).T => (d2,n,1)
                     my_jacMx[start:start+d] = wt * result.squeeze(2) # (d2,n)
                     start += d
 

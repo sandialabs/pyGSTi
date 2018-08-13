@@ -15,6 +15,9 @@ namespace CReps {
 				 INT s, double tol, double eta,
 				 double* F, double* scratch);
 
+  //Forward declarations (as necessary)
+  class DMGateCRep;
+
   // DENSE MATRIX (DM) propagation
 
   // STATEs
@@ -70,6 +73,18 @@ namespace CReps {
     virtual ~DMEffectCRep_Computational();
     virtual double probability(DMStateCRep* state);
     INT parity(INT x);
+  };
+
+
+  class DMEffectCRep_Errgen :public DMEffectCRep {
+    public:
+    DMGateCRep* _errgen_ptr;
+    DMEffectCRep* _effect_ptr;
+    INT _errgen_id;
+
+    DMEffectCRep_Errgen(DMGateCRep* errgen_gaterep, DMEffectCRep* effect_rep, INT errgen_id, INT dim);
+    virtual ~DMEffectCRep_Errgen();
+    virtual double probability(DMStateCRep* state);
   };
 
 

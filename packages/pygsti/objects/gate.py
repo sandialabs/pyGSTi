@@ -193,14 +193,14 @@ def convert(gate, toType, basis, extra=None):
         if isinstance(gate, FullyParameterizedGate):
             return gate #no conversion necessary
         else:
-            ret = FullyParameterizedGate( gate )
+            ret = FullyParameterizedGate( gate.todense() )
             return ret
 
     elif toType == "TP":
         if isinstance(gate, TPParameterizedGate):
             return gate #no conversion necessary
         else:
-            return TPParameterizedGate( gate )
+            return TPParameterizedGate( gate.todense() )
               # above will raise ValueError if conversion cannot be done
 
     elif toType == "linear":
@@ -208,7 +208,7 @@ def convert(gate, toType, basis, extra=None):
             return gate #no conversion necessary
         elif isinstance(gate, StaticGate):
             real = _np.isclose(_np.linalg.norm( gate.imag ),0)
-            return LinearlyParameterizedGate(gate, _np.array([]), {}, real)
+            return LinearlyParameterizedGate(gate.todense(), _np.array([]), {}, real)
         else:
             raise ValueError("Cannot convert type %s to LinearlyParameterizedGate"
                              % type(gate))
@@ -418,7 +418,7 @@ class Gate(_gatesetmember.GateSetMember):
             return replib.DMGateRep_Dense(_np.ascontiguousarray(self.todense(),'d'))
         else:
             raise NotImplementedError("torep(%s) not implemented for %s objects!" %
-                                      (self._evotype, self.__class__.__name__))
+                                      (self._evotype, self.__class__.__name__))            
 
     def tosparse(self):
         """
@@ -653,7 +653,8 @@ class Gate(_gatesetmember.GateSetMember):
             Array of derivatives with shape (dimension^2, num_params)
         """
         assert(self.num_params() == 0), \
-            "Default deriv_wrt_params is only for 0-parameter (default) case"
+            "Default deriv_wrt_params is only for 0-parameter (default) case (%s)" \
+            % str(self.__class__.__name__)
 
         dtype = complex if self._evotype == 'statevec' else 'd'
         derivMx = _np.zeros((self.size,0),dtype)
@@ -1868,19 +1869,16 @@ class LindbladParameterizedGateMap(Gate):
 
     @classmethod
     def from_gate_obj(cls, gate, paramType="GLND", unitary_postfactor=None,
-                      proj_basis="pp", mxBasis="pp", trucate=True, lazy=False):
+                      proj_basis="pp", mxBasis="pp", truncate=True, lazy=False):
         """ TODO: docstring """
         RANK_TOL = 1e-6
-
-        if not isinstance(gate, Gate):
-            gate = FullyParameterizedGate(gate) #assume gate is just a matrix
 
         if unitary_postfactor is None:
             #Try to obtain unitary_post by getting the closest unitary
             if isinstance(gate, LindbladParameterizedGate):
                 unitary_postfacor = gate.unitary_postfactor
-            elif gate._evotype == "densitymx":
-                J = _jt.fast_jamiolkowski_iso_std(gate.todense(), basis) #Choi mx basis doesn't matter
+            elif isinstance(gate, Gate) and gate._evotype == "densitymx": 
+                J = _jt.fast_jamiolkowski_iso_std(gate.todense(), mxBasis) #Choi mx basis doesn't matter
                 if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
                     unitary_postfactor = gate # when 'gate' is unitary
             # FUTURE: support other gate._evotypes?
@@ -1928,12 +1926,12 @@ class LindbladParameterizedGateMap(Gate):
            normeq(gate.unitary_postfactor,unitary_postfactor) \
            and beq(ham_basis,gate.ham_basis) and beq(nonham_basis,gate.other_basis) \
            and param_mode==gate.param_mode and nonham_mode==gate.nonham_mode \
-           and beq(basis,gate.matrix_basis) and gate._evotype == evotype and lazy:
+           and beq(mxBasis,gate.matrix_basis) and gate._evotype == evotype and lazy:
             return gate #no creation necessary!
         else:
             return cls.from_gate_matrix(
                 gate, unitary_postfactor, ham_basis, nonham_basis, param_mode,
-                nonham_mode, truncate, basis, evotype)
+                nonham_mode, truncate, mxBasis, evotype)
 
 
     @classmethod
@@ -2036,13 +2034,14 @@ class LindbladParameterizedGateMap(Gate):
             errgen = _gt.error_generator(gateMatrix, upost, mxBasis, "logGTi")
 
         return cls.from_error_generator(unitaryPostfactor, errgen, ham_basis,
-                                        nonham_basis, nonham_mode, truncate,
-                                        mxBasis, evotype)
+                                        nonham_basis, param_mode, nonham_mode,
+                                        truncate, mxBasis, evotype)
 
     
     @classmethod
     def from_error_generator(cls, unitaryPostfactor, errgen,
-                             ham_basis="pp", nonham_basis="pp", nonham_mode="all",
+                             ham_basis="pp", nonham_basis="pp",
+                             param_mode="cptp", nonham_mode="all",
                              truncate=True, mxBasis="pp", evotype="densitymx"):
         """
         Create a Lindblad-parameterized gate from an error generator and a
@@ -2151,12 +2150,12 @@ class LindbladParameterizedGateMap(Gate):
             hamC, otherC, ham_basis, other_basis, nonham_mode)
         
         return cls(unitaryPostfactor, Ltermdict, basisdict,
-                   nonham_mode, truncate, matrix_basis, evotype )
+                   param_mode, nonham_mode, truncate, matrix_basis, evotype )
 
         
     def __init__(self, unitaryPostfactor, Ltermdict, basisdict=None,
-                 nonham_mode="all", truncate=True, mxBasis="pp",
-                 evotype="densitymx"): 
+                 param_mode="cptp", nonham_mode="all", truncate=True,
+                 mxBasis="pp", evotype="densitymx"): 
         """
         Create a new LinbladParameterizedMap based on a set of Lindblad terms.
 
@@ -2954,6 +2953,57 @@ class LindbladParameterizedGateMap(Gate):
             raise ValueError("Invalid transform for this LindbladParameterizedGate: type %s"
                              % str(type(S)))
 
+    def spam_transform(self, S, typ):
+        """
+        Update gate matrix G with inv(S) * G OR G * S,
+        depending on the value of `typ`.
+
+        This functions as `transform(...)` but is used when this
+        Lindblad-parameterized gate is used as a part of a SPAM
+        vector.  When `typ == "prep"`, the spam vector is assumed
+        to be `rho = dot(self, <spamvec>)`, which transforms as
+        `rho -> inv(S) * rho`, so `self -> inv(S) * self`. When
+        `typ == "effect"`, `e.dag = dot(e.dag, self)` (not that
+        `self` is NOT `self.dag` here), and `e.dag -> e.dag * S`
+        so that `self -> self * S`.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        assert(typ in ('prep','effect')), "Invalid `typ` argument: %s" % typ
+        
+        if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement) or \
+           isinstance(S, _gaugegroup.TPSpamGaugeGroupElement):
+            U = S.get_transform_matrix()
+            Uinv = S.get_transform_matrix_inverse()
+
+            #just act on postfactor and Lindbladian exponent:
+            if typ == "prep":
+                if self.unitary_postfactor is not None:
+                    self.unitary_postfactor = _mt.safedot(Uinv,self.unitary_postfactor)
+                self.err_gen = _mt.safedot(Uinv,self.err_gen)
+            else:
+                if self.unitary_postfactor is not None:
+                    self.unitary_postfactor = _mt.safedot(self.unitary_postfactor, U)
+                self.err_gen = _mt.safedot(self.err_gen, U)
+                
+            self._set_params_from_errgen(self.err_gen, truncate=True)
+            self._construct_errgen() # unnecessary? (TODO)
+            self.dirty = True
+            #Note: truncate=True above because some unitary transforms seem to
+            ## modify eigenvalues to be negative beyond the tolerances
+            ## checked when truncate == False.  I'm not sure why this occurs,
+            ## since a true unitary should map CPTP -> CPTP...
+        else:
+            raise ValueError("Invalid transform for this LindbladParameterizedGate: type %s"
+                             % str(type(S)))
+
         
     def __str__(self):
         s = "Lindblad Parameterized gate map with dim = %d, num params = %d\n" % \
@@ -3316,12 +3366,19 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                 #Reshape so index as [iFlattenedGate,iOtherParam]
                 # 2nd dim will be 1 (diagonal-depol), bsO-1 (diagonal-cptp),
                 # bsO (diag_affine-depol), 2*(bsO-1) (diag_affine-) or (bsO-1)**2 (all-) depending on tensor rank
-                dO = dexpL.reshape((d2**2,-1)) 
+                dO = dexpL.reshape((d2**2,-1))
             else:
                 dO = _np.empty( (d2**2,0), 'd') #so concat works below
-            
+
             derivMx = _np.concatenate((dH,dO), axis=1)
-            assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)
+            assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL), \
+                ("Deriv matrix has imaginary part = %s.  This can result from "
+                 "evaluating a GateSet derivative at a 'bad' point where the "
+                 "error generator is large.  This often occurs when GST's "
+                 "starting GateSet has *no* stochastic error and all such "
+                 "parameters affect error rates at 2nd order.  Try "
+                 "depolarizing the seed GateSet.") % str(_np.linalg.norm(_np.imag(derivMx)))
+                 # if this fails, uncomment around "DB COMMUTANT NORM" for further debugging.
             derivMx = _np.real(derivMx)
             self.base_deriv = derivMx
 
@@ -3450,10 +3507,19 @@ def _dexpSeries(X, dX):
             commutant = _np.einsum("ik,kjab->ijab",X,last_commutant) - \
                     _np.einsum("ikab,kj->ijab",last_commutant,X)
         term = 1/_np.math.factorial(i) * commutant
+
+        #Uncomment some/all of this when you suspect an overflow due to X having large norm.
+        #print("DB COMMUTANT NORM = ",_np.linalg.norm(commutant)) # sometimes this increases w/iter -> divergence => NaN
+        #assert(not _np.isnan(_np.linalg.norm(term))), \
+        #    ("Haddamard series = NaN! Probably due to trying to differentiate "
+        #     "exp(X) where X has a large norm!")
+
+        #DEBUG
         #if not _np.isfinite(_np.linalg.norm(term)): break # DEBUG high values -> overflow for nqubit gates
         #if len( (_np.isnan(term)).nonzero()[0] ) > 0: # NaN debugging
         #    #WARNING: stopping early b/c of NaNs!!! - usually caused by infs
         #    break
+        
         series += term #1/_np.math.factorial(i) * commutant
         last_commutant = commutant; i += 1
     return series
@@ -3533,7 +3599,7 @@ def _dexpX(X,dX,expX=None,postfactor=None):
 
     series = _dexpSeries(X,dX)
     if expX is None: expX = _spl.expm(X)
-    
+
     if tr == 3:
         dExpX = _np.einsum('ika,kj->ija', series, expX)
         if postfactor is not None:

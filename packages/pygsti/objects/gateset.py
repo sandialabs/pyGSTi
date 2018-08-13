@@ -509,6 +509,7 @@ class GateSet(object):
             - "H+S terms" : like H+S, but support "svterm" evolution type
             - "H+S clifford terms" : like H+S, but support "cterm" evo. type
             - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
+        TODO: docstring - need to update these parameters
 
         extra : dict, optional
             For `"H+S terms"` type, this may specify a dictionary
@@ -516,36 +517,20 @@ class GateSet(object):
             as the *ideal* operation of each gate/SPAM vector.
         """
         typ = parameterization_type
-        assert(parameterization_type in ('full','TP','CPTP','H+S','S','static',
-                                         'H+S terms','clifford','H+S clifford terms',
-                                         'static unitary'))
 
-        povmtyp = rtyp = ityp = "TP" if typ in ("CPTP","H+S","S") else typ
-        #rtyp = "CPTP" if typ in ("H+S","S") else typ #TESTING, but CPTP spamvec still unreliable
+        #More options now
+        #assert(parameterization_type in ('full','TP','CPTP','H+S','S','static',
+        #                                 'H+S terms','clifford','H+S clifford terms',
+        #                                 'static unitary'))
 
         #Update dim and evolution type so that setting converted elements works correctly
         orig_dim = self.dim
         orig_evotype = self._evotype
-        if typ in ('full','TP','CPTP','H+S','S','static'):
-            self._evotype = "densitymx"
-            if self._sim_type not in ("matrix","map"):
-                self.set_simtype("matrix" if self.dim <= 16 else "map")
-
-        elif typ == 'clifford':
-            self._evotype = "stabilizer"
-            self.set_simtype("map")
-
-        elif typ == 'H+S terms':
-            self._evotype = "svterm"
-            if self._sim_type != "termorder":
-                self.set_simtype("termorder:1")
-
-        elif typ == 'H+S clifford terms':
-            self._evotype = "cterm"
-            if self._sim_type != "termorder":
-                self.set_simtype("termorder:1")
-
-        elif typ == 'static unitary':
+        
+        bTyp = typ.split()[0] # "base" type
+        evostr = " ".join(typ.split()[1:])
+        
+        if typ == 'static unitary':
             assert(self._evotype == "densitymx"), \
                 "Can only convert to 'static unitary' from a density-matrix evolution type."
             self._evotype = "statevec"
@@ -553,8 +538,34 @@ class GateSet(object):
             if self._sim_type not in ("matrix","map"):
                 self.set_simtype("matrix" if self.dim <= 4 else "map")
 
+        elif typ == 'clifford':
+            self._evotype = "stabilizer"
+            self.set_simtype("map")
+
+        elif evostr == "":
+            self._evotype = "densitymx"
+            if self._sim_type not in ("matrix","map"):
+                self.set_simtype("matrix" if self.dim <= 16 else "map")
+
+        elif evostr == "terms":
+            self._evotype = "svterm"
+            if self._sim_type != "termorder":
+                self.set_simtype("termorder:1")
+
+        elif evostr == "clifford terms":
+            self._evotype = "svterm"
+            if self._sim_type != "termorder":
+                self.set_simtype("termorder:1")
+
+        else:
+            raise ValueError("Unrecognized parameterization: %s" % typ)
+
         basis = self.basis
         if extra is None: extra = {}
+
+        povmtyp = rtyp = typ #assume spam types are available to all objects
+        ityp = "TP" if bTyp in ("CPTP","H+S","S","H+S+A","S+A","H+D+A", "D+A", "D") else typ
+        #povmtyp = ityp # DEBUG!!! -this fixes a unit test... suspicious...
 
         for lbl,gate in self.gates.items():
             self.gates[lbl] = _gate.convert(gate, typ, basis,

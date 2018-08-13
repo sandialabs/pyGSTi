@@ -259,7 +259,7 @@ def write_gateset(gs,filename,title=None):
                 typ = "PREP"
             output.write("%s: %s\n" % (typ,prepLabel))
             output.write("LiouvilleVec\n")
-            output.write(" ".join( "%.8g" % el for el in rhoVec ) + '\n')
+            output.write(" ".join( "%.8g" % el for el in rhoVec.todense() ) + '\n')
             output.write("\n")
 
         for povmLabel,povm in gs.povms.items():
@@ -287,7 +287,7 @@ def write_gateset(gs,filename,title=None):
                     typ = "EFFECT"
                 output.write("%s: %s\n" % (typ,ELabel))
                 output.write("LiouvilleVec\n")
-                output.write(" ".join( "%.8g" % el for el in EVec ) + '\n')
+                output.write(" ".join( "%.8g" % el for el in EVec.todense() ) + '\n')
                 output.write("\n")
 
             output.write("END POVM\n\n")

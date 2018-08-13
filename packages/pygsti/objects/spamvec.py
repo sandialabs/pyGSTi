@@ -123,13 +123,13 @@ def convert(spamvec, toType, basis, extra=None):
         if isinstance(spamvec, FullyParameterizedSPAMVec):
             return spamvec #no conversion necessary
         else:
-            return FullyParameterizedSPAMVec( spamvec )
+            return FullyParameterizedSPAMVec( spamvec.todense() )
 
     elif toType == "TP":
         if isinstance(spamvec, TPParameterizedSPAMVec):
             return spamvec #no conversion necessary
         else:
-            return TPParameterizedSPAMVec( spamvec )
+            return TPParameterizedSPAMVec( spamvec.todense() )
               # above will raise ValueError if conversion cannot be done
 
     elif toType == "TrueCPTP": # a non-lindbladian CPTP spamvec that hasn't worked well...
@@ -2068,7 +2068,8 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
     @classmethod
     def from_spamvec_obj(cls, spamvec, typ, paramType="GLND", purevec=None,
-                      proj_basis="pp", mxBasis="pp", trucate=True, lazy=False):
+                         proj_basis="pp", mxBasis="pp", truncate=True,
+                         lazy=False):
 
         if not isinstance(spamvec, SPAMVec):
             gate = FullyParameterizedSPAMVec(spamvec) #assume spamvec is just a vector
@@ -2118,13 +2119,13 @@ class LindbladParameterizedSPAMVec(SPAMVec):
            and spamvec._evotype == evotype and spamvec.typ == typ \
            and beq(ham_basis,spamvec.error_map.ham_basis) and beq(nonham_basis,spamvec.error_map.other_basis) \
            and param_mode==spamvec.error_map.param_mode and nonham_mode==spamvec.error_map.nonham_mode \
-           and beq(basis,spamvec.error_map.matrix_basis) and lazy:
+           and beq(mxBasis,spamvec.error_map.matrix_basis) and lazy:
            #normeq(gate.pure_state_vec,purevec) \ # TODO: more checks for equality?!
             return spamvec #no creation necessary!
         else:
             return cls.from_spam_vector(
                 spamvec, purevec, typ, ham_basis, nonham_basis,
-                param_mode, nonham_mode, truncate, basis, evotype)
+                param_mode, nonham_mode, truncate, mxBasis, evotype)
 
     
     @classmethod
@@ -2231,8 +2232,10 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
 
     @classmethod
-    def from_error_generator(cls, pureVec, errgen, typ, ham_basis="pp", nonham_basis="pp", param_mode="cptp",
-                             nonham_mode="all", truncate=True, mxBasis="pp", evotype="densitymx"):
+    def from_error_generator(cls, pureVec, errgen, typ, ham_basis="pp",
+                             nonham_basis="pp", param_mode="cptp",
+                             nonham_mode="all", truncate=True, mxBasis="pp",
+                             evotype="densitymx"):
         """
         Create a Lindblad-parameterized spamvec from an error generator and a
         basis which specifies how to decompose (project) the error generator.
@@ -2296,10 +2299,12 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
         Returns
         -------
-        LindbladParameterizedGateMap                
+        LindbladParameterizedSPAMVec
         """
         from .gate import LindbladParameterizedGateMap as _LPGMap
-        errmap = _LPGMap.from_error_generator(
+        from .gate import LindbladParameterizedGate as _LPGate
+        errcls = _LPGate if pureVec.dim <= 64 else _LPGMap
+        errmap = errcls.from_error_generator(
             None, errgen, ham_basis, nonham_basis, param_mode,
             nonham_mode, truncate, mxBasis, evotype)
 
@@ -2389,6 +2394,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
     
     def __init__(self, pureVec, errormap, typ, mxBasis=None):
         """
+        TODO: docstring? - can pureVec be an array or not??
         Initialize a LindbladParameterizedSPAMVec object.
 
         Essentially a pure state preparation or projection that is followed
@@ -2419,12 +2425,13 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             basis object).  If None, then this is extracted (if possible) from
             `errormap`.
         """
+        from .gate import LindbladParameterizedGateMap as _LPGMap
         evotype = errormap._evotype
         assert(evotype in ("densitymx","svterm","cterm")), \
             "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
         if mxBasis is None:
-            if isinstance(errormap, LindbladParameterizedGateMap):
+            if isinstance(errormap, _LPGMap):
                 mxBasis = errormap.matrix_basis
             else:
                 raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"
@@ -2440,7 +2447,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             purestate = pureVec.pure_state_vec # a SPAMVec
 
         elif isinstance(pureVec, ComputationalSPAMVec):
-            purestate = ComputationalSPAMVec(pureVec._vals, "statevec")
+            purestate = ComputationalSPAMVec(pureVec._zvals, "statevec")
 
         else:
             raise ValueError("Unable to obtain pure state from density matrix type %s!" % type(pureVec))
@@ -2467,6 +2474,36 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         self.matrix_basis = mxBasis
         self.terms = {} if evotype in ("svterm","cterm") else None
         SPAMVec.__init__(self, d2, evotype) #sets self.dim
+
+
+    def allocate_gpindices(self, startingIndex, parent):
+        """
+        Sets gpindices array for this object or any objects it
+        contains (i.e. depends upon).  Indices may be obtained
+        from contained objects which have already been initialized
+        (e.g. if a contained object is shared with other
+         top-level objects), or given new indices starting with
+        `startingIndex`.
+
+        Parameters
+        ----------
+        startingIndex : int
+            The starting index for un-allocated parameters.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        num_new: int
+            The number of *new* allocated parameters (so 
+            the parent should mark as allocated parameter
+            indices `startingIndex` to `startingIndex + new_new`).
+        """
+        num_new_params = self.error_map.allocate_gpindices( startingIndex, parent ) # *same* parent as this SPAMVec
+        _gatesetmember.GateSetMember.set_gpindices(
+            self, self.error_map.gpindices, parent)
+        return num_new_params
 
         
     def set_gpindices(self, gpindices, parent, memo=None):
@@ -2502,7 +2539,52 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         """
         dmVec_std = _gt.state_to_dmvec( self.pure_state_vec.todense() )
         dmVec = _bt.change_basis(dmVec_std, 'std', self.matrix_basis)
-        return _np.dot(self.error_map.todense(), dmVec)
+
+        if self.typ == "prep":
+            #error map acts on dmVec
+            return _np.dot(self.error_map.todense(), dmVec)
+        else:
+            #Note: if this is an effect vector, self.error_map is the
+            # map that acts on the *state* vector before dmVec acts
+            # as an effect:  E.T -> dot(E.T,errmap) ==> E -> dot(errmap.T,E)
+            return _np.dot(self.error_map.todense().conjugate().T, dmVec)
+
+    def torep(self, typ, outvec=None):
+        """
+        Return a "representation" object for this SPAMVec.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        StateRep
+        """
+        if self._evotype == "densitymx":
+
+            #FUTURE: allow LindbladParameterizedSPAMVec to hold a dmVec directly
+            # from __init__ from which we can just call .torep() to get more
+            # efficient reps (e.g. if this dmVec was a ComputationalSPAMVec)
+            dmVec_std = _gt.state_to_dmvec( self.pure_state_vec.todense() )
+            dmVec = _bt.change_basis(dmVec_std, 'std', self.matrix_basis)
+
+            if typ == "prep":
+                dmRep = replib.DMStateRep( _np.ascontiguousarray(dmVec) )
+                errmapRep = self.error_map.torep()
+                return errmapRep.acton(dmRep) # FUTURE: do this acton in place somehow? (like C-reps do)
+                  #maybe make a special _Errgen *state* rep?
+
+            else: # effect
+                dmEffectRep = replib.DMEffectRep_Dense( _np.ascontiguousarray(dmVec) )
+                errmapRep = self.error_map.torep()
+                return replib.DMEffectRep_Errgen(errmapRep, dmEffectRep, id(self.error_map))
+                  # an effect that applies a *named* errormap before computing with dmEffectRep
+
+        else:
+            #framework should not be calling "torep" on states w/a term-based evotype...
+            # they should call torep on the *terms* given by get_order_terms(...)
+            raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
+                             (self._evotype, self.__class__.__name__))
 
     
     def get_order_terms(self, order):
@@ -2541,7 +2623,13 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             
             stateTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.pure_state_vec, self.pure_state_vec, tt)
             err_terms = self.error_map.get_order_terms(order)
-            terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
+            if self.typ == "prep":
+                terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
+            else: # "effect"
+                #Effect terms are special in that all their pre/post ops act in order on the *state* before
+                # the final effect is used to compute a probability.  Thus, constructing the same "terms"
+                # as above works here too - the difference comes when this SPAMVec is used as an effect rather than a prep.
+                terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
 
             #OLD: now this is done within calculator when possible b/c not all terms can be collapsed
             #terms = [ t.collapse() for t in terms ] # collapse terms for speed
@@ -2549,7 +2637,33 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             self.terms[order] = terms
 
         return self.terms[order]
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the derivatives of the SPAM vector
+        with respect to a single param.  Thus, each column is of length
+        get_dimension and there is one column per SPAM vector parameter.
     
+        Returns
+        -------
+        numpy array
+            Array of derivatives, shape == (dimension, num_params)
+        """
+        dmVec_std = _gt.state_to_dmvec( self.pure_state_vec.todense() )
+        dmVec = _bt.change_basis(dmVec_std, 'std', self.matrix_basis)
+
+        derrgen = self.error_map.deriv_wrt_params(wrtFilter) # shape (dim*dim, nParams)
+        derrgen.shape = (self.dim, self.dim, self.num_params()) # => (dim,dim,nParams)
+
+        if self.typ == "prep":
+            #derror map acts on dmVec
+            return _np.einsum("ijk,j->ik", derrgen, dmVec) # return shape = (dim,nParams)
+        else:
+            # self.error_map acts on the *state* vector before dmVec acts
+            # as an effect:  E.dag -> dot(E.dag,errmap) ==> E -> dot(errmap.dag,E)
+            return _np.einsum("jik,j->ik", derrgen.conjugate(), dmVec) # return shape = (dim,nParams)
+
+
     def num_params(self):
         """
         Get the number of independent parameters which specify this SPAM vector.
@@ -2589,6 +2703,38 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         """
         self.error_map.from_vector(v)
         self.dirty = True
+
+
+    def transform(self, S, typ):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for preparation
+        or  effect SPAM vectors, respectively.
+
+        Note that this is equivalent to state preparation vectors getting 
+        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Generally, the transform function updates the *parameters* of 
+        the SPAM vector such that the resulting vector is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+            
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        #Defer everything to LindbladParameterizedGateMap's
+        # `spam_tranform` function, which applies either 
+        # error_map -> inv(S) * error_map ("prep" case) OR
+        # error_map -> error_map * S      ("effect" case)
+        self.error_map.spam_transform(S,typ) 
+
+            
 
 
 class StabilizerSPAMVec(SPAMVec):
