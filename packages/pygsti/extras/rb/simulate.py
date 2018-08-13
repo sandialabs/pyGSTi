@@ -262,14 +262,15 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, f
     cdepths = []
     c2Qgcounts = []
     
-    for i in range(k):   
-        for l in lengths:
+    for i in range(k):
+
+        if verbosity > 0: 
+                print("- Sampling and simulating circuit {} of {} at each of {} lengths".format(i+1,k,len(lengths)))
+                print("  - Number of circuits complete = ",end='')   
+        
+        for lind, l in enumerate(lengths):
 
             lengthslist.append(l)
-
-            if verbosity > 0: 
-                print("Circuit {} of {} at length {}".format(i+1,k,l))
-                print(" - Sampling circuit...",end='')
            
             if rbtype == 'DRB':
                 c, idealout = _samp.direct_rb_circuit(pspec, l, subsetQs, *rbspec)
@@ -278,13 +279,13 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, f
             elif rbtype == 'MRB':
                 c, idealout = _samp.mirror_rb_circuit(pspec, l, subsetQs, *rbspec)
 
-            if verbosity > 0: 
-                print(" complete")
-                print(" - Simulating circuit...",end='')
+            #if verbosity > 0: 
+            #    print(" complete")
+            #    print(" - Simulating circuit...",end='')
 
             outcome = circuit_simulator_for_tensored_independent_pauli_errors(c, pspec, errormodel, counts, 
                                                                           alloutcomes=False)
-            if verbosity > 0: print(" complete")
+            if verbosity > 0: print(lind+1,end=',')
 
             # Add the number of success counts to the list
             scounts.append(outcome.get(idealout,0))
@@ -296,6 +297,7 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, f
                 with open(filename,'a') as f:
                     f.write('{} {} {} {} {}\n'.format(l,scounts[-1],counts,cdepths[-1],c2Qgcounts[-1]))
                 
+        if verbosity > 0: print('')
     if returndata:
 
         data = _res.RBSummaryDataset(n, lengthslist, success_counts=scounts, total_counts=counts, circuit_depths=cdepths, 
@@ -317,11 +319,11 @@ def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, 
     pspec : ProcessorSpec
         The ProcessorSpec that defines the device.
 
-    oneQgate_errorrate_list : float
+    oneQgate_errorrate : float
         The 1-qubit gates error rate (the probability of a Pauli error on the target qubit) not including 
         idle gates. 
 
-    twoQgate_errorrate_list : float
+    twoQgate_errorrate : float
         The 2-qubit gates error rate (the total probability of a Pauli error on either qubit the gate acts
         on -- each qubit has independent errors with equal probabilities). 
 
@@ -371,8 +373,8 @@ def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, 
             q1 = gate.qubits[0]
             q2 = gate.qubits[1]
             er = perQ_twoQ_errorrate
-            errormodel[gate][q1,:] =  error_row(er)
-            errormodel[gate][q2,:] =  error_row(er)
+            errormodel[gate][pspec.qubit_labels.index(q1),:] =  error_row(er)
+            errormodel[gate][pspec.qubit_labels.index(q2),:] =  error_row(er)
 
         elif gate.number_of_qubits == 1:
             q = gate.qubits[0]
@@ -380,7 +382,7 @@ def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, 
             if gate.name == pspec.identity: er = idle_errorrate
             else: er = oneQgate_errorrate
             
-            errormodel[gate][q,:] =  error_row(er)
+            errormodel[gate][pspec.qubit_labels.index(q),:] =  error_row(er)
 
         else:    
             raise ValueError("The ProcessorSpec must only contain 1- and 2- qubit gates!")
