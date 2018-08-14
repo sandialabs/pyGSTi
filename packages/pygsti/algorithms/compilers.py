@@ -1824,18 +1824,21 @@ def compile_stabilizer_state(s, p, pspec, subsetQs=None, iterations=20, pauliran
     # Repeatedly find compilations for the symplectic, and pick the best one.
     while i < iterations:
 
-        tc, tcc = compile_conditional_symplectic(s, pspec, subsetQs=subsetQs, calg=algorithm, cargs=aargs, check=False)
-        i += 1
-        # Do the depth-compression *before* changing gate library            
-        tc.compress_depth(oneQgate_relations=oneQgate_relations,verbosity=0)            
-        tc.change_gate_library(pspec.compilations['paulieq'],identity=pspec.identity)       
-        cost = costfunction(tc,pspec)
-        # If this is the best circuit so far, then save it.
-        if cost < mincost :
-            circuit = tc.copy()
-            check_circuit = tcc.copy()
-            mincost = cost
- 
+        try:
+            tc, tcc = compile_conditional_symplectic(s, pspec, subsetQs=subsetQs, calg=algorithm, cargs=aargs, check=False)
+            i += 1
+            # Do the depth-compression *before* changing gate library            
+            tc.compress_depth(oneQgate_relations=oneQgate_relations,verbosity=0)            
+            tc.change_gate_library(pspec.compilations['paulieq'],identity=pspec.identity)       
+            cost = costfunction(tc,pspec)
+            # If this is the best circuit so far, then save it.
+            if cost < mincost :
+                circuit = tc.copy()
+                check_circuit = tcc.copy()
+                mincost = cost
+        except:
+            failcount += 1
+     
         assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input ProcessorSpec is not valid or does not contain the neccessary information."
          
     if paulirandomize:       
