@@ -568,7 +568,7 @@ class GatesetVsTargetTable(WorkspaceTable):
             #table.addrow(("Avg. clifford gate set infidelity", AGsI), (None, 'Normal') )
 
             RBnum = _ev(_reportables.Predicted_rb_number(clifford_gateset, clifford_targetGateset))
-            table.addrow(("Predicted RB number", RBnum), (None, 'Normal') )
+            table.addrow(("Predicted Clifford RB number", RBnum), (None, 'Normal') )
 
         table.finish()
         return table

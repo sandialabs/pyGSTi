@@ -2029,11 +2029,11 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
 
     #Special check: update basis name to "pp" if we have a Pauli Basis 
     # (for small d when this isn't too expensive)
-    if d <= 16 and all([_mt.safenorm(b0-b1) < 1e-8 for b0,b1 in
+    if d in (2,4,8,16) and all([_mt.safenorm(b0-b1) < 1e-8 for b0,b1 in
                         zip(_basis_matrices("pp",d,sparse),ham_basis_mxs)]):
         ham_name = "pp"
     else: ham_name = None
-    if d <= 16 and all([_mt.safenorm(b0-b1) < 1e-8 for b0,b1 in
+    if d in (2,4,8,16) and all([_mt.safenorm(b0-b1) < 1e-8 for b0,b1 in
                         zip(_basis_matrices("pp",d,sparse),other_basis_mxs)]):
         other_name = "pp"
     else: other_name = None
