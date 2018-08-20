@@ -61,6 +61,7 @@ from .compilationlibrary import CompilationLibrary
 from .processorspec import ProcessorSpec
 from .stabilizer import StabilizerFrame
 from .qubitgraph import QubitGraph
+from .hypothesistest import HypothesisTest
 
 from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement
 from .gaugegroup import TPGaugeGroup, TPGaugeGroupElement
