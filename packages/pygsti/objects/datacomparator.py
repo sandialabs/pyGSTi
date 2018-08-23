@@ -358,20 +358,20 @@ class DataComparator():
         """
         return self.composite_pVal_threshold
 
-    def get_JSD(self, gatestring):
-        """
-        Todo
-        """
-        assert(False), "Not yet written!"
-        return 0
+    # def get_JSD(self, gatestring):
+    #     """
+    #     Todo
+    #     """
+    #     assert(False), "Not yet written!"
+    #     return 0
 
-    def get_JSD_pseudothreshold(self):
-        """
-        Todo
-        Should return a fail message with varied-count data.
-        """
-        assert(False), "Not yet written!"
-        return 0
+    # def get_JSD_pseudothreshold(self):
+    #     """
+    #     Todo
+    #     Should return a fail message with varied-count data.
+    #     """
+    #     assert(False), "Not yet written!"
+    #     return 0
 
     def get_SSJSD(self, gatestring):
         """
