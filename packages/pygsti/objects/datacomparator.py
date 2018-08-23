@@ -286,12 +286,62 @@ class DataComparator():
             self.tvds[key] = tvd_val
             if self.results.hypothesis_rejected[key]:               
                 self.sstvds[key] = tvd_val
-            else:
-                self.sstvds[key] = None
+            #else:
+            #    self.sstvds[key] = None
         if verbosity >= 2:
             print("complete.")
-                
+
+    def get_maximum_SSTVD(self):
+        """
+        Todo
+        """
+        try: assert len(self.dataset_list_or_multidataset) == 2
+        except: raise ValueError("Can only compute TVD between two datasets.")  
+
+        if len(self.sstvds) == 0:
+            return None, None
+        else:
+    
+            index = _np.argmax(list(self.sstvds.values()))
+            max_sstvd_gs = list(self.sstvds.keys())[index]
+            max_sstvd = self.sstvds[max_sstvd_gs]
+            
+            return max_sstvd_gs, max_sstvd
+
+    def get_SSTVD(self, gatestring):
+        """
+        Todo 
+        """
+        try: assert len(self.dataset_list_or_multidataset) == 2
+        except: raise ValueError("Can only compute TVD between two datasets.")  
+
+        return self.sstvds.get(gatestring, None)
+
+    def get_TVD(self, gatestring):
+        """
+        Todo
+        """
+        try: assert len(self.dataset_list_or_multidataset) == 2
+        except: raise ValueError("Can only compute TVD between two datasets.")  
+
+        return self.tvds.get(gatestring)
+
+    def get_LLR(self, gatestring):
+        """
+        Todo
+        """
+        return self.llrs.get(gatestring)
+
+    def get_pvalue(self, gatestring):
+        """
+        Todo
+        """
+        return self.pVals.get(gatestring)
+
     def rectify_datasets(self,confidence_level=0.95,target_score='dof'):
+        """
+        Todo
+        """
         assert(False), "This method needs to be fixed by Tim!"
         if target_score == 'dof':
             target_score = self.dof
