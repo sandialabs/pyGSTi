@@ -8,7 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from . import signal as _sig
 from . import objects as _obj
-from ..tools import hypothesis as _hyp
+from ...tools import hypothesis as _hyp
 from . import statistics as _stat
 from ... import objects as _objs
 
