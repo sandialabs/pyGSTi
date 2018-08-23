@@ -56,6 +56,7 @@ class HypothesisTest(object):
     	self.pvalues = None
     	self.hypothesis_rejected = None
     	self.significance_tested_at = None
+    	self.pvalue_pseudothreshold = None
 
     	self.nested_hypotheses = {}
     	for h in self.hypotheses:
@@ -152,8 +153,10 @@ class HypothesisTest(object):
     	"""
     	assert(self.pvalues is not None), "Data must be input before the test can be implemented!"
 
+    	self.pvalue_pseudothreshold = {}
     	self.hypothesis_rejected = {}
     	for h in self.hypotheses:
+    		self.pvalue_pseudothreshold[h] = 0.
     		if not self.nested_hypotheses[h]:
     			self.hypothesis_rejected[h] = False
 
@@ -164,7 +167,6 @@ class HypothesisTest(object):
     	for h in self.hypotheses:
     		if not self.nested_hypotheses[h]:
     			self.significance_tested_at[h] = 0.
-
     	# Test the non-nested hypotheses. This can potentially pass significance on
      	# to the nested hypotheses, so these are tested after this (the nested
      	# hypotheses never pass significance out of them so can be tested last in any
@@ -177,6 +179,7 @@ class HypothesisTest(object):
     			if not self.nested_hypotheses[h]:
     				if dynamic_local_significance[h] > self.significance_tested_at[h]:
     					self.significance_tested_at[h] = dynamic_local_significance[h]
+    					self.pvalue_pseudothreshold[h] = dynamic_local_significance[h]
     				if self.pvalues[h] <= dynamic_local_significance[h]:
     					hind = self.hypotheses.index(h)
     					stop = False
@@ -217,6 +220,7 @@ class HypothesisTest(object):
     		self.significance_tested_at[h] = 0.
 
     	if correction == 'Bonferroni':
+    		self.pvalue_pseudothreshold[hypotheses] = significance/len(hypotheses)
 	    	for h in hypotheses:
 	    		self.significance_tested_at[h] = significance/len(hypotheses)
 	    		if self.pvalues[h] <= significance/len(hypotheses):
@@ -235,6 +239,8 @@ class HypothesisTest(object):
     					del dynamic_hypotheses[dynamic_hypotheses.index(h)]
     				if test_significance > self.significance_tested_at[h]:
     					self.significance_tested_at[h] = test_significance
+
+    		self.pvalue_pseudothreshold[hypotheses] = significance/len(dynamic_hypotheses)
 
     	elif correction == 'Hochberg':
 
@@ -257,6 +263,8 @@ class HypothesisTest(object):
     					#print(h)
     					self.hypothesis_rejected[h] = True
     					self.significance_tested_at[h] = significance/(i + 1)
+
+    				self.pvalue_pseudothreshold[hypotheses] = significance/(i + 1)
     				return
     			else:
     				self.significance_tested_at[dynamic_hypotheses[0]] = significance/(i + 1)
@@ -265,6 +273,7 @@ class HypothesisTest(object):
  				
     	elif correction == 'none':
     		print("Warning: the family-wise error rate is not being controlled, as the correction specified for this nested hypothesis is 'none'!")
+    		self.pvalue_pseudothreshold[hypotheses] = significance
     		for h in hypotheses:
 	    		self.significance_tested_at[h] = significance
 	    		if self.pvalues[h] <= significance:

@@ -65,6 +65,12 @@ def pval(llrval, dof):
     """
     return 1 - _stats.chi2.cdf(llrval, dof)
 
+def llr_to_signed_nsigma(llrval, dof):
+    """
+    Todo
+    """
+    return (llrval - dof) / _np.sqrt(2*dof)
+
 def is_gatestring_allowed_by_exclusion(gate_exclusions,gatestring):
     """
     Todo
@@ -84,11 +90,11 @@ def is_gatestring_allowed_by_inclusion(gate_inclusions,gatestring):
             return True
     return False
 
-def find_thresh(confidence_level, strings, dof):
+def compute_llr_threshold(significance, dof):
     """
     Todo
     """
-    return _scipy.stats.chi2.isf((1-confidence_level)/strings,dof)
+    return _scipy.stats.chi2.isf(significance,dof)
 
 def tvd(gatestring, ds0, ds1):
     """
@@ -165,7 +171,9 @@ class DataComparator():
 
         self.dataset_list_or_multidataset = dataset_list_or_multidataset
         self.pVals = pVals
+        self.pVals_pseudothreshold = None
         self.llrs = llrs
+        self.llrs_pseudothreshold = None
         self.gate_exclusions = gate_exclusions
         self.gate_inclusions = gate_inclusions
         self.pVals0 = str(len(self.pVals)-_np.count_nonzero(list(self.pVals.values())))
@@ -173,21 +181,14 @@ class DataComparator():
         self.num_strs = len(self.pVals)
         self.DS_names = DS_names
 
-        self.composite_llr = _np.sum(list(self.llrs.values())  )     
+        self.composite_llr = _np.sum(list(self.llrs.values())) 
+        self.composite_llr_threshold = None    
         self.composite_pVal = pval(self.composite_llr, self.num_strs*self.dof) 
-        
-        # Convert the composite LLR to a signed standard deviations.
-        k = self.num_strs*self.dof
-        self.composite_nsigma = (self.composite_llr - k) / _np.sqrt(2*k)
+        self.composite_pVal_threshold = None 
 
-    # Todo : fix this
-    # def worst_strings(self, number):
-    #     """
-    #     Returns the `number` strings with the smallest p-values.
-    #     """
-    #     worst_strings = _np.array(self.pVals_and_strings,dtype='object')
-    #     worst_strings = sorted(worst_strings, key=lambda x: x[1])[:number]
-    #     return worst_strings
+        # Convert the composite LLR to a signed standard deviations.
+        self.composite_nsigma = llr_to_signed_nsigma(self.composite_llr,self.num_strs*self.dof)
+        self.composite_nsigma_threshold = None 
 
     def implement(self, significance=0.05, per_sequence_correction='Hochberg', 
                   composite_test_weighting=0.5,  pass_alpha=True, verbosity=1):
@@ -195,11 +196,8 @@ class DataComparator():
         self.significance = significance
         assert(composite_test_weighting <= 1. or composite_test_weighting >= 0.), "The weighting on the composite test must be between 0 and 1!"
         
-
         if verbosity >= 2:
             print("Implementing {}% significance statistical hypothesis testing...".format(self.significance*100),end='')
-
-       
 
         gatestrings = tuple(self.pVals.keys())
         hypotheses = ('composite', gatestrings)
@@ -219,11 +217,16 @@ class DataComparator():
         self.results = hypotest
 
         if composite_test_weighting == 0:
-            self.composite_thresh = _np.inf
+            self.composite_llr_threshold = _np.inf
+            self.composite_nsigma_threshold = _np.inf
+            self.composite_pVal_threshold = 0.
         else:
-            # Tim doesn't really get this function, and will change it to something more transparent at
-            # some point.
-            self.composite_thresh = find_thresh(1-significance, 1./composite_test_weighting, self.num_strs*self.dof)
+            self.composite_llr_threshold = compute_llr_threshold(composite_test_weighting*significance, self.num_strs*self.dof)
+            self.composite_nsigma_threshold = llr_to_signed_nsigma(self.composite_llr, self.num_strs*self.dof)
+            self.composite_pVal_threshold = composite_test_weighting*significance
+
+        self.pVal_pseudothreshold = hypotest.pvalue_pseudothreshold[gatestrings]
+        self.llr_pseudothreshold = compute_llr_threshold(self.pVal_pseudothreshold,self.dof)
 
         temp_hypothesis_rejected_dict = _copy.copy(hypotest.hypothesis_rejected)
         self.inconsistent_datasets_detected = any(list(temp_hypothesis_rejected_dict.values()))
@@ -243,31 +246,15 @@ class DataComparator():
             if self.inconsistent_datasets_detected:
                 print("The datasets are INCONSISTENT at {0}% significance.\n".format(self.significance*100))
                 print("  Details:")
+                print("  - Using the composite log-likelihood ratio test, the significance of the inconsistency between datasets is {} standard deviations.".format(self.composite_nsigma)) 
                 print("  - The number of sequences with data that is inconsistent is {0}".format(self.number_of_significant_sequences))
-                print("  - Using the composite log-likelihood ratio test, the significance of the inconsistency between datasets is {} standard deviations.".format(self.composite_nsigma))  
+                if len(self.dataset_list_or_multidataset) == 2 and self.number_of_significant_sequences>0:
+                    max_SSTVD_gs, max_SSTVD = self.get_maximum_SSTVD()
+                    print("  - The maximum SSTVD over all sequences is {}".format(max_SSTVD)) 
+                    print("  - The maximum SSTVD was observed for {}".format(max_SSTVD_gs))                    
             else:
                 print("Statistical hypothesis tests did NOT find inconsistency between the datasets at {0}% significance.\n".format(self.significance*100))           
-                #print("  Details:")
-                #print("  - Using the composite log-likelihood ratio test, the signed N-sigma between the datasets is {}".format(self.composite_nsigma))  
-       
-        # print("Consistency report- datasets are inconsistent at given confidence level if EITHER of the following scores report inconsistency.")
-        # print()
-        # print("Threshold for individual gatestring scores is {0}".format(single_string_thresh))
-        # if number_of_significant_sequences > 0:
-        #     print("As measured by worst-performing gate strings, data sets are INCONSISTENT at the {0}% confidence level.".format(confidence_level*100))
-        #     print("{0} gate string(s) have loglikelihood scores greater than the threshold.".format(number_of_significant_sequences))
-        # else:
-        #     print("As measured by worst-performing gate strings, data sets are CONSISTENT at the {0}% confidence level.".format(confidence_level*100))
-        #     print("{0} gate string(s) have loglikelihood scores greater than the threshold.".format(number_of_significant_sequences))
-        # print()
-        # print("Threshold for sum of gatestring scores is {0}.".format(composite_thresh))
-        # if composite_score > composite_thresh:
-        #     print("As measured by sum of gatestring scores, data sets are INCONSISTENT at the {0}% confidence level.".format(confidence_level*100))
-        # else:
-        #     print("As measured by sum of gatestring scores, data sets are CONSISTENT at the {0}% confidence level.".format(confidence_level*100))
-        # print("Total loglikelihood is {0}".format(composite_score))
-        # print("Total number of standard deviations (N_sigma) of model violation is {0}.".format(N_sigma))
-    
+
     def compute_TVDs(self, verbosity=2):
         """
         Todo
@@ -286,10 +273,27 @@ class DataComparator():
             self.tvds[key] = tvd_val
             if self.results.hypothesis_rejected[key]:               
                 self.sstvds[key] = tvd_val
-            #else:
-            #    self.sstvds[key] = None
+ 
         if verbosity >= 2:
             print("complete.")
+
+    def get_TVD(self, gatestring):
+        """
+        Todo
+        """
+        try: assert len(self.dataset_list_or_multidataset) == 2
+        except: raise ValueError("Can only compute TVD between two datasets.")  
+
+        return self.tvds.get(gatestring)
+
+    def get_SSTVD(self, gatestring):
+        """
+        Todo 
+        """
+        try: assert len(self.dataset_list_or_multidataset) == 2
+        except: raise ValueError("Can only compute TVD between two datasets.")  
+
+        return self.sstvds.get(gatestring, None)
 
     def get_maximum_SSTVD(self):
         """
@@ -308,35 +312,88 @@ class DataComparator():
             
             return max_sstvd_gs, max_sstvd
 
-    def get_SSTVD(self, gatestring):
-        """
-        Todo 
-        """
-        try: assert len(self.dataset_list_or_multidataset) == 2
-        except: raise ValueError("Can only compute TVD between two datasets.")  
-
-        return self.sstvds.get(gatestring, None)
-
-    def get_TVD(self, gatestring):
-        """
-        Todo
-        """
-        try: assert len(self.dataset_list_or_multidataset) == 2
-        except: raise ValueError("Can only compute TVD between two datasets.")  
-
-        return self.tvds.get(gatestring)
-
     def get_LLR(self, gatestring):
         """
         Todo
         """
         return self.llrs.get(gatestring)
 
+    def get_LLR_pseudothreshold(self):
+
+        return self.llr_pseudothreshold
+
+    def get_composite_LLR():
+        """
+        Todo
+        """
+        return self.composite_llr
+
+    def get_composite_LLR_threshold():
+        """
+        Todo
+        """
+        return self.composite_llr_threshold
+
     def get_pvalue(self, gatestring):
         """
         Todo
         """
         return self.pVals.get(gatestring)
+
+    def get_pvalue_pseudothreshold(self):
+        """
+        Todo
+        """
+        return self.pVal_pseudothreshold
+
+    def get_composite_pvalue():
+        """
+        Todo
+        """
+        return self.composite_pVal
+
+    def get_composite_pvalue_threshold():
+        """
+        Todo
+        """
+        return self.composite_pVal_threshold
+
+    # def get_JSD(self, gatestring):
+    #     """
+    #     Todo
+    #     """
+    #     assert(False), "Not yet written!"
+    #     return 0
+
+    # def get_JSD_pseudothreshold(self):
+    #     """
+    #     Todo
+    #     Should return a fail message with varied-count data.
+    #     """
+    #     assert(False), "Not yet written!"
+    #     return 0
+
+    def get_SSJSD(self, gatestring):
+        """
+        Todo
+        """
+        assert(False), "Not yet written!"
+        return 0
+
+    def get_composite_nsigma(self):
+        """
+        Todo
+        """
+        return self.composite_nsigma
+
+    # Todo : fix this
+    # def get_worst_gatestrings(self, number):
+    #     """
+    #     Returns the `number` strings with the smallest p-values.
+    #     """
+    #     worst_strings = _np.array(self.pVals_and_strings,dtype='object')
+    #     worst_strings = sorted(worst_strings, key=lambda x: x[1])[:number]
+    #     return worst_strings
 
     def rectify_datasets(self,confidence_level=0.95,target_score='dof'):
         """
