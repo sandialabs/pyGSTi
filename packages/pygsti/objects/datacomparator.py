@@ -234,7 +234,7 @@ class DataComparator():
             print("complete.")
 
         if len(self.dataset_list_or_multidataset) == 2:
-            self.compute_stat_sig_TVDs(verbosity=verbosity)
+            self.compute_TVDs(verbosity=verbosity)
         
         if verbosity >= 2:
             print("\n--- Results ---\n")
