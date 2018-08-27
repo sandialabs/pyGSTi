@@ -208,6 +208,18 @@ namespace CReps {
     virtual dcomplex amplitude(SVStateCRep* state);
   };
 
+  class SVEffectCRep_Computational :public SVEffectCRep {
+    public:
+    INT _nfactors;
+    INT _zvals_int;
+    INT _nonzero_index;
+
+    SVEffectCRep_Computational(INT nfactors, INT zvals_int, INT dim);
+    virtual ~SVEffectCRep_Computational();
+    virtual double probability(SVStateCRep* state);
+    virtual dcomplex amplitude(SVStateCRep* state);
+  };
+
 
   // GATEs
   class SVGateCRep {

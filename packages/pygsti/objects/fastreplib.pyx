@@ -125,6 +125,13 @@ cdef extern from "fastreps.h" namespace "CReps":
         double complex amplitude(SVStateCRep* state)
         INT _dim
 
+    cdef cppclass SVEffectCRep_Computational(SVEffectCRep):
+        SVEffectCRep_Computational() except +
+        SVEffectCRep_Computational(INT, INT, INT) except +
+        double probability(SVStateCRep* state)
+        double complex amplitude(SVStateCRep* state)
+        INT _dim
+
     cdef cppclass SVGateCRep:
         SVGateCRep(INT) except +
         SVStateCRep* acton(SVStateCRep*, SVStateCRep*)
@@ -318,7 +325,7 @@ cdef class DMEffectRep_TensorProd(DMEffectRep):
                                                     nfactors, max_factor_dim, dim)
 
 
-cdef class DMEffectRep_Computational(DMEffectRep): #TODO!! Need to make SV version
+cdef class DMEffectRep_Computational(DMEffectRep):
 
     def __cinit__(self, np.ndarray[np.int64_t, ndim=1, mode='c'] zvals, INT dim):
         # cdef INT dim = 4**zvals.shape[0] -- just send as argument
@@ -549,6 +556,21 @@ cdef class SVEffectRep_TensorProd(SVEffectRep):
         self.c_effect = new SVEffectCRep_TensorProd(<double complex*>kron_array.data,
                                                     <INT*>factor_dims.data,
                                                     nfactors, max_factor_dim, dim)
+
+        
+cdef class SVEffectRep_Computational(SVEffectRep):
+
+    def __cinit__(self, np.ndarray[np.int64_t, ndim=1, mode='c'] zvals, INT dim):
+        # cdef INT dim = 2**zvals.shape[0] -- just send as argument
+        cdef INT nfactors = zvals.shape[0]
+        cdef double abs_elval = 1/(np.sqrt(2)**nfactors)
+        cdef INT base = 1
+        cdef INT zvals_int = 0
+        for i in range(nfactors):
+            zvals_int += base * zvals[i]
+            base = base << 1 # *= 2
+        self.c_effect = new SVEffectCRep_Computational(nfactors, zvals_int, dim)
+
 
 
 cdef class SVGateRep:

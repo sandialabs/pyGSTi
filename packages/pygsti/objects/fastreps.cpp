@@ -743,6 +743,40 @@ namespace CReps {
     return ret;
   }
 
+  
+  /****************************************************************************	\
+  |* SVEffectCRep_Computational                                               *|
+  \****************************************************************************/
+
+  SVEffectCRep_Computational::SVEffectCRep_Computational(INT nfactors, INT zvals_int, INT dim)
+    :SVEffectCRep(dim)
+  {
+    _nfactors = nfactors;
+    _zvals_int = zvals_int;
+
+
+    _nonzero_index = 0;
+    INT base = 1 << (nfactors-1); // == pow(2,nfactors-1)
+    for(INT i=0; i < nfactors; i++) {
+      if((zvals_int >> i) & 1) // if i-th bit (i-th zval) is a 1 (it's either 0 or 1)
+	_nonzero_index += base;
+      base = base >> 1; // same as /= 2
+    }
+    
+  }
+
+  SVEffectCRep_Computational::~SVEffectCRep_Computational() { }
+
+  double SVEffectCRep_Computational::probability(SVStateCRep* state) {
+    return (double)pow(std::abs(amplitude(state)),2);
+  }
+  
+  dcomplex SVEffectCRep_Computational::amplitude(SVStateCRep* state) {
+    //There's only a single nonzero index with element == 1.0, so dotprod is trivial
+    return state->_dataptr[_nonzero_index];
+  }
+    
+
   /****************************************************************************\
   |* SVGateCRep                                                               *|
   \****************************************************************************/
