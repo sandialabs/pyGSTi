@@ -200,11 +200,16 @@ class GateCalc(object):
                 if isinstance(EVec, _sv.ComplementSPAMVec):
                     del newSelf.effects[effectlbl]
             self = newSelf #HACK!!! replacing self for remainder of this fn with version without Ecs
+
+            #recompute effects in case we deleted any ComplementSPAMVecs
+            self_effects = _collections.OrderedDict([ (lbl,vec.todense()[:,None])
+                                                      for lbl,vec in self.effects.items() ])
+            
         
         #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
         dim = self.dim 
         nParams = self.Np
-                                                    
+
         nElements = sum([obj.size for _,obj in self.iter_objs()])
         #nElements = sum([o.size for o in self_gates.values()]) + \
         #            sum([o.size for o in self_preps.values()]) + \

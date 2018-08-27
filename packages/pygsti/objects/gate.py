@@ -1920,6 +1920,7 @@ class LindbladParameterizedGateMap(Gate):
 
         def normeq(a,b):
             if a is None and b is None: return True
+            if a is None or b is None: return False
             return _mt.safenorm(a-b) < 1e-6 # what about possibility of Clifford gates?
             
         if isinstance(gate, LindbladParameterizedGateMap) and \

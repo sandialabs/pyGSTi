@@ -270,7 +270,7 @@ def write_gateset(gs,filename,title=None):
                     ("Non-standard POVM of type {typ} cannot be described by"
                      "text format gate set files.  It will be read in as a"
                      "standard POVM").format(typ=str(type(povm))))
-                typ = "POVM"
+                povmType = "POVM"
                 
             output.write("%s: %s\n\n" % (povmType,povmLabel))
                 

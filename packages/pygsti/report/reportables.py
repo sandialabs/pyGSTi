@@ -101,7 +101,8 @@ def spam_dotprods(rhoVecs, povms):
         j = 0
         for povm in povms:
             for EVec in povm.values():
-                ret[i,j] = _np.dot(_np.transpose(EVec.todense()), rhoVec.todense()); j += 1
+                ret[i,j] = _np.vdot(EVec.todense(), rhoVec.todense()); j += 1
+                  # todense() gives a 1D array, so no need to transpose EVec
     return ret
 Spam_dotprods = _gsf.spamfn_factory(spam_dotprods) #init args == (gateset)
 
