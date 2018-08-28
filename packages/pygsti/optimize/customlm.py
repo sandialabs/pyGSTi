@@ -102,6 +102,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
 
     fd_outers = 1 # DEBUG: TODO - make an arg
+
+    #DEBUG - largeJ handling (doesn't seem to do much good)
+    #x_with_okJ = None
+    #mu_with_okJ = None
+    #jactype_okJ = None
+    #largeJ_damping = 1.0
         
     for k in range(max_iter): #outer loop
         # assume x, f, fnorm hold valid values
@@ -145,8 +151,43 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                         + "shape=%s, GB=%.2f" % (str(Jac.shape),
                                                         Jac.nbytes/(1024.0**3)) )
 
-        Jnorm = _np.linalg.norm(Jac)
+        Jnorm = _np.linalg.norm(Jac)            
         printer.log("--- Outer Iter %d: norm_f = %g, mu=%g, |J|=%g" % (k,norm_f,mu,Jnorm))
+
+        #DEBUG - largeJ handling (doesn't seem to do much good)
+        #if Jnorm > 1e10 and (x_with_okJ is not None):
+        #    largeJ_damping /= 2
+        #
+        #    if largeJ_damping > 1e-8:
+        #        printer.log("|J| too large! Reverting to prior step w/damping = %g" % largeJ_damping)
+        #    else:
+        #        msg = "large-|J| damping is less than %g" % 1e-8
+        #        converged = True; break
+        #
+        #    x[:] = x_with_okJ[:]
+        #    mu = mu_with_okJ
+        #    f = obj_fn(x)
+        #    norm_f = _np.dot(f,f) # _np.linalg.norm(new_f)**2
+        #        
+        #    #Recomp J - TODO: consolidate w/identical code above
+        #    if jactype_okJ:
+        #        Jac = jac_fn(x)
+        #    else:
+        #        eps = 1e-7
+        #        Jac = _np.empty((len(f),len(x)),'d')
+        #        for i in range(len(x)):
+        #            x_plus_dx = x.copy()
+        #            x_plus_dx[i] += eps
+        #            Jac[:,i] = (obj_fn(x_plus_dx)-f)/eps
+        #            
+        #    Jnorm = _np.linalg.norm(Jac)
+        #    printer.log("--- Outer Iter %d: norm_f = %g, mu=%g, |J|=%g" % (k,norm_f,mu,Jnorm))
+        #    okJ = False
+        #else:
+        #    largeJ_damping = 1.0
+        #    x_with_okJ = x.copy()
+        #    jactype_okJ = bool(k >= fd_outers)
+        #    okJ = True
 
         #assert(_np.isfinite(Jac).all()), "Non-finite Jacobian!" # NaNs tracking
         #assert(_np.isfinite(_np.linalg.norm(Jac))), "Finite Jacobian has inf norm!" # NaNs tracking
@@ -181,6 +222,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             mu = tau * _np.max(undampled_JTJ_diag) # initial damping element
             #mu = min(mu, MU_TOL1)
 
+        #DEBUG - largeJ handling (doesn't seem to do much good)
+        #if okJ: #must do *after* mu is set
+        #    mu_with_okJ = mu
+
         #determing increment using adaptive damping
         while True:  #inner loop
 
@@ -202,11 +247,21 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #except _np.linalg.LinAlgError:
             except _scipy.linalg.LinAlgError:
                 success = False
+
+            #DEBUG - largeJ handling (doesn't seem to do much good)
+            #dx /= largeJ_damping
             
             if profiler: profiler.mem_check("custom_leastsq: after linsolve")
             if success: #linear solve succeeded
                 new_x = x + dx
                 norm_dx = _np.dot(dx,dx) # _np.linalg.norm(dx)**2
+
+                #ensure dx isn't too large - don't let any component change by more than ~sqrt(1.0)
+                MAX = 1.0*x.size #TODO MAX factor => argument
+                if norm_dx > MAX: 
+                    dx *= _np.sqrt(MAX / norm_dx) 
+                    new_x = x + dx
+                    norm_dx = _np.dot(dx,dx) # _np.linalg.norm(dx)**2
 
                 printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu,norm_dx),2)
 
