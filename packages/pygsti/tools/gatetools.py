@@ -1784,7 +1784,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
             if other_mode == "diagonal":
                 otherProjs.shape = (otherGens.shape[0],)
             elif other_mode == "diag_affine":
-                otherProjs.shape = (2,otherGens.shape[0])
+                otherProjs.shape = (2,otherGens.shape[1])
             else:
                 otherProjs.shape = (otherGens.shape[0],otherGens.shape[1])
 
@@ -2202,12 +2202,12 @@ def lindblad_projections_to_paramvals(hamProjs, otherProjs, param_mode="cptp",
                 assert(truncate or all([_np.isclose(v,otherProjs[0,0]) for v in otherProjs[0]])), \
                     "Diagonal lindblad coefficients are not equal (truncate == False)!"
                 depolProj = _np.mean(otherProjs[0,:].clip(1e-16,1e100))
-                otherParams = _np.concatenate( ([_np.sqrt(_np.real(depolProj))],otherProjs[1]) ) # shape (1+(bsO-1),)
+                otherParams = _np.concatenate( ([_np.sqrt(_np.real(depolProj))],otherProjs[1].real) ) # shape (1+(bsO-1),)
                 
             elif param_mode == "cptp": # Note: does not constrained affine coeffs to CPTP
                 assert(truncate or all([v >= -1e-12 for v in otherProjs[0]])), \
                     "Lindblad coefficients are not CPTP (truncate == False)!"
-                diagParams = _np.sqrt(otherProjs[0,:].clip(1e-16,1e100)) # shape (bsO-1,)
+                diagParams = _np.sqrt(_np.real(otherProjs[0,:]).clip(1e-16,1e100)) # shape (bsO-1,)
                 otherParams = _np.concatenate( (diagParams, otherProjs[1].real) ) # diag + affine params
 
             else: # param_mode == "unconstrained": otherParams is a 1D vector of the real diagonal els of otherProjs
@@ -2259,6 +2259,8 @@ def lindblad_projections_to_paramvals(hamProjs, otherProjs, param_mode="cptp",
     else:
         otherParams = _np.empty(0,'d')
 
+    assert(not _np.iscomplexobj(hamParams))   # params should always
+    assert(not _np.iscomplexobj(otherParams)) # be *real*
     return _np.concatenate( (hamParams, otherParams.flat) )
 
 

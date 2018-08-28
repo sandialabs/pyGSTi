@@ -192,7 +192,7 @@ class GateMatrixCalc(GateCalc):
         # Allocate memory for the final result
         num_deriv_cols =  self.Np if (wrtFilter is None) else len(wrtFilter)
         flattened_dprod = _np.zeros((dim**2, num_deriv_cols),'d')
-        
+
         _fas(flattened_dprod, [None,gpindices], 
              gate.deriv_wrt_params(gate_wrtFilter)) # (dim**2, nParams[gateLabel])
 

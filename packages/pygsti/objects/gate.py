@@ -2392,9 +2392,9 @@ class LindbladParameterizedGateMap(Gate):
         assert(bsH == self.ham_basis_size)
             
         if otherGens is not None:
-            bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
 
             if self.nonham_mode == "diagonal":
+                bsO = otherGens.shape[0]+1 #projection-basis size (not nec. == d2)
                 _gt._assert_shape(otherGens, (bsO-1,d2,d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
@@ -2407,6 +2407,7 @@ class LindbladParameterizedGateMap(Gate):
                     otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
 
             elif self.nonham_mode == "diag_affine":
+                bsO = otherGens.shape[1]+1 #projection-basis size (not nec. == d2)
                 _gt._assert_shape(otherGens, (2,bsO-1,d2,d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
@@ -2421,6 +2422,7 @@ class LindbladParameterizedGateMap(Gate):
                     otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
                                                 otherGens, rightTrans)                    
             else:
+                bsO = otherGens.shape[0]+1 #projection-basis size (not nec. == d2)
                 _gt._assert_shape(otherGens, (bsO-1,bsO-1,d2,d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
@@ -3184,7 +3186,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             if self.param_mode == "depol": # all coeffs same & == param^2
                 assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'depol' case!"
                 dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None] * 2*otherParams[0]
-            if self.param_mode == "cptp": # (coeffs = params^2)
+            elif self.param_mode == "cptp": # (coeffs = params^2)
                 dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
             else: # "unconstrained" (coeff == params)
                 dOdp  = _np.einsum('alj->lja', self.otherGens)
@@ -3201,7 +3203,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                 dOdp  = _np.empty((d2,d2,bsO),'complex')
                 dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2*diag_params[0] # single diagonal term
                 dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
-            if self.param_mode == "cptp": # (coeffs = params^2)
+            elif self.param_mode == "cptp": # (coeffs = params^2)
                 diag_params, affine_params = otherParams[0:bsO-1], otherParams[bsO-1:]
                 dOdp  = _np.empty((d2,d2,2,bsO-1),'complex')
                 dOdp[:,:,0,:] = _np.einsum('alj,a->lja', self.otherGens[0], 2*diag_params)
