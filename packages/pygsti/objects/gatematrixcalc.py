@@ -852,14 +852,18 @@ class GateMatrixCalc(GateCalc):
         #Note: these 2nd derivatives are non-zero when the spam vectors have
         # a more than linear dependence on their parameters.
         if self.preps[rholabel].has_nonzero_hessian():
+            derivWrtAnyRhovec = scale * _np.dot(E,prod) # may overflow, but OK
             d2pr_d2rhos = _np.zeros( (1, self.Np, self.Np) )
-            d2pr_d2rhos[0] = self.preps[rholabel].hessian_wrt_params()
+            _fas(d2pr_d2rhos,[0,self.preps[rholabel].gpindices,self.preps[rholabel].gpindices],
+                 _np.einsum('ij,jkl->ikl', derivWrtAnyRhovec, self.preps[rholabel].hessian_wrt_params()))
         else:
             d2pr_d2rhos = 0
 
         if self.effects[elabel].has_nonzero_hessian():
+            derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod,rho)) # may overflow, but OK
             d2pr_d2Es   = _np.zeros( (1, self.Np, self.Np) )
-            d2pr_d2Es[0] = self.effects[elabel].hessian_wrt_params()
+            _fas(d2pr_d2Es,[0,self.effects[elabel].gpindices,self.effects[elabel].gpindices],
+                 _np.einsum('ij,jkl->ikl',derivWrtAnyEvec,self.effects[elabel].hessian_wrt_params()))
         else:
             d2pr_d2Es = 0
 
@@ -1954,16 +1958,20 @@ class GateMatrixCalc(GateCalc):
         #Note: these 2nd derivatives are non-zero when the spam vectors have
         # a more than linear dependence on their parameters.
         if self.preps[rholabel].has_nonzero_hessian():
+            dp_dAnyRho = _np.dot(E, Gs).squeeze(0) * scaleVals[:,None] #overflow OK
             d2pr_d2rhos = _np.zeros( (nGateStrings, nDerivCols1, nDerivCols2) )
             _fas(d2pr_d2rhos,[None, rho_gpindices1, rho_gpindices2],
-                 self.preps[rholabel].hessian_wrt_params(rho_wrtFilter1, rho_wrtFilter2)[None,:,:])
+                 _np.einsum('ij,jkl->ikl', dp_dAnyRho, self.preps[rholabel].hessian_wrt_params(
+                     rho_wrtFilter1, rho_wrtFilter2)))
         else:
             d2pr_d2rhos = 0
 
         if self.effects[elabel].has_nonzero_hessian():
+            dp_dAnyE = _np.dot(Gs, rho).squeeze(2) * scaleVals[:,None] #overflow OK
             d2pr_d2Es   = _np.zeros( (nGateStrings, nDerivCols1, nDerivCols2) )
             _fas(d2pr_d2Es,[None, E_gpindices1, E_gpindices2],
-                 self.effects[elabel].hessian_wrt_params(E_wrtFilter1, E_wrtFilter2)[None,:,:])
+                 _np.einsum('ij,jkl->ikl', dp_dAnyE, self.effects[elabel].hessian_wrt_params(
+                     E_wrtFilter1, E_wrtFilter2)))
         else:
             d2pr_d2Es = 0
 
