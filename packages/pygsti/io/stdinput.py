@@ -818,36 +818,38 @@ def read_gateset(filename):
 
     def get_liouville_mx(obj,prefix=""):
         """ Process properties of `obj` to extract a single liouville representation """
-        props = obj['properties']
+        props = obj['properties']; lmx = None
         if prefix+"StateVec" in props:
             ar = _evalRowList( props[prefix+"StateVec"], bComplex=True )
             if ar.shape == (1,2):
                 stdmx = _tools.state_to_stdmx(ar[0,:])
-                qty = _tools.stdmx_to_vec(stdmx, basis)
+                lmx = _tools.stdmx_to_vec(stdmx, basis)
             else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label,ar.shape))
 
         elif prefix+"DensityMx" in props:
             ar = _evalRowList( props[prefix+"DensityMx"], bComplex=True )
             if ar.shape == (2,2) or ar.shape == (4,4):
-                qty = _tools.stdmx_to_vec(ar, basis)
+                lmx = _tools.stdmx_to_vec(ar, basis)
             else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
 
         elif prefix+"LiouvilleVec" in props:
-            qty = _np.transpose( _evalRowList( props[prefix+"LiouvilleVec"], bComplex=False ) )
+            lmx = _np.transpose( _evalRowList( props[prefix+"LiouvilleVec"], bComplex=False ) )
 
         elif prefix+"UnitaryMx" in props:
             ar = _evalRowList( props[prefix+"UnitaryMx"], bComplex=True )
-            qty = _tools.change_basis(_tools.unitary_to_process_mx(ar), 'std', basis)
+            lmx = _tools.change_basis(_tools.unitary_to_process_mx(ar), 'std', basis)
 
         elif prefix+"UnitaryMxExp" in props:
             ar = _evalRowList( props[prefix+"UnitaryMxExp"], bComplex=True )
-            qty = _tools.change_basis(_tools.unitary_to_process_mx(_expm(-1j*ar)), 'std', basis)
+            lmx = _tools.change_basis(_tools.unitary_to_process_mx(_expm(-1j*ar)), 'std', basis)
 
         elif prefix+"LiouvilleMx" in props:
-            qty = _evalRowList( props[prefix+"LiouvilleMx"], bComplex=False )
+            lmx = _evalRowList( props[prefix+"LiouvilleMx"], bComplex=False )
             
-        assert(qty is not None), "No valid format found in %s" % str(list(props.keys()))
-        return qty
+        if lmx is None:
+            raise ValueError("No valid format found in %s" % str(list(props.keys())))
+        
+        return lmx
 
     
     #Now process top_level_objs to create a GateSet
@@ -920,7 +922,7 @@ def read_gateset(filename):
             qty = get_liouville_mx(obj)
             try:
                 unitary_post = get_liouville_mx(obj,"Ref")
-            except AssertionError:
+            except ValueError:
                 unitary_post = None
             nQubits = _np.log2(qty.shape[0])/2.0
             bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?

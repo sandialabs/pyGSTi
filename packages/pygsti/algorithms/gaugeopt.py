@@ -715,7 +715,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]
-        denMx = _tools.vec_to_stdmx(prepvec, gateBasis)
+        denMx = _tools.vec_to_stdmx(prepvec.todense()[:,None], gateBasis)
         assert(_np.linalg.norm(denMx - denMx.T.conjugate()) < 1e-4), \
             "denMx should be Hermitian!"
 
@@ -729,7 +729,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
         # get d(prepvec')/dp = d(S_inv * prepvec)/dp in gateBasis [shape == (n,dim)]
         #                    = (-S_inv*dS*S_inv) * prepvec = -S_inv*dS * prepvec'
         Sinv_dS  = _np.dot(S_inv, dS) # shape (d1,n,d2)
-        dVdp = -1 * _np.dot(Sinv_dS, prepvec).squeeze(2) # shape (d,n,1) => (d,n)
+        dVdp = -1 * _np.dot(Sinv_dS, prepvec.todense()[:,None]).squeeze(2) # shape (d,n,1) => (d,n)
         assert(dVdp.shape == (d,n))
 
         # denMx = sum( spamvec[i] * Bmx[i] )
@@ -754,7 +754,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
         for lbl,effectvec in povm.items():
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-            EMx = _tools.vec_to_stdmx(effectvec, gateBasis)
+            EMx = _tools.vec_to_stdmx(effectvec.todense()[:,None], gateBasis)
             dmDim = EMx.shape[0]
             assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
                 "denMx should be Hermitian!"
@@ -769,7 +769,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
             # get d(effectvec')/dp = [d(effectvec.T * S)/dp].T in gateBasis [shape == (n,dim)]
             #                      = [effectvec.T * dS].T
             #  OR = dS.T * effectvec
-            pre_effectvec = gs_pre.povms[povmlbl][lbl]
+            pre_effectvec = gs_pre.povms[povmlbl][lbl].todense()[:,None]
             dVdp = _np.dot( pre_effectvec.T, dS ).squeeze(0).T
               # shape = (1,d) * (n, d1,d2) = (1,n,d2) => (n,d2) => (d2,n)
             assert(dVdp.shape == (d,n))

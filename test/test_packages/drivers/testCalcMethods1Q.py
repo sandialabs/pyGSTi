@@ -75,8 +75,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         #Random starting points - little kick so we don't get hung up at start
         np.random.seed(1234)
         cls.rand_start18 = np.random.random(18)*1e-6
-        cls.rand_start25 = np.random.random(25)*1e-6
-        cls.rand_start36 = np.random.random(36)*1e-6
+        cls.rand_start25 = np.random.random(30)*1e-6 # TODO: rename?
+        cls.rand_start36 = np.random.random(30)*1e-6 # TODO: rename?
 
         #Circuit Simulation circuits
         cls.csim_nQubits=3
@@ -182,6 +182,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                              extraWeight1Hops=0, extraGateWeight=1, sparse=False,
                                              sim_type="matrix", verbosity=1)
+        print("Num params = ",gs_target.num_params())
         gs_target.from_vector(self.rand_start25)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
@@ -192,7 +193,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         #                    open(compare_files + "/test1Qcalc_redmod_exact.gateset",'w'))
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
-        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
+        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
         gs_compare = pygsti.io.json.load( open(compare_files + "/test1Qcalc_redmod_exact.gateset"))
         self.assertAlmostEqual( results.estimates['default'].gatesets['go0'].frobeniusdist(gs_compare), 0, places=3)
 
@@ -202,13 +203,14 @@ class CalcMethods1QTestCase(BaseTestCase):
         gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                              extraWeight1Hops=0, extraGateWeight=1, sparse=False,
                                              sim_type="map", verbosity=1)
+        print("Num params = ",gs_target.num_params())
         gs_target.from_vector(self.rand_start25)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advancedOptions={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
-        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
+        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
         gs_compare = pygsti.io.json.load( open(compare_files + "/test1Qcalc_redmod_exact.gateset"))
         self.assertAlmostEqual( results.estimates['default'].gatesets['go0'].frobeniusdist(gs_compare), 0, places=1)
           #Note: gatesets aren't necessarily exactly equal given gauge freedoms that we don't know
@@ -220,13 +222,14 @@ class CalcMethods1QTestCase(BaseTestCase):
         gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                              extraWeight1Hops=0, extraGateWeight=1, sparse=True,
                                              sim_type="map", verbosity=1)
+        print("Num params = ",gs_target.num_params())
         gs_target.from_vector(self.rand_start25)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advancedOptions={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
-        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
+        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
         gs_compare = pygsti.io.json.load( open(compare_files + "/test1Qcalc_redmod_exact.gateset"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].gatesets['go0'].to_vector()
                                                - gs_compare.to_vector()), 0, places=1)
@@ -240,6 +243,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                       extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
                                       sim_type="termorder:1", parameterization="H+S terms")
+        print("Num params = ",gs_target.num_params())
         gs_target.from_vector(self.rand_start36)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
@@ -261,6 +265,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                              extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
                                              sim_type="termorder:1", parameterization="H+S clifford terms")
+        print("Num params = ",gs_target.num_params())
         gs_target.from_vector(self.rand_start36)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,

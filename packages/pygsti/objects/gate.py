@@ -1876,7 +1876,7 @@ class LindbladParameterizedGateMap(Gate):
         if unitary_postfactor is None:
             #Try to obtain unitary_post by getting the closest unitary
             if isinstance(gate, LindbladParameterizedGate):
-                unitary_postfacor = gate.unitary_postfactor
+                unitary_postfactor = gate.unitary_postfactor
             elif isinstance(gate, Gate) and gate._evotype == "densitymx": 
                 J = _jt.fast_jamiolkowski_iso_std(gate.todense(), mxBasis) #Choi mx basis doesn't matter
                 if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
@@ -1922,7 +1922,7 @@ class LindbladParameterizedGateMap(Gate):
             if a is None and b is None: return True
             if a is None or b is None: return False
             return _mt.safenorm(a-b) < 1e-6 # what about possibility of Clifford gates?
-            
+        
         if isinstance(gate, LindbladParameterizedGateMap) and \
            normeq(gate.unitary_postfactor,unitary_postfactor) \
            and beq(ham_basis,gate.ham_basis) and beq(nonham_basis,gate.other_basis) \
@@ -3479,7 +3479,8 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             
         if wrtFilter1 is None:
             if wrtFilter2 is None:
-                return self.base_hessian
+                return self.base_hessian.view()
+                  #view because later setting of .shape by caller can mess with self.base_hessian!
             else:
                 return _np.take(self.base_hessian, wrtFilter2, axis=2 )
         else:
@@ -3489,7 +3490,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                 return _np.take( _np.take(self.base_hessian, wrtFilter1, axis=1),
                                  wrtFilter2, axis=2 )
 
-
+        
 def _dexpSeries(X, dX):
     TERM_TOL = 1e-12
     tr = len(dX.shape) #tensor rank of dX; tr-2 == # of derivative dimensions

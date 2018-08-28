@@ -375,9 +375,18 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
         gs.from_vector(vecNoSpam)
 
         
+    #FUTURE: should probabal make extracting evotype from a parameterization name a
+    # function somewhere - maybe a classmethod of LindbladParameterizedGate?
+    parts = parameterization.split()
+    evostr = " ".join(parts[1:])
+    if   evostr == "":               evotype = "densitymx"
+    elif evostr == "terms":          evotype = "svterm"
+    elif evostr == "clifford terms": evotype = "cterm"
+    else: raise ValueError("Unrecognized evotype in `parameterization`=%s" % parameterization)
+        
     #SPAM
     if spamtype == "static" or maxSpamWeight == 0:
-
+        
         if prepNoise is not None or povmNoise is not None:
             raise ValueError(("`spamtype == 'static'` is incompatible with "
                               "non-None `prepNoise` or `povmNoise`"))
@@ -385,8 +394,8 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
             _warnings.warn(("`spamtype == 'static'` ignores the supplied "
                             "`maxSpamWeight=%d > 0`") % maxSpamWeight )
 
-        gs.preps[_Lbl('rho0')] = _objs.ComputationalSPAMVec([0]*nQubits,"densitymx")
-        gs.povms[_Lbl('Mdefault')] = _objs.ComputationalBasisPOVM(nQubits, "densitymx")
+        gs.preps[_Lbl('rho0')] = _objs.ComputationalSPAMVec([0]*nQubits,evotype)
+        gs.povms[_Lbl('Mdefault')] = _objs.ComputationalBasisPOVM(nQubits,evotype)
         
     elif spamtype == "tensorproduct": 
 
@@ -434,9 +443,9 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
 
     elif spamtype == "lindblad":
 
-        prepPure = _objs.PureStateSPAMVec( _objs.ComputationalSPAMVec([0]*nQubits,"statevec"), dm_basis="pp" )
+        prepPure = _objs.ComputationalSPAMVec([0]*nQubits,evotype)
         prepNoiseMap = build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, printer-1)
-        gs.preps[_Lbl('rho0')] = _objs.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep", "pp")
+        gs.preps[_Lbl('rho0')] = _objs.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep")
         if prepNoise is not None:
             # add noise to prepNoiseMap *after* assigning to GateSet just to be
             #  sure parameters are wired correctly.

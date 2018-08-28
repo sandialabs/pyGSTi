@@ -1214,7 +1214,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
     elif parameterization == "clifford":
         # Clifford object construction is different enough we do it separately
         gs.preps['rho0'] = _spamvec.StabilizerSPAMVec(nQubits) # creates all-0 state by default
-        gs.povms['Mdefault'] = _povm.StabilizerZPOVM(nQubits)
+        gs.povms['Mdefault'] = _povm.ComputationalBasisPOVM(nQubits,'stabilizer')
 
     elif parameterization in ("static","static unitary"):
         #static computational basis
@@ -1224,19 +1224,16 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
     else:
         # parameterization should be a type amenable to Lindblad
         # create lindblad SPAM ops w/maxWeight == 1 (HARDCODED for now)
-        assert(evotype == "densitymx"), \
-            "Lindblad spam ops can only be created for 'densitymx' evolution type!"
-
-        import nqnoiseconstruction as _nqn
+        from . import nqnoiseconstruction as _nqn
         maxSpamWeight = 1; sparse = False; verbosity=0 #HARDCODED
         qubitGraph = _qubitgraph.QubitGraph.common_graph(nQubits, "line") # doesn't matter while maxSpamWeight==1
         
-        prepPure = _spamvec.PureStateSPAMVec( _objs.ComputationalSPAMVec([0]*nQubits,"statevec"), dm_basis="pp" )
+        prepPure = _spamvec.ComputationalSPAMVec([0]*nQubits, evotype)
         prepNoiseMap = _nqn.build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, verbosity)
-        gs.preps[_Lbl('rho0')] = _spamvec.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep", "pp")
+        gs.preps['rho0'] = _spamvec.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep")
 
         povmNoiseMap = _nqn.build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, verbosity)
-        gs.povms[_Lbl('Mdefault')] = _povm.LindbladParameterizedPOVM(povmNoiseMap, "pp")
+        gs.povms['Mdefault'] = _povm.LindbladParameterizedPOVM(povmNoiseMap, "pp")
 
 
     for gateName, gate in gatedict.items():

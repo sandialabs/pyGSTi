@@ -2949,11 +2949,11 @@ def _spam_penalty(gs,prefactor,gateBasis):
     return prefactor* ( _np.sqrt(
         _np.array( [
             _tools.tracenorm(
-                _tools.vec_to_stdmx(prepvec, gateBasis)
+                _tools.vec_to_stdmx(prepvec.todense(), gateBasis)
             ) for prepvec in gs.preps.values()
         ] + [
             _tools.tracenorm(
-                _tools.vec_to_stdmx(gs.povms[plbl][elbl], gateBasis)
+                _tools.vec_to_stdmx(gs.povms[plbl][elbl].todense(), gateBasis)
             ) for plbl in gs.povms for elbl in gs.povms[plbl] ], 'd')
     ))
 

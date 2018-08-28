@@ -3035,19 +3035,19 @@ class GateSet(object):
         s += " Preps:\n"
         for lbl in self.preps:
             s += "  %s = %g\n" % \
-                (lbl, _np.linalg.norm(self.preps[lbl]-otherGateSet.preps[lbl]))
+                (lbl, _np.linalg.norm(self.preps[lbl].todense()-otherGateSet.preps[lbl].todense()))
 
         s += " POVMs:\n"
         for povm_lbl,povm in self.povms.items():
             s += "  %s: " % povm_lbl
             for lbl in povm:
                 s += "    %s = %g\n" % \
-                     (lbl, _np.linalg.norm(povm[lbl]-otherGateSet.povms[povm_lbl][lbl]))
+                     (lbl, _np.linalg.norm(povm[lbl].todense()-otherGateSet.povms[povm_lbl][lbl].todense()))
 
         s += " Gates:\n"
         for lbl in self.gates:
             s += "  %s = %g\n" % \
-                (lbl, _np.linalg.norm(self.gates[lbl]-otherGateSet.gates[lbl]))
+                (lbl, _np.linalg.norm(self.gates[lbl].todense()-otherGateSet.gates[lbl].todense()))
 
         if len(self.instruments) > 0:
             s += " Instruments:\n"
@@ -3055,7 +3055,7 @@ class GateSet(object):
                 s += "  %s: " % inst_lbl
                 for lbl in inst:
                     s += "    %s = %g\n" % \
-                         (lbl, _np.linalg.norm(inst[lbl]-otherGateSet.instruments[inst_lbl][lbl]))
+                         (lbl, _np.linalg.norm(inst[lbl].todense()-otherGateSet.instruments[inst_lbl][lbl].todense()))
 
         return s
 
