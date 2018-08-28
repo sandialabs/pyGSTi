@@ -681,109 +681,6 @@ def read_gateset(filename):
     GateSet
     """
     basis = 'pp' #default basis to load as
-    
-    def add_current():
-        """ Adds the current object, described by lots of cur_* variables """
-
-        qty = None
-        if cur_format == "StateVec":
-            ar = _evalRowList( cur_rows, bComplex=True )
-            if ar.shape == (1,2):
-                stdmx = _tools.state_to_stdmx(ar[0,:])
-                qty = _tools.stdmx_to_vec(stdmx, basis)
-            else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label,ar.shape))
-
-        elif cur_format == "DensityMx":
-            ar = _evalRowList( cur_rows, bComplex=True )
-            if ar.shape == (2,2) or ar.shape == (4,4):
-                qty = _tools.stdmx_to_vec(ar, basis)
-            else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
-
-        elif cur_format == "LiouvilleVec":
-            qty = _np.transpose( _evalRowList( cur_rows, bComplex=False ) )
-
-        elif cur_format == "UnitaryMx":
-            ar = _evalRowList( cur_rows, bComplex=True )
-            qty = _tools.change_basis(_tools.unitary_to_process_mx(ar), 'std', basis)
-
-        elif cur_format == "UnitaryMxExp":
-            ar = _evalRowList( cur_rows, bComplex=True )
-            qty = _tools.change_basis(_tools.unitary_to_process_mx(_expm(-1j*ar)), 'std', basis)
-
-        elif cur_format == "LiouvilleMx":
-            qty = _evalRowList( cur_rows, bComplex=False )
-
-        assert(qty is not None), "Invalid format: %s" % cur_format
-
-        if cur_typ == "PREP":
-            gs.preps[cur_label] = _objs.FullyParameterizedSPAMVec(qty)
-        elif cur_typ == "TP-PREP":
-            gs.preps[cur_label] = _objs.TPParameterizedSPAMVec(qty)
-        elif cur_typ == "STATIC-PREP":
-            gs.preps[cur_label] = _objs.StaticSPAMVec(qty)
-
-        elif cur_typ in ("EFFECT","TP-EFFECT","STATIC-EFFECT"):
-            if cur_typ == "EFFECT": qty = _objs.FullyParameterizedSPAMVec(qty)
-            elif cur_typ == "TP-EFFECT": qty = _objs.TPParameterizedSPAMVec(qty)
-            elif cur_typ == "STATIC-EFFECT": qty = _objs.StaticSPAMVec(qty)
-            if "effects" in cur_group_info:
-                cur_group_info['effects'].append( (cur_label,qty) )
-            else:  cur_group_info['effects'] = [ (cur_label,qty) ]            
-                
-        elif cur_typ == "GATE":
-            gs.gates[cur_label] = _objs.FullyParameterizedGate(qty)
-        elif cur_typ == "TP-GATE":
-            gs.gates[cur_label] = _objs.TPParameterizedGate(qty)
-        elif cur_typ == "CPTP-GATE":
-            #Similar to gate.convert(...) method
-            J = _tools.fast_jamiolkowski_iso_std(qty, basis) #Choi mx basis doesn't matter
-            RANK_TOL = 1e-6
-            if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
-                unitary_post = qty # when 'gate' is unitary
-            else: unitary_post = None
-
-            nQubits = _np.log2(qty.shape[0])/2.0
-            bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
-
-            proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-            ham_basis = proj_basis
-            nonham_basis = proj_basis
-            nonham_diagonal_only = False; cptp = True; truncate=False
-            gs.gates[cur_label] = _objs.LindbladParameterizedGate.from_gate_matrix(
-                qty, unitary_post, ham_basis, nonham_basis,
-                cptp, nonham_diagonal_only, truncate, basis)
-        elif cur_typ == "STATIC-GATE":
-            gs.gates[cur_label] = _objs.StaticGate(qty)
-
-        elif cur_typ in ("IGATE","STATIC-IGATE"):
-            mxOrGate = _objs.StaticGate(qty) if cur_typ == "STATIC-IGATE" \
-                       else qty #just add numpy array `qty` to matrices list
-                                # and it will be made into a fully-param gate.
-            if "matrices" in cur_group_info:
-                cur_group_info['matrices'].append( (cur_label,mxOrGate) )
-            else:  cur_group_info['matrices'] = [ (cur_label,mxOrGate) ]
-        else:
-            raise ValueError("Unknown type: %s!" % cur_typ)
-
-
-    def add_current_group():
-        """ 
-        Adds the current "group" - either a POVM or Instrument - which contains
-        multiple objects.
-        """
-        if cur_group_typ == "POVM":
-            gs.povms[cur_group] = _objs.UnconstrainedPOVM( cur_group_info['effects'] )
-        elif cur_group_typ == "TP-POVM":
-            assert(len(cur_group_info['effects']) > 1), "TP-POVMs must have at least 2 elements!"
-            gs.povms[cur_group] = _objs.TPPOVM( cur_group_info['effects'] )
-        elif cur_group_typ == "Instrument":
-            gs.instruments[cur_group] = _objs.Instrument( cur_group_info['matrices'] )
-        elif cur_group_typ == "TP-Instrument":
-            gs.instruments[cur_group] = _objs.TPInstrument( cur_group_info['matrices'] )
-        else:
-            raise ValueError("Unknown group type: %s!" % cur_group_typ ) # pragma: no cover
-            # should be unreachable given group-name test below
-
 
     gs = _objs.GateSet()
     spam_vecs = _OrderedDict();
@@ -821,66 +718,240 @@ def read_gateset(filename):
         # uses basis in a way that can infer a dimension)
         basis = basis_abbrev
 
-    state = "look for label"
-    cur_label = ""; cur_typ = ""
-    cur_group = ""; cur_group_typ = ""
-    cur_format = ""; cur_rows = []; cur_group_info = {}
+    state = "look for label or property"
+    cur_obj = None
+    cur_group_obj = None
+    cur_property = ""; cur_rows = []
+    top_level_objs = []
+    
     with open(filename) as inputfile:
         for line in inputfile:
             line = line.strip()
 
             if len(line) == 0 or line.startswith("END"):
-                #Blank lines or "END..." statements trigger the end of objects
-                state = "look for label"
-                if len(cur_label) > 0:
-                    add_current()
-                    cur_label = ""; cur_rows = []
+                #Blank lines or "END..." statements trigger the end of properties
+                state = "look for label or property"
+                if len(cur_property) > 0:
+                    assert((cur_obj is not None) or (cur_group_obj is not None)), \
+                        "No object to add %s property to!" % cur_property
+                    obj = cur_obj if (cur_obj is not None) else cur_group_obj
+                    obj['properties'][cur_property] = cur_rows
+                    cur_property = ""; cur_rows = []
 
                 #END... ends the current group
                 if line.startswith("END"):
-                    if len(cur_group) > 0:
-                        add_current_group()
-                        cur_group = ""; cur_group_info = {}
+                    assert(cur_group_obj is not None), "%s does not correspond to any object group!" % line
+                    if cur_obj is not None:
+                        cur_group_obj['objects'].append( cur_obj ); cur_obj = None
+                    top_level_objs.append(cur_group_obj); cur_group_obj = None
 
             elif line[0] == "#":
                 pass # skip comments
 
-            elif state == "look for label":
-                parts = line.split(':')
-                assert(len(parts) == 2), "Invalid '<type>: <label>' line: %s" % line
-                typ = parts[0].strip()
-                label = parts[1].strip()
-
-                if typ in ("BASIS","GAUGEGROUP"):
-                    pass #handled above
+            elif state == "look for label or property":
+                assert(cur_property == ""), "Logic error!"
                 
-                elif typ in ("POVM","TP-POVM","Instrument","TP-Instrument"):
-                    # if this is a group type, just record this and continue looking
-                    #  for the next labeled object
-                    cur_group = label
-                    cur_group_typ = typ
-                else:
-                    #All other "types" should be objects with formatted data
-                    # associated with them: set cur_label and cur_typ to hold 
-                    # the object label and type - next read it in.
-                    cur_label = label
-                    cur_typ = typ
-                    state = "expect format" # the default next action
-                    
-            elif state == "expect format":
-                cur_format = line
-                if cur_format not in ["StateVec", "DensityMx", "UnitaryMx", "UnitaryMxExp", "LiouvilleVec", "LiouvilleMx"]:
-                    raise ValueError("Expected object format for label %s and got line: %s -- must specify a valid object format" % (cur_label,line))
-                state = "read object"
+                parts = line.split(':')
+                if len(parts) == 2: # then this is a '<type>: <label>' line => new cur_obj
+                    typ = parts[0].strip()
+                    label = parts[1].strip()
 
-            elif state == "read object":
+                    # place any existing cur_obj
+                    if cur_obj is not None:
+                        if cur_group_obj is not None:
+                            cur_group_obj['objects'].append( cur_obj )
+                        else:
+                            top_level_objs.append(cur_obj)
+                        cur_obj = None
+                        
+                    if typ in ("BASIS","GAUGEGROUP"):
+                        pass #handled above
+                    
+                    elif typ in ("POVM","TP-POVM","CPTP-POVM","Instrument","TP-Instrument"):
+                        # a group type - so create a new *group* object
+                        assert(cur_group_obj is None), "Group label encountered before ENDing prior group:\n%s" % line
+                        cur_group_obj = {'label': label, 'type': typ, 'properties': {}, 'objects': [] }
+                    else:
+                        #All other "types" are object labels
+                        cur_obj = {'label': label, 'type': typ, 'properties': {} }
+                        
+                elif len(parts) == 1:
+                    # a "property" line - either just <prop_name> (for a
+                    # multiline format) or <prop_name> = <value>
+                    assert((cur_obj is not None) or (cur_group_obj is not None)), \
+                        "Property: %s\nencountered without a containing object!" % line
+                    eqparts = line.split('=')
+                    
+                    if len(eqparts) == 2:
+                        lhs = eqparts[0].strip()
+                        rhs = eqparts[1].strip()
+                        obj = cur_obj if (cur_obj is not None) else cur_group_obj
+                        obj['properties'][lhs] = _ast.literal_eval(rhs)
+                    elif len(eqparts) == 1:
+                        cur_property = eqparts[0].strip()
+                        state = "read array"
+                    else:
+                        raise ValueError("Invalid property definition: %s" % line)
+                else:
+                    raise ValueError("Line: %s\nDoes not look like an object label or property!" % line)
+
+            elif state == "read array":
                 cur_rows.append( line.split() )
 
-    if len(cur_label) > 0:
-        add_current()
-    if len(cur_group) > 0:
-        add_current_group()
 
+    #Deal with any lingering properties or objects
+    if len(cur_property) > 0:
+        assert((cur_obj is not None) or (cur_group_obj is not None)), \
+            "No object to add %s property to!" % cur_property
+        obj = cur_obj if (cur_obj is not None) else cur_group_obj
+        obj['properties'][cur_property] = cur_rows
+
+    if cur_obj is not None:
+        if cur_group_obj is not None:
+            cur_group_obj['objects'].append(cur_obj)
+        else:
+            top_level_objs.append(cur_obj)
+
+    if cur_group_obj is not None:
+        top_level_objs.append(cur_group_obj)
+
+
+    def get_liouville_mx(obj,prefix=""):
+        """ Process properties of `obj` to extract a single liouville representation """
+        props = obj['properties']
+        if prefix+"StateVec" in props:
+            ar = _evalRowList( props[prefix+"StateVec"], bComplex=True )
+            if ar.shape == (1,2):
+                stdmx = _tools.state_to_stdmx(ar[0,:])
+                qty = _tools.stdmx_to_vec(stdmx, basis)
+            else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label,ar.shape))
+
+        elif prefix+"DensityMx" in props:
+            ar = _evalRowList( props[prefix+"DensityMx"], bComplex=True )
+            if ar.shape == (2,2) or ar.shape == (4,4):
+                qty = _tools.stdmx_to_vec(ar, basis)
+            else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
+
+        elif prefix+"LiouvilleVec" in props:
+            qty = _np.transpose( _evalRowList( props[prefix+"LiouvilleVec"], bComplex=False ) )
+
+        elif prefix+"UnitaryMx" in props:
+            ar = _evalRowList( props[prefix+"UnitaryMx"], bComplex=True )
+            qty = _tools.change_basis(_tools.unitary_to_process_mx(ar), 'std', basis)
+
+        elif prefix+"UnitaryMxExp" in props:
+            ar = _evalRowList( props[prefix+"UnitaryMxExp"], bComplex=True )
+            qty = _tools.change_basis(_tools.unitary_to_process_mx(_expm(-1j*ar)), 'std', basis)
+
+        elif prefix+"LiouvilleMx" in props:
+            qty = _evalRowList( props[prefix+"LiouvilleMx"], bComplex=False )
+            
+        assert(qty is not None), "No valid format found in %s" % str(list(props.keys()))
+        return qty
+
+    
+    #Now process top_level_objs to create a GateSet
+    for obj in top_level_objs: # `obj` is a dict of object info
+        cur_typ = obj['type']
+        cur_label = obj['label']
+
+        #Preps
+        if cur_typ == "PREP":
+            gs.preps[cur_label] = _objs.FullyParameterizedSPAMVec(
+                get_liouville_mx(obj))
+        elif cur_typ == "TP-PREP":
+            gs.preps[cur_label] = _objs.TPParameterizedSPAMVec(
+                get_liouville_mx(obj))
+        elif cur_typ == "CPTP-PREP":
+            props = obj['properties']
+            assert("PureVec" in props and "ErrgenMx" in props) # must always be Liouville reps!
+            qty = _evalRowList( props["ErrgenMx"], bComplex=False )
+            nQubits = _np.log2(qty.size)/2.0
+            bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
+            proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+            errorMap = _objs.LindbladParameterizedGate.from_gate_matrix(
+                qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis) #unitary postfactor = Id
+            pureVec = _objs.StaticSPAMVec( _np.transpose(_evalRowList( props["PureVec"], bComplex=False )))
+            gs.preps[cur_label] = _objs.LindbladParameterizedSPAMVec(pureVec,errorMap,"prep")
+        elif cur_typ == "STATIC-PREP":
+            gs.preps[cur_label] = _objs.StaticSPAMVec(get_liouville_mx(obj))
+
+        #POVMs
+        elif cur_typ in ("POVM","TP-POVM"):
+            effects = []
+            for sub_obj in obj['objects']:
+                sub_typ = sub_obj['type']
+                if sub_typ == "EFFECT":
+                    Evec = _objs.FullyParameterizedSPAMVec(get_liouville_mx(sub_obj))
+                elif sub_typ == "TP-EFFECT":
+                    Evec = _objs.TPParameterizedSPAMVec(get_liouville_mx(sub_obj))
+                elif sub_typ == "STATIC-EFFECT":
+                    Evec = _objs.StaticSPAMVec(get_liouville_mx(sub_obj))
+                #elif sub_typ == "CPTP-EFFECT":
+                #    Evec = _objs.LindbladParameterizedSPAMVec.from_spam_vector(qty,qty,"effect")
+                effects.append( (sub_obj['label'],Evec) )
+
+            if cur_typ == "POVM":
+                gs.povms[cur_label] = _objs.UnconstrainedPOVM( effects )
+            elif cur_typ == "TP-POVM":
+                assert(len(effects) > 1), "TP-POVMs must have at least 2 elements!"
+                gs.povms[cur_label] = _objs.TPPOVM( effects )
+            else: assert(False), "Logic error!"
+            
+        elif cur_typ == "CPTP-POVM":
+            props = obj['properties']
+            assert("ErrgenMx" in props) # must always be Liouville reps!
+            qty = _evalRowList( props["ErrgenMx"], bComplex=False )
+            nQubits = _np.log2(qty.size)/2.0
+            bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
+            proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+            errorMap = _objs.LindbladParameterizedGate.from_gate_matrix(
+                qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis) #unitary postfactor = Id
+            gs.povms[cur_label] = _objs.LindbladParameterizedPOVM(errorMap)
+
+            
+        elif cur_typ == "GATE":
+            gs.gates[cur_label] = _objs.FullyParameterizedGate(
+                get_liouville_mx(obj))
+        elif cur_typ == "TP-GATE":
+            gs.gates[cur_label] = _objs.TPParameterizedGate(
+                get_liouville_mx(obj))
+        elif cur_typ == "CPTP-GATE":
+            qty = get_liouville_mx(obj)
+            try:
+                unitary_post = get_liouville_mx(obj,"Ref")
+            except AssertionError:
+                unitary_post = None
+            nQubits = _np.log2(qty.shape[0])/2.0
+            bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
+            proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+            gs.gates[cur_label] = _objs.LindbladParameterizedGate.from_gate_matrix(
+                qty, unitary_post, proj_basis, proj_basis, truncate=False, mxBasis=basis)
+
+        elif cur_typ == "STATIC-GATE":
+            gs.gates[cur_label] = _objs.StaticGate(get_liouville_mx(obj))
+
+
+        elif cur_typ in ("Instrument","TP-Instrument"):
+            matrices = []
+            for sub_obj in obj['objects']:
+                sub_typ = sub_obj['type']
+                qty = get_liouville_mx(sub_obj)
+                mxOrGate = _objs.StaticGate(qty) if cur_typ == "STATIC-IGATE" \
+                       else qty #just add numpy array `qty` to matrices list
+                                # and it will be made into a fully-param gate.
+                matrices.append( (sub_obj['label'],mxOrGate) )
+
+            if cur_typ == "Instrument":
+                gs.instruments[cur_label] = _objs.Instrument( matrices )
+            elif cur_typ == "TP-Instrument":
+                gs.instruments[cur_label] = _objs.TPInstrument( matrices )
+            else: assert(False), "Logic error!"
+        else:
+            raise ValueError("Unknown type: %s!" % cur_typ)
+
+
+            
     #Try to infer basis dimension if none is given
     if basis_dims is None:
         if gs.get_dimension() is not None:

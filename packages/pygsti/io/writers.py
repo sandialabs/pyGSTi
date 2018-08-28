@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import warnings as _warnings
+import numpy as _np
 
 # from . import stdinput as _stdinput
 from .. import tools as _tools
@@ -241,6 +242,21 @@ def write_gateset(gs,filename,title=None):
 
     """
 
+    def writeprop(f, lbl, val):
+        """ Write (label,val) property to output file """
+        if isinstance(val, _np.ndarray): # then write as rows
+            f.write("%s\n" % lbl)
+            if val.ndim == 1:
+                f.write(" ".join( "%.8g" % el for el in val ) + '\n')
+            elif val.ndim == 2:
+                f.write(_tools.mx_to_string(val, width=16, prec=8))
+            else:
+                raise ValueError("Cannot write an ndarray with %d dimensions!" % val.ndim)
+            f.write("\n")
+        else:
+            f.write("%s = %s\n" % (lbl, repr(val)))
+        
+
     with open(filename, 'w') as output:
 
         if title is not None:
@@ -248,23 +264,34 @@ def write_gateset(gs,filename,title=None):
         output.write('\n')
 
         for prepLabel,rhoVec in gs.preps.items():
+            props = None
             if isinstance(rhoVec, _objs.FullyParameterizedSPAMVec): typ = "PREP"
             elif isinstance(rhoVec, _objs.TPParameterizedSPAMVec): typ = "TP-PREP"
             elif isinstance(rhoVec, _objs.StaticSPAMVec): typ = "STATIC-PREP"
+            elif isinstance(rhoVec, _objs.LindbladParameterizedSPAMVec):
+                typ = "CPTP-PREP"
+                props = [ ("PureVec", rhoVec.state_vec.todense()),
+                          ("ErrgenMx", rhoVec.error_map.todense()) ]
             else:
                 _warnings.warn(
                     ("Non-standard prep of type {typ} cannot be described by"
                      "text format gate set files.  It will be read in as a"
                      "fully parameterized spam vector").format(typ=str(type(rhoVec))))
                 typ = "PREP"
+
+            if props is None: props = [("LiouvilleVec", rhoVec.todense())]
             output.write("%s: %s\n" % (typ,prepLabel))
-            output.write("LiouvilleVec\n")
-            output.write(" ".join( "%.8g" % el for el in rhoVec.todense() ) + '\n')
-            output.write("\n")
+            for lbl,val in props:
+                writeprop(output, lbl, val)
 
         for povmLabel,povm in gs.povms.items():
+            props = None
             if isinstance(povm, _objs.UnconstrainedPOVM): povmType = "POVM"
             elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
+            elif isinstance(povm, _objs.LindbladParameterizedPOVM):
+                povmType = "CPTP-POVM"
+                props = [ ("ErrgenMx", povm.error_map.todense()),
+                          ("nQubits", povm.nqubits) ]
             else:
                 _warnings.warn(
                     ("Non-standard POVM of type {typ} cannot be described by"
@@ -273,40 +300,52 @@ def write_gateset(gs,filename,title=None):
                 povmType = "POVM"
                 
             output.write("%s: %s\n\n" % (povmType,povmLabel))
-                
-            for ELabel,EVec in povm.items():
-                if isinstance(EVec, _objs.FullyParameterizedSPAMVec): typ = "EFFECT"
-                elif isinstance(EVec, _objs.ComplementSPAMVec): typ = "EFFECT" # ok
-                elif isinstance(EVec, _objs.TPParameterizedSPAMVec): typ = "TP-EFFECT"
-                elif isinstance(EVec, _objs.StaticSPAMVec): typ = "STATIC-EFFECT"
-                else:
-                    _warnings.warn(
-                        ("Non-standard effect of type {typ} cannot be described by"
-                         "text format gate set files.  It will be read in as a"
-                         "fully parameterized spam vector").format(typ=str(type(EVec))))
-                    typ = "EFFECT"
-                output.write("%s: %s\n" % (typ,ELabel))
-                output.write("LiouvilleVec\n")
-                output.write(" ".join( "%.8g" % el for el in EVec.todense() ) + '\n')
-                output.write("\n")
+            if props is None:
+                for ELabel,EVec in povm.items():
+                    if isinstance(EVec, _objs.FullyParameterizedSPAMVec): typ = "EFFECT"
+                    elif isinstance(EVec, _objs.ComplementSPAMVec): typ = "EFFECT" # ok
+                    elif isinstance(EVec, _objs.TPParameterizedSPAMVec): typ = "TP-EFFECT"
+                    elif isinstance(EVec, _objs.StaticSPAMVec): typ = "STATIC-EFFECT"
+                    else:
+                        _warnings.warn(
+                            ("Non-standard effect of type {typ} cannot be described by"
+                             "text format gate set files.  It will be read in as a"
+                             "fully parameterized spam vector").format(typ=str(type(EVec))))
+                        typ = "EFFECT"
+                    output.write("%s: %s\n" % (typ,ELabel))
+                    writeprop(output, "LiouvilleVec", EVec.todense())
 
+            else:
+                for lbl,val in props:
+                    writeprop(output, lbl, val)
+                
             output.write("END POVM\n\n")
 
         for label,gate in gs.gates.items():
+            props = None
             if isinstance(gate, _objs.FullyParameterizedGate): typ = "GATE"
             elif isinstance(gate, _objs.TPParameterizedGate): typ = "TP-GATE"
-            elif isinstance(gate, _objs.LindbladParameterizedGate): typ = "CPTP-GATE"
             elif isinstance(gate, _objs.StaticGate): typ = "STATIC-GATE"
+            elif isinstance(gate, _objs.LindbladParameterizedGate):
+                typ = "CPTP-GATE"
+                props = [ ("LiouvilleMx", gate.todense()) ]
+                if gate.unitary_postfactor is not None:
+                    upost = gate.unitary_postfactor.todense() \
+                            if isinstance(gate.unitary_postfactor,_objs.Gate) \
+                            else gate.unitary_postfactor
+                    props.append( ("RefLiouvilleMx", upost) )
             else:
                 _warnings.warn(
                     ("Non-standard gate of type {typ} cannot be described by"
                      "text format gate set files.  It will be read in as a"
                      "fully parameterized gate").format(typ=str(type(gate))))
                 typ = "GATE"
+
+            if props is None: props = [("LiouvilleMx", gate.todense())]
             output.write(typ + ": " + str(label) + '\n')
-            output.write("LiouvilleMx\n")
-            output.write(_tools.mx_to_string(gate, width=16, prec=8) + '\n')
-            output.write("\n")
+            for lbl,val in props:
+                writeprop(output, lbl, val)
+
 
         for instLabel,inst in gs.instruments.items():
             if isinstance(inst, _objs.Instrument): typ = "Instrument" 
@@ -330,9 +369,7 @@ def write_gateset(gs,filename,title=None):
                          "fully parameterized gate").format(typ=str(type(gate))))
                     typ = "IGATE"
                 output.write(typ + ": " + str(label) + '\n')
-                output.write("LiouvilleMx\n")
-                output.write(_tools.mx_to_string(gate, width=16, prec=8) + '\n')
-                output.write("\n")
+                writeprop(output, "LiouvilleMx", gate.todense())
             output.write("END Instrument\n\n")
 
         dims = gs.basis.dim.blockDims
