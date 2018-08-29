@@ -1345,6 +1345,16 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
         return 2 * N * zf * _np.log(nzf/cp)
 
 
+def _patched_logl_fn(N,p,min_p):
+    """ N * log(p) with min-prob-clip patching """
+    if N == 0: return 0.0
+    S = N / min_p               # slope term that is derivative of logl at min_p
+    S2 = -0.5 * N / (min_p**2)  # 2nd derivative of logl term at min_p
+    pos_p = max(min_p,p)
+    v = N * _np.log(pos_p)
+    if p < min_p:
+        v += S*(p - min_p) + S2*(p - min_p)**2 #quadratic extrapolation of logl at min_p for p < min_p
+    return v
 
 
 
