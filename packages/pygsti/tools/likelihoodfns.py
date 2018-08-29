@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
+import scipy.stats as _stats
 import warnings as _warnings
 import itertools as _itertools
 import time as _time
@@ -1045,6 +1046,123 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
         terms[i] = _np.sum( maxLogLTerms[lookup[i]], axis=0 )
     return terms
 
+
+def two_delta_logl(gateset, dataset, gatestring_list=None,
+                   minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
+                   poissonPicture=True, check=False, gateLabelAliases=None,
+                   evaltree_cache=None, comm=None, dof_calc_method=None):
+    """
+    Twice the difference between the maximum and actual log-likelihood, 
+    optionally along with Nsigma (# std deviations from mean) and p-value
+    relative to expected chi^2 distribution (when `dof_calc_method` is
+    not None).
+
+    This function's arguments are supersets of :function:`logl`, and
+    :function:`logl_max`. This is a convenience function, equivalent to
+    `2*(logl_max(...) - logl(...))`, whose value is what is often called
+    the *log-likelihood-ratio* between the "maximal model" (that which trivially
+    fits the data exactly) and the model given by `gateset`.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        Gateset of parameterized gates
+
+    dataset : DataSet
+        Probability data
+
+    gatestring_list : list of (tuples or GateStrings), optional
+        Each element specifies a gate string to include in the log-likelihood
+        sum.  Default value of None implies all the gate strings in dataset
+        should be used.
+
+    minProbClip : float, optional
+        The minimum probability treated normally in the evaluation of the log-likelihood.
+        A penalty function replaces the true log-likelihood for probabilities that lie
+        below this threshold so that the log-likelihood never becomes undefined (which improves
+        optimizer performance).
+
+    probClipInterval : 2-tuple or None, optional
+        (min,max) values used to clip the probabilities predicted by gatesets during MLEGST's
+        search for an optimal gateset (if not None).  if None, no clipping is performed.
+
+    radius : float, optional
+        Specifies the severity of rounding used to "patch" the zero-frequency
+        terms of the log-likelihood.
+
+    evalTree : evaluation tree, optional
+      given by a prior call to bulk_evaltree for the same gatestring_list.
+      Significantly speeds up evaluation of log-likelihood, even more so
+      when accompanied by countVecMx (see below).
+
+    poissonPicture : boolean, optional
+        Whether the log-likelihood-in-the-Poisson-picture terms should be included
+        in the computed log-likelihood values.
+
+    check : boolean, optional
+        If True, perform extra checks within code to verify correctness.  Used
+        for testing, and runs much slower when True.
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
+    evaltree_cache : dict, optional
+        A dictionary which server as a cache for the computed EvalTree used
+        in this computation.  If an empty dictionary is supplied, it is filled
+        with cached values to speed up subsequent executions of this function
+        which use the *same* `gateset` and `gatestring_list`.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    dof_calc_method : {None, "all", "nongauge"}
+        How `gateset`'s number of degrees of freedom (parameters) are obtained
+        when computing the number of standard deviations and p-value relative to
+        a chi2_k distribution, where `k` is additional degrees of freedom
+        possessed by the maximal model. If None, then `Nsigma` and `pvalue` are
+        not returned (see below).
+
+
+    Returns
+    -------
+    twoDeltaLogL : float
+        2*(loglikelihood(maximal_model,data) - loglikelihood(gateset_model,data))
+
+    Nsigma, pvalue : float
+        Only returned when `dof_calc_method` is not None.
+    """
+    twoDeltaLogL =  2*(logl_max(gateset, dataset, gatestring_list, poissonPicture,
+                                check, gateLabelAliases, evaltree_cache) - 
+                       logl(gateset, dataset, gatestring_list,
+                            minProbClip, probClipInterval, radius,
+                            poissonPicture, check, gateLabelAliases,
+                            evaltree_cache, comm))
+
+    if dof_calc_method is None: return twoDeltaLogL
+    elif dof_calc_method == "all": gs_dof = gateset.num_params()
+    elif dof_calc_method == "nongauge": gs_dof = gateset.num_nongauge_params()
+    else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
+
+    if gatestring_list is not None:
+        if gateLabelAliases is not None:
+            ds_strs = _tools.find_replace_tuple_list(
+                gatestring_list, gateLabelAliases)
+        else:
+            ds_strs = gatestring_list
+    else: ds_strs = None
+
+    Ns = dataset.get_degrees_of_freedom(ds_strs)
+    k = max(Ns - gs_dof, 1)
+    if Ns <= gs_dof: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,gs_dof))
+
+    Nsigma = (twoDeltaLogL-k)/_np.sqrt(2*k)
+    pvalue = 1.0 - _stats.chi2.cdf(twoDeltaLogL,k)
+    return twoDeltaLogL, Nsigma, pvalue
+    
 
 def forbidden_prob(gateset, dataset):
     """
