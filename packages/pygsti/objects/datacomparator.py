@@ -197,7 +197,7 @@ class DataComparator():
         assert(composite_test_weighting <= 1. or composite_test_weighting >= 0.), "The weighting on the composite test must be between 0 and 1!"
         
         if verbosity >= 2:
-            print("Implementing {}% significance statistical hypothesis testing...".format(self.significance*100),end='')
+            print("Implementing {0:.2f}% significance statistical hypothesis testing...".format(self.significance*100),end='')
 
         gatestrings = tuple(self.pVals.keys())
         hypotheses = ('composite', gatestrings)
@@ -222,7 +222,7 @@ class DataComparator():
             self.composite_pVal_threshold = 0.
         else:
             self.composite_llr_threshold = compute_llr_threshold(composite_test_weighting*significance, self.num_strs*self.dof)
-            self.composite_nsigma_threshold = llr_to_signed_nsigma(self.composite_llr, self.num_strs*self.dof)
+            self.composite_nsigma_threshold = llr_to_signed_nsigma(self.composite_llr_threshold, self.num_strs*self.dof)
             self.composite_pVal_threshold = composite_test_weighting*significance
 
         self.pVal_pseudothreshold = hypotest.pvalue_pseudothreshold[gatestrings]
@@ -244,17 +244,18 @@ class DataComparator():
 
         if verbosity >= 1:
             if self.inconsistent_datasets_detected:
-                print("The datasets are INCONSISTENT at {0}% significance.\n".format(self.significance*100))
-                print("  Details:")
-                print("  - Using the composite log-likelihood ratio test, the significance of the inconsistency between datasets is {} standard deviations.".format(self.composite_nsigma)) 
-                print("  - The number of sequences with data that is inconsistent is {0}".format(self.number_of_significant_sequences))
+                print("The datasets are INCONSISTENT at {0:.2f}% significance.".format(self.significance*100))
+                print("  - Details:")
+                print("    - The aggregate log-likelihood ratio test is significant at {0:.2f} standard deviations.".format(self.composite_nsigma))
+                print("    - The aggregate log-likelihood ratio test standard deviations signficance threshold is {0:.2f}".format(self.composite_nsigma_threshold)) 
+                print("    - The number of sequences with data that is inconsistent is {0}".format(self.number_of_significant_sequences))
                 if len(self.dataset_list_or_multidataset) == 2 and self.number_of_significant_sequences>0:
                     max_SSTVD_gs, max_SSTVD = self.get_maximum_SSTVD()
-                    print("  - The maximum SSTVD over all sequences is {}".format(max_SSTVD)) 
-                    print("  - The maximum SSTVD was observed for {}".format(max_SSTVD_gs))                    
+                    print("    - The maximum SSTVD over all sequences is {0:.2f}".format(max_SSTVD)) 
+                    print("    - The maximum SSTVD was observed for {}".format(max_SSTVD_gs))                    
             else:
-                print("Statistical hypothesis tests did NOT find inconsistency between the datasets at {0}% significance.\n".format(self.significance*100))           
-
+                print("Statistical hypothesis tests did NOT find inconsistency between the datasets at {0:.2f}% significance.".format(self.significance*100))           
+    
     def compute_TVDs(self, verbosity=2):
         """
         Todo
@@ -385,6 +386,12 @@ class DataComparator():
         Todo
         """
         return self.composite_nsigma
+
+    def get_composite_nsigma_threshold(self):
+        """
+        Todo
+        """
+        return self.composite_nsigma_threshold
 
     # Todo : fix this
     # def get_worst_gatestrings(self, number):
