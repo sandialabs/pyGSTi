@@ -285,13 +285,13 @@ def write_gateset(gs,filename,title=None):
                 writeprop(output, lbl, val)
 
         for povmLabel,povm in gs.povms.items():
-            props = None
+            props = None; povm_to_write = povm
             if isinstance(povm, _objs.UnconstrainedPOVM): povmType = "POVM"
             elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
             elif isinstance(povm, _objs.LindbladParameterizedPOVM):
                 povmType = "CPTP-POVM"
-                props = [ ("ErrgenMx", povm.error_map.todense()),
-                          ("nQubits", povm.nqubits) ]
+                props = [ ("ErrgenMx", povm.error_map.todense()) ]
+                povm_to_write = povm.base_povm
             else:
                 _warnings.warn(
                     ("Non-standard POVM of type {typ} cannot be described by"
@@ -300,24 +300,23 @@ def write_gateset(gs,filename,title=None):
                 povmType = "POVM"
                 
             output.write("%s: %s\n\n" % (povmType,povmLabel))
-            if props is None:
-                for ELabel,EVec in povm.items():
-                    if isinstance(EVec, _objs.FullyParameterizedSPAMVec): typ = "EFFECT"
-                    elif isinstance(EVec, _objs.ComplementSPAMVec): typ = "EFFECT" # ok
-                    elif isinstance(EVec, _objs.TPParameterizedSPAMVec): typ = "TP-EFFECT"
-                    elif isinstance(EVec, _objs.StaticSPAMVec): typ = "STATIC-EFFECT"
-                    else:
-                        _warnings.warn(
-                            ("Non-standard effect of type {typ} cannot be described by"
-                             "text format gate set files.  It will be read in as a"
-                             "fully parameterized spam vector").format(typ=str(type(EVec))))
-                        typ = "EFFECT"
-                    output.write("%s: %s\n" % (typ,ELabel))
-                    writeprop(output, "LiouvilleVec", EVec.todense())
-
-            else:
+            if props is not None:
                 for lbl,val in props:
                     writeprop(output, lbl, val)
+
+            for ELabel,EVec in povm_to_write.items():
+                if isinstance(EVec, _objs.FullyParameterizedSPAMVec): typ = "EFFECT"
+                elif isinstance(EVec, _objs.ComplementSPAMVec): typ = "EFFECT" # ok
+                elif isinstance(EVec, _objs.TPParameterizedSPAMVec): typ = "TP-EFFECT"
+                elif isinstance(EVec, _objs.StaticSPAMVec): typ = "STATIC-EFFECT"
+                else:
+                    _warnings.warn(
+                        ("Non-standard effect of type {typ} cannot be described by"
+                         "text format gate set files.  It will be read in as a"
+                         "fully parameterized spam vector").format(typ=str(type(EVec))))
+                    typ = "EFFECT"
+                output.write("%s: %s\n" % (typ,ELabel))
+                writeprop(output, "LiouvilleVec", EVec.todense())
                 
             output.write("END POVM\n\n")
 

@@ -879,7 +879,7 @@ def read_gateset(filename):
             gs.preps[cur_label] = _objs.StaticSPAMVec(get_liouville_mx(obj))
 
         #POVMs
-        elif cur_typ in ("POVM","TP-POVM"):
+        elif cur_typ in ("POVM","TP-POVM","CPTP-POVM"):
             effects = []
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
@@ -898,19 +898,18 @@ def read_gateset(filename):
             elif cur_typ == "TP-POVM":
                 assert(len(effects) > 1), "TP-POVMs must have at least 2 elements!"
                 gs.povms[cur_label] = _objs.TPPOVM( effects )
+            elif cur_typ == "CPTP-POVM":
+                props = obj['properties']
+                assert("ErrgenMx" in props) # and it must always be a Liouville rep!
+                qty = _evalRowList( props["ErrgenMx"], bComplex=False )
+                nQubits = _np.log2(qty.size)/2.0
+                bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
+                proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+                errorMap = _objs.LindbladParameterizedGate.from_gate_matrix(
+                    qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis) #unitary postfactor = Id
+                base_povm = _objs.UnconstrainedPOVM(effects) # could try to detect a ComputationalBasisPOVM in FUTURE
+                gs.povms[cur_label] = _objs.LindbladParameterizedPOVM(errorMap, base_povm)
             else: assert(False), "Logic error!"
-            
-        elif cur_typ == "CPTP-POVM":
-            props = obj['properties']
-            assert("ErrgenMx" in props) # must always be Liouville reps!
-            qty = _evalRowList( props["ErrgenMx"], bComplex=False )
-            nQubits = _np.log2(qty.size)/2.0
-            bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
-            proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-            errorMap = _objs.LindbladParameterizedGate.from_gate_matrix(
-                qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis) #unitary postfactor = Id
-            gs.povms[cur_label] = _objs.LindbladParameterizedPOVM(errorMap)
-
             
         elif cur_typ == "GATE":
             gs.gates[cur_label] = _objs.FullyParameterizedGate(

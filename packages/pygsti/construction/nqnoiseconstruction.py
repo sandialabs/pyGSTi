@@ -461,7 +461,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
             
 
         povmNoiseMap = build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, printer-1)
-        gs.povms[_Lbl('Mdefault')] = _objs.LindbladParameterizedPOVM(povmNoiseMap, "pp")
+        gs.povms[_Lbl('Mdefault')] = _objs.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
         if povmNoise is not None:
             # add noise to povmNoiseMap *after* assigning to GateSet just to be
             #  sure parameters are wired correctly.

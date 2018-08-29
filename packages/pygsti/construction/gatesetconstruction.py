@@ -1233,7 +1233,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
         gs.preps['rho0'] = _spamvec.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep")
 
         povmNoiseMap = _nqn.build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, verbosity)
-        gs.povms['Mdefault'] = _povm.LindbladParameterizedPOVM(povmNoiseMap, "pp")
+        gs.povms['Mdefault'] = _povm.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
 
 
     for gateName, gate in gatedict.items():

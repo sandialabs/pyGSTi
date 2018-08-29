@@ -184,6 +184,42 @@ def convert(spamvec, toType, basis, extra=None):
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
 
+def _convert_to_lindblad_base(vec, new_evotype, mxBasis="pp"):
+    """ 
+    Attempts to convert `vec` to a static (0 params) SPAMVec with 
+    evoution type `new_evotype`.  Used to convert spam vecs to
+    being LindbladParameterizedSPAMVec objects.
+    """
+    if vec._evotype == new_evotype and vec.num_params() == 0:
+        return vec #no conversion necessary
+    if new_evotype == "densitymx":
+        return StaticSPAMVec(vec.todense(),"densitymx")
+    if new_evotype in ("svterm","cterm"):
+        if isinstance(vec, ComputationalSPAMVec): #special case when conversion is easy
+            return ComputationalSPAMVec(vec._zvals, new_evotype)
+        elif vec._evotype == "densitymx":
+            # then try to extract a (static) pure state from vec wth
+            # evotype 'statevec' or 'stabilizer' <=> 'svterm', 'cterm'
+            if isinstance(vec, DenseSPAMVec):
+                dmvec = _bt.change_basis(vec,mxBasis,'std')
+                purestate = StaticSPAMVec(_gt.dmvec_to_state(dmvec),'statevec')
+            elif isinstance(vec, PureStateSPAMVec):
+                purestate = vec.pure_state_vec # evotype 'statevec'
+            else:
+                raise ValueError("Unable to obtain pure state from density matrix type %s!" % type(vec))
+
+            if new_evotype == "cterm": # then purestate 'statevec' => 'stabilizer' (if possible)
+                if typ =="prep":
+                    purestate = StabilizerSPAMVec.from_dense_purevec(purestate.todense())
+                else: # type == "effect"
+                    purestate = StabilizerEffectVec.from_dense_purevec(purestate.todense())
+                
+            return PureStateSPAMVec(purestate, new_evotype, mxBasis)
+        
+    raise ValueError("Could not convert %s (evotype %s) to %s w/0 params!" %
+                     (str(type(vec)), vec._evotype, new_evotype))
+
+
 
 def finite_difference_deriv_wrt_params(spamvec, eps=1e-7):
     """
@@ -2184,39 +2220,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         def normeq(a,b):
             if a is None and b is None: return True
             if a is None or b is None: return False
-            return _mt.safenorm(a-b) < 1e-6 # what about possibility of Clifford gates?
-
-        def convert_vec(vec, new_evotype):
-            """ Tries to alter vec's evotype and set its num_params == 0 """
-            if vec._evotype == new_evotype and vec.num_params() == 0:
-                return vec #no conversion necessary
-            if new_evotype == "densitymx":
-                return StaticSPAMVec(vec.todense(),"densitymx")
-            if new_evotype in ("svterm","cterm"):
-                if isinstance(vec, ComputationalSPAMVec): #special case when conversion is easy
-                    return ComputationalSPAMVec(vec._zvals, new_evotype)
-                elif vec._evotype == "densitymx":
-                    # then try to extract a (static) pure state from vec wth
-                    # evotype 'statevec' or 'stabilizer' <=> 'svterm', 'cterm'
-                    if isinstance(vec, DenseSPAMVec):
-                        dmvec = _bt.change_basis(vec,mxBasis,'std')
-                        purestate = StaticSPAMVec(_gt.dmvec_to_state(dmvec),'statevec')
-                    elif isinstance(vec, PureStateSPAMVec):
-                        purestate = vec.pure_state_vec # evotype 'statevec'
-                    else:
-                        raise ValueError("Unable to obtain pure state from density matrix type %s!" % type(vec))
-
-                    if new_evotype == "cterm": # then purestate 'statevec' => 'stabilizer' (if possible)
-                        if typ =="prep":
-                            purestate = StabilizerSPAMVec.from_dense_purevec(purestate.todense())
-                        else: # type == "effect"
-                            purestate = StabilizerEffectVec.from_dense_purevec(purestate.todense())
-                        
-                    return PureStateSPAMVec(purestate, new_evotype, mxBasis)
-                
-            raise ValueError("Could not convert %s (evotype %s) to %s w/0 params!" %
-                             (str(type(vec)), vec._evotype, new_evotype))
-                
+            return _mt.safenorm(a-b) < 1e-6 # what about possibility of Clifford gates?                
 
         if isinstance(spamvec, LindbladParameterizedSPAMVec) \
            and spamvec._evotype == evotype and spamvec.typ == typ \
@@ -2229,8 +2233,8 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             #Convert vectors (if possible) to SPAMVecs
             # of the appropriate evotype and 0 params.
             bDiff = spamvec is not purevec
-            spamvec = convert_vec(spamvec, evotype) 
-            purevec = convert_vec(purevec, evotype) if bDiff else spamvec
+            spamvec = _convert_to_lindblad_base(spamvec, evotype, mxBasis) 
+            purevec = _convert_to_lindblad_base(purevec, evotype, mxBasis) if bDiff else spamvec
             assert(spamvec._evotype == evotype)
             assert(purevec._evotype == evotype)
             

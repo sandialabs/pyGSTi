@@ -102,35 +102,34 @@ def convert(povm, toType, basis, extra=None):
 
     elif toType.split()[0] in ("CPTP","H+S","S","H+S+A","S+A","H+D","D","H+D+A","D+A","GLND"):
 
-        #ensure that povm being converted is a simple computational basis POVM,
-        # since we initialize Lindblad error map as the identity below...
-        nQubits = _np.log2(povm.dim)/2.0 #Linblad ops always work on density-matrices, never states
-        bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
-        assert(bQubits); nQubits = int(round(nQubits)) # only support integer# of qubits so far... FUTURE - allow qutrits at least!
+        # A LindbladParameterizedPOVM needs a *static* base/reference POVM
+        #  with the appropriate evotype.  If we can convert `povm` to such a
+        #  thing we win.  (the error generator is initialized as just the identity below)
+
+        nQubits = int(round(_np.log2(povm.dim)/2.0)) #Linblad ops always work on density-matrices, never states
+        bQubits = bool(_np.isclose(nQubits, _np.log2(povm.dim)/2.0)) #integer # of qubits?
         proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-
-        if isinstance(povm, ComputationalBasisPOVM):
-            assert(povm.nqubits == nQubits)
-        else:
-            chk_povm = ComputationalBasisPOVM(nQubits, "densitymx") # to check against
-
-            #Check if `povm` happens to be a Z-basis POVM on `nQubits`
-            for lbl, EVec in chk_povm.items():
-                if not _np.allclose(EVec.todense(), povm[lbl].todense()):
-                    raise ValueError("Cannot convert POVM into a computational Z-basis POVM")
 
         evostr = " ".join(toType.split()[1:])
         if   evostr == "":               evotype = "densitymx"
         elif evostr == "terms":          evotype = "svterm"
         elif evostr == "clifford terms": evotype = "cterm"
         else: raise ValueError("Unrecognized evotype in `paramType`=%s" % paramType)
-        
+
+        if isinstance(povm, ComputationalBasisPOVM): #special easy case
+            assert(povm.nqubits == nQubits)
+            base_povm = ComputationalBasisPOVM(nQubits, evotype)
+        else:
+            base_items = [ (lbl, _sv._convert_to_lindblad_base(Evec, evotype, basis))
+                           for lbl, Evec in povm.items() ]
+            base_povm = UnconstrainedPOVM(base_items)
+
         # purevecs = extra if (extra is not None) else None # UNUSED
         cls = _gate.LindbladParameterizedGate if (povm.dim <= 64 and evotype == "densitymx") \
               else _gate.LindbladParameterizedGateMap
         povmNoiseMap = cls.from_gate_obj(_np.identity(povm.dim,'d'), toType,
                                          None, proj_basis, basis, truncate=True)
-        return LindbladParameterizedPOVM(povmNoiseMap, basis)
+        return LindbladParameterizedPOVM(povmNoiseMap, base_povm, basis)
         
         #OLD TODO REMOVE # Create an Unconstrained POVM with LindbladParameterizedSPAMVecs
         #new_effects = []
@@ -1087,7 +1086,7 @@ class LindbladParameterizedPOVM(POVM):
     A POVM that is effectively a *single* Lindblad-parameterized gate
     followed by a computational-basis POVM.
     """
-    def __init__(self, errormap, mxBasis=None):
+    def __init__(self, errormap, povm=None, mxBasis=None):
         """
         Creates a new LindbladParameterizedPOVM object.
 
@@ -1100,6 +1099,14 @@ class LindbladParameterizedPOVM(POVM):
             to allow LindbladParameterizedSPAMVecs to share error generator
             parameters with other gates and spam vectors.)
 
+        povm : POVM, optional
+            A sub-POVM which supplies the set of "reference" effect vectors
+            that `errormap` acts on to produce the final effect vectors of
+            this LindbladParameterizedPOVM.  This POVM must be *static* 
+            (have zero parameters) and its evolution type must match that of
+            `errormap`.  If None, then a :class:`ComputationalBasisPOVM` is 
+            used on the number of qubits appropriate to `errormap`'s dimension.
+
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The basis for this spam vector. Allowed values are Matrix-unit (std),
             Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt) (or a custom
@@ -1108,7 +1115,6 @@ class LindbladParameterizedPOVM(POVM):
         """
         self.error_map = errormap
         dim = self.error_map.dim
-        self.nqubits = int(round(_np.log2(dim)/2))
         
         if mxBasis is None:
             if isinstance(errormap, _gate.LindbladParameterizedGateMap):
@@ -1118,26 +1124,38 @@ class LindbladParameterizedPOVM(POVM):
                                  % str(type(errormap)))
 
         self.matrix_basis = mxBasis
-        items = [] # init as empty (lazy creation of members)
         evotype = self.error_map._evotype
+
+        if povm is None:
+            nqubits = int(round(_np.log2(dim)/2))
+            assert( _np.isclose(nqubits, _np.log2(dim)/2)), \
+                ("A default computational-basis POVM can only be used with an"
+                 " integral number of qubits!")
+            povm = ComputationalBasisPOVM(nqubits, evotype)
+        else:
+            assert(povm._evotype == evotype), \
+                ("Evolution type of `povm` (%s) must match that of "
+                 "`errormap` (%s)!") % (povm._evotype, evotype)
+            assert(povm.num_params() == 0), \
+                "Given `povm` must be static (have 0 parameters)!"
+        self.base_povm = povm
+            
+        items = [] # init as empty (lazy creation of members)
         super(LindbladParameterizedPOVM, self).__init__(dim, evotype, items)
 
     def __contains__(self, key):
         """ For lazy creation of effect vectors """
-        fkeys = ('0','1')
-        return bool(len(key) == self.nqubits and
-                    all([ (letter in fkeys) for letter in key]))
+        return bool(key in self.base_povm)
 
     def __iter__(self):
         return self.keys()
 
     def __len__(self):
-        return 2**self.nqubits
+        return len(self.base_povm)
 
     def keys(self):
-        iterover = [('0','1')]*self.nqubits
-        for k in _itertools.product(*iterover):
-            yield "".join(k)
+        for k in self.base_povm.keys():
+            yield k
 
     def values(self):
         for k in self.keys():
@@ -1153,10 +1171,10 @@ class LindbladParameterizedPOVM(POVM):
             return _collections.OrderedDict.__getitem__(self, key)
         elif key in self: # calls __contains__ to efficiently check for membership
             #create effect vector now that it's been requested (lazy creation)
-            outcomes = [ (0 if letter == '0' else 1) for letter in key ] # decompose key into separate factor-effect labels
-            pureVec = _sv.ComputationalSPAMVec(outcomes, self._evotype)
+            pureVec = self.base_povm[key]
             effect = _sv.LindbladParameterizedSPAMVec(pureVec, self.error_map,"effect")
-            effect.set_gpindices(self.error_map.gpindices, self.parent) # initialize gpindices of "child" effect (should be in compile_effects?)
+            effect.set_gpindices(self.error_map.gpindices, self.parent)
+              # initialize gpindices of "child" effect (should be in compile_effects?)
             _collections.OrderedDict.__setitem__(self,key,effect)
             return effect
         else: raise KeyError("%s is not an outcome label of this StabilizerZPOVM" % key)
@@ -1164,7 +1182,7 @@ class LindbladParameterizedPOVM(POVM):
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
-        return (LindbladParameterizedPOVM, (self.error_map.copy(), self.matrix_basis),
+        return (LindbladParameterizedPOVM, (self.error_map.copy(), self.base_povm.copy(), self.matrix_basis),
                 {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
 
     def allocate_gpindices(self, startingIndex, parent):
@@ -1191,6 +1209,7 @@ class LindbladParameterizedPOVM(POVM):
             the parent should mark as allocated parameter
             indices `startingIndex` to `startingIndex + new_new`).
         """
+        assert(self.base_povm.num_params() == 0) # so no need to do anything w/base_povm
         num_new_params = self.error_map.allocate_gpindices( startingIndex, parent ) # *same* parent as this SPAMVec
         _gm.GateSetMember.set_gpindices(
             self, self.error_map.gpindices, parent)
@@ -1218,6 +1237,7 @@ class LindbladParameterizedPOVM(POVM):
         elif id(self) in memo: return
         memo.add(id(self))
 
+        assert(self.base_povm.num_params() == 0) # so no need to do anything w/base_povm
         self.error_map.set_gpindices(gpindices, parent, memo)
         self.terms = {} # clear terms cache since param indices have changed now
         _gm.GateSetMember.set_gpindices(self, gpindices, parent)
@@ -1256,6 +1276,7 @@ class LindbladParameterizedPOVM(POVM):
         int
            the number of independent parameters.
         """
+        # Recall self.base_povm.num_params() == 0
         return self.error_map.num_params()
 
 
@@ -1268,6 +1289,7 @@ class LindbladParameterizedPOVM(POVM):
         numpy array
             a 1D numpy array with length == num_params().
         """
+        # Recall self.base_povm.num_params() == 0
         return self.error_map.to_vector()
 
 
@@ -1285,6 +1307,7 @@ class LindbladParameterizedPOVM(POVM):
         -------
         None
         """
+        # Recall self.base_povm.num_params() == 0
         self.error_map.from_vector(v)
 
 
@@ -1307,8 +1330,8 @@ class LindbladParameterizedPOVM(POVM):
 
 
     def __str__(self):
-        s = "Lindblad-parameterized POVM on %d qubits\n" \
-            % (self.nqubits)
+        s = "Lindblad-parameterized POVM of length %d\n" \
+            % (len(self))
         return s
 
 
