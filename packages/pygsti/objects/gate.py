@@ -2394,7 +2394,7 @@ class LindbladParameterizedGateMap(Gate):
         if otherGens is not None:
 
             if self.nonham_mode == "diagonal":
-                bsO = otherGens.shape[0]+1 #projection-basis size (not nec. == d2)
+                bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
                 _gt._assert_shape(otherGens, (bsO-1,d2,d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
@@ -2407,7 +2407,7 @@ class LindbladParameterizedGateMap(Gate):
                     otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
 
             elif self.nonham_mode == "diag_affine":
-                bsO = otherGens.shape[1]+1 #projection-basis size (not nec. == d2)
+                bsO = len(otherGens[0])+1 # projection-basis size (not nec. == d2) [~shape[1] but works for lists too]
                 _gt._assert_shape(otherGens, (2,bsO-1,d2,d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
@@ -2422,7 +2422,7 @@ class LindbladParameterizedGateMap(Gate):
                     otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
                                                 otherGens, rightTrans)                    
             else:
-                bsO = otherGens.shape[0]+1 #projection-basis size (not nec. == d2)
+                bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
                 _gt._assert_shape(otherGens, (bsO-1,bsO-1,d2,d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
