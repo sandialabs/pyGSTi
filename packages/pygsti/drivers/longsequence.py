@@ -347,10 +347,12 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - gsWeights = dict or None
         - starting point = "LGST" (default) or  "target" or GateSet
         - depolarizeStart = float (default == 0)
+        - randomizeStart = float (default == 0)
         - contractStartToCPTP = True / False (default)
         - cptpPenaltyFactor = float (default = 0)
         - tolerance = float or dict w/'relx','relf','f','jac' keys
         - maxIterations = int
+        - fdIterations = int
         - minProbClip = float
         - minProbClipForWeighting = float (default == 1e-4)
         - probClipInterval = tuple (default == (-1e6,1e6)
@@ -628,7 +630,11 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
             gs_start = _alg.contract(gs_start, "CPTP")
         if advancedOptions.get('depolarizeStart',0) > 0:
             gs_start = gs_start.depolarize(gate_noise=advancedOptions.get('depolarizeStart',0))
-
+        if advancedOptions.get('randomizeStart',0) > 0:
+            v = gs_start.to_vector()
+            vrand = 2*(_np.random.random(len(v))-0.5) * advancedOptions.get('randomizeStart',0)
+            gs_start.from_vector(v + vrand)
+            
         if comm is not None: #broadcast starting gate set
             comm.bcast(gs_start, root=0)
     else:
@@ -658,6 +664,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         cptp_penalty_factor = advancedOptions.get('cptpPenaltyFactor',0),
         spam_penalty_factor = advancedOptions.get('spamPenaltyFactor',0),
         maxiter = advancedOptions.get('maxIterations',100000),
+        fditer = advancedOptions.get('fdIterations', 1),
         probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
         returnAll=True,
         gatestringWeightsDict=advancedOptions.get('gsWeights',None),
@@ -713,6 +720,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     parameters['spamPenaltyFactor'] = advancedOptions.get('spamPenaltyFactor',0)
     parameters['distributeMethod'] = advancedOptions.get('distributeMethod','default')
     parameters['depolarizeStart'] = advancedOptions.get('depolarizeStart',0)
+    parameters['randomizeStart'] = advancedOptions.get('randomizeStart',0)
     parameters['contractStartToCPTP'] = advancedOptions.get('contractStartToCPTP',False)
     parameters['tolerance'] = advancedOptions.get('tolerance',1e-6)
     parameters['maxIterations'] = advancedOptions.get('maxIterations',100000)
