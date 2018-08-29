@@ -193,11 +193,6 @@ class GateSet(object):
         if gateVal.dim == self.dim:
             return gateVal # if gate operates on full dimension, no need to embed
 
-        # TODO: REMOVE - I think this is redundant w/case above and less general
-        #if len(self.stateSpaceLabels.labels) == 1 and \
-        #   set(self.stateSpaceLabels.labels[0]) == set(gateTargetLabels):
-        #    return gateVal # if gate operates on *all* the labels, no need to embed
-
         if self._sim_type == "matrix":
             return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
         elif self._sim_type in ("map","termorder"):
@@ -1229,26 +1224,6 @@ class GateSet(object):
 
                         #Link the current iParent to this index (even if it was already going to be computed)
                         elIndsToOutcomes[(s,spamtup_indx)] = outcome_tup
-
-                    #OLD: raw_spamTuples_dict[s] = _lt.remove_duplicates(raw_spamTuples_dict[s] + spamtuples)
-                    # Note: there should only be duplicates if there are duplicates in
-                    # original `gatestring_list` - check this?
-
-                    #OLD - "index" case
-                    #elif action == "index":  # fill *ByParent dicts
-                    #    assert(iParent is not None)
-                    #    offset = raw_offsets[s]
-                    #    all_spamtuples = raw_spamTuples_dict[s] # an OrderedDict
-                    #    final_outcomes = [ spamTupleToOutcome[x] for x in spamtuples ]
-                    #    my_spamTuple_indices = [ offset+all_spamtuples[x] for x in spamtuples ]
-                    #    my_outcome_tuples =  [ gate_outcomes + x for x in final_outcomes ]
-                    #    for i,tup in zip(my_spamTuple_indices,my_outcome_tuples):
-                    #        if i not in elIndicesByParent[iParent]: #don't duplicate existing indices
-                    #            elIndicesByParent[iParent][i] = True #just a placeholder; just care about (ordered) keys
-                    #            outcomesByParent[iParent].append(tup)
-                    #        else: assert(tup in outcomesByParent) # pragma: no check
-                    #                # double-check - could REMOVE for speed in future
-
                 else:
                     # Note: store elements of raw_spamTuples_dict as dicts for
                     # now, for faster lookup during "index" mode
@@ -1267,8 +1242,6 @@ class GateSet(object):
                         spamtup_dict = _collections.OrderedDict( [
                             (spamtup,i) for i,spamtup in enumerate(spamtuples) ] )
 
-                        # OLD: spamTuple_indices = range(len(spamtuples))
-                        # OLD: for ist,out_tup in zip(spamTuple_indices,outcome_tuples):
                         for ist,out_tup in enumerate(outcome_tuples): # ist = spamtuple index
                             elIndsToOutcomes[(s,ist)] = out_tup # element index is given by (parent_gatestring, spamtuple_index) tuple
                               # Note: works even if `i` already exists - doesn't reorder keys then
@@ -2465,7 +2438,6 @@ class GateSet(object):
             and `p` is the corresponding probability.
         """
         gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
-        #OLD: evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list, dataset=dataset)
         evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
             gatestring_list, comm, memLimit, subcalls=['bulk_fill_probs'],
             dataset=dataset, verbosity=0) # FUTURE (maybe make verbosity into an arg?)

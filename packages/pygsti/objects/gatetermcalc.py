@@ -279,41 +279,6 @@ class GateTermCalc(GateCalc):
         return prps
         
 
-    # TODO REMOVE (UNUSED)
-    #def pr(self, spamTuple, gatestring, clipTo, bScale):
-    #    """
-    #    Compute probability of a single "outcome" (spam-tuple) for a single
-    #    gate string.
-    #
-    #    Parameters
-    #    ----------
-    #    spamTuple : (rho_label, compiled_effect_label)
-    #        Specifies the prep and POVM effect used to compute the probability.
-    #
-    #    gatestring : GateString or tuple
-    #        A tuple-like object of *compiled* gates (e.g. may include
-    #        instrument elements like 'Imyinst_0')
-    #
-    #    clipTo : 2-tuple
-    #      (min,max) to clip returned probability to if not None.
-    #      Only relevant when prMxToFill is not None.
-    #
-    #    bScale : bool, optional
-    #      Unused.  Present to match function signature of other calculators.
-    #
-    #    Returns
-    #    -------
-    #    probability: float
-    #    """
-    #    #OLD: poly = self.pr_as_poly(spamTuple, gatestring)
-    #    #OLD: p = _np.real_if_close(cpoly.evaluate(self.paramvec))
-    #    cpoly = self.prs_as_compact_polys(spamTuple[0], [spamTuple[1]], gatestring)[0]
-    #    val = _bulk_eval_compact_polys(cpoly[0], cpoly[1], self.paramvec, (1,))[0]
-    #    p = _np.real_if_close(val)
-    #    if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
-    #    return float(p)
-
-
     def prs(self, rholabel, elabels, gatestring, clipTo, bUseScaling=False):
         """
         Compute probabilities of a multiple "outcomes" (spam-tuples) for a single

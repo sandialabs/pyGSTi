@@ -1298,20 +1298,12 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
                     #  if factors[-1].opname == cur_effect_opname: (or opint in C-case)
                     #      <skip application of post_ops & preops - just load from (new) saved slot get pLeft & pRight>
 
-                    #OLD TODO REMOVE (now in effect terms, i.e. factors[-1], pre/post ops are interpreted acting
-                    # on the *state* -- that is, they're already reversed and adjointed from what would act on the effect covector)
-                    ## Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-                    #for f in reversed(factors[-1].post_ops):
-                    #    rhoVecL = f.adjoint_acton(rhoVecL)
-
                     for f in factors[-1].post_ops:
                         rhoVecL = f.acton(rhoVecL)
                     E = factors[-1].post_effect # effect representation
                     pLeft = E.amplitude(rhoVecL)
 
                     #Same for pre_ops and rhoVecR
-                    #OLD: for f in reversed(factors[-1].pre_ops):
-                    #OLD:    rhoVecR = f.adjoint_acton(rhoVecR)
                     for f in factors[-1].pre_ops:
                         rhoVecR = f.acton(rhoVecR)
                     E = factors[-1].pre_effect
@@ -1330,7 +1322,6 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
             else: # non-fast mode
                 last_index = len(factor_lists)-1
                 for fi in _itertools.product(*[range(l) for l in factor_list_lens]):
-                    #if len(fi) == 0 ...  #never happens TODO REMOVE
                     factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
                     res    = _functools.reduce(lambda x,y: x.mult(y), [f.coeff for f in factors])
                     pLeft  = _unitary_sim_pre(factors, comm, memLimit)
@@ -1364,9 +1355,6 @@ def _unitary_sim_pre(complete_factors, comm, memLimit):
     for f in _itertools.chain(*[f.pre_ops for f in complete_factors[1:-1]]):
         rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
 
-    #OLD: # Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-    #OLD: for f in reversed(complete_factors[-1].post_ops):
-    #OLD:     rhoVec = f.adjoint_acton(rhoVec)
     for f in complete_factors[-1].post_ops:
         rhoVec = f.acton(rhoVec)
 
@@ -1381,9 +1369,6 @@ def _unitary_sim_post(complete_factors, comm, memLimit):
     for f in _itertools.chain(*[f.post_ops for f in complete_factors[1:-1]]):
         rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
 
-    #OLD: # Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-    #OLD: for f in reversed(complete_factors[-1].pre_ops):
-    #OLD:     rhoVec = f.adjoint_acton(rhoVec)
     for f in complete_factors[-1].pre_ops:
         rhoVec = f.acton(rhoVec)
     EVec = complete_factors[-1].pre_effect

@@ -1733,17 +1733,6 @@ class TensorProdSPAMVec(SPAMVec):
                 
         else: # self._evotype in ("svterm","cterm")
             raise NotImplementedError("torep() not implemented for %s evolution type" % self._evotype)
-
-
-    ##TODO: REMOVE
-    #@property
-    #def outcomes(self): #DEPRECATED REPS! - can use torep() now...
-    #    """ To mimic StabilizerEffectVec DEPRECATED """
-    #    assert(self._evotype == "stabilizer"), \
-    #        "'outcomes' property is only valid for the 'stabilizer' evolution type"
-    #    out = list(_itertools.chain(*[f.outcomes for f in self.factors]))
-    #    return _np.array(out, int)
-    #      #Note: may need to a qubit filter property here and to StabilizerEffectVec...
         
 
     def get_order_terms(self, order):
@@ -2549,43 +2538,6 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             "`pureVec` evotype must match `errormap` ('%s' != '%s')" % (pureVec._evotype,evotype)
         assert(pureVec.num_params() == 0), "`pureVec` 'reference' must have *zero* parameters!"
 
-        ##TODO: REMOVE    
-        #if mxBasis is None:
-        #    if isinstance(errormap, _LPGMap):
-        #        mxBasis = errormap.matrix_basis
-        #    else:
-        #        raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"
-        #                         % str(type(errormap)))
-        ##Need to extract the pure state SPAMVec from pureVec, which is
-        ## a density-matrix-holding evec.
-        #if isinstance(pureVec, DenseSPAMVec):
-        #    dmvec = _bt.change_basis(pureVec,mxBasis,'std')
-        #    purestate = StaticSPAMVec(_gt.dmvec_to_state(dmvec))
-        #    
-        #elif isinstance(pureVec, PureStateSPAMVec):
-        #    purestate = pureVec.pure_state_vec # a SPAMVec
-        #
-        #elif isinstance(pureVec, ComputationalSPAMVec):
-        #    purestate = ComputationalSPAMVec(pureVec._zvals, "statevec")
-        #
-        #else:
-        #    raise ValueError("Unable to obtain pure state from density matrix type %s!" % type(pureVec))
-        #
-        ## automatically "up-convert" to Stabilizer vecs if needed
-        #if evotype == "cterm":
-        #    if typ =="prep" and not isinstance(purestate, StabilizerSPAMVec):
-        #        if isinstance(purestate, ComputationalSPAMVec): #special case: transfer z-vals directly
-        #            purestate = StabilizerSPAMVec( len(purestate._zvals), purestate._zvals)
-        #        else:
-        #            purestate = StabilizerSPAMVec.from_dense_purevec(purestate)
-        #            
-        #    elif typ == "effect" and not isinstance(purestate, StabilizerEffectVec):
-        #        if isinstance(purestate, ComputationalSPAMVec): #special case: transfer z-vals directly
-        #            purestate = StabilizerEffectVec(purestate._zvals)
-        #        else:
-        #            purestate = StabilizerEffectVec.from_dense_purevec(purestate)
-        #d = purestate.dim
-
         d2 = pureVec.dim
         self.typ = typ
         self.state_vec = pureVec
@@ -2982,37 +2934,6 @@ class StabilizerSPAMVec(SPAMVec):
         """
         return self.sframe.torep()
 
-    #TODO REMOVE
-    #def to_statevec(self):
-    #    """
-    #    Return this SPAM vector as a dense state vector of shape
-    #    (2^(nqubits), 1)
-    #
-    #    Returns
-    #    -------
-    #    numpy array
-    #    """
-    #    statevec = self.sframe.to_statevec()
-    #    statevec.shape = (statevec.size,1)
-    #    return statevec
-    #
-    #def to_dmvec(self, basis):
-    #    """
-    #    Return this SPAM vector as a dense density-matrix vector of shape
-    #    (4^(nqubits), 1)
-    #
-    #    Parameters
-    #    ----------
-    #    basis : {'std','gm','pp'} or Basis object
-    #        The basis for the returned density-matrix vector.
-    #
-    #    Returns
-    #    -------
-    #    numpy array
-    #    """
-    #    svec = self.to_statevec()
-    #    return _bt.change_basis(
-    #        _np.kron(svec,_np.conjugate(svec.T)).flatten(), 'std', basis)
 
     def __str__(self):
         s = "Stabilizer spam vector for %d qubits with rep:\n" % (self.sframe.nqubits)
@@ -3090,25 +3011,6 @@ class StabilizerEffectVec(SPAMVec): # FUTURE: merge this with ComptationalSPAMVe
         statevec = _functools.reduce(_np.kron, [v[i] for i in self.outcomes])
         statevec.shape = (statevec.size,1)
         return statevec
-
-    #TODO REMOVE
-    #def to_dmvec(self, basis):
-    #    """
-    #    Return this SPAM vector as a dense density-matrix vector of shape
-    #    (4^(nqubits), 1)
-    #
-    #    Parameters
-    #    ----------
-    #    basis : {'std','gm','pp'} or Basis object
-    #        The basis for the returned density-matrix vector.
-    #
-    #    Returns
-    #    -------
-    #    numpy array
-    #    """
-    #    svec = self.to_statevec()
-    #    return _bt.change_basis(
-    #        _np.kron(svec,_np.conjugate(svec.T)).flatten(), 'std', basis)
 
         
     @property

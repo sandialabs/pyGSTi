@@ -130,23 +130,8 @@ def convert(povm, toType, basis, extra=None):
         povmNoiseMap = cls.from_gate_obj(_np.identity(povm.dim,'d'), toType,
                                          None, proj_basis, basis, truncate=True)
         return LindbladParameterizedPOVM(povmNoiseMap, base_povm, basis)
-        
-        #OLD TODO REMOVE # Create an Unconstrained POVM with LindbladParameterizedSPAMVecs
-        #new_effects = []
-        #for lbl,Evec in povm.items():
-        #
-        #    #Below is similar to spamvec convert(...) case
-        #    purevec = purevecs[lbl] if (purevecs is not None) else \
-        #              Evec # right now, we don't try to extract a "closest pure
-        #                   # dmvec" to Evec - below will fail if Evec isn't pure.
-        #
-        #    new_effects.append( (lbl, _sv.LindbladParameterizedSPAMVec.from_spamvec_obj(
-        #        Evec, "effect", toType, purevec, proj_basis, basis,
-        #        truncate=True, lazy=True)) )
-        #
-        ##Always return unconstrained?? TODO FUTURE
-        #return UnconstrainedPOVM( new_effects )
 
+    
     elif toType == "clifford":
         if isinstance(povm,ComputationalBasisPOVM) and povm._evotype == "stabilizer":
             return povm
@@ -806,10 +791,6 @@ class TensorProdPOVM(POVM):
         """
         for povm in self.factorPOVMs:
             povm.from_vector( v[povm.gpindices] )
-        #TODO: REMOVE
-        #I don't think there's any need to do this (re-inits effect vector from factor POVMs)
-        #for effect in self.values():
-        #    effect.todense()
 
 
     def depolarize(self, amount):
@@ -850,119 +831,6 @@ class TensorProdPOVM(POVM):
         #s += _mt.mx_to_string( _np.concatenate( [effect.todense() for effect in self.values()],
         #                                   axis=1), width=6, prec=2)
         return s
-
-
-
-#TODO REMOVE: made obsolete by ComputationalBasisPOVM w/"stabilizer" evotype
-#class StabilizerZPOVM(POVM):
-#    """ 
-#    A POVM that "measures" stabilizer states in the computational "Z" basis.
-#    """
-#    def __init__(self, nqubits, qubit_filter=None):
-#        """
-#        Creates a new StabilizerZPOVM object.
-#
-#        Parameters
-#        ----------
-#        nqubits : int
-#            The number of qubits
-#
-#        qubit_filter : list, optional
-#            An optional list of integers specifying a subset
-#            of the qubits to be measured.
-#        """
-#        if qubit_filter is not None:
-#            raise NotImplementedError("Still need to implement qubit_filter functionality")
-#
-#        self.nqubits = nqubits
-#        self.qubit_filter = qubit_filter
-#        dim = 2**nqubits # assume "unitary evolution"-type mode?
-#
-#        #LATER - do something with qubit_filter here
-#        # qubits = self.qubit_filter if (self.qubit_filter is not None) else list(range(self.nqubits))
-#
-#        items = [] # init as empty (lazy creation of members)
-#
-#        #OLD: create all vectors upon init (slow when lots of qubits)
-#        #iterover = [(0,1)]*nqubits
-#        #items = [ (''.join(map(str,outcomes)), _sv.StabilizerEffectVec(outcomes,self))
-#        #          for outcomes in _itertools.product(*iterover) ]
-#        super(StabilizerZPOVM, self).__init__(dim, "stabilizer", items)
-#
-#
-#    def __contains__(self, key):
-#        """ For lazy creation of effect vectors """
-#        fkeys = ('0','1')
-#        return bool(len(key) == self.nqubits and
-#                    all([ (letter in fkeys) for letter in key]))
-#
-#    def __iter__(self):
-#        return self.keys()
-#
-#    def __len__(self):
-#        return 2**self.nqubits
-#
-#    def keys(self):
-#        iterover = [('0','1')]*self.nqubits
-#        for k in _itertools.product(*iterover):
-#            yield "".join(k)
-#
-#    def values(self):
-#        for k in self.keys():
-#            yield self[k]
-#
-#    def items(self):
-#        for k in self.keys():
-#            yield k,self[k]
-#
-#    def __getitem__(self, key):
-#        """ For lazy creation of effect vectors """
-#        if _collections.OrderedDict.__contains__(self,key):
-#            return _collections.OrderedDict.__getitem__(self, key)
-#        elif key in self: # calls __contains__ to efficiently check for membership
-#            #create effect vector now that it's been requested (lazy creation)
-#            outcomes = [ (0 if letter == '0' else 1) for letter in key ] # decompose key into separate factor-effect labels
-#            effect = _sv.StabilizerEffectVec(outcomes)
-#            _collections.OrderedDict.__setitem__(self,key,effect)
-#            return effect
-#        else: raise KeyError("%s is not an outcome label of this StabilizerZPOVM" % key)
-#
-#
-#    def __reduce__(self):
-#        """ Needed for OrderedDict-derived classes (to set dict items) """
-#        return (StabilizerZPOVM, (self.nqubits,self.qubit_filter),
-#                {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
-#
-#
-#    def compile_effects(self, prefix=""):
-#        """
-#        Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
-#        `GateSet` - that is, whose `gpindices` are set to all or a subset of
-#        this POVM's gpindices.  Such effect vectors are used internally within
-#        computations involving the parent `GateSet`.
-#
-#        Parameters
-#        ----------
-#        prefix : str
-#            A string, usually identitying this POVM, which may be used
-#            to prefix the compiled gate keys.
-#
-#        Returns
-#        -------
-#        OrderedDict of SPAMVecs
-#        """
-#        # Create "compiled" effect vectors, which infer their parent and
-#        # gpindices from the set of "factor-POVMs" they're constructed with.
-#        if prefix: prefix += "_"
-#        compiled = _collections.OrderedDict(
-#            [ (prefix + k, self[k]) for k in self.keys() ] )
-#        return compiled
-#
-#
-#    def __str__(self):
-#        s = "Stabilizer Z POVM on %d qubits and filter %s\n" \
-#            % (self.nqubits,str(self.qubit_filter))
-#        return s
 
 
 class ComputationalBasisPOVM(POVM): 
@@ -1033,10 +901,6 @@ class ComputationalBasisPOVM(POVM):
         elif key in self: # calls __contains__ to efficiently check for membership
             #create effect vector now that it's been requested (lazy creation)
             outcomes = [ (0 if letter == '0' else 1) for letter in key ] # decompose key into separate factor-effect labels
-            #TODO REMOVE
-            #if self._evotype == "stabilizer":
-            #    effect = _sv.StabilizerEffectVec(outcomes)
-            #else:
             effect = _sv.ComputationalSPAMVec(outcomes, self._evotype) # "statevec" or "densitymx"
             _collections.OrderedDict.__setitem__(self,key,effect)
             return effect
@@ -1333,86 +1197,3 @@ class LindbladParameterizedPOVM(POVM):
         s = "Lindblad-parameterized POVM of length %d\n" \
             % (len(self))
         return s
-
-
-
-
-#TODO REMOVE - not really needed; maybe make into a factory function that
-# creates an UnconstrainedPOVM of ComputationalSPAMVec elements?
-#class StandardZPOVM(POVM):
-#    """ 
-#    A POVM that "measures" states in the computational "Z" basis.
-#    """
-#    def __init__(self, nqubits, evotype, qubit_filter=None):
-#        """
-#        Creates a new StandardZPOVM object.
-#
-#        Parameters
-#        ----------
-#        nqubits : int
-#            The number of qubits
-#
-#        evotype : {"densitymx", "statevec"}
-#            The type of evolution being performed.
-#
-#        qubit_filter : list, optional
-#            An optional list of integers specifying a subset
-#            of the qubits to be measured.
-#        """
-#        if qubit_filter is not None:
-#            raise NotImplementedError("Still need to implement qubit_filter functionality")
-#
-#
-#        self.nqubits = nqubits
-#        self.qubit_filter = qubit_filter
-#        self.cached_probs = None
-#        self.cached_state = None
-#
-#        if evotype == "densitymx":
-#            dim = 4**nqubits
-#        elif evotype == "statevec":
-#            dim = 2**nqubits
-#        else: raise ValueError("Invalid `evotype`: %s" % evotype)
-#            
-#        #LATER - do something with qubit_filter here
-#        
-#        iterover = [(0,1)]*nqubits
-#        items = [ (''.join(map(str,outcomes)), _sv.ComputationalSPAMVec(outcomes,evotype))
-#                  for outcomes in _itertools.product(*iterover) ]
-#        super(StandardZPOVM, self).__init__(dim, evotype, items)
-#
-#    def __reduce__(self):
-#        """ Needed for OrderedDict-derived classes (to set dict items) """
-#        return (StandardZPOVM, (self.nqubits,self._evotype,self.qubit_filter),
-#                {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
-#
-#
-#    def compile_effects(self, prefix=""):
-#        """
-#        Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
-#        `GateSet` - that is, whose `gpindices` are set to all or a subset of
-#        this POVM's gpindices.  Such effect vectors are used internally within
-#        computations involving the parent `GateSet`.
-#
-#        Parameters
-#        ----------
-#        prefix : str
-#            A string, usually identitying this POVM, which may be used
-#            to prefix the compiled gate keys.
-#
-#        Returns
-#        -------
-#        OrderedDict of SPAMVecs
-#        """
-#        # Create "compiled" effect vectors, which infer their parent and
-#        # gpindices from the set of "factor-POVMs" they're constructed with.
-#        if prefix: prefix += "_"
-#        compiled = _collections.OrderedDict(
-#            [ (prefix + k, Evec) for k,Evec in self.items() ] )
-#        return compiled
-#
-#
-#    def __str__(self):
-#        s = "Standard Z POVM on %d qubits and filter %s\n" \
-#            % (self.nqubits,str(self.qubit_filter))
-#        return s

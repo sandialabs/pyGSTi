@@ -409,12 +409,6 @@ cdef class DMGateRep_Embedded(DMGateRep):
 		  INT embedded_dim, INT nComponentsInActiveBlock,
                   INT iActiveBlock, INT nBlocks, INT dim):
 
-#OLD: TODO REMOVE
-#                 np.ndarray[np.int64_t, ndim=1, mode='c'] noop_incrementers,
-#		  np.ndarray[np.int64_t, ndim=1, mode='c'] numBasisEls_noop_blankaction,
-#                 np.ndarray[np.int64_t, ndim=1, mode='c'] baseinds,
-
-
         cdef INT i, j
 
         # numBasisEls_noop_blankaction is just numBasisEls with actionInds == 1
@@ -1030,7 +1024,6 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm):
     #   (evalTree.cache_size(), 8.0 * c_rho._dim / 1024.0**3, evalTree.cache_size() * 8.0 * c_rho._dim / 1024.0**3)
     cdef vector[DMStateCRep*] rho_cache = create_rhocache(evalTree.cache_size(), c_rho._dim)
 
-    #OLD cdef double[:,:] ret_view = ret
     dm_compute_pr_cache(pCache, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
 
     free_rhocache(rho_cache)  #delete cache entries
@@ -1078,9 +1071,7 @@ cdef dm_compute_pr_cache(double[:,:] ret,
     
         #Propagate state rep
         # prop2 should already be alloc'd; need to "allocate" prop1 - either take from cache or from "shelf"
-        #OLD: prop1 = new DMStateCRep(init_state._dataptr, dim, <bool>1) 
         prop1 = shelved if icache == -1 else deref(prho_cache)[icache]
-        #OLD for j in range(dim): prop1._dataptr[j] = init_state._dataptr[j]   NOW: a method of DMStateCRep?
         prop1.copy_from(init_state) # copy init_state -> prop1 
         #print " prop1:";  print [ prop1._dataptr[t] for t in range(4) ]
         #t1 = time.time() # DEBUG
@@ -1441,10 +1432,8 @@ cdef void sv_pr_as_poly_innerloop(vector[vector_SVTermCRep_ptr_ptr] factor_lists
                 tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
         factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
 
-        # can't propagate effects, so act w/adjoint of post_ops in reverse order...
+	# can't propagate effects, so effect's post_ops are constructed to act on *state*
         EVec = factor._post_effect
-        #OLD: for j in range(<INT>factor._post_ops.size()-1,-1,-1): # (reversed)
-        #OLD:    rhoVec = factor._post_ops[j].adjoint_acton(prop1,prop2)
         for j in range(<INT>factor._post_ops.size()):
             rhoVec = factor._post_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
@@ -1464,8 +1453,6 @@ cdef void sv_pr_as_poly_innerloop(vector[vector_SVTermCRep_ptr_ptr] factor_lists
         factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
         
         EVec = factor._pre_effect
-        #OLD: for j in range(<INT>factor._pre_ops.size()-1,-1,-1): # (reversed)
-        #OLD:     factor._pre_ops[j].adjoint_acton(prop1,prop2)
         for j in range(<INT>factor._pre_ops.size()):
             factor._pre_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
@@ -1620,8 +1607,6 @@ cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr]
         factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
         EVec = factor._post_effect
         prop1.copy_from(rhoVecL) # initial state (prop2 already alloc'd)
-        #OLD: for j in range(<INT>factor._post_ops.size()-1,-1,-1): # (reversed)
-        #OLD:     factor._post_ops[j].adjoint_acton(prop1,prop2)
         for j in range(<INT>factor._post_ops.size()):
             factor._post_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop
@@ -1630,8 +1615,6 @@ cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr]
         #print "DB: right ampl"
         EVec = factor._pre_effect
         prop1.copy_from(rhoVecR)
-        #OLD: for j in range(<INT>factor._pre_ops.size()-1,-1,-1): # (reversed)
-        #OLD:     factor._pre_ops[j].adjoint_acton(prop1,prop2)
         for j in range(<INT>factor._pre_ops.size()):
             factor._pre_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop
@@ -1925,10 +1908,8 @@ cdef void sb_pr_as_poly_innerloop(vector[vector_SBTermCRep_ptr_ptr] factor_lists
                 tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
         factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
 
-        # can't propagate effects, so act w/adjoint of post_ops in reverse order...
+        # can't propagate effects, so effect's post_ops are constructed to act on *state*
         EVec = factor._post_effect
-        #OLD: for j in range(<INT>factor._post_ops.size()-1,-1,-1): # (reversed)
-        #OLD:     rhoVec = factor._post_ops[j].adjoint_acton(prop1,prop2)
         for j in range(<INT>factor._post_ops.size()):
             rhoVec = factor._post_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
@@ -1948,8 +1929,6 @@ cdef void sb_pr_as_poly_innerloop(vector[vector_SBTermCRep_ptr_ptr] factor_lists
         factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
         
         EVec = factor._pre_effect
-        #OLD: for j in range(<INT>factor._pre_ops.size()-1,-1,-1): # (reversed)
-        #OLD:     factor._pre_ops[j].adjoint_acton(prop1,prop2)
         for j in range(<INT>factor._pre_ops.size()):
             factor._pre_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
@@ -2104,8 +2083,6 @@ cdef void sb_pr_as_poly_innerloop_savepartials(vector[vector_SBTermCRep_ptr_ptr]
         factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
         EVec = factor._post_effect
         prop1.copy_from(rhoVecL) # initial state (prop2 already alloc'd)
-        #OLD: for j in range(<INT>factor._post_ops.size()-1,-1,-1): # (reversed)
-        #OLD:     factor._post_ops[j].adjoint_acton(prop1,prop2)
         for j in range(<INT>factor._post_ops.size()):
             factor._post_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop
@@ -2116,8 +2093,6 @@ cdef void sb_pr_as_poly_innerloop_savepartials(vector[vector_SBTermCRep_ptr_ptr]
         prop1.copy_from(rhoVecR)
         pRight = EVec.amplitude(prop1)
         #DEBUG print "  - begin: ",complex(pRight)
-        #OLD: for j in range(<INT>factor._pre_ops.size()-1,-1,-1): # (reversed)
-        #OLD: factor._pre_ops[j].adjoint_acton(prop1,prop2)
         for j in range(<INT>factor._pre_ops.size()):
             #DEBUG print " - state = ", [ prop1._smatrix[ii] for ii in range(2*2)]
             #DEBUG print "         = ", [ prop1._pvectors[ii] for ii in range(2)]
@@ -2136,23 +2111,6 @@ cdef void sb_pr_as_poly_innerloop_savepartials(vector[vector_SBTermCRep_ptr_ptr]
         pRight = EVec.amplitude(prop1).conjugate()
 
         shelved = prop1 # return prop1 to the "shelf" since we'll use prop1 for other things next
-
-        #DO THIS IN SB VARIANT (OLD! - note use of adjoint_action which probably isn't correct now)
-        #else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-        #    factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
-        #    EVec = factor.post_ops[0]
-        #    for j in range(len(factor.post_ops)-1,0,-1): # (reversed)
-        #        rhoVecL = factor.post_ops[j].adjoint_acton(rhoVecL)
-        #    #OLD: p = stabilizer_measurement_prob(rhoVecL, EVec.outcomes)
-        #    #OLD: pLeft = np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
-        #    pLeft = rhoVecL.extract_amplitude(EVec.outcomes)
-        #
-        #    EVec = factor.pre_ops[0]
-        #    for j in range(len(factor.pre_ops)-1,0,-1): # (reversed)
-        #        rhoVecR = factor.pre_ops[j].adjoint_acton(rhoVecR)
-        #    #OLD: p = stabilizer_measurement_prob(rhoVecR, EVec.outcomes)
-        #    #OLD: pRight = np.sqrt(p) # sqrt b/c pRight is just *amplitude*
-        #    pRight = np.conjugate(rhoVecR.extract_amplitude(EVec.outcomes))
 
         #print "DB: final block: pLeft=",complex(pLeft)," pRight=",complex(pRight)
         #print "DB running coeff = ",dict(coeff._coeffs)
@@ -2189,68 +2147,6 @@ cdef void sb_pr_as_poly_innerloop_savepartials(vector[vector_SBTermCRep_ptr_ptr]
     return
 
 
-    
-#OLD LOOP - maybe good for python version?
-#    #comm is currently ignored
-#    #TODO: if evalTree is split, distribute among processors
-#    for i,iStart,remainder,iCache in ievalTree:
-#        if iStart is None:  init_state = rhorep
-#        else:               init_state = rho_cache[iStart] #[:,None]
-#
-#        
-#        #Propagate state rep
-#        #print("init ",i,str(init_state))
-#        #print("applying")
-#        #for r in remainder:
-#        #    print("mx:")
-#        #    print(gatereps[r])
-#        final_state = propagate_staterep(init_state, [gatereps[r] for r in remainder] )
-#        #print("final ",i,str(final_state))
-#        if iCache is not None: rho_cache[iCache] = final_state # [:,0] #store this state in the cache
-#
-#        for j,erep in enumerate(ereps):
-#            p = erep.probability(final_state) #outcome probability
-#            #print("processing ",i,j,p)
-#            ret[i,j] = p
-
-
-
-        #if self.evotype == "statevec":
-        #    for j,E in enumerate(EVecs):
-        #        ret[i,j] = _np.abs(_np.vdot(E.todense(Escratch),final_state))**2
-        #elif self.evotype == "densitymx":
-        #    for j,E in enumerate(EVecs):
-        #        ret[i,j] = _np.vdot(E.todense(Escratch),final_state)
-        #        #OLD (slower): _np.dot(_np.conjugate(E.todense(Escratch)).T,final_state)
-        #        # FUTURE: optionally pre-compute todense() results for speed if mem is available?
-        #else: # evotype == "stabilizer" case
-        #    #TODO: compute using tree-like fanout, only fanning when necessary. -- at least when there are O(d=2^nQ) effects
-        #    for j,E in enumerate(EVecs):
-        #        ret[i,j] = rho.measurement_probability(E.outcomes)
-
-    #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
-    #return ret
-
-
-#cdef struct Gate_crep:
-#    INT x
-#    char * y
-#    #put everything potentially necessary here
-#ctypedef Gate_crep Gate_crep_t
-
-
-#def fast_compute_pr_cache(rholabel, elabels, evalTree, comm, scratch=None)::
-#    #needs to construct gate creps, etc...
-#    
-#    #calls propagate_state:
-#    
-#cdef propagate_state(Gate_crep_t* gate_creps, INT* gids,
-#                     State_crep* state_crep):
-#    for gateid in gids:
-#    	actonlib[gateid](gate_creps[gateid],state_crep) # act in-place / don't require copy?
-	
-
-
 ## You can also typedef pointers too
 #
 #ctypedef INT * int_ptr
@@ -2263,8 +2159,6 @@ cdef void sb_pr_as_poly_innerloop_savepartials(vector[vector_SBTermCRep_ptr_ptr]
 #
 ## then we use the function pointer:
 #cdef cfptr myfunctionptr = &myfunc
-
-
 
 def dot(np.ndarray[double, ndim=1] f, np.ndarray[double, ndim=1] g):
     cdef INT N = f.shape[0]

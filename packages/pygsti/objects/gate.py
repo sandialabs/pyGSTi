@@ -2679,9 +2679,6 @@ class LindbladParameterizedGateMap(Gate):
                     lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs,
                                                 self.otherGens)
 
-            #lnd_error_gen = _np.dot(self.leftTrans, _np.dot(   #REMOVE IF PRETRANS
-            #    lnd_error_gen, self.rightTrans)) #basis chg    #REMOVE IF PRETRANS
-
         assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0))
         #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)        
         self.err_gen = _mt.safereal(lnd_error_gen, inplace=True)
@@ -3240,11 +3237,6 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         tr = len(dOdp.shape) #tensor rank
         assert( (tr-2) in (1,2)), "Currently, dodp can only have 1 or 2 derivative dimensions"
 
-        #REMOVE IF PRETRANS: before we changed basis right away (in _set_params_from_errgen)
-        #if tr == 3:
-        #    dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
-        #elif tr == 4:
-        #    dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
         assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
         return _np.real(dOdp)
 
@@ -3327,11 +3319,6 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         tr = len(d2Odp2.shape) #tensor rank
         assert( (tr-2) in (2,4)), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
 
-        #REMOVE IF PRETRANS: before we changed basis right away (in _set_params_from_errgen)
-        #if tr == 4:
-        #    d2Odp2  = _np.einsum('lk,knaq,nj->ljaq', self.leftTrans, d2Odp2, self.rightTrans)
-        #elif tr == 6:
-        #    d2Odp2  = _np.einsum('lk,knabqr,nj->ljabqr', self.leftTrans, d2Odp2, self.rightTrans)
         assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)
         return _np.real(d2Odp2)
 
@@ -4140,9 +4127,6 @@ class EmbeddedGateMap(Gate):
     An EmbeddedGateMap acts as the identity on all of its domain except the 
     subspace of its contained gate, where it acts as the contained gate does.
     """
-
-    #def _slow_adjoint_acton(self, v): # TODO REMOVE
-    #    raise NotImplementedError() # TEMPORARY JUST TO DO IDLETOMOG TEST
     
     def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None): # TODO: remove basisdim as arg
         """
@@ -4277,13 +4261,6 @@ class EmbeddedGateMap(Gate):
                                               for targetLbl in self.targetLabels ], _np.int64)
         else:
             self.qubit_indices = None # (unused)
-
-        #DEBUG TO REMOVE
-        #print("self.numBasisEls_noop_blankaction = ",self.numBasisEls_noop_blankaction)
-        #print("numBasisEls_action = ",self.numBasisEls_action)
-        #print("multipliers = ",self.multipliers)
-        #print("noop incrementers = ",self.noop_incrementers," dim=",gateDim)
-        #print("baseinds = ",self.baseinds)
 
         gateDim = dmDim if evotype in ("statevec","stabilizer") else superOpDim
           # ("densitymx","svterm","cterm") all use super-op dimension
