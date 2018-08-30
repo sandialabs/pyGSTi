@@ -1882,11 +1882,11 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
     Returns
     -------
     sequences : list
-        A list of (GateString, L, germ, "XX","XX") tuples specifying the final
-        "tiled" fiducial pairs sandwiching `germPowerStr` for as many clouds in
-        parallel as possible.  Actual qubit labels (not the always-integer
-        labels used in templates) are used in these strings. The "XX" elements
-        are placeholders for future use. There are no duplicates in this list.
+        A list of (GateString, L, germ, prepFid, measFid) tuples specifying the
+        final "tiled" fiducial pairs sandwiching `germPowerStr` for as many
+        clouds in parallel as possible.  Actual qubit labels (not the always-
+        integer labels used in templates) are used in these strings.  There are
+        no duplicates in this list.
 
     germs : list
         A list of GateString objects giving all the germs (with appropriate
@@ -1962,7 +1962,8 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
                 merge_into(germPowerStr, germPowerStr_qubits, germPower)
                 
             germs.append( _objs.GateString(germStr) )
-            sequences.append( (_objs.GateString(prepStr + germPowerStr + measStr), L, germs[-1], "XX", "XX") )
+            sequences.append( (_objs.GateString(prepStr + germPowerStr + measStr), L, germs[-1],
+                               _objs.GateString(prepStr), _objs.GateString(measStr) ) ) # was XX
               # gatestring, L, germ, prepFidIndex, measFidIndex??
         
     # return a list of gate strings (duplicates removed)
@@ -2197,7 +2198,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     Returns
     -------
     sequences : list
-        A list of (GateString, L, germ, "XX","XX") tuples specifying the 
+        A list of (GateString, L, germ, prepFid, measFid) tuples specifying the 
         final sequences categorized by max-length (L) and germ.
 
     germs : list
@@ -2313,7 +2314,8 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     for L in maxLengths:
         for fidpair in idle_fidpairs:
             prepFid, measFid = fidpair
-            sequences.append( (prepFid + idleGateStr*L + measFid, L, idleGateStr, "XX", "XX") )
+            sequences.append( (prepFid + idleGateStr*L + measFid, L, idleGateStr,
+                               prepFid, measFid) ) # was XX
               # gatestring, L, germ, prepFidIndex, measFidIndex??
     printer.log("%d idle sequences (for all max-lengths: %s)" % (len(sequences), str(maxLengths)))
     
