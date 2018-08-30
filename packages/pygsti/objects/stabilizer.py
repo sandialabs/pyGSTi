@@ -77,7 +77,7 @@ class StabilizerFrame(object):
             
         s = _np.fliplr(_np.identity(2*nqubits,int)) # flip b/c stab cols are *first*
         p = _np.zeros(2*nqubits,int)
-        if zvals:
+        if zvals is not None:
             for i,z in enumerate(zvals):
                 p[i] = p[i+nqubits] = 2 if bool(z) else 0
                   # TODO: check this is right -- (how/need to update the destabilizers?)

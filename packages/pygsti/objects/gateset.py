@@ -651,6 +651,8 @@ class GateSet(object):
         #for o in self.effects.values(): o._parent = self
         for o in self.gates.values(): o._parent = self
         for o in self.instruments.values(): o._parent = self
+        if self._autogator is not None: # (just in case)
+            self._autogator.parent = self
 
 
 

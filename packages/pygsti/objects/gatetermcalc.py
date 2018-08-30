@@ -39,7 +39,8 @@ try:
         if _np.iscomplexobj(ctape):
             ret = _fastgatecalc.fast_bulk_eval_compact_polys_complex(
                 vtape, ctape, paramvec, dest_shape)
-            assert(_np.linalg.norm(_np.imag(ret)) < 1e-6 ) # DEBUG CHECK
+            assert(_np.linalg.norm(_np.imag(ret)) < 1e-6 ), \
+                "norm(Im part) = %g" % _np.linalg.norm(_np.imag(ret)) # DEBUG CHECK
             return _np.real( ret )
         else:
             return _np.real( _fastgatecalc.fast_bulk_eval_compact_polys(

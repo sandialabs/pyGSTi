@@ -184,7 +184,7 @@ def convert(spamvec, toType, basis, extra=None):
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
 
-def _convert_to_lindblad_base(vec, new_evotype, mxBasis="pp"):
+def _convert_to_lindblad_base(vec, typ, new_evotype, mxBasis="pp"):
     """ 
     Attempts to convert `vec` to a static (0 params) SPAMVec with 
     evoution type `new_evotype`.  Used to convert spam vecs to
@@ -2222,8 +2222,8 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             #Convert vectors (if possible) to SPAMVecs
             # of the appropriate evotype and 0 params.
             bDiff = spamvec is not purevec
-            spamvec = _convert_to_lindblad_base(spamvec, evotype, mxBasis) 
-            purevec = _convert_to_lindblad_base(purevec, evotype, mxBasis) if bDiff else spamvec
+            spamvec = _convert_to_lindblad_base(spamvec, typ, evotype, mxBasis) 
+            purevec = _convert_to_lindblad_base(purevec, typ, evotype, mxBasis) if bDiff else spamvec
             assert(spamvec._evotype == evotype)
             assert(purevec._evotype == evotype)
             

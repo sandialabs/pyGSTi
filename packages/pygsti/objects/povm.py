@@ -120,7 +120,7 @@ def convert(povm, toType, basis, extra=None):
             assert(povm.nqubits == nQubits)
             base_povm = ComputationalBasisPOVM(nQubits, evotype)
         else:
-            base_items = [ (lbl, _sv._convert_to_lindblad_base(Evec, evotype, basis))
+            base_items = [ (lbl, _sv._convert_to_lindblad_base(Evec, "effect", evotype, basis))
                            for lbl, Evec in povm.items() ]
             base_povm = UnconstrainedPOVM(base_items)
 
@@ -643,7 +643,7 @@ class TensorProdPOVM(POVM):
             evotype = "densitymx" # default (if there are no factors)
 
         items = [] # init as empty (lazy creation of members)
-        self._factor_keys = tuple((povm.keys() for povm in factorPOVMs ))
+        self._factor_keys = tuple((list(povm.keys()) for povm in factorPOVMs ))
         self._factor_lbllens = []
         for fkeys in self._factor_keys:
             assert(len(fkeys) > 0), "Each factor POVM must have at least one effect!"
