@@ -2272,9 +2272,14 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     
     Np = gateset.num_params()
     idleGateStr = _objs.GateString(("Gi",))
-    singleQfiducials = [(), ('Gx',), ('Gy',)] # , ('Gx','Gx')
     prepLbl = _Lbl("rho0")
     effectLbls = [ _Lbl("Mdefault_%s" % l) for l in gateset.povms['Mdefault'].keys()]
+
+    if paramroot in ("H+S","S","H+D","D"): #no affine - can get away w/1 fewer fiducials
+        singleQfiducials = [(), ('Gx',), ('Gy',)]
+    else:
+        singleQfiducials = [(), ('Gx',), ('Gy',), ('Gx','Gx')]
+
 
     # create a gateset with maxIdleWeight qubits that includes all
     # the errors of the actual n-qubit gateset...

@@ -93,8 +93,10 @@ class GateSet(object):
               to compute probabilities out to some maximum order <X> (an
               integer) in these rates.
         """
-        assert(default_param in ('full','TP','CPTP','H+S','S','static',
-                                         'H+S terms','clifford','H+S clifford terms'))
+
+        #More options now (TODO enumerate?)
+        #assert(default_param in ('full','TP','CPTP','H+S','S','static',
+        #                         'H+S terms','clifford','H+S clifford terms'))
 
         #default_e_param = "full" if default_param == "TP" else default_param
 
@@ -513,7 +515,7 @@ class GateSet(object):
         """
         typ = parameterization_type
 
-        #More options now
+        #More options now (TODO enumerate?)
         #assert(parameterization_type in ('full','TP','CPTP','H+S','S','static',
         #                                 'H+S terms','clifford','H+S clifford terms',
         #                                 'static unitary'))
