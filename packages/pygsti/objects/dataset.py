@@ -1496,6 +1496,11 @@ class DataSet(object):
             else: self.cnt_cache = None
 
         self.auxInfo = state_dict.get('auxInfo', _DefaultDict(dict) )
+        if not isinstance(self.auxInfo, _DefaultDict) and isinstance(self.auxInfo,dict):
+            self.auxInfo = _DefaultDict(dict, self.auxInfo)
+            # some types of serialization (e.g. JSON) just save a *normal* dict
+            # so promote to a defaultdict if needed..
+            
         self.collisionAction = state_dict.get('collisionAction','aggregate')
         self.uuid = state_dict.get('uuid',None)
 
