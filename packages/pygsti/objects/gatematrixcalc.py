@@ -18,9 +18,9 @@ from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
+from ..baseobjs import Label as _Label
 from .matrixevaltree import MatrixEvalTree as _MatrixEvalTree
 from .gatecalc import GateCalc
-
 _dummy_profiler = _DummyProfiler()
 
 # Smallness tolerances, used internally for conditional scaling required
@@ -40,7 +40,7 @@ class GateMatrixCalc(GateCalc):
     fundamental operations.
     """
 
-    def __init__(self, dim, gates, preps, effects, paramvec):
+    def __init__(self, dim, gates, preps, effects, paramvec, autogator):
         """
         Construct a new GateMatrixCalc object.
 
@@ -55,23 +55,23 @@ class GateMatrixCalc(GateCalc):
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
-        spamdefs : OrderedDict
-            A dictionary whose keys are the allowed SPAM labels, and whose
-            values are 2-tuples comprised of a state preparation label
-            followed by a POVM effect label (both of which are strings,
-            and keys of preps and effects, respectively, except for the
-            special case both are set to "remainder").
-
         paramvec : ndarray
             The parameter vector of the GateSet.
+
+        autogator : AutoGator
+            An auto-gator object that may be used to construct virtual gates
+            for use in computations.
         """
         super(GateMatrixCalc, self).__init__(
-            dim, gates, preps, effects, paramvec)
+            dim, gates, preps, effects, paramvec, autogator)
+        if self.evotype not in ("statevec","densitymx"):
+            raise ValueError(("Evolution type %s is incompatbile with "
+                              "matrix-based calculations" % self.evotype))
 
     def copy(self):
         """ Return a shallow copy of this GateMatrixCalc """
         return GateMatrixCalc(self.dim, self.gates, self.preps,
-                              self.effects, self.paramvec)
+                              self.effects, self.paramvec, self.autogator)
         
 
     def product(self, gatestring, bScale=False):
@@ -103,13 +103,14 @@ class GateMatrixCalc(GateCalc):
         """
         if bScale:
             scaledGatesAndExps = {};
-            for (gateLabel,gatemx) in self.gates.items():
-                ng = max(_nla.norm(gatemx),1.0)
-                scaledGatesAndExps[gateLabel] = (gatemx / ng, _np.log(ng))
-
             scale_exp = 0
             G = _np.identity( self.dim )
             for lGate in gatestring:
+                if lGate not in scaledGatesAndExps: #fill "on-demand" b/c can't just iterate through self.gates anymore (autogator)
+                    gatemx = self._getgate(lGate)
+                    ng = max(_nla.norm(gatemx),1.0)
+                    scaledGatesAndExps[lGate] = (gatemx / ng, _np.log(ng))
+                
                 gate, ex = scaledGatesAndExps[lGate]
                 H = _np.dot(gate,G)   # product of gates, starting with identity
                 scale_exp += ex   # scale and keep track of exponent
@@ -127,7 +128,7 @@ class GateMatrixCalc(GateCalc):
         else:
             G = _np.identity( self.dim )
             for lGate in gatestring:
-                G = _np.dot(self.gates[lGate].base,G) #product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
+                G = _np.dot(self._getgate(lGate).base,G) #product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
         
@@ -152,7 +153,7 @@ class GateMatrixCalc(GateCalc):
                 if i in gpindices:
                     relevant_gpindices.append(ii)
                     obj_wrtFilter.append(list(gpindices).index(i))
-            relevant_gpindices = _np.array(relevant_gpindices,'i')
+            relevant_gpindices = _np.array(relevant_gpindices,_np.int64)
             if len(relevant_gpindices) == 1:
                 #Don't return a length-1 list, as this doesn't index numpy arrays
                 # like length>1 lists do... ugh.
@@ -185,20 +186,20 @@ class GateMatrixCalc(GateCalc):
     def dgate(self, gateLabel, flat=False, wrtFilter=None):
         """ Return the derivative of a length-1 (single-gate) sequence """
         dim = self.dim
-        gate_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, self.gates[gateLabel])
+        gate = self._getgate(gateLabel)
+        gate_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, gate)
 
         # Allocate memory for the final result
         num_deriv_cols =  self.Np if (wrtFilter is None) else len(wrtFilter)
         flattened_dprod = _np.zeros((dim**2, num_deriv_cols),'d')
         
-        gate = self.gates[gateLabel]
         _fas(flattened_dprod, [None,gpindices], 
              gate.deriv_wrt_params(gate_wrtFilter)) # (dim**2, nParams[gateLabel])
 
         if _slct.length(gpindices) > 0: #works for arrays too
             # Compute the derivative of the entire gate string with respect to the 
             # gate's parameters and fill appropriate columns of flattened_dprod.
-            gate = self.gates[gateLabel]
+            #gate = self._getgate[gateLabel] UNNEEDED (I think)
             _fas(flattened_dprod,[None,gpindices],
                 gate.deriv_wrt_params(gate_wrtFilter)) # (dim**2, nParams in wrtFilter for gateLabel)
                 
@@ -211,8 +212,9 @@ class GateMatrixCalc(GateCalc):
         """ Return the hessian of a length-1 (single-gate) sequence """
         dim = self.dim
 
-        gate_wrtFilter1, gpindices1 = self._process_wrtFilter(wrtFilter1, self.gates[gateLabel])
-        gate_wrtFilter2, gpindices2 = self._process_wrtFilter(wrtFilter2, self.gates[gateLabel])
+        gate = self._getgate(gateLabel)
+        gate_wrtFilter1, gpindices1 = self._process_wrtFilter(wrtFilter1, gate)
+        gate_wrtFilter2, gpindices2 = self._process_wrtFilter(wrtFilter2, gate)
 
         # Allocate memory for the final result
         num_deriv_cols1 =  self.Np if (wrtFilter1 is None) else len(wrtFilter1)
@@ -222,7 +224,6 @@ class GateMatrixCalc(GateCalc):
         if _slct.length(gpindices1) > 0 and _slct.length(gpindices2) > 0: #works for arrays too
             # Compute the derivative of the entire gate string with respect to the 
             # gate's parameters and fill appropriate columns of flattened_dprod.
-            gate = self.gates[gateLabel]
             _fas(flattened_hprod, [None,gpindices1,gpindices2],
                 gate.hessian_wrt_params(gate_wrtFilter1, gate_wrtFilter2))
                 
@@ -297,13 +298,13 @@ class GateMatrixCalc(GateCalc):
         leftProds = [ ]
         G = _np.identity( dim ); leftProds.append(G)
         for gateLabel in revGateLabelList:
-            G = _np.dot(G,self.gates[gateLabel].base)
+            G = _np.dot(G,self._getgate(gateLabel).base)
             leftProds.append(G)
 
         rightProdsT = [ ]
         G = _np.identity( dim ); rightProdsT.append( _np.transpose(G) )
         for gateLabel in reversed(revGateLabelList):
-            G = _np.dot(self.gates[gateLabel].base,G)
+            G = _np.dot(self._getgate(gateLabel).base,G)
             rightProdsT.append( _np.transpose(G) )
 
         # Allocate memory for the final result
@@ -313,8 +314,10 @@ class GateMatrixCalc(GateCalc):
         # For each gate label, compute the derivative of the entire gate string
         #  with respect to only that gate's parameters and fill the appropriate
         #  columns of flattened_dprod.
-        for gateLabel,gate in self.gates.items():
-            gate_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, self.gates[gateLabel])
+        uniqueGateLabels = sorted(list(set(revGateLabelList)))
+        for gateLabel in uniqueGateLabels:
+            gate = self._getgate(gateLabel)
+            gate_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, gate)
             dgate_dgateLabel = gate.deriv_wrt_params(gate_wrtFilter)
 
             for (i,gl) in enumerate(revGateLabelList):
@@ -393,12 +396,16 @@ class GateMatrixCalc(GateCalc):
 
         dim = self.dim
 
+        uniqueGateLabels = sorted(list(set(revGateLabelList)))
+        used_gates = _collections.OrderedDict()
+
         #Cache processed parameter filters for multiple uses below
         gpindices1 = {}; gate_wrtFilters1 = {}
         gpindices2 = {}; gate_wrtFilters2 = {}
-        for l,gate in self.gates.items():
-            gate_wrtFilters1[l], gpindices1[l] = self._process_wrtFilter(wrtFilter1, gate)
-            gate_wrtFilters2[l], gpindices2[l] = self._process_wrtFilter(wrtFilter2, gate)
+        for l in uniqueGateLabels:
+            used_gates[l] = self._getgate(l)
+            gate_wrtFilters1[l], gpindices1[l] = self._process_wrtFilter(wrtFilter1, used_gates[l])
+            gate_wrtFilters2[l], gpindices2[l] = self._process_wrtFilter(wrtFilter2, used_gates[l])
         
         #Cache partial products (relatively little mem required)
         prods = {}
@@ -407,25 +414,25 @@ class GateMatrixCalc(GateCalc):
             prods[ (i,i-1) ] = ident #product of no gates
             G = ident
             for (j,gateLabel2) in enumerate(revGateLabelList[i:],start=i): #loop over "ending" gate (>= starting gate)
-                G = _np.dot(G,self.gates[gateLabel2].base)
+                G = _np.dot(G,self._getgate(gateLabel2).base)
                 prods[ (i,j) ] = G
         prods[ (len(revGateLabelList),len(revGateLabelList)-1) ] = ident #product of no gates
 
         #Also Cache gate jacobians (still relatively little mem required)
         dgate_dgateLabel1 = {
             gateLabel: gate.deriv_wrt_params( gate_wrtFilters1[gateLabel] )
-            for gateLabel,gate in self.gates.items() }
+            for gateLabel,gate in used_gates.items() }
         
         if wrtFilter1 == wrtFilter2:
             dgate_dgateLabel2 = dgate_dgateLabel1
         else:
             dgate_dgateLabel2 = {
                 gateLabel: gate.deriv_wrt_params( gate_wrtFilters2[gateLabel] )
-                for gateLabel,gate in self.gates.items() }
+                for gateLabel,gate in used_gates.items() }
 
         #Finally, cache any nonzero gate hessians (memory?)
         hgate_dgateLabels = {}
-        for gateLabel,gate in self.gates.items():
+        for gateLabel,gate in used_gates.items():
             if gate.has_nonzero_hessian():
                 hgate_dgateLabels[gateLabel] = gate.hessian_wrt_params(
                     gate_wrtFilters1[gateLabel], gate_wrtFilters2[gateLabel])
@@ -496,15 +503,98 @@ class GateMatrixCalc(GateCalc):
             # axes = (gateset_parameter1, gateset_parameter2, gateset_element_row, gateset_element_col)
 
 
-    def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
+    #TODO REMOVE (UNUSED)
+    #def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
+    #    """
+    #    Compute probability of a single "outcome" (spam-tuple) for a single
+    #    gate string.
+    #
+    #    Parameters
+    #    ----------
+    #    spamTuple : (rho_label, compiled_effect_label)
+    #        Specifies the prep and POVM effect used to compute the probability.
+    #
+    #    gatestring : GateString or tuple
+    #        A tuple-like object of *compiled* gates (e.g. may include
+    #        instrument elements like 'Imyinst_0')
+    #
+    #    clipTo : 2-tuple
+    #      (min,max) to clip returned probability to if not None.
+    #      Only relevant when prMxToFill is not None.
+    #
+    #    bUseScaling : bool, optional
+    #      Whether to use a post-scaled product internally.  If False, this
+    #      routine will run slightly faster, but with a chance that the
+    #      product will overflow and the subsequent trace operation will
+    #      yield nan as the returned probability.
+    #
+    #    Returns
+    #    -------
+    #    probability: float
+    #    """
+    #    rho,E = self._rhoE_from_spamTuple(spamTuple)
+    #
+    #    if bUseScaling:
+    #        old_err = _np.seterr(over='ignore')
+    #        G,scale = self.product(gatestring, True)
+    #        if self.evotype == "statevec":
+    #            p =  float(abs(_np.dot(E, _np.dot(G, rho)) * scale)**2)
+    #        else: # evotype == "densitymx"
+    #            p = float(_np.dot(E, _np.dot(G, rho)) * scale) # probability, with scaling applied (may generate overflow, but OK)
+    #
+    #        #DEBUG: catch warnings to make sure correct (inf if value is large) evaluation occurs when there's a warning
+    #        #bPrint = False
+    #        #with _warnings.catch_warnings():
+    #        #    _warnings.filterwarnings('error')
+    #        #    try:
+    #        #        test = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) ) * scale
+    #        #    except Warning: bPrint = True
+    #        #if bPrint:  print 'Warning in Gateset.pr : scale=%g, trace=%g, p=%g' % (scale,_np.dot(self.SPAMs[spamLabel],G) ), p)
+    #        _np.seterr(**old_err)
+    #
+    #    else: #no scaling -- faster but susceptible to overflow
+    #        G = self.product(gatestring, False)
+    #        if self.evotype == "statevec":
+    #            p =  float(abs(_np.dot(E, _np.dot(G, rho)))**2)
+    #        else: # evotype == "densitymx"
+    #            p = float(_np.dot(E, _np.dot(G, rho)))
+    #
+    #
+    #    if _np.isnan(p):
+    #        if len(gatestring) < 10:
+    #            strToPrint = str(gatestring)
+    #        else:
+    #            strToPrint = str(gatestring[0:10]) + " ... (len %d)" % len(gatestring)
+    #        _warnings.warn("pr(%s) == nan" % strToPrint)
+    #        #DEBUG: print "backtrace" of product leading up to nan
+    #
+    #        #G = _np.identity( self.dim ); total_exp = 0.0
+    #        #for i,lGate in enumerate(gateLabelList):
+    #        #    G = _np.dot(G,self[lGate])  # product of gates, starting with G0
+    #        #    nG = norm(G); G /= nG; total_exp += log(nG) # scale and keep track of exponent
+    #        #
+    #        #    p = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) ) * exp(total_exp) # probability
+    #        #    print "%d: p = %g, norm %g, exp %g\n%s" % (i,p,norm(G),total_exp,str(G))
+    #        #    if _np.isnan(p): raise ValueError("STOP")
+    #
+    #    if clipTo is not None:
+    #        return _np.clip(p,clipTo[0],clipTo[1])
+    #    else: return p
+
+        
+    def prs(self, rholabel, elabels, gatestring, clipTo, bUseScaling=False):
         """
-        Compute probability of a single "outcome" (spam-tuple) for a single
-        gate string.
+        Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
+        gate string.  The spam tuples may only vary in their effect-label (their
+        prep labels must be the same)
 
         Parameters
         ----------
-        spamTuple : (rho_label, compiled_effect_label)
-            Specifies the prep and POVM effect used to compute the probability.
+        rholabel : Label
+            The state preparation label.
+        
+        elabels : list
+            A list of :class:`Label` objects giving the *compiled* effect labels.
 
         gatestring : GateString or tuple
             A tuple-like object of *compiled* gates (e.g. may include
@@ -522,30 +612,31 @@ class GateMatrixCalc(GateCalc):
 
         Returns
         -------
-        probability: float
+        numpy.ndarray
+            An array of floating-point probabilities, corresponding to
+            the elements of `elabels`.
         """
-        rho,E = self._rhoE_from_spamTuple(spamTuple)
+        rho,Es = self._rhoEs_from_spamTuples(rholabel, elabels)
+          #shapes: rho = (N,1), Es = (len(elabels),N)
 
         if bUseScaling:
             old_err = _np.seterr(over='ignore')
             G,scale = self.product(gatestring, True)
-            p = float(_np.dot(E, _np.dot(G, rho)) * scale) # probability, with scaling applied (may generate overflow, but OK)
-
-            #DEBUG: catch warnings to make sure correct (inf if value is large) evaluation occurs when there's a warning
-            #bPrint = False
-            #with _warnings.catch_warnings():
-            #    _warnings.filterwarnings('error')
-            #    try:
-            #        test = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) ) * scale
-            #    except Warning: bPrint = True
-            #if bPrint:  print 'Warning in Gateset.pr : scale=%g, trace=%g, p=%g' % (scale,_np.dot(self.SPAMs[spamLabel],G) ), p)
+            if self.evotype == "statevec":
+                ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)) * scale)**2)
+            else: # evotype == "densitymx"
+                ps = _np.real(_np.dot(Es, _np.dot(G, rho)) * scale) # probability, with scaling applied (may generate overflow, but OK)
             _np.seterr(**old_err)
 
         else: #no scaling -- faster but susceptible to overflow
             G = self.product(gatestring, False)
-            p = float(_np.dot(E, _np.dot(G, rho) ))
+            if self.evotype == "statevec":
+                ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)))**2)
+            else: # evotype == "densitymx"
+                ps = _np.real(_np.dot(Es, _np.dot(G, rho)))
+        ps = ps.flatten()
 
-        if _np.isnan(p):
+        if _np.any(_np.isnan(ps)):
             if len(gatestring) < 10:
                 strToPrint = str(gatestring)
             else:
@@ -563,8 +654,13 @@ class GateMatrixCalc(GateCalc):
             #    if _np.isnan(p): raise ValueError("STOP")
 
         if clipTo is not None:
-            return _np.clip(p,clipTo[0],clipTo[1])
-        else: return p
+            ret = _np.clip(ps,clipTo[0],clipTo[1])
+        else: ret = ps
+
+        #DEBUG CHECK
+        #check_ps = _np.array( [ self.pr( (rholabel,elabel), gatestring, clipTo, bScale) for elabel in elabels ])
+        #assert(_np.linalg.norm(ps-check_ps) < 1e-8)
+        return ps
 
 
     def dpr(self, spamTuple, gatestring, returnPr, clipTo):
@@ -598,6 +694,14 @@ class GateMatrixCalc(GateCalc):
         probability : float
             only returned if returnPr == True.
         """
+        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
+          # To support unitary evolution we need to:
+          # - alter product, dproduct, etc. to allow for *complex* derivatives, since matrices can be complex
+          # - update probability-derivative computations: dpr/dx -> d|pr|^2/dx = d(pr*pr.C)/dx = dpr/dx*pr.C + pr*dpr/dx.C
+          #    = 2 Re(dpr/dx*pr.C) , where dpr/dx is the usual density-matrix-mode probability
+          # (TODO in FUTURE)
+          
+        
         #  pr = Tr( |rho><E| * prod ) = sum E_k prod_kl rho_l
         #  dpr/d(gateLabel)_ij = sum E_k [dprod/d(gateLabel)_ij]_kl rho_l
         #  dpr/d(rho)_i = sum E_k prod_ki
@@ -679,6 +783,7 @@ class GateMatrixCalc(GateCalc):
         probability : float
             only returned if returnPr == True.
         """
+        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
         
         #  pr = Tr( |rho><E| * prod ) = sum E_k prod_kl rho_l
         #  d2pr/d(gateLabel1)_mn d(gateLabel2)_ij = sum E_k [dprod/d(gateLabel1)_mn d(gateLabel2)_ij]_kl rho_l
@@ -813,7 +918,7 @@ class GateMatrixCalc(GateCalc):
                 prodCache[i] = _np.identity( dim )
                 # Note: scaleCache[i] = 0.0 from initialization
             else:
-                gate = self.gates[gateLabel].base
+                gate = self._getgate(gateLabel).base
                 nG = max(_nla.norm(gate), 1.0)
                 prodCache[i] = gate / nG
                 scaleCache[i] = _np.log(nG)
@@ -1056,7 +1161,7 @@ class GateMatrixCalc(GateCalc):
         for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
             if gateLabel == "": #special case of empty label == no gate
                 hProdCache[i] = _np.zeros( hessn_shape )
-            elif not self.gates[gateLabel].has_nonzero_hessian():
+            elif not self._getgate(gateLabel).has_nonzero_hessian():
                 #all gate elements are at most linear in params, so
                 # all hessians for single- or zero-gate strings are zero.
                 hProdCache[i] = _np.zeros( hessn_shape )
@@ -1591,10 +1696,10 @@ class GateMatrixCalc(GateCalc):
 
     def _rhoE_from_spamTuple(self, spamTuple):
         assert( len(spamTuple) == 2 )
-        if _compat.isstr(spamTuple[0]):
+        if isinstance(spamTuple[0],_Label):
             rholabel,elabel = spamTuple
-            rho = self.preps[rholabel].toarray()
-            E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray()))
+            rho = self.preps[rholabel].todense()[:,None] # This calculator uses the convention that rho has shape (N,1)
+            E   = _np.conjugate(_np.transpose(self.effects[elabel].todense()[:,None])) # convention: E has shape (1,N)
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
@@ -1602,7 +1707,17 @@ class GateMatrixCalc(GateCalc):
             E   = _np.conjugate(_np.transpose(Eraw))
         return rho,E
 
+    def _rhoEs_from_spamTuples(self, rholabel, elabels):
+        #Note: no support for "custom" spamlabels...
+        rho = self.preps[rholabel].todense()[:,None] # This calculator uses the convention that rho has shape (N,1)
+        Es =  [self.effects[elabel].todense()[:,None] for elabel in elabels]
+        Es = _np.conjugate(_np.transpose( _np.concatenate( Es, axis=1 ))) # convention: Es has shape (len(elabels),N)
+        return rho,Es
+
+
     def _probs_from_rhoE(self, rho, E, Gs, scaleVals):
+        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
+        
         #Compute probability and save in return array
         # want vp[iFinal] = float(dot(E, dot(G, rho)))
         #  vp[i] = sum_k,l E[0,k] Gs[i,k,l] rho[l,0] * scaleVals[i]
@@ -1614,6 +1729,8 @@ class GateMatrixCalc(GateCalc):
 
 
     def _dprobs_from_rhoE(self, spamTuple, rho, E, Gs, dGs, scaleVals, wrtSlice=None):
+        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
+        
         rholabel,elabel = spamTuple
         rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
         EVec = self.effects[elabel]   # arrays, these are SPAMVecs
@@ -1719,6 +1836,8 @@ class GateMatrixCalc(GateCalc):
 
     def _hprobs_from_rhoE(self, spamTuple, rho, E, Gs, dGs1, dGs2, hGs, scaleVals,
                           wrtSlice1=None, wrtSlice2=None):
+        if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
+        
         rholabel,elabel = spamTuple
         rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
         EVec = self.effects[elabel]   # arrays, these are SPAMVecs
@@ -1865,7 +1984,7 @@ class GateMatrixCalc(GateCalc):
             gatestring_list = master_gatestring_list[gInds]
 
             if prMxToFill is not None:
-                check_vp = _np.array( [ self.pr(spamTuple, gateString, clipTo, False) for gateString in gatestring_list ] )
+                check_vp = _np.array( [ self.prs(spamTuple[0], [spamTuple[1]], gateString, clipTo, False)[0] for gateString in gatestring_list ] )
                 if _nla.norm(prMxToFill[fInds] - check_vp) > 1e-6:
                     _warnings.warn("norm(vp-check_vp) = %g - %g = %g" % \
                                (_nla.norm(prMxToFill[fInds]),

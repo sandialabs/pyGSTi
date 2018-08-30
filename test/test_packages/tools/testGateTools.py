@@ -70,8 +70,8 @@ class GateBaseTestCase(BaseTestCase):
         self.assertAlmostEqual( pygsti.frobeniusdist(A,A), 0.0 )
         self.assertAlmostEqual( pygsti.frobeniusdist2(A,A), 0.0 )
 
-    def test_process_fidelity(self):
-        fidelity = gatetools.process_fidelity(A, B)
+    def test_entanglement_fidelity(self):
+        fidelity = gatetools.entanglement_fidelity(A, B)
         self.assertAlmostEqual(fidelity, 0.42686642003)
 
     def test_fidelity_upper_bound(self):

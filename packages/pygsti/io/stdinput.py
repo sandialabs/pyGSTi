@@ -11,6 +11,7 @@ import os as _os
 import sys as _sys
 import time as _time
 import numpy as _np
+import ast as _ast
 import warnings as _warnings
 from scipy.linalg import expm as _expm
 from collections import OrderedDict as _OrderedDict
@@ -121,6 +122,7 @@ class StdInputParser(object):
                 f = float(p)
                 counts.append(f)
             except:
+                if 'G' in p: break # somewhat a hack - if there's a 'G' in it, then it's not a count column
                 try: # "expanded" ColonContainingLabels:count
                     t = p.split(':')
                     assert(len(t) > 1)
@@ -294,9 +296,26 @@ class StdInputParser(object):
                 if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
 
                 line = line.strip()
-                if len(line) == 0 or line[0] == '#': continue
+                if '#' in line:
+                    i = line.index('#')
+                    dataline,comment = line[:i], line[i+1:]
+                else:
+                    dataline,comment = line, ""
+
+                if len(dataline) == 0: continue
                 try:
-                    gateStringTuple, gateStringStr, valueList = self.parse_dataline(line, lookupDict, nDataCols)
+                    gateStringTuple, gateStringStr, valueList = \
+                            self.parse_dataline(dataline, lookupDict, nDataCols)
+
+                    commentDict = {}
+                    if len(comment) > 0:
+                        try:
+                            commentDict = _ast.literal_eval("{ " + comment + " }")
+                            #commentDict = _json.loads("{ " + comment + " }")
+                              #Alt: safer(?) & faster, but need quotes around all keys & vals
+                        except:
+                            _warnings.warn("%s Line %d: Could not parse comment '%s'"
+                                           % (filename, iLine, comment))
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
@@ -313,7 +332,7 @@ class StdInputParser(object):
                     _warnings.warn( "Dataline for gateString '%s' has zero counts and will be ignored" % gateStringStr)
                     continue #skip lines in dataset file with zero counts (no experiments done)
                 gateStr = _objs.GateString(gateStringTuple, gateStringStr, lookup=lookupDict)
-                dataset.add_count_dict(gateStr, countDict)
+                dataset.add_count_dict(gateStr, countDict, aux=commentDict)
 
         dataset.done_adding_data()
         return dataset
@@ -536,18 +555,21 @@ class StdInputParser(object):
         countCols, freqCols, impliedCounts1Q = fillInfo
 
         for dsLabel,outcomeLabel,iCol in countCols:
+            if colValues[iCol] == '--': continue
             if colValues[iCol] > 0 and colValues[iCol] < 1:
                 raise ValueError("Count column (%d) contains value(s) " % iCol +
                                  "between 0 and 1 - could this be a frequency?")
             countDicts[dsLabel][outcomeLabel] = colValues[iCol]
 
         for dsLabel,outcomeLabel,iCol,iTotCol in freqCols:
+            if colValues[iCol] == '--': continue
             if colValues[iCol] < 0 or colValues[iCol] > 1.0:
                 raise ValueError("Frequency column (%d) contains value(s) " % iCol +
                                  "outside of [0,1.0] interval - could this be a count?")
             countDicts[dsLabel][outcomeLabel] = colValues[iCol] * colValues[iTotCol]
 
         for dsLabel,outcomeLabel,iTotCol in impliedCounts1Q:
+            if colValues[iTotCol] == '--': raise ValueError("Mising total (== '--')!")
             if outcomeLabel == '0':
                 countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
             elif outcomeLabel == '1':
@@ -726,10 +748,10 @@ def read_gateset(filename):
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
             ham_basis = proj_basis
             nonham_basis = proj_basis
-            nonham_diagonal_only = False; cptp = True; truncate=True
-            gs.gates[cur_label] = _objs.LindbladParameterizedGate(qty, unitary_post, ham_basis,
-                                                                  nonham_basis, cptp, nonham_diagonal_only,
-                                                                  truncate, basis)
+            nonham_diagonal_only = False; cptp = True; truncate=False
+            gs.gates[cur_label] = _objs.LindbladParameterizedGate.from_gate_matrix(
+                qty, unitary_post, ham_basis, nonham_basis,
+                cptp, nonham_diagonal_only, truncate, basis)
         elif cur_typ == "STATIC-GATE":
             gs.gates[cur_label] = _objs.StaticGate(qty)
 

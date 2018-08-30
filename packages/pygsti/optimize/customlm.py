@@ -98,7 +98,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     if not _np.isfinite(norm_f):
         msg = "Infinite norm of objective function at initial point!"
 
+    # DB: from ..tools import matrixtools as _mt
+    # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
 
+        
     for k in range(max_iter): #outer loop
         # assume x, f, fnorm hold valid values
 
@@ -116,6 +119,17 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
         if profiler: profiler.mem_check("custom_leastsq: begin outer iter")
         Jac = jac_fn(x)
+
+        ##DEBUG: use finite difference to compute jacobian
+        #eps = 1e-7
+        #Jac = _np.empty((len(f),len(x)),'d')
+        #for i in range(len(x)):
+        #    x_plus_dx = x.copy()
+        #    x_plus_dx[i] += eps
+        #    Jac[:,i] = (obj_fn(x_plus_dx)-f)/eps
+        
+        # DB: from ..tools import matrixtools as _mt
+        # DB: print("DB JAC (%s)=" % str(Jac.shape)); _mt.print_mx(Jac,prec=0,width=4); assert(False)
         if profiler: profiler.mem_check("custom_leastsq: after jacobian:" 
                                         + "shape=%s, GB=%.2f" % (str(Jac.shape),
                                                         Jac.nbytes/(1024.0**3)) )
@@ -191,8 +205,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
                 if norm_dx > (norm_x+rel_xtol)/(MACH_PRECISION**2):
                     msg = "(near-)singular linear system"; break
-                
+
                 new_f = obj_fn(new_x)
+                # DB: from ..tools import matrixtools as _mt
+                # DB: print("DB XNEW (%s)=" % str(new_x.shape)); print(new_x)
+                # DB: print("DB FNEW (%s)=" % str(new_f.shape)); print(new_f); assert(False)
+                
                 if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
                 norm_new_f = _np.dot(new_f,new_f) # _np.linalg.norm(new_f)**2
                 if not _np.isfinite(norm_new_f): # avoid infinite loop...
@@ -204,7 +222,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" % 
                             (norm_new_f,dL,dF,dL/norm_f,dF/norm_f),2)
 
-                if dL/norm_f < rel_ftol and dF/norm_f < rel_ftol and dF/dL < 2.0:
+                if dL/norm_f < rel_ftol and dF >= 0 and dF/norm_f < rel_ftol and dF/dL < 2.0:
                     msg = "Both actual and predicted relative reductions in the" + \
                         " sum of squares are at most %g" % rel_ftol
                     converged = True; break

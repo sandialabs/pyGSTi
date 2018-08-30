@@ -457,11 +457,11 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
     global_numtests = 1
     
     # Todo: change some of these to the sidak correction where appropriate
-    pspepo_confidence_classcompensation = _hyp.bonferoni_correction(confidence,pspepo_numtests)
-    pspe_confidence_classcompensation = _hyp.bonferoni_correction(confidence,pspe_numtests)    
-    ps_confidence_classcompensation = _hyp.bonferoni_correction(confidence,ps_numtests)
-    pe_confidence_classcompensation = _hyp.bonferoni_correction(confidence,pe_numtests)
-    global_confidence_classcompensation = _hyp.bonferoni_correction(confidence,global_numtests)
+    pspepo_confidence_classcompensation = _hyp.bonferroni_correction(confidence,pspepo_numtests)
+    pspe_confidence_classcompensation = _hyp.bonferroni_correction(confidence,pspe_numtests)    
+    ps_confidence_classcompensation = _hyp.bonferroni_correction(confidence,ps_numtests)
+    pe_confidence_classcompensation = _hyp.bonferroni_correction(confidence,pe_numtests)
+    global_confidence_classcompensation = _hyp.bonferroni_correction(confidence,global_numtests)
     
     pspepo_significance_threshold_classcompensation = _stat.maxpower_threshold_chi2(pspepo_confidence_classcompensation, 
                                                                                     num_timesteps, pspepo_dof)
@@ -749,7 +749,7 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
         weights = [1/3.,1/3.,1/3.]
         
     numtests = [1,num_entities,num_entities*num_sequences]
-    composite_confidence = _hyp.generalized_bonferoni_correction(confidence,weights,numtests=numtests)
+    composite_confidence = _hyp.generalized_bonferroni_correction(confidence,weights,numtests=numtests)
 
     pspe_minimum_pvalue = _np.min(pspe_pvalue)
     pe_minimum_pvalue = _np.min(pe_pvalue)

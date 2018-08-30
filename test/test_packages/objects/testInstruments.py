@@ -21,7 +21,7 @@ class InstrumentTestCase(BaseTestCase):
         Gmz_minus = np.dot(Erem,Erem.T)
         self.gs_target.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         self.povm_ident = self.gs_target.povms['Mdefault']['0'] + self.gs_target.povms['Mdefault']['1']
-
+        
         self.gs_target_wTP = self.gs_target.copy()
         self.gs_target_wTP.instruments['IzTP'] = pygsti.obj.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
 

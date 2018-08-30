@@ -274,7 +274,7 @@ def init_notebook_mode_ex(connected=False):
 def get_plotlyjs_ex():
     """ Gets the custom pyGSTi version of plotly """
     path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                         "templates","offline", "plotly-polarfixed.min.js") # "plotly-polarfixed.js"
+                         "templates","offline", "plotly-latest.min.js") # "plotly-polarfixed.js"
 
     #EGN this block mocks-up resource_string to also work when using a
     # local package... could look into whether this is unecessary if we

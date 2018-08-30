@@ -135,7 +135,7 @@ def gatefn_factory(fn):
             self.gl = gl
             self.args = args
             self.kwargs = kwargs        
-            GateSetFunction.__init__(self, gateset, ["gate:"+gl])
+            GateSetFunction.__init__(self, gateset, ["gate:"+str(gl)])
             
         def evaluate(self, gateset):
             """ Evaluate this gate-set-function at `gateset`."""
@@ -176,7 +176,7 @@ def gatesfn_factory(fn):
             self.gl = gl
             self.args = args
             self.kwargs = kwargs        
-            GateSetFunction.__init__(self, gateset1, ["gate:"+gl])
+            GateSetFunction.__init__(self, gateset1, ["gate:"+str(gl)])
             
         def evaluate(self, gateset):
             """ Evaluate this gate-set-function at `gateset`."""
@@ -220,7 +220,7 @@ def vecfn_factory(fn):
                 typ = "povm"
                 lbl,_ = lbl.split(":") #for "effect"-mode, lbl must == "povmLbl:ELbl"
                                        # and GateSetFunction depends on entire POVM
-            GateSetFunction.__init__(self, gateset, [typ + ":" + lbl]) 
+            GateSetFunction.__init__(self, gateset, [typ + ":" + str(lbl)]) 
             
         def evaluate(self, gateset):
             """ Evaluate this gate-set-function at `gateset`."""
@@ -273,7 +273,7 @@ def vecsfn_factory(fn):
                                        # and GateSetFunction depends on entire POVM
             self.other_vecsrc = self.other_gateset.preps if self.typ == "prep" \
                                 else self.other_gateset.povms
-            GateSetFunction.__init__(self, gateset1, [typ + ":" + lbl])
+            GateSetFunction.__init__(self, gateset1, [typ + ":" + str(lbl)])
             
         def evaluate(self, gateset):
             """ Evaluate this gate-set-function at `gateset`."""

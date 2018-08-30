@@ -1,5 +1,6 @@
 import unittest
 import itertools
+import collections
 import pygsti
 import numpy as np
 import warnings
@@ -7,7 +8,16 @@ import pickle
 import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
-from pygsti.objects.gatemapcalc import GateMapCalc
+#from pygsti.objects.gatemapcalc import GateMapCalc
+
+#Note: calcs expect tuples (or GateStrings) of *Labels*
+from pygsti.objects import Label as L
+
+from pygsti.construction import std1Q_XYI
+
+def Ls(*args):
+    """ Convert args to a tuple to Labels """
+    return tuple([L(x) for x in args])
 
 FD_JAC_PLACES = 5 # loose checking when computing finite difference derivatives (currently in map calcs)
 FD_HESS_PLACES = 1 # looser checking when computing finite difference hessians (currently in map calcs)
@@ -37,7 +47,8 @@ class GateSetTestCase(BaseTestCase):
             parameterization="static")
 
         self.mgateset = self.gateset.copy()
-        self.mgateset._calcClass = GateMapCalc
+        #self.mgateset._calcClass = GateMapCalc
+        self.mgateset.set_simtype('map')
 
 
 class TestGateSetMethods(GateSetTestCase):
@@ -131,7 +142,11 @@ class TestGateSetMethods(GateSetTestCase):
         Gi_test_matrix[0,:] = [1,0,0,0] # so TP mode works
         Gi_test = pygsti.objects.FullyParameterizedGate( Gi_test_matrix  )
         print("POINT 1")
-        gs["Gi"] = Gi_test_matrix #set gate matrix
+        try:
+            gs["Gi"] = Gi_test_matrix #set gate matrix
+        except ValueError:
+            pass # can't always set via matrix - e.g. doesn't work for *static* case
+        
         print("POINT 2")
         gs["Gi"] = Gi_test #set gate object
         self.assertArraysAlmostEqual( gs['Gi'], Gi_test_matrix )
@@ -311,8 +326,8 @@ class TestGateSetMethods(GateSetTestCase):
 
         
     def test_bulk_probabilities(self):
-        gatestring1 = ('Gx','Gy')
-        gatestring2 = ('Gx','Gy','Gy')
+        gatestring1 = pygsti.obj.GateString(('Gx','Gy'))
+        gatestring2 = pygsti.obj.GateString(('Gx','Gy','Gy'))
         evt,lookup,outcome_lookup = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )
         mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( [gatestring1,gatestring2] )
 
@@ -423,9 +438,9 @@ class TestGateSetMethods(GateSetTestCase):
 
 
     def test_derivatives(self):
-        gatestring0 = ('Gi',) #,'Gx'
-        gatestring1 = ('Gx','Gy')
-        gatestring2 = ('Gx','Gy','Gy')
+        gatestring0 = pygsti.obj.GateString(('Gi',)) #,'Gx'
+        gatestring1 = pygsti.obj.GateString(('Gx','Gy'))
+        gatestring2 = pygsti.obj.GateString(('Gx','Gy','Gy'))
 
         gatestringList = [gatestring0,gatestring1,gatestring2]
         evt,lookup,outcome_lookup = self.gateset.bulk_evaltree( gatestringList )
@@ -601,11 +616,11 @@ class TestGateSetMethods(GateSetTestCase):
 
 
     def test_hessians(self):
-        gatestring0 = ('Gi','Gx')
-        gatestring1 = ('Gx','Gy')
-        gatestring2 = ('Gx','Gy','Gy')
+        gatestring0 = pygsti.obj.GateString(('Gi','Gx'))
+        gatestring1 = pygsti.obj.GateString(('Gx','Gy'))
+        gatestring2 = pygsti.obj.GateString(('Gx','Gy','Gy'))
 
-        gatestringList = [gatestring0,gatestring1,gatestring2]
+        gatestringList = pygsti.construction.gatestring_list([gatestring0,gatestring1,gatestring2])
         evt,lookup,outcome_lookup = self.gateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
         mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
 
@@ -981,16 +996,17 @@ class TestGateSetMethods(GateSetTestCase):
 
 
     def test_tree_construction(self):
-        gatestrings = [('Gx',),
-                       ('Gy',),
-                       ('Gx','Gy'),
-                       ('Gy','Gy'),
-                       ('Gy','Gx'),
-                       ('Gx','Gx','Gx'),
-                       ('Gx','Gy','Gx'),
-                       ('Gx','Gy','Gy'),
-                       ('Gy','Gy','Gy'),
-                       ('Gy','Gx','Gx') ]
+        gatestrings = pygsti.construction.gatestring_list(
+            [('Gx',),
+             ('Gy',),
+             ('Gx','Gy'),
+             ('Gy','Gy'),
+             ('Gy','Gx'),
+             ('Gx','Gx','Gx'),
+             ('Gx','Gy','Gx'),
+             ('Gx','Gy','Gy'),
+             ('Gy','Gy','Gy'),
+             ('Gy','Gx','Gx') ] )
         evt,lookup,outcome_lookup = self.gateset.bulk_evaltree( gatestrings, maxTreeSize=4 )
         mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( gatestrings, maxTreeSize=4 )
 
@@ -1198,11 +1214,12 @@ class TestGateSetMethods(GateSetTestCase):
 
 
     def test_base_gatecalc(self):
-        rawCalc = pygsti.objects.gatecalc.GateCalc(4, {'Gx': "dummy", 'Gy': "gates"},None,None, np.zeros(1,'d'))
+        rawCalc = pygsti.objects.gatecalc.GateCalc(4, {pygsti.obj.Label('Gx'): pygsti.obj.FullyParameterizedGate(np.identity(4,'d')) },
+                                                   {},{}, np.zeros(16,'d'), None)
 
         #Lots of things that derived classes implement
-        with self.assertRaises(NotImplementedError):
-            rawCalc._buildup_dPG() # b/c gates are not GateMatrix-derived (they're strings in fact!)
+        #with self.assertRaises(NotImplementedError):
+        #    rawCalc._buildup_dPG() # b/c gates are not GateMatrix-derived (they're strings in fact!)
         with self.assertRaises(NotImplementedError):
             rawCalc.product(('Gx',))
         with self.assertRaises(NotImplementedError):
@@ -1230,12 +1247,14 @@ class TestGateSetMethods(GateSetTestCase):
         rawCalc = self.gateset._calc()
 
         #Make call variants that aren't called by GateSet routines
-        dg = rawCalc.dgate('Gx', flat=False)
-        dgflat = rawCalc.dgate('Gx', flat=True)
+        dg = rawCalc.dgate(L('Gx'), flat=False)
+        dgflat = rawCalc.dgate(L('Gx'), flat=True)
 
-        rawCalc.hproduct(('Gx','Gx'), flat=True, wrtFilter1=[0,1], wrtFilter2=[1,2,3])
-        rawCalc.pr( ('rho0','Mdefault_0'), ('Gx','Gx'), clipTo=(-1,1))
-        rawCalc.pr( ('rho0','Mdefault_0'), ('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
+        rawCalc.hproduct(Ls('Gx','Gx'), flat=True, wrtFilter1=[0,1], wrtFilter2=[1,2,3])
+        #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1))
+        #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
+        rawCalc.prs( L('rho0'), [L('Mdefault_0')], Ls('Gx','Gx'), clipTo=(-1,1))
+        rawCalc.prs( L('rho0'), [L('Mdefault_0')], Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
 
         custom_spamTuple = ( np.zeros((4,1),'d'), np.zeros((4,1),'d') )
         rawCalc._rhoE_from_spamTuple(custom_spamTuple)
@@ -1266,25 +1285,27 @@ class TestGateSetMethods(GateSetTestCase):
         cptpGateset.set_all_parameterizations("CPTP") # so gates have nonzero hessians
         cptpCalc = cptpGateset._calc()
 
-        hg = cptpCalc.hgate('Gx', flat=False)
-        hgflat = cptpCalc.hgate('Gx', flat=True)
+        hg = cptpCalc.hgate(L('Gx'), flat=False)
+        hgflat = cptpCalc.hgate(L('Gx'), flat=True)
 
-        cptpCalc.hpr( ('rho0','Mdefault_0'), ('Gx','Gx'), False,False, clipTo=(-1,1))
+        cptpCalc.hpr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), False,False, clipTo=(-1,1))
         
 
 
     def test_base_gatemapcalc(self):
         rawCalc = self.mgateset._calc()
-
+        
         #Make call variants that aren't called by GateSet routines
-        rawCalc.pr( ('rho0','Mdefault_0'), ('Gx','Gx'), clipTo=(-1,1))
-        rawCalc.pr( ('rho0','Mdefault_0'), ('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
-        rawCalc.hpr( ('rho0','Mdefault_0'), ('Gx','Gx'), False,False, clipTo=(-1,1))
-        rawCalc.hpr( ('rho0','Mdefault_0'), ('Gx','Gx'), True,True, clipTo=(-1,1))
-                
-        custom_spamTuple = ( np.nan*np.ones((4,1),'d'), np.zeros((4,1),'d') )
-        rawCalc.pr( custom_spamTuple, ('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
+        #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1))
+        #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
+        rawCalc.prs( L('rho0'),[L('Mdefault_0')], Ls('Gx','Gx'), clipTo=(-1,1))
+        rawCalc.prs( L('rho0'),[L('Mdefault_0')], Ls('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
+        rawCalc.hpr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), False,False, clipTo=(-1,1))
+        rawCalc.hpr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), True,True, clipTo=(-1,1))
 
+        #Custom spamtuples aren't supported anymore
+        #custom_spamTuple = ( np.nan*np.ones((4,1),'d'), np.zeros((4,1),'d') )
+        #rawCalc.pr( custom_spamTuple, ('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
 
         rawCalc.estimate_cache_size(100)
         with self.assertRaises(ValueError):
@@ -1330,7 +1351,7 @@ class TestGateSetMethods(GateSetTestCase):
         
     def test_base_gatesetmember(self):
         #Test some parts of GateSetMember that aren't tested elsewhere
-        raw_member = pygsti.objects.gatesetmember.GateSetMember(dim=4)
+        raw_member = pygsti.objects.gatesetmember.GateSetMember(dim=4, evotype="densitymx")
         with self.assertRaises(ValueError):
             raw_member.gpindices = slice(0,3) # read-only!
         with self.assertRaises(ValueError):
@@ -1390,6 +1411,64 @@ class TestGateSetMethods(GateSetTestCase):
         gs.gates['Gnew3'] = pygsti.obj.FullyParameterizedGate( np.identity(4,'d') )
         del gs.gates['Gnew3'] #this causes update of Gnew2 indices
         del gs.gates['Gnew2']
+
+    def test_ondemand_probabilities(self):
+        #First create a "sparse" dataset
+        # # Columns = 0 count, 1 count 
+        dataset_txt = \
+"""# Test Sparse format data set
+{}    0:0  1:100
+Gx    0:10 1:90 2:0
+GxGy  0:40 1:60
+Gx^4  0:100
+"""
+        with open(temp_files + "/SparseDataset.txt",'w') as f:
+            f.write(dataset_txt)
+
+        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset.txt")
+        self.assertEqual(ds.get_outcome_labels(), [('0',), ('1',), ('2',)])
+        self.assertEqual(ds[()].outcomes, [('1',)]) # only nonzero count is 1-count
+        self.assertEqual(ds[()]['2'], 0) # but we can query '2' since it's a valid outcome label
+
+        gstrs = list(ds.keys())
+        raw_dict, elIndices, outcome_lookup, ntotal = std1Q_XYI.gs_target.compile_gatestrings(gstrs, ds)
+
+        print("Raw gs -> spamtuple dict:\n","\n".join(["%s: %s" % (str(k),str(v)) for k,v in raw_dict.items()]))
+        print("\nElement indices lookup (orig gstr index -> element indices):\n",elIndices)
+        print("\nOutcome lookup (orig gstr index -> list of outcome for each element):\n",outcome_lookup)
+        print("\ntotal elements = ", ntotal)
+
+        self.assertEqual(raw_dict[()], [(L('rho0'), L('Mdefault_1'))])
+        self.assertEqual(raw_dict[('Gx',)], [(L('rho0'), L('Mdefault_0')),(L('rho0'), L('Mdefault_1'))])
+        self.assertEqual(raw_dict[('Gx','Gy')], [(L('rho0'), L('Mdefault_0')),(L('rho0'), L('Mdefault_1'))])
+        self.assertEqual(raw_dict[('Gx',)*4], [(L('rho0'), L('Mdefault_0'))])
+
+        self.assertEqual(elIndices, collections.OrderedDict(
+            [(0, slice(0, 1, None)), (1, slice(1, 3, None)), (2, slice(3, 5, None)), (3, slice(5, 6, None))]) )
+
+        self.assertEqual(outcome_lookup, collections.OrderedDict(
+            [(0, [('1',)]), (1, [('0',), ('1',)]), (2, [('0',), ('1',)]), (3, [('0',)])]) )
+
+        self.assertEqual(ntotal, 6)
+
+
+        #A sparse dataset loading test using the more common format:
+        dataset_txt2 = \
+"""## Columns = 0 count, 1 count
+{} 0 100
+Gx 10 90
+GxGy 40 60
+Gx^4 100 0
+"""
+
+        with open(temp_files + "/SparseDataset2.txt",'w') as f:
+            f.write(dataset_txt2)
+
+        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset2.txt")
+        self.assertEqual(ds.get_outcome_labels(), [('0',), ('1',)])
+        self.assertEqual(ds[()].outcomes, [('1',)]) # only nonzero count is 1-count
+        with self.assertRaises(KeyError):
+            ds[()]['2'] # *can't* query '2' b/c it's NOT a valid outcome label here
 
         
 

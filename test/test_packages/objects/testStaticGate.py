@@ -16,10 +16,11 @@ class StaticGateTestCase(BaseTestCase):
         gate = self.gate.copy()
         with self.assertRaises(ValueError):
             gate.set_value([])
-        gate.set_value([[1, 2],[1, 2]])
+        with self.assertRaises(ValueError):
+            gate.set_value([[1, 2],[1, 2]])
 
         gate.dim = 'adfadsflkj'
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             gate.set_value([[1, 2],[1, 2]])
         with self.assertRaises(ValueError):
             gate.set_value([[[1, 2]],[], []])

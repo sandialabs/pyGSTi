@@ -37,7 +37,7 @@ slowtests = ['report', 'drivers']
 
 def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
               parallel=False, failed=False, cores=None, coverdir='../output/coverage', html=False,
-              threshold=90, outputfile=None, package='pygsti'):
+              threshold=90, outputfile=None, package='pygsti', scriptfile=None, timer=False):
 
     with directory('test_packages'):
 
@@ -102,10 +102,29 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
                                '--cover-package={}'.format(package),
                                '--cover-min-percentage={}'.format(threshold)]
 
+        if timer:
+            pythoncommands.append('--with-timer')
+
         returned = 0
         if len(testnames) > 0:
             commands = pythoncommands + testnames + postcommands
-            print(' '.join(commands))
+            commandStr = ' '.join(commands)
+            
+            if scriptfile:
+                #Script file runs command directly from shell so output works normally
+                # (using subprocess on TravisCI gives incomplete output sometimes).  It
+                # uses a sleep loop to ensure some output is printed every 9 minutes,
+                # as TravisCI terminates a process when it goes 10m without output.
+                with open(scriptfile, 'w') as script:
+                    print("#!/usr/bin/bash",file=script)
+                    print('echo "%s"' % commandStr, file=script)
+                    print('while sleep 540; do echo "=====[ $SECONDS seconds ]====="; done &', file=script)
+                    print(commandStr,file=script)
+                    print('kill %1', file=script) # Kill background sleep loop
+                print("Wrote script file %s" % os.path.join('test_packages',scriptfile)) # cwd == 'test_packages'
+                sys.exit(0)
+            else:
+                print(commandStr)
 
             if outputfile is None:
                 returned = subprocess.call(commands)
@@ -177,10 +196,16 @@ if __name__ == "__main__":
                         help='coverage percentage to beat')
     parser.add_argument('--output', type=str, default=None,
                         help='outputfile')
+    parser.add_argument('--script', type=str, default=None,
+                        help='scriptfile')
+    parser.add_argument('--with-timer', '-t', action='store_true',
+                        help='run tests in parallel')
+        
 
     parsed = parser.parse_args(sys.argv[1:])
 
     # With this many arguments, maybe this function should be refactored?
     run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.cover,
               parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir,
-              parsed.html, parsed.threshold, parsed.output, parsed.package)
+              parsed.html, parsed.threshold, parsed.output, parsed.package,
+              parsed.script, parsed.with_timer)

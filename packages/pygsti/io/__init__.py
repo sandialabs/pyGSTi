@@ -11,3 +11,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 from .loaders import *
 from .writers import *
 from .stdinput import *
+from . import json
+
+#Users may not have msgpack, which is fine.
+try: from . import msgpack
+except ImportError: pass

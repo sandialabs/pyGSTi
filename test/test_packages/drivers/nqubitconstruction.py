@@ -392,7 +392,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
         
             err_qubit_global_inds = err_qubit_inds
             fullTermErr = Embedded(ssAllQ, [('Q%d'%i) for i in err_qubit_global_inds],
-                                   termErr, basisAllQ)
+                                   termErr, basisAllQ.dim)
             assert(fullTermErr.num_params() == termErr.num_params())
             printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                         (termErr.dim, termErr.num_params(), fullTermErr.dim))
@@ -516,7 +516,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
     ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nQubits)])]
     basisAllQ = pygsti.objects.Basis('pp', 2**qubitGraph.nQubits, sparse=sparse)
     fullTargetOp = Embedded(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
-                            Static(targetOp), basisAllQ) 
+                            Static(targetOp), basisAllQ.dim) 
 
     #Factor2: idle_noise operation
     printer.log("Creating idle error factor",2)
@@ -530,7 +530,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
             # Id_1Q = _sps.identity(4**1,'d','csr') if sparse else  _np.identity(4**1,'d')
             Id_1Q = _np.identity(4**1,'d') #always dense for now...
             fullIdleErr = Composed(
-                [ Embedded(ssAllQ, ('Q%d'%i,), Lindblad(Id_1Q.copy()),basisAllQ)
+                [ Embedded(ssAllQ, ('Q%d'%i,), Lindblad(Id_1Q.copy()),basisAllQ.dim)
                   for i in range(qubitGraph.nQubits)] )
         elif idle_noise == False:
             printer.log("No idle factor",3)
@@ -590,7 +590,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
                             nonham_diagonal_only=True, truncate=True,
                             mxBasis=basisLocQ)
         fullLocalErr = Embedded(ssAllQ, ['Q%d'%i for i in all_possible_err_qubit_inds],
-                                localErr, basisAllQ)
+                                localErr, basisAllQ.dim)
         printer.log("Lindblad gate w/dim=%d and %d params (from error basis of len %d) -> embedded to gate w/dim=%d" %
                     (localErr.dim, localErr.num_params(), len(errbasis), fullLocalErr.dim),2)
 
@@ -632,7 +632,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
                                    mxBasis=wtBasis)
         
                 fullTermErr = Embedded(ssAllQ, ['Q%d'%i for i in err_qubit_global_inds],
-                                       termErr, basisAllQ)
+                                       termErr, basisAllQ.dim)
                 assert(fullTermErr.num_params() == termErr.num_params())
                 printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                             (termErr.dim, termErr.num_params(), fullTermErr.dim))

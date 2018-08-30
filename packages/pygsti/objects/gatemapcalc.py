@@ -15,11 +15,26 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools.matrixtools import _fas
+from ..tools import symplectic as _symp
 from ..baseobjs import DummyProfiler as _DummyProfiler
+from ..baseobjs import Label as _Label
 from .mapevaltree import MapEvalTree as _MapEvalTree
 from .gatecalc import GateCalc
 
+try:
+    from . import fastreplib as replib
+except ImportError:
+    from . import replib
+
+
+
 _dummy_profiler = _DummyProfiler()
+
+# FUTURE: use enum (make sure it's supported in Python2.7?)
+SUPEROP  = 0
+UNITARY  = 1
+CLIFFORD = 2
+
 
 #TODO:
 # Gate -> GateMatrix
@@ -33,9 +48,8 @@ class GateMapCalc(GateCalc):
     gate set classes (e.g. ones which use entirely different -- non-gate-local
     -- parameterizations of gate matrices and SPAM vectors) access to these
     fundamental operations.
-    """
-
-    def __init__(self, dim, gates, preps, effects, paramvec):
+    """    
+    def __init__(self, dim, gates, preps, effects, paramvec, autogator):
         """
         Construct a new GateMapCalc object.
 
@@ -50,80 +64,162 @@ class GateMapCalc(GateCalc):
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
-        spamdefs : OrderedDict
-            A dictionary whose keys are the allowed SPAM labels, and whose
-            values are 2-tuples comprised of a state preparation label
-            followed by a POVM effect label (both of which are strings,
-            and keys of preps and effects, respectively, except for the
-            special case when both are set to "remainder").
-
         paramvec : ndarray
             The parameter vector of the GateSet.
+
+        autogator : AutoGator
+            An auto-gator object that may be used to construct virtual gates
+            for use in computations.
         """
         super(GateMapCalc, self).__init__(
-            dim, gates, preps, effects, paramvec)
+            dim, gates, preps, effects, paramvec, autogator)
+        if self.evotype not in ("statevec","densitymx","stabilizer"):
+            raise ValueError(("Evolution type %s is incompatbile with "
+                              "map-based calculations" % self.evotype))
 
         
     def copy(self):
         """ Return a shallow copy of this GateMatrixCalc """
         return GateMapCalc(self.dim, self.gates, self.preps,
-                              self.effects, self.paramvec)
+                              self.effects, self.paramvec, self.autogator)
 
-        
+
+    #UNUSED TODO REMOVE
     #Same as GateMatrixCalc, but not general enough to be in base class
-    def _rhoE_from_spamTuple(self, spamTuple):
-        assert( len(spamTuple) == 2 )
-        if _compat.isstr(spamTuple[0]):
-            rholabel,elabel = spamTuple
-            rho = self.preps[rholabel].toarray()
-            E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray()))
-        else:
-            # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
-            #  objects: (prepVec, effectVec)
-            rho, Eraw = spamTuple
-            E   = _np.conjugate(_np.transpose(Eraw))
-        return rho,E
-
+    #def _rhoE_from_spamTuple(self, spamTuple):
+    #    assert( len(spamTuple) == 2 )
+    #    if isinstance(spamTuple[0],_Label): 
+    #        rholabel,elabel = spamTuple
+    #        if self.evotype in ("densitymx","statevec"):  # FUTURE: use enum (make sure it's supported in Python2.7?)
+    #            typ = complex if self.evotype == "statevec" else 'd'
+    #            scratch = _np.empty(self.preps[rholabel].dim, typ) # allocate local scratch
+    #            rho = self.preps[rholabel].todense(scratch).copy() # copy b/c use scratch again (next line)
+    #            E   = _np.conjugate(_np.transpose(self.effects[elabel].todense(scratch)))
+    #        else: # CLIFFORD
+    #            rho = self.preps[rholabel].todense()
+    #            E = self.effects[elabel] # just return raw effect object
+    #    else:
+    #        # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
+    #        #  objects: (prepVec, effectVec)
+    #        rho, Eraw = spamTuple
+    #        E   = _np.conjugate(_np.transpose(Eraw))
+    #    return rho,E
+    #
+    
     def _rhoEs_from_labels(self, rholabel, elabels):
-        """ Returns SPAMVec *objects*, so must call .toarray() later """
+        """ Returns SPAMVec *objects*, so must call .todense() later """
         rho = self.preps[rholabel]
         Es = [ self.effects[elabel] for elabel in elabels ]
         #No support for "custom" spamlabel stuff here
         return rho,Es
 
-    def propagate_state(self, rho, gatestring):
-        """ 
-        State propagation by GateMap objects which have 'acton'
-        methods.  This function could easily be overridden to 
-        perform some more sophisticated state propagation
-        (i.e. Monte Carlo) in the future.
+    #OLD: TODO REMOVE
+    #def propagate_state(self, rho, gatestring):
+    #    """ 
+    #    State propagation by GateMap objects which have 'acton'
+    #    methods.  This function could easily be overridden to 
+    #    perform some more sophisticated state propagation
+    #    (i.e. Monte Carlo) in the future.
+    #
+    #    Parameters
+    #    ----------
+    #    rho : SPAMVec
+    #       The spam vector representing the initial state.
+    #
+    #    gatestring : GateString or tuple
+    #       A tuple of labels specifying the gate sequence to apply.
+    #
+    #    Returns
+    #    -------
+    #    SPAMVec
+    #    """
+    #    #from .label import Label #DEBUG
+    #    #print("INIT: \n",rho) #DEBUG
+    #    for lbl in gatestring:
+    #        rho = self.gates[lbl].acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
+    #        #print("AFTER %s: \n" % str(lbl),rho) #DEBUG HERE
+    #    return rho
+
+
+    #TODO REMOVE (UNUSED)
+    #def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
+    #    """
+    #    Compute probability of a single "outcome" (spam-tuple) for a single
+    #    gate string.
+    #
+    #    Parameters
+    #    ----------
+    #    spamTuple : (rho_label, compiled_effect_label)
+    #        Specifies the prep and POVM effect used to compute the probability.
+    #
+    #    gatestring : GateString or tuple
+    #        A tuple-like object of *compiled* gates (e.g. may include
+    #        instrument elements like 'Imyinst_0')
+    #
+    #    clipTo : 2-tuple
+    #      (min,max) to clip returned probability to if not None.
+    #      Only relevant when prMxToFill is not None.
+    #
+    #    bUseScaling : bool, optional
+    #      Whether to use a post-scaled product internally.  If False, this
+    #      routine will run slightly faster, but with a chance that the
+    #      product will overflow and the subsequent trace operation will
+    #      yield nan as the returned probability.
+    #
+    #    Returns
+    #    -------
+    #    probability: float
+    #    """
+    #    rholabel,elabel = spamTuple # can't handle custom rho/e -- this seems ok...
+    #    rhorep = self.preps[rholabel].torep('prep')
+    #    erep = self.effects[elabel].torep('effect')
+    #    rhorep = replib.propagate_staterep(rhorep, [self._getgate(gl).torep() for gl in gatestring])
+    #    p = erep.probability(rhorep) #outcome probability
+    #
+    #    #OLD DEPRECATED REPS TODO REMOVE
+    #    #rho,E = self._rhoE_from_spamTuple(spamTuple)
+    #    #rho = self.propagate_state(rho, gatestring)
+    #    ## DEBUG print( " - state = ", rho.s)
+    #    ## DEBUG print( "         = ", rho.ps)
+    #    ## DEBUG print( "         = ", rho.a)
+    #    #if self.evotype == "statevec":
+    #    #    p_old = float(abs(_np.dot(E,rho))**2)
+    #    #elif self.evotype == "densitymx":
+    #    #    p_old = float(_np.dot(E,rho))
+    #    #else: # evotype == "stabilizer"
+    #    #    #print("MEASURE!!")
+    #    #    p_old = rho.measurement_probability(E.outcomes)
+    #    #    #a_old = rho.extract_amplitude(E.outcomes)
+    #    #    # DEBUG print("AMP DEBUG COMP = ",amp,a_old)
+    #    #    #assert(_np.isclose(amp,a_old)),"New code is giving a different amplitude result!"
+    #    #if not (_np.isnan(p) and _np.isnan(p_old)):
+    #    #    assert(_np.isclose(p,p_old)),"New code is giving a different result!"
+    #
+    #    if _np.isnan(p):
+    #        if len(gatestring) < 10:
+    #            strToPrint = str(gatestring)
+    #        else:
+    #            strToPrint = str(gatestring[0:10]) + " ... (len %d)" % len(gatestring)
+    #        _warnings.warn("pr(%s) == nan" % strToPrint)
+    #
+    #    if clipTo is not None:
+    #        return _np.clip(p,clipTo[0],clipTo[1])
+    #    else: return p
+
+        
+    def prs(self, rholabel, elabels, gatestring, clipTo, bUseScaling=False):
+        """
+        Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
+        gate string.  The spam tuples may only vary in their effect-label (their
+        prep labels must be the same)
 
         Parameters
         ----------
-        rho : SPAMVec
-           The spam vector representing the initial state.
-
-        gatestring : GateString or tuple
-           A tuple of labels specifying the gate sequence to apply.
-
-        Returns
-        -------
-        SPAMVec
-        """
-        for lbl in gatestring:
-            rho = self.gates[lbl].acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
-        return rho
-
-
-    def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
-        """
-        Compute probability of a single "outcome" (spam-tuple) for a single
-        gate string.
-
-        Parameters
-        ----------
-        spamTuple : (rho_label, compiled_effect_label)
-            Specifies the prep and POVM effect used to compute the probability.
+        rholabel : Label
+            The state preparation label.
+        
+        elabels : list
+            A list of :class:`Label` objects giving the *compiled* effect labels.
 
         gatestring : GateString or tuple
             A tuple-like object of *compiled* gates (e.g. may include
@@ -134,20 +230,21 @@ class GateMapCalc(GateCalc):
           Only relevant when prMxToFill is not None.
 
         bUseScaling : bool, optional
-          Whether to use a post-scaled product internally.  If False, this
-          routine will run slightly faster, but with a chance that the
-          product will overflow and the subsequent trace operation will
-          yield nan as the returned probability.
+          Unused.  Present to match function signature of other calculators.
 
         Returns
         -------
-        probability: float
+        numpy.ndarray
+            An array of floating-point probabilities, corresponding to
+            the elements of `elabels`.
         """
-        rho,E = self._rhoE_from_spamTuple(spamTuple)
-        rho = self.propagate_state(rho, gatestring)
-        p = float(_np.dot(E,rho))
+        rhorep = self.preps[rholabel].torep('prep')
+        ereps = [ self.effects[elabel].torep('effect') for elabel in elabels ]
+        rhorep = replib.propagate_staterep(rhorep, [self._getgate(gl).torep() for gl in gatestring])
+        ps = _np.array([ erep.probability(rhorep) for erep in ereps ], 'd')
+          #outcome probabilities
 
-        if _np.isnan(p):
+        if _np.any(_np.isnan(ps)):
             if len(gatestring) < 10:
                 strToPrint = str(gatestring)
             else:
@@ -155,8 +252,8 @@ class GateMapCalc(GateCalc):
             _warnings.warn("pr(%s) == nan" % strToPrint)
 
         if clipTo is not None:
-            return _np.clip(p,clipTo[0],clipTo[1])
-        else: return p
+            return _np.clip(ps,clipTo[0],clipTo[1])
+        else: return ps
 
         
     def dpr(self, spamTuple, gatestring, returnPr, clipTo):
@@ -193,14 +290,14 @@ class GateMapCalc(GateCalc):
         
         #Finite difference derivative
         eps = 1e-7 #hardcoded?
-        p = self.pr(spamTuple, gatestring, clipTo)
+        p = self.prs(spamTuple[0], [spamTuple[1]], gatestring, clipTo)[0]
         dp = _np.empty( (1,self.Np), 'd' )
 
         orig_vec = self.to_vector().copy()
         for i in range(self.Np):
             vec = orig_vec.copy(); vec[i] += eps
             self.from_vector(vec)
-            dp[0,i] = (self.pr(spamTuple, gatestring, clipTo)-p)/eps
+            dp[0,i] = (self.prs(spamTuple[0], [spamTuple[1]], gatestring, clipTo)-p)[0]/eps
         self.from_vector(orig_vec)
                 
         if returnPr:
@@ -277,87 +374,141 @@ class GateMapCalc(GateCalc):
 
 
     def _compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch=None):
-        #tStart = _time.time()
-        dim = self.dim
-        cacheSize = evalTree.cache_size()
-        rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
-        ret = _np.empty((len(evalTree),len(elabels)),'d')
-        
-        if scratch is None:
-            rho_cache = _np.zeros((cacheSize, dim), 'd')
-        else:
-            assert(scratch.shape == (cacheSize,dim))
-            rho_cache = scratch #to avoid recomputation
+        return replib.DM_compute_pr_cache(self, rholabel, elabels, evalTree, comm)
 
-        #comm is currently ignored
-        #TODO: if evalTree is split, distribute among processors
-
-        rho = rhoVec.toarray()
-        Escratch = _np.empty(rho.shape[0],'d') # memory for E.toarray() if it wants it
-        for i in evalTree.get_evaluation_order():
-            iStart,remainder,iCache = evalTree[i]
-            if iStart is None:  init_state = rho #[:,0]
-            else:               init_state = rho_cache[iStart][:,None]
-
-            final_state = self.propagate_state(init_state, remainder)
-            if iCache is not None: rho_cache[iCache] = final_state[:,0] #store this state in the cache
-
-            for j,E in enumerate(EVecs):
-                ret[i,j] = _np.vdot(E.toarray(Escratch),final_state)
-                #OLD (slower): _np.dot(_np.conjugate(E.toarray(Escratch)).T,final_state)
-                # FUTURE: optionally pre-compute toarray() results for speed if mem is available?
-                
-        #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
-        return ret
-
+        #DEPRECATED REPS - just call replib version now - but below (commented) version
+        # works for state-vec and stabilizer modes too - and we still need to essentially
+        # duplicate DM_compute_pr_cache to SV and SB modes...
+        ##tStart = _time.time()
+        #dim = self.dim
+        #cacheSize = evalTree.cache_size()
+        #rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
+        #ret = _np.empty((len(evalTree),len(elabels)),'d')
+        #
+        ##Get rho & rhoCache
+        #if self.evotype in ("statevec", "densitymx"):
+        #    #Scratch type (for holding spam/state vectors)
+        #    typ = complex if self.evotype == "statevec" else 'd'
+        #    
+        #    if scratch is None:
+        #        rho_cache = _np.zeros((cacheSize, dim), typ)
+        #    else:
+        #        assert(scratch.shape == (cacheSize,dim))
+        #        rho_cache = scratch #to avoid reallocation
+        #        
+        #    Escratch = _np.empty(dim,typ) # memory for E.todense() if it wants it
+        #    rho = rhoVec.todense(Escratch).copy() #rho can use same scratch space (enables fastkron)
+        #                                          # copy b/c use Escratch again (below)
+        #else: # CLIFFORD case
+        #    rho = rhoVec.todense()
+        #    if scratch is None:
+        #        rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
+        #    else:
+        #        assert(len(scratch) == cacheSize)
+        #        rho_cache = scratch
+        #               
+        #
+        ##comm is currently ignored
+        ##TODO: if evalTree is split, distribute among processors
+        #for i in evalTree.get_evaluation_order():
+        #    iStart,remainder,iCache = evalTree[i]
+        #    if iStart is None:  init_state = rho
+        #    else:               init_state = rho_cache[iStart] #[:,None]
+        #
+        #    final_state = self.propagate_state(init_state, remainder)
+        #    if iCache is not None: rho_cache[iCache] = final_state # [:,0] #store this state in the cache
+        #
+        #    if self.evotype == "statevec":
+        #        for j,E in enumerate(EVecs):
+        #            ret[i,j] = _np.abs(_np.vdot(E.todense(Escratch),final_state))**2
+        #    elif self.evotype == "densitymx":
+        #        for j,E in enumerate(EVecs):
+        #            ret[i,j] = _np.vdot(E.todense(Escratch),final_state)
+        #            #OLD (slower): _np.dot(_np.conjugate(E.todense(Escratch)).T,final_state)
+        #            # FUTURE: optionally pre-compute todense() results for speed if mem is available?
+        #    else: # evotype == "stabilizer" case
+        #        #TODO: compute using tree-like fanout, only fanning when necessary. -- at least when there are O(d=2^nQ) effects
+        #        for j,E in enumerate(EVecs):
+        #            ret[i,j] = rho.measurement_probability(E.outcomes)
+        #
+        ##print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
+        #
+        ##CHECK
+        ##print("DB: ",ret); print("DB: ",ret2)
+        #assert(_np.linalg.norm(ret-ret2) < 1e-6)
+        #
+        #return ret
+    
     
     def _compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch=None):
-        #Compute finite difference derivatives, one parameter at a time.
-        tStart = _time.time() #DEBUG
-        param_indices = range(self.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
-        nDerivCols = len(param_indices) # *all*, not just locally computed ones
-        
-        dim = self.dim
-        cacheSize = evalTree.cache_size()
-        dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
-        if scratch is None:
-            rho_cache  = _np.zeros((cacheSize, dim), 'd')
-        else:
-            assert(scratch.shape == (cacheSize,dim))
-            rho_cache  = scratch
-            
-        eps = 1e-7 #hardcoded?
-        pCache = self._compute_pr_cache(rholabel,elabels,evalTree,comm,rho_cache)
+        return replib.DM_compute_dpr_cache(self, rholabel, elabels, evalTree, wrtSlice, comm, scratch)
 
-        all_slices, my_slice, owners, subComm = \
-                _mpit.distribute_slice(slice(0,len(param_indices)), comm)
-
-        my_param_indices = param_indices[my_slice]
-        st = my_slice.start #beginning of where my_param_indices results
-                            # get placed into dpr_cache
-        
-        #Get a map from global parameter indices to the desired
-        # final index within dpr_cache
-        iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
-
-        orig_vec = self.to_vector().copy()
-        for i in range(self.Np): #HERE range(20): #
-            #print("dprobs cache %d of %d" % (i,self.Np))
-            if i in iParamToFinal:
-                iFinal = iParamToFinal[i]
-                vec = orig_vec.copy(); vec[i] += eps
-                self.from_vector(vec)
-                dpr_cache[:,:,iFinal] = ( self._compute_pr_cache(
-                    rholabel,elabels,evalTree,subComm,rho_cache) - pCache)/eps
-        self.from_vector(orig_vec)
-
-        #Now each processor has filled the relavant parts of dpr_cache,
-        # so gather together:
-        _mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=2, comm=comm)
-        print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" % 
-              (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
-
-        return dpr_cache
+        #DEPRECATED REPS - just call replib version now - but below (commented) version
+        # works for state-vec and stabilizer modes too - and we still need to essentially
+        # duplicate this function to SV and SB modes...
+        ##Compute finite difference derivatives, one parameter at a time.
+        #tStart = _time.time() #DEBUG
+        #param_indices = range(self.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
+        #nDerivCols = len(param_indices) # *all*, not just locally computed ones
+        #
+        #dim = self.dim
+        #cacheSize = evalTree.cache_size()
+        #dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
+        #
+        ## Allocate cache space if needed
+        #if self.evotype in ("statevec", "densitymx"):
+        #    typ = complex if self.evotype == "statevec" else 'd'
+        #
+        #    if scratch is None:
+        #        rho_cache  = _np.zeros((cacheSize, dim), typ)
+        #    else:
+        #        assert(scratch.shape == (cacheSize,dim))
+        #        rho_cache  = scratch
+        #else: # evotype == "stabilizer" case
+        #    if scratch is None:
+        #        rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
+        #    else:
+        #        assert(len(scratch) == cacheSize)
+        #        rho_cache = scratch
+        #        
+        #eps = 1e-7 #hardcoded?
+        #pCache = self._compute_pr_cache(rholabel,elabels,evalTree,comm,rho_cache)
+        #
+        #all_slices, my_slice, owners, subComm = \
+        #        _mpit.distribute_slice(slice(0,len(param_indices)), comm)
+        #
+        #my_param_indices = param_indices[my_slice]
+        #st = my_slice.start #beginning of where my_param_indices results
+        #                    # get placed into dpr_cache
+        #
+        ##Get a map from global parameter indices to the desired
+        ## final index within dpr_cache
+        #iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
+        #
+        #orig_vec = self.to_vector().copy()
+        #for i in range(self.Np):
+        #    #print("dprobs cache %d of %d" % (i,self.Np))
+        #    if i in iParamToFinal:
+        #        iFinal = iParamToFinal[i]
+        #        vec = orig_vec.copy(); vec[i] += eps
+        #        self.from_vector(vec)
+        #        dpr_cache[:,:,iFinal] = ( self._compute_pr_cache(
+        #            rholabel,elabels,evalTree,subComm,rho_cache) - pCache)/eps
+        #self.from_vector(orig_vec)
+        #
+        ##Now each processor has filled the relavant parts of dpr_cache,
+        ## so gather together:
+        #_mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=2, comm=comm)
+        ## DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
+        ##print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" % 
+        ##      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
+        #
+        ##CHECK
+        ##assert(_np.linalg.norm(dpr_cache-dpr_cache2) < 1e-6)
+        #if _np.linalg.norm(dpr_cache-dpr_cache2) > 1e-6:
+        #    print("DPR_CACHE MISMATCH: ", _np.linalg.norm(dpr_cache-dpr_cache2), " shape=",dpr_cache.shape)
+        #
+        #return dpr_cache
 
     def _compute_hpr_cache(self, rholabel, elabels, evalTree, wrtSlice1, wrtSlice2, comm):
         #Compute finite difference hessians, one parameter at a time.
@@ -369,8 +520,14 @@ class GateMapCalc(GateCalc):
         
         dim = self.dim
         cacheSize = evalTree.cache_size()
-        dpr_scratch = _np.zeros((cacheSize,dim),'d')
         hpr_cache  = _np.zeros((len(evalTree),len(elabels), nDerivCols1, nDerivCols2),'d')
+
+        # Allocate scratch space for compute_dpr_cache
+        if self.evotype in ("statevec", "densitymx"):
+            typ = complex if self.evotype == "statevec" else 'd'
+            dpr_scratch  = _np.zeros((cacheSize, dim), typ)
+        else: # evotype == "stabilizer" case
+            dpr_scratch = [None]*cacheSize # so we can store (s,p) tuples in cache
             
         eps = 1e-4 #hardcoded?
         dpCache = self._compute_dpr_cache(rholabel,elabels,evalTree,wrtSlice2,comm,
