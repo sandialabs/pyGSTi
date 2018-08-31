@@ -86,6 +86,26 @@ class GateSetMember(GateSetChild):
         raise ValueError(("Use set_gpindices(...) to set the parent"
                           " of a GateSetMember object"))
 
+    def relink_parent(self, parent):
+        """ 
+        Sets the parent of this object *without* altering its gpindices.
+
+        This operation is appropriate to do when "re-linking" a parent with
+        its children after the parent and child have been serialized.
+        (the parent is *not* saved in serialization - see 
+         GateSetChild.__getstate__ -- and so must be manually re-linked
+         upon de-serialization).
+
+        In addition to setting the parent of this object, this method 
+        sets the parent of any objects this object contains (i.e.
+        depends upon) - much like allocate_gpindices.  To ensure a valid
+        parent is not overwritten, the existing parent *must be None*
+        prior to this call.
+        """
+        if self._parent is parent: return # OK to relink multiple times
+        assert(self._parent is None), "Cannot relink parent: parent is not None!"
+        self._parent = parent # assume no dependent objects
+
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """

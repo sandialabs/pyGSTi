@@ -3832,15 +3832,35 @@ class ComposedGateMap(Gate):
         # parent's parameter array:
         tot_new_params = 0
         all_gpindices = []
+        #TODO: REMOVE below DB: statements (for debugging parameter allocation)
+        #DB: print("DB: Composed gate ALLOC: start =",startingIndex, "p=",str(type(self.parent)),"gp=",self.gpindices)
         for gate in self.factorgates:
+            #DB: print("Factor%d: %s" % (i,str(type(gate))), id(gate), "p=",str(type(gate.parent)),"gp=",gate.gpindices)
             num_new_params = gate.allocate_gpindices( startingIndex, parent ) # *same* parent as this ComposedGate
             startingIndex += num_new_params
             tot_new_params += num_new_params
             all_gpindices.extend( gate.gpindices_as_array() )
+            #DB: print("Factor%d: %d new params.  Gate params = " % (i,num_new_params),gate.gpindices)
+        #DB: print("All indices = ",_slct.list_to_slice(all_gpindices, array_ok=True))
 
         _gatesetmember.GateSetMember.set_gpindices(
             self, _slct.list_to_slice(all_gpindices, array_ok=True), parent)
         return tot_new_params
+
+
+    def relink_parent(self, parent):
+        """ 
+        Sets the parent of this object *without* altering its gpindices.
+
+        In addition to setting the parent of this object, this method 
+        sets the parent of any objects this object contains (i.e.
+        depends upon) - much like allocate_gpindices.  To ensure a valid
+        parent is not overwritten, the existing parent *must be None*
+        prior to this call.
+        """
+        for gate in self.factorgates:
+            gate.relink_parent(parent)
+        _gatesetmember.GateSetMember.relink_parent(self, parent)
 
     
     def set_gpindices(self, gpindices, parent, memo=None):
@@ -4298,10 +4318,27 @@ class EmbeddedGateMap(Gate):
             the parent should mark as allocated parameter
             indices `startingIndex` to `startingIndex + new_new`).
         """
+        #TODO: REMOVE
+        #DB: print("  Embedded ALLOC of gate ",str(type(self.embedded_gate)),"p=",str(type(self.embedded_gate.parent)),
+        #DB:      "gp=",self.embedded_gate.gpindices)
         num_new_params = self.embedded_gate.allocate_gpindices(startingIndex, parent)
         _gatesetmember.GateSetMember.set_gpindices(
             self, self.embedded_gate.gpindices, parent)
         return num_new_params
+
+
+    def relink_parent(self, parent):
+        """ 
+        Sets the parent of this object *without* altering its gpindices.
+
+        In addition to setting the parent of this object, this method 
+        sets the parent of any objects this object contains (i.e.
+        depends upon) - much like allocate_gpindices.  To ensure a valid
+        parent is not overwritten, the existing parent *must be None*
+        prior to this call.
+        """
+        self.embedded_gate.relink_parent(parent)
+        _gatesetmember.GateSetMember.relink_parent(self, parent)
 
     
     def set_gpindices(self, gpindices, parent, memo=None):

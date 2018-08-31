@@ -19,6 +19,7 @@ from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
 from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
+from ..objects import autogator as _autogator
 from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
@@ -478,6 +479,9 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
 
     else:
         raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
+
+    #Set auto-gator to one appropriate for the global idle gate used here
+    gs._autogator = _autogator.SharedIdleAutoGator(gs)
 
     #FUTURE - just return cloud *keys*? (gate label values are never used
     # downstream, but may still be useful for debugging, so keep for now)
