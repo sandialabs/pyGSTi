@@ -838,6 +838,33 @@ class Circuit(_gstr.GateString):
 
         self._tup_dirty = self._str_dirty = True
 
+    def replace_with_idling_wire(self, line_label):
+        """
+        Converts the specified wire to an idling wire, by changing all
+        gates to the identity gate. If there are any multi-qubit gates
+        acting on this wire, they are converted to idles on qubits on
+        which they act.
+
+        Parameters
+        ----------
+        line_label: str or int
+            The label of the line/wire to convert to an idling wire.
+        """
+        # Todo: add a test of this function.
+        assert(not self._static),"Cannot edit a read-only circuit!"
+        line_index = self.line_labels.index(line_label)
+
+        for l in range(self.depth()):
+            gate = self.line_items[line_index][l]
+            if gate.number_of_qubits != 1:
+                for q in gate.qubits:
+                    q_index =self.line_labels.index(q)
+                    del self.line_items[q_index][l]
+                    self.line_items[q_index].insert(l,_Label(self.identity,q))
+
+        self.line_items[line_index] = [_Label(self.identity,line_label) for l in range(self.depth())]
+        self._tup_dirty = self._str_dirty = True        
+
     def insert_idling_wires(self, all_line_labels):
         """
         Creates more lines (wires/qubits) in the circuit, with these new lines 
@@ -1343,7 +1370,10 @@ class Circuit(_gstr.GateString):
         -------
         int
         """ 
-        return len(self.line_items[0])
+        if len(self.line_items) > 0:
+            return len(self.line_items[0])
+        else:
+            return 0
     
     def size(self):
         """
@@ -1444,6 +1474,10 @@ class Circuit(_gstr.GateString):
         """
         A text rendering of the circuit.
         """
+
+        # If it's a circuit over no lines, return an empty string
+        if self.number_of_lines() == 0: return ''
+
         s = ''
         Ctxt = 'C' if _sys.version_info <= (3, 0) else '\u25CF' # No unicode in
         Ttxt = 'T' if _sys.version_info <= (3, 0) else '\u2295' #  Python 2
