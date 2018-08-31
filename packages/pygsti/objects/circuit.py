@@ -594,10 +594,10 @@ class Circuit(_gstr.GateString):
         sdepth = self.depth()
         if cdepth > sdepth:
             for q in range(self.number_of_lines()):
-                self.line_items[q] += [_Label(self.identity,q) for i in range(cdepth-sdepth)]
+                self.line_items[q] += [_Label(self.identity,self.line_labels[q]) for i in range(cdepth-sdepth)]
         elif cdepth < sdepth:
             for q in range(circuit.number_of_lines()):
-                circuit.line_items[q] += [_Label(circuit.identity,q) for i in range(sdepth-cdepth)]
+                circuit.line_items[q] += [_Label(circuit.identity,circuit.line_labels[q]) for i in range(sdepth-cdepth)]
         
         self.insert_idling_wires(new_line_labels)
 

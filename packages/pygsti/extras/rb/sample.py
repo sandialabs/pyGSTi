@@ -73,7 +73,9 @@ def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgate
         one gate acting on each qubit in `pspec` or `subsetQs`).       
     """
     if subsetQs is None: n = pspec.number_of_qubits
-    else: n = len(subsetQs)
+    else:
+        assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
+        n = len(subsetQs)
     
     # If the one qubit and/or two qubit gate names are only specified as 'all', construct them.
     if (oneQgatenames == 'all') or (twoQgatenames == 'all'):    
@@ -99,9 +101,9 @@ def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgate
     
     # Basic variables required for sampling the circuit layer.
     if subsetQs is None:
-        qubits = pspec.qubit_labels[:] # copy this list
+        qubits = list(pspec.qubit_labels[:]) # copy this list
     else:
-        qubits = subsetQs[:] # copy this list
+        qubits = list(subsetQs[:]) # copy this list
     sampled_layer = []
     num_oneQgatenames = len(oneQgatenames)
     num_twoQgatenames = len(twoQgatenames)
@@ -198,11 +200,12 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
         only one gate acting on each qubit in `pspec` or `subsetQs`).        
     """
     if subsetQs is None:
+        assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
         n = pspec.number_of_qubits
-        qubits = pspec.qubit_labels[:] # copy this list
+        qubits = list(pspec.qubit_labels[:]) # copy this list
     else:
         n = len(subsetQs)   
-        qubits = subsetQs[:] # copy this list
+        qubits = list(subsetQs[:]) # copy this list
 
     # If oneQgates is specified, use the given list.
     if oneQgates != 'all':
@@ -432,8 +435,9 @@ def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='unifor
         
     # Prep the sampling variables
     sampled_layer = []
-    if subsetQs is not None:    
-        remaining_qubits = subsetQs[:] # copy this list
+    if subsetQs is not None: 
+        assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"   
+        remaining_qubits = list(subsetQs[:]) # copy this list
     else:
         remaining_qubits = pspec.qubit_labels[:] # copy this list
     
@@ -517,8 +521,11 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
         A list of gate Labels that defines a "complete" circuit layer (there is one and 
         only one gate acting on each qubit).       
     """
-    if subsetQs is not None: qubits = subsetQs[:] # copy this list
-    else: qubits = pspec.qubit_labels[:] # copy this list
+    if subsetQs is not None: 
+        assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
+        qubits = list(subsetQs[:]) # copy this list
+    else: 
+        qubits = list(pspec.qubit_labels[:]) # copy this list
 
     sampled_layer = []
     
@@ -634,9 +641,10 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
         else: raise ValueError("Sampler type not understood!")
 
     if subsetQs is not None:
-        qubits = subsetQs[:] # copy this list
+        assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
+        qubits = list(subsetQs[:]) # copy this list
     else:
-        qubits = pspec.qubit_labels[:] # copy this list
+        qubits = list(pspec.qubit_labels[:]) # copy this list
     
     # If we can, we use the identity in the pspec.
     if pspec.identity is not None:
@@ -1172,33 +1180,47 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
     """    
     if isinstance(structure,str):
         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
-        structure = (q for q in pspec.qubit_labels)
+        structure = tuple([(q,) for q in pspec.qubit_labels])
+        n = pspec.number_of_qubits
+    else:
+        assert(isinstance(structure,list) or isinstance(structure,tuple)), "If not a string, `structure` must be a list or tuple."
+        qubits_used = []
+        for subsetQs in structure:
+            assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
+            qubits_used = qubits_used + list(subsetQs)
+            assert(len(set(qubits_used)) == len(qubits_used)), "The qubits in the tuples/lists of `structure must all be unique!"
+
+        assert(set(qubits_used).issubset(set(pspec.qubit_labels))), "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+        n = len(qubits_used)
+
+    print(structure)
     
     # Creates a empty circuit over no wires
-    circuit = _cir.Circuit(num_lines=0) 
+    circuit = _cir.Circuit(num_lines=0, identity=pspec.identity) 
 
     s_rc_dict = {}
-    P_rc_dict = {}
+    p_rc_dict = {}
     circuit_dict = {}
 
     for subsetQs in structure:
+        subsetQs = tuple(subsetQs)
         # Sample a random circuit of "native gates" over this set of qubits, with the 
         # specified sampling.
         subset_circuit = random_circuit(pspec=pspec, length=length, subsetQs=subsetQs, sampler=sampler, 
                                        samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
         circuit_dict[subsetQs] = subset_circuit
-        # find the symplectic matrix / phase vector this circuit implements.
+        # find the symplectic matrix / phase ©vector this circuit implements.
         s_rc_dict[subsetQs], p_rc_dict[subsetQs] = _symp.symplectic_rep_of_clifford_circuit(subset_circuit,pspec=pspec)
         # Tensors this circuit with the current circuit
         circuit.tensor_circuit(subset_circuit)
     
     # Creates empty circuits over no wires
-    inversion_circuit = _cir.Circuit(num_lines=0)  
+    inversion_circuit = _cir.Circuit(num_lines=0, identity=pspec.identity)  
     if cliffordtwirl: 
-        intial_circuit = _cir.Circuit(num_lines=0)  
+        initial_circuit = _cir.Circuit(num_lines=0, identity=pspec.identity)  
       
     for subsetQs in structure:
-   
+        subsetQs = tuple(subsetQs)
         subset_n = len(subsetQs)
         # If we are clifford twirling, we do an initial random circuit that is either a uniformly random
         # cliffor or creates a uniformly random stabilizer state from the standard input.
@@ -1207,7 +1229,8 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
             # Sample a uniformly random Clifford.
             s_initial, p_initial = _symp.random_clifford(subset_n)
             # Find the composite action of this uniformly random clifford and the random circuit.
-            s_composite, p_composite = _symp.compose_cliffords(s_initial, p_initial, s_rc[subsetQs], p_rc[subsetQs])
+            s_composite, p_composite = _symp.compose_cliffords(s_initial, p_initial, s_rc_dict[subsetQs], 
+                                                               p_rc_dict[subsetQs])
 
             # If conditionaltwirl we do a stabilizer prep (a conditional Clifford).
             if conditionaltwirl:
@@ -1232,7 +1255,7 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
             # before handing it to the stabilizer measurement function.
             if randomizeout: p_for_measurement = _symp.random_phase_vector(s_composite,subset_n)
             else: p_for_measurement =  p_composite
-            inversion_circuit = _cmpl.compile_stabilizer_measurement(s_composite, p_for_measurement, pspec, subsetQs,
+            subset_inversion_circuit = _cmpl.compile_stabilizer_measurement(s_composite, p_for_measurement, pspec, subsetQs,
                                                                      citerations, *compilerargs)   
         else:
             # Find the Clifford that inverts the circuit so far. We 
@@ -1253,8 +1276,8 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
         full_circuit.append_circuit(inversion_circuit)
     else:
         full_circuit = _copy.deepcopy(circuit)
-        full_circuit.append_circuit(inversion_circuit)         
-     
+        full_circuit.append_circuit(inversion_circuit)
+         
     # Find the expected outcome of the circuit.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit,pspec=pspec)
     if conditionaltwirl: # s_out is not always the identity with a conditional twirl, only conditional on prep/measure.
@@ -1449,7 +1472,10 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
     experiment_dict['spec']['partitioned'] = partitioned
     experiment_dict['spec']['descriptor'] = descriptor
 
-    if subsetQs is not None: experiment_dict['qubitordering'] = tuple(subsetQs)
+    if subsetQs is not None:
+        assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
+        subsetQs = tuple(subsetQs)
+        experiment_dict['qubitordering'] = tuple(subsetQs)
     else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
     
     experiment_dict['circuits'] = {}
