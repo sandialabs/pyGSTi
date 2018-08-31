@@ -2714,7 +2714,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         dmVec = self.state_vec.todense()
 
         derrgen = self.error_map.deriv_wrt_params(wrtFilter) # shape (dim*dim, nParams)
-        derrgen.shape = (self.dim, self.dim, self.num_params()) # => (dim,dim,nParams)
+        derrgen.shape = (self.dim, self.dim, derrgen.shape[1]) # => (dim,dim,nParams)
 
         if self.typ == "prep":
             #derror map acts on dmVec

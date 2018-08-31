@@ -628,6 +628,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         #Advanced Options can specify further manipulation of starting gate set
         if advancedOptions.get('contractStartToCPTP',False):
             gs_start = _alg.contract(gs_start, "CPTP")
+            raise ValueError("'contractStartToCPTP' has been removed b/c it can change the parameterization of a gateset")
         if advancedOptions.get('depolarizeStart',0) > 0:
             gs_start = gs_start.depolarize(gate_noise=advancedOptions.get('depolarizeStart',0))
         if advancedOptions.get('randomizeStart',0) > 0:
@@ -636,9 +637,12 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
             gs_start.from_vector(v + vrand)
             
         if comm is not None: #broadcast starting gate set
-            comm.bcast(gs_start, root=0)
+            #OLD: comm.bcast(gs_start, root=0)
+            comm.bcast(gs_start.to_vector(), root=0) # just broadcast *vector* to avoid huge pickles (if cached calcs!)
     else:
-        gs_start = comm.bcast(None, root=0)
+        #OLD: gs_start = comm.bcast(None, root=0)
+        v = comm.bcast(None, root=0)
+        gs_start.from_vector(v)
 
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: Prep Initial seed',tRef); tRef=tNxt

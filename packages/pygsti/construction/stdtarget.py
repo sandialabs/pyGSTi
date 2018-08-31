@@ -209,15 +209,33 @@ def _write_calccache(calc_cache, key_fn, val_fn, json_too=False, comm=None):
             with open(key_fn_json,'w') as f:
                 _json.dump(ckeys, f)
             print("Wrote %s" % key_fn_json)
-        
-    values = [calc_cache[k] for k in keys]
-    vtape = []; ctape = []
-    for v in values:
-        vt,ct = v #.compact() # Now cache hold compact polys already
-        vtape.append(vt)
-        ctape.append(ct)    
-    vtape = _np.concatenate(vtape)
-    ctape = _np.concatenate(ctape)
+
+    if len(keys) > 0: # some procs might have 0 keys (e.g. the "scheduler")
+        values = [calc_cache[k] for k in keys]
+        vtape = []; ctape = []
+        for v in values:
+            vt,ct = v #.compact() # Now cache hold compact polys already
+            vtape.append(vt)
+            ctape.append(ct)    
+        vtape = _np.concatenate(vtape)
+        ctape = _np.concatenate(ctape)
+        comm.allgather(vtape.dtype)
+        comm.allgather(ctape.dtype)
+    else:
+        #Need to create vtape and ctape of length 0 and *correct type*
+        vtape_types = comm.allgather(None)
+        ctape_types = comm.allgather(None)
+        for typ in vtape_types: 
+            if typ is not None:
+                vtape = _np.zeros(0, typ); break
+        else:
+            vtape = _np.zeros(0, _np.int64) # default type = int64
+
+        for typ in ctape_types: 
+            if typ is not None:
+                ctape = _np.zeros(0, typ); break
+        else:
+            ctape = _np.zeros(0, complex) # default type = complex
     
     #Gather keys onto rank 0 processor if necessary
     if comm is not None:

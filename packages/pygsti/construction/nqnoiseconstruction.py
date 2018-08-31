@@ -1680,7 +1680,7 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
                            % (Jrank,Namped))
             
         for gfp_list in idle_gatename_fidpair_lists:
-            print("GFP list = ",gfp_list)
+            #print("GFP list = ",gfp_list)
             prep_noncore = tuple( (gfp_list[i][0] for i in range(nQubits)) ) # just the prep-part
             meas_noncore = tuple( (gfp_list[i][1] for i in range(nQubits)) ) # just the meas-part
     

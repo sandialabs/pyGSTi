@@ -1065,12 +1065,19 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     printer.log("--- Minimum Chi^2 GST ---", 1)
 
     if comm is not None:
-        gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
-        try:
-            if gs.frobeniusdist(gs_cmp) > 1e-6:
+        #assume all gatesets at least have same parameters - so just compare vecs
+        v_cmp = comm.bcast(gs.to_vector() if (comm.Get_rank() == 0) else None, root=0)
+        if _np.linalg.norm(gs.to_vector()-v_cmp) > 1e-6:
                 raise ValueError("MPI ERROR: *different* MC2GST start gatesets" + # pragma: no cover
                              " given to different processors!")                   # pragma: no cover
-        except NotImplementedError: pass # OK if some gates (maps) don't implement this
+
+        #OLD: TODO REMOVE
+        #gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
+        #try:
+        #    if gs.frobeniusdist(gs_cmp) > 1e-6:
+        #        raise ValueError("MPI ERROR: *different* MC2GST start gatesets" + # pragma: no cover
+        #                     " given to different processors!")                   # pragma: no cover
+        #except NotImplementedError: pass # OK if some gates (maps) don't implement this
 
     #convert list of GateStrings to list of raw tuples since that's all we'll need
     if len(gateStringsToUse) > 0 and \
@@ -1098,10 +1105,10 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         curMem = _baseobjs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1*(memLimit-persistentMem))
         mlim = memLimit-persistentMem-gthrMem-curMem
-        assert mlim > 0, 'Not enough memory, exiting..'
         printer.log("Memory limit = %.2fGB" % (memLimit*C))
         printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
                     (curMem*C, persistentMem*C, gthrMem*C))
+        assert mlim > 0, 'Not enough memory, exiting..'
     else: gthrMem = mlim = None
 
     if evaltree_cache and 'evTree' in evaltree_cache \
@@ -2273,12 +2280,19 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     printer.log("--- MLGST ---", 1)
 
     if comm is not None:
-        gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
-        try:
-            if gs.frobeniusdist(gs_cmp) > 1e-6:
-                raise ValueError("MPI ERROR: *different* MLGST start gatesets" +
-                                 " given to different processors!") # pragma: no cover
-        except NotImplementedError: pass # OK if some gates (maps) don't implement this
+        #assume all gatesets at least have same parameters - so just compare vecs
+        v_cmp = comm.bcast(gs.to_vector() if (comm.Get_rank() == 0) else None, root=0)
+        if _np.linalg.norm(gs.to_vector()-v_cmp) > 1e-6:
+                raise ValueError("MPI ERROR: *different* MC2GST start gatesets" + # pragma: no cover
+                             " given to different processors!")                   # pragma: no cover
+
+        #OLD TODO REMOVE
+        #gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
+        #try:
+        #    if gs.frobeniusdist(gs_cmp) > 1e-6:
+        #        raise ValueError("MPI ERROR: *different* MLGST start gatesets" +
+        #                         " given to different processors!") # pragma: no cover
+        #except NotImplementedError: pass # OK if some gates (maps) don't implement this
 
         if forcefn_grad is not None:
             forcefn_cmp = comm.bcast(forcefn_grad if (comm.Get_rank() == 0) else None, root=0)
