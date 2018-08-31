@@ -646,11 +646,11 @@ class GateSet(object):
         #self.effects.parent = self
         self.gates.parent = self
         self.instruments.parent = self
-        for o in self.preps.values(): o._parent = self
-        for o in self.povms.values(): o._parent = self
-        #for o in self.effects.values(): o._parent = self
-        for o in self.gates.values(): o._parent = self
-        for o in self.instruments.values(): o._parent = self
+        for o in self.preps.values(): o.relink_parent(self)
+        for o in self.povms.values(): o.relink_parent( self)
+        #for o in self.effects.values(): o.relink_parent(self)
+        for o in self.gates.values(): o.relink_parent(self)
+        for o in self.instruments.values(): o.relink_parent(self)
         if self._autogator is not None: # (just in case)
             self._autogator.parent = self
 

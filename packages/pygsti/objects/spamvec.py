@@ -2575,6 +2575,20 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             self, self.error_map.gpindices, parent)
         return num_new_params
 
+
+    def relink_parent(self, parent):
+        """ 
+        Sets the parent of this object *without* altering its gpindices.
+
+        In addition to setting the parent of this object, this method 
+        sets the parent of any objects this object contains (i.e.
+        depends upon) - much like allocate_gpindices.  To ensure a valid
+        parent is not overwritten, the existing parent *must be None*
+        prior to this call.
+        """
+        self.error_map.relink_parent(parent)
+        _gatesetmember.GateSetMember.relink_parent(self, parent)
+
         
     def set_gpindices(self, gpindices, parent, memo=None):
         """

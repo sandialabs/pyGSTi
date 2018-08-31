@@ -131,7 +131,7 @@ class SharedIdleAutoGator(AutoGator):
         ----------
         parent : GateSet
         """
-        super(SimpleCompositionAutoGator,self).__init__(parent)
+        super(SharedIdleAutoGator,self).__init__(parent)
 
     def __call__(self, existing_gates, gatelabel):
         """
@@ -160,7 +160,7 @@ class SharedIdleAutoGator(AutoGator):
             # so we compose 1st & 3rd factors of parallel gates and keep just a single 2nd factor...
             
             targetOp = Composed([g.factorgates[0] for g in gates])
-            idleErr = gates[0].factorgate[1]
+            idleErr = gates[0].factorgates[1]
             localErr = Composed([g.factorgates[2] for g in gates])
             
             ret = Composed([targetOp,idleErr,localErr])
