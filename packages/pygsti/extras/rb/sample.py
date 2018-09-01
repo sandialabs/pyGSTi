@@ -1193,7 +1193,9 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
         assert(set(qubits_used).issubset(set(pspec.qubit_labels))), "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
         n = len(qubits_used)
 
-    print(structure)
+    for subsetQs in structure:
+        subgraph = pspec.qubitgraph.subgraph(list(subsetQs))
+        assert(subgraph.are_glob_connected(list(subsetQs))), "Each subset of qubits in `structure` must be connected!"
     
     # Creates a empty circuit over no wires
     circuit = _cir.Circuit(num_lines=0, identity=pspec.identity) 
@@ -1288,13 +1290,17 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
     s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
     idealout = []
-    for q in range(0,n):
-        measurement_out = _symp.pauli_z_measurement(s_outstate, p_outstate, q)
-        bit = measurement_out[1]
-        assert(bit == 0 or bit == 1), "Ideal output is not a computational basis state!"
-        if not randomizeout:
-            assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
-        idealout.append(int(measurement_out[1]))
+    for subsetQs in structure:
+        subset_idealout = []
+        for q in subsetQs:
+            qind = circuit.line_labels.index(q)
+            measurement_out = _symp.pauli_z_measurement(s_outstate, p_outstate, qind)
+            bit = measurement_out[1]
+            assert(bit == 0 or bit == 1), "Ideal output is not a computational basis state!"
+            if not randomizeout:
+                assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
+            subset_idealout.append(int(bit))
+        idealout.append(tuple(subset_idealout))
     idealout = tuple(idealout)
 
     if not partitioned: outcircuit = full_circuit
@@ -1306,7 +1312,7 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
 
 def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, structure='1Q', sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[],
                          randomizeout=False, cliffordtwirl=True, conditionaltwirl=True, citerations=20, compilerargs=[], 
-                         partitioned=False, descriptor='A set of simultaneous DRB experiments', verbosity=1):
+                         partitioned=False, return_idling_circuits=True, descriptor='A set of simultaneous DRB experiments', verbosity=1):
     """
     Generates a simultaneous "direct randomized benchmarking" (DRB) experiments, where DRB is the protocol introduced in
     arXiv:1807.07975 (2018). The
@@ -1414,6 +1420,9 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
         (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1) 
         and then (3) to (1).
 
+    return_idling_circuits : bool, optional
+        Todo
+
     descriptor : str, optional
         A description of the experiment being generated. Stored in the output dictionary.
 
@@ -1459,7 +1468,6 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
 
     experiment_dict = {}
     experiment_dict['spec'] = {}
-    experiment_dict['spec']['structure'] = structure
     experiment_dict['spec']['sampler'] = sampler
     experiment_dict['spec']['samplerargs'] = samplerargs
     experiment_dict['spec']['addlocal'] = addlocal
@@ -1472,14 +1480,28 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
     experiment_dict['spec']['partitioned'] = partitioned
     experiment_dict['spec']['descriptor'] = descriptor
 
-    if subsetQs is not None:
-        assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
-        subsetQs = tuple(subsetQs)
-        experiment_dict['qubitordering'] = tuple(subsetQs)
-    else: experiment_dict['qubitordering'] = tuple(pspec.qubit_labels)
-    
+    if isinstance(structure,str):
+        assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
+        structure = tuple([(q,) for q in pspec.qubit_labels])
+        n = pspec.number_of_qubits
+    else:
+        assert(isinstance(structure,list) or isinstance(structure,tuple)), "If not a string, `structure` must be a list or tuple."
+        qubits_used = []
+        for subsetQs in structure:
+            assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
+            qubits_used = qubits_used + list(subsetQs)
+            assert(len(set(qubits_used)) == len(qubits_used)), "The qubits in the tuples/lists of `structure must all be unique!"
+
+        assert(set(qubits_used).issubset(set(pspec.qubit_labels))), "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+        n = len(qubits_used)
+  
+    experiment_dict['spec']['structure'] = structure
     experiment_dict['circuits'] = {}
     experiment_dict['idealout'] = {}
+
+    for subsetQs in structure:
+        subgraph = pspec.qubitgraph.subgraph(list(subsetQs))
+        assert(subgraph.are_glob_connected(list(subsetQs))), "Each subset of qubits in `structure` must be connected!"
 
     for lnum, l in enumerate(lengths):
         if verbosity > 0:
@@ -1490,8 +1512,22 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
                                                   addlocal=addlocal, lsargs=lsargs, randomizeout=randomizeout, 
                                                   cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl, 
                                                   citerations=citerations, compilerargs=compilerargs, partitioned=partitioned)
-            experiment_dict['circuits'][l,j] = circuit
-            experiment_dict['idealout'][l,j] = idealout
+            if return_idling_circuits:
+                experiment_dict['circuits'][l,j] = {}
+                experiment_dict['idealout'][l,j] = {}
+                experiment_dict['circuits'][l,j]['simultaneous'] = circuit
+                experiment_dict['idealout'][l,j]['simultaneous'] = idealout
+                for subset_ind, subset in enumerate(structure):
+                    subset_circuit = circuit.copy()
+                    for q in circuit.line_labels:
+                        if q not in subset:
+                            subset_circuit.replace_with_idling_wire(q)
+                    experiment_dict['circuits'][l,j][tuple(subset)] = subset_circuit
+                    experiment_dict['idealout'][l,j][tuple(subset)] = idealout[subset_ind]
+            else:
+                experiment_dict['circuits'][l,j] = circuit
+                experiment_dict['idealout'][l,j] = idealout 
+
             if verbosity > 0: print(j+1,end=',')
         if verbosity >0: print('')
 
