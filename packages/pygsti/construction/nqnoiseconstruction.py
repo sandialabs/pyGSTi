@@ -2217,7 +2217,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     #   parameters" (the parameters of the Gi gate)
     # - precompute other idle fiducial pairs needed for 1 & 2Q synthetic
     #   idles (with maxWeight = gate-error-weight + spreading potential)
-    # - To amplify the remaining parameters iterat through the "clouds"
+    # - To amplify the remaining parameters iterate through the "clouds"
     #   constructed by build_nqnoise_gateset (these essentially give
     #   the areas of the qubit graph where non-Gi gates should act and where
     #   they aren't supposted to act but can have errors).  For each cloud
