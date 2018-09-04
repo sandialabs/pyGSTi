@@ -239,8 +239,9 @@ def merge_outcomes(dataset,label_merge_dict):
         The dictionary whose keys define the new DataSet outcomes, and whose items
         are lists of input DataSet outcomes that are to be summed together.  For example,
         if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
-        we want to ''trace out'' the second qubit, we could use label_merge_dict =
-        {'0':['00','01'],'1':['10','11']}.
+        we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
+        {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
+        to use :function:`filter_qubits` which also updates the gate sequences.
 
     Returns
     -------
@@ -263,3 +264,65 @@ def merge_outcomes(dataset,label_merge_dict):
     merged_dataset.done_adding_data()
     return merged_dataset
 
+
+
+def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=None):
+    """
+    Creates a DataSet that restricts the is the restriction of `dataset`
+    to the sectors identified by `sectors_to_keep`.
+
+    More specifically, this function aggregates (sums) outcomes in `dataset`
+    which differ only in sectors (usually qubits - see below)  *not* in 
+    `sectors_to_keep`, and removes any gate labels which act specifically on
+    sectors not in `sectors_to_keep` (e.g. an idle gate acting on *all* 
+    sectors because it's `.sslbls` is None will *not* be removed).
+
+    Here "sectors" are state-space labels, present in the gate strings of 
+    `dataset`.  Each sector also corresponds to a particular character position
+    within the outcomes labels of `dataset`.  Thus, for this function to work,
+    the outcome labels of `dataset` must all be 1-tuples whose sole element is
+    an n-character string such that each character represents the outcome of
+    a single sector.  If the state-space labels are integers, then they can
+    serve as both a label and an outcome-string position.  The argument
+    `new_sectors` may be given to rename the kept state-space labels in the
+    returned `DataSet`'s gate strings.
+
+    A typical case is when the state-space is that of *n* qubits, and the
+    state space labels the intergers 0 to *n-1*.  As stated above, in this
+    case there is no need to specify `sindices_to_keep`.  One may want to
+    "rebase" the indices to 0 in the returned data set using `new_sectors`
+    (E.g. `sectors_to_keep == [4,5,6]` and `new_sectors == [0,1,2]`).
+    
+    Parameters
+    ----------
+    dataset : DataSet object
+        The input DataSet whose data will be processed.
+
+    sectors_to_keep : list or tuple
+        The state-space labels (strings or integers) of the "sectors" to keep in
+        the returned DataSet.
+
+    sindices_to_keep : list or tuple
+        The 0-based indices of the labels in `sectors_to_keep` which give the
+        postiions of the corresponding letters in each outcome string (see above).
+        If the state space labels are integers (labeling *qubits*) thath are also
+        letter-positions, then this may be left as `None`.  For example, if the 
+        outcome strings of `dataset` are '00','01','10',and '11' and the first
+        position refers to qubit "Q1" and the second to qubit "Q2" (present in
+        gate labels), then to extract just "Q2" data `sectors_to_keep` should be
+        `["Q2"]` and `sindices_to_keep` should be `[1]`.
+
+    new_sectors : list or tuple
+        New sectors names to map the elements of `sectors_to_keep` onto in the 
+        output DataSet's gate strings.  None means the labels are not renamed.
+        This can be useful if, for instance, you want to run a 2-qubit protocol
+        that expects the qubits to be labeled "0" and "1" on qubits "4" and "5" 
+        of a larger set.  Simply set `sectors_to_keep == [4,5]` and 
+        `new_sectors == [0,1]`.
+
+    Returns
+    -------
+    filtered_dataset : DataSet object
+        The DataSet with outcomes and gate strings filtered as described above.
+    """
+    pass #HERE
