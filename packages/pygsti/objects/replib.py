@@ -417,7 +417,7 @@ class SVEffectRep_TensorProd(SVEffectRep):
         return _np.vdot(Edense,state.data)
 
 
-class SVEffectRep_Computational(DMEffectRep):
+class SVEffectRep_Computational(SVEffectRep):
     def __init__(self, zvals, dim):
         # int dim = 4**len(zvals) -- just send as argument for speed?
         assert(dim == 2**len(zvals))
@@ -437,8 +437,8 @@ class SVEffectRep_Computational(DMEffectRep):
         for k,v in enumerate(zvals):
             assert(v in (0,1)), "zvals must contain only 0s and 1s"
             self.nonzero_index += base*v
-            base /= 2 # or right shift?
-
+            base //= 2 # or right shift?
+        super(SVEffectRep_Computational,self).__init__(dim)
 
     def todense(self, outvec, trust_outvec_sparsity=False):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
@@ -447,6 +447,7 @@ class SVEffectRep_Computational(DMEffectRep):
         if not trust_outvec_sparsity:
             outvec[:] = 0 #reset everything to zero
         outvec[self.nonzero_index] = 1.0
+        return outvec
 
     def amplitude(self, state): # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
