@@ -19,6 +19,21 @@ class GateSetChild(object):
         self._parent = parent # parent GateSet used to determine how to process
                               # a Gate's gpindices when inserted into a GateSet
 
+    def copy(self, parent=None):
+        """
+        Copy this object. Resets parent to None or `parent`.
+
+        Returns
+        -------
+        GateSetChild
+            A copy of this object.
+        """
+        #Copying resets or updates the parent of a GateSetChild
+        memo = {id(self.parent): None} # so deepcopy uses None instead of copying parent
+        copyOfMe = _copy.deepcopy(self,memo) # parent == None now
+        copyOfMe.parent = parent
+        return copyOfMe
+
     @property
     def parent(self):
         """ Gets the parent of this object."""

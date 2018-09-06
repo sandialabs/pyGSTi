@@ -3067,6 +3067,10 @@ class GateSet(object):
             self._calcClass = _gatematrixcalc.GateMatrixCalc
         newGateset._calcClass = self._calcClass
 
+        if not hasattr(self,"_autogator"): #for backward compatibility
+            self._autogator = None # the default for *old* gatesets
+        newGateset._autogator = self._autogator.copy(newGateset)
+
         if not hasattr(self,"_sim_type"): #for backward compatibility
             self._sim_type = "dmmatrix"
             self._sim_args = []

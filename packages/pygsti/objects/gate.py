@@ -3897,6 +3897,22 @@ class ComposedGateMap(Gate):
         _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
 
 
+    def copy(self, parent=None):
+        """
+        Copy this object.
+
+        Returns
+        -------
+        Gate
+            A copy of this object.
+        """
+        # We need to override this method so that factor gates have their 
+        # parent reset correctly.
+        cls = self.__class__ # so that this method works for derived classes too
+        copyOfMe = cls([ g.copy(parent) for g in self.factorgates ])
+        return self._copy_gpindices(copyOfMe, parent)
+
+
     def tosparse(self):
         """ Return the gate as a sparse matrix """
         mx = self.factorgates[0].tosparse()
@@ -4366,7 +4382,23 @@ class EmbeddedGateMap(Gate):
         self.embedded_gate.set_gpindices(gpindices, parent, memo)
         _gatesetmember.GateSetMember.set_gpindices(
             self, gpindices, parent) #could have used self.embedded_gate.gpindices (same)
-        
+
+
+    def copy(self, parent=None):
+        """
+        Copy this object.
+
+        Returns
+        -------
+        Gate
+            A copy of this object.
+        """
+        # We need to override this method so that embedded gate has its
+        # parent reset correctly.
+        cls = self.__class__ # so that this method works for derived classes too
+        copyOfMe = cls(self.stateSpaceLabels, self.targetLabels,
+                       self.embedded_gate.copy(parent), self.basisdim)
+        return self._copy_gpindices(copyOfMe, parent)
         
         
     def _decomp_gate_index(self, indx):
