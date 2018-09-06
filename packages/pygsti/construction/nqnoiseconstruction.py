@@ -2928,3 +2928,55 @@ def check_kcoverage_template(rows, n, k, verbosity=0):
                     "Permutation %s on qubits (cols) %s is not present!" % (str(perm),str(cols_to_check))
     if verbosity > 0: print(" check succeeded!")                                                             
     
+
+def filter_nqubit_sequences(sequence_tuples,sectors_to_keep,new_sectors=None):
+    """
+    Creates a new set of qubit sequences-tuples that is the restriction of
+    `sequence_tuples` to the sectors identified by `sectors_to_keep`.
+
+    More specifically, this function removes any gate labels which act
+    specifically on sectors not in `sectors_to_keep` (e.g. an idle gate acting
+    on *all* sectors because it's `.sslbls` is None will *not* be removed --
+    see :function:`filter_gatestring` for details).  Non-empty sequences for
+    which all labels are removed in the *germ* are not included in the output
+    (as these correspond to an irrelevant germ).
+
+    A typical case is when the state-space is that of *n* qubits, and the
+    state space labels the intergers 0 to *n-1*.  One may want to "rebase" the
+    indices to 0 in the returned data set using `new_sectors`
+    (E.g. `sectors_to_keep == [4,5,6]` and `new_sectors == [0,1,2]`).
+
+    Parameters
+    ----------
+    sequence_tuples : list
+        A list of (gatestring, L, germ, prepfid, measfid) tuples giving the
+        sequences to process.
+
+    sectors_to_keep : list or tuple
+        The state-space labels (strings or integers) of the "sectors" to keep in
+        the returned tuple list.
+
+    new_sectors : list or tuple, optional
+        New sectors names to map the elements of `sectors_to_keep` onto in the
+        output DataSet's gate strings.  None means the labels are not renamed.
+        This can be useful if, for instance, you want to run a 2-qubit protocol
+        that expects the qubits to be labeled "0" and "1" on qubits "4" and "5"
+        of a larger set.  Simply set `sectors_to_keep == [4,5]` and
+        `new_sectors == [0,1]`.
+
+    Returns
+    -------
+    filtered_sequence_tuples : list
+        A list of tuples with the same structure as `sequence tuples`.
+    """
+    ret = []
+    for gstr, L, germ, prepfid, measfid in sequence_tuples:
+        new_germ = _gsc.filter_gatestring(germ,sectors_to_keep,new_sectors)
+        if len(new_germ) > 0 or len(gstr) == 0: 
+            new_prep = _gsc.filter_gatestring(prepfid,sectors_to_keep,new_sectors)
+            new_meas = _gsc.filter_gatestring(measfid,sectors_to_keep,new_sectors)
+            new_gstr = _gsc.filter_gatestring(gstr,sectors_to_keep,new_sectors)
+            ret.append( (new_gstr, L, new_germ, new_prep, new_meas) )
+
+    return ret
+

@@ -15,6 +15,7 @@ import itertools as _itertools
 from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
 from ..baseobjs import label as _lbl
+from ..tools import compattools as _compat
 from . import gatestringconstruction as _gstrc
 
 from pprint import pprint
@@ -251,8 +252,12 @@ def merge_outcomes(dataset,label_merge_dict):
 
     new_outcomes = label_merge_dict.keys()
     merged_dataset = _ds.DataSet(outcomeLabels=new_outcomes)
-    if sorted([outcome for sublist in label_merge_dict.values() for outcome in sublist]) != sorted(dataset.get_outcome_labels()):
-        print('Warning: There is a mismatch between original outcomes in label_merge_dict and outcomes in original dataset.')
+    merge_dict_old_outcomes = [outcome for sublist in label_merge_dict.values() for outcome in sublist]
+    if not set(dataset.get_outcome_labels()).issubset( merge_dict_old_outcomes ):
+        raise ValueError(("`label_merge_dict` must account for all the outcomes in original dataset."
+                          " It's missing directives for:\n%s") % 
+                         '\n'.join(set(dataset.get_outcome_labels()) - set(merge_dict_old_outcomes)))
+
     for key in dataset.keys():
         linecounts = dataset[key].counts
         count_dict = {}
@@ -264,6 +269,72 @@ def merge_outcomes(dataset,label_merge_dict):
     merged_dataset.done_adding_data()
     return merged_dataset
 
+def create_qubit_merge_dict(nQubits, qubits_to_keep):
+    """ 
+    Creates a dictionary appropriate for use with :function:`merge_outcomes`,
+    that aggregates all but the specified `qubits_to_keep` when the outcome
+    labels are those of `nQubits` qubits (i.e. strings of 0's and 1's).
+
+    Parameters
+    ----------
+    nQubits : int
+        The total number of qubits
+        
+    qubits_to_keep : list
+        A list of integers specifying which qubits should be kept, that is,
+        *not* aggregated, when the returned dictionary is passed to 
+        `merge_outcomes`.
+
+    Returns
+    -------
+    dict
+    """
+    outcome_labels = [''.join(map(str,t)) for t in itertools.product([0,1], repeat=nQubits)]
+    return create_merge_dict(qubits_to_keep, outcome_labels)
+
+
+def create_merge_dict(indices_to_keep, outcome_labels):
+    """ 
+    Creates a dictionary appropriate for use with :function:`merge_outcomes`,
+    that aggregates all but the specified `indices_to_keep`.
+
+    In particular, each element of `outcome_labels` should be a n-character
+    string (or a 1-tuple of such a string).  The returned dictionary's keys
+    will be all the unique results of keeping only the characters indexed by
+    `indices_to_keep` from each outcome label.   The dictionary's values will
+    be a list of all the original outcome labels which reduce to the key value
+    when the non-`indices_to_keep` characters are removed.
+
+    For example, if `outcome_labels == ['00','01','10','11']` and 
+    `indices_to_keep == [1]` then this function returns the dict
+    `{'0': ['00','10'], '1': ['01','11'] }`.
+
+    Note: if the elements of `outcome_labels` are 1-tuples then so are the
+    elements of the returned dictionary's values.
+
+    Parameters
+    ----------
+    indices_to_keep : list
+        A list of integer indices specifying which character positions should be
+        kept (i.e. *not* aggregated together by `merge_outcomes`).
+
+    outcome_labels : list
+        A list of the outcome labels to potentially merge.  This can be a list
+        of strings or of 1-tuples containing strings.
+
+    Returns
+    -------
+    dict
+    """
+    merge_dict = _collections.defaultdict(list)
+    for ol in outcome_labels:
+        if _compat.isstr(ol):
+            reduced = ''.join([ol[i] for i in indices_to_keep])
+        else: 
+            assert(len(ol) == 1) #should be a 1-tuple
+            reduced = (''.join([ol[0][i] for i in indices_to_keep]),) # a tuple
+        merge_dict[reduced].append(ol)
+    return dict(merge_dict) # return a *normal* dict
 
 
 def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=None):
@@ -302,7 +373,7 @@ def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=Non
         The state-space labels (strings or integers) of the "sectors" to keep in
         the returned DataSet.
 
-    sindices_to_keep : list or tuple
+    sindices_to_keep : list or tuple, optional
         The 0-based indices of the labels in `sectors_to_keep` which give the
         postiions of the corresponding letters in each outcome string (see above).
         If the state space labels are integers (labeling *qubits*) thath are also
@@ -312,7 +383,7 @@ def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=Non
         gate labels), then to extract just "Q2" data `sectors_to_keep` should be
         `["Q2"]` and `sindices_to_keep` should be `[1]`.
 
-    new_sectors : list or tuple
+    new_sectors : list or tuple, optional
         New sectors names to map the elements of `sectors_to_keep` onto in the 
         output DataSet's gate strings.  None means the labels are not renamed.
         This can be useful if, for instance, you want to run a 2-qubit protocol
@@ -325,4 +396,13 @@ def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=Non
     filtered_dataset : DataSet object
         The DataSet with outcomes and gate strings filtered as described above.
     """
-    pass #HERE
+    if sindices_to_keep is None:
+        sindices_to_keep = sectors_to_keep
+
+    ds_merged = merge_outcomes(dataset, create_merge_dict(sindices_to_keep,
+                                             dataset.get_outcome_labels()))
+    ds_merged = ds_merged.copy_nonstatic()
+    ds_merged.process_gate_strings(lambda s: _gstrc.filter_gatestring(
+                                       s, sectors_to_keep, new_sectors))
+    ds_merged.done_adding_data()
+    return ds_merged
