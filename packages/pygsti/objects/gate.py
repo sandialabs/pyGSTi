@@ -3377,7 +3377,8 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             #derivMx = fd_deriv
 
         if wrtFilter is None:
-            return self.base_deriv
+            return self.base_deriv.view()
+                #view because later setting of .shape by caller can mess with self.base_deriv!
         else:
             return _np.take( self.base_deriv, wrtFilter, axis=1 )
 
