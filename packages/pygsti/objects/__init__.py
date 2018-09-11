@@ -56,6 +56,7 @@ from .gatestring import GateString
 from .gatestring import WeightedGateString
 from .gatestringstructure import GatestringStructure
 from .gatestringstructure import LsGermsStructure
+from .gatestringstructure import LsGermsSerialStructure
 from .circuit import Circuit
 from .multidataset import MultiDataSet
 from .datacomparator import DataComparator

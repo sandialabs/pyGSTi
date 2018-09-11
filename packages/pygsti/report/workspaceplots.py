@@ -2369,9 +2369,14 @@ class GramMatrixBarPlot(WorkspacePlot):
         
     def _create(self, dataset, target, maxlen, fixedLists, scale):
 
-        _, svals, target_svals = _alg.max_gram_rank_and_evals( dataset, target, maxlen, fixedLists)
-        svals = _np.sort(_np.abs(svals)).reshape(-1,1)
-        target_svals = _np.sort(_np.abs(target_svals)).reshape(-1,1)
+        if fixedLists is not None and \
+                (len(fixedLists[0]) == 0 or len(fixedLists[1]) == 0):
+            #Empty fixed lists => create empty gram plot
+            svals = target_svals = _np.array([],'d')
+        else:
+            _, svals, target_svals = _alg.max_gram_rank_and_evals( dataset, target, maxlen, fixedLists)
+            svals = _np.sort(_np.abs(svals)).reshape(-1,1)
+            target_svals = _np.sort(_np.abs(target_svals)).reshape(-1,1)
         
         xs = list(range(svals.size))                
         trace1 = go.Bar(
@@ -2387,9 +2392,12 @@ class GramMatrixBarPlot(WorkspacePlot):
             name="from Target"
         )
 
-        ymin = min(_np.min(svals), _np.min(target_svals))
-        ymax = max(_np.max(svals), _np.max(target_svals))
-        ymin = max(ymin, 1e-8) #prevent lower y-limit from being riduculously small
+        if svals.size > 0:
+            ymin = min(_np.min(svals), _np.min(target_svals))
+            ymax = max(_np.max(svals), _np.max(target_svals))
+            ymin = max(ymin, 1e-8) #prevent lower y-limit from being riduculously small
+        else:
+            ymin = 0.1; ymax=1.0 # just pick some values for empty plot
         
         data = [trace1,trace2]
         layout = go.Layout(
@@ -2464,11 +2472,13 @@ class FitComparisonBarPlot(WorkspacePlot):
 
         if NpByX is None:
             try:
-                NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
+                NpByX = [ gs.num_nongauge_params() if (gs is not None) else 0 
+                          for gs in gatesetByX ] #Note: gatesets can be None => N/A
             except: #numpy can throw a LinAlgError
                 _warnings.warn(("FigComparisonBarPlot could not obtain number of"
                                 " *non-gauge* parameters - using total params instead"))
-                NpByX = [ gs.num_params() for gs in gatesetByX ]
+                NpByX = [ gs.num_params() if (gs is not None) else 0 
+                          for gs in gatesetByX ]
 
         if isinstance(datasetByX, _objs.DataSet):
             datasetByX = [datasetByX]*len(gatesetByX)
@@ -2534,7 +2544,10 @@ class FitComparisonBarPlot(WorkspacePlot):
                 ),
             bargap=0.1
         )
-        if max(plotted_ys) < 1.0:
+        if len(plotted_ys) == 0:
+            layout['yaxis']['range'] = [_np.log10(0.1),
+                                        _np.log10(1.0)] # empty plot: range doesn't matter
+        elif max(plotted_ys) < 1.0:
             layout['yaxis']['range'] = [_np.log10(min(plotted_ys)/2.0),
                                         _np.log10(1.0)]
         else:

@@ -1655,6 +1655,11 @@ class FitComparisonTable(WorkspaceTable):
                                 " of non-gauge parameters.  Using total"
                                 " parameters instead."))
                 NpByX = [ gs.num_params() for gs in gatesetByX ]
+            except NotImplementedError:
+                _warnings.warn(("FitComparisonTable could not obtain number of"
+                                "*non-gauge* parameters - using total params instead"))
+                NpByX = [ gs.num_params() for gs in gatesetByX ]
+
 
         tooltips = ('', 'Difference in logL', 'number of degrees of freedom',
                     'difference between observed logl and expected mean',
@@ -1705,7 +1710,9 @@ class GatestringTable(WorkspaceTable):
 
     def _create(self, gsLists, titles, nCols, commonTitle):
 
-        if isinstance(gsLists[0], _objs.GateString) or \
+        if len(gsLists) == 0:
+            gsLists = [ [] ]
+        elif isinstance(gsLists[0], _objs.GateString) or \
            (isinstance(gsLists[0], tuple) and _tools.isstr(gsLists[0][0])):
             gsLists = [ gsLists ]
 

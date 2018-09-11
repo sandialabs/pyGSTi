@@ -974,13 +974,20 @@ class Switchboard(_collections.OrderedDict):
                         "}",
                         "window.findNearest_%s = findNearest_%s;\n" % (ID,ID)))
                 
+                #allow ipos = something (e.g. -1) when there aren't any position labels
+                if len(posLbls) == 0:
+                    float_val = 0.0; posLabel = "--"
+                else:
+                    float_val = float_vals[ipos]
+                    posLabel = posLbls[ipos]
+
                 js += "\n".join( (
                     "  $('#%s').slider({" % ID,
                     "     orientation: 'horizontal', range: false,",
                     "     min: %f, max: %f, step: %f," % (m,M,(M-m)/100.0),
-                    "     value: %f," % float_vals[ipos],
+                    "     value: %f," % float_val,
                     "     create: function() {",
-                    "       $('#%s-handle').text('%s');" % (ID,posLbls[ipos]),
+                    "       $('#%s-handle').text('%s');" % (ID,posLabel),
                     "       $('#%s-handle').css({'width':'%fem','height':'%fem'});" % (ID,w,1.7),
                     "       $('#%s-handle').css({'margin-left':'%fem','top':'%fem'});" % (ID,-w/2,-1.7/2+0.4),
                     "       $('#%s-handle').css({'text-align':'center','line-height':'1.5em'});" % ID,

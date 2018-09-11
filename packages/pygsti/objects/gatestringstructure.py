@@ -500,3 +500,272 @@ class LsGermsStructure(GatestringStructure):
         cpy._firsts = self._firsts[:]
         cpy._baseStrToGerm = _copy.deepcopy(self._baseStrToLGerm.copy())
         return cpy
+
+
+
+
+
+class LsGermsSerialStructure(GatestringStructure):
+    """
+    A type of gate string structure whereby sequences can be
+    indexed by L, germ, preparation-fiducial, and measurement-fiducial.
+    """
+    def __init__(self, Ls, germs, nMinorRows, nMinorCols, aliases=None,
+                 sequenceRules=None):
+        """
+        TODO: docstring - nMinorRows, etc.
+        Create an empty gate string structure.
+
+        Parameters
+        ----------
+        Ls : list of ints
+            List of maximum lengths (x values)
+
+        germs : list of GateStrings
+            List of germ sequences (y values)
+
+        prepStrs : list of GateStrings
+            List of preparation fiducial sequences (minor x values)
+
+        effecStrs : list of GateStrings
+            List of measurement fiducial sequences (minor y values)
+
+        aliases : dict
+            Gate label aliases to be propagated to all plaquettes.
+
+        sequenceRules : list, optional
+            A list of `(find,replace)` 2-tuples which specify string replacement
+            rules.  Both `find` and `replace` are tuples of gate labels
+            (or `GateString` objects).
+        """
+        self.Ls = Ls[:]
+        self.germs = germs[:]
+        self.nMinorRows = nMinorRows
+        self.nMinorCols = nMinorCols
+        self.aliases = aliases.copy() if (aliases is not None) else None
+        self.sequenceRules = sequenceRules[:] if (sequenceRules is not None) else None
+
+
+        self.allstrs = []
+        self._plaquettes = {}
+        self._firsts = []
+        self._baseStrToLGerm = {}
+
+    #Base class access in terms of generic x,y coordinates
+    def xvals(self):
+        """ Returns a list of the x-values"""
+        return self.Ls
+
+    def yvals(self):
+        """ Returns a list of the y-values"""
+        return self.germs
+
+    def minor_xvals(self):
+        """ Returns a list of the minor x-values"""
+        return list(range(self.nMinorCols))
+
+    def minor_yvals(self):
+        """ Returns a list of the minor y-values"""
+        return list(range(self.nMinorRows))
+
+    def add_plaquette(self, basestr, L, germ, fidpairs, dsfilter=None):
+        """
+        TODO: docstring fidpairs is now mandatory and must be a list of (GateString,GateString) tuples
+        Adds a plaquette with the given fiducial pairs at the
+        `(L,germ)` location.
+
+        Parameters
+        ----------
+        basestr : GateString
+            The base gate string of the new plaquette.
+
+        L : int
+
+        germ : GateString
+
+        fidpairs : list
+            A list if `(i,j)` tuples of integers, where `i` is a prepation
+            fiducial index and `j` is a measurement fiducial index.  None
+            can be used to mean all pairs.
+
+        dsfilter : DataSet, optional
+            If not None, check that this data set contains all of the
+            gate strings being added.  If dscheck does not contain a gate
+            sequence, it is *not* added.
+
+        Returns
+        -------
+        missing : list
+            A list of `(prep_fiducial, germ, L, effect_fiducial, entire_string)`
+            tuples indicating which sequences were not found in `dsfilter`.
+        """
+
+        missing_list = []
+        from ..construction import gatestringconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
+
+        if dsfilter:
+            inds_to_remove = []
+            for k,(prepStr,effectStr) in enumerate(fidpairs):
+                el = prepStr + basestr + effectStr
+                trans_el = _gstrc.translate_gatestring(el, self.aliases)
+                if trans_el not in dsfilter:
+                    missing_list.append( (prepStr,germ,L,effectStr,el) )
+                    inds_to_remove.append(k)
+
+            if len(inds_to_remove) > 0:
+                fidpairs = fidpairs[:] #copy
+                for i in reversed(inds_to_remove):
+                    del fidpairs[i]
+
+        plaq = self.create_plaquette(basestr, fidpairs)
+        self.allstrs.extend( [ _gstrc.manipulate_gatestring(gatestr,self.sequenceRules)
+                               for i,j,gatestr in plaq ] )
+        _lt.remove_duplicates_in_place(self.allstrs)
+
+        self._plaquettes[(L,germ)] = plaq
+
+        #keep track of which L,germ is the *first* one to "claim" a base string
+        # (useful for *not* duplicating data in color box plots)
+        if basestr not in self._baseStrToLGerm:
+            self._firsts.append( (L,germ) )
+            self._baseStrToLGerm[ basestr ] = (L,germ)
+
+        return missing_list
+
+
+    def add_unindexed(self, gsList, dsfilter=None):
+        """
+        Adds unstructured gate strings (not in any plaquette).
+
+        Parameters
+        ----------
+        gsList : list of GateStrings
+            The gate strings to add.
+
+        dsfilter : DataSet, optional
+            If not None, check that this data set contains all of the
+            gate strings being added.  If dscheck does not contain a gate
+            sequence, it is *not* added.
+
+        Returns
+        -------
+        missing : list
+            A list of elements in `gsList` which were not found in `dsfilter`
+            and therefore not added.
+        """
+        from ..construction import gatestringconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
+
+        missing_list = []
+        for gatestr in gsList:
+            if gatestr not in self.allstrs:
+                if dsfilter:
+                    trans_gatestr = _gstrc.translate_gatestring(gatestr, self.aliases)
+                    if trans_gatestr not in dsfilter:
+                        missing_list.append( gatestr )
+                        continue
+                self.allstrs.append(gatestr)
+        return missing_list
+
+    def done_adding_strings(self):
+        """
+        Called to indicate the user is done adding plaquettes.
+        """
+        #placeholder in case there's some additional init we need to do.
+        pass
+
+
+    def get_plaquette(self, L, germ, onlyfirst=True):
+        """
+        Returns a the plaquette at `(L,germ)`.
+
+        Parameters
+        ----------
+        L : int
+            The maximum length.
+
+        germ : Gatestring
+            The germ.
+
+        onlyfirst : bool, optional
+            If True, then when multiple plaquettes have been added with the
+            same base string, only the *first* added plaquette will be
+            returned normally.  Requests for the other plaquettes will be
+            given an empty plaquette.  This behavior is useful for color
+            box plots where we wish to avoid duplicated data.
+
+        Returns
+        -------
+        GatestringPlaquette
+        """
+        if (L,germ) not in self._plaquettes:
+            p =  self.create_plaquette(None,[]) # no elements
+            p.compile_gatestrings(None) # just marks as "compiled"
+            return p
+
+        if not onlyfirst or (L,germ) in self._firsts:
+            return self._plaquettes[(L,germ)]
+        else:
+            basestr = self._plaquettes[(L,germ)].base
+            p = self.create_plaquette(basestr,[]) # no elements
+            p.compile_gatestrings(None) # just marks as "compiled"
+            return p
+
+    def truncate(self, Ls=None, germs=None, prepStrs=None, effectStrs=None):
+        """
+        A future capability: truncate this gate string structure to a
+        subset of its current strings.
+        """
+        raise NotImplementedError("future capability")
+
+
+    def create_plaquette(self, baseStr, fidpairs):
+        """
+        TODO: docstring - update: fidpairs is now a list of (GateString,GateString) tuples
+        Creates a the plaquette for the given base string and pairs.
+
+        Parameters
+        ----------
+        baseStr : GateString
+
+        fidpairs : list
+            A list if `(i,j)` tuples of integers, where `i` is a prepation
+            fiducial index and `j` is a measurement fiducial index.  If
+            None, then all pairs are included (a "full" plaquette is created).
+
+        Returns
+        -------
+        GatestringPlaquette
+        """
+        ji_list = list(_itertools.product(list(range(self.nMinorRows)),
+                                    list(range(self.nMinorCols))))
+        assert(len(ji_list) >= len(fidpairs)), "Number of minor rows/cols is too small!"
+        
+        elements = [ (j,i,prepStr + baseStr + effectStr)
+                     for (j,i),(prepStr,effectStr) in 
+                     zip(ji_list[0:len(fidpairs)], fidpairs) ] #note preps are *cols* not rows
+
+        return GatestringPlaquette(baseStr, self.nMinorRows,
+                                   self.nMinorCols, elements, self.aliases)
+
+    def plaquette_rows_cols(self):
+        """
+        Return the number of rows and columns contained in each plaquette of
+        this LsGermsStructure.
+
+        Returns
+        -------
+        rows, cols : int
+        """
+        return self.nMinorRows, self.nMinorCols
+
+    def copy(self):
+        """
+        Returns a copy of this `LsGermsStructure`.
+        """
+        cpy = LsGermsSerialStructure(self.Ls, self.germs, self.nMinorRows,
+                                     self.nMinorCols, self.aliases, self.sequenceRules)
+        cpy.allstrs = self.allstrs[:]
+        cpy._plaquettes = { k: v.copy() for k,v in self._plaquettes.items() }
+        cpy._firsts = self._firsts[:]
+        cpy._baseStrToGerm = _copy.deepcopy(self._baseStrToLGerm.copy())
+        return cpy
