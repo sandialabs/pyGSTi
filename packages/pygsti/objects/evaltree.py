@@ -83,19 +83,13 @@ class EvalTree(list):
         super(EvalTree, self).__init__(items)
 
         
-    def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1):
+    def initialize(self, compiled_gatestring_list, numSubTreeComms=1):
         """
           Initialize an evaluation tree using a set of gate strings.
           This function must be called before using an EvalTree.
 
           Parameters
           ----------
-          gateLabels : list of strings
-              A list of all the single gate labels to
-              be stored at the beginning of the tree.  This
-              list must include all the gate labels contained
-              in the elements of gatestring_list.
-
           gatestring_list : list of (tuples or GateStrings)
               A list of tuples of gate labels or GateString
               objects, specifying the gate strings that
@@ -111,7 +105,17 @@ class EvalTree(list):
           -------
           None
         """
-        raise NotImplementedError("initialize(...) must be implemented by a derived class") 
+        raise NotImplementedError("initialize(...) must be implemented by a derived class")
+
+    def _get_gateLabels(self, compiled_gatestring_list):
+        """ 
+        Returns a list of the distinct gate labels in 
+        `compiled_gatestring_list` - a dictionary w/keys = "raw" gate strings OR a list of them.
+        """
+        gateLabels = set()
+        for raw_gstr in compiled_gatestring_list: # will work for dict keys too
+            gateLabels.update( raw_gstr )
+        return sorted(gateLabels)
 
 
     def _copyBase(self,newTree):
@@ -187,7 +191,7 @@ class EvalTree(list):
         else:
             sl = [slice(None)] * a.ndim
             sl[axis] = slice(0,self.num_final_strings())
-            ret = a[sl]
+            ret = a[tuple(sl)]
             assert(ret.base is a or ret.base is a.base) #check that what is returned is a view
             assert(ret.size == 0 or _np.may_share_memory(ret,a))
             return ret
@@ -328,7 +332,7 @@ class EvalTree(list):
 
         def _mkindx(i):
             mi = [slice(None)]*a.ndim; mi[axis] = i
-            return mi
+            return tuple(mi)
 
         if self.original_index_lookup is not None:
             for iorig,icur in self.original_index_lookup.items():                
@@ -367,7 +371,7 @@ class EvalTree(list):
 
         def _mkindx(i):
             mi = [slice(None)]*a.ndim; mi[axis] = i
-            return mi
+            return tuple(mi)
 
         if self.original_index_lookup is not None:
             for iorig,icur in self.original_index_lookup.items():                
@@ -560,6 +564,8 @@ class EvalTree(list):
                     iFirstNonFinal = iLastFinal # move boundary to make k's new location non-final
 
             subTreeNumFinal = iFirstNonFinal # the final <-> non-final boundary
+            if subTreeNumFinal == 0: continue # this subtree only contributes non-final elements -> skip
+
             parentIndexRevPerm.extend( subTreeIndices[0:subTreeNumFinal] )
             subTreeIndicesList.append( subTreeIndices )
             numFinalList.append( subTreeNumFinal )

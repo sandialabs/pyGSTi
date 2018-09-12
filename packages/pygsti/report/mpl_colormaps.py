@@ -199,26 +199,35 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
         mpl_size = w/100.0, h/100.0 #heusistic
         mpl_fig.set_size_inches(*mpl_size) # was 12,8 for "super" color plot
         pygsti_fig.metadata['mpl_fig_size'] = mpl_size #record for later use by rendering commands
-    
+
+    def get(obj,x,default):
+        """ Needed b/c in plotly v3 layout no longer is a dict """
+        try:
+            ret = obj[x]
+            return ret if (ret is not None) else default
+        except KeyError:
+            return default
+        raise ValueError("Non-KeyError raised when trying to access a plotly hierarchy object.")
+        
     xaxis, yaxis = layout['xaxis'], layout['yaxis']
-    #annotations = layout.get('annotations',[])
-    title = layout.get('title',None)
-    shapes = layout.get('shapes',[]) # assume only shapes are grid lines
-    bargap = layout.get('bargap',0)
+    #annotations = get(layout,'annotations',[])
+    title = get(layout,'title',None)
+    shapes = get(layout,'shapes',[]) # assume only shapes are grid lines
+    bargap = get(layout,'bargap',0)
     
-    xlabel = xaxis.get('title',None)
-    ylabel = yaxis.get('title',None)
-    xlabels = xaxis.get('ticktext',None)
-    ylabels = yaxis.get('ticktext',None)
-    xtickvals = xaxis.get('tickvals',None)
-    ytickvals = yaxis.get('tickvals',None)
-    xaxistype = xaxis.get('type',None)
-    yaxistype = yaxis.get('type',None)
-    xaxisside = xaxis.get('side','bottom')
-    yaxisside = yaxis.get('side','left')
-    xtickangle = xaxis.get('tickangle',0)
-    xlim = xaxis.get('range',None)
-    ylim = yaxis.get('range',None)
+    xlabel = get(xaxis,'title',None)
+    ylabel = get(yaxis,'title',None)
+    xlabels = get(xaxis,'ticktext',None)
+    ylabels = get(yaxis,'ticktext',None)
+    xtickvals = get(xaxis,'tickvals',None)
+    ytickvals = get(yaxis,'tickvals',None)
+    xaxistype = get(xaxis,'type',None)
+    yaxistype = get(yaxis,'type',None)
+    xaxisside = get(xaxis,'side','bottom')
+    yaxisside = get(yaxis,'side','left')
+    xtickangle = get(xaxis,'tickangle',0)
+    xlim = get(xaxis,'range',None)
+    ylim = get(yaxis,'range',None)
 
     if xaxisside == "top":
         axes.xaxis.set_label_position('top') 
@@ -272,22 +281,23 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
         axes.set_ylim(ylim)
 
     #figure out barwidth and offsets for bar plots
-    num_bars = sum([d.get('type','')=='bar' for d in data_trace_list])
+    num_bars = sum([get(d,'type','')=='bar' for d in data_trace_list])
     currentBarOffset = 0
     barWidth = (1.0-bargap)/num_bars if num_bars > 0 else 1.0
 
     #process traces
     handles = []; labels = [] #for the legend
+    boxes = [] # for violins
     for traceDict in data_trace_list:
-        typ = traceDict.get('type','unknown')
+        typ = get(traceDict,'type','unknown')
         
-        name = traceDict.get('name',None)
-        showlegend = traceDict.get('showlegend',True)
+        name = get(traceDict,'name',None)
+        showlegend = get(traceDict,'showlegend',True)
         
         if typ == "heatmap":
-            #colorscale = traceDict.get('colorscale','unknown')
+            #colorscale = get(traceDict,'colorscale','unknown')
             plt_data = pygsti_fig.metadata['plt_data'] #traceDict['z'] is *normalized* already - maybe would work here but not for box value labels
-            show_colorscale = traceDict.get('showscale',True)
+            show_colorscale = get(traceDict,'showscale',True)
 
             mpl_size = (plt_data.shape[1]*0.5, plt_data.shape[0]*0.5)
             mpl_fig.set_size_inches( *mpl_size )
@@ -343,11 +353,21 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                 _plt.colorbar(heatmap)
 
         elif typ == "scatter":
-            mode = traceDict.get('mode','lines')
-            marker = traceDict.get('marker',None)
-            line = marker['line'] if marker else None
-            color = mpl_color(marker.get('color','rgb(0,0,0)') if marker else 'rgb(0,0,0)')
-            linewidth = float(line['width']) if (line and line.get('width',None) is not None) else 1.0
+            mode = get(traceDict,'mode','lines')
+            marker = get(traceDict,'marker',None)
+            line = get(traceDict,'line',None)
+            if marker and (line is None):
+                line = marker['line'] # 2nd attempt to get line props
+                
+            if marker:
+                color = get(marker,'color',None)
+            if line and (color is None):
+                color = get(line,'color',None)
+            if color is None:
+                color = 'rgb(0,0,0)'
+            color = mpl_color(color)
+            
+            linewidth = float(line['width']) if (line and get(line,'width',None) is not None) else 1.0
 
             x = y = None
             if 'x' in traceDict and 'y' in traceDict:
@@ -402,7 +422,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
             x = _np.arange(y.size) + currentBarOffset
             currentBarOffset += barWidth #so next bar trace will be offset correctly
 
-            marker = traceDict.get('marker',None)
+            marker = get(traceDict,'marker',None)
             if marker and ('color' in marker):
                 if _compat.isstr(marker['color']):
                     color = mpl_color(marker['color'])
@@ -423,8 +443,8 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
             axes.set_xticklabels( mpl_process_lbls(xlabels) ,rotation=0, fontsize=(fontsize-4) )    
             
         elif typ == "histogram":
-            #histnorm = traceDict.get('histnorm',None)
-            marker = traceDict.get('marker',None)
+            #histnorm = get(traceDict,'histnorm',None)
+            marker = get(traceDict,'marker',None)
             color = mpl_color(marker['color'] if marker and _compat.isstr(marker['color']) else "gray")
             xbins = traceDict['xbins']
             histdata = traceDict['x'] 
@@ -450,14 +470,26 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
             if marker and ('color' in marker) and isinstance(marker['color'],list):
                 for p,c in zip(patches,marker['color']):
                     _plt.setp(p, 'facecolor', mpl_color(c))
-        
+
+        elif typ == "box":
+            boxes.append(traceDict)
+
+    if len(boxes) > 0:
+        _plt.violinplot([box['y'] for box in boxes],[box['x0'] for box in boxes],
+                        points=10, widths=1., showmeans=False, 
+                        showextrema=False, showmedians=False)
+        # above kwargs taken from Tim's original RB plot - we could set some of
+        # these from boxes[0]'s properties like 'boxmean' (a boolean) FUTURE?
+
+    extraartists = [axes]
     if len(handles) > 0:
-        _plt.legend(handles, labels, bbox_to_anchor=(1.01, 1.0),
+        lgd = _plt.legend(handles, labels, bbox_to_anchor=(1.01, 1.0),
                     borderaxespad=0., loc="upper left")
+        extraartists.append(lgd)
         
     if save_to:
         _gc.collect() # too many open files (b/c matplotlib doesn't close everything) can cause the below to fail
-        _plt.savefig(save_to, bbox_extra_artists=(axes,),
+        _plt.savefig(save_to, bbox_extra_artists=extraartists,
                      bbox_inches='tight') #need extra artists otherwise
                                           #axis labels get clipped 
         _plt.cla()

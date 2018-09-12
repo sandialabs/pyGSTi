@@ -7,19 +7,17 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
+import copy as _copy
 from ..tools import slicetools as _slct
 
 class GateSetChild(object):
     """
     Base class for all objects contained in a GateSet that
-    hold a `parent` refernce to their parent GateSet.
+    hold a `parent` reference to their parent GateSet.
     """
     def __init__(self, parent=None):
         self._parent = parent # parent GateSet used to determine how to process
                               # a Gate's gpindices when inserted into a GateSet
-                              # Note that this is *not* pickled by virtue of all
-                              # the Gate classes implementing a __reduce__ which
-                              # sets parent==None via this constructor.
 
     @property
     def parent(self):
@@ -31,19 +29,29 @@ class GateSetChild(object):
         """ Sets the parent of this object."""
         self._parent = value
 
+    def __getstate__(self):
+        """ Don't pickle parent """
+        d = self.__dict__.copy()
+        d['_parent'] = None
+        return d
+
+
         
 
 class GateSetMember(GateSetChild):
     """ 
     Base class for all GateSet member objects which possess a definite
-    dimension and number of parmeters, can be vectorized into/onto a portion of
-    their paren GateSet's parameter vector.  They therefore contain a
-    `gpindices` reference to the global GateSet indices "owned" by this member.
-    Note that GateSetMembers may contain other GateSetMembers (may be nested).
+    dimension, number of parmeters, and evolution type (_evotype).  A 
+    GateSetMember can be vectorized into/onto a portion of their parent
+    GateSet's (or other GateSetMember's) parameter vector.  They therefore
+    contain a `gpindices` reference to the global GateSet indices "owned" by
+    this member.  Note that GateSetMembers may contain other GateSetMembers (may
+    be nested).
     """
-    def __init__(self, dim, gpindices=None, parent=None):
+    def __init__(self, dim, evotype, gpindices=None, parent=None):
         """ Initialize a new GateSetMember """
         self.dim = dim
+        self._evotype = evotype
         self._gpindices = gpindices
         self.dirty = False # True when there's any *possibility* that this
                            # gate's parameters have been changed since the
@@ -158,9 +166,9 @@ class GateSetMember(GateSetChild):
         numpy.ndarray
         """
         if self._gpindices is None:
-            return _np.empty(0,'i')
+            return _np.empty(0,_np.int64)
         elif isinstance(self._gpindices, slice):
-            return _np.array(_slct.indices(self._gpindices),'i')
+            return _np.array(_slct.indices(self._gpindices),_np.int64)
         else:
             return self._gpindices #it's already an array
 
@@ -169,13 +177,13 @@ class GateSetMember(GateSetChild):
         """
         Get the number of independent parameters which specify this object.
         """
-        raise NotImplementedError("num_params not implemented!")
+        return 0 # by default, object has no parameters
 
     def to_vector(self):
         """
         Get this object's parameters as an array of values.
         """
-        raise NotImplementedError("to_vector not implemented!")
+        return _np.array([], 'd') # no parameters
 
     def from_vector(self, v):
         """
@@ -191,7 +199,7 @@ class GateSetMember(GateSetChild):
         -------
         None
         """
-        raise NotImplementedError("from_vector not implemented!")
+        assert(len(v) == 0) #should be no parameters, and nothing to do
     
     def copy(self, parent=None):
         """
@@ -202,8 +210,12 @@ class GateSetMember(GateSetChild):
         Gate
             A copy of this object.
         """
-        raise NotImplementedError("copy not implemented!")
+        # A default for derived classes - deep copy everything except the parent,
+        #  which will get reset by _copy_gpindices anyway.
+        memo = {id(self.parent): None} # so deepcopy uses None instead of copying parent
+        return self._copy_gpindices(_copy.deepcopy(self,memo), parent)
 
+    
     def _copy_gpindices(self, gateObj, parent):
         """ Helper function for implementing copy in derived classes """
         gpindices_copy = None
@@ -224,12 +236,6 @@ class GateSetMember(GateSetChild):
         #gateObj.set_gpindices(gpindices_copy, parent) #don't do this
         
         return gateObj
-
-    def __getstate__(self):
-        """ Don't pickle parent """
-        d = self.__dict__.copy()
-        d['_parent'] = None
-        return d
 
 
 def _compose_gpindices(parent_gpindices, child_gpindices):
@@ -280,4 +286,4 @@ def _decompose_gpindices(parent_gpindices, sibling_gpindices):
         sibInds = _slct.indices(sibling_gpindices) \
                   if isinstance(sibling_gpindices, slice) else sibling_gpindices
         parent_lookup = { j: i for i,j in enumerate(parent_gpindices) }
-        return _np.array( [ parent_lookup[j] for j in sibInds ], 'i')
+        return _np.array( [ parent_lookup[j] for j in sibInds ], _np.int64)

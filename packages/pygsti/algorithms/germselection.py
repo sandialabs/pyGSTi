@@ -921,7 +921,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     gateset = removeSPAMVectors(gateset)
 
 
-    germLengths = _np.array([len(germ) for germ in germsToTest], 'i')
+    germLengths = _np.array([len(germ) for germ in germsToTest], _np.int64)
     twirledDerivDaggerDeriv = calc_bulk_twirled_DDD(gateset, germsToTest,
                                                1./threshold, check,
                                                germLengths)
@@ -965,10 +965,10 @@ def build_up(gatesetList, germsList, randomize=True,
     (reducedGatesetList,
      numGaugeParams, _, _) = get_gateset_params(gatesetList)
 
-    germLengths = _np.array([len(germ) for germ in germsList], 'i')
+    germLengths = _np.array([len(germ) for germ in germsList], _np.int64)
     numGerms = len(germsList)
 
-    weights = _np.zeros(numGerms, 'i')
+    weights = _np.zeros(numGerms, _np.int64)
     goodGerms = []
     if force:
         if force == "singletons":
@@ -1150,12 +1150,12 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
 
     (_, numGaugeParams,
      numNonGaugeParams, _) = get_gateset_params(gatesetList)
-    germLengths = _np.array([len(germ) for germ in germsList], 'i')
+    germLengths = _np.array([len(germ) for germ in germsList], _np.int64)
 
     numGerms = len(germsList)
 
     goodGerms = []
-    weights = _np.zeros(numGerms, 'i')
+    weights = _np.zeros(numGerms, _np.int64)
     if force:
         if force == "singletons":
             weights[_np.where(germLengths == 1)] = 1
@@ -1480,7 +1480,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         # bools
         weights = _np.array([1 if x else 0 for x in initialWeights])
     else:
-        weights = _np.ones(len(germsList), 'i') # default: start with all germs
+        weights = _np.ones(len(germsList), _np.int64) # default: start with all germs
 #        lessWeightOnly = True # we're starting at the max-weight vector
 
     undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
@@ -1511,7 +1511,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     #   keys = (gatesetNum, tuple-ized weight vector of 1's and 0's only)
     #   values = list_score
     scoreD = {}
-    germLengths = _np.array([len(germ) for germ in germsList], 'i')
+    germLengths = _np.array([len(germ) for germ in germsList], _np.int64)
 
     if force:
         if force == "singletons":
@@ -1780,11 +1780,11 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
     (_,  numGaugeParams,
      numNonGaugeParams, _) = get_gateset_params(gatesetList)
 
-    germLengths = _np.array([len(germ) for germ in germsList], 'i')
+    germLengths = _np.array([len(germ) for germ in germsList], _np.int64)
 
     numGerms = len(germsList)
 
-    initialWeights = _np.zeros(numGerms, dtype='i')
+    initialWeights = _np.zeros(numGerms, dtype=_np.int64)
     if force:
         if force == "singletons":
             initialWeights[_np.where(germLengths == 1)] = 1

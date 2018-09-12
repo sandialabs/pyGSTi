@@ -2,6 +2,7 @@ import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 from pygsti.baseobjs.basis import Basis
+from pygsti.objects import Label as L
 
 import numpy as np
 from scipy import polyfit
@@ -262,12 +263,12 @@ class TestCoreMethods(AlgorithmsBase):
                                                       useFreqWeightedChiSq=True, gateStringSetLabels=["Set1","Set2"],
                                                       gatestringWeightsDict={ ('Gx',): 2.0 } )
 
-        aliased_list = [ pygsti.obj.GateString( [ (x if x != "Gx" else "GA1") for x in gs]) for gs in self.lsgstStrings[0] ]
+        aliased_list = [ pygsti.obj.GateString( [ (x if x != L("Gx") else L("GA1")) for x in gs]) for gs in self.lsgstStrings[0] ]
         gs_withA1 = gs_clgst.copy(); gs_withA1.gates["GA1"] = gs_clgst.gates["Gx"]
         del gs_withA1.gates["Gx"] # otherwise gs_withA1 will have Gx params that we have no knowledge of!
         gs_lsgst_chk_opts2 = pygsti.do_mc2gst(ds, gs_withA1, aliased_list, minProbClipForWeighting=1e-6,
                                               probClipInterval=(-1e2,1e2), verbosity=10,
-                                              gateLabelAliases={ 'GA1': ('Gx',) })
+                                              gateLabelAliases={ L('GA1'): (L('Gx'),) })
 
         
         #Check with small but ok memlimit -- not anymore since new mem estimation uses current memory, making this non-robust
@@ -372,20 +373,20 @@ class TestCoreMethods(AlgorithmsBase):
         gs_mlegst_chk_opts = pygsti.do_iterative_mlgst(ds, gs_clgst, self.lsgstStrings[0:2], verbosity=0,
                                                        minProbClip=1e-4, probClipInterval=(-1e2,1e2),
                                                        gateStringSetLabels=["Set1","Set2"], useFreqWeightedChiSq=True,
-                                                       gatestringWeightsDict={ ('Gx',): 2.0 } )
+                                                       gatestringWeightsDict={ (L('Gx'),): 2.0 } )
 
-        aliased_list = [ pygsti.obj.GateString( [ (x if x != "Gx" else "GA1") for x in gs]) for gs in self.lsgstStrings[0] ]
+        aliased_list = [ pygsti.obj.GateString( [ (x if x != L("Gx") else L("GA1")) for x in gs]) for gs in self.lsgstStrings[0] ]
         gs_withA1 = gs_clgst.copy(); gs_withA1.gates["GA1"] = gs_clgst.gates["Gx"]
         del gs_withA1.gates["Gx"] # otherwise gs_withA1 will have Gx params that we have no knowledge of!
         gs_mlegst_chk_opts2 = pygsti.do_mlgst(ds, gs_withA1, aliased_list, minProbClip=1e-4,
                                               probClipInterval=(-1e2,1e2), verbosity=10,
-                                              gateLabelAliases={ 'GA1': ('Gx',) })
+                                              gateLabelAliases={ L('GA1'): (L('Gx'),) })
 
         #Other option variations - just make sure they run at this point
         gs_mlegst_chk_opts3 = pygsti.do_iterative_mlgst(ds, gs_clgst, self.lsgstStrings[0:2], verbosity=0,
                                                        minProbClip=1e-4, probClipInterval=(-1e2,1e2),
                                                        gateStringSetLabels=["Set1","Set2"], useFreqWeightedChiSq=True,
-                                                        gatestringWeightsDict={ ('Gx',): 2.0 }, alwaysPerformMLE=True )
+                                                        gatestringWeightsDict={ (L('Gx'),): 2.0 }, alwaysPerformMLE=True )
 
         #Forcing function used by linear response error bars
         forcingfn_grad = np.ones((1,gs_clgst.num_params()), 'd')

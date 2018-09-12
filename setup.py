@@ -26,7 +26,22 @@ try:
                   #define_macros = [('CYTHON_TRACE','1')], #for profiling
                   include_dirs=['.', np.get_include()]
                   #libraries=['m'] #math lib?
+                  ),
+        Extension("pygsti.objects.fastgatecalc",
+                  sources=["packages/pygsti/objects/fastgatecalc.pyx"], 
+                  include_dirs=['.', np.get_include()],
+                  language="c++",
+                  extra_compile_args=["-std=c++11"], #,"-stdlib=libc++"
+                  extra_link_args=["-std=c++11"]
+                  ),
+        Extension("pygsti.objects.fastreplib",
+                  sources=["packages/pygsti/objects/fastreplib.pyx", "packages/pygsti/objects/fastreps.cpp"], 
+                  include_dirs=['.', np.get_include()],
+                  language="c++",
+                  extra_compile_args=["-std=c++11"], #,"-stdlib=libc++"
+                  extra_link_args=["-std=c++11"]
                   )
+
         ]
     ext_modules = cythonize(ext_modules)
 except ImportError: # if Cython isn't available (e.g. in readthedocs) just skip
@@ -66,6 +81,7 @@ setup(name='pyGSTi',
       packages=['pygsti', 'pygsti.algorithms', 'pygsti.baseobjs', 'pygsti.construction', 'pygsti.drivers', 'pygsti.extras', 'pygsti.extras.rb', 'pygsti.extras.rpe', 'pygsti.extras.drift', 'pygsti.io', 'pygsti.objects', 'pygsti.optimize', 'pygsti.report', 'pygsti.tools'],
       package_dir={'': 'packages'},
       package_data={'pygsti.tools': ['fastcalc.pyx'],
+                    'pygsti.objects': ['fastgatecalc.pyx','fastreplib.pyx','fastreps.cpp','fastreps.h'],
                     'pygsti.report': ['templates/*.tex', 'templates/*.html', 'templates/*.json',
                                       'templates/report_notebook/*.txt',
                                       'templates/standard_html_report/*.html',
@@ -79,15 +95,16 @@ setup(name='pyGSTi',
       extras_require = {
            'diamond norm computation':  ['cvxpy', 'cvxopt'],
            'nose testing' : ['nose'],
-           'image comparison' : ['Pillow'],
            'accurate memory profiling' : ['psutil'],
            'multi-processor support' : ['mpi4py'],
            'evolutionary optimization algorithm': ['deap'],
            'pickling report tables': ['pandas'],
            'generating PDFs of report figures': ['matplotlib'],
            'generating report notebooks': ['ipython','notebook'],
-           'read/write message pack format': ['msgpack-python'],
-	   'extension modules': ['cython']
+           'read/write message pack format': ['msgpack'],
+	   'extension modules': ['cython'],
+           'complete': ['nose','cython','cvxpy','cvxopt','psutil','mpi4py','pandas','matplotlib','ipython','notebook','msgpack'],
+           'travisci': ['nose','nose-timer','cython','cvxpy','cvxopt','psutil','mpi4py','pandas','msgpack']
       },
       platforms = ["any"],      
       url = 'http://www.pygsti.info',

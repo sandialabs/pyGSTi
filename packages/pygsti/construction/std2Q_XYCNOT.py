@@ -9,9 +9,11 @@ Variables for working with the 2-qubit gate set containing the gates
 I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT.
 """
 
+import sys as _sys
 import numpy as _np
 from . import gatestringconstruction as _strc
 from . import gatesetconstruction as _setc
+from . import stdtarget as _stdtarget
 from ..tools import gatetools as _gt
 
 description = "I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT gates"
@@ -204,6 +206,28 @@ gs_target = _setc.build_gateset(
     [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'],
     [  "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CNOT(Q0,Q1)"],
     effectLabels=['00','01','10','11'], effectExpressions=["0","1","2","3"])
+
+_gscache = { ("full","auto"): gs_target }
+def copy_target(parameterization_type="full", sim_type="auto"):
+    """ 
+    Returns a copy of the target gateset in the given parameterization.
+
+    Parameters
+    ----------
+    parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
+        The gate and SPAM vector parameterization type. See 
+        :function:`GateSet.set_all_parameterizations` for all allowed values.
+        
+    sim_type : {"auto", "matrix", "map", "termorder:X" }
+        The simulator type to be used for gate set calculations (leave as
+        "auto" if you're not sure what this is).
+    
+    Returns
+    -------
+    GateSet
+    """
+    return _stdtarget._copy_target(_sys.modules[__name__],parameterization_type,
+                                   sim_type, _gscache)
 
 
 

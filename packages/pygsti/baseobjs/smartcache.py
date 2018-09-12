@@ -42,7 +42,7 @@ def show_cache_percents(hits, misses, printer):
     """
     nHits     = csize(hits)
     nMisses   = csize(misses)
-    nRequests = nHits + nMisses 
+    nRequests = nHits + nMisses
     printer.log('    {:<10} requests'.format(nRequests))
     printer.log('    {:<10} hits'.format(nHits))
     printer.log('    {:<10} misses'.format(nMisses))
@@ -94,7 +94,7 @@ class SmartCache(object):
         self.saved = 0
 
         self.unpickleable = set()
-        
+
         SmartCache.StaticCacheList.append(self)
 
     def __setstate__(self, d):
@@ -133,7 +133,7 @@ class SmartCache(object):
 
     def low_overhead_cached_compute(self, fn, argVals, kwargs=None):
         '''
-        Cached compute with less profiling: 
+        Cached compute with less profiling:
             see :method:`cached_compute` docstring
         '''
         if kwargs is None:
@@ -178,7 +178,7 @@ class SmartCache(object):
         if kwargs is None:
             kwargs = dict()
         name_key = get_fn_name_key(fn)
-        self.requests[name_key] += 1 
+        self.requests[name_key] += 1
         if name_key in self.ineffective:
             key = 'INEFFECTIVE'
             result = fn(*argVals, **kwargs)
@@ -306,13 +306,13 @@ class SmartCache(object):
 
             savedTimes = self.avg_timedict(self.effectiveTimes)
             saved = sum(savedTimes.values())
-            show_kvs('Effective total saved time:\n', 
-                    sorted(savedTimes.items(), key=lambda t : t[1], reverse=True), 
+            show_kvs('Effective total saved time:\n',
+                    sorted(savedTimes.items(), key=lambda t : t[1], reverse=True),
                     printer)
 
             overTimes = self.avg_timedict(self.ineffectiveTimes)
             overhead = sum(overTimes.values())
-            show_kvs('Ineffective differences:\n', 
+            show_kvs('Ineffective differences:\n',
                     sorted(overTimes.items(), key=lambda t : t[1]),
                     printer)
 
@@ -381,10 +381,10 @@ def digest(obj, custom_digests=None):
                         else:
                             attribs = list(sorted(dir(v)))
                             for k in attribs:
-                                if k.startswith('__'): 
+                                if k.startswith('__'):
                                     continue
                                 a = getattr(v, k)
-                                if _inspect.isroutine(a): 
+                                if _inspect.isroutine(a):
                                     continue
                                 add(md5,k)
                                 add(md5,a)
@@ -402,7 +402,7 @@ def get_fn_name_key(fn):
     return name
 
 def call_key(fn, args, custom_digests):
-    """ 
+    """
     Returns a hashable key for caching the result of a function call.
 
     Parameters

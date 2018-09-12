@@ -9,6 +9,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 from copy import deepcopy as _deepcopy
 import numpy as _np
 
+from ..baseobjs.label import Label as _Label
+
 class ReportableQty(object):
     """
     Encapsulates a computed quantity and possibly its error bars,
@@ -228,6 +230,8 @@ class ReportableQty(object):
         '''
         if isinstance(value, ReportableQty):
             return value
+        if isinstance(value, _Label): # distinguish b/c Label is also a *tuple*
+            return ReportableQty(value, nonMarkovianEBs=nonMarkovianEBs)
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have eb field ' + \
                                     'or has too many fields: len = {}'.format(

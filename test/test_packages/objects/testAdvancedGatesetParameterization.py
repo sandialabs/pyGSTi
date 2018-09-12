@@ -26,24 +26,24 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         
         nQubits = 3 # say
         Id_1Q = np.identity(4**1,'d')
-        idleErr0 = LindbladParameterizedGate(Id_1Q) # 1-qubit error generator
-        idleErr1 = LindbladParameterizedGate(Id_1Q) # allow different "idle" 
-        idleErr2 = LindbladParameterizedGate(Id_1Q) # 1Q errors on each qubit
+        idleErr0 = LindbladParameterizedGate.from_gate_matrix(Id_1Q) # 1-qubit error generator
+        idleErr1 = LindbladParameterizedGate.from_gate_matrix(Id_1Q) # allow different "idle" 
+        idleErr2 = LindbladParameterizedGate.from_gate_matrix(Id_1Q) # 1Q errors on each qubit
         # so far no gpindices have been set...
         
         ss3Q = [('Q0','Q1','Q2')] #3Q state space
         basis3Q = pygsti.objects.Basis('pp', 2**nQubits) #3Q basis
-        Giii = ComposedGate([ EmbeddedGate(ss3Q, ('Q0',), idleErr0, basis3Q),
-                              EmbeddedGate(ss3Q, ('Q1',), idleErr1, basis3Q),
-                              EmbeddedGate(ss3Q, ('Q2',), idleErr2, basis3Q)
+        Giii = ComposedGate([ EmbeddedGate(ss3Q, ('Q0',), idleErr0),
+                              EmbeddedGate(ss3Q, ('Q1',), idleErr1),
+                              EmbeddedGate(ss3Q, ('Q2',), idleErr2)
                             ])
         
         targetGx = StaticGate(gs1Q.gates['Gx'])
-        Gxii_xErr = LindbladParameterizedGate(Id_1Q) 
+        Gxii_xErr = LindbladParameterizedGate.from_gate_matrix(Id_1Q) 
         Gxii_xGate = ComposedGate( [targetGx, idleErr0, Gxii_xErr])
-        Gxii = ComposedGate([ EmbeddedGate(ss3Q, ('Q0',), Gxii_xGate, basis3Q),
-                              EmbeddedGate(ss3Q, ('Q1',), idleErr1, basis3Q),
-                              EmbeddedGate(ss3Q, ('Q2',), idleErr2, basis3Q)
+        Gxii = ComposedGate([ EmbeddedGate(ss3Q, ('Q0',), Gxii_xGate),
+                              EmbeddedGate(ss3Q, ('Q1',), idleErr1),
+                              EmbeddedGate(ss3Q, ('Q2',), idleErr2)
                             ])
         
         def printInfo():
@@ -126,10 +126,10 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         
         print("\nGate Test:")
         SparseId = sps.identity(4**2,'d','csr')
-        gate = LindbladParameterizedGate( np.identity(4**2,'d') )
+        gate = LindbladParameterizedGate.from_gate_matrix( np.identity(4**2,'d') )
         print("gate Errgen type (should be dense):",type(gate.err_gen))
         self.assertIsInstance(gate.err_gen, np.ndarray)
-        sparseGate = LindbladParameterizedGateMap( SparseId )
+        sparseGate = LindbladParameterizedGateMap.from_gate_matrix( SparseId )
         print("spareGate Errgen type (should be sparse):",type(sparseGate.err_gen))
         self.assertIsInstance(sparseGate.err_gen, sps.csr_matrix)
         self.assertArraysAlmostEqual(gate.err_gen,sparseGate.err_gen.toarray())
@@ -139,8 +139,8 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         noisyG.depolarize(0.9)
         Sparse_noisyG = sps.csr_matrix(noisyG,dtype='d')
         Sparse_perfectG = sps.csr_matrix(perfectG,dtype='d')
-        gate2 = LindbladParameterizedGate( noisyG, perfectG )
-        sparseGate2 = LindbladParameterizedGateMap( Sparse_noisyG, Sparse_perfectG )
+        gate2 = LindbladParameterizedGate.from_gate_matrix( noisyG, perfectG )
+        sparseGate2 = LindbladParameterizedGateMap.from_gate_matrix( Sparse_noisyG, Sparse_perfectG )
         print("spareGate2 Errgen type (should be sparse):",type(sparseGate2.err_gen))
         self.assertIsInstance(sparseGate2.err_gen, sps.csr_matrix)
         #print("errgen = \n"); pygsti.tools.print_mx(gate2.err_gen,width=4,prec=1)

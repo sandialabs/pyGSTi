@@ -31,19 +31,13 @@ class MapEvalTree(EvalTree):
         """ Create a new, empty, evaluation tree. """
         super(MapEvalTree, self).__init__(items)
 
-    def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1, maxCacheSize=None):
+    def initialize(self, compiled_gatestring_list, numSubTreeComms=1, maxCacheSize=None):
         """
           Initialize an evaluation tree using a set of gate strings.
           This function must be called before using an EvalTree.
 
           Parameters
           ----------
-          gateLabels : list of strings
-              A list of all the single gate labels to
-              be stored at the beginning of the tree.  This
-              list must include all the gate labels contained
-              in the elements of gatestring_list.
-
           gatestring_list : list of (tuples or GateStrings)
               A list of tuples of gate labels or GateString
               objects, specifying the gate strings that
@@ -60,7 +54,11 @@ class MapEvalTree(EvalTree):
           None
         """
         #tStart = _time.time() #DEBUG TIMER
-        self.gateLabels = gateLabels
+
+        # gateLabels : A list of all the distinct gate labels found in
+        #              compiled_gatestring_list.  Used in calc classes
+        #              as a convenient precomputed quantity.
+        self.gateLabels = self._get_gateLabels(compiled_gatestring_list)
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 
@@ -95,7 +93,7 @@ class MapEvalTree(EvalTree):
         #print("SORTED"); print("\n".join(map(str,sorted_strs)))
 
 
-        #PASS1: figure out what's work keeping in the cache:
+        #PASS1: figure out what's worth keeping in the cache:
         curCacheSize = 0
         cacheIndices = [] #indices into gatestring_list/self of the strings to cache
         dummy_self = [None]*self.num_final_strs; cache_hits = {}
@@ -512,7 +510,9 @@ class MapEvalTree(EvalTree):
                 maxCost = self.get_num_applies() / numSubTrees
             else: maxCost = len(self) / numSubTrees
             maxCostLowerBound, maxCostUpperBound = maxCost, None
-            maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0/len(self), +1.0/len(self)
+            maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0, +1.0 
+               #OLD (& incorrect) vals were 0, -1.0/len(self), +1.0/len(self),
+               #   though current -1,1 vals are probably overly conservative...
             resultingSubtrees = numSubTrees+1 #just to prime the loop
             iteration = 0
 
@@ -534,6 +534,7 @@ class MapEvalTree(EvalTree):
                 #Perform binary search in maxCost then maxCostRate to find
                 # desired final subtree count.
                 if maxCostUpperBound is None or abs(maxCostLowerBound-maxCostUpperBound) > 1.0:
+                    # coarse adjust => vary maxCost
                     last_maxCost = maxCost
                     if resultingSubtrees <= numSubTrees: #too few trees: reduce maxCost
                         maxCost = (maxCost + maxCostLowerBound)/2.0
@@ -545,6 +546,7 @@ class MapEvalTree(EvalTree):
                             maxCost = (maxCost + maxCostUpperBound)/2.0
                             maxCostLowerBound = last_maxCost
                 else:
+                    # fine adjust => vary maxCostRate
                     last_maxRate = maxCostRate
                     if resultingSubtrees <= numSubTrees: # too few trees reduce maxCostRate
                         maxCostRate = (maxCostRate + rateLowerBound)/2.0
@@ -649,6 +651,7 @@ class MapEvalTree(EvalTree):
             subTree.recompute_spamtuple_indices(bLocal=False)
 
             subTree.trim_nonfinal_els()
+            subTree.gateLabels = self._get_gateLabels( subTree.generate_gatestring_list(permute=False) )
 
             return subTree
     
