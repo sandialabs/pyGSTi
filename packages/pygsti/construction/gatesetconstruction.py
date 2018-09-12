@@ -1164,12 +1164,11 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
     if qubit_labels is None:
         qubit_labels = list(range(nQubits))
 
-    evostr = " ".join(parameterization.split()[1:])
     if evotype == "auto": # Note: this same logic is repeated in build_nqubit_standard_gateset
         if parameterization == "clifford": evotype = "stabilizer"
         elif parameterization == "static unitary": evotype = "statevec"
-        elif evostr == "terms": evotype = "svterm"
-        elif evostr == "clifford terms": evotype = "cterm"
+        elif _gt.is_valid_lindblad_paramtype(parameterization):
+            _,evotype = _gt.split_lindblad_paramtype(parameterization)
         else: evotype = "densitymx" #everything else
 
     if evotype in ("densitymx","svterm","cterm"):

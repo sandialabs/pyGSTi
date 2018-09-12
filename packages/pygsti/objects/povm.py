@@ -63,6 +63,7 @@ from ..tools import gatetools as _gt
 
 def convert(povm, toType, basis, extra=None):
     """
+    TODO: update toType options
     Convert POVM to a new type of parameterization, potentially
     creating a new object.  Raises ValueError for invalid conversions.
 
@@ -100,7 +101,7 @@ def convert(povm, toType, basis, extra=None):
                                   for lbl,vec in povm.items() ]
             return TPPOVM(converted_effects)
 
-    elif toType.split()[0] in ("CPTP","H+S","S","H+S+A","S+A","H+D","D","H+D+A","D+A","GLND"):
+    elif _gt.is_valid_lindblad_paramtype(toType):
 
         # A LindbladParameterizedPOVM needs a *static* base/reference POVM
         #  with the appropriate evotype.  If we can convert `povm` to such a
@@ -110,11 +111,7 @@ def convert(povm, toType, basis, extra=None):
         bQubits = bool(_np.isclose(nQubits, _np.log2(povm.dim)/2.0)) #integer # of qubits?
         proj_basis = "pp" if (basis == "pp" or bQubits) else basis
 
-        evostr = " ".join(toType.split()[1:])
-        if   evostr == "":               evotype = "densitymx"
-        elif evostr == "terms":          evotype = "svterm"
-        elif evostr == "clifford terms": evotype = "cterm"
-        else: raise ValueError("Unrecognized evotype in `paramType`=%s" % paramType)
+        _, evotype = _gt.split_lindblad_paramtype(toType)
 
         if isinstance(povm, ComputationalBasisPOVM): #special easy case
             assert(povm.nqubits == nQubits)

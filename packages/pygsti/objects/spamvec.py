@@ -91,6 +91,7 @@ def optimize_spamvec(vecToOptimize, targetVec):
 
 def convert(spamvec, toType, basis, extra=None):
     """
+    TODO: docstring: update toType options...
     Convert SPAM vector to a new type of parameterization, potentially
     creating a new SPAMVec object.  Raises ValueError for invalid conversions.
 
@@ -150,7 +151,7 @@ def convert(spamvec, toType, basis, extra=None):
         purevec = _gt.dmvec_to_state(dmvec)
         return StaticSPAMVec(purevec, "statevec")
 
-    elif toType.split()[0] in ("CPTP","H+S","S","H+S+A","S+A","H+D","D","H+D+A","D+A","GLND"):
+    elif _gt.is_valid_lindblad_paramtype(toType):
 
         if extra is None:
             purevec = spamvec # right now, we don't try to extract a "closest pure vec"
@@ -2174,31 +2175,10 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             purevec = StaticSPAMVec(purevec) #assume spamvec is just a vector
 
         #Break paramType in to a "base" type and an evotype
-        parts = paramType.split()
-        bTyp = parts[0] # "base" type
-        evostr = " ".join(parts[1:])
-        if   evostr == "":               evotype = "densitymx"
-        elif evostr == "terms":          evotype = "svterm"
-        elif evostr == "clifford terms": evotype = "cterm"
-        else: raise ValueError("Unrecognized evotype in `paramType`=%s" % paramType)
+        bTyp, evotype, nonham_mode, param_mode = cls.decomp_paramtype(paramType)
 
         ham_basis = proj_basis if (("H+" in bTyp) or bTyp in ("CPTP","GLND")) else None
         nonham_basis = proj_basis
-
-        if bTyp == "CPTP":
-            nonham_mode = "all"; param_mode = "cptp" 
-        elif bTyp in ("H+S","S"):
-            nonham_mode = "diagonal"; param_mode = "cptp" 
-        elif bTyp in ("H+S+A","S+A"):
-            nonham_mode = "diag_affine"; param_mode = "cptp" 
-        elif bTyp in ("H+D","D"):
-            nonham_mode = "diagonal"; param_mode = "depol" 
-        elif bTyp in ("H+D+A","D+A"):
-            nonham_mode = "diag_affine"; param_mode = "depol" 
-        elif bTyp == "GLND":
-            nonham_mode = "all"; param_mode = "unconstrained" 
-        else:
-            raise ValueError("Unrecognized base type in `paramType`=%s" % paramType)
 
         def beq(b1,b2):
             """ Check if bases have equal names """

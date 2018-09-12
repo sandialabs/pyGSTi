@@ -255,8 +255,8 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
     """
 
     if sim_type == "auto":
-        evostr = ' '.join(parameterization.split()[1:])
-        if evostr in ("terms", "clifford terms"): sim_type = "termorder:1"
+        _,_,evotype = _gt.split_lindblad_parameterization(parameterization,True)
+        if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
         else: sim_type = "map" if nQubits > 2 else "matrix"
 
     assert(sim_type in ("matrix","map") or sim_type.startswith("termorder"))
@@ -379,12 +379,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
         
     #FUTURE: should probabal make extracting evotype from a parameterization name a
     # function somewhere - maybe a classmethod of LindbladParameterizedGate?
-    parts = parameterization.split()
-    evostr = " ".join(parts[1:])
-    if   evostr == "":               evotype = "densitymx"
-    elif evostr == "terms":          evotype = "svterm"
-    elif evostr == "clifford terms": evotype = "cterm"
-    else: raise ValueError("Unrecognized evotype in `parameterization`=%s" % parameterization)
+    _,evotype = _gt.split_lindblad_paramtype(parameterization)
         
     #SPAM
     if spamtype == "static" or maxSpamWeight == 0:
@@ -492,11 +487,11 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
 def _get_Lindblad_factory(sim_type, parameterization):
     """ Returns a function that creates a Lindblad-type gate appropriate
         given the simulation type and parameterization """
-    evostr = ' '.join(parameterization.split()[1:]) # e.g. "", "terms" or "clifford terms"
-    if evostr == "":  # evotype = "densitymx"
+    _,evotype = _gt.split_lindblad_paramtype(parameterization)
+    if evotype ==  "densitymx":
         cls = _objs.LindbladParameterizedGate if sim_type == "matrix" \
               else _objs.LindbladParameterizedGateMap
-    elif evostr in ("terms","clifford terms"): # evotype = "svterm" if evostr == "terms" else "cterm"
+    elif evotype in ("svterm","cterm"):
         assert(sim_type.startswith("termorder"))        
         cls = _objs.LindbladParameterizedGateMap
     else:
@@ -504,8 +499,13 @@ def _get_Lindblad_factory(sim_type, parameterization):
 
     #Just call cls.from_gate_matrix with appropriate evotype
     def _f(gateMatrix, unitaryPostfactor=None,
-           proj_basis="pp", mxBasis="pp"):
-        return cls.from_gate_obj(gateMatrix, parameterization, unitaryPostfactor,
+           proj_basis="pp", mxBasis="pp", relative=False):
+        p = parameterization
+        if relative:
+            if parameterization == "CPTP": p = "GLND"
+            elif "S" in parameterization: p = parameterization.replace("S","s")
+            elif "D" in parameterization: p = parameterization.replace("D","d")
+        return cls.from_gate_obj(gateMatrix, p, unitaryPostfactor,
                                  proj_basis, mxBasis, truncate=True)
     return _f
                                     
@@ -513,17 +513,15 @@ def _get_Lindblad_factory(sim_type, parameterization):
 def _get_Static_factory(sim_type, parameterization):
     """ Returns a function that creates a static-type gate appropriate 
         given the simulation and parameterization """
-    evostr = ' '.join(parameterization.split()[1:]) # e.g. "", "terms" or "clifford terms"
-    if evostr == "":
+    _,evotype = _gt.split_lindblad_paramtype(parameterization)
+    if evotype == "densitymx":
         if sim_type == "matrix":
             return lambda g,b: _objs.StaticGate(g)
         elif sim_type == "map":
-            return lambda g,b: _objs.StaticGate(g) # TODO: create StaticGateMap
+            return lambda g,b: _objs.StaticGate(g) # TODO: create StaticGateMap?
 
-    elif evostr in ("terms", "clifford terms"):
+    elif evotype in ("svterm", "cterm"):
         assert(sim_type.startswith("termorder"))
-        evotype = "svterm" if evostr == "terms" else "cterm"
-        
         def _f(gateMatrix, mxBasis="pp"):
             return _objs.LindbladParameterizedGateMap.from_gate_matrix(
                 None, gateMatrix, None, None, mxBasis=mxBasis, evotype=evotype)
@@ -872,7 +870,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
         ssLocQ = [tuple(['Q%d'%i for i in range(nLocal)])]
         basisLocQ = _Basis('pp', 2**nLocal, sparse=sparse)
         locId = _sps.identity(4**nLocal,'d','csr') if sparse else _np.identity(4**nLocal,'d')
-        localErr = Lindblad(locId, proj_basis=errbasis, mxBasis=basisLocQ)
+        localErr = Lindblad(locId, proj_basis=errbasis, mxBasis=basisLocQ, relative=True)
         fullLocalErr = Embedded(ssAllQ, ['Q%d'%i for i in all_possible_err_qubit_inds],
                                 localErr, basisAllQ_dim)
         printer.log("Lindblad gate w/dim=%d and %d params (from error basis of len %d) -> embedded to gate w/dim=%d" %
@@ -911,7 +909,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
                 err_qubit_global_inds = possible_err_qubit_inds[list(err_qubit_local_inds)]
                 printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_global_inds,len(errbasis)), 4)
                 errbasis = _Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
-                termErr = Lindblad(wtId, proj_basis=errbasis, mxBasis=wtBasis)
+                termErr = Lindblad(wtId, proj_basis=errbasis, mxBasis=wtBasis, relative=True)
         
                 fullTermErr = Embedded(ssAllQ, ['Q%d'%i for i in err_qubit_global_inds],
                                        termErr, basisAllQ_dim)
@@ -2279,7 +2277,8 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     prepLbl = _Lbl("rho0")
     effectLbls = [ _Lbl("Mdefault_%s" % l) for l in gateset.povms['Mdefault'].keys()]
 
-    if paramroot in ("H+S","S","H+D","D"): #no affine - can get away w/1 fewer fiducials
+    if paramroot in ("H+S","S","H+D","D",
+                     "H+s","s","H+d","d"): #no affine - can get away w/1 fewer fiducials
         singleQfiducials = [(), ('Gx',), ('Gy',)]
     else:
         singleQfiducials = [(), ('Gx',), ('Gy',), ('Gx','Gx')]

@@ -143,7 +143,8 @@ class GateSet(object):
 
         if sim_type == "auto":
             default_param = self.gates.default_param # assume the same for other dicts
-            if default_param in ("H+S terms","H+S clifford terms"):
+            if _gt.is_valid_lindblad_paramtype(default_param) and \
+               _gt.split_lindblad_paramtype(default_param)[1] in ("svterm","cterm"):
                 sim_type = "termorder:1"
             else:
                 d = self._dim if (self._dim is not None) else 0
@@ -523,10 +524,8 @@ class GateSet(object):
         #Update dim and evolution type so that setting converted elements works correctly
         orig_dim = self.dim
         orig_evotype = self._evotype
-        
-        bTyp = typ.split()[0] # "base" type
-        evostr = " ".join(typ.split()[1:])
-        
+        baseType = typ # the default - only updated if a lindblad param type
+                
         if typ == 'static unitary':
             assert(self._evotype == "densitymx"), \
                 "Can only convert to 'static unitary' from a density-matrix evolution type."
@@ -539,30 +538,27 @@ class GateSet(object):
             self._evotype = "stabilizer"
             self.set_simtype("map")
 
-        elif evostr == "":
+        elif _gt.is_valid_lindblad_paramtype(typ):
+            baseType,evotype = _gt.split_lindblad_paramtype(typ)
+            self._evotype = evotype
+            if evotype == "densitymx":
+                if self._sim_type not in ("matrix","map"):
+                    self.set_simtype("matrix" if self.dim <= 16 else "map")
+            elif evotype in ("svterm","cterm"):
+                if self._sim_type != "termorder":
+                    self.set_simtype("termorder:1")
+
+        else: # assume all other parameterizations are densitymx type
             self._evotype = "densitymx"
             if self._sim_type not in ("matrix","map"):
                 self.set_simtype("matrix" if self.dim <= 16 else "map")
-
-        elif evostr == "terms":
-            self._evotype = "svterm"
-            if self._sim_type != "termorder":
-                self.set_simtype("termorder:1")
-
-        elif evostr == "clifford terms":
-            self._evotype = "svterm"
-            if self._sim_type != "termorder":
-                self.set_simtype("termorder:1")
-
-        else:
-            raise ValueError("Unrecognized parameterization: %s" % typ)
 
         basis = self.basis
         if extra is None: extra = {}
 
         povmtyp = rtyp = typ #assume spam types are available to all objects
-        ityp = "TP" if bTyp in ("CPTP","H+S","S","H+S+A","S+A","H+D+A", "D+A", "D") else typ
-        #povmtyp = ityp # DEBUG!!! -this fixes a unit test... suspicious...
+        ityp = "TP" if baseType in ("CPTP","H+S","S","H+S+A","S+A","H+D+A", "D+A", "D") else typ
+        #povmtyp = ityp # OLD TODO REMOVE
 
         for lbl,gate in self.gates.items():
             self.gates[lbl] = _gate.convert(gate, typ, basis,
@@ -586,7 +582,7 @@ class GateSet(object):
             self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
         elif typ == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim, basis)
-        else: # typ in ('static','H+S','S', 'H+S terms')
+        else: # typ in ('static','H+S','S', 'H+S terms', ...)
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.dim)
 
 
