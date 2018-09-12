@@ -130,6 +130,7 @@ class DataComparator():
             dsList = dataset_list_or_multidataset    
             olIndex = dsList[0].olIndex
             olIndexListBool = [ds.olIndex==(olIndex) for ds in dsList]
+            DS_names = list(range(len(dataset_list_or_multidataset)))
             if not _np.all(olIndexListBool):
                 raise ValueError('Outcomes labels and order must be the same across datasets.')
             if gatestrings == 'all':
@@ -143,7 +144,7 @@ class DataComparator():
             dsList = [dataset_list_or_multidataset[key] for key in dataset_list_or_multidataset.keys()]
             gatestrings = dsList[0].keys()
             if DS_names is None:
-                DS_names = dataset_list_or_multidataset.keys()
+                DS_names = list(dataset_list_or_multidataset.keys())
                 
         if gate_exclusions is not None:
             gatestrings_exc_temp = []
@@ -270,7 +271,7 @@ class DataComparator():
         self.tvds = _collections.OrderedDict({})
         self.sstvds = _collections.OrderedDict({})
         for key in self.llrs.keys():
-            tvd_val = tvd(key,self.dataset_list_or_multidataset[0],self.dataset_list_or_multidataset[1])
+            tvd_val = tvd(key,self.dataset_list_or_multidataset[self.DS_names[0]],self.dataset_list_or_multidataset[self.DS_names[1]])
             self.tvds[key] = tvd_val
             if self.results.hypothesis_rejected[key]:               
                 self.sstvds[key] = tvd_val
