@@ -2662,11 +2662,11 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
             for j,_ in enumerate(dslabels[i+1:],start=i+1):
                 dsc = dsc_dict.get( (i,j), dsc_dict.get( (j,i), None) )
                 
-                val = dsc.get_composite_nsigma() if (dsc is not None) else None                
+                val = dsc.composite_nsigma if (dsc is not None) else None                
                 nSigmaMx[i,j] = nSigmaMx[j,i] = val
                 if val and val > max_nSigma: max_nSigma = val
 
-                val = dsc.get_composite_2DeltaLogL() if (dsc is not None) else None
+                val = dsc.composite_llr if (dsc is not None) else None
                 logLMx[i,j] = logLMx[j,i] = val
                 if val and val > max_2DeltaLogL: max_2DeltaLogL = val
                 
@@ -2731,13 +2731,13 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
         
     def _create(self, dsc, nbins, frequency, log, display, scale):
         if display == 'llr' and nbins is None:
-            nbins = len(dsc.llrVals)
+            nbins = len(dsc.llrs)
 
         TOL=1e-10
-        pVals = dsc.pVals.astype('d')
+        pVals = _np.array(list(dsc.pVals.values()),'d')
         pVals_nz = _np.array([x for x in pVals if abs(x)>TOL])
         pVals0 = (len(pVals)-len(pVals_nz)) if log else dsc.pVals0
-        llrVals = dsc.llrVals.astype('d')
+        llrVals = _np.array(list(dsc.llrs.values()),'d')
 
         if log:
             if len(pVals_nz) == 0:

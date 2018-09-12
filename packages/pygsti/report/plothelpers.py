@@ -594,7 +594,7 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
         they correspond to.
 
     dscomparator : DataComparator
-        The object specifying that data to be compared.
+        The object specifying the data to be compared.
 
     Returns
     -------
@@ -603,10 +603,9 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
         where a base gateString is sandwiched between the each prep-fiducial and
         effect-fiducial pair.
     """
-    llrVals_and_strings_dict = dict(dscomparator.llrVals_and_strings)
     ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for i,j,gstr in gsplaq:
-        ret[i,j] = llrVals_and_strings_dict[gstr]
+        ret[i,j] = dscomparator.llrs[gstr]
     return ret
 
 @smart_cached
