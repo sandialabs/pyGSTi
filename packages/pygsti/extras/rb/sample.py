@@ -868,6 +868,8 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
     """    
     experiment_dict = {}
     experiment_dict['spec'] = {}
+    experiment_dict['spec']['lengths'] = lengths
+    experiment_dict['spec']['circuits_per_length'] = circuits_per_length
     experiment_dict['spec']['sampler'] = sampler
     experiment_dict['spec']['samplerargs'] = samplerargs
     experiment_dict['spec']['addlocal'] = addlocal
@@ -1275,6 +1277,8 @@ def direct_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
 
     experiment_dict = {}
     experiment_dict['spec'] = {}
+    experiment_dict['spec']['lengths'] = lengths
+    experiment_dict['spec']['circuits_per_length'] = circuits_per_length
     experiment_dict['spec']['subsetQs'] = subsetQs
     experiment_dict['spec']['sampler'] = sampler
     experiment_dict['spec']['samplerargs'] = samplerargs
@@ -1715,6 +1719,8 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
 
     experiment_dict = {}
     experiment_dict['spec'] = {}
+    experiment_dict['spec']['lengths'] = lengths
+    experiment_dict['spec']['circuits_per_length'] = circuits_per_length
     experiment_dict['spec']['sampler'] = sampler
     experiment_dict['spec']['samplerargs'] = samplerargs
     experiment_dict['spec']['addlocal'] = addlocal
@@ -2038,6 +2044,8 @@ def clifford_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, r
     """
     experiment_dict = {}
     experiment_dict['spec'] = {}
+    experiment_dict['spec']['lengths'] = lengths
+    experiment_dict['spec']['circuits_per_length'] = circuits_per_length
     experiment_dict['spec']['subsetQs'] = subsetQs
     experiment_dict['spec']['randomizeout'] = randomizeout
     experiment_dict['spec']['citerations'] = citerations
@@ -2437,6 +2445,8 @@ def mirror_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
     """ 
     experiment_dict = {}
     experiment_dict['spec'] = {}
+    experiment_dict['spec']['lengths'] = lengths
+    experiment_dict['spec']['circuits_per_length'] = circuits_per_length
     experiment_dict['spec']['subsetQs'] = subsetQs
     experiment_dict['spec']['sampler'] = sampler
     experiment_dict['spec']['samplerargs'] = samplerargs
