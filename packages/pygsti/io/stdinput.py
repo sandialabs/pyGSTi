@@ -290,6 +290,7 @@ class StdInputParser(object):
         if nSkip == 0: nSkip = 1
 
         display_progress = get_display_progress_fn(showProgress)
+        warnings = [] # to display *after* display progress
 
         with open(filename, 'r') as inputfile:
             for (iLine,line) in enumerate(inputfile):
@@ -308,14 +309,19 @@ class StdInputParser(object):
                             self.parse_dataline(dataline, lookupDict, nDataCols)
 
                     commentDict = {}
+                    comment = comment.strip()
                     if len(comment) > 0:
                         try:
-                            commentDict = _ast.literal_eval("{ " + comment + " }")
+                            if comment.startswith("{") and comment.endswith("}"):
+                                commentDict = _ast.literal_eval(comment)
+                            else: # put brackets around it
+                                commentDict = _ast.literal_eval("{ " + comment + " }")
                             #commentDict = _json.loads("{ " + comment + " }")
                               #Alt: safer(?) & faster, but need quotes around all keys & vals
                         except:
-                            _warnings.warn("%s Line %d: Could not parse comment '%s'"
-                                           % (filename, iLine, comment))
+                            warnings.append("%s Line %d: Could not parse comment '%s'"
+                                            % (filename, iLine, comment))
+
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
@@ -329,10 +335,13 @@ class StdInputParser(object):
                 countDict = _OrderedDict()
                 self._fillDataCountDict( countDict, fillInfo, valueList )
                 if all([ (abs(v) < 1e-9) for v in list(countDict.values())]):
-                    _warnings.warn( "Dataline for gateString '%s' has zero counts and will be ignored" % gateStringStr)
+                    warnings.append("Dataline for gateString '%s' has zero counts and will be ignored" % gateStringStr)
                     continue #skip lines in dataset file with zero counts (no experiments done)
                 gateStr = _objs.GateString(gateStringTuple, gateStringStr, lookup=lookupDict)
                 dataset.add_count_dict(gateStr, countDict, aux=commentDict)
+
+        if warnings:
+            _warnings.warn('\n'.join(warnings)) # to be displayed at end, after potential progress updates
 
         dataset.done_adding_data()
         return dataset

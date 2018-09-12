@@ -127,12 +127,17 @@ def write_dataset(filename, dataset, gatestring_list=None,
                 #output '--' for outcome labels that aren't present in this row
                 output.write(gateString.str + "  " +
                              "  ".join( [(("%g" % counts[ol]) if (ol in counts) else '--')
-                                         for ol in outcomeLabels] ) + '\n')
+                                         for ol in outcomeLabels] ))
             else: # use expanded label:count format
                 output.write(
                     gateString.str + "  " +
                     "  ".join( [("%s:%g" % (_outcome_to_str(ol),counts[ol]))
-                                for ol in outcomeLabels if ol in counts] )+'\n')
+                                for ol in outcomeLabels if ol in counts] ))
+
+            #write aux info
+            if dataRow.aux:
+                output.write(" # %s" % str(repr(dataRow.aux)))
+            output.write('\n') # finish the line
                 
 
 def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabelOrder=None):
