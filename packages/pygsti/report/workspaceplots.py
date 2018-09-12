@@ -2694,13 +2694,15 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
             boxLabels=True, prec=1, colormap=colormap, scale=scale)
         
         #Combine plotly figures into one
-        combined_fig_data = list(nSigma_fig.plotlyfig['data']) + [ logL_fig.plotlyfig['data'][0] ]
+        nSigma_figdict = nSigma_fig.plotlyfig.to_dict() # so we can work with normal dicts
+        logL_figdict = logL_fig.plotlyfig.to_dict()     # and not weird plotly objects
+        combined_fig_data = list(nSigma_figdict['data']) + [ logL_figdict['data'][0] ]
         combined_fig_data[-1].update(visible=False)
-        combined_fig = ReportFigure( go.Figure(data=combined_fig_data, layout=nSigma_fig.plotlyfig['layout']),
+        combined_fig = ReportFigure( go.Figure(data=combined_fig_data, layout=nSigma_figdict['layout']),
                                      nSigma_fig.colormap, nSigma_fig.pythonvalue )
         
-        annotations = [ nSigma_fig.plotlyfig['layout']['annotations'],
-                        logL_fig.plotlyfig['layout']['annotations'] ]
+        annotations = [ nSigma_figdict['layout']['annotations'],
+                        logL_figdict['layout']['annotations'] ]
         
         buttons = []; nTraces = 2
         for i,nm in enumerate(['Nsigma','2DeltaLogL']):
@@ -2711,15 +2713,15 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
                            {'annotations': annotations[i]}],
                      label=nm,
                      method='update') ) #'restyle'
-        combined_fig.plotlyfig['layout'].update(
-            updatemenus=list([
+        #.update( updatemenus=
+        combined_fig.plotlyfig['layout']['updatemenus'] = list([
                 dict(buttons=buttons,
                      direction = 'left',
                      #pad = {'r': 1, 'b': 1},
                      showactive = True, type = 'buttons',
                      x = 0.0, xanchor = 'left',
                      y = -0.1, yanchor = 'top')
-                ]) )
+                ]) #)
         m = combined_fig.plotlyfig['layout']['margin']
         w = combined_fig.plotlyfig['layout']['width']
         h = combined_fig.plotlyfig['layout']['height']

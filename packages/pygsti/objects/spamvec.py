@@ -2175,7 +2175,8 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             purevec = StaticSPAMVec(purevec) #assume spamvec is just a vector
 
         #Break paramType in to a "base" type and an evotype
-        bTyp, evotype, nonham_mode, param_mode = cls.decomp_paramtype(paramType)
+        from .gate import LindbladParameterizedGateMap as _LPGMap
+        bTyp, evotype, nonham_mode, param_mode = _LPGMap.decomp_paramtype(paramType)
 
         ham_basis = proj_basis if (("H+" in bTyp) or bTyp in ("CPTP","GLND")) else None
         nonham_basis = proj_basis

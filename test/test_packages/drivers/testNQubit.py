@@ -79,6 +79,19 @@ class NQubitTestCase(BaseTestCase):
         #pygsti.io.json.dump(expList_tups, open(compare_files + "/nqubit_1Q_seqs.json",'w'))
 
         compare_tups = pygsti.io.json.load(open(compare_files + "/nqubit_1Q_seqs.json"))
+        
+        #expList_tups_mod = [tuple( etup[0:3] + ('XX','XX')) for etup in expList_tups ]
+        #for etup in expList_tups:
+        #    etup_mod = tuple( etup[0:3] + ('XX','XX'))
+        #    if etup_mod not in compare_tups:
+        #        print("Not found: ", etup)
+        #
+        #    #if (etup[0] != ctup[0]) or (etup[1] != ctup[1]) or (etup[2] != ctup[2]):
+        #    #    print("Mismatch:",(etup[0] != ctup[0]), (etup[1] != ctup[1]), (etup[2] != ctup[2]))
+        #    #    print(etup); print(ctup)
+        #    #    print(tuple(etup[0]))
+        #    #    print(tuple(ctup[0]))
+
         self.assertEqual(set(expList_tups), set(compare_tups))
 
         

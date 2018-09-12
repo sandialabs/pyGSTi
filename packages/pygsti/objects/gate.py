@@ -1868,7 +1868,7 @@ class LindbladParameterizedGateMap(Gate):
     """
 
     @classmethod 
-    def decomp_paramtype(paramType):
+    def decomp_paramtype(cls, paramType):
         """ TODO: docstring 
 
         Returns
