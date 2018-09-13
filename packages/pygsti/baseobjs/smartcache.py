@@ -190,7 +190,7 @@ class SmartCache(object):
             with _timed_block('hash', times):
                 key = call_key(fn, (argVals, kwargs), self.customDigests) # cache by call key
             if key not in self.cache:
-                print(fn.__name__, " --> computing...")
+                #print(fn.__name__, " --> computing...")
                 typesig = str(tuple(str(type(arg)) for arg in argVals)) + \
                         str({k : str(type(v)) for k, v in kwargs.items()})
                 self.typesigs[name_key] = typesig
@@ -208,7 +208,7 @@ class SmartCache(object):
                 self.callTimes[name_key].append(calltime)
             else:
                 #print('The function {} experienced a cache hit'.format(name_key))
-                print(fn.__name__, " --> cache hit!")
+                #print(fn.__name__, " --> cache hit!")
                 self.hits[key] += 1
                 self.fhits[name_key] += 1
             result = self.cache[key]

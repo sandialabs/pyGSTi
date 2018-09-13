@@ -181,7 +181,6 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     #freqTerm = countVecMx * ( _np.log(freqs_nozeros) - 1.0 )
     #freqTerm[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
 
-    print("DBC1: computeProbs called w/ ", probs.shape, id(evalTree), probClipInterval, check)
     smart(gateset.bulk_fill_probs, probs, evalTree, probClipInterval, check, comm)
     pos_probs = _np.where(probs < min_p, min_p, probs)
 

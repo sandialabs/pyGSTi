@@ -1672,7 +1672,6 @@ class FitComparisonTable(WorkspaceTable):
         table = _ReportTable(colHeadings, None, colHeadingLabels=tooltips)
 
         for X,gs,gss,Np in zip(Xs,gatesetByX,gssByX,NpByX):
-            print("DB1: ratedNSigma called w: ", id(dataset), id(gs), id(gss), objective, Np)
             Nsig, rating, fitQty, k, Ns, Np = self._ccompute( 
                 _ph.ratedNsigma, dataset, gs, gss,
                 objective, Np, returnAll=True,

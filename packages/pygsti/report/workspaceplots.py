@@ -1727,7 +1727,6 @@ class ColorBoxPlot(WorkspacePlot):
                 raise ValueError("Invalid plot type: %s" % ptyp)
 
             if precomp and probs_precomp_dict is None: #bulk-compute probabilities for performance
-                print("DB: computeProbabilities called w: ", id(dataset), id(gateset), id(gss))
                 probs_precomp_dict = self._ccompute( _ph._computeProbabilities,
                                                      gss, gateset, dataset,
                                                      comm=comm, smartc=self.ws.smartCache)
@@ -2500,7 +2499,6 @@ class FitComparisonBarPlot(WorkspacePlot):
             if gss is None or gs is None:
                 Nsig, rating = _np.nan, 5
             else:
-                print("DB2: ratedNSigma called w: ", id(dataset), id(gs), id(gss), objective, Np)
                 Nsig, rating, _,_,_,_ = self._ccompute( _ph.ratedNsigma, dataset, gs,
                                                         gss, objective, Np, returnAll=True,
                                                         comm=comm, smartc=self.ws.smartCache)
@@ -2645,7 +2643,6 @@ class FitComparisonBoxPlot(WorkspacePlot):
                     NsigMx[iY][iX] = _np.nan
                     continue
 
-                print("DB3: ratedNSigma called w: ", id(dataset), id(gs), id(gss), objective)
                 Nsig, rating, _,_,_,_ = self._ccompute(
                     _ph.ratedNsigma, dataset, gs, gss, objective,
                     returnAll=True, comm=comm, smartc=self.ws.smartCache)

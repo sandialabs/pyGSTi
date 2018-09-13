@@ -446,7 +446,6 @@ def _computeProbabilities(gss, gateset, dataset, probClipInterval=(-1e6,1e6),
                              gatestringList, comm, dataset=dataset)
 
     bulk_probs = _np.zeros(evt.num_final_elements(), 'd') # _np.empty(evt.num_final_elements(), 'd') - .zeros b/c of caching
-    print("DBC2: computeProbs called w/ ", bulk_probs.shape, id(evt), probClipInterval, check)
     smart(gateset.bulk_fill_probs, bulk_probs, evt, probClipInterval, check, comm)
       # bulk_probs indexed by [element_index]
 
