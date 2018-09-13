@@ -3088,15 +3088,15 @@ class GateSet(object):
     def __str__(self):
         s = ""
         for lbl,vec in self.preps.items():
-            s += "%s = " % lbl + str(vec) + "\n"
+            s += "%s = " % str(lbl) + str(vec) + "\n"
         s += "\n"
         for lbl,povm in self.povms.items():
-            s += "%s = " % lbl + str(povm) + "\n"
+            s += "%s = " % str(lbl) + str(povm) + "\n"
         s += "\n"
         for lbl,gate in self.gates.items():
-            s += "%s = \n" % lbl + str(gate) + "\n\n"
+            s += "%s = \n" % str(lbl) + str(gate) + "\n\n"
         for lbl,inst in self.instruments.items():
-            s += "%s = " % lbl + str(inst) + "\n"
+            s += "%s = " % str(lbl) + str(inst) + "\n"
         s += "\n"
 
         return s
