@@ -272,6 +272,9 @@ class HypothesisTest(object):
                     self.significance_tested_at[dynamic_hypotheses[0]] = significance/(i + 1)
                     del pvalues[0]
                     del dynamic_hypotheses[0]
+
+            # If no nulls rejected, the threshold is the Bonferroni threshold
+            self.pvalue_pseudothreshold[hypotheses] = significance/num_hypotheses
                     
         elif correction == 'Benjamini-Hochberg':
             print("Warning: the family-wise error rate is not being controlled! Instead the False discovery rate is being controlled")
@@ -299,6 +302,9 @@ class HypothesisTest(object):
                     del pvalues[0]
                     del dynamic_hypotheses[0]
 
+            # If no nulls rejected, the threshold is the Bonferroni threshold
+            self.pvalue_pseudothreshold[hypotheses] = significance/num_hypotheses
+
         elif correction == 'none':
             print("Warning: the family-wise error rate is not being controlled, as the correction specified for this nested hypothesis is 'none'!")
             self.pvalue_pseudothreshold[hypotheses] = significance
@@ -309,6 +315,8 @@ class HypothesisTest(object):
                    
         else: 
             raise ValueError("The choice of `{}` for the `correction` parameter is invalid.".format(correction))
+
+            
     #def any_hypotheses_rejected():
     #    assert(self.results is not None), "Test must be implemented before results can be queried!"
     #    return
