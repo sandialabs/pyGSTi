@@ -853,7 +853,7 @@ def create_standard_report(results, filename, title="auto",
     addqty(1,'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
     addqty(2,'germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
     addqty(4,'progressTable', ws.FitComparisonTable,
-           Ls, gssAllL, switchBd.gsAllL_modvi, ds, switchBd.objective_modvi, 'L', comm=comm)
+           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
 
     # Generate plots
     printer.log("*** Generating plots ***")
