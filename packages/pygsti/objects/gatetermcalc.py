@@ -46,7 +46,15 @@ try:
             return _np.real( _fastgatecalc.fast_bulk_eval_compact_polys(
                 vtape, ctape, paramvec, dest_shape) )
 except ImportError:
-    from .polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
+    from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
+    def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
+        ret = poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
+        if _np.iscomplexobj(ret):
+            assert(_np.linalg.norm(_np.imag(ret)) < 1e-6 ), \
+                "norm(Im part) = %g" % _np.linalg.norm(_np.imag(ret)) # DEBUG CHECK
+            ret = _np.real( ret )
+        return ret # always return a *real* vector
+    
 
 _dummy_profiler = _DummyProfiler()
 
