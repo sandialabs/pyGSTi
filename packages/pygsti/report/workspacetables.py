@@ -1583,7 +1583,7 @@ class DataSetOverviewTable(WorkspaceTable):
 class FitComparisonTable(WorkspaceTable):
     """ Table showing how the goodness-of-fit evolved over GST iterations """
     def __init__(self, ws, Xs, gssByX, gatesetByX, dataset, objective="logl",
-                 Xlabel='L', NpByX=None):
+                 Xlabel='L', NpByX=None, comm=None):
         """
         Create a table showing how the chi^2 or log-likelihood changed with
         successive GST iterations.
@@ -1614,15 +1614,19 @@ class FitComparisonTable(WorkspaceTable):
             A list of parameter counts to use for each X.  If None, then
             the number of non-gauge parameters for each gate set is used.
 
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
 
         Returns
         -------
         ReportTable
         """
         super(FitComparisonTable,self).__init__(ws, self._create, Xs, gssByX, gatesetByX,
-                                                dataset, objective, Xlabel, NpByX)
+                                                dataset, objective, Xlabel, NpByX, comm)
 
-    def _create(self, Xs, gssByX, gatesetByX, dataset, objective, Xlabel, NpByX):
+    def _create(self, Xs, gssByX, gatesetByX, dataset, objective, Xlabel, NpByX, comm):
 
         if objective == "chi2":
             colHeadings = {
@@ -1668,8 +1672,11 @@ class FitComparisonTable(WorkspaceTable):
         table = _ReportTable(colHeadings, None, colHeadingLabels=tooltips)
 
         for X,gs,gss,Np in zip(Xs,gatesetByX,gssByX,NpByX):
-            Nsig, rating, fitQty, k, Ns, Np = _ph.ratedNsigma(dataset, gs, gss,
-                                                              objective, Np, returnAll=True)
+            print("DB1: ratedNSigma called w: ", id(dataset), id(gs), id(gss), objective, Np)
+            Nsig, rating, fitQty, k, Ns, Np = self._ccompute( 
+                _ph.ratedNsigma, dataset, gs, gss,
+                objective, Np, returnAll=True,
+                comm=comm, smartc=self.ws.smartCache)
             table.addrow((str(X),fitQty,k,fitQty-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
                          (None,'Normal','Normal','Normal','Normal','Rounded','Normal','Normal','Conversion'))
 

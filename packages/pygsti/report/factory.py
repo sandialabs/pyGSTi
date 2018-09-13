@@ -853,7 +853,7 @@ def create_standard_report(results, filename, title="auto",
     addqty(1,'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
     addqty(2,'germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
     addqty(4,'progressTable', ws.FitComparisonTable,
-           Ls, gssAllL, switchBd.gsAllL_modvi, ds, switchBd.objective_modvi, 'L')
+           Ls, gssAllL, switchBd.gsAllL_modvi, ds, switchBd.objective_modvi, 'L', comm=comm)
 
     # Generate plots
     printer.log("*** Generating plots ***")
@@ -862,9 +862,9 @@ def create_standard_report(results, filename, title="auto",
 
 
     addqty(4,'progressBarPlot', ws.FitComparisonBarPlot,
-           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L')
+           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
     addqty(A,'progressBarPlot_sum', ws.FitComparisonBarPlot,
-           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L') #just duplicate for now
+           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm) #just duplicate for now
 
     # Don't display "Target" in model violation summary, as it's often
     # huge and messes up the plot scale.
@@ -884,37 +884,39 @@ def create_standard_report(results, filename, title="auto",
                    for d in range(Nd)]
         addqty(A,'finalFitComparePlot', ws.FitComparisonBoxPlot,
                est_lbls_mt, dataset_labels,
-               gssGrid, gsGrid, dsGrid, grid_objective)
+               gssGrid, gsGrid, dsGrid, grid_objective, comm=comm)
     else:
         dsGrid = [ na_to_none(switchBd.modvi_ds[0,i]) for i in est_inds_mt ]
         gssGrid =[ na_to_none(switchBd.gssFinal[0])]*Ne
         gsGrid = [ na_to_none(switchBd.gsL_modvi[0,i,-1]) for i in est_inds_mt]
         addqty(A,'finalFitComparePlot', ws.FitComparisonBarPlot,
-               est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, 'Estimate')
+               est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, 'Estimate', comm=comm)
 
     addqty(1,'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
-           minProbClipForWeighting=switchBd.mpc_modvi)
+           minProbClipForWeighting=switchBd.mpc_modvi, comm=comm)
     if brevity < 1: qtys['bestEstimateColorBoxPlot'].set_render_options(
             click_to_display=False, valign='bottom')
 
     addqty(1,'bestEstimateTVDColorBoxPlot', ws.ColorBoxPlot,
-           'tvd', gss, modvi_ds, gsL_modvi)
+           'tvd', gss, modvi_ds, gsL_modvi, comm=comm)
     if brevity < 1: qtys['bestEstimateTVDColorBoxPlot'].set_render_options(
             click_to_display=False, valign='bottom')
 
     addqty(1,'bestEstimateColorScatterPlot', ws.ColorBoxPlot,
         switchBd.objective, gss, modvi_ds, gsL_modvi,
         linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc_modvi, typ="scatter") #TODO: L-switchboard on modvi overview page?
+        minProbClipForWeighting=switchBd.mpc_modvi, typ="scatter", comm=comm)
+          #TODO: L-switchboard on modvi overview page?
     ##qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
     ##  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation
 
     addqty(A,'bestEstimateColorHistogram', ws.ColorBoxPlot,
         switchBd.objective, gss, modvi_ds, gsL_modvi,
         linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc_modvi, typ="histogram") #TODO: L-switchboard on summary page?
+        minProbClipForWeighting=switchBd.mpc_modvi,
+        typ="histogram", comm=comm) #TODO: L-switchboard on summary page?
 
 
     if combine_robust:
@@ -925,35 +927,35 @@ def create_standard_report(results, filename, title="auto",
         # duplicate plots (for estiamtes without scaling) are avoided.
 
         addqty(4,'progressTable_scl', ws.FitComparisonTable,
-               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L', comm=comm)
 
         addqty(4,'progressBarPlot_scl', ws.FitComparisonBarPlot,
-               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L') # robust-scaled version
+               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L', comm=comm) # robust-scaled version
 
         #Not pagniated currently... just set to same full plot
         addqty(1,'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
             switchBd.objective, gss, eff_ds, gsL,
             linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=switchBd.mpc)
+            minProbClipForWeighting=switchBd.mpc, comm=comm)
         if brevity < 1: qtys['bestEstimateColorBoxPlot_scl'].set_render_options(
                 click_to_display=False, valign='bottom')
 
         addqty(1,'bestEstimateColorScatterPlot_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
-               minProbClipForWeighting=switchBd.mpc, typ="scatter")
+               minProbClipForWeighting=switchBd.mpc, typ="scatter", comm=comm)
 
         addqty(A,'bestEstimateColorHistogram_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
-               minProbClipForWeighting=switchBd.mpc, typ="histogram")
+               minProbClipForWeighting=switchBd.mpc, typ="histogram", comm=comm)
 
 
     #Note: this is the only plot that uses eff_ds (and is on robust-scaling
     #  page) that is created when combine_robust == False
     addqty(1,'dataScalingColorBoxPlot', ws.ColorBoxPlot,
            "scaling", switchBd.gssFinal, eff_ds, None,
-           submatrices=switchBd.scaledSubMxsDict)
+           submatrices=switchBd.scaledSubMxsDict, comm=comm)
 
 
     if multidataset:
@@ -1020,9 +1022,9 @@ def create_standard_report(results, filename, title="auto",
             #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
             addqty(4,'dsComparisonHistogram', ws.ColorBoxPlot,
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
-                   dscomparator=dscmp_switchBd.dscmp, typ="histogram")
+                   dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm)
             addqty(1,'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
-                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp)
+                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm)
             toggles['CompareDatasets'] = True
         else:
             toggles['CompareDatasets'] = False # not comparable!
@@ -1281,7 +1283,7 @@ def create_nqnoise_report(results, filename, title="auto",
     #X addqty(1,'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
     addqty(2,'germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
     addqty(4,'progressTable', ws.FitComparisonTable,
-           Ls, gssAllL, switchBd.gsAllL_modvi, ds, switchBd.objective_modvi, 'L')
+           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
 
     # Generate plots
     printer.log("*** Generating plots ***")
@@ -1290,9 +1292,9 @@ def create_nqnoise_report(results, filename, title="auto",
 
 
     addqty(4,'progressBarPlot', ws.FitComparisonBarPlot,
-           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L')
+           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
     addqty(A,'progressBarPlot_sum', ws.FitComparisonBarPlot,
-           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L') #just duplicate for now
+           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm) #just duplicate for now
 
     # Don't display "Target" in model violation summary, as it's often
     # huge and messes up the plot scale.
@@ -1312,7 +1314,7 @@ def create_nqnoise_report(results, filename, title="auto",
                    for d in range(Nd)]
         addqty(A,'finalFitComparePlot', ws.FitComparisonBoxPlot,
                est_lbls_mt, dataset_labels,
-               gssGrid, gsGrid, dsGrid, grid_objective)
+               gssGrid, gsGrid, dsGrid, grid_objective, comm=comm)
     else:
         dsGrid = [ na_to_none(switchBd.modvi_ds[0,i]) for i in est_inds_mt ]
         gssGrid =[ na_to_none(switchBd.gssFinal[0])]*Ne
@@ -1321,31 +1323,33 @@ def create_nqnoise_report(results, filename, title="auto",
         else: # the usual case:
             gsGrid = [ na_to_none(switchBd.gsL_modvi[0,i,-1]) for i in est_inds_mt]
         addqty(A,'finalFitComparePlot', ws.FitComparisonBarPlot,
-               est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, 'Estimate')
+               est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, 'Estimate', comm=comm)
 
     addqty(1,'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
-           minProbClipForWeighting=switchBd.mpc_modvi)
+           minProbClipForWeighting=switchBd.mpc_modvi, comm=comm)
     if brevity < 1: qtys['bestEstimateColorBoxPlot'].set_render_options(
             click_to_display=False, valign='bottom')
 
     addqty(1,'bestEstimateTVDColorBoxPlot', ws.ColorBoxPlot,
-           'tvd', gss, modvi_ds, gsL_modvi)
+           'tvd', gss, modvi_ds, gsL_modvi, comm=comm)
     if brevity < 1: qtys['bestEstimateTVDColorBoxPlot'].set_render_options(
             click_to_display=False, valign='bottom')
 
     addqty(1,'bestEstimateColorScatterPlot', ws.ColorBoxPlot,
         switchBd.objective, gss, modvi_ds, gsL_modvi,
         linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc_modvi, typ="scatter") #TODO: L-switchboard on modvi overview page?
+        minProbClipForWeighting=switchBd.mpc_modvi,
+        typ="scatter", comm=comm) #TODO: L-switchboard on modvi overview page?
     ##qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
     ##  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation
 
     addqty(A,'bestEstimateColorHistogram', ws.ColorBoxPlot,
         switchBd.objective, gss, modvi_ds, gsL_modvi,
         linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc_modvi, typ="histogram") #TODO: L-switchboard on summary page?
+        minProbClipForWeighting=switchBd.mpc_modvi,
+        typ="histogram", comm=comm) #TODO: L-switchboard on summary page?
 
 
     if combine_robust:
@@ -1356,35 +1360,37 @@ def create_nqnoise_report(results, filename, title="auto",
         # duplicate plots (for estiamtes without scaling) are avoided.
 
         addqty(4,'progressTable_scl', ws.FitComparisonTable,
-               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L', comm=comm)
 
         addqty(4,'progressBarPlot_scl', ws.FitComparisonBarPlot,
-               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L') # robust-scaled version
+               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L', comm=comm) # robust-scaled version
 
         #Not pagniated currently... just set to same full plot
         addqty(1,'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
             switchBd.objective, gss, eff_ds, gsL,
             linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=switchBd.mpc)
+            minProbClipForWeighting=switchBd.mpc, comm=comm)
         if brevity < 1: qtys['bestEstimateColorBoxPlot_scl'].set_render_options(
                 click_to_display=False, valign='bottom')
 
         addqty(1,'bestEstimateColorScatterPlot_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
-               minProbClipForWeighting=switchBd.mpc, typ="scatter")
+               minProbClipForWeighting=switchBd.mpc,
+               typ="scatter", comm=comm)
 
         addqty(A,'bestEstimateColorHistogram_scl', ws.ColorBoxPlot,
                switchBd.objective, gss, eff_ds, gsL,
                linlg_pcntle=float(linlogPercentile) / 100,
-               minProbClipForWeighting=switchBd.mpc, typ="histogram")
+               minProbClipForWeighting=switchBd.mpc,
+               typ="histogram", comm=comm)
 
 
     #Note: this is the only plot that uses eff_ds (and is on robust-scaling
     #  page) that is created when combine_robust == False
     addqty(1,'dataScalingColorBoxPlot', ws.ColorBoxPlot,
            "scaling", switchBd.gssFinal, eff_ds, None,
-           submatrices=switchBd.scaledSubMxsDict)
+           submatrices=switchBd.scaledSubMxsDict, comm=comm)
 
 
     if multidataset:
@@ -1451,9 +1457,9 @@ def create_nqnoise_report(results, filename, title="auto",
             #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
             addqty(4,'dsComparisonHistogram', ws.ColorBoxPlot,
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
-                   dscomparator=dscmp_switchBd.dscmp, typ="histogram")
+                   dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm)
             addqty(1,'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
-                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp)
+                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm)
             toggles['CompareDatasets'] = True
         else:
             toggles['CompareDatasets'] = False # not comparable!

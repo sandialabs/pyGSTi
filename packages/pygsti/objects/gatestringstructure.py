@@ -81,14 +81,14 @@ class GatestringPlaquette(object):
         ret = GatestringPlaquette(self.base, self.rows, self.cols,
                                    new_elements, None)
         if gatestring_compiler is not None:
-            ret.compile_gatestrings(gatestring_compiler)
+            ret.compile_gatestrings(gatestring_compiler, dsFilter)
         return ret
 
     def get_all_strs(self):
         """Return a list of all the gate strings contained in this plaquette"""
         return [s for i,j,s in self.elements]
 
-    def compile_gatestrings(self, gateset):
+    def compile_gatestrings(self, gateset, dataset=None):
         """
         Compiles this plaquette so that the `num_compiled_elements` property and
         the `iter_compiled()` method may be used.
@@ -97,11 +97,16 @@ class GatestringPlaquette(object):
         ----------
         gateset : GateSet
             The gate set used to perform the compiling.
+
+        dataset : DataSet, optional
+            If not None, restrict what is compiled to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
         """
         all_strs = self.get_all_strs()
         if len(all_strs) > 0:
             rawmap, self._elementIndicesByStr, self._outcomesByStr, nEls = \
-              gateset.compile_gatestrings(all_strs)
+              gateset.compile_gatestrings(all_strs, dataset)
         else:
             nEls = 0 #nothing to compile
         self.num_compiled_elements = nEls
@@ -219,7 +224,7 @@ class GatestringStructure(object):
                     baseStrs.add(p.base)
         return list(baseStrs)
 
-    def compile_plaquettes(self, gateset):
+    def compile_plaquettes(self, gateset, dataset=None):
         """
         Compiles all the plaquettes in this structure so that their
         `num_compiled_elements` property and the `iter_compiled()` methods
@@ -229,12 +234,17 @@ class GatestringStructure(object):
         ----------
         gateset : GateSet
             The gate set used to perform the compiling.
+
+        dataset : DataSet, optional
+            If not None, restrict what is compiled to only those
+            probabilities corresponding to non-zero counts (observed
+            outcomes) in this data set.
         """
         for x in self.xvals():
             for y in self.yvals():
                 p = self.get_plaquette(x,y)
                 if p is not None:
-                    p.compile_gatestrings(gateset)
+                    p.compile_gatestrings(gateset, dataset)
 
 
 class LsGermsStructure(GatestringStructure):

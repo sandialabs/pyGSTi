@@ -171,10 +171,10 @@ class SmartCache(object):
 
         Returns
         -------
+        key: the key used to hash the function call
         result : result of fn called with argVals and kwargs
 
         '''
-
         if kwargs is None:
             kwargs = dict()
         name_key = get_fn_name_key(fn)
@@ -184,11 +184,13 @@ class SmartCache(object):
             result = fn(*argVals, **kwargs)
             self.ineffectiveRequests[name_key] += 1
             self.misses[key] += 1
+            #print(fn.__name__, " --> Ineffective!")
         else:
             times = dict()
             with _timed_block('hash', times):
                 key = call_key(fn, (argVals, kwargs), self.customDigests) # cache by call key
             if key not in self.cache:
+                print(fn.__name__, " --> computing...")
                 typesig = str(tuple(str(type(arg)) for arg in argVals)) + \
                         str({k : str(type(v)) for k, v in kwargs.items()})
                 self.typesigs[name_key] = typesig
@@ -206,6 +208,7 @@ class SmartCache(object):
                 self.callTimes[name_key].append(calltime)
             else:
                 #print('The function {} experienced a cache hit'.format(name_key))
+                print(fn.__name__, " --> cache hit!")
                 self.hits[key] += 1
                 self.fhits[name_key] += 1
             result = self.cache[key]
@@ -354,6 +357,7 @@ def digest(obj, custom_digests=None):
         """Add `v` to the hash, recursively if needed."""
         with _timed_block(str(type(v)), DIGEST_TIMES):
             md5.update(str(type(v)).encode('utf-8'))
+            if isinstance(v, SmartCache): return # don't hash SmartCache args
             if isinstance(v, bytes):
                 md5.update(v)  #can add bytes directly
             else:

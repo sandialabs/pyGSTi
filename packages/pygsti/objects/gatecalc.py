@@ -1382,7 +1382,7 @@ class GateCalc(object):
 
 
     def bulk_probs(self, gatestrings, evalTree, elIndices, outcomes,
-                   clipTo=None, check=False, comm=None):
+                   clipTo=None, check=False, comm=None, smartc=None):
         """
         Construct a dictionary containing the probabilities
         for an entire list of gate sequences.
@@ -1403,16 +1403,20 @@ class GateCalc(object):
             gate string.
 
         clipTo : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        smartc : SmartCache, optional
+            A cache object to cache & use previously cached values inside this
+            function.
 
 
         Returns
@@ -1423,7 +1427,11 @@ class GateCalc(object):
             and `p` is the corresponding probability.
         """
         vp = _np.empty(evalTree.num_final_elements(),'d')
-        self.bulk_fill_probs(vp, evalTree, clipTo, check, comm)
+        if smartc:
+            smartc.cached_compute(self.bulk_fill_probs, vp, evalTree,
+                                  clipTo, check, comm)
+        else:
+            self.bulk_fill_probs(vp, evalTree, clipTo, check, comm)
 
         ret = _collections.OrderedDict()
         for i, gstr in enumerate(gatestrings):

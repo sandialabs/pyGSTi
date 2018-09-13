@@ -427,17 +427,27 @@ def _compute_num_boxes_dof(subMxs, sumUp, element_dof):
 
 
 
-def _computeProbabilities(gss, gateset, dataset):
+def _computeProbabilities(gss, gateset, dataset, probClipInterval=(-1e6,1e6), 
+                          check=False, comm=None, smartc=None):
     """
     Returns a dictionary of probabilities for each gate sequence in
     GatestringStructure `gss`.
     """
+    def smart(fn, *args, **kwargs):
+        if smartc: 
+            return smartc.cached_compute(fn, args, kwargs)[1]
+        else: return fn(*args, **kwargs)
+
     gatestringList = gss.allstrs
 
     #compute probabilities
-    evt,lookup,_ = gateset.bulk_evaltree(gatestringList)
-    bulk_probs = _np.empty(evt.num_final_elements(), 'd')
-    gateset.bulk_fill_probs(bulk_probs, evt) # LATER use comm?
+    #OLD: evt,lookup,_ = smart(gateset.bulk_evaltree, gatestringList, dataset=dataset)
+    evt,_,_,lookup,_ = smart(gateset.bulk_evaltree_from_resources,
+                             gatestringList, comm, dataset=dataset)
+
+    bulk_probs = _np.zeros(evt.num_final_elements(), 'd') # _np.empty(evt.num_final_elements(), 'd') - .zeros b/c of caching
+    print("DBC2: computeProbs called w/ ", bulk_probs.shape, id(evt), probClipInterval, check)
+    smart(gateset.bulk_fill_probs, bulk_probs, evt, probClipInterval, check, comm)
       # bulk_probs indexed by [element_index]
 
     probs_dict = \
@@ -447,8 +457,8 @@ def _computeProbabilities(gss, gateset, dataset):
 
 
 #@smart_cached
-def _computeSubMxs(gss, gateset, subMxCreationFn):
-    if gateset is not None: gss.compile_plaquettes(gateset)
+def _computeSubMxs(gss, gateset, subMxCreationFn, dataset=None):
+    if gateset is not None: gss.compile_plaquettes(gateset, dataset)
     subMxs = [ [ subMxCreationFn(gss.get_plaquette(x,y),x,y)
                  for x in gss.used_xvals() ] for y in gss.used_yvals()]
     #Note: subMxs[y-index][x-index] is proper usage
@@ -691,7 +701,8 @@ def drift_maxpower_matrices(gsplaq, driftresults):
     return ret
 
 
-def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
+def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False,
+                comm=None, smartc=None):  #TODO: pipe down minprobclip, radius, probclipinterval?
     """
     Computes the number of standard deviations of model violation, comparing
     the data in `dataset` with the `gateset` model at the "points" (sequences)
@@ -722,6 +733,15 @@ def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
         Returns additional information such as the raw and expected model
         violation (see below).
 
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    smartc : SmartCache, optional
+        A cache object to cache & use previously cached values inside this
+        function.
+
+
     Returns
     -------
     Nsig : float
@@ -748,10 +768,13 @@ def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
     if objective == "chi2":
         fitQty = _tools.chi2( gateset, dataset, gstrs,
                               minProbClipForWeighting=1e-4,
-                              gateLabelAliases=gss.aliases )
+                              gateLabelAliases=gss.aliases,
+                              comm=comm, smartc=smartc )
     elif objective == "logl":
-        logL_upperbound = _tools.logl_max(gateset, dataset, gstrs, gateLabelAliases=gss.aliases)
-        logl = _tools.logl( gateset, dataset, gstrs, gateLabelAliases=gss.aliases)
+        logL_upperbound = _tools.logl_max(gateset, dataset, gstrs, gateLabelAliases=gss.aliases,
+                                          smartc=smartc)
+        logl = _tools.logl( gateset, dataset, gstrs, gateLabelAliases=gss.aliases,
+                            comm=comm, smartc=smartc)
         fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
         if(logL_upperbound < logl):
             raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))

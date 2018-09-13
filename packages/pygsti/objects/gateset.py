@@ -2397,7 +2397,7 @@ class GateSet(object):
 
 
     def bulk_probs(self, gatestring_list, clipTo=None, check=False,
-                   comm=None, memLimit=None, dataset=None):
+                   comm=None, memLimit=None, dataset=None, smartc=None):
         """
         Construct a dictionary containing the probabilities
         for an entire list of gate sequences.
@@ -2429,6 +2429,10 @@ class GateSet(object):
             probabilities corresponding to non-zero counts (observed
             outcomes) in this data set.
 
+        smartc : SmartCache, optional
+            A cache object to cache & use previously cached values inside this
+            function.
+
 
         Returns
         -------
@@ -2442,7 +2446,7 @@ class GateSet(object):
             gatestring_list, comm, memLimit, subcalls=['bulk_fill_probs'],
             dataset=dataset, verbosity=0) # FUTURE (maybe make verbosity into an arg?)
         return self._calc().bulk_probs(gatestring_list, evalTree, elIndices,
-                                       outcomes, clipTo, check, comm)
+                                       outcomes, clipTo, check, comm, smartc)
 
 
     def bulk_dprobs(self, gatestring_list, returnPr=False,clipTo=None,

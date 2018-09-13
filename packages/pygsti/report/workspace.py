@@ -1575,6 +1575,9 @@ class WorkspaceOutput(object):
         """
         raise NotImplementedError()
 
+    def _ccompute(self, fn, *args, **kwargs):
+        """ Cached-computation using self.ws's smart cache """
+        return self.ws.smartCache.cached_compute(fn, args, kwargs)[1]
     
     def _create_onready_handler(self, content): 
         global_requirejs = self.options.get('global_requirejs',False)

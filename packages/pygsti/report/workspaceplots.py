@@ -1429,7 +1429,7 @@ class ColorBoxPlot(WorkspacePlot):
                  sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
                  directGSTgatesets=None, dscomparator=None, driftresults=None,
-                 submatrices=None, typ="boxes", scale=1.0):
+                 submatrices=None, typ="boxes", scale=1.0, comm=None):
         """
         Create a plot displaying the value of per-gatestring quantities.
 
@@ -1508,19 +1508,23 @@ class ColorBoxPlot(WorkspacePlot):
 
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
         """
         # separate in rendering/saving: save_to=None, ticSize=20, scale=1.0 (?)
         super(ColorBoxPlot,self).__init__(ws, self._create, plottype, gss, dataset, gateset,
                                           prec, sumUp, boxLabels, hoverInfo,
                                           invert, linlg_pcntle, minProbClipForWeighting,
                                           directGSTgatesets, dscomparator, driftresults, 
-                                          submatrices, typ, scale)
+                                          submatrices, typ, scale, comm)
 
     def _create(self, plottypes, gss, dataset, gateset,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
                 directGSTgatesets, dscomparator, driftresults, submatrices,
-                typ, scale):
+                typ, scale, comm):
 
         probs_precomp_dict = None
         fig = None
@@ -1723,19 +1727,22 @@ class ColorBoxPlot(WorkspacePlot):
                 raise ValueError("Invalid plot type: %s" % ptyp)
 
             if precomp and probs_precomp_dict is None: #bulk-compute probabilities for performance
-                probs_precomp_dict = _ph._computeProbabilities(gss, gateset, dataset)
+                print("DB: computeProbabilities called w: ", id(dataset), id(gateset), id(gss))
+                probs_precomp_dict = self._ccompute( _ph._computeProbabilities,
+                                                     gss, gateset, dataset,
+                                                     comm=comm, smartc=self.ws.smartCache)
 
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp] # "custom" type -- all mxs precomputed by user
             else:
-                subMxs = _ph._computeSubMxs(gss,gateset,_mx_fn)
+                subMxs = _ph._computeSubMxs(gss,gateset,_mx_fn,dataset)
 
             addl_hover_info = _collections.OrderedDict()
             for lbl,addl_mx_fn in addl_hover_info_fns.items():
                 if (submatrices is not None) and lbl in submatrices:
                     addl_subMxs = submatrices[lbl] #ever useful?
                 else:
-                    addl_subMxs = _ph._computeSubMxs(gss,gateset,addl_mx_fn)
+                    addl_subMxs = _ph._computeSubMxs(gss,gateset,addl_mx_fn,dataset)
                 addl_hover_info[lbl] = addl_subMxs
 
 
@@ -2426,7 +2433,7 @@ class FitComparisonBarPlot(WorkspacePlot):
     """ Bar plot showing the overall (aggregate) goodness of fit
         (along one dimension)"""
     def __init__(self, ws, Xs, gssByX, gatesetByX, datasetByX,
-                 objective="logl", Xlabel='L', NpByX=None, scale=1.0):
+                 objective="logl", Xlabel='L', NpByX=None, scale=1.0, comm=None):
         """
         Creates a bar plot showing the overall (aggregate) goodness of fit
         for one or more gate set estimates to corresponding data sets.
@@ -2460,12 +2467,18 @@ class FitComparisonBarPlot(WorkspacePlot):
 
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
         """
         super(FitComparisonBarPlot,self).__init__(ws, self._create,
                                                   Xs, gssByX, gatesetByX, datasetByX,
-                                                  objective, Xlabel, NpByX, scale)
+                                                  objective, Xlabel, NpByX, scale, comm)
         
-    def _create(self, Xs, gssByX, gatesetByX, datasetByX, objective, Xlabel, NpByX, scale):
+    def _create(self, Xs, gssByX, gatesetByX, datasetByX, objective, Xlabel,
+                NpByX, scale, comm):
 
         xs = list(range(len(Xs)))
         xtics = []; ys = []; colors = []; texts=[]
@@ -2487,7 +2500,11 @@ class FitComparisonBarPlot(WorkspacePlot):
             if gss is None or gs is None:
                 Nsig, rating = _np.nan, 5
             else:
-                Nsig, rating = _ph.ratedNsigma(dataset, gs, gss, objective, Np)
+                print("DB2: ratedNSigma called w: ", id(dataset), id(gs), id(gss), objective, Np)
+                Nsig, rating, _,_,_,_ = self._ccompute( _ph.ratedNsigma, dataset, gs,
+                                                        gss, objective, Np, returnAll=True,
+                                                        comm=comm, smartc=self.ws.smartCache)
+                  #Note: don't really need returnAll=True, but helps w/caching b/c other fns use it.
                 
             if   rating==5: color="darkgreen"
             elif rating==4: color="lightgreen"
@@ -2562,7 +2579,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
     """ Box plot showing the overall (aggregate) goodness of fit
         (along 2 dimensions)"""
     def __init__(self, ws, Xs, Ys, gssByYthenX, gatesetByYthenX, datasetByYthenX,
-                 objective="logl", Xlabel=None, Ylabel=None, scale=1.0):
+                 objective="logl", Xlabel=None, Ylabel=None, scale=1.0, comm=None):
         """
         Creates a box plot showing the overall (aggregate) goodness of fit
         for one or more gate set estimates to their respective  data sets.
@@ -2593,13 +2610,17 @@ class FitComparisonBoxPlot(WorkspacePlot):
 
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
         """
         super(FitComparisonBoxPlot,self).__init__(
             ws, self._create, Xs, Ys, gssByYthenX, gatesetByYthenX,
-            datasetByYthenX, objective, Xlabel, Ylabel, scale)
+            datasetByYthenX, objective, Xlabel, Ylabel, scale, comm)
         
     def _create(self, Xs, Ys, gssByYX, gatesetByYX, datasetByYX, objective,
-                    Xlabel, Ylabel, scale):
+                    Xlabel, Ylabel, scale, comm):
 
         xs = list(range(len(Xs)))
         ys = list(range(len(Ys)))
@@ -2624,7 +2645,10 @@ class FitComparisonBoxPlot(WorkspacePlot):
                     NsigMx[iY][iX] = _np.nan
                     continue
 
-                Nsig, rating = _ph.ratedNsigma(dataset, gs, gss, objective)
+                print("DB3: ratedNSigma called w: ", id(dataset), id(gs), id(gss), objective)
+                Nsig, rating, _,_,_,_ = self._ccompute(
+                    _ph.ratedNsigma, dataset, gs, gss, objective,
+                    returnAll=True, comm=comm, smartc=self.ws.smartCache)
                 NsigMx[iY][iX] = Nsig
 
         return matrix_color_boxplot(
