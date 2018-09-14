@@ -1109,12 +1109,15 @@ def create_nqnoise_report(results, filename, title="auto",
                           " confidence interval - please note the updated function signature"))
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
-        title = "GST Report for " + autoname
-        _warnings.warn( ("You should really specify `title=` when generating reports,"
-                         " as this makes it much easier to identify them later on.  "
-                         "Since you didn't, pyGSTi has generated a random one"
-                         " for you: '{}'.").format(autoname))
+        if filename is not None:
+            autoname = _autotitle.generate_name()
+            title = "GST Report for " + autoname
+            _warnings.warn( ("You should really specify `title=` when generating reports,"
+                             " as this makes it much easier to identify them later on.  "
+                             "Since you didn't, pyGSTi has generated a random one"
+                             " for you: '{}'.").format(autoname))
+        else:
+            title = "N/A" # No title - but it doesn't matter since filename is None
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
     toggles = _set_toggles(results_dict, brevity, combine_robust)

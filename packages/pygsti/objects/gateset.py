@@ -12,6 +12,7 @@ import itertools as _itertools
 import collections as _collections
 import warnings as _warnings
 import time as _time
+import uuid as _uuid
 import bisect as _bisect
 
 from ..tools import matrixtools as _mt
@@ -135,6 +136,8 @@ class GateSet(object):
         self._paramvec = _np.zeros(0, 'd')
         self._rebuild_paramvec()
         self._autogator = _autogator.SimpleCompositionAutoGator(self) # the default
+
+        self.uuid = _uuid.uuid4() # a GateSet's uuid is like a persistent id(), useful for hashing
 
         super(GateSet, self).__init__()
 
@@ -632,6 +635,9 @@ class GateSet(object):
 
         else:
             self.__dict__.update(stateDict)
+
+        if 'uuid' not in stateDict:
+            self.uuid = _uuid.uuid4() #create a new uuid
 
         #Additionally, must re-connect this gateset as the parent
         # of relevant OrderedDict-derived classes, which *don't*
@@ -3100,6 +3106,12 @@ class GateSet(object):
         s += "\n"
 
         return s
+
+    def __hash__(self):
+        if self.uuid is not None:
+            return hash(self.uuid)
+        else:
+            raise TypeError('Use digest hash')
 
 
     def iter_objs(self):

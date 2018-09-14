@@ -145,7 +145,7 @@ class SmartCache(object):
         else:
             times = dict()
             with _timed_block('hash', times):
-                key = call_key(fn, (argVals, kwargs), self.customDigests) # cache by call key
+                key = call_key(fn, tuple(argVals)+(kwargs,), self.customDigests) # cache by call key
             if key not in self.cache:
                 with _timed_block('call', times):
                     self.cache[key] = fn(*argVals, **kwargs)
@@ -184,13 +184,15 @@ class SmartCache(object):
             result = fn(*argVals, **kwargs)
             self.ineffectiveRequests[name_key] += 1
             self.misses[key] += 1
-            #print(fn.__name__, " --> Ineffective!")
+            #DB: print(fn.__name__, " --> Ineffective!")
         else:
             times = dict()
             with _timed_block('hash', times):
-                key = call_key(fn, (argVals, kwargs), self.customDigests) # cache by call key
+                key = call_key(fn, tuple(argVals)+(kwargs,), self.customDigests) # cache by call key
             if key not in self.cache:
-                #print(fn.__name__, " --> computing...")
+                #DB: print(fn.__name__, " --> computing... (not found in %d keys)" % len(list(self.cache.keys())))
+                #DB: print("Key detail: ",key[0])
+                #DB: for a,k in zip(tuple(argVals)+(kwargs,),key[1:]): print(type(a),": ",repr(k))
                 typesig = str(tuple(str(type(arg)) for arg in argVals)) + \
                         str({k : str(type(v)) for k, v in kwargs.items()})
                 self.typesigs[name_key] = typesig
@@ -207,8 +209,8 @@ class SmartCache(object):
                 self.hashTimes[name_key].append(hashtime)
                 self.callTimes[name_key].append(calltime)
             else:
-                #print('The function {} experienced a cache hit'.format(name_key))
-                #print(fn.__name__, " --> cache hit!")
+                #DB: print('The function {} experienced a cache hit'.format(name_key))
+                #DB: print(fn.__name__, " --> cache hit!")
                 self.hits[key] += 1
                 self.fhits[name_key] += 1
             result = self.cache[key]
@@ -360,6 +362,8 @@ def digest(obj, custom_digests=None):
             if isinstance(v, SmartCache): return # don't hash SmartCache args
             if isinstance(v, bytes):
                 md5.update(v)  #can add bytes directly
+            elif v is None:
+                md5.update(str(hash("(_NONE_)")).encode('utf-8')) #make all None's hash the same
             else:
                 try:
                     md5.update(str(hash(v)).encode('utf-8'))

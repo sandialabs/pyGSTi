@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import copy as _copy
+import uuid as _uuid
 import itertools as _itertools
 from ..tools import listtools as _lt
 
@@ -144,7 +145,19 @@ class GatestringStructure(object):
     along with any aliases.
     """
     def __init__(self):
-        pass
+        self.uuid = _uuid.uuid4() # like a persistent id(), 
+          # useful for peristent (file) caches
+
+    def __hash__(self):
+        if self.uuid is not None:
+            return hash(self.uuid)
+        else:
+            raise TypeError('Use digest hash')
+
+    def __setstate__(self, stateDict):
+        self.__dict__.update(stateDict)
+        if 'uuid' not in stateDict:
+            self.uuid = _uuid.uuid4() #create a new uuid
 
     def xvals(self):
         """ Returns a list of the x-values"""
@@ -291,6 +304,7 @@ class LsGermsStructure(GatestringStructure):
         self._plaquettes = {}
         self._firsts = []
         self._baseStrToLGerm = {}
+        super(LsGermsStructure,self).__init__()
 
     #Base class access in terms of generic x,y coordinates
     def xvals(self):
@@ -560,6 +574,7 @@ class LsGermsSerialStructure(GatestringStructure):
         self._plaquettes = {}
         self._firsts = []
         self._baseStrToLGerm = {}
+        super(LsGermsSerialStructure,self).__init__()
 
     #Base class access in terms of generic x,y coordinates
     def xvals(self):
