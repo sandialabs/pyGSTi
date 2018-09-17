@@ -2265,6 +2265,154 @@ def lindblad_projections_to_paramvals(hamProjs, otherProjs, param_mode="cptp",
 
 
 
+def paramvals_to_lindblad_projections(paramvals, ham_basis_size,
+                                      other_basis_size, param_mode="cptp",
+                                      other_mode="all", Lmx=None):
+    """
+    TODO: docstring: check that 'param_mode' and 'other_mode' are 
+         correctly docstringed in other functions like this one.
+    Construct the separate arrays of Hamiltonian and non-Hamiltonian
+    Lindblad-term projections from the array of Lindblad-gate parameter values.
+
+    This function essentially performs the inverse of 
+    :function:`lindblad_projections_to_paramvals`.
+
+    Parameters
+    ----------
+    paramvals : numpy.ndarray
+        A 1D array of real parameter values consisting of d-1 Hamiltonian 
+        values followed by either (d-1)^2 or just d-1 non-Hamiltonian
+        values (the latter when `other_mode in ('diagonal','diag_affine')`).
+
+    ham_basis_size, other_basis_size : int
+        The number of elements in the Hamiltonian and non-Hamiltonian
+        bases used to construct `paramvals`.  As such, `ham_basis_size`
+        gives the offset into `paramvals` where the non-Hamiltonian
+        parameters begin.
+
+    param_mode : {"unconstrained", "cptp", "depol"}
+        Specifies how the Lindblad-term coefficients are mapped to the set of
+        (real) parameter values.  This really just applies to the "other"
+        (non-Hamiltonian) coefficients.  "unconstrained" means that ranging 
+        over the parameter values lets the coefficient-matrix vary over all
+        matrices, "cptp" restricts this to postitive matrices, and "depol" 
+        maps all of the coefficients to the *same* parameter (only available
+        for "diagonal" and "diag_affine" other-modes).
+
+    other_mode : {"all", "diagonal", "diag_affine"}
+        Specifies the structure of the matrix of other (non-Hamiltonian)
+        coefficients.  If d is the gate dimension, "all" means a (d-1,d-1)
+        matrix is used; "diagonal" means just the (d2-1,) diagonal of this
+        matrix is used; "diag_affine" means the coefficients are in a (2,d2-1)
+        array with the diagonal-term coefficients being the first row and the
+        affine coefficients being the second row.
+
+    Lmx : ndarray, optional
+        Scratch space that is used to store the lower-triangular
+        Cholesky decomposition matrix that is used to construct
+        the "other" projections when there is a CPTP constraint.
+
+    Returns
+    -------
+    hamProjs : numpy.ndarray
+        An array of length d-1, where d is the gate dimension, giving the
+        projections onto a full set of the Hamiltonian-type Lindblad terms.
+
+    otherProjs : numpy.ndarray
+        An array of shape (d-1,d-1) or (d-1,) or (2,d-1) where d is the gate
+        dimension, giving the projections onto a full set of non-Hamiltonian
+        -type Lindblad terms (see `other_mode` above).
+    """
+    bsH = ham_basis_size
+    bsO = other_basis_size
+
+    if Lmx is None:
+        Lmx = _np.zeros((bsO-1,bsO-1),'complex') if bsO > 0 else None
+
+    # self.paramvals = [hamCoeffs] + [otherParams]
+    #  where hamCoeffs are *real* and of length d2-1 (self.dim == d2)
+    if bsH > 0:
+        hamCoeffs = paramvals[0:bsH-1]
+        nHam = bsH-1
+    else:
+        hamCoeffs = None
+        nHam = 0
+
+    #built up otherCoeffs based on param_mode and nonham_mode
+    if bsO > 0:
+        if other_mode == "diagonal":
+            otherParams = paramvals[nHam:]
+            expected_shape = (1,) if (param_mode in ("depol","reldepol")) else (bsO-1,)
+            assert(otherParams.shape == expected_shape)
+            
+            if param_mode in ("cptp","depol"):
+                otherCoeffs = otherParams**2 #Analagous to L*L_dagger
+            else: # "unconstrained"
+                otherCoeffs = otherParams
+                
+        elif other_mode == "diag_affine":
+
+            if param_mode in ("depol","reldepol"):
+                otherParams = paramvals[nHam:].reshape((1+bsO-1,))
+                otherCoeffs = _np.empty((2,bsO-1), 'd') #leave as real type b/c doesn't have complex entries
+                if param_mode == "depol":
+                    otherCoeffs[0,:] = otherParams[0]**2
+                else:
+                    otherCoeffs[0,:] = otherParams[0]
+                otherCoeffs[1,:] = otherParams[1:]
+
+            else:
+                otherParams = paramvals[nHam:].reshape((2,bsO-1))
+                if param_mode == "cptp":
+                    otherCoeffs = otherParams.copy()
+                    otherCoeffs[0,:] = otherParams[0]**2
+                else: # param_mode == "unconstrained"
+                    #otherCoeffs = _np.empty((2,bsO-1),'complex')
+                    otherCoeffs = otherParams
+                    
+        else: # other_mode == "all"
+            otherParams = paramvals[nHam:].reshape((bsO-1,bsO-1))
+    
+            if param_mode == "cptp":
+                #  otherParams is an array of length (bs-1)*(bs-1) that
+                #  encodes a lower-triangular matrix "Lmx" via:
+                #  Lmx[i,i] = otherParams[i,i]
+                #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
+                for i in range(bsO-1):
+                    Lmx[i,i] = otherParams[i,i]
+                    for j in range(i):
+                        Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
+        
+                #The matrix of (complex) "other"-coefficients is build by
+                # assuming Lmx is its Cholesky decomp; means otherCoeffs
+                # is pos-def.
+
+                # NOTE that the Cholesky decomp with all positive real diagonal
+                # elements is *unique* for a given positive-definite otherCoeffs
+                # matrix, but we don't care about this uniqueness criteria and so
+                # the diagonal els of Lmx can be negative and that's fine -
+                # otherCoeffs will still be posdef.
+                otherCoeffs = _np.dot(Lmx,Lmx.T.conjugate())
+    
+                #DEBUG - test for pos-def
+                #evals = _np.linalg.eigvalsh(otherCoeffs)
+                #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
+                #assert(all([ev >= -DEBUG_TOL for ev in evals]))
+    
+            else: # param_mode == "unconstrained"
+                #otherParams holds otherCoeff real and imaginary parts directly
+                otherCoeffs = _np.empty((bsO-1,bsO-1),'complex')
+                for i in range(bsO-1):
+                    otherCoeffs[i,i] = otherParams[i,i]
+                    for j in range(i):
+                        otherCoeffs[i,j] = otherParams[i,j] +1j*otherParams[j,i]
+                        otherCoeffs[j,i] = otherParams[i,j] -1j*otherParams[j,i]
+    else:
+        otherCoeffs = None
+
+    return hamCoeffs, otherCoeffs
+
+
 #TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
 # calls to this one and unitary_to_processmx
 def rotation_gate_mx(r, mxBasis="gm"):

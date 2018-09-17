@@ -85,7 +85,7 @@ def chi2_terms(gateset, dataset, gateStrings=None,
         N[ lookup[i] ] = dataset[gateStr].total
         f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
 
-    smart(gateset.bulk_fill_probs, probs, evTree, clipTo, check, comm)
+    smart(gateset.bulk_fill_probs, probs, evTree, clipTo, check, comm, _filledarrays=(0,))
 
     cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
     v = N * ((probs - f)**2/cprobs)
@@ -288,13 +288,13 @@ def chi2(gateset, dataset, gateStrings=None,
 
     if compute_hprobs:
         smart(gateset.bulk_fill_hprobs, hprobs, evTree,
-              probs, dprobs, clipTo, check, comm)
+              probs, dprobs, clipTo, check, comm, _filledarrays=(0,2,3))
     elif returnGradient:
         smart(gateset.bulk_fill_dprobs, dprobs, evTree,
-              probs, clipTo, check, comm)
+              probs, clipTo, check, comm, _filledarrays=(0,2))
     else:
         smart(gateset.bulk_fill_probs, probs, evTree,
-              clipTo, check, comm)
+              clipTo, check, comm, _filledarrays=(0,))
 
 
     #cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting) #clipped probabilities (also clip derivs to 0?)

@@ -181,7 +181,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     #freqTerm = countVecMx * ( _np.log(freqs_nozeros) - 1.0 )
     #freqTerm[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
 
-    smart(gateset.bulk_fill_probs, probs, evalTree, probClipInterval, check, comm)
+    smart(gateset.bulk_fill_probs, probs, evalTree, probClipInterval, check, comm, _filledarrays=(0,))
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
     if poissonPicture:
@@ -426,7 +426,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
 
     smart(gateset.bulk_fill_dprobs, dprobs, evalTree, prMxToFill=probs,
           clipTo=probClipInterval, check=check, comm=comm,
-          wrtBlockSize=blkSize) # FUTURE: set gatherMemLimit=?
+          wrtBlockSize=blkSize, _filledarrays=(0,'prMxToFill')) # FUTURE: set gatherMemLimit=?
 
 
     pos_probs = _np.where(probs < min_p, min_p, probs)
@@ -706,7 +706,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
         #compute pos_probs separately
         smart(gateset.bulk_fill_probs, probs, evalSubTree,
               clipTo=probClipInterval, check=check,
-              comm=mySubComm)
+              comm=mySubComm, _filledarrays=(0,))
         pos_probs = _np.where(probs < min_p, min_p, probs)
 
         nCols = gateset.num_params()
@@ -893,7 +893,7 @@ def logl_approximate_hessian(gateset, dataset, gatestring_list=None,
 
     smart(gateset.bulk_fill_dprobs, dprobs, evalTree, prMxToFill=probs,
           clipTo=probClipInterval, check=check, comm=comm,
-          wrtBlockSize=blkSize) # FUTURE: set gatherMemLimit=?
+          wrtBlockSize=blkSize, _filledarrays=(0,'prMxToFill')) # FUTURE: set gatherMemLimit=?
 
     pos_probs = _np.where(probs < min_p, min_p, probs)
 

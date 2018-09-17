@@ -1246,8 +1246,11 @@ def create_nqnoise_report(results, filename, title="auto",
     #X addqty(A,'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
     #X                                      display=('inf','trace','diamond','evinf','evdiamond'))
 
-    addqty(4,'bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri(1), ("errgen","H","S","A"),
-                                                           "boxes", errgen_type)
+    #addqty(4,'bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri(1), ("errgen","H","S","A"),
+    #                                                       "boxes", errgen_type)
+    addqty(4,'bestGatesetErrGenBoxTable', ws.NQubitErrgenTable, gsGIRep, cri(1),
+           ("H","S"), "boxes")
+
     addqty(2,'metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
     addqty(2,'stdoutBlock', ws.StdoutText, switchBd.meta_stdout)
     addqty(2,'profilerTable', ws.ProfilerTable, switchBd.profiler)

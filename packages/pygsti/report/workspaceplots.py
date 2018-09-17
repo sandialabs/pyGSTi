@@ -1043,7 +1043,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
         Minimum and maximum of the color scale.
 
     xlabels, ylabels: list, optional
-        List of (str) axis labels.
+        List of (str) box labels for each axis.
 
     xlabel, ylabel : str, optional
         Axis labels for the plot.
@@ -1945,7 +1945,7 @@ class MatrixPlot(WorkspacePlot):
           Min and max values of the color scale.
     
         xlabels, ylabels: list, optional
-          List of (str) axis labels.
+          List of (str) box labels for each axis.
     
         xlabel : str, optional
           An x-axis label for the plot.

@@ -446,7 +446,7 @@ def _computeProbabilities(gss, gateset, dataset, probClipInterval=(-1e6,1e6),
                              gatestringList, comm, dataset=dataset)
 
     bulk_probs = _np.zeros(evt.num_final_elements(), 'd') # _np.empty(evt.num_final_elements(), 'd') - .zeros b/c of caching
-    smart(gateset.bulk_fill_probs, bulk_probs, evt, probClipInterval, check, comm)
+    smart(gateset.bulk_fill_probs, bulk_probs, evt, probClipInterval, check, comm, _filledarrays=(0,))
       # bulk_probs indexed by [element_index]
 
     probs_dict = \

@@ -1429,7 +1429,7 @@ class GateCalc(object):
         vp = _np.empty(evalTree.num_final_elements(),'d')
         if smartc:
             smartc.cached_compute(self.bulk_fill_probs, vp, evalTree,
-                                  clipTo, check, comm)
+                                  clipTo, check, comm, _filledarrays=(0,))
         else:
             self.bulk_fill_probs(vp, evalTree, clipTo, check, comm)
 
