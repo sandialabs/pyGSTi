@@ -24,8 +24,8 @@ apt-get install libsuitesparse-dev  > /dev/null 2>&1
 cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so  > /dev/null 2>&1
 echo "SuiteSparse complete"
 
-sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test # > /dev/null 2>&1
-sudo apt-get update # > /dev/null 2>&1
+sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test > /dev/null 2>&1
+sudo apt-get update > /dev/null 2>&1
 
 echo "Reinstalling gcc/g++ to get newer versions"
 sudo update-alternatives --remove-all gcc  > /dev/null 2>&1
@@ -55,9 +55,10 @@ cd ~/temp  > /dev/null 2>&1
 wget https://cmake.org/files/v$version/cmake-$version.$build.tar.gz  > /dev/null 2>&1
 tar -xzvf cmake-$version.$build.tar.gz  > /dev/null 2>&1
 cd cmake-$version.$build/  > /dev/null 2>&1
-./bootstrap  # > /dev/null 2>&1
-make -j4  # > /dev/null 2>&1
-sudo make install  # > /dev/null 2>&1
-cd ..  # > /dev/null 2>&1
-rm -r temp  # > /dev/null 2>&1
+./bootstrap  > /dev/null 2>&1
+make -j4  > /dev/null 2>&1
+sudo make install  > /dev/null 2>&1
+cd ..  > /dev/null 2>&1
+#rm -r temp  # > /dev/null 2>&1
+export PATH=/usr/local/bin:$PATH
 cmake --version
