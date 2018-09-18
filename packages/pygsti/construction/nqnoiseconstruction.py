@@ -2199,13 +2199,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
 
     Returns
     -------
-    sequences : list
-        A list of (GateString, L, germ, prepFid, measFid) tuples specifying the 
-        final sequences categorized by max-length (L) and germ.
-
-    germs : list
-        A list of GateString objects specifying all the germs found in
-        `sequences`.
+    LsGermsSerialStructure
     """
 
     #The algorithm here takes the following basic structure:
@@ -2678,10 +2672,47 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
                                 
                 printer.log("After tiling L=%d to cloudbank, have %d sequences, %d germs" %
                             (L, len(sequences),len(selected_germs)),4)
-                
+
                 
     printer.log("Done: %d sequences, %d germs" % (len(sequences),len(selected_germs)))
-    return sequences, selected_germs
+    #OLD: return sequences, selected_germs
+    #sequences : list
+    #    A list of (GateString, L, germ, prepFid, measFid) tuples specifying the 
+    #    final sequences categorized by max-length (L) and germ.
+    #
+    #germs : list
+    #    A list of GateString objects specifying all the germs found in
+    #    `sequences`.
+
+
+    #Post processing: convert sequence tuples to a gate string structure
+    Ls = set()
+    germs = _collections.OrderedDict()
+    
+    for gstr,L,germ,prepFid,measFid in sequences:
+        Ls.add(L)
+        if germ not in germs: germs[germ] = {}
+        if L not in germs[germ]: germs[germ][L] = []
+        germs[germ][L].append( (prepFid,measFid) )
+        
+    maxPlaqEls = max([len(fidpairs) for gdict in germs.values() for fidpairs in gdict.values()])
+    nMinorRows = nMinorCols = int(_np.floor(_np.sqrt(maxPlaqEls)))
+    if nMinorRows*nMinorCols < maxPlaqEls: nMinorCols += 1
+    if nMinorRows*nMinorCols < maxPlaqEls: nMinorRows += 1
+    assert(nMinorRows*nMinorCols >= maxPlaqEls), "Logic Error!"
+    
+    germList = list(germs.keys()) #ordered dict so retains nice ordering
+    Ls = sorted(list(Ls))
+    gss = _objs.LsGermsSerialStructure(Ls,germList,nMinorRows,nMinorCols,
+                                       aliases=None,sequenceRules=None)
+    
+    for germ,gdict in germs.items():
+        for L,fidpairs in gdict.items():            
+            serial_germ = germ.serialize() #must serialize to get correct count
+            germ_power = _gsc.repeat_with_max_length(serial_germ,L)
+            gss.add_plaquette(germ_power, L, germ, fidpairs) #returns 'missing_list'; useful if using dsfilter arg
+            
+    return gss                
 
 
 def _get_kcoverage_template_k2(n):

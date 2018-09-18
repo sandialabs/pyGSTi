@@ -44,18 +44,18 @@ class NQubitTestCase(BaseTestCase):
                                       gateNoise=(1234,0.01), prepNoise=(456,0.01), povmNoise=(789,0.01))
 
         cache = {}
-        expList_tups, germs = pygsti.construction.create_nqubit_sequences(
+        gss = pygsti.construction.create_nqubit_sequences(
             nQubits, maxLengths, 'line', cnot_edges, maxIdleWeight=2, maxhops=1,
             extraWeight1Hops=0, extraGateWeight=0, verbosity=4, cache=cache, algorithm="sequential")
-        expList = [ tup[0] for tup in expList_tups]
+        expList = gss.allstrs #[ tup[0] for tup in expList_tups]
 
         #RUN to save list & dataset
-        #pygsti.io.json.dump(expList_tups, open(compare_files + "/nqubit_2Q_seqs.json",'w'))
+        #pygsti.io.json.dump(gss, open(compare_files + "/nqubit_2Q_seqs.json",'w'))
         #ds = pygsti.construction.generate_fake_data(gs_datagen, expList, 1000, "multinomial", seed=1234)
         #pygsti.io.json.dump(ds,open(compare_files + "/nqubit_2Q_dataset.json",'w'))
 
-        compare_tups = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
-        self.assertEqual(set(expList_tups), set(compare_tups))
+        compare_gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
+        self.assertEqual(set(gss.allstrs), set(compare_gss.allstrs))
 
 
 
@@ -70,15 +70,15 @@ class NQubitTestCase(BaseTestCase):
                                       gateNoise=(1234,0.01), prepNoise=(456,0.01), povmNoise=(789,0.01))
 
         cache = {}
-        expList_tups, germs = pygsti.construction.create_nqubit_sequences(
+        gss = pygsti.construction.create_nqubit_sequences(
             nQubits, maxLengths, 'line', cnot_edges, maxIdleWeight=1, maxhops=0,
             extraWeight1Hops=0, extraGateWeight=0, verbosity=4, cache=cache, algorithm="greedy")
-        #expList = [ tup[0] for tup in expList_tups]
+        #expList = gss.allstrs #[ tup[0] for tup in expList_tups]
 
         #RUN to save list
-        #pygsti.io.json.dump(expList_tups, open(compare_files + "/nqubit_1Q_seqs.json",'w'))
+        #pygsti.io.json.dump(gss, open(compare_files + "/nqubit_1Q_seqs.json",'w'))
 
-        compare_tups = pygsti.io.json.load(open(compare_files + "/nqubit_1Q_seqs.json"))
+        compare_gss = pygsti.io.json.load(open(compare_files + "/nqubit_1Q_seqs.json"))
         
         #expList_tups_mod = [tuple( etup[0:3] + ('XX','XX')) for etup in expList_tups ]
         #for etup in expList_tups:
@@ -92,7 +92,7 @@ class NQubitTestCase(BaseTestCase):
         #    #    print(tuple(etup[0]))
         #    #    print(tuple(ctup[0]))
 
-        self.assertEqual(set(expList_tups), set(compare_tups))
+        self.assertEqual(set(gss.allstrs), set(compare_gss.allstrs))
 
         
     def test_2Q(self):

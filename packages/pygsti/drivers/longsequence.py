@@ -491,10 +491,15 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         The target gate set, specified either directly or by the filename of a
         gateset file (text format).
 
-    lsgstLists : list of lists or of LsGermsStructs
+    lsgstLists : list of lists or LsGermsStruct(s)
         An explicit list of either the raw gate string lists to be used in
         the analysis or of LsGermsStruct objects, which additionally contain
         the max-L, germ, and fiducial pair structure of a set of gate strings.
+        A single LsGermsStruct object can also be given, which is equivalent 
+        to passing a list of successive L-value truncations of this object
+        (e.g. if the object has `Ls = [1,2,4]` then this is like passing
+         a list of three LsGermsStructs w/truncations `[1]`, `[1,2]`, and 
+         `[1,2,4]`).
 
     gaugeOptParams : dict, optional
         A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
@@ -581,12 +586,18 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: loading',tRef); tRef=tNxt
 
+    #Convert a single LsGermsStruct to a list if needed:
+    validStructTypes = (_objs.LsGermsStructure,_objs.LsGermsSerialStructure)
+    if isinstance(lsgstLists, validStructTypes):
+        master = lsgstLists
+        lsgstLists = [ master.truncate(Ls=master.Ls[0:i+1]) 
+                       for i in range(len(master.Ls))]
 
     #Starting Point - compute on rank 0 and distribute
     LGSTcompatibleGates = all([(isinstance(g,_objs.FullyParameterizedGate) or
                                 isinstance(g,_objs.TPParameterizedGate))
                                for g in gs_target.gates.values()])
-    if isinstance(lsgstLists[0],_objs.LsGermsStructure) and LGSTcompatibleGates:
+    if isinstance(lsgstLists[0],validStructTypes) and LGSTcompatibleGates:
         startingPt = advancedOptions.get('starting point',"LGST")
     else:
         startingPt = advancedOptions.get('starting point',"target")

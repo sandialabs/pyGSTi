@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
+import itertools as _itertools
 #import uuid  as _uuid
 from ..tools import compattools as _compat
 from ..baseobjs import GateStringParser as _GateStringParser
@@ -143,6 +144,106 @@ class GateString(object):
         """
         return GateString( [l.map_state_space_labels(mapper) for l in self.tup] )
 
+    def serialize(self):
+        """
+        Construct a gate string whereby all compound labels (containing multiple
+        gates in parallel) in this string are converted to separate labels,
+        effectively putting each elementary gate operation into its own "layer".
+        Ordering is dictated by the ordering of the compound label.
+
+        Returns
+        -------
+        GateString
+        """
+        serial_lbls = []
+        for lbl in self:
+            for c in lbl.components:
+                serial_lbls.append(c)
+        return GateString(serial_lbls)
+
+    def parallelize(self, can_break_labels=True, adjacent_only=False):
+        """
+        Construct a gatestring with the same underlying labels as this one,
+        but with as many gates performed in parallel as possible (with
+        some restrictions - see the Parameters sectin below).  Generally,
+        gates are moved as far left (toward the start) in the sequence as
+        possible.
+
+        Parameters
+        ----------
+        can_break_labels : bool, optional
+            Whether compound (parallel-gate) labels in this GateString can be
+            separated during the parallelization process.  For example, if
+            `can_break_labels=True` then `"Gx:0[Gy:0Gy:1]" => "[Gx:0Gy:1]Gy:0"`
+            whereas if `can_break_labels=False` the result would remain 
+            `"Gx:0[Gy:0Gy:1]"` because `[Gy:0Gy:1]` cannot be separated.
+
+        adjacent_only : bool, optional
+            It `True`, then gate labels are only allowed to move into an
+            adjacent label, that is, they cannot move "through" other 
+            gate labels.  For example, if `adjacent_only=True` then
+            `"Gx:0Gy:0Gy:1" => "Gx:0[Gy:0Gy:1]"` whereas if 
+            `adjacent_only=False` the result would be `"[Gx:0Gy:1]Gy:0`.
+            Setting this to `True` is sometimes useful if you want to 
+            parallelize a serial string in such a way that subsequently 
+            calling `.serialize()` will give you back the original string.
+            
+        Returns
+        -------
+        GateString
+        """
+        parallel_lbls = []
+        cur_components = []
+        first_free = {'*':0}
+        for lbl in self:
+            if can_break_labels: # then process label components individually
+                for c in lbl.components:
+                    if c.sslbls is None: # ~= acts on *all* sslbls
+                        pos = max(list(first_free.values())) 
+                          #first position where all sslbls are free
+                    else:
+                        inds = [v for k,v in first_free.items() if k in c.sslbls]
+                        pos = max(inds) if len(inds) > 0 else first_free['*']
+                          #first position where all c.sslbls are free (uses special
+                          # '*' "base" key if we haven't seen any of the sslbls yet)
+
+                    if len(parallel_lbls) < pos+1: parallel_lbls.append([])
+                    assert(pos < len(parallel_lbls))
+                    parallel_lbls[pos].append(c) #add component in proper place
+
+                    #update first_free
+                    if adjacent_only: # all labels/components following this one must at least be at 'pos'
+                        for k in first_free: first_free[k] = pos
+                    if c.sslbls is None:
+                        for k in first_free: first_free[k] = pos+1 #includes '*'
+                    else:
+                        for k in c.sslbls: first_free[k] = pos+1
+
+            else: # can't break labels - treat as a whole
+                if lbl.sslbls is None: # ~= acts on *all* sslbls
+                    pos = max(list(first_free.values())) 
+                      #first position where all sslbls are free
+                else:
+                    inds = [v for k,v in first_free.items() if k in lbl.sslbls]
+                    pos = max(inds) if len(inds) > 0 else first_free['*']
+                      #first position where all c.sslbls are free (uses special
+                      # '*' "base" key if we haven't seen any of the sslbls yet)
+
+                if len(parallel_lbls) < pos+1: parallel_lbls.append([])
+                assert(pos < len(parallel_lbls))
+                for c in lbl.components:  # add *all* components of lbl in proper place
+                    parallel_lbls[pos].append(c)
+
+                #update first_free
+                if adjacent_only: # all labels/components following this one must at least be at 'pos'
+                    for k in first_free: first_free[k] = pos
+                if lbl.sslbls is None:
+                    for k in first_free: first_free[k] = pos+1 #includes '*'
+                else:
+                    for k in lbl.sslbls: first_free[k] = pos+1
+                    
+        return GateString(parallel_lbls)
+                    
             
     #Conversion routines for evalTree usage -- TODO: make these member functions
     def to_pythonstr(self,gateLabels):

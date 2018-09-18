@@ -19,7 +19,7 @@ class GatestringPlaquette(object):
     fiducial sequences.
     """
 
-    def __init__(self, base, rows, cols, elements, aliases):
+    def __init__(self, base, rows, cols, elements, aliases, fidpairs=None):
         """
         Create a new GatestringPlaquette.
 
@@ -39,11 +39,17 @@ class GatestringPlaquette(object):
         aliases : dict
             A dictionary of gate label aliases that is carried along
             for calls to :func:`expand_aliases`.
+            
+        fidpairs : list, optional
+            A list of `(prepStr, effectStr)` tuples specifying how
+            `elements` is generated from `base`, i.e. by
+            `prepStr + base + effectStr`.
         """
         self.base = base
         self.rows = rows
         self.cols = cols
         self.elements = elements[:]
+        self.fidpairs = fidpairs[:] if (fidpairs is not None) else None
         self.aliases = aliases
 
         #After compiling:
@@ -72,15 +78,24 @@ class GatestringPlaquette(object):
         """
         #find & replace aliased gate labels with their expanded form
         new_elements = []
-        for i,j,s in self.elements:
+        new_fidpairs = [] if (self.fidpairs is not None) else None
+        for k,(i,j,s) in enumerate(self.elements):
             s2 = s if (self.aliases is None) else \
                  _lt.find_replace_tuple(s,self.aliases)
 
+            if new_fidpairs:
+                prep,effect = self.fidpairs[k]
+                prep2 = prep if (self.aliases is None) else \
+                    _lt.find_replace_tuple(prep,self.aliases)
+                effect2 = effect if (self.aliases is None) else \
+                    _lt.find_replace_tuple(effect,self.aliases)
+
             if dsFilter is None or s2 in dsFilter:
                 new_elements.append((i,j,s2))
+                if new_fidpairs: new_fidpairs.append((prep2, effect2))
 
         ret = GatestringPlaquette(self.base, self.rows, self.cols,
-                                   new_elements, None)
+                                   new_elements, None, new_fidpairs)
         if gatestring_compiler is not None:
             ret.compile_gatestrings(gatestring_compiler, dsFilter)
         return ret
@@ -133,7 +148,7 @@ class GatestringPlaquette(object):
         aliases = _copy.deepcopy(self.aliases) if (self.aliases is not None) \
                   else None
         return GatestringPlaquette(self.base, self.rows, self.cols,
-                                   self.elements[:], aliases)
+                                   self.elements[:], aliases, self.fidpairs)
 
 
 class GatestringStructure(object):
@@ -301,6 +316,7 @@ class LsGermsStructure(GatestringStructure):
 
 
         self.allstrs = []
+        self.unindexed = [] # unindexed strings
         self._plaquettes = {}
         self._firsts = []
         self._baseStrToLGerm = {}
@@ -421,6 +437,7 @@ class LsGermsStructure(GatestringStructure):
                         missing_list.append( gatestr )
                         continue
                 self.allstrs.append(gatestr)
+                self.unindexed.append(gatestr)
         return missing_list
 
     def done_adding_strings(self):
@@ -469,10 +486,42 @@ class LsGermsStructure(GatestringStructure):
 
     def truncate(self, Ls=None, germs=None, prepStrs=None, effectStrs=None):
         """
-        A future capability: truncate this gate string structure to a
-        subset of its current strings.
+        Truncate this gate string structure to a subset of its current strings.
+
+        Parameters
+        ----------
+        Ls : list, optional
+            The integer L-values to keep.  If None, then all are kept.
+            
+        germs : list, optional
+            The (GateString) germs to keep.  If None, then all are kept.
+            
+        prepStrs, effectStrs : list, optional
+            The (GateString) preparation and effect fiducial sequences to keep.
+            If None, then all are kept.
+
+        Returns
+        -------
+        LsGermsStructure
         """
-        raise NotImplementedError("future capability")
+        Ls = self.Ls if (Ls is None) else Ls
+        germs = self.germs if (germs is None) else germs
+        prepStrs = self.prepStrs if (prepStrs is None) else prepStrs
+        effectStrs = self.effectStrs if (effectStrs is None) else effectStrs
+        cpy = LsGermsStructure(Ls, germs, prepStrs,
+                               effectStrs, self.aliases, self.sequenceRules)
+
+        iPreps = [ i for i,prepStr in enumerate(self.prepStrs) if prepStr in prepStrs ]
+        iEffects = [ i for i,eStr in enumerate(self.effectStrs) if eStr in effectStrs ]
+        fidpairs = list(_itertools.product(iPreps,iEffects))
+        
+        for (L,germ),plaq in self._plaquettes.items():
+            basestr = plaq.base
+            if (L in Ls) and (germ in germs):
+                cpy.add_plaquette(basestr, L, germ, fidpairs)
+
+        cpy.add_unindexed(self.unindexed) # preserve unindexed strings
+        return cpy
 
 
     def create_plaquette(self, baseStr, fidpairs=None):
@@ -499,8 +548,10 @@ class LsGermsStructure(GatestringStructure):
         elements = [ (j,i,self.prepStrs[i] + baseStr + self.effectStrs[j])
                      for i,j in fidpairs ] #note preps are *cols* not rows
 
+        real_fidpairs = [(self.prepStrs[i],self.effectStrs[j]) for i,j in fidpairs] # strings, not just indices
         return GatestringPlaquette(baseStr, len(self.effectStrs),
-                            len(self.prepStrs), elements, self.aliases)
+                                   len(self.prepStrs), elements,
+                                   self.aliases, real_fidpairs)
 
     def plaquette_rows_cols(self):
         """
@@ -520,12 +571,11 @@ class LsGermsStructure(GatestringStructure):
         cpy = LsGermsStructure(self.Ls, self.germs, self.prepStrs,
                                self.effectStrs, self.aliases, self.sequenceRules)
         cpy.allstrs = self.allstrs[:]
+        cpy.unindexed = self.unindexed[:]
         cpy._plaquettes = { k: v.copy() for k,v in self._plaquettes.items() }
         cpy._firsts = self._firsts[:]
         cpy._baseStrToGerm = _copy.deepcopy(self._baseStrToLGerm.copy())
         return cpy
-
-
 
 
 
@@ -571,6 +621,7 @@ class LsGermsSerialStructure(GatestringStructure):
 
 
         self.allstrs = []
+        self.unindexed = []
         self._plaquettes = {}
         self._firsts = []
         self._baseStrToLGerm = {}
@@ -689,6 +740,7 @@ class LsGermsSerialStructure(GatestringStructure):
                         missing_list.append( gatestr )
                         continue
                 self.allstrs.append(gatestr)
+                self.unindexed.append(gatestr)
         return missing_list
 
     def done_adding_strings(self):
@@ -735,12 +787,64 @@ class LsGermsSerialStructure(GatestringStructure):
             p.compile_gatestrings(None) # just marks as "compiled"
             return p
 
-    def truncate(self, Ls=None, germs=None, prepStrs=None, effectStrs=None):
+    def truncate(self, Ls=None, germs=None, nMinorRows=None, nMinorCols=None):
         """
-        A future capability: truncate this gate string structure to a
-        subset of its current strings.
+        Truncate this gate string structure to a subset of its current strings.
+
+        Parameters
+        ----------
+        Ls : list, optional
+            The integer L-values to keep.  If None, then all are kept.
+            
+        germs : list, optional
+            The (GateString) germs to keep.  If None, then all are kept.
+            
+        nMinorRows, nMinorCols : int or "auto", optional
+            The number of minor rows and columns in the new structure.  If the
+            special "auto" value is used, the number or rows/cols is chosen
+            automatically (to be as small as possible). If None, then the values
+            of the original (this) gatestring structure are kept.
+
+        Returns
+        -------
+        LsGermsSerialStructure
         """
-        raise NotImplementedError("future capability")
+        Ls = self.Ls if (Ls is None) else Ls
+        germs = self.germs if (germs is None) else germs
+        nMinorCols = self.nMinorCols if (nMinorCols is None) else nMinorCols
+        nMinorRows = self.nMinorRows if (nMinorRows is None) else nMinorRows
+
+        if nMinorCols == "auto" or nMinorRows == "auto": 
+            #Pre-compute fidpairs lists per plaquette to get #fidpairs for each
+            maxEls = 0
+            for (L,germ),plaq in self._plaquettes.items():
+                if (L in Ls) and (germ in germs):
+                    maxEls = max(maxEls, len(plaq.elements))
+                
+            if nMinorCols == "auto" and nMinorRows == "auto": 
+                #special behavior: make as square as possible
+                nMinorRows = nMinorCols = int(np.floor(np.sqrt(maxEls)))
+                if nMinorRows*nMinorCols < maxEls: nMinorCols += 1
+                if nMinorRows*nMinorCols < maxEls: nMinorRows += 1
+                assert(nMinorRows*nMinorCols >= maxEls), "Logic Error!"
+            elif nMinorCols == "auto":
+                nMinorCols = maxEls // nMinorRows
+                if nMinorRows*nMinorCols < maxEls: nMinorCols += 1
+            else: # nMinorRows == "auto"
+                nMinorRows = maxEls // nMinorCols
+                if nMinorRows*nMinorCols < maxEls: nMinorRows += 1
+
+        cpy = LsGermsSerialStructure(Ls, germs, nMinorRows, nMinorCols,
+                                     self.aliases, self.sequenceRules)
+        
+        for (L,germ),plaq in self._plaquettes.items():
+            basestr = plaq.base
+            fidpairs = plaq.fidpairs
+            if (L in Ls) and (germ in germs):
+                cpy.add_plaquette(basestr, L, germ, fidpairs)
+
+        cpy.add_unindexed(self.unindexed) # preserve unindexed strings
+        return cpy
 
 
     def create_plaquette(self, baseStr, fidpairs):
@@ -770,7 +874,8 @@ class LsGermsSerialStructure(GatestringStructure):
                      zip(ji_list[0:len(fidpairs)], fidpairs) ] #note preps are *cols* not rows
 
         return GatestringPlaquette(baseStr, self.nMinorRows,
-                                   self.nMinorCols, elements, self.aliases)
+                                   self.nMinorCols, elements,
+                                   self.aliases, fidpairs[:])
 
     def plaquette_rows_cols(self):
         """
@@ -790,6 +895,7 @@ class LsGermsSerialStructure(GatestringStructure):
         cpy = LsGermsSerialStructure(self.Ls, self.germs, self.nMinorRows,
                                      self.nMinorCols, self.aliases, self.sequenceRules)
         cpy.allstrs = self.allstrs[:]
+        cpy.unindexed = self.unindexed[:]
         cpy._plaquettes = { k: v.copy() for k,v in self._plaquettes.items() }
         cpy._firsts = self._firsts[:]
         cpy._baseStrToGerm = _copy.deepcopy(self._baseStrToLGerm.copy())
