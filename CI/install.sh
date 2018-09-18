@@ -40,9 +40,10 @@ sudo apt-get update  > /dev/null 2>&1
 sudo apt-get upgrade -y  > /dev/null 2>&1
 sudo apt-get dist-upgrade  > /dev/null 2>&1
 
-export CXX=g++  > /dev/null 2>&1
+export CXX=g++
 echo "gcc/g++ install complete"
 
+cmake --version
 sudo apt remove cmake  > /dev/null 2>&1
 
 # Install the following version of CMAKE
@@ -54,9 +55,9 @@ cd ~/temp  > /dev/null 2>&1
 wget https://cmake.org/files/v$version/cmake-$version.$build.tar.gz  > /dev/null 2>&1
 tar -xzvf cmake-$version.$build.tar.gz  > /dev/null 2>&1
 cd cmake-$version.$build/  > /dev/null 2>&1
-./bootstrap  > /dev/null 2>&1
-make -j4  > /dev/null 2>&1
-sudo make install  > /dev/null 2>&1
-cd ..  > /dev/null 2>&1
-rm -r temp  > /dev/null 2>&1
+./bootstrap  # > /dev/null 2>&1
+make -j4  # > /dev/null 2>&1
+sudo make install  # > /dev/null 2>&1
+cd ..  # > /dev/null 2>&1
+rm -r temp  # > /dev/null 2>&1
 cmake --version
