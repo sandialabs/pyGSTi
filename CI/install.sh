@@ -18,7 +18,7 @@ sudo apt-get update  > /dev/null 2>&1
 # proceed since it apparently doesn't actually require anything
 # in the non-existent library...
 apt-get install libsuitesparse-dev  > /dev/null 2>&1
-cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so  > /dev/null 2>&1
+#cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so  > /dev/null 2>&1
 
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test  > /dev/null 2>&1
 sudo apt-get update  > /dev/null 2>&1
