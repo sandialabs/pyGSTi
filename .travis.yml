@@ -28,7 +28,8 @@ before_install:
   - ls
   - ls CI/install.sh
   - sudo ls CI/install.sh
-  - travis_wait 30 "sudo bash CI/install.sh" # > /dev/null 2>&1"
+  - sudo bash -c pwd
+  - sudo bash CI/install.sh # travis_wait 30 "sudo bash CI/install.sh" # > /dev/null 2>&1"
   - "export DISPLAY=:99.0"
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
