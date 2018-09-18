@@ -24,7 +24,7 @@ apt-get install libsuitesparse-dev  > /dev/null 2>&1
 cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so  > /dev/null 2>&1
 echo "SuiteSparse complete"
 
-sudo add-apt-repository -m ppa:ubuntu-toolchain-r/test # > /dev/null 2>&1
+sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test # > /dev/null 2>&1
 sudo apt-get update # > /dev/null 2>&1
 
 echo "Reinstalling gcc/g++ to get newer versions"
