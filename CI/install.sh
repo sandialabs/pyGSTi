@@ -1,5 +1,6 @@
 #!/bin/bash
 # This script needs to be run as admin
+set -o verbose
 echo "Beginning install.sh"
 sudo apt-get update  > /dev/null 2>&1
 echo "Update complete"
@@ -23,8 +24,8 @@ apt-get install libsuitesparse-dev  > /dev/null 2>&1
 cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so  > /dev/null 2>&1
 echo "SuiteSparse complete"
 
-sudo add-apt-repository ppa:ubuntu-toolchain-r/test  > /dev/null 2>&1
-sudo apt-get update  > /dev/null 2>&1
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test # > /dev/null 2>&1
+sudo apt-get update # > /dev/null 2>&1
 
 echo "Reinstalling gcc/g++ to get newer versions"
 sudo update-alternatives --remove-all gcc  > /dev/null 2>&1
