@@ -928,7 +928,7 @@ def do_iterative_exlgst(
 ##################################################################################
 
 def do_mc2gst(dataset, startGateset, gateStringsToUse,
-              maxiter=100000, maxfev=None, tol=1e-6,
+              maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
               cptp_penalty_factor=0, spam_penalty_factor=0,
               minProbClipForWeighting=1e-4,
               probClipInterval=(-1e6,1e6), useFreqWeightedChiSq=False,
@@ -962,10 +962,15 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         Maximum number of function evaluations for the chi^2 optimization.
         Defaults to maxiter.
 
+    fditer : int, optional
+        The number of iterations to perform with a finite-difference-Jacobian,
+        as opposed to the more precise "analytic" Jacobian.  Useful if the 
+        optimization's starting point is special/singular.
+
     tol : float or dict, optional
         The tolerance for the chi^2 optimization.  If a dict, allowed keys are
-        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then
-        `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
+        `'relx'`, `'relf'`, `'f'`, `'jac'`, and `'maxdx'`.  If a float, then
+        `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0 }` is used.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the least squares optimization also contains CPTP penalty
@@ -1060,12 +1065,19 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     printer.log("--- Minimum Chi^2 GST ---", 1)
 
     if comm is not None:
-        gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
-        try:
-            if gs.frobeniusdist(gs_cmp) > 1e-6:
+        #assume all gatesets at least have same parameters - so just compare vecs
+        v_cmp = comm.bcast(gs.to_vector() if (comm.Get_rank() == 0) else None, root=0)
+        if _np.linalg.norm(gs.to_vector()-v_cmp) > 1e-6:
                 raise ValueError("MPI ERROR: *different* MC2GST start gatesets" + # pragma: no cover
                              " given to different processors!")                   # pragma: no cover
-        except NotImplementedError: pass # OK if some gates (maps) don't implement this
+
+        #OLD: TODO REMOVE
+        #gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
+        #try:
+        #    if gs.frobeniusdist(gs_cmp) > 1e-6:
+        #        raise ValueError("MPI ERROR: *different* MC2GST start gatesets" + # pragma: no cover
+        #                     " given to different processors!")                   # pragma: no cover
+        #except NotImplementedError: pass # OK if some gates (maps) don't implement this
 
     #convert list of GateStrings to list of raw tuples since that's all we'll need
     if len(gateStringsToUse) > 0 and \
@@ -1093,10 +1105,10 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         curMem = _baseobjs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1*(memLimit-persistentMem))
         mlim = memLimit-persistentMem-gthrMem-curMem
-        assert mlim > 0, 'Not enough memory, exiting..'
         printer.log("Memory limit = %.2fGB" % (memLimit*C))
         printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
                     (curMem*C, persistentMem*C, gthrMem*C))
+        assert mlim > 0, 'Not enough memory, exiting..'
     else: gthrMem = mlim = None
 
     if evaltree_cache and 'evTree' in evaltree_cache \
@@ -1430,13 +1442,13 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #Step 3: solve least squares minimization problem
     tm = _time.time()
     x0 = gs.to_vector()
-    if isinstance(tol,float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }
+    if isinstance(tol,float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0 }
     if CUSTOMLM:
         opt_x,converged,msg = _opt.custom_leastsq(
             _objective_func, _jacobian, x0, f_norm2_tol=tol['f'],
             jac_norm_tol=tol['jac'], rel_ftol=tol['relf'], rel_xtol=tol['relx'],
-            max_iter=maxiter, comm=comm,
-            verbosity=printer-1, profiler=profiler)
+            max_iter=maxiter, num_fd_iters=fditer, max_dx_scale=tol['maxdx'],
+            comm=comm, verbosity=printer-1, profiler=profiler)
         printer.log("Least squares message = %s" % msg,2)
         assert(converged), "Failed to converge: %s" % msg
     else:
@@ -1620,7 +1632,7 @@ def do_mc2gst_with_model_selection(
         gateStringsToUse = [ gstr.tup for gstr in gateStringsToUse ]
 
     minErr, gs = do_mc2gst(dataset, startGateset, gateStringsToUse, maxiter,
-                           maxfev, tol, cptp_penalty_factor, spam_penalty_factor,
+                           maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
                            minProbClipForWeighting, probClipInterval,
                            useFreqWeightedChiSq, regularizeFactor, printer-1,
                            check, check_jacobian, gatestringWeights, gateLabelAliases,
@@ -1650,7 +1662,7 @@ def do_mc2gst_with_model_selection(
         nParams = curStartGateset.num_params()
 
         minErr, gs = do_mc2gst(dataset, curStartGateset, gateStringsToUse, maxiter,
-                               maxfev, tol, cptp_penalty_factor, spam_penalty_factor,
+                               maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
                                minProbClipForWeighting, probClipInterval,
                                useFreqWeightedChiSq, regularizeFactor, printer-1,
                                check, check_jacobian, gatestringWeights, gateLabelAliases,
@@ -1688,7 +1700,7 @@ def do_mc2gst_with_model_selection(
             continue
 
         minErr, gs = do_mc2gst(dataset, curStartGateset, gateStringsToUse, maxiter,
-                               maxfev, tol, cptp_penalty_factor, spam_penalty_factor,
+                               maxfev, 0, tol, cptp_penalty_factor, spam_penalty_factor,
                                minProbClipForWeighting, probClipInterval,
                                useFreqWeightedChiSq, regularizeFactor, printer-1,
                                check, check_jacobian, gatestringWeights, gateLabelAliases,
@@ -1715,7 +1727,7 @@ def do_mc2gst_with_model_selection(
 
 
 def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
-                        maxiter=100000, maxfev=None, tol=1e-6,
+                        maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
                         cptp_penalty_factor=0, spam_penalty_factor=0,
                         minProbClipForWeighting=1e-4,
                         probClipInterval=(-1e6,1e6), useFreqWeightedChiSq=False,
@@ -1749,6 +1761,11 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
     maxfev : int, optional
         Maximum number of function evaluations for the chi^2 optimization.
+
+    fditer : int, optional
+        The number of initial (step 0) iterations to perform with a 
+        finite-difference-Jacobian, as opposed to the more precise "analytic"
+        Jacobian.  Useful if the optimization's starting point is special/singular.
 
     tol : float, optional
         The tolerance for the chi^2 optimization.  If a dict, allowed keys are
@@ -1882,10 +1899,11 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                         gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
             else: gatestringWeights = None
             lsgstGateset.basis = startGateset.basis
+            num_fd = fditer if (i==0) else 0
 
             minErr, lsgstGateset = \
                 do_mc2gst( dataset, lsgstGateset, stringsToEstimate,
-                           maxiter, maxfev, tol,
+                           maxiter, maxfev, num_fd, tol,
                            cptp_penalty_factor, spam_penalty_factor,
                            minProbClipForWeighting, probClipInterval,
                            useFreqWeightedChiSq, regularizeFactor,
@@ -2094,7 +2112,7 @@ def do_iterative_mc2gst_with_model_selection(
 ##################################################################################
 
 def do_mlgst(dataset, startGateset, gateStringsToUse,
-             maxiter=100000, maxfev=None, tol=1e-6,
+             maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
              cptp_penalty_factor=0, spam_penalty_factor=0,
              minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
              poissonPicture=True, verbosity=0, check=False,
@@ -2121,10 +2139,15 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         Maximum number of function evaluations for the logL optimization.
         Defaults to maxiter.
 
-    tol : float, optional
+    fditer : int, optional
+        The number of iterations to perform with a finite-difference-Jacobian,
+        as opposed to the more precise "analytic" Jacobian.  Useful if the 
+        optimization's starting point is special/singular.
+
+    tol : float or dict, optional
         The tolerance for the logL optimization.  If a dict, allowed keys are
-        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then
-        `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
+        `'relx'`, `'relf'`, `'f'`, `'jac'`, and `'maxdx'`.  If a float, then
+        `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0 }` is used.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the least squares optimization also contains CPTP penalty
@@ -2202,15 +2225,15 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     gateset : GateSet
         The gate set that maximized the log-likelihood.
     """
-    return _do_mlgst_base(dataset, startGateset, gateStringsToUse, maxiter,
-                          maxfev, tol,cptp_penalty_factor, spam_penalty_factor, minProbClip,
+    return _do_mlgst_base(dataset, startGateset, gateStringsToUse, maxiter, maxfev,
+                          fditer, tol,cptp_penalty_factor, spam_penalty_factor, minProbClip,
                           probClipInterval, radius, poissonPicture, verbosity,
                           check, gatestringWeights, gateLabelAliases, memLimit,
                           comm, distributeMethod, profiler, evaltree_cache, None)
 
 
 def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
-                   maxiter=100000, maxfev=None, tol=1e-6,
+                   maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
                    cptp_penalty_factor=0, spam_penalty_factor=0,
                    minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
                    poissonPicture=True, verbosity=0, check=False,
@@ -2257,12 +2280,19 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     printer.log("--- MLGST ---", 1)
 
     if comm is not None:
-        gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
-        try:
-            if gs.frobeniusdist(gs_cmp) > 1e-6:
-                raise ValueError("MPI ERROR: *different* MLGST start gatesets" +
-                                 " given to different processors!") # pragma: no cover
-        except NotImplementedError: pass # OK if some gates (maps) don't implement this
+        #assume all gatesets at least have same parameters - so just compare vecs
+        v_cmp = comm.bcast(gs.to_vector() if (comm.Get_rank() == 0) else None, root=0)
+        if _np.linalg.norm(gs.to_vector()-v_cmp) > 1e-6:
+                raise ValueError("MPI ERROR: *different* MC2GST start gatesets" + # pragma: no cover
+                             " given to different processors!")                   # pragma: no cover
+
+        #OLD TODO REMOVE
+        #gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
+        #try:
+        #    if gs.frobeniusdist(gs_cmp) > 1e-6:
+        #        raise ValueError("MPI ERROR: *different* MLGST start gatesets" +
+        #                         " given to different processors!") # pragma: no cover
+        #except NotImplementedError: pass # OK if some gates (maps) don't implement this
 
         if forcefn_grad is not None:
             forcefn_cmp = comm.bcast(forcefn_grad if (comm.Get_rank() == 0) else None, root=0)
@@ -2593,13 +2623,14 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     #Run optimization (use leastsq)
     tm = _time.time()
     x0 = gs.to_vector()
-    if isinstance(tol,float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }
+    if isinstance(tol,float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0 }
+    
     if CUSTOMLM:
         opt_x,converged,msg = _opt.custom_leastsq(
             _objective_func, _jacobian, x0, f_norm2_tol=tol['f'],
             jac_norm_tol=tol['jac'], rel_ftol=tol['relf'], rel_xtol=tol['relx'],
-            max_iter=maxiter, comm=comm,
-            verbosity=printer-1, profiler=profiler)
+            max_iter=maxiter, num_fd_iters=fditer, max_dx_scale=tol['maxdx'],
+            comm=comm, verbosity=printer-1, profiler=profiler)
         printer.log("Least squares message = %s" % msg,2)
         assert(converged), "Failed to converge: %s" % msg
     else:
@@ -2659,7 +2690,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
 
 
 def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
-                       maxiter=100000, maxfev=None, tol=1e-6,
+                       maxiter=100000, maxfev=None, fditer=0, tol=1e-6,
                        cptp_penalty_factor=0, spam_penalty_factor=0,
                        minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
                        poissonPicture=True,returnMaxLogL=False,returnAll=False,
@@ -2693,10 +2724,15 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     maxfev : int, optional
         Maximum number of function evaluations for the logL optimization.
 
-    tol : float, optional
+    fditer : int, optional
+        The number of initial (step 0) iterations to perform with a 
+        finite-difference-Jacobian, as opposed to the more precise "analytic"
+        Jacobian.  Useful if the optimization's starting point is special/singular.
+
+    tol : float or dict, optional
         The tolerance for the logL optimization.  If a dict, allowed keys are
-        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then
-        `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
+        `'relx'`, `'relf'`, `'f'`, `'jac'`, and `'maxdx'`.  If a float, then
+        `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0 }` is used.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the least squares optimization also contains CPTP penalty
@@ -2836,9 +2872,11 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             mleGateset.basis = startGateset.basis
               #set basis in case of CPTP constraints
 
+            num_fd = fditer if (i == 0) else 0
+
             evt_cache = {} # get the eval tree that's created so we can reuse it
             _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
-                                      maxiter, maxfev, tol, cptp_penalty_factor,
+                                      maxiter, maxfev, num_fd, tol, cptp_penalty_factor,
                                       spam_penalty_factor, minProbClip, probClipInterval,
                                       useFreqWeightedChiSq, 0,printer-1, check,
                                       check, gatestringWeights, gateLabelAliases,
@@ -2846,7 +2884,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
             if alwaysPerformMLE:
                 _, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
-                                         maxiter, maxfev, tol,
+                                         maxiter, maxfev, num_fd, tol,
                                          cptp_penalty_factor, spam_penalty_factor,
                                          minProbClip, probClipInterval, radius,
                                          poissonPicture, printer-1, check, gatestringWeights,
@@ -2875,7 +2913,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 mleGateset.basis = startGateset.basis
 
                 maxLogL_p, mleGateset_p = do_mlgst(
-                    dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
+                    dataset, mleGateset, stringsToEstimate, maxiter, maxfev, 0, tol,
                     cptp_penalty_factor, spam_penalty_factor, minProbClip, probClipInterval, radius,
                     poissonPicture, printer-1, check, gatestringWeights, gateLabelAliases,
                     memLimit, comm, distributeMethod, profiler, evt_cache)
@@ -2949,11 +2987,11 @@ def _spam_penalty(gs,prefactor,gateBasis):
     return prefactor* ( _np.sqrt(
         _np.array( [
             _tools.tracenorm(
-                _tools.vec_to_stdmx(prepvec, gateBasis)
+                _tools.vec_to_stdmx(prepvec.todense(), gateBasis)
             ) for prepvec in gs.preps.values()
         ] + [
             _tools.tracenorm(
-                _tools.vec_to_stdmx(gs.povms[plbl][elbl], gateBasis)
+                _tools.vec_to_stdmx(gs.povms[plbl][elbl].todense(), gateBasis)
             ) for plbl in gs.povms for elbl in gs.povms[plbl] ], 'd')
     ))
 

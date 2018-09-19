@@ -164,9 +164,10 @@ class SPAMVecTestCase(BaseTestCase):
         v_tp = np.zeros((4,1),'d'); v_tp[0] = 1.0/np.sqrt(2); v_tp[3] = 1.0/np.sqrt(2) - 0.05
         s = pygsti.obj.FullyParameterizedSPAMVec(v_tp)
 
-        for toType in ("full","TP","CPTP","static"):
+        for toType in ("full","TP","static"):
             s2 = pygsti.objects.spamvec.convert(s, toType, "pp")
             pygsti.objects.spamvec.convert(s2, toType, "pp") #no conversion necessary
+        # todo add Lindblad types: "CPTP"
 
         ssv = pygsti.obj.StaticSPAMVec(v_tp)
         pygsti.objects.spamvec.optimize_spamvec(ssv, s) #test opt of static spamvec (nothing to do)
