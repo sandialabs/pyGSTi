@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import copy as _copy
+from ..tools import compattools as _compat
 
 # -- To be put back in when we allow for non-p-value pvalues --
 # def pvalue_threshold_function(hypothesisname, p, significance):
@@ -67,12 +68,12 @@ class HypothesisTest(object):
             else:
                 self.nested_hypotheses[h]=True
 
-        if isinstance(passing_graph,str):
+        if _compat.isstr(passing_graph):
             assert(passing_graph == 'Holms')
             self._initialize_to_weighted_holms_test()
 
         self.local_significance = {}
-        if isinstance(weighting,str):
+        if _compat.isstr(weighting):
             assert(weighting == 'equal')
             for h in self.hypotheses:
                 self.local_significance[h] = self.significance/len(self.hypotheses)
@@ -83,7 +84,7 @@ class HypothesisTest(object):
             for h in self.hypotheses:
                 self.local_significance[h] = significance*weighting[h]/totalweight
 
-        if isinstance(local_corrections,str): 
+        if _compat.isstr(local_corrections): 
             assert(local_corrections in ('Holms','Hochberg','Bonferroni','none','Benjamini-Hochberg')), "A local correction of `{}` is not a valid choice".format(local_corrections)
             self.local_corrections = {}
             for h in self.hypotheses:
@@ -94,7 +95,7 @@ class HypothesisTest(object):
 
         self._check_permissible()
 
-        # if is not isinstance(threshold_function,str):
+        # if is not _compat.isstr(threshold_function):
         #     raise ValueError ("Data that is not p-values is currently not supported!")
         # else:
         #     if threshold_function is not 'pvalue':

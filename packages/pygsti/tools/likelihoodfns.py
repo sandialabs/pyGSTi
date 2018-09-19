@@ -126,7 +126,9 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     def smart(fn, *args, **kwargs):
         if smartc: 
             return smartc.cached_compute(fn, args, kwargs)[1]
-        else: return fn(*args, **kwargs)
+        else: 
+            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
+            return fn(*args, **kwargs)
 
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
@@ -375,7 +377,9 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     def smart(fn, *args, **kwargs):
         if smartc: 
             return smartc.cached_compute(fn, args, kwargs)[1]
-        else: return fn(*args, **kwargs)
+        else:
+            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
+            return fn(*args, **kwargs)
 
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
@@ -538,7 +542,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     def smart(fn, *args, **kwargs):
         if smartc: 
             return smartc.cached_compute(fn, args, kwargs)[1]
-        else: return fn(*args, **kwargs)
+        else:
+            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
+            return fn(*args, **kwargs)
 
     nP = gateset.num_params()
 
@@ -850,7 +856,9 @@ def logl_approximate_hessian(gateset, dataset, gatestring_list=None,
     def smart(fn, *args, **kwargs):
         if smartc: 
             return smartc.cached_compute(fn, args, kwargs)[1]
-        else: return fn(*args, **kwargs)
+        else:
+            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
+            return fn(*args, **kwargs)
 
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
@@ -1030,7 +1038,9 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
     def smart(fn, *args, **kwargs):
         if smartc: 
             return smartc.cached_compute(fn, args, kwargs)[1]
-        else: return fn(*args, **kwargs)
+        else:
+            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
+            return fn(*args, **kwargs)
 
     if evaltree_cache and 'evTree' in evaltree_cache:
         evalTree = evaltree_cache['evTree']

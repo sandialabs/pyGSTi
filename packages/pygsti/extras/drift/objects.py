@@ -217,7 +217,7 @@ class DriftResults(object):
 
         
         # outcome value is ignored
-        elif sequence_index != 'averaged' and entity != 'averaged' and outcome_index == 'averaged':       
+        elif sequence_index != 'averaged' and entity != 'averaged' and outcome == 'averaged':       
             spectrum = self.pspe_power_spectrum[sequence_index,entity,:]
             threshold1test = self.pspe_significance_threshold_1test
             thresholdclass = self.pspe_significance_threshold_classcompensation
@@ -233,7 +233,7 @@ class DriftResults(object):
                 title += ', entity ' + str(entity) + name_in_title1
         
         # outcome value is not ignored. Number of entities must be 1 (checked earlier)
-        elif sequence_index != 'averaged' and outcome_index != 'averaged': 
+        elif sequence_index != 'averaged' and outcome != 'averaged': 
             if self.number_of_entities == 1:
                 entity = 0     
             spectrum = self.pspepo_power_spectrum[sequence_index,entity,outcome_index,:]
@@ -317,7 +317,7 @@ class DriftResults(object):
                                         savepath=savepath, loc=loc, title=title)
         
    
-    def plot_estimated_probability(self, sequence, entity=0, outcome=0, errorbars=True,
+    def plot_estimated_probability(self, sequence, entity=0, outcome='0', errorbars=True,
                                    plot_data=False, target_value=None, parray=None, figsize=(15,3), savepath=None, 
                                    loc=None, title=True):
         

@@ -37,7 +37,9 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     def smart(fn, *args, **kwargs):
         if smartc: 
             return smartc.cached_compute(fn, args, kwargs)[1]
-        else: return fn(*args, **kwargs)
+        else:
+            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
+            return fn(*args, **kwargs)
 
     if useFreqWeightedChiSq:
         raise ValueError("frequency weighted chi2 is not implemented yet.")
@@ -194,7 +196,9 @@ def chi2(gateset, dataset, gateStrings=None,
     def smart(fn, *args, **kwargs):
         if smartc: 
             return smartc.cached_compute(fn, args, kwargs)[1]
-        else: return fn(*args, **kwargs)
+        else:
+            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
+            return fn(*args, **kwargs)
 
     # Scratch work:
     # chi^2 = sum_i N_i*(p_i-f_i)^2 / p_i  (i over gatestrings & spam labels)
@@ -217,7 +221,7 @@ def chi2(gateset, dataset, gateStrings=None,
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
         #OLD: evTree,lookup,outcomes_lookup = smart(gateset.bulk_evaltree,gateStrings)
-        evalTree,_,_,lookup,outcomes_lookup = smart(gateset.bulk_evaltree_from_resources,
+        evTree,_,_,lookup,outcomes_lookup = smart(gateset.bulk_evaltree_from_resources,
                                                     gateStrings, comm, dataset=dataset)
 
         #Fill cache dict if one was given

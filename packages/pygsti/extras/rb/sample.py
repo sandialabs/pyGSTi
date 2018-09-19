@@ -200,10 +200,10 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
         only one gate acting on each qubit in `pspec` or `subsetQs`).        
     """
     if subsetQs is None:
-        assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
         n = pspec.number_of_qubits
         qubits = list(pspec.qubit_labels[:]) # copy this list
     else:
+        assert(isinstance(subsetQs, (list,tuple))), "SubsetQs must be a list or a tuple!"
         n = len(subsetQs)   
         qubits = list(subsetQs[:]) # copy this list
 
@@ -760,7 +760,7 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
         subset_circuit = random_circuit(pspec=pspec, length=length, subsetQs=subsetQs, sampler=sampler, 
                                        samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
         circuit_dict[subsetQs] = subset_circuit
-        # find the symplectic matrix / phase ©vector this circuit implements.
+        # find the symplectic matrix / phase vector this circuit implements.
         s_rc_dict[subsetQs], p_rc_dict[subsetQs] = _symp.symplectic_rep_of_clifford_circuit(subset_circuit,pspec=pspec)
         # Tensors this circuit with the current circuit
         circuit.tensor_circuit(subset_circuit)
@@ -1463,7 +1463,7 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
         subset_circuit = random_circuit(pspec=pspec, length=length, subsetQs=subsetQs, sampler=sampler, 
                                        samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
         circuit_dict[subsetQs] = subset_circuit
-        # find the symplectic matrix / phase ©vector this circuit implements.
+        # find the symplectic matrix / phase vector this circuit implements.
         s_rc_dict[subsetQs], p_rc_dict[subsetQs] = _symp.symplectic_rep_of_clifford_circuit(subset_circuit,pspec=pspec)
         # Tensors this circuit with the current circuit
         circuit.tensor_circuit(subset_circuit)

@@ -97,8 +97,8 @@ class NQubitTestCase(BaseTestCase):
         
     def test_2Q(self):
 
-        expList_tups = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
-        expList = [ tup[0] for tup in expList_tups]
+        gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
+        expList = gss.allstrs
 
         ds = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_dataset.json"))
         print(len(expList)," sequences")   
@@ -107,11 +107,13 @@ class NQubitTestCase(BaseTestCase):
         maxLengths = [1,2]
         cnot_edges = [(i,i+1) for i in range(nQubits-1)] #only single direction
 
-        lsgstLists = []; lst = []
-        for L in maxLengths:
-            for tup in expList_tups:
-                if tup[1] == L: lst.append( tup[0] )
-            lsgstLists.append(lst[:]) # append *running* list
+        #OLD
+        #lsgstLists = []; lst = []
+        #for L in maxLengths:
+        #    for tup in expList_tups:
+        #        if tup[1] == L: lst.append( tup[0] )
+        #    lsgstLists.append(lst[:]) # append *running* list
+        lsgstLists = gss # can just use gss as input to pygsti.do_long_sequence_gst_base
             
         gs_to_optimize = pc.build_nqnoise_gateset(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                   extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
@@ -123,8 +125,8 @@ class NQubitTestCase(BaseTestCase):
 
     def test_2Q_terms(self):
 
-        expList_tups = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
-        expList = [ tup[0] for tup in expList_tups]
+        gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
+        expList = gss.allstrs
         
         ds = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_dataset.json"))
         print(len(expList)," sequences")   
@@ -133,11 +135,13 @@ class NQubitTestCase(BaseTestCase):
         maxLengths = [1,2]
         cnot_edges = [(i,i+1) for i in range(nQubits-1)] #only single direction
 
-        lsgstLists = []; lst = []
-        for L in maxLengths:
-            for tup in expList_tups:
-                if tup[1] == L: lst.append( tup[0] )
-            lsgstLists.append(lst[:]) # append *running* list
+        #OLD
+        #lsgstLists = []; lst = []
+        #for L in maxLengths:
+        #    for tup in expList_tups:
+        #        if tup[1] == L: lst.append( tup[0] )
+        #    lsgstLists.append(lst[:]) # append *running* list
+        lsgstLists = gss # can just use gss as input to pygsti.do_long_sequence_gst_base
 
         gs_to_optimize = pc.build_nqnoise_gateset(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                   extraWeight1Hops=0, extraGateWeight=1, verbosity=1,

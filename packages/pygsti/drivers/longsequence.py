@@ -604,7 +604,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 
     #Compute starting point
     if startingPt == "LGST":
-        assert(isinstance(lsgstLists[0], _objs.LsGermsStructure)), \
+        assert(isinstance(lsgstLists[0], validStructTypes)), \
                "Cannot run LGST: fiducials not specified!"
         gateLabels = advancedOptions.get('gateLabels',
                                          list(gs_target.gates.keys()) +
@@ -661,11 +661,11 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     # lsgstLists can hold either gatestring lists or structures - get
     # just the lists for calling core gst routines (structure is used only
     # for LGST and post-analysis).
-    rawLists = [ l.allstrs if isinstance(l,_objs.LsGermsStructure) else l
+    rawLists = [ l.allstrs if isinstance(l,validStructTypes) else l
                  for l in lsgstLists ]
 
     aliases = lsgstLists[-1].aliases if isinstance(
-        lsgstLists[-1], _objs.LsGermsStructure) else None
+        lsgstLists[-1], validStructTypes) else None
     aliases = advancedOptions.get('gateLabelAliases',aliases)
 
     #Run Long-sequence GST on data
@@ -1308,7 +1308,8 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
         profiler.add_time('%s: gauge optimization' % callerName,tRef); tRef=tNxt
 
     #Perform extra analysis if a bad fit was obtained
-    rawLists = [ l.allstrs if isinstance(l,_objs.LsGermsStructure) else l
+    validStructTypes = (_objs.LsGermsStructure,_objs.LsGermsSerialStructure)
+    rawLists = [ l.allstrs if isinstance(l,validStructTypes) else l
                  for l in lsgstLists ]
     objective = advancedOptions.get('objective', 'logl')
     badFitThreshold = advancedOptions.get('badFitThreshold',DEFAULT_BAD_FIT_THRESHOLD)
