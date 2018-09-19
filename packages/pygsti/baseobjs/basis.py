@@ -166,7 +166,8 @@ class Basis(object):
             return False
         
         if self.sparse:
-            def sparse_equal(A,B,atol = 1e-8):
+            def sparse_equal(A,B,atol = 1e-8): 
+                """ NOTE: same as matrixtools.sparse_equal - but can't import that here """
                 if _np.array_equal(A.shape, B.shape)==0:
                     return False
     

@@ -1,6 +1,9 @@
 #!/bin/bash
 # This script needs to be run as admin
+set -o verbose
+echo "Beginning install.sh"
 sudo apt-get update  > /dev/null 2>&1
+echo "Update complete"
 
 ##An example of how to search for a file in apt packages
 ## (useful for debugging TravisCI build errors)
@@ -19,10 +22,12 @@ sudo apt-get update  > /dev/null 2>&1
 # in the non-existent library...
 apt-get install libsuitesparse-dev  > /dev/null 2>&1
 cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so  > /dev/null 2>&1
+echo "SuiteSparse complete"
 
-sudo add-apt-repository ppa:ubuntu-toolchain-r/test  > /dev/null 2>&1
-sudo apt-get update  > /dev/null 2>&1
+sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test > /dev/null 2>&1
+sudo apt-get update > /dev/null 2>&1
 
+echo "Reinstalling gcc/g++ to get newer versions"
 sudo update-alternatives --remove-all gcc  > /dev/null 2>&1
 sudo update-alternatives --remove-all g++  > /dev/null 2>&1
 sudo apt-get install gcc-4.8  > /dev/null 2>&1
@@ -35,11 +40,14 @@ sudo apt-get update  > /dev/null 2>&1
 sudo apt-get upgrade -y  > /dev/null 2>&1
 sudo apt-get dist-upgrade  > /dev/null 2>&1
 
-export CXX=g++  > /dev/null 2>&1
+export CXX=g++
+echo "gcc/g++ install complete"
 
+cmake --version
 sudo apt remove cmake  > /dev/null 2>&1
 
 # Install the following version of CMAKE
+echo "Installing newer version of cmake"
 version=3.11  > /dev/null 2>&1
 build=1  > /dev/null 2>&1
 mkdir ~/temp  > /dev/null 2>&1
@@ -51,5 +59,6 @@ cd cmake-$version.$build/  > /dev/null 2>&1
 make -j4  > /dev/null 2>&1
 sudo make install  > /dev/null 2>&1
 cd ..  > /dev/null 2>&1
-rm -r temp  > /dev/null 2>&1
+#rm -r temp  # > /dev/null 2>&1
+export PATH=/usr/local/bin:$PATH
 cmake --version

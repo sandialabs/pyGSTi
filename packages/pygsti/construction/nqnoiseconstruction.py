@@ -19,6 +19,7 @@ from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
 from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
+from ..objects import autogator as _autogator
 from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
@@ -139,11 +140,11 @@ def nparams_nqnoise_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0
 
 
 def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
-                          maxIdleWeight=1, maxhops=0,
+                          maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
                           extraWeight1Hops=0, extraGateWeight=0, sparse=False,
                           gateNoise=None, prepNoise=None, povmNoise=None,
                           sim_type="matrix", parameterization="H+S",
-                          addIdleNoiseToAllGates=True,
+                          spamtype="lindblad", addIdleNoiseToAllGates=True,
                           return_clouds=False, verbosity=0): #, debug=False):
     """ 
     Create a noisy n-qubit gateset using a low-weight and geometrically local
@@ -171,6 +172,9 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
 
     maxIdleWeight : int, optional
         The maximum-weight for errors on the global idle gate.
+
+    maxSpamWeight : int, optional
+        The maximum-weight for SPAM errors when `spamtype == "linblad"`.
 
     maxhops : int
         The locality constraint: for a gate, errors (of weight up to the
@@ -215,12 +219,23 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
         `"termorder"` option is designed for even larger numbers.  Usually,
         the default of `"auto"` is what you want.
     
-    parameterization : {"H+S", "H+S terms", "H+S clifford terms"}
-        The type of parameterizaton to use in the constructed gate set.  The
-        default of `"H+S"` performs usual density-matrix evolution to compute
-        circuit probabilities.  The other "terms" options compute probabilities
-        using a path-integral approach designed for larger numbers of qubits,
-        and are considered expert options.
+    parameterization : {"P", "P terms", "P clifford terms"}
+        Where *P* can be any Lindblad parameterization base type (e.g. CPTP,
+        H+S+A, H+S, S, D, etc.) This is the type of parameterizaton to use in
+        the constructed gate set.  Types without any "terms" suffix perform
+        usual density-matrix evolution to compute circuit probabilities.  The
+        other "terms" options compute probabilities using a path-integral
+        approach designed for larger numbers of qubits (experts only).
+
+    spamtype : { "static", "lindblad", "tensorproduct" }
+        Specifies how the SPAM elements of the returned `GateSet` are formed.
+        Static elements are ideal (perfect) operations with no parameters, i.e.
+        no possibility for noise.  Lindblad SPAM operations are the "normal"
+        way to allow SPAM noise, in which case error terms up to weight 
+        `maxSpamWeight` are included.  Tensor-product operations require that
+        the state prep and POVM effects have a tensor-product structure; the
+        "tensorproduct" mode exists for historical reasons and is *deprecated*
+        in favor of `"lindblad"`; use it only if you know what you're doing.
 
     addIdleNoiseToAllGates: bool, optional
         Whether the global idle should be added as a factor following the 
@@ -239,9 +254,9 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
     GateSet
     """
 
-    assert(parameterization in ("H+S","H+S terms","H+S clifford terms"))
     if sim_type == "auto":
-        if parameterization in ("H+S terms", "H+S clifford terms"): sim_type = "termorder:1"
+        _,_,evotype = _gt.split_lindblad_parameterization(parameterization,True)
+        if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
         else: sim_type = "map" if nQubits > 2 else "matrix"
 
     assert(sim_type in ("matrix","map") or sim_type.startswith("termorder"))
@@ -362,62 +377,108 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
         gs.from_vector(vecNoSpam)
 
         
+    #FUTURE: should probabal make extracting evotype from a parameterization name a
+    # function somewhere - maybe a classmethod of LindbladParameterizedGate?
+    _,evotype = _gt.split_lindblad_paramtype(parameterization)
+        
     #SPAM
-    basis1Q = _Basis("pp",2)
-    prep_factors = []; povm_factors = []
+    if spamtype == "static" or maxSpamWeight == 0:
+        
+        if prepNoise is not None or povmNoise is not None:
+            raise ValueError(("`spamtype == 'static'` is incompatible with "
+                              "non-None `prepNoise` or `povmNoise`"))
+        if maxSpamWeight > 0:
+            _warnings.warn(("`spamtype == 'static'` ignores the supplied "
+                            "`maxSpamWeight=%d > 0`") % maxSpamWeight )
 
-    v0 = _basis_build_vector("0", basis1Q)
-    v1 = _basis_build_vector("1", basis1Q)
+        gs.preps[_Lbl('rho0')] = _objs.ComputationalSPAMVec([0]*nQubits,evotype)
+        gs.povms[_Lbl('Mdefault')] = _objs.ComputationalBasisPOVM(nQubits,evotype)
+        
+    elif spamtype == "tensorproduct": 
 
-    typ = parameterization
-    povmtyp = rtyp = "TP" if typ in ("CPTP","H+S","S") else typ  # use TP until we have LindbladParameterizedSPAMVecs
+        _warnings.warn("`spamtype == 'tensorproduct'` is deprecated!")
+        basis1Q = _Basis("pp",2)
+        prep_factors = []; povm_factors = []
 
-    #DEBUG - make spam static for now (modified convert() in spamvec.py and povm.py for terms - see "DEBUG!!!")
-    #if debug:
-    #    if rtyp in ("TP",): rtyp = "static"
-    #    if povmtyp in ("TP",): povmtyp = "static"
+        v0 = _basis_build_vector("0", basis1Q)
+        v1 = _basis_build_vector("1", basis1Q)
 
-    for i in range(nQubits):
-        prep_factors.append(
-            _objs.spamvec.convert(_objs.StaticSPAMVec(v0), rtyp, basis1Q) )
-        povm_factors.append(
-            _objs.povm.convert(_objs.UnconstrainedPOVM( ([
-                ('0',_objs.StaticSPAMVec(v0)),
-                ('1',_objs.StaticSPAMVec(v1))]) ), povmtyp, basis1Q) )
+        # Historical use of TP for non-term-based cases?
+        #  - seems we could remove this. FUTURE REMOVE?
+        povmtyp = rtyp = "TP" if parameterization in \
+                         ("CPTP","H+S","S","H+S+A","S+A","H+D+A","D+A","D") \
+                         else parameterization
+        
+        for i in range(nQubits):
+            prep_factors.append(
+                _objs.spamvec.convert(_objs.StaticSPAMVec(v0), rtyp, basis1Q) )
+            povm_factors.append(
+                _objs.povm.convert(_objs.UnconstrainedPOVM( ([
+                    ('0',_objs.StaticSPAMVec(v0)),
+                    ('1',_objs.StaticSPAMVec(v1))]) ), povmtyp, basis1Q) )
 
-    if prepNoise is not None:
-        if isinstance(prepNoise,tuple): # use as (seed, strength)
-            seed,strength = prepNoise
-            rndm = _np.random.RandomState(seed)
-            depolAmts = _np.abs(rndm.random_sample(nQubits)*strength)
-        else:
-            depolAmts = prepNoise[0:nQubits]
-        for amt,vec in zip(depolAmts,prep_factors): vec.depolarize(amt)
+        if prepNoise is not None:
+            if isinstance(prepNoise,tuple): # use as (seed, strength)
+                seed,strength = prepNoise
+                rndm = _np.random.RandomState(seed)
+                depolAmts = _np.abs(rndm.random_sample(nQubits)*strength)
+            else:
+                depolAmts = prepNoise[0:nQubits]
+            for amt,vec in zip(depolAmts,prep_factors): vec.depolarize(amt)
+    
+        if povmNoise is not None:
+            if isinstance(povmNoise,tuple): # use as (seed, strength)
+                seed,strength = povmNoise
+                rndm = _np.random.RandomState(seed)
+                depolAmts = _np.abs(rndm.random_sample(nQubits)*strength)
+            else:
+                depolAmts = povmNoise[0:nQubits]
+            for amt,povm in zip(depolAmts,povm_factors): povm.depolarize(amt) 
+    
+        gs.preps[_Lbl('rho0')] = _objs.TensorProdSPAMVec('prep', prep_factors)
+        gs.povms[_Lbl('Mdefault')] = _objs.TensorProdPOVM(povm_factors)
 
-    if povmNoise is not None:
-        if isinstance(povmNoise,tuple): # use as (seed, strength)
-            seed,strength = povmNoise
-            rndm = _np.random.RandomState(seed)
-            depolAmts = _np.abs(rndm.random_sample(nQubits)*strength)
-        else:
-            depolAmts = povmNoise[0:nQubits]
-        for amt,povm in zip(depolAmts,povm_factors): povm.depolarize(amt) 
+    elif spamtype == "lindblad":
 
-    gs.preps[_Lbl('rho0')] = _objs.TensorProdSPAMVec('prep', prep_factors)
-    gs.povms[_Lbl('Mdefault')] = _objs.TensorProdPOVM(povm_factors)
+        prepPure = _objs.ComputationalSPAMVec([0]*nQubits,evotype)
+        prepNoiseMap = build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, printer-1)
+        gs.preps[_Lbl('rho0')] = _objs.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep")
+        if prepNoise is not None:
+            # add noise to prepNoiseMap *after* assigning to GateSet just to be
+            #  sure parameters are wired correctly.
+            nP = prepNoiseMap.num_params()
+            if isinstance(prepNoise,tuple): # use as (seed, strength)
+                seed,strength = prepNoise
+                rndm = _np.random.RandomState(seed)
+                noise_params = _np.abs(rndm.random_sample(nP)*strength)
+            else:
+                noise_params = prepNoise[0:nP]
+            prepNoiseMap.from_vector(noise_params)
+            gs._update_paramvec(gs.preps[_Lbl('rho0')]) # make sure params update
+            
 
-    # #DEBUG SPECIAL CASE: when prep and povm noise are None create a *fixed*
-    # # (no parameters) POVM of the computational basis elements. (This is just
-    # # as useful for data generation but not as useful for GST as it doesn't
-    # # give the SPAM any degrees of freedom.)
-    # if prepNoise is None and povmNoise is None:
-    #     iterover = [(0,1)]*nQubits
-    #     items = [ (''.join(map(str,outcomes)), _objs.ComputationalSPAMVec(outcomes,"densitymx"))
-    #               for outcomes in _itertools.product(*iterover) ]
-    #     gs.povms[_Lbl('Mdefault')] = _objs.UnconstrainedPOVM(items) # overwrite above
-    # # END DEBUG
+        povmNoiseMap = build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, printer-1)
+        gs.povms[_Lbl('Mdefault')] = _objs.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
+        if povmNoise is not None:
+            # add noise to povmNoiseMap *after* assigning to GateSet just to be
+            #  sure parameters are wired correctly.
+            nP = povmNoiseMap.num_params()
+            if isinstance(povmNoise,tuple): # use as (seed, strength)
+                seed,strength = povmNoise
+                rndm = _np.random.RandomState(seed)
+                noise_params = _np.abs(rndm.random_sample(nP)*strength)
+            else:
+                noise_params = povmNoise[0:nP]
+            povmNoiseMap.from_vector(noise_params)
+            gs._update_paramvec(gs.povms[_Lbl('Mdefault')]) # make sure params update        
 
-    #FUTURE - just return cloud keys? (gate label values are never used
+    else:
+        raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
+
+    #Set auto-gator to one appropriate for the global idle gate used here
+    gs._autogator = _autogator.SharedIdleAutoGator(gs)
+
+    #FUTURE - just return cloud *keys*? (gate label values are never used
     # downstream, but may still be useful for debugging, so keep for now)
     printer.log("DONE! - returning GateSet with dim=%d and gates=%s" % (gs.dim, list(gs.gates.keys())))    
     return (gs, clouds) if return_clouds else gs
@@ -426,42 +487,41 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
 def _get_Lindblad_factory(sim_type, parameterization):
     """ Returns a function that creates a Lindblad-type gate appropriate
         given the simulation type and parameterization """
-    if parameterization == "H+S":
-        evotype = "densitymx"
+    _,evotype = _gt.split_lindblad_paramtype(parameterization)
+    if evotype ==  "densitymx":
         cls = _objs.LindbladParameterizedGate if sim_type == "matrix" \
               else _objs.LindbladParameterizedGateMap
-
-    elif parameterization in ("H+S terms","H+S clifford terms"):
-        assert(sim_type.startswith("termorder"))
-        evotype = "svterm" if parameterization == "H+S terms" else "cterm"
+    elif evotype in ("svterm","cterm"):
+        assert(sim_type.startswith("termorder"))        
         cls = _objs.LindbladParameterizedGateMap
     else:
         raise ValueError("Cannot create Lindblad gate factory for ",sim_type, parameterization)
 
     #Just call cls.from_gate_matrix with appropriate evotype
     def _f(gateMatrix, unitaryPostfactor=None,
-          ham_basis="pp", nonham_basis="pp", cptp=True,
-          nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
-        return cls.from_gate_matrix(gateMatrix, unitaryPostfactor,
-                                    ham_basis, nonham_basis, cptp,
-                                    nonham_diagonal_only, truncate,
-                                    mxBasis, evotype)
+           proj_basis="pp", mxBasis="pp", relative=False):
+        p = parameterization
+        if relative:
+            if parameterization == "CPTP": p = "GLND"
+            elif "S" in parameterization: p = parameterization.replace("S","s")
+            elif "D" in parameterization: p = parameterization.replace("D","d")
+        return cls.from_gate_obj(gateMatrix, p, unitaryPostfactor,
+                                 proj_basis, mxBasis, truncate=True)
     return _f
                                     
 
 def _get_Static_factory(sim_type, parameterization):
     """ Returns a function that creates a static-type gate appropriate 
         given the simulation and parameterization """
-    if parameterization == "H+S":
+    _,evotype = _gt.split_lindblad_paramtype(parameterization)
+    if evotype == "densitymx":
         if sim_type == "matrix":
             return lambda g,b: _objs.StaticGate(g)
         elif sim_type == "map":
-            return lambda g,b: _objs.StaticGate(g) # TODO: create StaticGateMap
+            return lambda g,b: _objs.StaticGate(g) # TODO: create StaticGateMap?
 
-    elif parameterization in ("H+S terms","H+S clifford terms"):
+    elif evotype in ("svterm", "cterm"):
         assert(sim_type.startswith("termorder"))
-        evotype = "svterm" if parameterization == "H+S terms" else "cterm"
-        
         def _f(gateMatrix, mxBasis="pp"):
             return _objs.LindbladParameterizedGateMap.from_gate_matrix(
                 None, gateMatrix, None, None, mxBasis=mxBasis, evotype=evotype)
@@ -495,8 +555,9 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
         the gate set this gate is destined for.  This affects what type of 
         gate objects (e.g. `ComposedGate` vs `ComposedGateMap`) are created.
     
-    parameterization : {"H+S", "H+S terms", "H+S clifford terms"}
-        The type of parameterizaton for the constructed gate.
+    parameterization : str
+        The type of parameterizaton for the constructed gate. E.g. "H+S",
+        "H+S terms", "H+S clifford terms", "CPTP", etc.
 
     verbosity : int, optional
         An integer >= 0 dictating how must output to send to stdout.
@@ -544,8 +605,7 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
 
             printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_inds,len(errbasis)), 3)
             errbasis = _Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
-            termErr = Lindblad(wtId, ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
-                               nonham_diagonal_only=True, truncate=True, mxBasis=wtBasis)
+            termErr = Lindblad(wtId, proj_basis=errbasis,  mxBasis=wtBasis)
         
             err_qubit_global_inds = err_qubit_inds
             fullTermErr = Embedded(ssAllQ, [('Q%d'%i) for i in err_qubit_global_inds],
@@ -699,8 +759,9 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
         the gate set this gate is destined for.  This affects what type of 
         gate objects (e.g. `ComposedGate` vs `ComposedGateMap`) are created.
     
-    parameterization : {"H+S", "H+S terms", "H+S clifford terms"}
-        The type of parameterizaton for the constructed gate.
+    parameterization : str
+        The type of parameterizaton for the constructed gate. E.g. "H+S",
+        "H+S terms", "H+S clifford terms", "CPTP", etc.
 
     verbosity : int, optional
         An integer >= 0 dictating how must output to send to stdout.
@@ -750,7 +811,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
             fullIdleErr = idle_noise
         elif idle_noise == True:
             #build composition of 1Q idle ops
-            printer.log("Constructing independend weight-1 idle gate",3)
+            printer.log("Constructing independent weight-1 idle gate",3)
             # Id_1Q = _sps.identity(4**1,'d','csr') if sparse else  _np.identity(4**1,'d')
             Id_1Q = _np.identity(4**1,'d') #always dense for now...
             fullIdleErr = Composed(
@@ -809,10 +870,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
         ssLocQ = [tuple(['Q%d'%i for i in range(nLocal)])]
         basisLocQ = _Basis('pp', 2**nLocal, sparse=sparse)
         locId = _sps.identity(4**nLocal,'d','csr') if sparse else _np.identity(4**nLocal,'d')
-        localErr = Lindblad(locId, ham_basis=errbasis,
-                            nonham_basis=errbasis, cptp=True,
-                            nonham_diagonal_only=True, truncate=True,
-                            mxBasis=basisLocQ)
+        localErr = Lindblad(locId, proj_basis=errbasis, mxBasis=basisLocQ, relative=True)
         fullLocalErr = Embedded(ssAllQ, ['Q%d'%i for i in all_possible_err_qubit_inds],
                                 localErr, basisAllQ_dim)
         printer.log("Lindblad gate w/dim=%d and %d params (from error basis of len %d) -> embedded to gate w/dim=%d" %
@@ -851,10 +909,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
                 err_qubit_global_inds = possible_err_qubit_inds[list(err_qubit_local_inds)]
                 printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_global_inds,len(errbasis)), 4)
                 errbasis = _Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
-                termErr = Lindblad(wtId, ham_basis=errbasis,
-                                   nonham_basis=errbasis, cptp=True,
-                                   nonham_diagonal_only=True, truncate=True,
-                                   mxBasis=wtBasis)
+                termErr = Lindblad(wtId, proj_basis=errbasis, mxBasis=wtBasis, relative=True)
         
                 fullTermErr = Embedded(ssAllQ, ['Q%d'%i for i in err_qubit_global_inds],
                                        termErr, basisAllQ_dim)
@@ -1627,7 +1682,7 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
                            % (Jrank,Namped))
             
         for gfp_list in idle_gatename_fidpair_lists:
-            print("GFP list = ",gfp_list)
+            #print("GFP list = ",gfp_list)
             prep_noncore = tuple( (gfp_list[i][0] for i in range(nQubits)) ) # just the prep-part
             meas_noncore = tuple( (gfp_list[i][1] for i in range(nQubits)) ) # just the meas-part
     
@@ -1759,6 +1814,14 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
     
     tmpl = get_kcoverage_template(nQubits, maxIdleWeight)
     final_fidpairs = []
+
+    def merge_into_1Q(gStr, gate_names, qubit_label):
+        """ Add gate_names, all acting on qubit_label, to gStr """
+        while len(gStr) < len(gate_names): gStr.append([]) # make sure prepStr is long enough
+        for iLayer,name in enumerate(gate_names):
+            assert(qubit_label not in set( _itertools.chain(*[l.sslbls for l in gStr[iLayer]]))) # only 1 op per qubit per layer!
+            gStr[iLayer].append( _Lbl(name,qubit_label) ) # gStr[i] is a list of i-th layer labels
+            if iLayer > 0: assert(qubit_label in set( _itertools.chain(*[l.sslbls for l in gStr[iLayer-1]]))) # only 1 op per qubit per layer!
     
     for gatename_fidpair_list in idle_gatename_fidpair_lists:
         # replace 0..(k-1) in each template string with the corresponding
@@ -1772,8 +1835,11 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
             meas_gates = []
             for iQubit,gatename_fidpair in enumerate(tmpl_instance_row):
                 prep_gatenames, meas_gatenames = gatename_fidpair
-                prep_gates.extend( [_Lbl(gatename,iQubit) for gatename in prep_gatenames ]) 
-                meas_gates.extend( [_Lbl(gatename,iQubit) for gatename in meas_gatenames ]) 
+                #prep_gates.extend( [_Lbl(gatename,iQubit) for gatename in prep_gatenames ]) #OLD: SERIAL strs
+                #meas_gates.extend( [_Lbl(gatename,iQubit) for gatename in meas_gatenames ]) #OLD: SERIAL strs
+                merge_into_1Q(prep_gates, prep_gatenames, iQubit)
+                merge_into_1Q(meas_gates, meas_gatenames, iQubit)
+
             final_fidpairs.append( (_objs.GateString(prep_gates),
                                     _objs.GateString(meas_gates)) )
             
@@ -1818,11 +1884,11 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
     Returns
     -------
     sequences : list
-        A list of (GateString, L, germ, "XX","XX") tuples specifying the final
-        "tiled" fiducial pairs sandwiching `germPowerStr` for as many clouds in
-        parallel as possible.  Actual qubit labels (not the always-integer
-        labels used in templates) are used in these strings. The "XX" elements
-        are placeholders for future use. There are no duplicates in this list.
+        A list of (GateString, L, germ, prepFid, measFid) tuples specifying the
+        final "tiled" fiducial pairs sandwiching `germPowerStr` for as many
+        clouds in parallel as possible.  Actual qubit labels (not the always-
+        integer labels used in templates) are used in these strings.  There are
+        no duplicates in this list.
 
     germs : list
         A list of GateString objects giving all the germs (with appropriate
@@ -1851,12 +1917,33 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
             
         #Create gate sequence "info-tuples" by processing in parallel the
         # list of parallel_clouds
+
+        def merge_into_1Q(gStr, gate_names, qubit_label):
+            """ Add gate_names, all acting on qubit_label, to gStr """
+            while len(gStr) < len(gate_names): gStr.append([]) # make sure prepStr is long enough
+            for iLayer,name in enumerate(gate_names):
+                assert(qubit_label not in set( _itertools.chain(*[l.sslbls for l in gStr[iLayer]]))) # only 1 op per qubit per layer!
+                gStr[iLayer].append( _Lbl(name,qubit_label) ) # gStr[i] is a list of i-th layer labels
+                if iLayer > 0: assert(qubit_label in set( _itertools.chain(*[l.sslbls for l in gStr[iLayer-1]]))) # only 1 op per qubit per layer!
+
+        def merge_into(gStr, gStr_qubits, gate_labels):
+            """ Add gate_labels to gStr using gStr_qubits to keep track of available qubits """
+            for lbl in gate_labels:
+                iLayer = 0
+                while True: #find a layer that can accomodate lbl
+                    if len(gStr_qubits) < iLayer+1:
+                        gStr.append([]); gStr_qubits.append(set())
+                    if len(gStr_qubits[iLayer].intersection(lbl.sslbls)) == 0:
+                        break
+                    iLayer += 1
+                gStr[iLayer].append( lbl )
+                gStr_qubits[iLayer].update( lbl.sslbls )
         
         for template_gatename_fidpair_list in template_gatename_fidpair_lists:
             prepStr = []
             measStr = []
-            germStr = []
-            germPowerStr = []
+            germStr = []; germStr_qubits = []
+            germPowerStr = []; germPowerStr_qubits = []
             for cloud in parallel_clouds:
                 cloud_dict, template_to_cloud_map = cloud
                 cloud_to_template_map = { c:t for t,c in template_to_cloud_map.items() }
@@ -1866,15 +1953,19 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
 
                 for cloud_ql in cloud_dict['qubits']:
                     prep,meas = template_gatename_fidpair_list[cloud_to_template_map[cloud_ql]] # gate-name lists
-                    prepStr.extend( [_Lbl(name,cloud_ql) for name in prep] )
-                    measStr.extend( [_Lbl(name,cloud_ql) for name in meas] )
+                    #prepStr.extend( [_Lbl(name,cloud_ql) for name in prep] ) #OLD: SERIAL strs
+                    #measStr.extend( [_Lbl(name,cloud_ql) for name in meas] ) #OLD: SERIAL strs
+                    merge_into_1Q(prepStr, prep, cloud_ql)
+                    merge_into_1Q(measStr, meas, cloud_ql)
 
-                germStr.extend( list(germ) )
-                germPowerStr.extend( list(germPower) )
-                #TODO: use parallel gate labels when possible here?
+                #germStr.extend( list(germ) ) #OLD: SERIAL strs
+                #germPowerStr.extend( list(germPower) ) #OLD: SERIAL strs
+                merge_into(germStr, germStr_qubits, germ)
+                merge_into(germPowerStr, germPowerStr_qubits, germPower)
                 
             germs.append( _objs.GateString(germStr) )
-            sequences.append( (_objs.GateString(prepStr + germPowerStr + measStr), L, germs[-1], "XX", "XX") )
+            sequences.append( (_objs.GateString(prepStr + germPowerStr + measStr), L, germs[-1],
+                               _objs.GateString(prepStr), _objs.GateString(measStr) ) ) # was XX
               # gatestring, L, germ, prepFidIndex, measFidIndex??
         
     # return a list of gate strings (duplicates removed)
@@ -2023,8 +2114,8 @@ def get_candidates_for_core(gateset, core_qubits, candidate_counts, seedStart):
 
 
 def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWeight=1, maxhops=0,
-                            extraWeight1Hops=0, extraGateWeight=0, sparse=False, verbosity=0,
-                            cache=None, idleOnly=False, algorithm="greedy"):
+                            extraWeight1Hops=0, extraGateWeight=0, paramroot="H+S",
+                            sparse=False, verbosity=0, cache=None, idleOnly=False, algorithm="greedy"):
     """ 
     Generate a list of sequences sufficient for amplifying all of the errors
     given by a geometrically local noise model defined by a graph and various
@@ -2075,6 +2166,11 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
 
+    paramroot : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
+        The parameterization used to define which parameters need to be
+        amplified.  Note this is only the "root", e.g. you shouldn't pass
+        "H+S terms" here, since the latter is implied by "H+S" when necessary.
+
     sparse : bool, optional
         Whether the embedded Lindblad-parameterized gates within the constructed
         `nQubits`-qubit gates are sparse or not.  (This is determied by whether
@@ -2103,13 +2199,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
 
     Returns
     -------
-    sequences : list
-        A list of (GateString, L, germ, "XX","XX") tuples specifying the 
-        final sequences categorized by max-length (L) and germ.
-
-    germs : list
-        A list of GateString objects specifying all the germs found in
-        `sequences`.
+    LsGermsSerialStructure
     """
 
     #The algorithm here takes the following basic structure:
@@ -2119,7 +2209,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     #   parameters" (the parameters of the Gi gate)
     # - precompute other idle fiducial pairs needed for 1 & 2Q synthetic
     #   idles (with maxWeight = gate-error-weight + spreading potential)
-    # - To amplify the remaining parameters iterat through the "clouds"
+    # - To amplify the remaining parameters iterate through the "clouds"
     #   constructed by build_nqnoise_gateset (these essentially give
     #   the areas of the qubit graph where non-Gi gates should act and where
     #   they aren't supposted to act but can have errors).  For each cloud
@@ -2142,6 +2232,10 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
         cache['Idle gatename fidpair lists'] = {}
     if 'Cloud templates' not in cache:
         cache['Cloud templates'] = _collections.defaultdict(list)
+
+    ptermstype = paramroot + " terms"
+      #the parameterization type used for constructing GateSets
+      # that will be used to construct 1st order prob polynomials.
     
     printer = _VerbosityPrinter.build_printer(verbosity)
     printer.log("Creating full gateset")
@@ -2151,11 +2245,12 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     else:
         qubitGraph = _objs.QubitGraph.common_graph(nQubits, geometry, directed=False)
         printer.log("Created qubit graph:\n"+str(qubitGraph))
-
+    
     gateset, clouds = build_nqnoise_gateset(
-        nQubits, qubitGraph, cnot_edges, maxIdleWeight, maxhops,
+        nQubits, qubitGraph, cnot_edges, maxIdleWeight, 0, maxhops,
         extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
-        sim_type="termorder:1", parameterization="H+S terms", return_clouds=True)
+        sim_type="termorder:1", parameterization=ptermstype, return_clouds=True)
+        #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
     #print("DB: GATES = ",gateset.gates.keys())
     #print("DB: CLOUDS = ",clouds)
 
@@ -2166,23 +2261,30 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     # The 'qubits' of a cloud are all the qubits that have any action -
     # ideal or error - except that which is the same as the Gi gate.
     
-    ideal_gateset = build_nqnoise_gateset(nQubits, qubitGraph, cnot_edges, 0, 0,
+    ideal_gateset = build_nqnoise_gateset(nQubits, qubitGraph, cnot_edges, 0, 0, 0,
                                           0, 0, False, verbosity=printer-5,
-                                          sim_type="map", parameterization="H+S") # for testing for synthetic idles
+                                          sim_type="map", parameterization=paramroot)
+                                          # for testing for synthetic idles - so no "terms"
     
     Np = gateset.num_params()
     idleGateStr = _objs.GateString(("Gi",))
-    singleQfiducials = [(), ('Gx',), ('Gy',)] # , ('Gx','Gx')
     prepLbl = _Lbl("rho0")
     effectLbls = [ _Lbl("Mdefault_%s" % l) for l in gateset.povms['Mdefault'].keys()]
+
+    if paramroot in ("H+S","S","H+D","D",
+                     "H+s","s","H+d","d"): #no affine - can get away w/1 fewer fiducials
+        singleQfiducials = [(), ('Gx',), ('Gy',)]
+    else:
+        singleQfiducials = [(), ('Gx',), ('Gy',), ('Gx','Gx')]
+
 
     # create a gateset with maxIdleWeight qubits that includes all
     # the errors of the actual n-qubit gateset...
     #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line'; no CNOTs)
     printer.log("Creating \"idle error\" gateset on %d qubits" % maxIdleWeight)
-    idle_gateset = build_nqnoise_gateset(maxIdleWeight, 'line', [], maxIdleWeight, maxhops,
+    idle_gateset = build_nqnoise_gateset(maxIdleWeight, 'line', [], maxIdleWeight, 0, maxhops,
                                          extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
-                                         sim_type="termorder:1", parameterization="H+S terms")
+                                         sim_type="termorder:1", parameterization=ptermstype)
     idle_params = idle_gateset.gates['Gi'].gpindices # these are the params we want to amplify at first...
 
     if maxIdleWeight in cache['Idle gatename fidpair lists']:
@@ -2214,7 +2316,8 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     for L in maxLengths:
         for fidpair in idle_fidpairs:
             prepFid, measFid = fidpair
-            sequences.append( (prepFid + idleGateStr*L + measFid, L, idleGateStr, "XX", "XX") )
+            sequences.append( (prepFid + idleGateStr*L + measFid, L, idleGateStr,
+                               prepFid, measFid) ) # was XX
               # gatestring, L, germ, prepFidIndex, measFidIndex??
     printer.log("%d idle sequences (for all max-lengths: %s)" % (len(sequences), str(maxLengths)))
     
@@ -2231,9 +2334,9 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
         if maxSyntheticIdleWt not in cache['Idle gatename fidpair lists']:
             printer.log("Getting sequences needed for max-weight=%d errors" % maxSyntheticIdleWt)
             printer.log(" on the idle gate (for %d-Q synthetic idles)" % gateWt)
-            sidle_gateset = build_nqnoise_gateset(maxSyntheticIdleWt, 'line', [], maxIdleWeight, maxhops,
+            sidle_gateset = build_nqnoise_gateset(maxSyntheticIdleWt, 'line', [], maxIdleWeight, 0, maxhops,
                                                   extraWeight1Hops, extraGateWeight, sparse, verbosity=printer-5,
-                                                  sim_type="termorder:1", parameterization="H+S terms")
+                                                  sim_type="termorder:1", parameterization=ptermstype)
             idle_params = sidle_gateset.gates['Gi'].gpindices # these are the params we want to amplify...
 
             _, _, idle_gatename_fidpair_lists = find_amped_polys_for_syntheticidle(
@@ -2569,10 +2672,47 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
                                 
                 printer.log("After tiling L=%d to cloudbank, have %d sequences, %d germs" %
                             (L, len(sequences),len(selected_germs)),4)
-                
+
                 
     printer.log("Done: %d sequences, %d germs" % (len(sequences),len(selected_germs)))
-    return sequences, selected_germs
+    #OLD: return sequences, selected_germs
+    #sequences : list
+    #    A list of (GateString, L, germ, prepFid, measFid) tuples specifying the 
+    #    final sequences categorized by max-length (L) and germ.
+    #
+    #germs : list
+    #    A list of GateString objects specifying all the germs found in
+    #    `sequences`.
+
+
+    #Post processing: convert sequence tuples to a gate string structure
+    Ls = set()
+    germs = _collections.OrderedDict()
+    
+    for gstr,L,germ,prepFid,measFid in sequences:
+        Ls.add(L)
+        if germ not in germs: germs[germ] = {}
+        if L not in germs[germ]: germs[germ][L] = []
+        germs[germ][L].append( (prepFid,measFid) )
+        
+    maxPlaqEls = max([len(fidpairs) for gdict in germs.values() for fidpairs in gdict.values()])
+    nMinorRows = nMinorCols = int(_np.floor(_np.sqrt(maxPlaqEls)))
+    if nMinorRows*nMinorCols < maxPlaqEls: nMinorCols += 1
+    if nMinorRows*nMinorCols < maxPlaqEls: nMinorRows += 1
+    assert(nMinorRows*nMinorCols >= maxPlaqEls), "Logic Error!"
+    
+    germList = list(germs.keys()) #ordered dict so retains nice ordering
+    Ls = sorted(list(Ls))
+    gss = _objs.LsGermsSerialStructure(Ls,germList,nMinorRows,nMinorCols,
+                                       aliases=None,sequenceRules=None)
+    
+    for germ,gdict in germs.items():
+        for L,fidpairs in gdict.items():            
+            serial_germ = germ.serialize() #must serialize to get correct count
+            germ_power = _gsc.repeat_with_max_length(serial_germ,L)
+            gss.add_plaquette(germ_power, L, germ, fidpairs) #returns 'missing_list'; useful if using dsfilter arg
+            
+    return gss                
 
 
 def _get_kcoverage_template_k2(n):
@@ -2818,3 +2958,55 @@ def check_kcoverage_template(rows, n, k, verbosity=0):
                     "Permutation %s on qubits (cols) %s is not present!" % (str(perm),str(cols_to_check))
     if verbosity > 0: print(" check succeeded!")                                                             
     
+
+def filter_nqubit_sequences(sequence_tuples,sectors_to_keep,new_sectors=None):
+    """
+    Creates a new set of qubit sequences-tuples that is the restriction of
+    `sequence_tuples` to the sectors identified by `sectors_to_keep`.
+
+    More specifically, this function removes any gate labels which act
+    specifically on sectors not in `sectors_to_keep` (e.g. an idle gate acting
+    on *all* sectors because it's `.sslbls` is None will *not* be removed --
+    see :function:`filter_gatestring` for details).  Non-empty sequences for
+    which all labels are removed in the *germ* are not included in the output
+    (as these correspond to an irrelevant germ).
+
+    A typical case is when the state-space is that of *n* qubits, and the
+    state space labels the intergers 0 to *n-1*.  One may want to "rebase" the
+    indices to 0 in the returned data set using `new_sectors`
+    (E.g. `sectors_to_keep == [4,5,6]` and `new_sectors == [0,1,2]`).
+
+    Parameters
+    ----------
+    sequence_tuples : list
+        A list of (gatestring, L, germ, prepfid, measfid) tuples giving the
+        sequences to process.
+
+    sectors_to_keep : list or tuple
+        The state-space labels (strings or integers) of the "sectors" to keep in
+        the returned tuple list.
+
+    new_sectors : list or tuple, optional
+        New sectors names to map the elements of `sectors_to_keep` onto in the
+        output DataSet's gate strings.  None means the labels are not renamed.
+        This can be useful if, for instance, you want to run a 2-qubit protocol
+        that expects the qubits to be labeled "0" and "1" on qubits "4" and "5"
+        of a larger set.  Simply set `sectors_to_keep == [4,5]` and
+        `new_sectors == [0,1]`.
+
+    Returns
+    -------
+    filtered_sequence_tuples : list
+        A list of tuples with the same structure as `sequence tuples`.
+    """
+    ret = []
+    for gstr, L, germ, prepfid, measfid in sequence_tuples:
+        new_germ = _gsc.filter_gatestring(germ,sectors_to_keep,new_sectors)
+        if len(new_germ) > 0 or len(gstr) == 0: 
+            new_prep = _gsc.filter_gatestring(prepfid,sectors_to_keep,new_sectors)
+            new_meas = _gsc.filter_gatestring(measfid,sectors_to_keep,new_sectors)
+            new_gstr = _gsc.filter_gatestring(gstr,sectors_to_keep,new_sectors)
+            ret.append( (new_gstr, L, new_germ, new_prep, new_meas) )
+
+    return ret
+

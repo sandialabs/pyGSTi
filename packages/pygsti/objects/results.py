@@ -14,6 +14,7 @@ import copy        as _copy
 from .. import tools as _tools
 from ..tools import compattools as _compat
 from .gatestringstructure import LsGermsStructure as _LsGermsStructure
+from .gatestringstructure import LsGermsSerialStructure as _LsGermsSerialStructure
 from .estimate import Estimate as _Estimate
 from .gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from .gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
@@ -98,7 +99,7 @@ class Results(object):
         #Set gatestring structures
         self.gatestring_structs['iteration'] = []
         for gss in structsByIter:
-            if isinstance(gss, _LsGermsStructure):
+            if isinstance(gss, (_LsGermsStructure,_LsGermsSerialStructure)):
                 self.gatestring_structs['iteration'].append(gss)
             elif isinstance(gss, list):
                 unindexed_gss = _LsGermsStructure([],[],[],[],None)
@@ -127,9 +128,14 @@ class Results(object):
         #Set "Ls and germs" info: gives particular structure
         # to the gateStringLists used to obtain estimates
         finalStruct = self.gatestring_structs['final']
-        self.gatestring_lists['prep fiducials'] = finalStruct.prepStrs
-        self.gatestring_lists['effect fiducials'] = finalStruct.effectStrs
-        self.gatestring_lists['germs'] = finalStruct.germs
+        if isinstance(finalStruct, _LsGermsStructure): # FUTURE: do something sensible w/ LsGermsSerialStructure?
+            self.gatestring_lists['prep fiducials'] = finalStruct.prepStrs
+            self.gatestring_lists['effect fiducials'] = finalStruct.effectStrs
+            self.gatestring_lists['germs'] = finalStruct.germs
+        else:
+            self.gatestring_lists['prep fiducials'] = []
+            self.gatestring_lists['effect fiducials'] = []
+            self.gatestring_lists['germs'] = []
 
 
     def add_estimates(self, results, estimatesToAdd=None):

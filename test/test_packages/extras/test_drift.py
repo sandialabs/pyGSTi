@@ -26,8 +26,9 @@ class DriftTestCase(BaseTestCase):
         print(results_gst.global_drift_frequencies)
 
         if bMPL:
-            results_gst.plot_power_spectrum()
-            results_gst.plot_power_spectrum(sequence=gstr,loc='upper right')
+            results_gst.plot_power_spectrum(savepath=temp_files+"/driftchar_powspec1.png")
+            results_gst.plot_power_spectrum(sequence=gstr,loc='upper right', 
+                                            savepath=temp_files+"/driftchar_powspec2.png")
 
             # This box constructs some GST objects, needed to create any sort of boxplot with GST data
 
@@ -49,10 +50,11 @@ class DriftTestCase(BaseTestCase):
         w.ColorBoxPlot('driftpwr', gssList[-1], None, None, driftresults = results_gst)
 
         if bMPL:
-            results_gst.plot_most_drifty_probability(plot_data=True)
+            results_gst.plot_most_drifty_probability(plot_data=True, savepath=temp_files+"/driftchar_probs.png")
 
             gstrs = [pygsti.objects.GateString(None,'(Gx)^'+str(2**l)) for l in range(0,1)]
-            results_gst.plot_multi_estimated_probabilities(gstrs,loc='upper right')
+            results_gst.plot_multi_estimated_probabilities(gstrs,loc='upper right',
+                                                           savepath=temp_files+"/driftchar_multiprobs.png")
 
 
         #More from bottom of tutorial:
@@ -107,8 +109,8 @@ class DriftTestCase(BaseTestCase):
                                                                      indices_to_sequences=sequences)
 
         if bMPL:
-            results_1seq_drift.plot_power_spectrum()
-            results_1seq_nodrift.plot_power_spectrum()
+            results_1seq_drift.plot_power_spectrum(savepath=temp_files+"/drift_powspec_1seqA.png")
+            results_1seq_nodrift.plot_power_spectrum(savepath=temp_files+"/drift_powspec_1seqB.png")
 
         print(results_1seq_drift.global_pvalue)
         print(results_1seq_nodrift.global_pvalue)
@@ -139,7 +141,8 @@ class DriftTestCase(BaseTestCase):
         # If we hand the parray to the plotting function, it will also plot
         # the true probability alongside our estimate from the data
         if bMPL:
-            results_1seq_drift.plot_estimated_probability(sequence=0,outcome=outcome,parray=parray_1seq,plot_data=True)
+            results_1seq_drift.plot_estimated_probability(sequence=0,outcome=outcome,parray=parray_1seq,
+                                                          plot_data=True, savepath=temp_files+"/drift_estprob1.png")
 
     def test_single_sequence_multiQ(self):
         outcomes = ['00','01','10','11']
@@ -165,9 +168,11 @@ class DriftTestCase(BaseTestCase):
         print(results_multiqubit_full.global_drift_frequencies)
 
         if bMPL:
-            results_multiqubit_full.plot_power_spectrum()
-            outcome = 0 # the outcome index associated with the '00' outcome
-            results_multiqubit_full.plot_power_spectrum(sequence=0,entity=0,outcome=outcome)
+            results_multiqubit_full.plot_power_spectrum(savepath=temp_files+"/drift_powspec0.png")
+            outcome = '00' 
+            #OLD: outcome = 0 # the outcome index associated with the '00' outcome
+            results_multiqubit_full.plot_power_spectrum(sequence=0,entity=0,outcome=outcome,
+                                                        savepath=temp_files+"/drift_powspec1.png")
 
         print(results_multiqubit_full.pspepo_drift_frequencies[0,0,0])
         print(results_multiqubit_full.pspepo_drift_frequencies[0,0,1])
@@ -183,16 +188,17 @@ class DriftTestCase(BaseTestCase):
 
         if bMPL:
             results_multiqubit_full.plot_estimated_probability(sequence=0,outcome=1, plot_data=True,
-                                                               parray=parray_multiqubit_full)
+                                                               parray=parray_multiqubit_full,
+                                                               savepath=temp_files+"/drift_estprob2.png")
 
         results_multiqubit_marg = drift.do_basic_drift_characterization(data_multiqubit, outcomes=outcomes, 
                                                                         marginalize = 'std', confidence=0.99)
         self.assertEqual(np.shape(results_multiqubit_marg.data), (1, 2, 2, 1000))
 
         if bMPL:
-            results_multiqubit_marg.plot_power_spectrum()
-            results_multiqubit_marg.plot_power_spectrum(sequence=0,entity=1)
-            results_multiqubit_marg.plot_power_spectrum(sequence=0,entity=0)
+            results_multiqubit_marg.plot_power_spectrum(savepath=temp_files+"/drift_powspec2.png")
+            results_multiqubit_marg.plot_power_spectrum(sequence=0,entity=1,savepath=temp_files+"/drift_powspec3.png")
+            results_multiqubit_marg.plot_power_spectrum(sequence=0,entity=0,savepath=temp_files+"/drift_powspec4.png")
             
         # Drift frequencies for the first qubit
         print(results_multiqubit_marg.pe_drift_frequencies[0])
@@ -207,7 +213,9 @@ class DriftTestCase(BaseTestCase):
         parray_multiqubit_marg[0,1,1,:] = np.array([pt01(t)+pt11(t) for t in range(0,T)])
 
         if bMPL:
-            results_multiqubit_marg.plot_estimated_probability(sequence=0,entity=0,outcome=0,parray=parray_multiqubit_marg)
+            results_multiqubit_marg.plot_estimated_probability(sequence=0,entity=0,outcome=0,
+                                                               parray=parray_multiqubit_marg,
+                                                               savepath=temp_files+"/drift_estprob3.png")
 
 
         N = 10 # Counts per timestep
@@ -232,8 +240,8 @@ class DriftTestCase(BaseTestCase):
                                                                             outcomes=outcomes, marginalize = 'none')
 
         if bMPL:
-            results_correlatedrift_marg.plot_power_spectrum()
-            results_correlatedrift_full.plot_power_spectrum()
+            results_correlatedrift_marg.plot_power_spectrum(savepath=temp_files+"/drift_powspec5.png")
+            results_correlatedrift_full.plot_power_spectrum(savepath=temp_files+"/drift_powspec6.png")
 
         
 

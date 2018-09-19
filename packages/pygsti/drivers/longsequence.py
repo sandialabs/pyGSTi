@@ -347,10 +347,12 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - gsWeights = dict or None
         - starting point = "LGST" (default) or  "target" or GateSet
         - depolarizeStart = float (default == 0)
+        - randomizeStart = float (default == 0)
         - contractStartToCPTP = True / False (default)
         - cptpPenaltyFactor = float (default = 0)
         - tolerance = float or dict w/'relx','relf','f','jac' keys
         - maxIterations = int
+        - fdIterations = int
         - minProbClip = float
         - minProbClipForWeighting = float (default == 1e-4)
         - probClipInterval = tuple (default == (-1e6,1e6)
@@ -489,10 +491,15 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         The target gate set, specified either directly or by the filename of a
         gateset file (text format).
 
-    lsgstLists : list of lists or of LsGermsStructs
+    lsgstLists : list of lists or LsGermsStruct(s)
         An explicit list of either the raw gate string lists to be used in
         the analysis or of LsGermsStruct objects, which additionally contain
         the max-L, germ, and fiducial pair structure of a set of gate strings.
+        A single LsGermsStruct object can also be given, which is equivalent 
+        to passing a list of successive L-value truncations of this object
+        (e.g. if the object has `Ls = [1,2,4]` then this is like passing
+         a list of three LsGermsStructs w/truncations `[1]`, `[1,2]`, and 
+         `[1,2,4]`).
 
     gaugeOptParams : dict, optional
         A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
@@ -579,19 +586,25 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: loading',tRef); tRef=tNxt
 
+    #Convert a single LsGermsStruct to a list if needed:
+    validStructTypes = (_objs.LsGermsStructure,_objs.LsGermsSerialStructure)
+    if isinstance(lsgstLists, validStructTypes):
+        master = lsgstLists
+        lsgstLists = [ master.truncate(Ls=master.Ls[0:i+1]) 
+                       for i in range(len(master.Ls))]
 
     #Starting Point - compute on rank 0 and distribute
     LGSTcompatibleGates = all([(isinstance(g,_objs.FullyParameterizedGate) or
                                 isinstance(g,_objs.TPParameterizedGate))
                                for g in gs_target.gates.values()])
-    if isinstance(lsgstLists[0],_objs.LsGermsStructure) and LGSTcompatibleGates:
+    if isinstance(lsgstLists[0],validStructTypes) and LGSTcompatibleGates:
         startingPt = advancedOptions.get('starting point',"LGST")
     else:
         startingPt = advancedOptions.get('starting point',"target")
 
     #Compute starting point
     if startingPt == "LGST":
-        assert(isinstance(lsgstLists[0], _objs.LsGermsStructure)), \
+        assert(isinstance(lsgstLists[0], validStructTypes)), \
                "Cannot run LGST: fiducials not specified!"
         gateLabels = advancedOptions.get('gateLabels',
                                          list(gs_target.gates.keys()) +
@@ -626,13 +639,21 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         #Advanced Options can specify further manipulation of starting gate set
         if advancedOptions.get('contractStartToCPTP',False):
             gs_start = _alg.contract(gs_start, "CPTP")
+            raise ValueError("'contractStartToCPTP' has been removed b/c it can change the parameterization of a gateset")
         if advancedOptions.get('depolarizeStart',0) > 0:
             gs_start = gs_start.depolarize(gate_noise=advancedOptions.get('depolarizeStart',0))
-
+        if advancedOptions.get('randomizeStart',0) > 0:
+            v = gs_start.to_vector()
+            vrand = 2*(_np.random.random(len(v))-0.5) * advancedOptions.get('randomizeStart',0)
+            gs_start.from_vector(v + vrand)
+            
         if comm is not None: #broadcast starting gate set
-            comm.bcast(gs_start, root=0)
+            #OLD: comm.bcast(gs_start, root=0)
+            comm.bcast(gs_start.to_vector(), root=0) # just broadcast *vector* to avoid huge pickles (if cached calcs!)
     else:
-        gs_start = comm.bcast(None, root=0)
+        #OLD: gs_start = comm.bcast(None, root=0)
+        v = comm.bcast(None, root=0)
+        gs_start.from_vector(v)
 
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: Prep Initial seed',tRef); tRef=tNxt
@@ -640,11 +661,11 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     # lsgstLists can hold either gatestring lists or structures - get
     # just the lists for calling core gst routines (structure is used only
     # for LGST and post-analysis).
-    rawLists = [ l.allstrs if isinstance(l,_objs.LsGermsStructure) else l
+    rawLists = [ l.allstrs if isinstance(l,validStructTypes) else l
                  for l in lsgstLists ]
 
     aliases = lsgstLists[-1].aliases if isinstance(
-        lsgstLists[-1], _objs.LsGermsStructure) else None
+        lsgstLists[-1], validStructTypes) else None
     aliases = advancedOptions.get('gateLabelAliases',aliases)
 
     #Run Long-sequence GST on data
@@ -658,6 +679,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         cptp_penalty_factor = advancedOptions.get('cptpPenaltyFactor',0),
         spam_penalty_factor = advancedOptions.get('spamPenaltyFactor',0),
         maxiter = advancedOptions.get('maxIterations',100000),
+        fditer = advancedOptions.get('fdIterations', 1),
         probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
         returnAll=True,
         gatestringWeightsDict=advancedOptions.get('gsWeights',None),
@@ -713,6 +735,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     parameters['spamPenaltyFactor'] = advancedOptions.get('spamPenaltyFactor',0)
     parameters['distributeMethod'] = advancedOptions.get('distributeMethod','default')
     parameters['depolarizeStart'] = advancedOptions.get('depolarizeStart',0)
+    parameters['randomizeStart'] = advancedOptions.get('randomizeStart',0)
     parameters['contractStartToCPTP'] = advancedOptions.get('contractStartToCPTP',False)
     parameters['tolerance'] = advancedOptions.get('tolerance',1e-6)
     parameters['maxIterations'] = advancedOptions.get('maxIterations',100000)
@@ -1285,7 +1308,8 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
         profiler.add_time('%s: gauge optimization' % callerName,tRef); tRef=tNxt
 
     #Perform extra analysis if a bad fit was obtained
-    rawLists = [ l.allstrs if isinstance(l,_objs.LsGermsStructure) else l
+    validStructTypes = (_objs.LsGermsStructure,_objs.LsGermsSerialStructure)
+    rawLists = [ l.allstrs if isinstance(l,validStructTypes) else l
                  for l in lsgstLists ]
     objective = advancedOptions.get('objective', 'logl')
     badFitThreshold = advancedOptions.get('badFitThreshold',DEFAULT_BAD_FIT_THRESHOLD)

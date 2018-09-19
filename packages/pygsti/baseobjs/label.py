@@ -402,8 +402,10 @@ class LabelTupTup(Label,tuple):
 
     @property
     def name(self):
-        assert(False),"TODO - something intelligent here..." # no real "name" for a compound label...?
-        # return self[0]
+        # TODO - something intelligent here?
+        # no real "name" for a compound label... but want it to be a string so
+        # users can use .startswith, etc.
+        return "COMPOUND"
 
     @property
     def sslbls(self):
