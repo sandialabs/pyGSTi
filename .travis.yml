@@ -23,7 +23,7 @@ env:
 before_install:
   - sudo apt-get -qq update
   - sudo apt-get -qq install gfortran libblas-dev liblapack-dev
-  - sudo apt-get -qq install openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev > /dev/null
+  - sudo apt-get -qq install openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.6 libopenmpi1.6-dbg libopenmpi-dev > /dev/null
   - sudo bash CI/install.sh # travis_wait 30 "sudo bash CI/install.sh" # > /dev/null 2>&1"
   - "export DISPLAY=:99.0"
   - "sh -e /etc/init.d/xvfb start" #some tests require a display

@@ -20,10 +20,17 @@ echo "Update complete"
 # lapack as this requested library, which allow the build to
 # proceed since it apparently doesn't actually require anything
 # in the non-existent library...
-apt-get install libsuitesparse-dev  > /dev/null 2>&1
-cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so  > /dev/null 2>&1
+sudo apt-get install libsuitesparse-dev  > /dev/null 2>&1
+sudo cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so  > /dev/null 2>&1
 echo "SuiteSparse complete"
 
+cmake --version
+gcc --version
+
+# ----------------------------------------------------------------------
+# The below block was used in TravisCI's 'precise' environment, when
+# newer versions of gcc, g++, and cmake were needed (so we built them)
+# ----------------------------------------------------------------------
 #sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test > /dev/null 2>&1
 #sudo apt-get update > /dev/null 2>&1
 #
@@ -61,4 +68,4 @@ echo "SuiteSparse complete"
 #cd ..  > /dev/null 2>&1
 ##rm -r temp  # > /dev/null 2>&1
 #export PATH=/usr/local/bin:$PATH
-cmake --version
+#cmake --version
