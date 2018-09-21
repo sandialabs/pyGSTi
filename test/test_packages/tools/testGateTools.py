@@ -156,25 +156,25 @@ class GateBaseTestCase(BaseTestCase):
         basis = pygsti.obj.Basis('gm',2)
 
         normalize = False
-        other_diagonal_only = False
-        gatetools.lindblad_error_generators(basis, basis, normalize, other_diagonal_only)
-        gatetools.lindblad_error_generators(None, basis, normalize, other_diagonal_only)
-        gatetools.lindblad_error_generators(basis, None, normalize, other_diagonal_only)
-        gatetools.lindblad_error_generators(None, None, normalize, other_diagonal_only)                
+        other_mode = "all"
+        gatetools.lindblad_error_generators(basis, basis, normalize, other_mode)
+        gatetools.lindblad_error_generators(None, basis, normalize, other_mode)
+        gatetools.lindblad_error_generators(basis, None, normalize, other_mode)
+        gatetools.lindblad_error_generators(None, None, normalize, other_mode)                
 
         normalize = True
-        other_diagonal_only = False
-        gatetools.lindblad_error_generators(basis, basis, normalize, other_diagonal_only)
-        gatetools.lindblad_error_generators(None, basis, normalize, other_diagonal_only)
-        gatetools.lindblad_error_generators(basis, None, normalize, other_diagonal_only)
-        gatetools.lindblad_error_generators(None, None, normalize, other_diagonal_only)                
+        other_mode = "all"
+        gatetools.lindblad_error_generators(basis, basis, normalize, other_mode)
+        gatetools.lindblad_error_generators(None, basis, normalize, other_mode)
+        gatetools.lindblad_error_generators(basis, None, normalize, other_mode)
+        gatetools.lindblad_error_generators(None, None, normalize, other_mode)                
 
         normalize = True
-        other_diagonal_only = True
-        gatetools.lindblad_error_generators(basis, basis, normalize, other_diagonal_only)
-        gatetools.lindblad_error_generators(None, basis, normalize, other_diagonal_only)
-        gatetools.lindblad_error_generators(basis, None, normalize, other_diagonal_only)
-        gatetools.lindblad_error_generators(None, None, normalize, other_diagonal_only)
+        other_mode = "diagonal"
+        gatetools.lindblad_error_generators(basis, basis, normalize, other_mode)
+        gatetools.lindblad_error_generators(None, basis, normalize, other_mode)
+        gatetools.lindblad_error_generators(basis, None, normalize, other_mode)
+        gatetools.lindblad_error_generators(None, None, normalize, other_mode)
 
 
         basis = pygsti.obj.Basis('gm',4)
@@ -182,23 +182,23 @@ class GateBaseTestCase(BaseTestCase):
         errgen = np.identity(16,'d')
         gatetools.lindblad_errgen_projections(errgen, basis, basis, mxBasis, 
                                     normalize=True, return_generators=False, 
-                                    other_diagonal_only=False, sparse=False)
+                                    other_mode="all", sparse=False)
 
         gatetools.lindblad_errgen_projections(errgen, None, 'gm', mxBasis, 
                                     normalize=True, return_generators=False, 
-                                    other_diagonal_only=False, sparse=False)
+                                    other_mode="all", sparse=False)
         gatetools.lindblad_errgen_projections(errgen, 'gm', None, mxBasis, 
                                     normalize=True, return_generators=True, 
-                                    other_diagonal_only=True, sparse=False)
+                                    other_mode="diagonal", sparse=False)
 
         basisMxs = pygsti.tools.basis_matrices('gm', 4, sparse=False) 
         gatetools.lindblad_errgen_projections(errgen, basisMxs, basisMxs, mxBasis, 
                                     normalize=True, return_generators=False, 
-                                    other_diagonal_only=False, sparse=False)
+                                    other_mode="all", sparse=False)
 
         gatetools.lindblad_errgen_projections(errgen, None, None, mxBasis, 
                                               normalize=True, return_generators=False, 
-                                              other_diagonal_only=False, sparse=False)
+                                              other_mode="all", sparse=False)
                 
 
     def test_project_gateset(self):

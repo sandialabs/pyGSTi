@@ -168,6 +168,17 @@ class DMEffectRep_Computational(DMEffectRep):
         Edense = self.todense( scratch  )
         return _np.dot(Edense,state.data) # not vdot b/c data is *real*
 
+class DMEffectRep_Errgen(DMEffectRep):  #TODO!! Need to make SV version
+    def __init__(self, errgen_gaterep, effect_rep, errgen_id):
+        dim = effect_rep.dim
+        self.errgen_rep = errgen_gaterep
+        self.effect_rep = effect_rep
+        self.errgen_id = errgen_id
+        super(DMEffectRep_Errgen,self).__init__(dim)
+
+    def probability(self, state):
+        state = self.errgen_rep.acton(state) # *not* acton_adjoint
+        return self.effect_rep.probability(state)
 
 
 class DMGateRep(object):
@@ -274,10 +285,10 @@ class DMGateRep_Embedded(DMGateRep):
 
 
 class DMGateRep_Composed(DMGateRep):
-    def __init__(self, factor_gate_reps):
-        assert(len(factor_gate_reps) > 0), "Composed gates must contain at least one factor gate!"
+    def __init__(self, factor_gate_reps, dim):
+        #assert(len(factor_gate_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factorgates = factor_gate_reps
-        super(DMGateRep_Composed,self).__init__(factor_gate_reps[0].dim)
+        super(DMGateRep_Composed,self).__init__(dim)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -406,7 +417,7 @@ class SVEffectRep_TensorProd(SVEffectRep):
         return _np.vdot(Edense,state.data)
 
 
-class SVEffectRep_Computational(DMEffectRep):
+class SVEffectRep_Computational(SVEffectRep):
     def __init__(self, zvals, dim):
         # int dim = 4**len(zvals) -- just send as argument for speed?
         assert(dim == 2**len(zvals))
@@ -426,8 +437,8 @@ class SVEffectRep_Computational(DMEffectRep):
         for k,v in enumerate(zvals):
             assert(v in (0,1)), "zvals must contain only 0s and 1s"
             self.nonzero_index += base*v
-            base /= 2 # or right shift?
-
+            base //= 2 # or right shift?
+        super(SVEffectRep_Computational,self).__init__(dim)
 
     def todense(self, outvec, trust_outvec_sparsity=False):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
@@ -436,6 +447,7 @@ class SVEffectRep_Computational(DMEffectRep):
         if not trust_outvec_sparsity:
             outvec[:] = 0 #reset everything to zero
         outvec[self.nonzero_index] = 1.0
+        return outvec
 
     def amplitude(self, state): # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
@@ -546,10 +558,10 @@ class SVGateRep_Embedded(SVGateRep):
 
 class SVGateRep_Composed(SVGateRep):
     # exactly the same as DM case
-    def __init__(self, factor_gate_reps):
-        assert(len(factor_gate_reps) > 0), "Composed gates must contain at least one factor gate!"
+    def __init__(self, factor_gate_reps, dim):
+        #assert(len(factor_gate_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factorsgates = factor_gate_reps
-        super(SVGateRep_Composed,self).__init__(factor_gate_reps[0].dim)
+        super(SVGateRep_Composed,self).__init__(dim)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -627,10 +639,10 @@ class SBGateRep_Embedded(SBGateRep):
 
 class SBGateRep_Composed(SBGateRep):
     # exactly the same as DM case except .dim -> .n
-    def __init__(self, factor_gate_reps):
-        assert(len(factor_gate_reps) > 0), "Composed gates must contain at least one factor gate!"
+    def __init__(self, factor_gate_reps, n):
+        #assert(len(factor_gate_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factorgates = factor_gate_reps
-        super(SBGateRep_Composed,self).__init__(factor_gate_reps[0].n)
+        super(SBGateRep_Composed,self).__init__(n)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -1064,6 +1076,7 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None): 
         final_state = propagate_staterep(init_state, [gatereps[gl] for gl in remainder])
         if iCache is not None: rho_cache[iCache] = final_state # [:,0] #store this state in the cache
 
+        #HERE - current_errgen_name check?
         for j,erep in enumerate(ereps):
             ret[i,j] = erep.probability(final_state) #outcome probability
 
@@ -1281,15 +1294,19 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
 
                     # for the last index, no need to save, and need to construct
                     # and apply effect vector
-                    # Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-                    for f in reversed(factors[-1].post_ops):
-                        rhoVecL = f.adjoint_acton(rhoVecL)
+                    
+                    #HERE - add something like:
+                    #  if factors[-1].opname == cur_effect_opname: (or opint in C-case)
+                    #      <skip application of post_ops & preops - just load from (new) saved slot get pLeft & pRight>
+
+                    for f in factors[-1].post_ops:
+                        rhoVecL = f.acton(rhoVecL)
                     E = factors[-1].post_effect # effect representation
                     pLeft = E.amplitude(rhoVecL)
 
                     #Same for pre_ops and rhoVecR
-                    for f in reversed(factors[-1].pre_ops):
-                        rhoVecR = f.adjoint_acton(rhoVecR)
+                    for f in factors[-1].pre_ops:
+                        rhoVecR = f.acton(rhoVecR)
                     E = factors[-1].pre_effect
                     pRight = _np.conjugate(E.amplitude(rhoVecR))
 
@@ -1306,7 +1323,6 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
             else: # non-fast mode
                 last_index = len(factor_lists)-1
                 for fi in _itertools.product(*[range(l) for l in factor_list_lens]):
-                    #if len(fi) == 0 ...  #never happens TODO REMOVE
                     factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
                     res    = _functools.reduce(lambda x,y: x.mult(y), [f.coeff for f in factors])
                     pLeft  = _unitary_sim_pre(factors, comm, memLimit)
@@ -1340,9 +1356,9 @@ def _unitary_sim_pre(complete_factors, comm, memLimit):
     for f in _itertools.chain(*[f.pre_ops for f in complete_factors[1:-1]]):
         rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
 
-    # Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-    for f in reversed(complete_factors[-1].post_ops):
-        rhoVec = f.adjoint_acton(rhoVec)
+    for f in complete_factors[-1].post_ops:
+        rhoVec = f.acton(rhoVec)
+
     EVec = complete_factors[-1].post_effect
     return EVec.amplitude(rhoVec)
 
@@ -1354,8 +1370,7 @@ def _unitary_sim_post(complete_factors, comm, memLimit):
     for f in _itertools.chain(*[f.post_ops for f in complete_factors[1:-1]]):
         rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
 
-    # Note - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
-    for f in reversed(complete_factors[-1].pre_ops):
-        rhoVec = f.adjoint_acton(rhoVec)
+    for f in complete_factors[-1].pre_ops:
+        rhoVec = f.acton(rhoVec)
     EVec = complete_factors[-1].pre_effect
     return _np.conjugate(EVec.amplitude(rhoVec)) # conjugate for same reason as above

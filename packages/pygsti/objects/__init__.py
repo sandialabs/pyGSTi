@@ -46,6 +46,8 @@ from .povm import POVM
 from .povm import TPPOVM
 from .povm import UnconstrainedPOVM
 from .povm import TensorProdPOVM
+from .povm import ComputationalBasisPOVM
+from .povm import LindbladParameterizedPOVM
 from .instrument import Instrument
 from .instrument import TPInstrument
 
@@ -54,6 +56,7 @@ from .gatestring import GateString
 from .gatestring import WeightedGateString
 from .gatestringstructure import GatestringStructure
 from .gatestringstructure import LsGermsStructure
+from .gatestringstructure import LsGermsSerialStructure
 from .circuit import Circuit
 from .multidataset import MultiDataSet
 from .datacomparator import DataComparator

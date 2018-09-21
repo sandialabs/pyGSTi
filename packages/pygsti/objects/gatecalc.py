@@ -170,12 +170,21 @@ class GateCalc(object):
 
         # ** See comments at the beginning of get_nongauge_projector for explanation **
 
-        if any([not isinstance(gate,_gate.GateMatrix) for gate in self.gates.values()]) or \
-           any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.preps.values()]) or \
-           any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.effects.values()]):
+        try:
+            self_gates = _collections.OrderedDict([ (lbl,gate.todense()) for lbl,gate in self.gates.items() ])
+            self_preps = _collections.OrderedDict([ (lbl,vec.todense()[:,None]) for lbl,vec in self.preps.items() ])
+            self_effects = _collections.OrderedDict([ (lbl,vec.todense()[:,None]) for lbl,vec in self.effects.items() ])
+        except:
             raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
                                        "parameters for GateSets with non-dense "
                                        "member representations"))
+        
+        #if any([not isinstance(gate,_gate.GateMatrix) for gate in self.gates.values()]) or \
+        #   any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.preps.values()]) or \
+        #   any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.effects.values()]):
+        #    raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
+        #                               "parameters for GateSets with non-dense "
+        #                               "member representations"))
 
         bSkipEcs = True #Whether we should artificially skip complement-type
          # effect vecs, which is historically what we've done, even though
@@ -191,11 +200,20 @@ class GateCalc(object):
                 if isinstance(EVec, _sv.ComplementSPAMVec):
                     del newSelf.effects[effectlbl]
             self = newSelf #HACK!!! replacing self for remainder of this fn with version without Ecs
+
+            #recompute effects in case we deleted any ComplementSPAMVecs
+            self_effects = _collections.OrderedDict([ (lbl,vec.todense()[:,None])
+                                                      for lbl,vec in self.effects.items() ])
+            
         
         #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
         dim = self.dim 
-        nParams = self.Np 
+        nParams = self.Np
+
         nElements = sum([obj.size for _,obj in self.iter_objs()])
+        #nElements = sum([o.size for o in self_gates.values()]) + \
+        #            sum([o.size for o in self_preps.values()]) + \
+        #            sum([o.size for o in self_effects.values()])
 
         #This was considered as optional behavior, but better to just delete qtys from GateSet
         ##whether elements of the raw gateset matrices/SPAM vectors that are not
@@ -209,22 +227,22 @@ class GateCalc(object):
         # *all* elements of a gate set.
 
         gsDeriv_gates = _collections.OrderedDict(
-            [(label,_np.zeros((dim,dim),'d')) for label in self.gates])
+            [(label,_np.zeros((dim,dim),'d')) for label in self_gates])
         gsDeriv_preps = _collections.OrderedDict(
-            [(label,_np.zeros((dim,1),'d')) for label in self.preps])
+            [(label,_np.zeros((dim,1),'d')) for label in self_preps])
         gsDeriv_effects = _collections.OrderedDict(
-            [(label,_np.zeros((dim,1),'d')) for label in self.effects])
+            [(label,_np.zeros((dim,1),'d')) for label in self_effects])
         
         dPG = _np.empty( (nElements, nParams + dim**2), 'd' )
         for i in range(dim):      # always range over all rows: this is the
             for j in range(dim):  # *generator* mx, not gauge mx itself
                 unitMx = _bt.mut(i,j,dim)
-                for lbl,rhoVec in self.preps.items():
-                    gsDeriv_preps[lbl] = _np.dot(unitMx, rhoVec.todense())
-                for lbl,EVec in self.effects.items():
-                    gsDeriv_effects[lbl] = -_np.dot(EVec.todense().T, unitMx).T
+                for lbl,rhoVec in self_preps.items():
+                    gsDeriv_preps[lbl] = _np.dot(unitMx, rhoVec)
+                for lbl,EVec in self_effects.items():
+                    gsDeriv_effects[lbl] = -_np.dot(EVec.T, unitMx).T
 
-                for lbl,gate in self.gates.items():
+                for lbl,gate in self_gates.items():
                     #if isinstance(gate,_gate.GateMatrix):
                     gsDeriv_gates[lbl] = _np.dot(unitMx,gate) - \
                                          _np.dot(gate,unitMx)
@@ -1364,7 +1382,7 @@ class GateCalc(object):
 
 
     def bulk_probs(self, gatestrings, evalTree, elIndices, outcomes,
-                   clipTo=None, check=False, comm=None):
+                   clipTo=None, check=False, comm=None, smartc=None):
         """
         Construct a dictionary containing the probabilities
         for an entire list of gate sequences.
@@ -1385,16 +1403,20 @@ class GateCalc(object):
             gate string.
 
         clipTo : 2-tuple, optional
-           (min,max) to clip return value if not None.
+            (min,max) to clip return value if not None.
 
         check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+            If True, perform extra checks within code to verify correctness,
+            generating warnings when checks fail.  Used for testing, and runs
+            much slower when True.
 
         comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        smartc : SmartCache, optional
+            A cache object to cache & use previously cached values inside this
+            function.
 
 
         Returns
@@ -1405,7 +1427,11 @@ class GateCalc(object):
             and `p` is the corresponding probability.
         """
         vp = _np.empty(evalTree.num_final_elements(),'d')
-        self.bulk_fill_probs(vp, evalTree, clipTo, check, comm)
+        if smartc:
+            smartc.cached_compute(self.bulk_fill_probs, vp, evalTree,
+                                  clipTo, check, comm, _filledarrays=(0,))
+        else:
+            self.bulk_fill_probs(vp, evalTree, clipTo, check, comm)
 
         ret = _collections.OrderedDict()
         for i, gstr in enumerate(gatestrings):

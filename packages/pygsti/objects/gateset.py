@@ -12,6 +12,7 @@ import itertools as _itertools
 import collections as _collections
 import warnings as _warnings
 import time as _time
+import uuid as _uuid
 import bisect as _bisect
 
 from ..tools import matrixtools as _mt
@@ -22,6 +23,7 @@ from ..tools import jamiolkowski as _jt
 from ..tools import compattools as _compat
 from ..tools import basistools as _bt
 from ..tools import listtools as _lt
+from ..tools import symplectic as _symp
 
 from . import gatesetmember as _gm
 from . import gatestring as _gs
@@ -58,7 +60,8 @@ class GateSet(object):
 
     def __init__(self, default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 povm_prefix="M", instrument_prefix="I", sim_type="auto"):
+                 povm_prefix="M", instrument_prefix="I", sim_type="auto",
+                 auto_idle_name=None):
         """
         Initialize a gate set.
 
@@ -92,9 +95,17 @@ class GateSet(object):
             - "termorder:<X>" : Use Taylor expansions of gates in error rates
               to compute probabilities out to some maximum order <X> (an
               integer) in these rates.
+
+        auto_idle_name : str, optional
+            A gate *name* (i.e. without any state-space labels) that indicates a
+            *perfect* idle operation and thus can be used as a placeholder
+            within compound gate labels without actually being stored in the
+            GateSet.
         """
-        assert(default_param in ('full','TP','CPTP','H+S','S','static',
-                                         'H+S terms','clifford','H+S clifford terms'))
+
+        #More options now (TODO enumerate?)
+        #assert(default_param in ('full','TP','CPTP','H+S','S','static',
+        #                         'H+S terms','clifford','H+S clifford terms'))
 
         #default_e_param = "full" if default_param == "TP" else default_param
 
@@ -133,6 +144,9 @@ class GateSet(object):
         self._paramvec = _np.zeros(0, 'd')
         self._rebuild_paramvec()
         self._autogator = _autogator.SimpleCompositionAutoGator(self) # the default
+        self.auto_idle_gatename = auto_idle_name
+
+        self.uuid = _uuid.uuid4() # a GateSet's uuid is like a persistent id(), useful for hashing
 
         super(GateSet, self).__init__()
 
@@ -141,7 +155,8 @@ class GateSet(object):
 
         if sim_type == "auto":
             default_param = self.gates.default_param # assume the same for other dicts
-            if default_param in ("H+S terms","H+S clifford terms"):
+            if _gt.is_valid_lindblad_paramtype(default_param) and \
+               _gt.split_lindblad_paramtype(default_param)[1] in ("svterm","cterm"):
                 sim_type = "termorder:1"
             else:
                 d = self._dim if (self._dim is not None) else 0
@@ -163,6 +178,25 @@ class GateSet(object):
             self._sim_args.append(cache) # add calculation cache as another argument
             
 
+    def set_state_space_labels(self, lbls):
+        """
+        Sets labels for the components of the Hilbert space upon which 
+        the gates of this GateSet act.
+
+        Parameters
+        ----------
+        lbls : list or tuple or StateSpaceLabels object
+            A list of state-space labels (can be strings or integers), e.g.
+            `['Q0','Q1']` or a :class:`StateSpaceLabels` object.
+        
+        Returns
+        -------
+        None
+        """
+        if isinstance(lbls, _ld.StateSpaceLabels):
+            self.stateSpaceLabels = lbls
+        else:
+            self.stateSpaceLabels = _ld.StateSpaceLabels(lbls)
 
 
     def _embedGate(self, gateTargetLabels, gateVal):
@@ -192,11 +226,6 @@ class GateSet(object):
 
         if gateVal.dim == self.dim:
             return gateVal # if gate operates on full dimension, no need to embed
-
-        # TODO: REMOVE - I think this is redundant w/case above and less general
-        #if len(self.stateSpaceLabels.labels) == 1 and \
-        #   set(self.stateSpaceLabels.labels[0]) == set(gateTargetLabels):
-        #    return gateVal # if gate operates on *all* the labels, no need to embed
 
         if self._sim_type == "matrix":
             return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
@@ -509,6 +538,7 @@ class GateSet(object):
             - "H+S terms" : like H+S, but support "svterm" evolution type
             - "H+S clifford terms" : like H+S, but support "cterm" evo. type
             - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
+        TODO: docstring - need to update these parameters
 
         extra : dict, optional
             For `"H+S terms"` type, this may specify a dictionary
@@ -516,36 +546,18 @@ class GateSet(object):
             as the *ideal* operation of each gate/SPAM vector.
         """
         typ = parameterization_type
-        assert(parameterization_type in ('full','TP','CPTP','H+S','S','static',
-                                         'H+S terms','clifford','H+S clifford terms',
-                                         'static unitary'))
 
-        povmtyp = rtyp = ityp = "TP" if typ in ("CPTP","H+S","S") else typ
-        #rtyp = "CPTP" if typ in ("H+S","S") else typ #TESTING, but CPTP spamvec still unreliable
+        #More options now (TODO enumerate?)
+        #assert(parameterization_type in ('full','TP','CPTP','H+S','S','static',
+        #                                 'H+S terms','clifford','H+S clifford terms',
+        #                                 'static unitary'))
 
         #Update dim and evolution type so that setting converted elements works correctly
         orig_dim = self.dim
         orig_evotype = self._evotype
-        if typ in ('full','TP','CPTP','H+S','S','static'):
-            self._evotype = "densitymx"
-            if self._sim_type not in ("matrix","map"):
-                self.set_simtype("matrix" if self.dim <= 16 else "map")
-
-        elif typ == 'clifford':
-            self._evotype = "stabilizer"
-            self.set_simtype("map")
-
-        elif typ == 'H+S terms':
-            self._evotype = "svterm"
-            if self._sim_type != "termorder":
-                self.set_simtype("termorder:1")
-
-        elif typ == 'H+S clifford terms':
-            self._evotype = "cterm"
-            if self._sim_type != "termorder":
-                self.set_simtype("termorder:1")
-
-        elif typ == 'static unitary':
+        baseType = typ # the default - only updated if a lindblad param type
+                
+        if typ == 'static unitary':
             assert(self._evotype == "densitymx"), \
                 "Can only convert to 'static unitary' from a density-matrix evolution type."
             self._evotype = "statevec"
@@ -553,8 +565,31 @@ class GateSet(object):
             if self._sim_type not in ("matrix","map"):
                 self.set_simtype("matrix" if self.dim <= 4 else "map")
 
+        elif typ == 'clifford':
+            self._evotype = "stabilizer"
+            self.set_simtype("map")
+
+        elif _gt.is_valid_lindblad_paramtype(typ):
+            baseType,evotype = _gt.split_lindblad_paramtype(typ)
+            self._evotype = evotype
+            if evotype == "densitymx":
+                if self._sim_type not in ("matrix","map"):
+                    self.set_simtype("matrix" if self.dim <= 16 else "map")
+            elif evotype in ("svterm","cterm"):
+                if self._sim_type != "termorder":
+                    self.set_simtype("termorder:1")
+
+        else: # assume all other parameterizations are densitymx type
+            self._evotype = "densitymx"
+            if self._sim_type not in ("matrix","map"):
+                self.set_simtype("matrix" if self.dim <= 16 else "map")
+
         basis = self.basis
         if extra is None: extra = {}
+
+        povmtyp = rtyp = typ #assume spam types are available to all objects
+        ityp = "TP" if baseType in ("CPTP","H+S","S","H+S+A","S+A","H+D+A", "D+A", "D") else typ
+        #povmtyp = ityp # OLD TODO REMOVE
 
         for lbl,gate in self.gates.items():
             self.gates[lbl] = _gate.convert(gate, typ, basis,
@@ -578,7 +613,7 @@ class GateSet(object):
             self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
         elif typ == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim, basis)
-        else: # typ in ('static','H+S','S', 'H+S terms')
+        else: # typ in ('static','H+S','S', 'H+S terms', ...)
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.dim)
 
 
@@ -629,6 +664,12 @@ class GateSet(object):
         else:
             self.__dict__.update(stateDict)
 
+        if 'uuid' not in stateDict:
+            self.uuid = _uuid.uuid4() #create a new uuid
+
+        if 'auto_idle_gatename' not in stateDict:
+            self.auto_idle_gatename = None
+
         #Additionally, must re-connect this gateset as the parent
         # of relevant OrderedDict-derived classes, which *don't*
         # preserve this information upon pickling so as to avoid
@@ -638,11 +679,13 @@ class GateSet(object):
         #self.effects.parent = self
         self.gates.parent = self
         self.instruments.parent = self
-        for o in self.preps.values(): o._parent = self
-        for o in self.povms.values(): o._parent = self
-        #for o in self.effects.values(): o._parent = self
-        for o in self.gates.values(): o._parent = self
-        for o in self.instruments.values(): o._parent = self
+        for o in self.preps.values(): o.relink_parent(self)
+        for o in self.povms.values(): o.relink_parent( self)
+        #for o in self.effects.values(): o.relink_parent(self)
+        for o in self.gates.values(): o.relink_parent(self)
+        for o in self.instruments.values(): o.relink_parent(self)
+        if self._autogator is not None: # (just in case)
+            self._autogator.parent = self
 
 
 
@@ -1218,26 +1261,6 @@ class GateSet(object):
 
                         #Link the current iParent to this index (even if it was already going to be computed)
                         elIndsToOutcomes[(s,spamtup_indx)] = outcome_tup
-
-                    #OLD: raw_spamTuples_dict[s] = _lt.remove_duplicates(raw_spamTuples_dict[s] + spamtuples)
-                    # Note: there should only be duplicates if there are duplicates in
-                    # original `gatestring_list` - check this?
-
-                    #OLD - "index" case
-                    #elif action == "index":  # fill *ByParent dicts
-                    #    assert(iParent is not None)
-                    #    offset = raw_offsets[s]
-                    #    all_spamtuples = raw_spamTuples_dict[s] # an OrderedDict
-                    #    final_outcomes = [ spamTupleToOutcome[x] for x in spamtuples ]
-                    #    my_spamTuple_indices = [ offset+all_spamtuples[x] for x in spamtuples ]
-                    #    my_outcome_tuples =  [ gate_outcomes + x for x in final_outcomes ]
-                    #    for i,tup in zip(my_spamTuple_indices,my_outcome_tuples):
-                    #        if i not in elIndicesByParent[iParent]: #don't duplicate existing indices
-                    #            elIndicesByParent[iParent][i] = True #just a placeholder; just care about (ordered) keys
-                    #            outcomesByParent[iParent].append(tup)
-                    #        else: assert(tup in outcomesByParent) # pragma: no check
-                    #                # double-check - could REMOVE for speed in future
-
                 else:
                     # Note: store elements of raw_spamTuples_dict as dicts for
                     # now, for faster lookup during "index" mode
@@ -1256,8 +1279,6 @@ class GateSet(object):
                         spamtup_dict = _collections.OrderedDict( [
                             (spamtup,i) for i,spamtup in enumerate(spamtuples) ] )
 
-                        # OLD: spamTuple_indices = range(len(spamtuples))
-                        # OLD: for ist,out_tup in zip(spamTuple_indices,outcome_tuples):
                         for ist,out_tup in enumerate(outcome_tuples): # ist = spamtuple index
                             elIndsToOutcomes[(s,ist)] = out_tup # element index is given by (parent_gatestring, spamtuple_index) tuple
                               # Note: works even if `i` already exists - doesn't reorder keys then
@@ -2413,7 +2434,7 @@ class GateSet(object):
 
 
     def bulk_probs(self, gatestring_list, clipTo=None, check=False,
-                   comm=None, memLimit=None, dataset=None):
+                   comm=None, memLimit=None, dataset=None, smartc=None):
         """
         Construct a dictionary containing the probabilities
         for an entire list of gate sequences.
@@ -2445,6 +2466,10 @@ class GateSet(object):
             probabilities corresponding to non-zero counts (observed
             outcomes) in this data set.
 
+        smartc : SmartCache, optional
+            A cache object to cache & use previously cached values inside this
+            function.
+
 
         Returns
         -------
@@ -2454,12 +2479,11 @@ class GateSet(object):
             and `p` is the corresponding probability.
         """
         gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
-        #OLD: evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list, dataset=dataset)
         evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
             gatestring_list, comm, memLimit, subcalls=['bulk_fill_probs'],
             dataset=dataset, verbosity=0) # FUTURE (maybe make verbosity into an arg?)
         return self._calc().bulk_probs(gatestring_list, evalTree, elIndices,
-                                       outcomes, clipTo, check, comm)
+                                       outcomes, clipTo, check, comm, smartc)
 
 
     def bulk_dprobs(self, gatestring_list, returnPr=False,clipTo=None,
@@ -3024,19 +3048,19 @@ class GateSet(object):
         s += " Preps:\n"
         for lbl in self.preps:
             s += "  %s = %g\n" % \
-                (lbl, _np.linalg.norm(self.preps[lbl]-otherGateSet.preps[lbl]))
+                (lbl, _np.linalg.norm(self.preps[lbl].todense()-otherGateSet.preps[lbl].todense()))
 
         s += " POVMs:\n"
         for povm_lbl,povm in self.povms.items():
             s += "  %s: " % povm_lbl
             for lbl in povm:
                 s += "    %s = %g\n" % \
-                     (lbl, _np.linalg.norm(povm[lbl]-otherGateSet.povms[povm_lbl][lbl]))
+                     (lbl, _np.linalg.norm(povm[lbl].todense()-otherGateSet.povms[povm_lbl][lbl].todense()))
 
         s += " Gates:\n"
         for lbl in self.gates:
             s += "  %s = %g\n" % \
-                (lbl, _np.linalg.norm(self.gates[lbl]-otherGateSet.gates[lbl]))
+                (lbl, _np.linalg.norm(self.gates[lbl].todense()-otherGateSet.gates[lbl].todense()))
 
         if len(self.instruments) > 0:
             s += " Instruments:\n"
@@ -3044,7 +3068,7 @@ class GateSet(object):
                 s += "  %s: " % inst_lbl
                 for lbl in inst:
                     s += "    %s = %g\n" % \
-                         (lbl, _np.linalg.norm(inst[lbl]-otherGateSet.instruments[inst_lbl][lbl]))
+                         (lbl, _np.linalg.norm(inst[lbl].todense()-otherGateSet.instruments[inst_lbl][lbl].todense()))
 
         return s
 
@@ -3080,6 +3104,11 @@ class GateSet(object):
             self._calcClass = _gatematrixcalc.GateMatrixCalc
         newGateset._calcClass = self._calcClass
 
+        if not hasattr(self,"_autogator"): #for backward compatibility
+            self._autogator = None # the default for *old* gatesets
+        newGateset._autogator = self._autogator.copy(newGateset)
+        newGateset.auto_idle_gatename = self.auto_idle_gatename
+
         if not hasattr(self,"_sim_type"): #for backward compatibility
             self._sim_type = "dmmatrix"
             self._sim_args = []
@@ -3097,18 +3126,24 @@ class GateSet(object):
     def __str__(self):
         s = ""
         for lbl,vec in self.preps.items():
-            s += "%s = " % lbl + str(vec) + "\n"
+            s += "%s = " % str(lbl) + str(vec) + "\n"
         s += "\n"
         for lbl,povm in self.povms.items():
-            s += "%s = " % lbl + str(povm) + "\n"
+            s += "%s = " % str(lbl) + str(povm) + "\n"
         s += "\n"
         for lbl,gate in self.gates.items():
-            s += "%s = \n" % lbl + str(gate) + "\n\n"
+            s += "%s = \n" % str(lbl) + str(gate) + "\n\n"
         for lbl,inst in self.instruments.items():
-            s += "%s = " % lbl + str(inst) + "\n"
+            s += "%s = " % str(lbl) + str(inst) + "\n"
         s += "\n"
 
         return s
+
+    def __hash__(self):
+        if self.uuid is not None:
+            return hash(self.uuid)
+        else:
+            raise TypeError('Use digest hash')
 
 
     def iter_objs(self):
@@ -3564,6 +3599,10 @@ class GateSet(object):
                   else None
 
         srep_dict = {}
+        if self.auto_idle_gatename is not None:
+            # Special case: gatename for a 1-qubit perfect idle (not actually stored as gates)
+            srep_dict[self.auto_idle_gatename] = _symp.unitary_to_symplectic(_np.identity(2,'d'))
+
         for gl,gate in self.gates.items():
             if (gfilter is not None) and (gl not in gfilter): continue
 

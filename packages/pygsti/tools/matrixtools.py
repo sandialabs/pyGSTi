@@ -1210,7 +1210,6 @@ def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta): # t == 1.0
     return F
 
 
-
 #From SciPy source, as a reference - above we assume A is a sparse csr matrix
 # and B is a dense vector
 #def _exact_inf_norm(A):
@@ -1227,3 +1226,43 @@ def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta): # t == 1.0
 #        return max(abs(A).sum(axis=0).flat)
 #    else:
 #        return np.linalg.norm(A, 1)
+
+
+
+def sparse_equal(A,B,atol = 1e-8):
+    """
+    Checks whether two Scipy sparse matrices are (almost) equal.
+
+    Parameters
+    ----------
+    A, B : scipy.sparse matrix
+        The two matrices to compare.
+        
+    atol : float, optional
+        The tolerance to use, passed to `numpy.allclose`, when comparing
+        the elements of `A` and `B`.
+
+    Returns
+    -------
+    bool
+    """
+    if _np.array_equal(A.shape, B.shape)==0:
+        return False
+
+    r1,c1 = A.nonzero()
+    r2,c2 = B.nonzero()
+
+    lidx1 = _np.ravel_multi_index((r1,c1), A.shape)
+    lidx2 = _np.ravel_multi_index((r2,c2), B.shape)
+    sidx1 = lidx1.argsort()
+    sidx2 = lidx2.argsort()
+
+    index_match = _np.array_equal(lidx1[sidx1], lidx2[sidx2])
+    if index_match==0:
+        return False
+    else:  
+        v1 = A.data
+        v2 = B.data        
+        V1 = v1[sidx1]
+        V2 = v2[sidx2]        
+    return _np.allclose(V1,V2, atol=atol)

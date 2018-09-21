@@ -327,6 +327,8 @@ class TestWorkspace(ReportBaseCase):
         mds.add_dataset("DS1",self.ds)
         dsc = pygsti.objects.DataComparator([self.ds,self.ds], gate_exclusions=['Gfoo'], gate_inclusions=['Gx','Gy','Gi'])
         dsc2 = pygsti.objects.DataComparator(mds)
+        dsc.implement()
+        dsc2.implement()
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.gs, dscomparator=dsc) ) # dscmp with 'None' dataset specified
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.gs, dscomparator=dsc2) )
 

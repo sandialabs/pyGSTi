@@ -161,8 +161,8 @@ class Circuit(_gstr.GateString):
                 actson = lbl.qubits if (lbl.qubits is not None) else self.line_labels # None == "all lines"
                 processed_lines.update(actson)
 
-            if len(layer_list) > 0:
-                label_list.append( _Label(layer_list) )
+            #OLD: if len(layer_list) > 0:
+            label_list.append( _Label(layer_list) ) # OK even if layer_list is empty
                 
         return tuple(label_list)
 
@@ -246,6 +246,9 @@ class Circuit(_gstr.GateString):
         if not isinstance(gatestring, _gstr.GateString):
             gatestring = _gstr.GateString(gatestring)
 
+        if parallelize:
+            gatestring = gatestring.parallelize()
+
         # Note: elements of gatestring are guaranteed to be Label objs b/c GateString enforces this.
             
         # Create an empty circuit, to populate from gatestring
@@ -260,32 +263,34 @@ class Circuit(_gstr.GateString):
         while j < len(gatestring):
             layer = [] # The gates that are going into this layer.
 
-            if parallelize:
-                k = 0 # The number of gates beyond j that are going into this layer.
-                used_qubits = set() # The qubits used in this layer.
-                while j+k < len(gatestring):
-                    
-                    # look at the j+kth gate and include in this layer
-                    gate = gatestring[j+k] # really a gate *label*
-
-                    # Label *can* have None as its .qubits, this in interpeted
-                    # to mean the label applies to all the lines.
-                    gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
-                    
-                    if len(used_qubits.intersection(gate_qubits)) > 0:
-                        break # `gate` can't fit in this layer
-                        
-                    layer.append(gate)
-                    used_qubits.update(gate_qubits)                    
-                        
-                    # look at the next gate in the list, which will be
-                    # added to the layer if it does not act on any qubits
-                    # with a gate already in this layer
-                    k += 1
-            else: # just add the next gate label as the next layer
-                k = 1 # The number of gates beyond j that are going into this layer.
-                gate = gatestring[j]
-                layer.append(gate)
+            #OLD TODO REMOVE (parallelization code - now rely on GateString.parallelize())
+            #  TODO - could condense this function some after this is removed
+            #if parallelize:
+            #    k = 0 # The number of gates beyond j that are going into this layer.
+            #    used_qubits = set() # The qubits used in this layer.
+            #    while j+k < len(gatestring):
+            #        
+            #        # look at the j+kth gate and include in this layer
+            #        gate = gatestring[j+k] # really a gate *label*
+            #
+            #        # Label *can* have None as its .qubits, this in interpeted
+            #        # to mean the label applies to all the lines.
+            #        gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
+            #        
+            #        if len(used_qubits.intersection(gate_qubits)) > 0:
+            #            break # `gate` can't fit in this layer
+            #            
+            #        layer.append(gate)
+            #        used_qubits.update(gate_qubits)                    
+            #            
+            #        # look at the next gate in the list, which will be
+            #        # added to the layer if it does not act on any qubits
+            #        # with a gate already in this layer
+            #        k += 1
+            #else: # just add the next gate label as the next layer
+            k = 1 # The number of gates beyond j that are going into this layer.
+            gate = gatestring[j]
+            layer.append(gate)
                 
             # Insert the layer into the circuit.
             self.insert_layer(layer,layer_number)

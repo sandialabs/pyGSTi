@@ -161,12 +161,6 @@ namespace CReps {
   |* DMEffectCRep_Computational                                               *|
   \****************************************************************************/
 
-    //class DMEffectCRep_Computational :public DMEffectCRep {
-    //public:
-    //INT nfactors;
-    //INT zvals_int;
-    //INT abs_elval;
-
   DMEffectCRep_Computational::DMEffectCRep_Computational(INT nfactors, INT zvals_int, double abs_elval, INT dim)
     :DMEffectCRep(dim)
   {
@@ -215,6 +209,28 @@ namespace CReps {
     return x & 1; // return the last bit (0 or 1)
   }
 
+
+  /****************************************************************************\
+  |* DMEffectCRep_Errgen                                                      *|
+  \****************************************************************************/
+
+  DMEffectCRep_Errgen::DMEffectCRep_Errgen(DMGateCRep* errgen_gaterep,
+					   DMEffectCRep* effect_rep,
+					   INT errgen_id, INT dim)
+    :DMEffectCRep(dim)
+  {
+    _errgen_ptr = errgen_gaterep;
+    _effect_ptr = effect_rep;
+    _errgen_id = errgen_id;
+  }
+  
+  DMEffectCRep_Errgen::~DMEffectCRep_Errgen() { }
+  
+  double DMEffectCRep_Errgen::probability(DMStateCRep* state) {
+    DMStateCRep outState(_dim);
+    _errgen_ptr->acton(state, &outState);
+    return _effect_ptr->probability(&outState);
+  }
 
 
   /****************************************************************************\
@@ -427,8 +443,8 @@ namespace CReps {
   /****************************************************************************\
   |* DMGateCRep_Composed                                                      *|
   \****************************************************************************/
-  DMGateCRep_Composed::DMGateCRep_Composed(std::vector<DMGateCRep*> factor_gate_creps)
-    :DMGateCRep(factor_gate_creps[0]->_dim),_factor_gate_creps(factor_gate_creps)
+  DMGateCRep_Composed::DMGateCRep_Composed(std::vector<DMGateCRep*> factor_gate_creps, INT dim)
+    :DMGateCRep(dim),_factor_gate_creps(factor_gate_creps)
   {
   }
   DMGateCRep_Composed::~DMGateCRep_Composed() { }
@@ -440,6 +456,12 @@ namespace CReps {
     std::size_t nfactors = _factor_gate_creps.size();
     DMStateCRep *tmp2, *tmp1 = out_state; //tmp1 already alloc'd
     DMStateCRep* t; // for swapping
+
+    //if length is 0 just copy state --> outstate
+    if(nfactors == 0) {
+      out_state->copy_from(state);
+      return out_state;
+    }
 
     //Act with first gate: output in tmp1
     _factor_gate_creps[0]->acton(state, tmp1);
@@ -727,6 +749,40 @@ namespace CReps {
     return ret;
   }
 
+  
+  /****************************************************************************	\
+  |* SVEffectCRep_Computational                                               *|
+  \****************************************************************************/
+
+  SVEffectCRep_Computational::SVEffectCRep_Computational(INT nfactors, INT zvals_int, INT dim)
+    :SVEffectCRep(dim)
+  {
+    _nfactors = nfactors;
+    _zvals_int = zvals_int;
+
+
+    _nonzero_index = 0;
+    INT base = 1 << (nfactors-1); // == pow(2,nfactors-1)
+    for(INT i=0; i < nfactors; i++) {
+      if((zvals_int >> i) & 1) // if i-th bit (i-th zval) is a 1 (it's either 0 or 1)
+	_nonzero_index += base;
+      base = base >> 1; // same as /= 2
+    }
+    
+  }
+
+  SVEffectCRep_Computational::~SVEffectCRep_Computational() { }
+
+  double SVEffectCRep_Computational::probability(SVStateCRep* state) {
+    return (double)pow(std::abs(amplitude(state)),2);
+  }
+  
+  dcomplex SVEffectCRep_Computational::amplitude(SVStateCRep* state) {
+    //There's only a single nonzero index with element == 1.0, so dotprod is trivial
+    return state->_dataptr[_nonzero_index];
+  }
+    
+
   /****************************************************************************\
   |* SVGateCRep                                                               *|
   \****************************************************************************/
@@ -937,8 +993,8 @@ namespace CReps {
   /****************************************************************************\
   |* SVGateCRep_Composed                                                      *|
   \****************************************************************************/
-  SVGateCRep_Composed::SVGateCRep_Composed(std::vector<SVGateCRep*> factor_gate_creps)
-    :SVGateCRep(factor_gate_creps[0]->_dim),_factor_gate_creps(factor_gate_creps)
+  SVGateCRep_Composed::SVGateCRep_Composed(std::vector<SVGateCRep*> factor_gate_creps, INT dim)
+    :SVGateCRep(dim),_factor_gate_creps(factor_gate_creps)
   {
   }
   SVGateCRep_Composed::~SVGateCRep_Composed() { }
@@ -950,6 +1006,12 @@ namespace CReps {
     std::size_t nfactors = _factor_gate_creps.size();
     SVStateCRep *tmp2, *tmp1 = out_state; //tmp1 already alloc'd
     SVStateCRep* t; // for swapping
+
+    //if length is 0 just copy state --> outstate
+    if(nfactors == 0) {
+      out_state->copy_from(state);
+      return out_state;
+    }
 
     //Act with first gate: output in tmp1
     _factor_gate_creps[0]->acton(state, tmp1);
@@ -1828,8 +1890,8 @@ namespace CReps {
   /****************************************************************************\
   |* SBGateCRep_Composed                                                      *|
   \****************************************************************************/
-  SBGateCRep_Composed::SBGateCRep_Composed(std::vector<SBGateCRep*> factor_gate_creps)
-    :SBGateCRep(factor_gate_creps[0]->_n),_factor_gate_creps(factor_gate_creps)
+  SBGateCRep_Composed::SBGateCRep_Composed(std::vector<SBGateCRep*> factor_gate_creps, INT n)
+    :SBGateCRep(n),_factor_gate_creps(factor_gate_creps)
   {
   }
   SBGateCRep_Composed::~SBGateCRep_Composed() { }
@@ -1839,6 +1901,12 @@ namespace CReps {
     std::size_t nfactors = _factor_gate_creps.size();
     SBStateCRep *tmp2, *tmp1 = out_state; //tmp1 already alloc'd
     SBStateCRep* t; // for swapping
+
+    //if length is 0 just copy state --> outstate
+    if(nfactors == 0) {
+      out_state->copy_from(state);
+      return out_state;
+    }
 
     //Act with first gate: output in tmp1
     _factor_gate_creps[0]->acton(state, tmp1);

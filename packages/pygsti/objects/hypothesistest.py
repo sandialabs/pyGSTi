@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import copy as _copy
+from ..tools import compattools as _compat
 
 # -- To be put back in when we allow for non-p-value pvalues --
 # def pvalue_threshold_function(hypothesisname, p, significance):
@@ -67,12 +68,12 @@ class HypothesisTest(object):
             else:
                 self.nested_hypotheses[h]=True
 
-        if isinstance(passing_graph,str):
+        if _compat.isstr(passing_graph):
             assert(passing_graph == 'Holms')
             self._initialize_to_weighted_holms_test()
 
         self.local_significance = {}
-        if isinstance(weighting,str):
+        if _compat.isstr(weighting):
             assert(weighting == 'equal')
             for h in self.hypotheses:
                 self.local_significance[h] = self.significance/len(self.hypotheses)
@@ -83,7 +84,7 @@ class HypothesisTest(object):
             for h in self.hypotheses:
                 self.local_significance[h] = significance*weighting[h]/totalweight
 
-        if isinstance(local_corrections,str): 
+        if _compat.isstr(local_corrections): 
             assert(local_corrections in ('Holms','Hochberg','Bonferroni','none','Benjamini-Hochberg')), "A local correction of `{}` is not a valid choice".format(local_corrections)
             self.local_corrections = {}
             for h in self.hypotheses:
@@ -94,7 +95,7 @@ class HypothesisTest(object):
 
         self._check_permissible()
 
-        # if is not isinstance(threshold_function,str):
+        # if is not _compat.isstr(threshold_function):
         #     raise ValueError ("Data that is not p-values is currently not supported!")
         # else:
         #     if threshold_function is not 'pvalue':
@@ -272,6 +273,9 @@ class HypothesisTest(object):
                     self.significance_tested_at[dynamic_hypotheses[0]] = significance/(i + 1)
                     del pvalues[0]
                     del dynamic_hypotheses[0]
+
+            # If no nulls rejected, the threshold is the Bonferroni threshold
+            self.pvalue_pseudothreshold[hypotheses] = significance/num_hypotheses
                     
         elif correction == 'Benjamini-Hochberg':
             print("Warning: the family-wise error rate is not being controlled! Instead the False discovery rate is being controlled")
@@ -299,6 +303,9 @@ class HypothesisTest(object):
                     del pvalues[0]
                     del dynamic_hypotheses[0]
 
+            # If no nulls rejected, the threshold is the Bonferroni threshold
+            self.pvalue_pseudothreshold[hypotheses] = significance/num_hypotheses
+
         elif correction == 'none':
             print("Warning: the family-wise error rate is not being controlled, as the correction specified for this nested hypothesis is 'none'!")
             self.pvalue_pseudothreshold[hypotheses] = significance
@@ -309,6 +316,8 @@ class HypothesisTest(object):
                    
         else: 
             raise ValueError("The choice of `{}` for the `correction` parameter is invalid.".format(correction))
+
+            
     #def any_hypotheses_rejected():
     #    assert(self.results is not None), "Test must be implemented before results can be queried!"
     #    return

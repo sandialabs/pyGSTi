@@ -23,7 +23,7 @@ def xlogy(x,y):
 
 def likelihood(pList,nList):
     """
-    Todo
+    Todo docstring
     """
     output = 1.
     for i, pVal in enumerate(pList):
@@ -32,7 +32,7 @@ def likelihood(pList,nList):
 
 def loglikelihood(pList,nList):
     """
-    Todo
+    Todo docstring
     """
     output = 0.
     for i, pVal in enumerate(pList):
@@ -41,13 +41,13 @@ def loglikelihood(pList,nList):
 
 def loglikelihoodRatioTestObj(alpha,nListList,dof):
     """
-    Todo
+    Todo docstring
     """
     return _np.abs(dof - loglikelihoodRatioTest(alpha*nListList))
 
 def loglikelihoodRatioTest(nListList):
     """
-    Todo
+    Todo docstring
     """
     nListC = _np.sum(nListList,axis=0)
     pListC = nListC / _np.float(_np.sum(nListC))
@@ -61,19 +61,19 @@ def loglikelihoodRatioTest(nListList):
 
 def pval(llrval, dof):
     """
-    Todo
+    Todo docstring
     """
     return 1 - _stats.chi2.cdf(llrval, dof)
 
 def llr_to_signed_nsigma(llrval, dof):
     """
-    Todo
+    Todo docstring
     """
     return (llrval - dof) / _np.sqrt(2*dof)
 
 def is_gatestring_allowed_by_exclusion(gate_exclusions,gatestring):
     """
-    Todo
+    Todo docstring
     """
     for gate in gate_exclusions:
         if gate in gatestring:
@@ -82,7 +82,7 @@ def is_gatestring_allowed_by_exclusion(gate_exclusions,gatestring):
 
 def is_gatestring_allowed_by_inclusion(gate_inclusions,gatestring):
     """
-    Todo
+    Todo docstring
     """
     if len(gatestring) == 0: return True # always include the empty string
     for gate in gate_inclusions:
@@ -92,13 +92,13 @@ def is_gatestring_allowed_by_inclusion(gate_inclusions,gatestring):
 
 def compute_llr_threshold(significance, dof):
     """
-    Todo
+    Todo docstring
     """
     return _scipy.stats.chi2.isf(significance,dof)
 
 def tvd(gatestring, ds0, ds1):
     """
-    Todo
+    Todo docstring
     """
 #    assert set(ds0.slIndex.keys()) == set(ds1.slIndex.keys())
 #    outcomes = ds0.slIndex.keys()
@@ -120,7 +120,7 @@ class DataComparator():
     def __init__(self, dataset_list_or_multidataset, gatestrings = 'all',
                  gate_exclusions = None, gate_inclusions = None, DS_names = None):
         """
-        Todo
+        Todo docstring
         """      
         if DS_names is not None:
             if len(DS_names) != len(dataset_list_or_multidataset):
@@ -259,7 +259,7 @@ class DataComparator():
     
     def compute_TVDs(self, verbosity=2):
         """
-        Todo
+        Todo docstring
         """
         if verbosity >= 2:
             print("Computing {}% statistically significant TVDs...".format(self.significance*100),end='')
@@ -281,7 +281,7 @@ class DataComparator():
 
     def get_TVD(self, gatestring):
         """
-        Todo
+        Todo docstring
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
         except: raise ValueError("Can only compute TVD between two datasets.")  
@@ -290,7 +290,7 @@ class DataComparator():
 
     def get_SSTVD(self, gatestring):
         """
-        Todo 
+        Todo docstring
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
         except: raise ValueError("Can only compute TVD between two datasets.")  
@@ -316,47 +316,49 @@ class DataComparator():
 
     def get_LLR(self, gatestring):
         """
-        Todo
+        Todo docstring
         """
         return self.llrs.get(gatestring)
 
     def get_LLR_pseudothreshold(self):
-
+        """
+        Todo docstring
+        """
         return self.llr_pseudothreshold
 
     def get_composite_LLR():
         """
-        Todo
+        Todo docstring
         """
         return self.composite_llr
 
     def get_composite_LLR_threshold():
         """
-        Todo
+        Todo docstring
         """
         return self.composite_llr_threshold
 
     def get_pvalue(self, gatestring):
         """
-        Todo
+        Todo docstring
         """
         return self.pVals.get(gatestring)
 
     def get_pvalue_pseudothreshold(self):
         """
-        Todo
+        Todo docstring
         """
         return self.pVal_pseudothreshold
 
     def get_composite_pvalue():
         """
-        Todo
+        Todo docstring
         """
         return self.composite_pVal
 
     def get_composite_pvalue_threshold():
         """
-        Todo
+        Todo docstring
         """
         return self.composite_pVal_threshold
 

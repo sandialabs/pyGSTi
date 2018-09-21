@@ -14,6 +14,7 @@ from ..tools import listtools as _lt
 from ..tools import compattools as _compat
 from ..objects import gatestring as _gs
 from ..objects import GateSet as _GateSet
+from ..baseobjs import Label as _Lbl
 
 def _runExpression(str_expression, myLocals):
     exec( "result = " + str_expression, {"__builtins__": None}, myLocals )
@@ -734,3 +735,103 @@ def manipulate_gatestring_list(gatestringList, sequenceRules):
         return gatestringList
     else:
         return [ manipulate_gatestring(gs, sequenceRules) for gs in gatestringList ]
+
+
+def filter_gatestrings(gatestrings, sslbls_to_keep, new_sslbls=None, drop=False):
+    """
+    Removes any labels from `gatestrings` whose state-space labels are not
+    entirely in `sslbls_to_keep`.  If a gates label's state-space labels
+    (its `.sslbls`) is `None`, then the label is retained in the returned 
+    string.
+
+    Furthermore, by specifying `new_sslbls` one can map the state-space
+    labels in `sslbls_to_keep` to new labels (useful for "re-basing" a
+    set of qubit strings.
+    
+    Parameters
+    ----------
+    gatestrings : list
+        A list of gate strings to act on.
+
+    sslbls_to_keep : list
+        A list of state space labels specifying which gate labels should 
+        be retained.
+        
+    new_sslbls : list, optional
+        If not None, a list of the same length as `sslbls_to_keep` specifying
+        a new set of state space labels to replace those in `sslbls_to_keep`.
+
+    drop : bool, optional
+        If True, then non-empty gate strings which become empty after 
+        filtering are not included in (i.e. dropped from) the returned list.
+        If False, then the returned list is always the same length as the 
+        input list.
+
+    Returns
+    -------
+    list
+        A list of GateStrings
+    """
+    if drop:
+        ret = []
+        for s in gatestrings:
+            fs = filter_gatestring(s,sslbls_to_keep,new_sslbls)
+            if len(fs) > 0 or len(s) == 0: ret.append(fs)
+        return ret
+    else: # drop == False (the easy case)
+        return [filter_gatestring(s,sslbls_to_keep,new_sslbls) for s in gatestrings]
+    
+
+def filter_gatestring(gatestring, sslbls_to_keep, new_sslbls=None):
+    """ 
+    Removes any labels from `gatestring` whose state-space labels are not
+    entirely in `sslbls_to_keep`.  If a gates label's state-space labels
+    (its `.sslbls`) is `None`, then the label is retained in the returned 
+    string.
+
+    Furthermore, by specifying `new_sslbls` one can map the state-space
+    labels in `sslbls_to_keep` to new labels (useful for "re-basing" a
+    set of qubit strings.
+    
+    Parameters
+    ----------
+    gatestring : GateString
+        The gate string to act on.
+
+    sslbls_to_keep : list
+        A list of state space labels specifying which gate labels should 
+        be retained.
+        
+    new_sslbls : list, optional
+        If not None, a list of the same length as `sslbls_to_keep` specifying
+        a new set of state space labels to replace those in `sslbls_to_keep`.
+
+    Returns
+    -------
+    GateString
+    """
+    if new_sslbls is not None:
+        sslbl_map = { old: new for old,new in zip(sslbls_to_keep,new_sslbls) }
+    else: sslbl_map = None
+
+    lbls = []
+    for lbl in gatestring:
+        sublbls = []
+        for sublbl in lbl.components:
+            if (sublbl.sslbls is None or
+                set(sublbl.sslbls).issubset(sslbls_to_keep)): # then keep this comp
+
+                if sslbl_map: # update state space labels
+                    new_sslbls = None if (sublbl.sslbls is None) else \
+                        tuple((sslbl_map[x] for x in sublbl.sslbls))
+                    sublbls.append( _Lbl(sublbl.name, new_sslbls) )
+                else: # leave labels as-is
+                    sublbls.append(sublbl)
+
+        if len(sublbls) > 0:
+            if len(sublbls) == 1: # necessary?
+                lbls.append(sublbls[0])
+            else:
+                lbls.append(sublbls)
+
+    return _gs.GateString(lbls)

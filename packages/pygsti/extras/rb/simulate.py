@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 from ...tools import symplectic as _symp
+from ...baseobjs.label import Label as _Lbl
 from . import sample as _samp
 from . import results as _res
 
@@ -363,6 +364,19 @@ def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, 
     n = pspec.number_of_qubits
 
     errormodel = {}
+
+    if pspec.models['clifford'].auto_idle_gatename is not None:
+        #Added by EGN: special behavior needed when GateSet has
+        # an gate name used to designate a perfect 1-qubit idle op (used as placeholder).
+        # This translates to a set of "<gatename>:X" gate labels all w/idle_errorrate
+        nQubits = int(round(_np.log2(pspec.models['clifford'].dim)))
+        idleLbl = pspec.models['clifford'].auto_idle_gatename
+        for q in pspec.qubit_labels:
+            gl = _Lbl(idleLbl,q)
+            errormodel[gl] = _np.zeros((n,4),float)
+            errormodel[gl][:,0] = _np.ones(n,float)
+            errormodel[gl][pspec.qubit_labels.index(q),:] =  error_row(idle_errorrate)
+
     for gate in list(pspec.models['clifford'].gates.keys()):
         errormodel[gate] = _np.zeros((n,4),float)
         errormodel[gate][:,0] = _np.ones(n,float)
@@ -444,6 +458,20 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
     n = pspec.number_of_qubits
 
     errormodel = {}
+
+    if pspec.models['clifford'].auto_idle_gatename is not None:
+        #Added by EGN: special behavior needed when GateSet has
+        # an gate name used to designate a perfect 1-qubit idle op (used as placeholder).
+        # This translates to a set of "<gatename>:X" gate labels all w/appropriate errorrate
+        nQubits = int(round(_np.log2(pspec.models['clifford'].dim)))
+        idleLbl = pspec.models['clifford'].auto_idle_gatename
+        for q in pspec.qubit_labels:
+            gl = _Lbl(idleLbl,q)
+            er = gate_errorrate_dict[q]
+            errormodel[gl] = _np.zeros((n,4),float)
+            errormodel[gl][:,0] = _np.ones(n,float)
+            errormodel[gl][pspec.qubit_labels.index(q),:] =  error_row(er)
+
     for gate in list(pspec.models['clifford'].gates.keys()):
         errormodel[gate] = _np.zeros((n,4),float)
         errormodel[gate][:,0] = _np.ones(n,float)

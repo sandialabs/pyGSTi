@@ -82,29 +82,6 @@ class GateMapCalc(GateCalc):
         """ Return a shallow copy of this GateMatrixCalc """
         return GateMapCalc(self.dim, self.gates, self.preps,
                               self.effects, self.paramvec, self.autogator)
-
-
-    #UNUSED TODO REMOVE
-    #Same as GateMatrixCalc, but not general enough to be in base class
-    #def _rhoE_from_spamTuple(self, spamTuple):
-    #    assert( len(spamTuple) == 2 )
-    #    if isinstance(spamTuple[0],_Label): 
-    #        rholabel,elabel = spamTuple
-    #        if self.evotype in ("densitymx","statevec"):  # FUTURE: use enum (make sure it's supported in Python2.7?)
-    #            typ = complex if self.evotype == "statevec" else 'd'
-    #            scratch = _np.empty(self.preps[rholabel].dim, typ) # allocate local scratch
-    #            rho = self.preps[rholabel].todense(scratch).copy() # copy b/c use scratch again (next line)
-    #            E   = _np.conjugate(_np.transpose(self.effects[elabel].todense(scratch)))
-    #        else: # CLIFFORD
-    #            rho = self.preps[rholabel].todense()
-    #            E = self.effects[elabel] # just return raw effect object
-    #    else:
-    #        # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
-    #        #  objects: (prepVec, effectVec)
-    #        rho, Eraw = spamTuple
-    #        E   = _np.conjugate(_np.transpose(Eraw))
-    #    return rho,E
-    #
     
     def _rhoEs_from_labels(self, rholabel, elabels):
         """ Returns SPAMVec *objects*, so must call .todense() later """
@@ -112,100 +89,6 @@ class GateMapCalc(GateCalc):
         Es = [ self.effects[elabel] for elabel in elabels ]
         #No support for "custom" spamlabel stuff here
         return rho,Es
-
-    #OLD: TODO REMOVE
-    #def propagate_state(self, rho, gatestring):
-    #    """ 
-    #    State propagation by GateMap objects which have 'acton'
-    #    methods.  This function could easily be overridden to 
-    #    perform some more sophisticated state propagation
-    #    (i.e. Monte Carlo) in the future.
-    #
-    #    Parameters
-    #    ----------
-    #    rho : SPAMVec
-    #       The spam vector representing the initial state.
-    #
-    #    gatestring : GateString or tuple
-    #       A tuple of labels specifying the gate sequence to apply.
-    #
-    #    Returns
-    #    -------
-    #    SPAMVec
-    #    """
-    #    #from .label import Label #DEBUG
-    #    #print("INIT: \n",rho) #DEBUG
-    #    for lbl in gatestring:
-    #        rho = self.gates[lbl].acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
-    #        #print("AFTER %s: \n" % str(lbl),rho) #DEBUG HERE
-    #    return rho
-
-
-    #TODO REMOVE (UNUSED)
-    #def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
-    #    """
-    #    Compute probability of a single "outcome" (spam-tuple) for a single
-    #    gate string.
-    #
-    #    Parameters
-    #    ----------
-    #    spamTuple : (rho_label, compiled_effect_label)
-    #        Specifies the prep and POVM effect used to compute the probability.
-    #
-    #    gatestring : GateString or tuple
-    #        A tuple-like object of *compiled* gates (e.g. may include
-    #        instrument elements like 'Imyinst_0')
-    #
-    #    clipTo : 2-tuple
-    #      (min,max) to clip returned probability to if not None.
-    #      Only relevant when prMxToFill is not None.
-    #
-    #    bUseScaling : bool, optional
-    #      Whether to use a post-scaled product internally.  If False, this
-    #      routine will run slightly faster, but with a chance that the
-    #      product will overflow and the subsequent trace operation will
-    #      yield nan as the returned probability.
-    #
-    #    Returns
-    #    -------
-    #    probability: float
-    #    """
-    #    rholabel,elabel = spamTuple # can't handle custom rho/e -- this seems ok...
-    #    rhorep = self.preps[rholabel].torep('prep')
-    #    erep = self.effects[elabel].torep('effect')
-    #    rhorep = replib.propagate_staterep(rhorep, [self._getgate(gl).torep() for gl in gatestring])
-    #    p = erep.probability(rhorep) #outcome probability
-    #
-    #    #OLD DEPRECATED REPS TODO REMOVE
-    #    #rho,E = self._rhoE_from_spamTuple(spamTuple)
-    #    #rho = self.propagate_state(rho, gatestring)
-    #    ## DEBUG print( " - state = ", rho.s)
-    #    ## DEBUG print( "         = ", rho.ps)
-    #    ## DEBUG print( "         = ", rho.a)
-    #    #if self.evotype == "statevec":
-    #    #    p_old = float(abs(_np.dot(E,rho))**2)
-    #    #elif self.evotype == "densitymx":
-    #    #    p_old = float(_np.dot(E,rho))
-    #    #else: # evotype == "stabilizer"
-    #    #    #print("MEASURE!!")
-    #    #    p_old = rho.measurement_probability(E.outcomes)
-    #    #    #a_old = rho.extract_amplitude(E.outcomes)
-    #    #    # DEBUG print("AMP DEBUG COMP = ",amp,a_old)
-    #    #    #assert(_np.isclose(amp,a_old)),"New code is giving a different amplitude result!"
-    #    #if not (_np.isnan(p) and _np.isnan(p_old)):
-    #    #    assert(_np.isclose(p,p_old)),"New code is giving a different result!"
-    #
-    #    if _np.isnan(p):
-    #        if len(gatestring) < 10:
-    #            strToPrint = str(gatestring)
-    #        else:
-    #            strToPrint = str(gatestring[0:10]) + " ... (len %d)" % len(gatestring)
-    #        _warnings.warn("pr(%s) == nan" % strToPrint)
-    #
-    #    if clipTo is not None:
-    #        return _np.clip(p,clipTo[0],clipTo[1])
-    #    else: return p
-
         
     def prs(self, rholabel, elabels, gatestring, clipTo, bUseScaling=False):
         """
