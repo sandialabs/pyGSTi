@@ -8,25 +8,39 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 from . import objects as _obj
+from ... import objects as _pygobjs
 import pcalg
 from gsq.ci_tests import ci_test_dis
+import collections
 
-def do_basic_crosstalk_detection(ds, number_of_qubits, settings, confidence=0.95, verbosity=1, name=None):
+def flatten(l):
+    """
+    Flattens an irregualr list.
+    From https://stackoverflow.com/questions/2158395/flatten-an-irregular-list-of-lists
+    """
+    for el in l:
+        if isinstance(el, collections.Iterable) and not isinstance(el, (str, bytes)):
+            yield from flatten(el)
+        else:
+            yield el
+
+def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.95, verbosity=1, name=None):
     """
     Implements crosstalk detection on multiqubit data (fine-grained data with entries for each experiment).
     
     Parameters
     ----------
     ds : pyGSTi DataSet or numpy array
-        The multiqubit data to analyze. If this is a DataSet it should contain fine-grained (or time series)
-        data (rather than, e.g., a total counts per-outcome per-GateString). If this is a
-        numpy array, it must again contain time series data and it may be 2-dimensional with each entry being 
-        a sequence of settings and measurment outcomes for each qubit. The first n entries are the outcomes 
-        and the following entries are settings.
+        The multiqubit data to analyze. If this is a numpy array, it must contain time series data and it must 
+        be 2-dimensional with each entry being a sequence of settings and measurment outcomes for each qubit region. 
+        A region is a set of one or more qubits and crosstalk is assessed between regions. The first n entries are 
+        the outcomes and the following entries are settings.
 
-    number_of_qubits: int, number of qubits in experiment
+    number_of_regions: int, number of regions in experiment
     
-    settings: list of length number_of_qubits, indicating the number of settings for each qubit  
+    settings: list of length number_of_regions, indicating the number of settings for each qubit region. Must be specified 
+    if input is an array. If input is a pyGSTi DataSet, this argument is ignored since the number of settings is 
+    extracted from the DataSet object.
     
     confidence : float, optional
     
@@ -37,16 +51,15 @@ def do_basic_crosstalk_detection(ds, number_of_qubits, settings, confidence=0.95
     Returns
     -------
     results : CrosstalkResults object
-        The results of the crosstalk detection analysis. This contains: output skeleton graph PC Algorithm indicating
-        qubits with detected crosstalk, all of the input information.
+        The results of the crosstalk detection analysis. This contains: output skeleton graph and DAG from 
+        PC Algorithm indicating regions with detected crosstalk, all of the input information.
 
     """    
     # -------------------------- #
     # Format and check the input #
     # -------------------------- #
-    
-    if True :
-    # TODO type(ds) != _objs.dataset.DataSet:
+
+    if type(ds) != _pygobjs.dataset.DataSet:
     
         data_shape = _np.shape(ds)
         settings_shape = _np.shape(settings)
@@ -55,24 +68,67 @@ def do_basic_crosstalk_detection(ds, number_of_qubits, settings, confidence=0.95
         assert(len(data_shape) == 2), \
         "Input data format is incorrect!If the input is a numpy array it must be 2-dimensional."
         
-        # Check that settings is a list of length number_of_qubits
-        assert( (len(settings_shape) == 1) and (settings_shape[0] == number_of_qubits) )
-        "settings should be a list of the same length as number_of_qubits."
+        # Check that settings is a list of length number_of_regions
+        assert( (len(settings_shape) == 1) and (settings_shape[0] == number_of_regions) )
+        "settings should be a list of the same length as number_of_regions."
         
         # The number of columns in the data must be consistent with the number of settings
-        assert( data_shape[1] == (sum(settings) + number_of_qubits) )
-        "Mismatch between the number of settings specified for each qubit and the number of columns in data"
+        assert( data_shape[1] == (sum(settings) + number_of_regions) )
+        "Mismatch between the number of settings specified for each region and the number of columns in data"
         
         data = ds
         num_data = data_shape[0]
         num_columns = data_shape[1]
         
     # This converts a DataSet to an array, as the code below uses arrays 
-    if False :
-    #TODO type(ds) == _objs.dataset.DataSet:
-        print("Error: crosstalk analysis currently does not support input specificed as DataSet")
-        return
+    if type(ds) == _pygobjs.dataset.DataSet:
+
+        gs = ds.keys()[0]
+        temp = ds.auxInfo[gs]['settings']
+        num_settings = len(temp)
         
+        assert( num_settings == number_of_regions )
+        "The number of settings per experiment must be the same as the number_of_regions"
+
+        num_columns = 2*num_settings
+        num_data = len(ds.keys())
+
+        data = []
+        collect_settings = {key: [] for key in range(num_settings)}
+        for row in range(num_data):
+            gs = ds.keys()[row]
+
+            templine_set = [0]*num_settings
+            settings_row = ds.auxInfo[gs]['settings']
+
+            for key in settings_row:
+                if len(key)==1: # single region/qubit gate
+                    templine_set[key[0]]=settings_row[key]
+                    collect_settings[key[0]].append(settings_row[key])
+                else: # two-region/two-qubit gate
+                    print("Two qubit gate, not sure what to do!!")  #TODO
+                    return
+            
+            outcomes_row = ds[gs]
+            for outcome in outcomes_row:
+                templine_out = [0]*num_settings
+
+                for r in range(num_settings):
+                    templine_out[r] = int(outcome[0][r])  
+                num_rep = int(outcome[2])
+
+                templine_out.append(templine_set)
+                flattened_line = list(flatten(templine_out))
+
+                for r in range(num_rep):
+                    data.append(flattened_line)
+
+
+        num_seqs = [len(set(collect_settings[i])) for i in range(num_settings)]
+        settings = [1,1] # assumes only 1 setting for each region, which is the applied gate sequence
+        data = _np.asarray(data)
+
+
     # --------------------------------------------------------- #
     # Prepare a results object, and store the input information #
     # --------------------------------------------------------- #
@@ -83,7 +139,7 @@ def do_basic_crosstalk_detection(ds, number_of_qubits, settings, confidence=0.95
     # Records input information into the results object.
     results.name = name
     results.data = data
-    results.number_of_qubits = number_of_qubits
+    results.number_of_regions = number_of_regions
     results.settings = settings
     results.number_of_datapoints = num_data
     results.number_of_columns = num_columns
@@ -92,38 +148,44 @@ def do_basic_crosstalk_detection(ds, number_of_qubits, settings, confidence=0.95
     # ------------------------------------------------- #
     #     Calculate the causal graph skeleton           #
     # ------------------------------------------------- #
-       
+    
+    # List edges between settings so that these can be ignored when constructing skeleton
+    ignore_edges = []
+    for set1 in range(number_of_regions, num_columns) :
+        for set2 in range(number_of_regions, num_columns) :
+            if set1 > set2:
+                ignore_edges.append((set1,set2))
+
     print("Calculating causal graph skeleton ...")
-    (skel,sep_set) = pcalg.estimate_skeleton(ci_test_dis, data, 1-confidence)
+    (skel,sep_set) = pcalg.estimate_skeleton(ci_test_dis, data, 1-confidence, ignore_edges)
     
     print("Calculating directed causal graph ...")
     g = pcalg.estimate_cpdag(skel_graph=skel, sep_set=sep_set)
-    # TODO: explicitly exclude edges between settings
     
     # Store skeleton and graph in results object
     results.skel = skel
     results.sep_set = sep_set
     results.graph = g
     
-    # Calculate the column index for the first setting for each qubit
-    setting_indices = {x: number_of_qubits+sum(settings[:x]) for x in range(number_of_qubits) };
+    # Calculate the column index for the first setting for each region
+    setting_indices = {x: number_of_regions+sum(settings[:x]) for x in range(number_of_regions) };
     results.setting_indices = setting_indices
 
     node_labels = {}
     cnt=0
     for col in range(num_columns) :
-        if col < number_of_qubits :
+        if col < number_of_regions :
             node_labels[cnt] = r'$%d^O$' % col
             cnt += 1
 #            node_labels.append("$%d^O$" % col)
         else :
-            for qubit in range(number_of_qubits):
-                if col in range(setting_indices[qubit],
-                                 (setting_indices[(qubit + 1)] if qubit < (number_of_qubits - 1) else num_columns)):
+            for region in range(number_of_regions):
+                if col in range(setting_indices[region],
+                                 (setting_indices[(region + 1)] if region < (number_of_regions - 1) else num_columns)):
                     break
-            node_labels[cnt] = r'$%d^S_{%d}$' % (qubit, (col-setting_indices[qubit]+1))
+            node_labels[cnt] = r'$%d^S_{%d}$' % (region, (col-setting_indices[region]+1))
             cnt += 1
-            #node_labels.append("%d^S_{%d}$" % (qubit, (col-setting_indices[qubit]+1)))
+            #node_labels.append("%d^S_{%d}$" % (region, (col-setting_indices[region]+1)))
 
     results.node_labels = node_labels
 
@@ -131,7 +193,7 @@ def do_basic_crosstalk_detection(ds, number_of_qubits, settings, confidence=0.95
     # destination variable when source variable is varied.
     print("Examining edges for crosstalk ...")
     
-    cmatrix = _np.zeros((number_of_qubits, number_of_qubits))
+    cmatrix = _np.zeros((number_of_regions, number_of_regions))
     edge_weights = _np.zeros(len(g.edges()))
     is_edge_ct = _np.zeros(len(g.edges()))
     edge_tvds = {}
@@ -145,30 +207,30 @@ def do_basic_crosstalk_detection(ds, number_of_qubits, settings, confidence=0.95
 
         # For each edge, decide if it represents crosstalk
         #   Crosstalk is:
-        #       (1) an edge between outcomes on different qubits
-        #       (2) an edge between a qubit's outcome and a setting of another qubit
-        if source < number_of_qubits and dest < number_of_qubits :
+        #       (1) an edge between outcomes on different regions
+        #       (2) an edge between a region's outcome and a setting of another region
+        if source < number_of_regions and dest < number_of_regions :
             cmatrix[source, dest] = 1
             is_edge_ct[idx] = 1
-            print("Crosstalk detected. Qubits " + str(source) + " and " + str(dest))
+            print("Crosstalk detected. Regions " + str(source) + " and " + str(dest))
         
-        if source < number_of_qubits and dest >= number_of_qubits :
-            if dest not in range(setting_indices[source], (setting_indices[(source+1)] if source<(number_of_qubits-1) else num_columns)) :
-                for qubit in range(number_of_qubits) :
-                    if dest in range(setting_indices[qubit], (setting_indices[(qubit+1)] if qubit<(number_of_qubits-1) else num_columns)) :
+        if source < number_of_regions and dest >= number_of_regions :
+            if dest not in range(setting_indices[source], (setting_indices[(source+1)] if source<(number_of_regions-1) else num_columns)) :
+                for region in range(number_of_regions) :
+                    if dest in range(setting_indices[region], (setting_indices[(region+1)] if region<(number_of_regions-1) else num_columns)) :
                         break    
-                cmatrix[source, qubit] = 1
+                cmatrix[source, region] = 1
                 is_edge_ct[idx] = 1
-                print("Crosstalk detected. Qubits " + str(source) + " and " + str(qubit))
+                print("Crosstalk detected. Regions " + str(source) + " and " + str(region))
                 
-        if source >= number_of_qubits and dest < number_of_qubits :
-            if source not in range(setting_indices[dest], (setting_indices[(dest+1)] if dest<(number_of_qubits-1) else num_columns)) :
-                for qubit in range(number_of_qubits) :
-                    if source in range(setting_indices[qubit], (setting_indices[(qubit+1)] if qubit<(number_of_qubits-1) else num_columns)) :
+        if source >= number_of_regions and dest < number_of_regions :
+            if source not in range(setting_indices[dest], (setting_indices[(dest+1)] if dest<(number_of_regions-1) else num_columns)) :
+                for region in range(number_of_regions) :
+                    if source in range(setting_indices[region], (setting_indices[(region+1)] if region<(number_of_regions-1) else num_columns)) :
                         break
-                cmatrix[qubit, dest] = 1
+                cmatrix[region, dest] = 1
                 is_edge_ct[idx] = 1
-                print("Crosstalk detected. Qubits " + str(qubit) + " and " + str(dest))
+                print("Crosstalk detected. Regions " + str(region) + " and " + str(dest))
 
         # For each edge in causal graph that represents crosstalk, calculate the TVD between distributions of dependent
         # variable when other variable is varied

@@ -18,7 +18,7 @@ class CrosstalkResults(object):
         
         self.name = None
         self.data = None
-        self.number_of_qubits = None
+        self.number_of_regions = None
         self.settings = None
         self.number_of_datapoints = None
         self.number_of_columns = None
@@ -71,7 +71,7 @@ class CrosstalkResults(object):
         # fig.add_subplot(ax1)
         # fig.add_subplot(ax2)
 
-        fig, (ax1, ax2) = _plt.subplots(1,2,figsize=(sum(self.settings)+self.number_of_qubits+6, self.number_of_qubits+4))
+        fig, (ax1, ax2) = _plt.subplots(1,2,figsize=(sum(self.settings)+self.number_of_regions+6, self.number_of_regions+4))
         fig.subplots_adjust(wspace=2, hspace=2)
 
         if self.name is not None:
@@ -83,41 +83,41 @@ class CrosstalkResults(object):
         kwargs = dict(
             origin='lower', interpolation='nearest', vmin=0, vmax=1, aspect='equal', cmap='YlOrBr')
 
-        settings_and_qubits = _np.zeros((sum(self.settings), self.number_of_qubits))
-        qubits_and_qubits = _np.zeros((self.number_of_qubits, self.number_of_qubits))
+        settings_and_regions = _np.zeros((sum(self.settings), self.number_of_regions))
+        regions_and_regions = _np.zeros((self.number_of_regions, self.number_of_regions))
 
         for idx, edge in enumerate(self.graph.edges()) :
             source = edge[0]
             dest = edge[1]
 
             # edge between two outcomes
-            if source < self.number_of_qubits and dest < self.number_of_qubits:
-                qubits_and_qubits[source, dest] = _np.max(self.edge_tvds[idx])
+            if source < self.number_of_regions and dest < self.number_of_regions:
+                regions_and_regions[source, dest] = _np.max(self.edge_tvds[idx])
 
             # edge between an outcome and a setting
-            if source < self.number_of_qubits and dest >= self.number_of_qubits:
-                if dest not in range(self.setting_indices[source], (self.setting_indices[(source + 1)] if source < (self.number_of_qubits - 1) else self.number_of_columns)):
-                    settings_and_qubits[dest-self.number_of_qubits, source] = _np.max(self.edge_tvds[idx])
+            if source < self.number_of_regions and dest >= self.number_of_regions:
+                if dest not in range(self.setting_indices[source], (self.setting_indices[(source + 1)] if source < (self.number_of_regions - 1) else self.number_of_columns)):
+                    settings_and_regions[dest-self.number_of_regions, source] = _np.max(self.edge_tvds[idx])
 
             # edge between an outcome and a setting
-            if source >= self.number_of_qubits and dest < self.number_of_qubits:
-                if source not in range(self.setting_indices[dest], (self.setting_indices[(dest + 1)] if dest < (self.number_of_qubits - 1) else self.number_of_columns)):
-                    settings_and_qubits[source-self.number_of_qubits, dest] = _np.max(self.edge_tvds[idx])
+            if source >= self.number_of_regions and dest < self.number_of_regions:
+                if source not in range(self.setting_indices[dest], (self.setting_indices[(dest + 1)] if dest < (self.number_of_regions - 1) else self.number_of_columns)):
+                    settings_and_regions[source-self.number_of_regions, dest] = _np.max(self.edge_tvds[idx])
 
-        ax1.imshow(settings_and_qubits, **kwargs)
+        ax1.imshow(settings_and_regions, **kwargs)
         _plt.setp(ax1, xticks=_np.arange(0, sum(self.settings), 1),
-                 xticklabels= [self.node_labels[k] for k in range(self.number_of_qubits,self.number_of_columns)],
-                 yticks=_np.arange(0, self.number_of_qubits, 1),
-                 yticklabels=_np.arange(0, self.number_of_qubits, 1).astype('str'))
+                 xticklabels= [self.node_labels[k] for k in range(self.number_of_regions,self.number_of_columns)],
+                 yticks=_np.arange(0, self.number_of_regions, 1),
+                 yticklabels=_np.arange(0, self.number_of_regions, 1).astype('str'))
 
 
-        dividers = [sum(self.settings[:k])-0.5 for k in range(1,self.number_of_qubits)]
+        dividers = [sum(self.settings[:k])-0.5 for k in range(1,self.number_of_regions)]
         for i in range(len(dividers)) :
             ax1.axvline(dividers[i], color='k')
 
         ax1.set_xlabel('Settings')
-        ax1.set_ylabel('Qubit outcomes')
-        ax1.set_title('Crosstalk between qubit outcomes and settings')
+        ax1.set_ylabel('Region outcomes')
+        ax1.set_title('Crosstalk between Region outcomes and settings')
 
   #       ax1a = ax1.twiny()
   #       offset = 0, -25  # Position of the second axis
@@ -132,14 +132,14 @@ class CrosstalkResults(object):
   #       ax1a.xaxis.set_minor_locator(ticker.FixedLocator([0.3, 0.8]))
   #       ax1a.xaxis.set_minor_formatter(ticker.FixedFormatter(['mammal', 'reptiles']))
 
-        im = ax2.imshow(qubits_and_qubits, **kwargs)
-        _plt.setp(ax2, xticks=_np.arange(0, self.number_of_qubits, 1),
-                 xticklabels=_np.arange(0, self.number_of_qubits, 1).astype('str'),
-                 yticks=_np.arange(0, self.number_of_qubits, 1),
-                 yticklabels=_np.arange(0, self.number_of_qubits, 1).astype('str'))
-        ax2.set_xlabel('Qubit outcomes')
-        ax2.set_ylabel('Qubit outcomes')
-        ax2.set_title('Crosstalk between qubit outcomes')
+        im = ax2.imshow(regions_and_regions, **kwargs)
+        _plt.setp(ax2, xticks=_np.arange(0, self.number_of_regions, 1),
+                 xticklabels=_np.arange(0, self.number_of_regions, 1).astype('str'),
+                 yticks=_np.arange(0, self.number_of_regions, 1),
+                 yticklabels=_np.arange(0, self.number_of_regions, 1).astype('str'))
+        ax2.set_xlabel('Region outcomes')
+        ax2.set_ylabel('Region outcomes')
+        ax2.set_title('Crosstalk between Region outcomes')
 
 
         divider = make_axes_locatable(ax2)
@@ -177,26 +177,26 @@ class CrosstalkResults(object):
         G = self.graph
         pos = {}
         # settings are distributed along y=1 line
-        pos.update( (n, (n-self.number_of_qubits, 1)) for n in range(self.number_of_qubits, self.number_of_columns) )
+        pos.update( (n, (n-self.number_of_regions, 1)) for n in range(self.number_of_regions, self.number_of_columns) )
 
         # results are distributed along y=3 line
-        for qubit in range(self.number_of_qubits) :
-            num_settings_before = sum(self.settings[0:qubit])
-            num_settings = self.settings[qubit]
+        for region in range(self.number_of_regions) :
+            num_settings_before = sum(self.settings[0:region])
+            num_settings = self.settings[region]
 
             if num_settings == 1 :
-                pos.update( {qubit: (num_settings_before, 3)} )
+                pos.update( {region: (num_settings_before, 3)} )
             else :
-                pos.update( {qubit: (num_settings_before + (num_settings-1)/2, 3)} )
+                pos.update( {region: (num_settings_before + (num_settings-1)/2, 3)} )
 
         # node colors
         settings_color = 'xkcd:light grey'
         outcomes_color = 'xkcd:light violet'
 
         # draw graph nodes
-        _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_qubits), node_size=1000,
+        _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions), node_size=1000,
                                 node_color=outcomes_color, node_shape='o',alpha=0.4)
-        _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_qubits, self.number_of_columns), node_size=1000,
+        _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions, self.number_of_columns), node_size=1000,
                                 node_color=settings_color, node_shape='s',alpha=0.4)
 
         label_posns = self.get_offset_label_posns(pos)
@@ -222,6 +222,77 @@ class CrosstalkResults(object):
             _plt.savefig(savepath)
         else:
             _plt.show()
+
+    def plot_crosstalk_skeleton(self, savepath=None):
+        """
+
+        """
+
+        try:
+            import networkx as _nx
+        except ImportError:
+            raise ValueError("plot_crosstalk_graph(...) requires you to install networkx")
+
+        try:
+            import matplotlib.pyplot as _plt
+        except ImportError:
+            raise ValueError("plot_crosstalk_graph(...) requires you to install matplotlib")
+        _plt.figure(figsize=(sum(self.settings)+2,6))
+
+        if self.name is not None:
+            title = 'Crosstalk skeleton for dataset ' + self.name + '. Confidence level ' + str(self.confidence)
+        else:
+            title = 'Crosstalk skeleton for dataset. Confidence level ' + str(self.confidence)
+
+        # set positions for each node in graph
+        G = self.skel
+        pos = {}
+        # settings are distributed along y=1 line
+        pos.update( (n, (n-self.number_of_regions, 1)) for n in range(self.number_of_regions, self.number_of_columns) )
+
+        # results are distributed along y=3 line
+        for region in range(self.number_of_regions) :
+            num_settings_before = sum(self.settings[0:region])
+            num_settings = self.settings[region]
+
+            if num_settings == 1 :
+                pos.update( {region: (num_settings_before, 3)} )
+            else :
+                pos.update( {region: (num_settings_before + (num_settings-1)/2, 3)} )
+
+        # node colors
+        settings_color = 'xkcd:light grey'
+        outcomes_color = 'xkcd:light violet'
+
+        # draw graph nodes
+        _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions), node_size=1000,
+                                node_color=outcomes_color, node_shape='o',alpha=0.4)
+        _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions, self.number_of_columns), node_size=1000,
+                                node_color=settings_color, node_shape='s',alpha=0.4)
+
+        label_posns = self.get_offset_label_posns(pos)
+
+        _nx.draw_networkx_labels(G, pos=label_posns, labels=self.node_labels)
+
+        float_formatter = lambda x: "%.4f" % x
+
+        # draw graph edge, with ones indicating crosstalk in red
+        for idx, edge in enumerate(self.graph.edges()) :
+            if self.is_edge_ct[idx] :
+                _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='r')
+                label = {}
+                label[edge] = float_formatter(_np.max(self.edge_tvds[idx]) )
+                _nx.draw_networkx_edge_labels(G,pos,edge_labels=label)
+            else :
+                _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='b')
+
+        _plt.title(title, fontsize=17)
+        _plt.axis('off')
+
+        if savepath is not None:
+            _plt.savefig(savepath)
+        else:
+            _plt.show()        
 
     def get_offset_label_posns(self, pos):
         """
