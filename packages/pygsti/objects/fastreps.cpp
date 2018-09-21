@@ -443,8 +443,8 @@ namespace CReps {
   /****************************************************************************\
   |* DMGateCRep_Composed                                                      *|
   \****************************************************************************/
-  DMGateCRep_Composed::DMGateCRep_Composed(std::vector<DMGateCRep*> factor_gate_creps)
-    :DMGateCRep(factor_gate_creps[0]->_dim),_factor_gate_creps(factor_gate_creps)
+  DMGateCRep_Composed::DMGateCRep_Composed(std::vector<DMGateCRep*> factor_gate_creps, INT dim)
+    :DMGateCRep(dim),_factor_gate_creps(factor_gate_creps)
   {
   }
   DMGateCRep_Composed::~DMGateCRep_Composed() { }
@@ -456,6 +456,12 @@ namespace CReps {
     std::size_t nfactors = _factor_gate_creps.size();
     DMStateCRep *tmp2, *tmp1 = out_state; //tmp1 already alloc'd
     DMStateCRep* t; // for swapping
+
+    //if length is 0 just copy state --> outstate
+    if(nfactors == 0) {
+      out_state->copy_from(state);
+      return out_state;
+    }
 
     //Act with first gate: output in tmp1
     _factor_gate_creps[0]->acton(state, tmp1);
@@ -987,8 +993,8 @@ namespace CReps {
   /****************************************************************************\
   |* SVGateCRep_Composed                                                      *|
   \****************************************************************************/
-  SVGateCRep_Composed::SVGateCRep_Composed(std::vector<SVGateCRep*> factor_gate_creps)
-    :SVGateCRep(factor_gate_creps[0]->_dim),_factor_gate_creps(factor_gate_creps)
+  SVGateCRep_Composed::SVGateCRep_Composed(std::vector<SVGateCRep*> factor_gate_creps, INT dim)
+    :SVGateCRep(dim),_factor_gate_creps(factor_gate_creps)
   {
   }
   SVGateCRep_Composed::~SVGateCRep_Composed() { }
@@ -1000,6 +1006,12 @@ namespace CReps {
     std::size_t nfactors = _factor_gate_creps.size();
     SVStateCRep *tmp2, *tmp1 = out_state; //tmp1 already alloc'd
     SVStateCRep* t; // for swapping
+
+    //if length is 0 just copy state --> outstate
+    if(nfactors == 0) {
+      out_state->copy_from(state);
+      return out_state;
+    }
 
     //Act with first gate: output in tmp1
     _factor_gate_creps[0]->acton(state, tmp1);
@@ -1878,8 +1890,8 @@ namespace CReps {
   /****************************************************************************\
   |* SBGateCRep_Composed                                                      *|
   \****************************************************************************/
-  SBGateCRep_Composed::SBGateCRep_Composed(std::vector<SBGateCRep*> factor_gate_creps)
-    :SBGateCRep(factor_gate_creps[0]->_n),_factor_gate_creps(factor_gate_creps)
+  SBGateCRep_Composed::SBGateCRep_Composed(std::vector<SBGateCRep*> factor_gate_creps, INT n)
+    :SBGateCRep(n),_factor_gate_creps(factor_gate_creps)
   {
   }
   SBGateCRep_Composed::~SBGateCRep_Composed() { }
@@ -1889,6 +1901,12 @@ namespace CReps {
     std::size_t nfactors = _factor_gate_creps.size();
     SBStateCRep *tmp2, *tmp1 = out_state; //tmp1 already alloc'd
     SBStateCRep* t; // for swapping
+
+    //if length is 0 just copy state --> outstate
+    if(nfactors == 0) {
+      out_state->copy_from(state);
+      return out_state;
+    }
 
     //Act with first gate: output in tmp1
     _factor_gate_creps[0]->acton(state, tmp1);

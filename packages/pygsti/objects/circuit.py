@@ -161,8 +161,8 @@ class Circuit(_gstr.GateString):
                 actson = lbl.qubits if (lbl.qubits is not None) else self.line_labels # None == "all lines"
                 processed_lines.update(actson)
 
-            if len(layer_list) > 0:
-                label_list.append( _Label(layer_list) )
+            #OLD: if len(layer_list) > 0:
+            label_list.append( _Label(layer_list) ) # OK even if layer_list is empty
                 
         return tuple(label_list)
 

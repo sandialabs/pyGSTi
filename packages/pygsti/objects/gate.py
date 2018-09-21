@@ -3832,7 +3832,7 @@ class ComposedGateMap(Gate):
     other `Gate`s)
     """
     
-    def __init__(self, gates_to_compose):
+    def __init__(self, gates_to_compose, dim="auto"):
         """
         Creates a new ComposedGateMap.
 
@@ -3844,13 +3844,20 @@ class ComposedGateMap(Gate):
             with vectors  in  *left-to-right* ordering, maintaining the same
             convention as gate sequences in pyGSTi.  Note that this is
             *opposite* from standard matrix multiplication order.
+            
+        dim : int or "auto"
+            Dimension of this gate.  Can be set to `"auto"` to take dimension
+            from `gates_to_compose[0]` *if* there's at least one gate being
+            composed.
         """
-        assert(len(gates_to_compose) > 0), "Must compose at least one gate!"
+        assert(len(gates_to_compose) > 0 or dim != "auto"), \
+            "Must compose at least one gate when dim='auto'!"
         self.factorgates = gates_to_compose
         
-        dim = gates_to_compose[0].dim
+        if dim == "auto":
+            dim = gates_to_compose[0].dim
         assert(all([dim == gate.dim for gate in gates_to_compose])), \
-            "All gates must have the same dimension!"
+            "All gates must have the same dimension (%d expected)!" % dim
         
         Gate.__init__(self, dim, gates_to_compose[0]._evotype)
 
@@ -3991,11 +3998,12 @@ class ComposedGateMap(Gate):
         """
         factor_gate_reps = [ gate.torep() for gate in self.factorgates ]
         if self._evotype == "densitymx":
-            return replib.DMGateRep_Composed(factor_gate_reps)
+            return replib.DMGateRep_Composed(factor_gate_reps, self.dim)
         elif self._evotype == "statevec":
-            return replib.SVGateRep_Composed(factor_gate_reps)
+            return replib.SVGateRep_Composed(factor_gate_reps, self.dim)
         elif self._evotype == "stabilizer":
-            return replib.SBGateRep_Composed(factor_gate_reps)
+            nQubits = int(round(_np.log2(self.dim))) # "stabilizer" is a unitary-evolution type mode
+            return replib.SBGateRep_Composed(factor_gate_reps, nQubits)
         
         assert(False), "Invalid internal _evotype: %s" % self._evotype
 
@@ -4096,7 +4104,7 @@ class ComposedGate(ComposedGateMap,GateMatrix):
     A gate that is the composition of a number of matrix factors (possibly other gates).
     """
     
-    def __init__(self, gates_to_compose):
+    def __init__(self, gates_to_compose, dim="auto"):
         """
         Creates a new ComposedGate.
 
@@ -4108,8 +4116,13 @@ class ComposedGate(ComposedGateMap,GateMatrix):
             with vectors  in  *left-to-right* ordering, maintaining the same
             convention as gate sequences in pyGSTi.  Note that this is
             *opposite* from standard matrix multiplication order.
+
+        dim : int or "auto"
+            Dimension of this gate.  Can be set to `"auto"` to take dimension
+            from `gates_to_compose[0]` *if* there's at least one gate being
+            composed.
         """
-        ComposedGateMap.__init__(self, gates_to_compose) #sets self.dim & self._evotype
+        ComposedGateMap.__init__(self, gates_to_compose, dim) #sets self.dim & self._evotype
         GateMatrix.__init__(self, _np.identity(self.dim), self._evotype) #type doesn't matter here - just a dummy
         self._construct_matrix()
 
