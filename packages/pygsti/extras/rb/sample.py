@@ -18,6 +18,7 @@ from ...tools import compattools as _compat
 
 import numpy as _np
 import copy as _copy
+import itertools as _itertools
 
 def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgatenames='all', 
                                     twoQgatenames='all', gatesetname='clifford'):   
@@ -689,7 +690,7 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
        of importance when not using an in-built sampler).
                          
     length : int
-        The length of the circuit.
+        The length of the circuit. Todo: update for varying length in different subsets.
 
     structure : str or tuple, optional
         todo.
@@ -753,11 +754,17 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
     p_rc_dict = {}
     circuit_dict = {}
 
-    for subsetQs in structure:
+    if isinstace(length,int):
+        length_per_subset = [length for i in range(len(structure))]
+    else:
+        length_per_subset = length
+        assert(len(length) == len(structure)), "If `length` is a list it must be the same length as `structure`"
+
+    for ssQs_ind, subsetQs in enumerate(structure):
         subsetQs = tuple(subsetQs)
         # Sample a random circuit of "native gates" over this set of qubits, with the 
         # specified sampling.
-        subset_circuit = random_circuit(pspec=pspec, length=length, subsetQs=subsetQs, sampler=sampler, 
+        subset_circuit = random_circuit(pspec=pspec, length=length_per_subset[ssQs_ind], subsetQs=subsetQs, sampler=sampler, 
                                        samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs)
         circuit_dict[subsetQs] = subset_circuit
         # find the symplectic matrix / phase vector this circuit implements.
@@ -797,12 +804,8 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
        of importance when not using an in-built sampler).
                          
     lengths : int
-        The set of "direct RB lengths" for the circuits. The DRB lengths must be integers >= 0. 
-        Unless `addlocal` is True, the DRB length is the depth of the "core" random circuit, 
-        sampled according to `sampler`, specified in step (2) above. If `addlocal` is True, 
-        each layer in the "core" circuit sampled according to "sampler` is followed by a layer of 
-        1-qubit gates, with sampling specified by `lsargs` (and the first layer is proceeded by a 
-        layer of 1-qubit gates), and so the circuit of step (2) is length 2*`length` + 1.
+        Todo : update (needs to include list option)
+        The set of lengths for the circuits.
 
     circuits_per_length : int
         The number of (possibly) different circuits sampled at each length.
@@ -938,6 +941,106 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
 
             if verbosity > 0: print(j+1,end=',')
         if verbosity >0: print('')
+
+    return experiment_dict
+
+def exhaustive_independent_random_circuits_experiment(pspec, allowed_lengths, circuits_per_subset, structure='1Q', 
+                                                      sampler='Qelimination', samplerargs=[], descriptor='', verbosity=1):
+    """
+    Todo 
+
+    Parameters
+    ----------
+    pspec : ProcessorSpec
+       The ProcessorSpec for the device that the circuit is being sampled for, which defines the 
+       "native" gate-set and the connectivity of the device. The returned circuit will be over
+       the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+       is always handed to the sampler, as the first argument of the sampler function (this is only
+       of importance when not using an in-built sampler).
+                         
+    allowed_lengths :
+        Todo
+        .
+    total_circuits_per_subset : int
+        Todo
+
+    structure : str or tuple.
+        Defines the "structure" of the simultaneous circuit. TODO : more details.
+        
+    sampler : str or function, optional
+        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+        Except for 'local', this corresponds to sampling layers according to the sampling function 
+        in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+        corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates. 
+        If `sampler` is a function, it should be a function that takes as the first argument a 
+        ProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+        the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is the
+        only sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary 
+        connectivity devices. See the docstrings for each of these samplers for more information.
+    
+    samplerargs : list, optional
+        A list of arguments that are handed to the sampler function, specified by `sampler`.
+        The first argument handed to the sampler is `pspec`, the second argument is `subsetQs`,
+        and `samplerargs` lists the remaining arguments handed to the sampler. This is not
+        optional for some choices of `sampler`.
+
+    descriptor : str, optional
+        A description of the experiment being generated. Stored in the output dictionary.
+
+    Returns
+    -------
+    dict
+        
+    """    
+    experiment_dict = {}
+    experiment_dict['spec'] = {}
+    experiment_dict['spec']['allowed_lengths'] = allowed_lengths
+    experiment_dict['spec']['circuits_per_subset'] = circuits_per_subset
+    experiment_dict['spec']['sampler'] = sampler
+    experiment_dict['spec']['samplerargs'] = samplerargs
+    experiment_dict['spec']['descriptor'] = descriptor
+
+    if isinstance(structure,str):
+        assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
+        structure = tuple([(q,) for q in pspec.qubit_labels])
+        n = pspec.number_of_qubits
+    else:
+        assert(isinstance(structure,list) or isinstance(structure,tuple)), "If not a string, `structure` must be a list or tuple."
+        qubits_used = []
+        for subsetQs in structure:
+            assert(isinstance(subsetQs, list) or isinstance(subsetQs, tuple)), "SubsetQs must be a list or a tuple!"
+            qubits_used = qubits_used + list(subsetQs)
+            assert(len(set(qubits_used)) == len(qubits_used)), "The qubits in the tuples/lists of `structure must all be unique!"
+
+        assert(set(qubits_used).issubset(set(pspec.qubit_labels))), "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+        n = len(qubits_used)
+  
+    experiment_dict['spec']['structure'] = structure
+    experiment_dict['circuits'] = {}
+    experiment_dict['probs'] = {}
+
+    if circuits_per_subset**len(structure) >> 10000:
+        print("Warning: {} circuits are going to be generated by this function!".format(total_circuits_per_subset**len(structure)))
+
+    circuits = {}
+
+    for ssQs_ind, subsetQs in enumerate(structure):
+        circuits[subsetQs] = []
+        for i in range(circuits_per_subset):
+            l = allowed_lengths[_np.random.randint(len(allowed_lengths))]
+            circuits[subsetQs].append(random_circuit(pspec, l, subsetQs=subsetQs, sampler=sampler, samplerargs=samplerargs))
+
+    experiment_dict['subset_circuits'] = circuits
+
+    parallel_circuits = {}
+    it = [range(circuits_per_subset) for i in range(len(structure))]
+    for setting_comb in _itertools.product(*it):
+        pcircuit = _cir.Circuit(num_lines=0, identity=pspec.identity) 
+        for ssQs_ind, subsetQs in enumerate(structure):
+            pcircuit.tensor_circuit(circuits[subsetQs][setting_comb[ssQs_ind]])
+            parallel_circuits[setting_comb] = pcircuit
+    
+    experiment_dict['circuits'] = parallel_circuits
 
     return experiment_dict
 

@@ -594,21 +594,22 @@ class Circuit(_gstr.GateString):
         else:
             new_line_labels = self.line_labels + circuit.line_labels
 
+        incircuit = circuit.copy()
         # Make the circuits the same depth, by padding the end of whichever (if either) circuit is shorter.
-        cdepth = circuit.depth()
+        cdepth = incircuit.depth()
         sdepth = self.depth()
         if cdepth > sdepth:
             for q in range(self.number_of_lines()):
                 self.line_items[q] += [_Label(self.identity,self.line_labels[q]) for i in range(cdepth-sdepth)]
         elif cdepth < sdepth:
             for q in range(circuit.number_of_lines()):
-                circuit.line_items[q] += [_Label(circuit.identity,circuit.line_labels[q]) for i in range(sdepth-cdepth)]
+                incircuit.line_items[q] += [_Label(incircuit.identity,incircuit.line_labels[q]) for i in range(sdepth-cdepth)]
         
         self.insert_idling_wires(new_line_labels)
 
-        for llabel in circuit.line_labels:
+        for llabel in incircuit.line_labels:
             lindex = self.line_labels.index(llabel)
-            self.line_items[lindex] = _copy.deepcopy(circuit.get_line(llabel))
+            self.line_items[lindex] = _copy.deepcopy(incircuit.get_line(llabel))
                        
     def replace_gatename(self, old_gatename, new_gatename):
         """
