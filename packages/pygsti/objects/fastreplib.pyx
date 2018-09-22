@@ -82,7 +82,7 @@ cdef extern from "fastreps.h" namespace "CReps":
         DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
 
     cdef cppclass DMGateCRep_Composed(DMGateCRep):
-        DMGateCRep_Composed(vector[DMGateCRep*]) except +
+        DMGateCRep_Composed(vector[DMGateCRep*], INT) except +
         DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
         DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
 
@@ -151,7 +151,7 @@ cdef extern from "fastreps.h" namespace "CReps":
         SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
 
     cdef cppclass SVGateCRep_Composed(SVGateCRep):
-        SVGateCRep_Composed(vector[SVGateCRep*]) except +
+        SVGateCRep_Composed(vector[SVGateCRep*], INT) except +
         SVStateCRep* acton(SVStateCRep*, SVStateCRep*)
         SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
 
@@ -189,7 +189,7 @@ cdef extern from "fastreps.h" namespace "CReps":
         SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
 
     cdef cppclass SBGateCRep_Composed(SBGateCRep):
-        SBGateCRep_Composed(vector[SBGateCRep*]) except +
+        SBGateCRep_Composed(vector[SBGateCRep*], INT) except +
         SBStateCRep* acton(SBStateCRep*, SBStateCRep*)
         SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
 
@@ -462,14 +462,14 @@ cdef class DMGateRep_Embedded(DMGateRep):
 cdef class DMGateRep_Composed(DMGateRep):
     cdef object list_of_factors # list of DMGateRep objs?
 
-    def __cinit__(self, factor_gate_reps):
+    def __cinit__(self, factor_gate_reps, INT dim):
         self.list_of_factors = factor_gate_reps
         cdef INT i
         cdef INT nfactors = len(factor_gate_reps)
         cdef vector[DMGateCRep*] gate_creps = vector[DMGateCRep_ptr](nfactors)
         for i in range(nfactors):
             gate_creps[i] = (<DMGateRep?>factor_gate_reps[i]).c_gate
-        self.c_gate = new DMGateCRep_Composed(gate_creps)
+        self.c_gate = new DMGateCRep_Composed(gate_creps, dim)
 
 
 cdef class DMGateRep_Lindblad(DMGateRep):
@@ -673,14 +673,14 @@ cdef class SVGateRep_Embedded(SVGateRep):
 cdef class SVGateRep_Composed(SVGateRep):
     cdef object list_of_factors # list of SVGateRep objs?
 
-    def __cinit__(self, factor_gate_reps):
+    def __cinit__(self, factor_gate_reps, INT dim):
         self.list_of_factors = factor_gate_reps
         cdef INT i
         cdef INT nfactors = len(factor_gate_reps)
         cdef vector[SVGateCRep*] gate_creps = vector[SVGateCRep_ptr](nfactors)
         for i in range(nfactors):
             gate_creps[i] = (<SVGateRep?>factor_gate_reps[i]).c_gate
-        self.c_gate = new SVGateCRep_Composed(gate_creps)
+        self.c_gate = new SVGateCRep_Composed(gate_creps, dim)
 
         
 # Stabilizer state (SB) propagation wrapper classes
@@ -780,14 +780,14 @@ cdef class SBGateRep_Embedded(SBGateRep):
 cdef class SBGateRep_Composed(SBGateRep):
     cdef object list_of_factors # list of SBGateRep objs?
 
-    def __cinit__(self, factor_gate_reps):
+    def __cinit__(self, factor_gate_reps, INT n):
         self.list_of_factors = factor_gate_reps
         cdef INT i
         cdef INT nfactors = len(factor_gate_reps)
         cdef vector[SBGateCRep*] gate_creps = vector[SBGateCRep_ptr](nfactors)
         for i in range(nfactors):
             gate_creps[i] = (<SBGateRep?>factor_gate_reps[i]).c_gate
-        self.c_gate = new SBGateCRep_Composed(gate_creps)
+        self.c_gate = new SBGateCRep_Composed(gate_creps, n)
 
 
 

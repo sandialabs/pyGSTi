@@ -23,6 +23,7 @@ from ..tools import jamiolkowski as _jt
 from ..tools import compattools as _compat
 from ..tools import basistools as _bt
 from ..tools import listtools as _lt
+from ..tools import symplectic as _symp
 
 from . import gatesetmember as _gm
 from . import gatestring as _gs
@@ -59,7 +60,8 @@ class GateSet(object):
 
     def __init__(self, default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 povm_prefix="M", instrument_prefix="I", sim_type="auto"):
+                 povm_prefix="M", instrument_prefix="I", sim_type="auto",
+                 auto_idle_name=None):
         """
         Initialize a gate set.
 
@@ -93,6 +95,12 @@ class GateSet(object):
             - "termorder:<X>" : Use Taylor expansions of gates in error rates
               to compute probabilities out to some maximum order <X> (an
               integer) in these rates.
+
+        auto_idle_name : str, optional
+            A gate *name* (i.e. without any state-space labels) that indicates a
+            *perfect* idle operation and thus can be used as a placeholder
+            within compound gate labels without actually being stored in the
+            GateSet.
         """
 
         #More options now (TODO enumerate?)
@@ -136,6 +144,7 @@ class GateSet(object):
         self._paramvec = _np.zeros(0, 'd')
         self._rebuild_paramvec()
         self._autogator = _autogator.SimpleCompositionAutoGator(self) # the default
+        self.auto_idle_gatename = auto_idle_name
 
         self.uuid = _uuid.uuid4() # a GateSet's uuid is like a persistent id(), useful for hashing
 
@@ -169,6 +178,25 @@ class GateSet(object):
             self._sim_args.append(cache) # add calculation cache as another argument
             
 
+    def set_state_space_labels(self, lbls):
+        """
+        Sets labels for the components of the Hilbert space upon which 
+        the gates of this GateSet act.
+
+        Parameters
+        ----------
+        lbls : list or tuple or StateSpaceLabels object
+            A list of state-space labels (can be strings or integers), e.g.
+            `['Q0','Q1']` or a :class:`StateSpaceLabels` object.
+        
+        Returns
+        -------
+        None
+        """
+        if isinstance(lbls, _ld.StateSpaceLabels):
+            self.stateSpaceLabels = lbls
+        else:
+            self.stateSpaceLabels = _ld.StateSpaceLabels(lbls)
 
 
     def _embedGate(self, gateTargetLabels, gateVal):
@@ -638,6 +666,9 @@ class GateSet(object):
 
         if 'uuid' not in stateDict:
             self.uuid = _uuid.uuid4() #create a new uuid
+
+        if 'auto_idle_gatename' not in stateDict:
+            self.auto_idle_gatename = None
 
         #Additionally, must re-connect this gateset as the parent
         # of relevant OrderedDict-derived classes, which *don't*
@@ -3076,6 +3107,7 @@ class GateSet(object):
         if not hasattr(self,"_autogator"): #for backward compatibility
             self._autogator = None # the default for *old* gatesets
         newGateset._autogator = self._autogator.copy(newGateset)
+        newGateset.auto_idle_gatename = self.auto_idle_gatename
 
         if not hasattr(self,"_sim_type"): #for backward compatibility
             self._sim_type = "dmmatrix"
@@ -3567,6 +3599,10 @@ class GateSet(object):
                   else None
 
         srep_dict = {}
+        if self.auto_idle_gatename is not None:
+            # Special case: gatename for a 1-qubit perfect idle (not actually stored as gates)
+            srep_dict[self.auto_idle_gatename] = _symp.unitary_to_symplectic(_np.identity(2,'d'))
+
         for gl,gate in self.gates.items():
             if (gfilter is not None) and (gl not in gfilter): continue
 

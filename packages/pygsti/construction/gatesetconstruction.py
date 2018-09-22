@@ -1103,11 +1103,14 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
 
     gatedict : dict
         A dictionary (an `OrderedDict` if you care about insertion order) which 
-        associates with string-type gate names (e.g. `"Gx"`) :class:`Gate` or
-        `numpy.ndarray` objects.  When the objects may act on fewer than the
-        total number of qubits (determined by their dimension/shape) then they
-        are repeatedly embedded into `nQubits`-qubit gates as specified by
-        `availability`.
+        associates with string-type gate names (e.g. `"Gx"`) :class:`Gate`,
+        `numpy.ndarray` objects, or the special `"PerfectIdle"` string.  When
+        the objects may act on fewer than the total number of qubits (determined
+        by their dimension/shape) then they are repeatedly embedded into
+        `nQubits`-qubit gates as specified by `availability`.  `"PerfectIdle"`
+        may be used to indicate a perfect idle gate that therefore doesn't need
+        to be included in the `GateSet` (but instead is set as its automatic
+        idle name it can process compound gate labels with this label in it).
 
     availability : dict, optional
         A dictionary whose keys are the same gate names as in
@@ -1192,8 +1195,16 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
             sim_type = "map" # use map as default for stabilizer-type evolutions
         else: assert(False) # should be unreachable
 
+
+    for gateName, gate in gatedict.items():
+        if _compat.isstr(gate) and gate == "PerfectIdle":
+            perfectIdleName = gateName; break
+    else:
+        perfectIdleName = None
+
     gs = _gateset.GateSet(default_param = parameterization, # "full", "TP" or "static", "clifford", ...
-                          sim_type = sim_type)              # "matrix", "map", "termorder:X"
+                          sim_type = sim_type,              # "matrix", "map", "termorder:X"
+                          auto_idle_name = perfectIdleName)
     gs.stateSpaceLabels = _ld.StateSpaceLabels(tuple(qubit_labels))
     gs._evotype = evotype # set this to ensure we create the types of gateset element we expect to.
 
@@ -1236,7 +1247,8 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
 
 
     for gateName, gate in gatedict.items():
-        if not isinstance(gate, _gate.Gate):
+        if _compat.isstr(gate) and gate == "PerfectIdle": continue #taken care of above
+        elif not isinstance(gate, _gate.Gate):
             try:
                 gate = _gate.convert(_gate.StaticGate(gate), parameterization, "pp")
             except Exception as e:
@@ -1357,11 +1369,9 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries={},
     
     gatedict = _collections.OrderedDict()
     for name in gate_names:
-        #TODO?
-        #if name == "Gi" and availability.get("Gi",None) is None:
-        #    # special global identity construction
-        #    availability['Gi'] = None #all qubits
-        #    gatedict['Gi'] = XXX
+        if name == "Gi": # special case: Gi as a gate *name* is interpreted as a
+            gatedict[name] = "PerfectIdle" # perfect idle operation/placeholder.
+            continue
             
         U = nonstd_gate_unitaries.get(name, std_unitaries.get(name,None))
         if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
