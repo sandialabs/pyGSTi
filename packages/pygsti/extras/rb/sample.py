@@ -754,7 +754,7 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
     p_rc_dict = {}
     circuit_dict = {}
 
-    if isinstace(length,int):
+    if isinstance(length,int):
         length_per_subset = [length for i in range(len(structure))]
     else:
         length_per_subset = length
