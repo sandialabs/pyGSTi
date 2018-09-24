@@ -108,7 +108,8 @@ class SimpleCompositionAutoGator(AutoGator):
                     factor_gates.append(existing_gates[l])
             else:
                 factor_gates = [ existing_gates[l] for l in gatelabel.components ]
-            ret = Composed(factor_gates)
+            ret = Composed(factor_gates, dim=self.parent.dim,
+                           evotype=self.parent._evotype)
             self.parent._init_virtual_obj(ret) # so ret's gpindices get set
             return ret
         else: raise ValueError("Cannot auto-create gate for label %s" % str(gatelabel))
@@ -179,9 +180,11 @@ class SharedIdleAutoGator(AutoGator):
             #each gate in gates is Composed([fullTargetOp,fullIdleErr,fullLocalErr])
             # so we compose 1st & 3rd factors of parallel gates and keep just a single 2nd factor...
             
-            targetOp = Composed([g.factorgates[0] for g in gates])
+            targetOp = Composed([g.factorgates[0] for g in gates], dim=self.parent.dim,
+                                evotype=self.parent._evotype)
             idleErr = gates[0].factorgates[1]
-            localErr = Composed([g.factorgates[2] for g in gates])
+            localErr = Composed([g.factorgates[2] for g in gates], dim=self.parent.dim,
+                                evotype=self.parent._evotype)
 
             #DEBUG could perform a check that gpindices are the same for idle gates
             #import numpy as _np 
@@ -190,7 +193,8 @@ class SharedIdleAutoGator(AutoGator):
             #    assert(_np.array_equal(_slct.as_array(g.factorgates[1].gpindices),
             #                           _slct.as_array(idleErr.gpindices)))            
             
-            ret = Composed([targetOp,idleErr,localErr])
+            ret = Composed([targetOp,idleErr,localErr], dim=self.parent.dim,
+                           evotype=self.parent._evotype)
             self.parent._init_virtual_obj(ret) # so ret's gpindices get set
             return ret
         else: raise ValueError("Cannot auto-create gate for label %s" % str(gatelabel))
