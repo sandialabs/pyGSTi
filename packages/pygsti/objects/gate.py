@@ -3832,7 +3832,7 @@ class ComposedGateMap(Gate):
     other `Gate`s)
     """
     
-    def __init__(self, gates_to_compose, dim="auto"):
+    def __init__(self, gates_to_compose, dim="auto", evotype="auto"):
         """
         Creates a new ComposedGateMap.
 
@@ -3849,6 +3849,11 @@ class ComposedGateMap(Gate):
             Dimension of this gate.  Can be set to `"auto"` to take dimension
             from `gates_to_compose[0]` *if* there's at least one gate being
             composed.
+
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
+            The evolution type of this gate.  Can be set to `"auto"` to take
+            the evolution type of `gates_to_compose[0]` *if* there's at least
+            one gate being composed.
         """
         assert(len(gates_to_compose) > 0 or dim != "auto"), \
             "Must compose at least one gate when dim='auto'!"
@@ -3858,8 +3863,13 @@ class ComposedGateMap(Gate):
             dim = gates_to_compose[0].dim
         assert(all([dim == gate.dim for gate in gates_to_compose])), \
             "All gates must have the same dimension (%d expected)!" % dim
+
+        if evotype == "auto":
+            gates_to_compose[0]._evotype
+        assert(all([evotype == gate._evotype for gate in gates_to_compose])), \
+            "All gates must have the same evolution type (%s expected)!" % evotype
         
-        Gate.__init__(self, dim, gates_to_compose[0]._evotype)
+        Gate.__init__(self, dim, evotype)
 
 
     def allocate_gpindices(self, startingIndex, parent):
@@ -4104,7 +4114,7 @@ class ComposedGate(ComposedGateMap,GateMatrix):
     A gate that is the composition of a number of matrix factors (possibly other gates).
     """
     
-    def __init__(self, gates_to_compose, dim="auto"):
+    def __init__(self, gates_to_compose, dim="auto", evotype="auto"):
         """
         Creates a new ComposedGate.
 
@@ -4121,8 +4131,13 @@ class ComposedGate(ComposedGateMap,GateMatrix):
             Dimension of this gate.  Can be set to `"auto"` to take dimension
             from `gates_to_compose[0]` *if* there's at least one gate being
             composed.
+
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
+            The evolution type of this gate.  Can be set to `"auto"` to take
+            the evolution type of `gates_to_compose[0]` *if* there's at least
+            one gate being composed.
         """
-        ComposedGateMap.__init__(self, gates_to_compose, dim) #sets self.dim & self._evotype
+        ComposedGateMap.__init__(self, gates_to_compose, dim, evotype) #sets self.dim & self._evotype
         GateMatrix.__init__(self, _np.identity(self.dim), self._evotype) #type doesn't matter here - just a dummy
         self._construct_matrix()
 
