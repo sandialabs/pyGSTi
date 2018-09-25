@@ -491,9 +491,12 @@ def calc_twirled_DDD(gateset, germ, eps=1e-6):
     size (vec_gateset_dim, vec_gateset_dim)
     """
     twirledDeriv = twirled_deriv(gateset, germ, eps) / len(germ)
-    twirledDerivDaggerDeriv = _np.einsum('jk,jl->kl',
-                                         _np.conjugate(twirledDeriv),
-                                         twirledDeriv)         
+    #twirledDerivDaggerDeriv = _np.einsum('jk,jl->kl',
+    #                                     _np.conjugate(twirledDeriv),
+    #                                     twirledDeriv)         
+    twirledDerivDaggerDeriv = _np.tensordot( _np.conjugate(twirledDeriv),
+                                             twirledDeriv, (0,0))         
+
     return twirledDerivDaggerDeriv
 
 
@@ -511,11 +514,8 @@ def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
     if forceIndices is not None and _np.any(weights[forceIndices] <= 0):
         score = forceScore
     else:
-        #OLD
         #combinedDDD = _np.einsum('i,ijk', weights,
         #                         derivDaggerDerivList[gateset_num])
-
-        #NEW: tensordot is a bit faster than einsum
         combinedDDD = _np.squeeze(
             _np.tensordot(_np.expand_dims(weights, 1),
                           derivDaggerDerivList[gateset_num], (0, 0)))
@@ -694,6 +694,7 @@ def sq_sing_vals_from_deriv(deriv, weights=None):
     """
     # shape (nGerms, vec_gateset_dim, vec_gateset_dim)
     derivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(deriv), deriv)
+      # awkward to convert to tensordot, so leave as einsum
 
     # Take the average of the D^dagger*D/L^2 matrices associated with each germ
     # with optional weights.
@@ -935,7 +936,8 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
         # weights = _np.array( [1.0/nGerms]*nGerms, 'd')
         weights = _np.array([1.0]*nGerms, 'd')
 
-    combinedTDDD = _np.einsum('i,ijk->jk', weights, twirledDerivDaggerDeriv)
+    #combinedTDDD = _np.einsum('i,ijk->jk', weights, twirledDerivDaggerDeriv)
+    combinedTDDD = _np.tensordot(weights, twirledDerivDaggerDeriv, (0,0))
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
 
     nGaugeParams = gateset.num_gauge_params()
