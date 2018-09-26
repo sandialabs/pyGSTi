@@ -2405,10 +2405,9 @@ class LindbladParameterizedGateMap(Gate):
                 for mx in hamGens: mx.sort_indices()
                   # for faster addition ops in _construct_errgen
             else:
-                hamGensCHK = _np.einsum("ik,akl,lj->aij", leftTrans, hamGens, rightTrans)
+                #hamGens = _np.einsum("ik,akl,lj->aij", leftTrans, hamGens, rightTrans)
                 hamGens = _np.transpose( _np.tensordot( 
                         _np.tensordot(leftTrans, hamGens, (1,1)), rightTrans, (2,0)), (1,0,2))
-                assert(_np.linalg.norm(hamGensCHK - hamGens) < 1e-8) # CHECK EINSUM
         else:
             bsH = 0
         assert(bsH == self.ham_basis_size)
@@ -2426,11 +2425,9 @@ class LindbladParameterizedGateMap(Gate):
                     for mx in hamGens: mx.sort_indices()
                       # for faster addition ops in _construct_errgen
                 else:
-                    otherGensCHK = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
+                    #otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
                     otherGens = _np.transpose( _np.tensordot( 
                             _np.tensordot(leftTrans, otherGens, (1,1)), rightTrans, (2,0)), (1,0,2))
-                    assert(_np.linalg.norm(otherGensCHK - otherGens) < 1e-8) # CHECK EINSUM
-
 
             elif self.nonham_mode == "diag_affine":
                 bsO = len(otherGens[0])+1 # projection-basis size (not nec. == d2) [~shape[1] but works for lists too]
@@ -2445,11 +2442,10 @@ class LindbladParameterizedGateMap(Gate):
                         for mx in mxRow: mx.sort_indices()
                           # for faster addition ops in _construct_errgen:
                 else:
-                    otherGensCHK = _np.einsum("ik,abkl,lj->abij", leftTrans,
-                                              otherGens, rightTrans)
+                    #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
+                    #                          otherGens, rightTrans)
                     otherGens = _np.transpose( _np.tensordot( 
                             _np.tensordot(leftTrans, otherGens, (1,2)), rightTrans, (3,0)), (1,2,0,3))
-                    assert(_np.linalg.norm(otherGensCHK - otherGens) < 1e-8) # CHECK EINSUM
                     
             else:
                 bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
@@ -2466,11 +2462,10 @@ class LindbladParameterizedGateMap(Gate):
                         for mx in mxRow: mx.sort_indices()
                           # for faster addition ops in _construct_errgen:
                 else:
-                    otherGensCHK = _np.einsum("ik,abkl,lj->abij", leftTrans,
-                                                otherGens, rightTrans)
+                    #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
+                    #                            otherGens, rightTrans)
                     otherGens = _np.transpose( _np.tensordot( 
                             _np.tensordot(leftTrans, otherGens, (1,2)), rightTrans, (3,0)), (1,2,0,3))
-                    assert(_np.linalg.norm(otherGensCHK - otherGens) < 1e-8) # CHECK EINSUM
 
         else:
             bsO = 0
@@ -2716,9 +2711,8 @@ class LindbladParameterizedGateMap(Gate):
         else: #dense matrices
             #if bsH > 0: REMOVE
             if hamCoeffs is not None:
-                lnd_error_genCHK = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
+                #lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
                 lnd_error_gen = _np.tensordot(hamCoeffs, self.hamGens, (0,0))
-                assert(_np.linalg.norm(lnd_error_genCHK - lnd_error_gen) < 1e-8) # CHECK EINSUM
             else:
                 lnd_error_gen = _np.zeros( (d2,d2), 'complex')
 
@@ -2726,18 +2720,12 @@ class LindbladParameterizedGateMap(Gate):
             if otherCoeffs is not None:
                 if self.nonham_mode == "diagonal":
                     #lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
-                    chk1 = _np.einsum('i,ikl', otherCoeffs, self.otherGens)
-                    chk2 = _np.tensordot(otherCoeffs, self.otherGens, (0,0))
-                    assert(_np.linalg.norm(chk1-chk2) < 1e-8) # CHECK EINSUM
-                    lnd_error_gen += chk2
+                    lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, (0,0))
 
                 else: # nonham_mode in ("diag_affine", "all")
                     #lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs,
                     #                            self.otherGens)
-                    chk1 = _np.einsum('ij,ijkl', otherCoeffs, self.otherGens)
-                    chk2 = _np.tensordot(otherCoeffs, self.otherGens, ((0,1),(0,1)))
-                    assert(_np.linalg.norm(chk1-chk2) < 1e-8) # CHECK EINSUM
-                    lnd_error_gen += chk2
+                    lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, ((0,1),(0,1)))
 
 
         assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0))
@@ -3318,17 +3306,16 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                 F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
             
                 # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-                dOdpCHK  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
-                dOdpCHK += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
-                           _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
-                dOdpCHK += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
-                           _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
+                #dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
+                #dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
+                #           _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
+                #dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
+                #           _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
                 tmp_ablj = _np.transpose(self.otherGens, (2,3,0,1)) # ablj -> ljab
                 tmp_balj = _np.transpose(self.otherGens, (2,3,1,0)) # balj -> ljab
                 dOdp  = tmp_ablj * F0  # a == b case
                 dOdp += tmp_ablj * F1 + tmp_balj * F1 # a > b (F1)
                 dOdp += tmp_balj * F2 - tmp_ablj * F2 # a < b (F2)
-                assert(_np.linalg.norm(dOdpCHK - dOdp) < 1e-8) # CHECK EINSUM
 
         # apply basis transform
         tr = len(dOdp.shape) #tensor rank
@@ -3352,14 +3339,12 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             # Derivative of exponent wrt other param; shape == [d2,d2,nP,nP]
             if self.param_mode == "depol":
                 assert(nP == 1)
-                d2Odp2CHK  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
+                #d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
                 d2Odp2  = _np.squeeze(self.otherGens,0)[:,:,None,None] * 2
-                assert(_np.linalg.norm(d2Odp2CHK - d2Odp2) < 1e-8) # CHECK EINSUM
             elif self.param_mode == "cptp":
                 assert(nP == bsO-1)
-                d2Odp2CHK  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
+                #d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
                 d2Odp2  = _np.transpose(self.otherGens, (1,2,0))[:,:,:,None] * 2*_np.identity(nP,'d')
-                assert(_np.linalg.norm(d2Odp2CHK - d2Odp2) < 1e-8) # CHECK EINSUM
             else: # param_mode == "unconstrained" or "reldepol"
                 assert(nP == bsO-1)
                 d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')
@@ -3596,18 +3581,15 @@ def _dexpSeries(X, dX):
     #take d(matrix-exp) using series approximation
     while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
         if tr == 3:
-            commutantCHK = _np.einsum("ik,kja->ija",X,last_commutant) - \
-                           _np.einsum("ika,kj->ija",last_commutant,X)
+            #commutant = _np.einsum("ik,kja->ija",X,last_commutant) - \
+            #            _np.einsum("ika,kj->ija",last_commutant,X)
             commutant = _np.tensordot(X,last_commutant,(1,0)) - \
                         _np.transpose(_np.tensordot(last_commutant,X,(1,0)),(0,2,1))
-            assert(_np.linalg.norm(commutantCHK - commutant) < 1e-8) # CHECK EINSUM
-
         elif tr == 4:
-            commutantCHK = _np.einsum("ik,kjab->ijab",X,last_commutant) - \
-                    _np.einsum("ikab,kj->ijab",last_commutant,X)
+            #commutant = _np.einsum("ik,kjab->ijab",X,last_commutant) - \
+            #        _np.einsum("ikab,kj->ijab",last_commutant,X)
             commutant = _np.tensordot(X,last_commutant,(1,0)) - \
-                    _np.transpose(_np.tensordot(last_commutant,X,(1,0)),(0,3,1,2))
-            assert(_np.linalg.norm(commutantCHK - commutant) < 1e-8) # CHECK EINSUM
+                _np.transpose(_np.tensordot(last_commutant,X,(1,0)),(0,3,1,2))
 
         term = 1/_np.math.factorial(i) * commutant
 
@@ -3704,21 +3686,17 @@ def _dexpX(X,dX,expX=None,postfactor=None):
     if expX is None: expX = _spl.expm(X)
 
     if tr == 3:
-        dExpXCHK = _np.einsum('ika,kj->ija', series, expX)
+        #dExpX = _np.einsum('ika,kj->ija', series, expX)
         dExpX = _np.transpose(_np.tensordot(series, expX, (1,0)),(0,2,1))
-        assert(_np.linalg.norm(dExpXCHK - dExpX) < 1e-8) # CHECK EINSUM
         if postfactor is not None:
-            dExpXCHK = _np.einsum('ila,lj->ija', dExpX, postfactor)
+            #dExpX = _np.einsum('ila,lj->ija', dExpX, postfactor)
             dExpX = _np.transpose(_np.tensordot(dExpX, postfactor, (1,0)),(0,2,1))
-            assert(_np.linalg.norm(dExpXCHK - dExpX) < 1e-8) # CHECK EINSUM
     elif tr == 4:
-        dExpXCHK = _np.einsum('ikab,kj->ijab', series, expX)
+        #dExpX = _np.einsum('ikab,kj->ijab', series, expX)
         dExpX = _np.transpose(_np.tensordot(series, expX, (1,0)),(0,3,1,2))
-        assert(_np.linalg.norm(dExpXCHK - dExpX) < 1e-8) # CHECK EINSUM
         if postfactor is not None:
-            dExpXCHK = _np.einsum('ilab,lj->ijab', dExpX, postfactor)
+            #dExpX = _np.einsum('ilab,lj->ijab', dExpX, postfactor)
             dExpX = _np.transpose(_np.tensordot(dExpX, postfactor, (1,0)),(0,3,1,2))
-            assert(_np.linalg.norm(dExpXCHK - dExpX) < 1e-8) # CHECK EINSUM
             
     return dExpX
 
@@ -4272,18 +4250,15 @@ class ComposedGate(ComposedGateMap,GateMatrix):
                 pre = self.factorgates[0]
                 for gateA in self.factorgates[1:i]:
                     pre = _np.dot(gateA,pre)
-                derivCHK = _np.einsum("ija,jk->ika", deriv, pre )
+                #deriv = _np.einsum("ija,jk->ika", deriv, pre )
                 deriv = _np.transpose(_np.tensordot(deriv, pre, (1,0)),(0,2,1))
-                assert(_np.linalg.norm(derivCHK - deriv) < 1e-8) # CHECK EINSUM
 
             if i+1 < len(self.factorgates): # factors after ith
                 post = self.factorgates[i+1]
                 for gateA in self.factorgates[i+2:]:
                     post = _np.dot(gateA,post)
-                derivCHK = _np.einsum("ij,jka->ika", post, deriv )
+                #deriv = _np.einsum("ij,jka->ika", post, deriv )
                 deriv = _np.tensordot(post, deriv, (1,0))
-                assert(_np.linalg.norm(derivCHK - deriv) < 1e-8) # CHECK EINSUM
-
 
             factorgate_local_inds = _gatesetmember._decompose_gpindices(
                 self.gpindices, gate.gpindices)

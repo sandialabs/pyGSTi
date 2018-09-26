@@ -669,9 +669,8 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs_pre, gs_post,
 
         #contract to get (note contract along both mx indices b/c treat like a
         # mx basis): d(|chi_std|_Tr)/dp = d(|chi_std|_Tr)/dchi_std * dchi_std/dp
-        vCHK =  _np.einsum("ij,aij->a",sgnchi,dchi_std)
+        #v =  _np.einsum("ij,aij->a",sgnchi,dchi_std)
         v =  _np.tensordot(sgnchi,dchi_std,((0,1),(1,2)))
-        assert(_np.linalg.norm(v-vCHK) < 1e-8) #CHECK EINSUM
         v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(chi))) #add 0.5/|chi|_Tr factor
         assert(_np.linalg.norm(v.imag) < 1e-4)
         cpPenaltyVecGradToFill[i,:] = v.real
@@ -739,9 +738,8 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
         #contract to get (note contract along both mx indices b/c treat like a mx basis):
         # d(|denMx|_Tr)/dp = d(|denMx|_Tr)/d(denMx) * d(denMx)/d(spamvec) * d(spamvec)/dp
         # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, n]
-        vCHK =  _np.einsum("ij,aij,ab->b",sgndm,ddenMxdV,dVdp)
+        #v =  _np.einsum("ij,aij,ab->b",sgndm,ddenMxdV,dVdp)
         v =  _np.tensordot( _np.tensordot(sgndm,ddenMxdV,((0,1),(1,2))),dVdp, (0,0) )
-        assert(_np.linalg.norm(v-vCHK) < 1e-8) #CHECK EINSUM
         v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(denMx))) #add 0.5/|denMx|_Tr factor
         assert(_np.linalg.norm(v.imag) < 1e-4)
         spamPenaltyVecGradToFill[i,:] = v.real
@@ -783,9 +781,8 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
             #contract to get (note contract along both mx indices b/c treat like a mx basis):
             # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
             # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, n]
-            vCHK =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
+            #v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
             v =  _np.tensordot( _np.tensordot(sgnE,dEMxdV,((0,1),(1,2))),dVdp, (0,0) )
-            assert(_np.linalg.norm(v-vCHK) < 1e-8) #CHECK EINSUM
             v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx))) #add 0.5/|EMx|_Tr factor
             assert(_np.linalg.norm(v.imag) < 1e-4)
             spamPenaltyVecGradToFill[i,:] = v.real
