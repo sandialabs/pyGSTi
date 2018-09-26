@@ -2405,7 +2405,9 @@ class LindbladParameterizedGateMap(Gate):
                 for mx in hamGens: mx.sort_indices()
                   # for faster addition ops in _construct_errgen
             else:
-                hamGens = _np.einsum("ik,akl,lj->aij", leftTrans, hamGens, rightTrans)
+                #hamGens = _np.einsum("ik,akl,lj->aij", leftTrans, hamGens, rightTrans)
+                hamGens = _np.transpose( _np.tensordot( 
+                        _np.tensordot(leftTrans, hamGens, (1,1)), rightTrans, (2,0)), (1,0,2))
         else:
             bsH = 0
         assert(bsH == self.ham_basis_size)
@@ -2423,7 +2425,9 @@ class LindbladParameterizedGateMap(Gate):
                     for mx in hamGens: mx.sort_indices()
                       # for faster addition ops in _construct_errgen
                 else:
-                    otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
+                    #otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
+                    otherGens = _np.transpose( _np.tensordot( 
+                            _np.tensordot(leftTrans, otherGens, (1,1)), rightTrans, (2,0)), (1,0,2))
 
             elif self.nonham_mode == "diag_affine":
                 bsO = len(otherGens[0])+1 # projection-basis size (not nec. == d2) [~shape[1] but works for lists too]
@@ -2438,8 +2442,11 @@ class LindbladParameterizedGateMap(Gate):
                         for mx in mxRow: mx.sort_indices()
                           # for faster addition ops in _construct_errgen:
                 else:
-                    otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
-                                                otherGens, rightTrans)                    
+                    #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
+                    #                          otherGens, rightTrans)
+                    otherGens = _np.transpose( _np.tensordot( 
+                            _np.tensordot(leftTrans, otherGens, (1,2)), rightTrans, (3,0)), (1,2,0,3))
+                    
             else:
                 bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
                 _gt._assert_shape(otherGens, (bsO-1,bsO-1,d2,d2), self.sparse)
@@ -2455,8 +2462,11 @@ class LindbladParameterizedGateMap(Gate):
                         for mx in mxRow: mx.sort_indices()
                           # for faster addition ops in _construct_errgen:
                 else:
-                    otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
-                                                otherGens, rightTrans)
+                    #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
+                    #                            otherGens, rightTrans)
+                    otherGens = _np.transpose( _np.tensordot( 
+                            _np.tensordot(leftTrans, otherGens, (1,2)), rightTrans, (3,0)), (1,2,0,3))
+
         else:
             bsO = 0
         assert(bsO == self.other_basis_size)
@@ -2701,17 +2711,22 @@ class LindbladParameterizedGateMap(Gate):
         else: #dense matrices
             #if bsH > 0: REMOVE
             if hamCoeffs is not None:
-                lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
+                #lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
+                lnd_error_gen = _np.tensordot(hamCoeffs, self.hamGens, (0,0))
             else:
                 lnd_error_gen = _np.zeros( (d2,d2), 'complex')
 
             #if bsO > 0: REMOVE
             if otherCoeffs is not None:
                 if self.nonham_mode == "diagonal":
-                    lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
+                    #lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
+                    lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, (0,0))
+
                 else: # nonham_mode in ("diag_affine", "all")
-                    lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs,
-                                                self.otherGens)
+                    #lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs,
+                    #                            self.otherGens)
+                    lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, ((0,1),(0,1)))
+
 
         assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0))
         #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)        
@@ -3226,14 +3241,19 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             #  except "depol" & "reldepol" cases, when shape == [d2,d2,1]
             if self.param_mode == "depol": # all coeffs same & == param^2
                 assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'depol' case!"
-                dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None] * 2*otherParams[0]
+                #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None] * 2*otherParams[0]
+                dOdp  = _np.transpose(self.otherGens, (1,2,0)) * 2*otherParams[0]
             elif self.param_mode == "reldepol": # all coeffs same & == param
                 assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'reldepol' case!"
-                dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None]
+                #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None]
+                dOdp  = _np.transpose(self.otherGens, (1,2,0)) * 2*otherParams[0]
             elif self.param_mode == "cptp": # (coeffs = params^2)
-                dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
+                #dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams) 
+                dOdp = _np.transpose(self.otherGens,(1,2,0)) * 2*otherParams # just a broadcast
             else: # "unconstrained" (coeff == params)
-                dOdp  = _np.einsum('alj->lja', self.otherGens)
+                #dOdp  = _np.einsum('alj->lja', self.otherGens)
+                dOdp  = _np.transpose(self.otherGens, (1,2,0))
+
 
         elif self.nonham_mode == "diag_affine":
             otherParams = self.paramvals[nHam:]
@@ -3245,19 +3265,26 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             if self.param_mode == "depol": # all coeffs same & == param^2
                 diag_params, affine_params = otherParams[0:1], otherParams[1:]
                 dOdp  = _np.empty((d2,d2,bsO),'complex')
-                dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2*diag_params[0] # single diagonal term
-                dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
+                #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2*diag_params[0] # single diagonal term
+                #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
+                dOdp[:,:,0]  = _np.squeeze(self.otherGens[0],0) * 2*diag_params[0] # single diagonal term
+                dOdp[:,:,1:] = _np.transpose(self.otherGens[1],(1,2,0)) # no need for affine_params
             elif self.param_mode == "reldepol": # all coeffs same & == param^2
                 dOdp  = _np.empty((d2,d2,bsO),'complex')
-                dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) # single diagonal term
-                dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # affine part: each gen has own param
+                #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) # single diagonal term
+                #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # affine part: each gen has own param
+                dOdp[:,:,0]  = _np.squeeze(self.otherGens[0],0) # single diagonal term
+                dOdp[:,:,1:] = _np.transpose(self.otherGens[1],(1,2,0)) # affine part: each gen has own param
             elif self.param_mode == "cptp": # (coeffs = params^2)
                 diag_params, affine_params = otherParams[0:bsO-1], otherParams[bsO-1:]
                 dOdp  = _np.empty((d2,d2,2,bsO-1),'complex')
-                dOdp[:,:,0,:] = _np.einsum('alj,a->lja', self.otherGens[0], 2*diag_params)
-                dOdp[:,:,1,:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
+                #dOdp[:,:,0,:] = _np.einsum('alj,a->lja', self.otherGens[0], 2*diag_params)
+                #dOdp[:,:,1,:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
+                dOdp[:,:,0,:] = _np.transpose(self.otherGens[0],(1,2,0)) * 2*diag_params # broadcast works
+                dOdp[:,:,1,:] = _np.transpose(self.otherGens[1],(1,2,0)) # no need for affine_params
             else: # "unconstrained" (coeff == params)
-                dOdp  = _np.einsum('ablj->ljab', self.otherGens) # -> shape (d2,d2,2,bsO-1)
+                #dOdp  = _np.einsum('ablj->ljab', self.otherGens) # -> shape (d2,d2,2,bsO-1)
+                dOdp  = _np.transpose(self.otherGens, (2,3,0,1) ) # -> shape (d2,d2,2,bsO-1)
 
         else: # nonham_mode == "all" ; all lindblad terms included
             assert(self.param_mode in ("cptp","unconstrained"))
@@ -3268,6 +3295,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                 F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
                 
                   # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+                  # Note: replacing einsums here results in at least 3 numpy calls (probably slower?)
                 dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
                 dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
                 dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
@@ -3278,11 +3306,16 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                 F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
             
                 # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-                dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
-                dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
-                        _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
-                dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
-                        _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
+                #dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
+                #dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
+                #           _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
+                #dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
+                #           _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
+                tmp_ablj = _np.transpose(self.otherGens, (2,3,0,1)) # ablj -> ljab
+                tmp_balj = _np.transpose(self.otherGens, (2,3,1,0)) # balj -> ljab
+                dOdp  = tmp_ablj * F0  # a == b case
+                dOdp += tmp_ablj * F1 + tmp_balj * F1 # a > b (F1)
+                dOdp += tmp_balj * F2 - tmp_ablj * F2 # a < b (F2)
 
         # apply basis transform
         tr = len(dOdp.shape) #tensor rank
@@ -3306,10 +3339,12 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             # Derivative of exponent wrt other param; shape == [d2,d2,nP,nP]
             if self.param_mode == "depol":
                 assert(nP == 1)
-                d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
+                #d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
+                d2Odp2  = _np.squeeze(self.otherGens,0)[:,:,None,None] * 2
             elif self.param_mode == "cptp":
                 assert(nP == bsO-1)
-                d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
+                #d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
+                d2Odp2  = _np.transpose(self.otherGens, (1,2,0))[:,:,:,None] * 2*_np.identity(nP,'d')
             else: # param_mode == "unconstrained" or "reldepol"
                 assert(nP == bsO-1)
                 d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')
@@ -3322,12 +3357,14 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             if self.param_mode == "depol":
                 assert(nP == bsO) # 1 diag param + (bsO-1) affine params
                 d2Odp2  = _np.empty((d2,d2,nP,nP),'complex')
-                d2Odp2[:,:,0,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2 # single diagonal term
+                #d2Odp2[:,:,0,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2 # single diagonal term
+                d2Odp2[:,:,0,0]  = _np.squeeze(self.otherGens[0],0) * 2 # single diagonal term
                 d2Odp2[:,:,1:,1:]  = 0 # 2nd deriv wrt. all affine params == 0
             elif self.param_mode == "cptp":
                 assert(nP == 2*(bsO-1)); hnP = bsO-1 # half nP
                 d2Odp2  = _np.empty((d2,d2,nP,nP),'complex')
-                d2Odp2[:,:,0:hnP,0:hnp] = _np.einsum('alj,aq->ljaq', self.otherGens[0], 2*_np.identity(nP,'d'))
+                #d2Odp2[:,:,0:hnP,0:hnp] = _np.einsum('alj,aq->ljaq', self.otherGens[0], 2*_np.identity(nP,'d'))
+                d2Odp2[:,:,0:hnP,0:hnp] = _np.transpose(self.otherGens[0],(1,2,0))[:,:,:,None] * 2*_np.identity(nP,'d')
                 d2Odp2[:,:,hnP:,hnp:]   = 0 # 2nd deriv wrt. all affine params == 0
             else: # param_mode == "unconstrained" or "reldepol"
                 assert(nP == 2*(bsO-1))
@@ -3544,11 +3581,16 @@ def _dexpSeries(X, dX):
     #take d(matrix-exp) using series approximation
     while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
         if tr == 3:
-            commutant = _np.einsum("ik,kja->ija",X,last_commutant) - \
-                        _np.einsum("ika,kj->ija",last_commutant,X)
+            #commutant = _np.einsum("ik,kja->ija",X,last_commutant) - \
+            #            _np.einsum("ika,kj->ija",last_commutant,X)
+            commutant = _np.tensordot(X,last_commutant,(1,0)) - \
+                        _np.transpose(_np.tensordot(last_commutant,X,(1,0)),(0,2,1))
         elif tr == 4:
-            commutant = _np.einsum("ik,kjab->ijab",X,last_commutant) - \
-                    _np.einsum("ikab,kj->ijab",last_commutant,X)
+            #commutant = _np.einsum("ik,kjab->ijab",X,last_commutant) - \
+            #        _np.einsum("ikab,kj->ijab",last_commutant,X)
+            commutant = _np.tensordot(X,last_commutant,(1,0)) - \
+                _np.transpose(_np.tensordot(last_commutant,X,(1,0)),(0,3,1,2))
+
         term = 1/_np.math.factorial(i) * commutant
 
         #Uncomment some/all of this when you suspect an overflow due to X having large norm.
@@ -3644,13 +3686,17 @@ def _dexpX(X,dX,expX=None,postfactor=None):
     if expX is None: expX = _spl.expm(X)
 
     if tr == 3:
-        dExpX = _np.einsum('ika,kj->ija', series, expX)
+        #dExpX = _np.einsum('ika,kj->ija', series, expX)
+        dExpX = _np.transpose(_np.tensordot(series, expX, (1,0)),(0,2,1))
         if postfactor is not None:
-            dExpX = _np.einsum('ila,lj->ija', dExpX, postfactor)
+            #dExpX = _np.einsum('ila,lj->ija', dExpX, postfactor)
+            dExpX = _np.transpose(_np.tensordot(dExpX, postfactor, (1,0)),(0,2,1))
     elif tr == 4:
-        dExpX = _np.einsum('ikab,kj->ijab', series, expX)
+        #dExpX = _np.einsum('ikab,kj->ijab', series, expX)
+        dExpX = _np.transpose(_np.tensordot(series, expX, (1,0)),(0,3,1,2))
         if postfactor is not None:
-            dExpX = _np.einsum('ilab,lj->ijab', dExpX, postfactor)
+            #dExpX = _np.einsum('ilab,lj->ijab', dExpX, postfactor)
+            dExpX = _np.transpose(_np.tensordot(dExpX, postfactor, (1,0)),(0,3,1,2))
             
     return dExpX
 
@@ -4204,13 +4250,15 @@ class ComposedGate(ComposedGateMap,GateMatrix):
                 pre = self.factorgates[0]
                 for gateA in self.factorgates[1:i]:
                     pre = _np.dot(gateA,pre)
-                deriv = _np.einsum("ija,jk->ika", deriv, pre )
+                #deriv = _np.einsum("ija,jk->ika", deriv, pre )
+                deriv = _np.transpose(_np.tensordot(deriv, pre, (1,0)),(0,2,1))
 
             if i+1 < len(self.factorgates): # factors after ith
                 post = self.factorgates[i+1]
                 for gateA in self.factorgates[i+2:]:
                     post = _np.dot(gateA,post)
-                deriv = _np.einsum("ij,jka->ika", post, deriv )
+                #deriv = _np.einsum("ij,jka->ika", post, deriv )
+                deriv = _np.tensordot(post, deriv, (1,0))
 
             factorgate_local_inds = _gatesetmember._decompose_gpindices(
                 self.gpindices, gate.gpindices)
