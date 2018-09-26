@@ -3911,7 +3911,7 @@ class ComposedGateMap(Gate):
             "All gates must have the same dimension (%d expected)!" % dim
 
         if evotype == "auto":
-            gates_to_compose[0]._evotype
+            evotype = gates_to_compose[0]._evotype
         assert(all([evotype == gate._evotype for gate in gates_to_compose])), \
             "All gates must have the same evolution type (%s expected)!" % evotype
         
