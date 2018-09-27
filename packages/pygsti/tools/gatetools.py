@@ -2530,13 +2530,15 @@ def project_gateset(gateset, targetGateset,
         if ('H' in projectiontypes) or ('H+S' in projectiontypes):
             hamProj, hamGens = std_errgen_projections(
                 errgen, "hamiltonian", basis.name, basis, True)
-            ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
+            #ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
+            ham_error_gen = _np.tensordot(hamProj, hamGens, (0,0))
             ham_error_gen = _bt.change_basis(ham_error_gen,"std",basis)
             
         if ('S' in projectiontypes) or ('H+S' in projectiontypes):
             stoProj, stoGens = std_errgen_projections(
                 errgen, "stochastic", basis.name, basis, True)
-            sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
+            #sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
+            sto_error_gen = _np.tensordot(stoProj, stoGens, (0,0))
             sto_error_gen = _bt.change_basis(sto_error_gen,"std",basis)
             
         if ('LND' in projectiontypes) or ('LNDF' in projectiontypes):
@@ -2545,8 +2547,10 @@ def project_gateset(gateset, targetGateset,
                     errgen, basis.name, basis.name, basis, normalize=False,
                     return_generators=True)
             #Note: return values *can* be None if an empty/None basis is given
-            lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
-                            _np.einsum('ij,ijkl', OProj, OGens)
+            #lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
+            #                _np.einsum('ij,ijkl', OProj, OGens)
+            lnd_error_gen = _np.tensordot(HProj, HGens, (0,0)) + \
+                            _np.tensordot(OProj, OGens, ((0,1),(0,1)))
             lnd_error_gen = _bt.change_basis(lnd_error_gen,"std",basis)
 
         targetGate = targetGateset.gates[gl]
@@ -2576,8 +2580,10 @@ def project_gateset(gateset, targetGateset,
             pos_evals = evals.clip(0,1e100) #clip negative eigenvalues to 0
             OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U)))
               #OProj_cp is now a pos-def matrix
-            lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
-                               _np.einsum('ij,ijkl', OProj_cp, OGens)
+            #lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
+            #                   _np.einsum('ij,ijkl', OProj_cp, OGens)
+            lnd_error_gen_cp = _np.tensordot(HProj, HGens, (0,0)) + \
+                               _np.tensordot(OProj_cp, OGens, ((0,1),(0,1)))
             lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp,"std",basis)
 
             gsDict['LND'].gates[gl] = gate_from_error_generator(
