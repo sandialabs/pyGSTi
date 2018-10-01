@@ -2713,11 +2713,13 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
         if self.typ == "prep":
             #derror map acts on dmVec
-            return _np.einsum("ijk,j->ik", derrgen, dmVec) # return shape = (dim,nParams)
+            #return _np.einsum("ijk,j->ik", derrgen, dmVec) # return shape = (dim,nParams)
+            return _np.tensordot(derrgen, dmVec, (1,0)) # return shape = (dim,nParams)
         else:
             # self.error_map acts on the *state* vector before dmVec acts
             # as an effect:  E.dag -> dot(E.dag,errmap) ==> E -> dot(errmap.dag,E)
-            return _np.einsum("jik,j->ik", derrgen.conjugate(), dmVec) # return shape = (dim,nParams)
+            #return _np.einsum("jik,j->ik", derrgen.conjugate(), dmVec) # return shape = (dim,nParams)
+            return _np.tensordot(derrgen.conjugate(), dmVec, (0,0)) # return shape = (dim,nParams)
 
 
     def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
@@ -2747,11 +2749,13 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
         if self.typ == "prep":
             #derror map acts on dmVec
-            return _np.einsum("ijkl,j->ikl", herrgen, dmVec) # return shape = (dim,nParams)
+            #return _np.einsum("ijkl,j->ikl", herrgen, dmVec) # return shape = (dim,nParams)
+            return _np.tensordot(herrgen, dmVec, (1,0)) # return shape = (dim,nParams)
         else:
             # self.error_map acts on the *state* vector before dmVec acts
             # as an effect:  E.dag -> dot(E.dag,errmap) ==> E -> dot(errmap.dag,E)
-            return _np.einsum("jikl,j->ikl", herrgen.conjugate(), dmVec) # return shape = (dim,nParams)
+            #return _np.einsum("jikl,j->ikl", herrgen.conjugate(), dmVec) # return shape = (dim,nParams)
+            return _np.tensordot(herrgen.conjugate(), dmVec, (0,0)) # return shape = (dim,nParams)
 
 
     def num_params(self):
