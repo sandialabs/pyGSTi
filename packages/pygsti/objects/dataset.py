@@ -1339,7 +1339,11 @@ class DataSet(object):
             new_gsIndex[ new_gstr  ] = indx
         self.gsIndex = new_gsIndex
         #Note: self.cnt_cache just remains None (a non-static DataSet)
-
+        auxInfo = _DefaultDict( dict )
+        for gstr in self.auxInfo.keys():
+            new_gstr = processor_fn(gstr)
+            auxInfo[new_gstr] = self.auxInfo[gstr]
+        self.auxInfo = auxInfo
 
     def copy(self):
         """ Make a copy of this DataSet. """
