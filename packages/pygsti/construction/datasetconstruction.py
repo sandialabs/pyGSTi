@@ -339,7 +339,7 @@ def create_merge_dict(indices_to_keep, outcome_labels):
 
 def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=None):
     """
-    Creates a DataSet that restricts the is the restriction of `dataset`
+    Creates a DataSet that restricts is the restriction of `dataset`
     to the sectors identified by `sectors_to_keep`.
 
     More specifically, this function aggregates (sums) outcomes in `dataset`
