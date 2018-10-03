@@ -9,10 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from scipy.fftpack import dct as _dct
 from scipy.fftpack import idct as _idct
-#from scipy.stats import chi2 as _chi2
-#from scipy.optimize import leastsq as _leastsq
-#from scipy import convolve as _convolve
-
+from scipy import convolve as _convolve
 
 def DCT(x,counts=1,null_hypothesis=None):
     """
@@ -138,6 +135,22 @@ def frequencies_from_timestep(timestep,T):
      
     return _np.arange(0,T)/(2*timestep*T)
 
+def DCT_basis_function(omega, T, t):
+    """
+    Todo
+
+    These are the *unnormalized* DCT amplitudes.
+    """
+    return _np.cos(omega*_np.pi*(t+0.5)/T)
+
+def probability_from_DCT_amplitudes(alphas, omegas, T, t):
+    """
+    Todo
+
+    This uses the *unnormalized* DCT amplitudes.
+    """
+    return _np.sum(_np.array([alphas[omega_idx]*DCT_basis_function(omega, T, t) for omega_idx, omega in enumerate(omegas)]))
+
 # -------------------------------- #
 # ---------- Signal tools -------- #
 # -------------------------------- #
@@ -148,8 +161,6 @@ def hoyer_sparsity_measure(p):
     """
     n = len(p)
     return (_np.sqrt(n) - _np.linalg.norm(p,1)/_np.linalg.norm(p,2))/(_np.sqrt(n)-1)
-
-
 
 def renormalizer(p,method='logistic'):
     """
@@ -170,7 +181,6 @@ def renormalizer(p,method='logistic'):
         raise ValueError("method should be 'logistic' or 'sharp'")
         
     return out
-
 
 def low_pass_filter(data,max_freq = None):
     """
