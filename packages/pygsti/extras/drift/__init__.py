@@ -10,5 +10,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # the package namespace
 from .core import *
 from .signal import *
-from .simulate import *
 from .io import *
+
+from . import simulate
+from . import estimate

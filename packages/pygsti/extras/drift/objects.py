@@ -365,7 +365,6 @@ class DriftResults(object):
             label = 'Data'
             _plt.plot(times,self.data[sequence_index,entity,outcome_index,:]/self.number_of_counts,'.',label=label)
         
-        print(outcome_index)
         p = self.pspepo_reconstruction[sequence_index,entity,outcome_index,:]
         error = self.pspepo_reconstruction_uncertainty[sequence_index,entity,outcome_index]
         upper = p+error
