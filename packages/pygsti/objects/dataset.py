@@ -1359,6 +1359,7 @@ class DataSet(object):
             copyOfMe.timeType = self.timeType
             copyOfMe.repType  = self.repType
             copyOfMe.cnt_cache = None
+            copyOfMe.auxInfo = self.auxInfo.copy()
             return copyOfMe
 
 
@@ -1377,10 +1378,11 @@ class DataSet(object):
                 if self.repData is not None:
                     copyOfMe.repData.append( self.repData[slc].copy() )
 
-            copyOfMe.oliType  =self.oliType
+            copyOfMe.oliType  = self.oliType
             copyOfMe.timeType = self.timeType
             copyOfMe.repType  = self.repType
             copyOfMe.cnt_cache = None
+            copyOfMe.auxInfo = self.auxInfo.copy()
             return copyOfMe
         else:
             return self.copy()
