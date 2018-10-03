@@ -117,6 +117,23 @@ def bartlett_spectrum(x,num_spectra,counts=1,null_hypothesis=None):
                 
     return bartlett_spectrum
 
+def bartlett_spectrum_averaging(spectrum, num_spectra):
+    """
+    If N/num_spectra is not an integer, then 
+    not all of the data points are used.
+    
+    TODO: docstring
+    TODO: Make this work with multicount data.
+    """ 
+    length = int(_np.floor(len(spectrum)/num_spectra))  
+    spectra = _np.zeros((num_spectra,length))
+    for i in range(0,num_spectra):
+        spectra[i,:] = spectrum[i*length:((i+1)*length)]
+        
+    bartlett_spectrum = _np.mean(spectra,axis=0)
+                
+    return bartlett_spectrum
+
 def frequencies_from_timestep(timestep,T):
      
     return _np.arange(0,T)/(2*timestep*T)

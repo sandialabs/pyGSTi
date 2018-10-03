@@ -265,7 +265,7 @@ def merge_outcomes(dataset,label_merge_dict):
             count_dict[new_outcome] = 0
             for old_outcome in label_merge_dict[new_outcome]:
                 count_dict[new_outcome] += linecounts.get(old_outcome,0)
-        merged_dataset.add_count_dict(key,count_dict)
+        merged_dataset.add_count_dict(key,count_dict,aux=dataset.auxInfo[key])
     merged_dataset.done_adding_data()
     return merged_dataset
 

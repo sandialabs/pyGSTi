@@ -211,7 +211,7 @@ class CrosstalkResults(object):
                 _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='r')
                 label = {}
                 label[edge] = float_formatter(_np.max(self.edge_tvds[idx]) )
-                _nx.draw_networkx_edge_labels(G,pos,edge_labels=label)
+                _nx.draw_networkx_edge_labels(G,pos,edge_labels=label,label_pos=0.2)
             else :
                 _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='b')
 

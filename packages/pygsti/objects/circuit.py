@@ -642,22 +642,31 @@ class Circuit(_gstr.GateString):
 
         self._tup_dirty = self._str_dirty = True
 
-    def replace_identity(self, identity):
+    def replace_identity(self, identity, convert_identity_gates = True):
         """
         Changes the *name* of the idle/identity gate in the circuit. This replaces
-        the name of the identity element in the circuit by setting self.identity = identity
-        *and* by changing the names of all the gates that had the old self.identity name.
+        the name of the identity element in the circuit by setting self.identity = identity.
+        If `convert_identity_gates` is True, this also changes the names of all the gates that 
+        had the old self.identity name.
 
         Parameters
         ----------
         identity : string
             The new name for the identity gate.
 
+        convert_identity_gates : bool, optional
+            If True, all gates that had the old identity name are converted to the new identity
+            name. Otherwise, they keep the old name, and the circuit nolonger considers them to
+            be identity gates.
+
         Returns
         -------
         None
         """
-        self.replace_gatename(self.identity, identity)
+        if convert_identity_gates: 
+            self.replace_gatename(self.identity, identity)
+
+        self._tup_dirty = self._str_dirty = True   
         self.identity = identity
 
     def change_gate_library(self, compilation, allowed_filter=None, allow_unchanged_gates=False, depth_compression=True, 
