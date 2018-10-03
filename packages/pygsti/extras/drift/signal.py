@@ -143,13 +143,19 @@ def DCT_basis_function(omega, T, t):
     """
     return _np.cos(omega*_np.pi*(t+0.5)/T)
 
+#def create_DCT_basis_function(omega, T):
+#
+#    def DCT_basis_function(t): return _np.cos(omega*_np.pi*(t+0.5)/T)
+#
+#    return DCT_basis_function
+
 def probability_from_DCT_amplitudes(alphas, omegas, T, t):
     """
     Todo
 
     This uses the *unnormalized* DCT amplitudes.
     """
-    return _np.sum(_np.array([alphas[omega_idx]*DCT_basis_function(omega, T, t) for omega_idx, omega in enumerate(omegas)]))
+    return _np.sum(_np.array([alphas[i]*DCT_basis_function(omegas[i], T, t) for i in range(len(omegas))]))
 
 # -------------------------------- #
 # ---------- Signal tools -------- #
@@ -181,6 +187,49 @@ def renormalizer(p,method='logistic'):
         raise ValueError("method should be 'logistic' or 'sharp'")
         
     return out
+
+def logistic_transform(p, mean):
+    """
+    Todo
+    """
+    nu = min([1-mean ,mean ]) 
+    out = mean - nu + (2*nu)/(1 + _np.exp(-2*(p - mean)/nu))
+    return out
+
+def reduce_DCT_amplitudes_until_probability_is_physical(alphas, omegas, T, epsilon=0.01, step_size=0.005):
+    """
+
+    """
+    assert(0 in omegas)
+    assert(0 == omegas[0]), "This function assume that the 0 mode is first in the list!"
+    pt = [probability_from_DCT_amplitudes(alphas, omegas, T, t) for t in range(T)]
+    newalphas = alphas.copy()
+
+    if alphas[0] > (1 - epsilon) or alphas[0] < epsilon:
+        newalphas[1:] = _np.zeros(len(newalphas)-1)
+        print("Constraint can't be satisfied using this function, because the zero-mode contribution is outside the requested bounds!")
+        return newalphas
+
+    iteration = 0
+    while max(pt) >= 1-epsilon or min(pt) <= epsilon:
+        iteration += 1
+        print("Interation {} of amplitude reduction.".format(iteration))
+        # We don't change the amplitude of the DC component.
+        for i in range(1,len(newalphas)):
+            if newalphas[i] > 0.:
+                newalphas[i] = newalphas[i] - step_size
+                # If it changes sign we set it to zero.
+                if newalphas[i] < 0.:
+                    newalphas[i] = 0
+            if newalphas[i] < 0.:
+                newalphas[i] = newalphas[i] + step_size
+                # If it changes sign we set it to zero.
+                if newalphas[i] > 0.:
+                    newalphas[i] = 0
+        pt = [probability_from_DCT_amplitudes(newalphas, omegas, T, t) for t in range(T)]
+
+    print("Estimate within bounds.")
+    return newalphas 
 
 def low_pass_filter(data,max_freq = None):
     """
