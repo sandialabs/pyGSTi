@@ -922,7 +922,7 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
                         if q not in subset:
                             subset_circuit.replace_with_idling_wire(q)
                     experiment_dict['circuits'][l,j][(tuple(subset),)] = subset_circuit
-                    experiment_dict['probs'][l,j][tuple(subset)] = idealout[subset_ind]
+                    experiment_dict['probs'][l,j][(tuple(subset),)] = idealout[subset_ind]
             
             if setcomplement_isolated:
                 for subset_ind, subset in enumerate(structure):
