@@ -176,15 +176,27 @@ class SharedIdleAutoGator(AutoGator):
             else:
                 gates = [ existing_gates[l] for l in gatelabel.components ]
 
-            assert( all([len(g.factorgates) == 3 for g in gates]) )
-            #each gate in gates is Composed([fullTargetOp,fullIdleErr,fullLocalErr])
-            # so we compose 1st & 3rd factors of parallel gates and keep just a single 2nd factor...
+            assert( all([len(g.factorgates) == 3 for g in gates]) or
+                    all([len(g.factorgates) == 2 for g in gates]) )
+            #each gate in gates is Composed([fullTargetOp,fullIdleErr,fullLocalErr]) OR
+            # just Composed([fullTargetOp,fullLocalErr]).  In the former case, 
+            # we compose 1st & 3rd factors of parallel gates and keep just a single 2nd factor.
+            # In the latter case, we just compose the 1st and 2nd factors of parallel gates.
             
-            targetOp = Composed([g.factorgates[0] for g in gates], dim=self.parent.dim,
-                                evotype=self.parent._evotype)
-            idleErr = gates[0].factorgates[1]
-            localErr = Composed([g.factorgates[2] for g in gates], dim=self.parent.dim,
-                                evotype=self.parent._evotype)
+            if len(gates[0].factorgates) == 3:
+                targetOp = Composed([g.factorgates[0] for g in gates], dim=self.parent.dim,
+                                    evotype=self.parent._evotype)
+                idleErr = gates[0].factorgates[1]
+                localErr = Composed([g.factorgates[2] for g in gates], dim=self.parent.dim,
+                                    evotype=self.parent._evotype)
+                gates_to_compose = [targetOp,idleErr,localErr]
+
+            else: # == 2 case
+                targetOp = Composed([g.factorgates[0] for g in gates], dim=self.parent.dim,
+                                    evotype=self.parent._evotype)
+                localErr = Composed([g.factorgates[1] for g in gates], dim=self.parent.dim,
+                                    evotype=self.parent._evotype)
+                gates_to_compose = [targetOp,localErr]
 
             #DEBUG could perform a check that gpindices are the same for idle gates
             #import numpy as _np 
@@ -193,7 +205,7 @@ class SharedIdleAutoGator(AutoGator):
             #    assert(_np.array_equal(_slct.as_array(g.factorgates[1].gpindices),
             #                           _slct.as_array(idleErr.gpindices)))            
             
-            ret = Composed([targetOp,idleErr,localErr], dim=self.parent.dim,
+            ret = Composed(gates_to_compose, dim=self.parent.dim,
                            evotype=self.parent._evotype)
             self.parent._init_virtual_obj(ret) # so ret's gpindices get set
             return ret
