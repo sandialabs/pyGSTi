@@ -1817,11 +1817,11 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
 
     def merge_into_1Q(gStr, gate_names, qubit_label):
         """ Add gate_names, all acting on qubit_label, to gStr """
-        while len(gStr) < len(gate_names): gStr.append([]) # make sure prepStr is long enough
+        while len(gStr) < len(gate_names): gStr.append([]) # make sure gStr is long enough
         for iLayer,name in enumerate(gate_names):
             assert(qubit_label not in set( _itertools.chain(*[l.sslbls for l in gStr[iLayer]]))) # only 1 op per qubit per layer!
             gStr[iLayer].append( _Lbl(name,qubit_label) ) # gStr[i] is a list of i-th layer labels
-            if iLayer > 0: assert(qubit_label in set( _itertools.chain(*[l.sslbls for l in gStr[iLayer-1]]))) # only 1 op per qubit per layer!
+            if iLayer > 0: assert(qubit_label in set( _itertools.chain(*[l.sslbls for l in gStr[iLayer-1]]))) # just to be safe
     
     for gatename_fidpair_list in idle_gatename_fidpair_lists:
         # replace 0..(k-1) in each template string with the corresponding
@@ -2264,7 +2264,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     ideal_gateset = build_nqnoise_gateset(nQubits, qubitGraph, cnot_edges, 0, 0, 0,
                                           0, 0, False, verbosity=printer-5,
                                           sim_type="map", parameterization=paramroot)
-                                          # for testing for synthetic idles - so no "terms"
+                                          # for testing for synthetic idles - so no " terms"
     
     Np = gateset.num_params()
     idleGateStr = _objs.GateString(("Gi",))
@@ -2322,7 +2322,30 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     printer.log("%d idle sequences (for all max-lengths: %s)" % (len(sequences), str(maxLengths)))
     
     if idleOnly: #Exit now when we just wanted idle-tomography sequences
-        return sequences, selected_germs 
+        #OLD: return sequences, selected_germs
+
+        #Post processing: convert sequence tuples to a gate string structure
+        Gi_fidpairs = _collections.defaultdict(list) # lists of fidpairs for each L value
+        for _,L,_,prepFid,measFid in sequences:
+            Gi_fidpairs[L].append( (prepFid,measFid) )
+            
+        maxPlaqEls = max([len(fidpairs) for fidpairs in Gi_fidpairs.values()])
+        nMinorRows = nMinorCols = int(_np.floor(_np.sqrt(maxPlaqEls)))
+        if nMinorRows*nMinorCols < maxPlaqEls: nMinorCols += 1
+        if nMinorRows*nMinorCols < maxPlaqEls: nMinorRows += 1
+        assert(nMinorRows*nMinorCols >= maxPlaqEls), "Logic Error!"
+        
+        germList = [ idleGateStr ]
+        Ls = sorted(maxLengths)
+        gss = _objs.LsGermsSerialStructure(Ls,germList,nMinorRows,nMinorCols,
+                                           aliases=None,sequenceRules=None)
+        serial_germ = idleGateStr.serialize() #must serialize to get correct count
+        for L,fidpairs in Gi_fidpairs.items():            
+            germ_power = _gsc.repeat_with_max_length(serial_germ,L)
+            gss.add_plaquette(germ_power, L, idleGateStr, fidpairs) #returns 'missing_list'; useful if using dsfilter arg
+                
+        return gss                
+
     
     #Compute "true-idle" fidpairs for checking synthetic idle errors for 1 & 2Q gates (HARDCODED OK?)
     # NOTE: this works when ideal gates are cliffords and Gi has same type of errors as gates...
@@ -2739,7 +2762,7 @@ def get_kcoverage_template(n, k, verbosity=0):
     of the `k` distinct letters (symbols) appears in those positions for at 
     least one element (word) in the set.  Such a set of sequences is returned
     by this function, namely a list length-`n` lists containing the integers
-    0 to `n-1`.
+    0 to `k-1`.
 
     This notion has application to idle-gate fiducial pair tiling, when we have
     found a set of fiducial pairs for `k` qubits and want to find a set of
@@ -3010,3 +3033,42 @@ def filter_nqubit_sequences(sequence_tuples,sectors_to_keep,new_sectors=None):
 
     return ret
 
+
+#Utility functions
+def gatename_fidpair_list_to_fidpairs(gatename_fidpair_list):
+    """ TODO: docstring """
+    fidpairs = []
+    for gatenames_per_qubit in gatename_fidpair_list:
+        prepStr = []
+        measStr = []
+        for iQubit,gatenames in enumerate(gatenames_per_qubit):
+            prepnames, measnames = gatenames
+            prepStr.extend( [_Lbl(name,iQubit) for name in prepnames] )
+            measStr.extend( [_Lbl(name,iQubit) for name in measnames] )
+        fidpair = (pygsti.obj.GateString(prepStr), pygsti.obj.GateString(measStr)) 
+        fidpairs.append(fidpair)
+    return fidpairs
+
+def fidpairs_to_gatename_fidpair_list(fidpairs, nQubits):
+    """ TODO: docstring Note: fidpairs must have only 1Q gates!"""
+    gatename_fidpair_list = []
+    for fidpair in fidpairs:
+        gatenames_per_qubit = [ (list(),list()) for i in range(nQubits) ] # prepnames, measnames for each qubit
+        prepStr, measStr = fidpair
+        
+        for lbl in prepStr:
+            assert(len(lbl.sslbls) == 1), "Can only convert strings with solely 1Q gates"
+            gatename = lbl.name
+            iQubit = lbl.sslbls[0]
+            gatenames_per_qubit[iQubit][0].append(gatename)
+        
+        for lbl in measStr:
+            assert(len(lbl.sslbls) == 1), "Can only convert strings with solely 1Q gates"
+            gatename = lbl.name
+            iQubit = lbl.sslbls[0]
+            gatenames_per_qubit[iQubit][1].append(gatename)
+
+        #Convert lists -> tuples
+        gatenames_per_qubit = tuple([ (tuple(x[0]),tuple(x[1])) for x in gatenames_per_qubit])
+        gatename_fidpair_list.append(gatenames_per_qubit)
+    return gatename_fidpair_list
