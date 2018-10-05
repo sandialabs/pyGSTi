@@ -2553,12 +2553,15 @@ class LindbladParameterizedGateMap(Gate):
                 else:
                     k = numHamParams + numOtherBasisEls + otherBasisLabels[termLbl[1]] #index of parameter
 
-                # rho -> basisdict[termLbl[1]] * I = basisdict[termLbl[1]] * 1/(d2-1)*sum{ P_i rho P_i } where Pi's are paulis
+                # rho -> basisdict[termLbl[1]] * I = basisdict[termLbl[1]] * sum{ P_i rho P_i } where Pi's
+                #  are the normalized paulis (including the identity), and rho has trace == 1
+                #  (all but "I/d" component of rho are annihilated by pauli sum; for the I/d component, all
+                #   d^2 of the terms in the sum is P/sqrt(d) * I/d * P/sqrt(d) == I/d^2, so the result is just "I")
                 L = basisdict[termLbl[1]]
                 Bmxs = _bt.basis_matrices("pp",d, sparse=False) #Note: only works when `d` corresponds to integral # of qubits!
 
-                for B in Bmxs:
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,): 1.0/(d2-1.)} ), _np.dot(L,B), B, tt) )
+                for B in Bmxs: # Note: *include* identity! (see pauli scratch notebook for details)
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,): 1.0} ), _np.dot(L,B), B, tt) ) # /(d2-1.)
                     
                 #TODO: check normalization of these terms vs those used in projections.
 
