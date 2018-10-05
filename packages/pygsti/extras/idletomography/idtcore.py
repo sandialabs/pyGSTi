@@ -6,10 +6,11 @@ import itertools as _itertools
 import time as _time
 
 from ... import objects as _objs
-from ... import construction as _cnst
 from ... import tools as _tools
-from ...construction import nqnoiseconstruction as _nqn
-from ...baseobjs.label import Label as _Lbl
+
+from . import pauliobjs as _pobjs
+from . import tools as _idttools
+from .idtresults import IdleTomographyResults as _IdleTomographyResults
 
 # This module implements idle tomography, which deals only with
 # many-qubit idle gates (on some number of qubits) and single-
@@ -17,282 +18,6 @@ from ...baseobjs.label import Label as _Lbl
 # As such, it is conventient to represent operations as native
 # Python strings, where there is one I,X,Y, or Z letter per
 # qubit.
-
-
-#def _iPauliCommutatorSign( P1, P2 ):
-#    """
-#    Computes the SIGN of i[P1,P2] -- e.g. i[X,Y] = -Z, so the sign is -1.
-#    """
-#    if P1+P2 in ["XY","YZ","ZX"]:
-#        return -1
-#    if P1+P2 in ["YX","ZY","XZ"]:
-#        return 1
-#    if P1 == "I" or P2 == "I" or P1==P2:
-#        return 0
-#    assert(False), "bad Paulis "+P1+", "+P2
-
-#def _iPauliCommuteParity( P1, P2 ):
-#    """
-#    Returns 1 if P1 and P2 commute, or -1 otherwise
-#    """
-#    if iPauliCommutatorSign(P1,P2) == 0:
-#        return 1
-#    else:
-#        return -1
-
-
-# iPauliCommutatorDummySign() is an inelegant function that returns +1 *unless* P1 & P2 anticommute 
-# *and* have a negative sign.  Nothing elegant about this, but it turns out to be what I need at one point.
-#def iPauliCommutatorDummySign( P1, P2 ):
-#    if P1+P2 in ["XY","YZ","ZX"]:
-#        return -1
-#    if P1+P2 in ["YX","ZY","XZ"]:
-#        return 1
-#    if P1 == "I" or P2 == "I" or P1==P2:
-#        return 1
-#    print( "bad Paulis "+P1+", "+P2)
-#    return 0
-
-
-#Helper functions
-def _commute_parity(P1,P2):
-    """ 1 if P1 commutes w/P2, -1 if they anticommute """
-    return 1 if (P1 == "I" or P2 == "I" or P1==P2) else -1
-
-
-
-class NQOutcome(object):
-    """ A string of 0's and 1's representing a definite outcome in the Z-basis """
-
-    @classmethod
-    def Weight1String(cls, N, i):
-        """ creates a `N`-bit string with a 1 in location `i`. """
-        ident = list("0"*N)
-        ident[i] =  "1"
-        return cls(''.join(ident))
-    
-    
-    @classmethod
-    def Weight2String(cls, N, i, j):
-        """ creates a `N`-bit string with 1s in locations `i` and `j`. """
-        ident = list("0"*N)
-        ident[i] =  "1"
-        ident[j] =  "1"
-        return cls(''.join(ident))
-
-    def __init__(self, string_rep):
-        self.rep = string_rep
-
-    def __eq__(self, other):
-        return self.rep == other.rep
-
-    def flip(self, *indices):
-        """
-        TODO: docstring
-        Flip "0" <-> "1" at any number of indices.
-        Returns a *new* NQOutcome with flipped bits.
-        """
-        outcomes = [ self.rep[i] for i in range(len(self.rep)) ]
-        for i in indices:
-            if outcomes[i] == '0': outcomes[i] = '1'
-            elif outcomes[i] == '1': outcomes[i] = '0'
-        return NQOutcome(''.join(outcomes))
-
-
-
-class NQPauliState(object):
-    """
-    A N-qubit state that is the tensor product of N
-    1-qubit Pauli eigenstates.  These can be represented as 
-    a string of Xs, Ys and Zz (but not Is) *each* with a +/-
-    sign indicating which of the two eigenstates is meant.
-
-    A NQPauliState object can also be used to represent a POVM
-    whose effects are the projections onto the 2^N tensor products
-    of (the given) Pauli eigenstates.  The +/- sign in this case 
-    indicates which eigenstate is equated with the "0" (vs "1") outcome.
-    """
-
-    def __init__(self, string_rep, signs=None):
-        """
-        TODO: docstring - by default signs are all +
-        """
-        assert("I" not in string_rep), "'I' cannot be in a NQPauliState"
-        self.rep = string_rep
-        if signs is None: 
-            signs = (1,)*len(self.rep)
-        self.signs = signs
-
-    def __len__(self):
-        return len(self.rep)
-
-    def __str__(self):
-        sgn = {1:'+', -1:'-'}
-        return "State[" + "".join(["%s%s" % (sgn[s],let)
-                                   for s,let in zip(self.signs,self.rep)]) + "]"
-
-    def to_gatestring(self, pauliDict):
-        """ TODO: docstring """
-        gstr = []
-        sgn = {1:'+', -1:'-'}
-        for i,(s,let) in enumerate(zip(self.signs,self.rep)):
-            key = sgn[s] + let # e.g. "+X", "-Y", etc
-            if key not in pauliDict and s == +1: 
-                key = let # try w/out "+"
-            if key not in pauliDict:
-                raise ValueError("'%s' is not in `pauliDict` (keys = %s)"
-                                 % (key,str(list(pauliDict.keys()))))
-            gstr.extend( [ _Lbl(gatenm,i) for gatenm in pauliDict[key] ] )
-              # pauliDict just has 1Q gate *names* -- need to make into labels
-        return _objs.GateString(gstr).parallelize()
-
-
-
-class NQPauliOp(object):
-    """
-    A N-qubit pauli operator, consisting of 
-    a 1-qubit gate on each of a set of qubits.
-    """
-
-    @classmethod
-    def Weight1Pauli(cls, N, i, P ):
-        """
-        Creates a `N`-qubit Pauli operator with 1-qubit Pauli `P` in location `i`.
-        """
-        ident = list("I"*N)
-        ident[i] =  ["X","Y","Z"][P]
-        return cls(''.join(ident))
-
-    @classmethod
-    def Weight2Pauli(cls, N, i, j, P1, P2 ):
-        """
-        Creates a `N`-qubit Pauli operator with Paulis `P1` and `P2` in locations
-        `i` and `j` respectively.
-        """
-        ident = list("I"*N)
-        ident[i] =  ["X","Y","Z"][P1]
-        ident[j] =  ["X","Y","Z"][P2]
-        return cls(''.join(ident))
-
-    def __init__(self, string_rep, sign=1):
-        self.rep = string_rep
-        self.sign = sign # +/- 1
-
-    def __len__(self):
-        return len(self.rep)
-
-    def __str__(self):
-        return "%s%s" % ('-' if (self.sign == -1) else ' ',self.rep)
-
-    def subpauli(self, indices ):
-        """
-        Returns a new N-qubit Pauli which sets all 1-qubit operations to "I"
-        except those in `indices`.
-        """
-        ident = list("I"*len(self.rep))
-        for i in indices:
-            ident[i]=self.rep[i]
-        return NQPauliOp(''.join(ident))
-        
-    def dot( self, other ):
-        """ 
-        Computes the Hilbert-Schmidt dot product (normed to 1) between this Pauli
-        and `other`.
-        """
-        assert(len(self) == len(other)), "Length mismatch!"
-        if other.rep == self.rep:
-            return self.sign * other.sign
-        else:
-            return 0
-
-    def statedot(self, state):
-        # Instead of computing P1*P2 on each Pauli in self (other), it computes P1*(I+P2).
-        # (this is only correct if all the Paulis in `other` are *not* I)
-
-        assert(isinstance(state, NQPauliState))
-        assert(len(self) == len(state)), "Length mismatch!"
-
-        ret = self.sign # keep track of -1s
-        for P1,P2,state_sign in zip(self.rep,state.rep,state.signs):
-            if _commute_parity(P1,P2) == -1: return 0 
-              # doesn't commute so => P1+P1*P2 = P1+Q = traceless
-            elif P1 == 'I': # I*(I+/-P) => (I+/-P) and "sign" of i-th el of state doesn't matter
-                pass
-            elif state_sign == -1: #  P*(I-P) => (P-I) and so sign (neg[i]) gets moved to I and affects the trace
-                assert(P1 == P2)
-                ret *= -1
-        return ret
-            
-    def commuteswith(self, other):
-        assert(len(self) == len(other)), "Length mismatch!"
-        return bool(_np.prod([_commute_parity(P1,P2) for P1,P2 in zip(s1,s2)])==1)
-
-    def icommutatorOver2(self, other):
-        #Pauli commutators:
-        # i(  ... x Pi Qi x ... 
-        #   - ... x Qi Pi x ... )
-        # Now, Pi & Qi either commute or anticommute, i.e.
-        # PiQi = QiPi or PiQi = -QiPi.  Let Si be the sign (or *parity*) so
-        # by definition PiQi = Si*QiPi.  Note that Si==1 iff Pi==Qi or either == I.
-        # If prod(Si) == 1, then the commutator is zero.  If prod(Si) == -1 then
-        # the commutator is
-        # 2*i*( ... x Pi Qi x ... ) = 2*i*( ... x Ri x ... ) where 
-        #  Ri = I if Pi==Qi (exactly when Si==1), or
-        #  Ri = Pi or Qi if Pi==I or Qi==I , otherwise
-        #  Ri = i(+/-1)P' where P' is another Pauli. (this is same as case when Si == -1)
-
-        def Ri_operator(P1,P2):
-            """ the *operator* (no sign) part of R = P1*P2 """
-            if P1+P2 in ("XY","YX","IZ","ZI"): return "Z"
-            if P1+P2 in ("XZ","ZX","IY","YI"): return "Y"
-            if P1+P2 in ("YZ","ZY","IX","XI"): return "X"
-            if P1+P2 in ("II","XX","YY","ZZ"): return "I"    
-            assert(False)
-
-        def Ri_sign(P1,P2,parity):
-            """ the +/-1 *sign* part of R = P1*P2 (doesn't count the i-factor in 3rd case)"""
-            if parity == 1: return 1 # pass commuteParity(P1,P2) to save computation
-            return 1 if P1+P2 in ("XY","YZ","ZX") else -1
-            
-        assert(len(self) == len(other)), "Length mismatch!"
-        s1,s2 = self.rep, other.rep
-        parities = [ _commute_parity(P1,P2) for P1,P2 in zip(s1,s2) ]
-        if _np.prod(parities) == 1: return None # an even number of minus signs => commutator = 0
-
-        op = ''.join( [Ri_operator(P1,P2) for P1,P2 in zip(s1,s2)] )
-        num_i = parities.count(-1) # number of i factors from 3rd Ri case above
-        sign = (-1)**((num_i+1)/2) * _np.prod( [Ri_sign(P1,P2,p) for P1,P2,p in zip(s1,s2,parities)] )
-        if isinstance(other, NQPauliOp): other_sign = other.sign
-        elif isinstance(other, NQPauliState): other_sign = _np.product(other.signs)
-        else: raise ValueError("Can't take commutator with %s type" % str(type(other)))
-
-        return NQPauliOp(op, sign * self.sign * other_sign)
-
-
-class IdleTomographyResults(object):
-    def __init__(self):
-        self.data = {}
-
-        
-
-#REMOVE
-## PauliStateDot() is a variation of PauliDot.  Instead of computing P1*P2 on each Pauli in s1 (s2), it computes P1*(I+P2).
-## Note that this is only correct if all the Paulis in s1/s2 are *not* I, so it's a hack...
-#def PauliStateDot( s1, s2 ):
-#    N = len(s1)
-#    if N != len(s2):
-#        print( "Wrong length!")
-#        return 0
-#    #assert('I' not in s1),"s1 = %s" % s1
-#    assert('I' not in s2),"s2 = %s" % s2
-#    if (-1) in [iPauliCommuteParity(s1[i],s2[i]) for i in range(N)]:
-#        return 0
-#    else:
-#        return 1
-
-
-
-
 
 
 # HamiltonianMatrixElement() computes the matrix element for a Hamiltonian error Jacobian:
@@ -341,12 +66,12 @@ def stochastic_outcome( prep, error, meas ):
     for s1,P1,s2,P2,Err in zip(prep.signs, prep.rep, meas.signs, meas.rep, error.rep):
         assert(P1 == P2), "Stochastic outcomes must prep & measure along same bases!"
         P = P1 # ( = P2)
-        if _commute_parity(P,Err) == 1: # commutes: [P,Err] == 0
+        if _pobjs._commute_parity(P,Err) == 1: # commutes: [P,Err] == 0
             outcome_str += "0" if (s1 == s2) else "1"
         else: # anticommutes: {P,Err} == 0
             outcome_str += "1" if (s1 == s2) else "0"
 
-    return NQOutcome(outcome_str)
+    return _pobjs.NQOutcome(outcome_str)
 
 
 # Now we can define the functions that do the real work for stochastic tomography.
@@ -410,10 +135,6 @@ def affine_jac_element( prep, error, meas, outcome):
         if errP == 'I': # special case: no affine action on this space
             if prepBasis == measBasis:
                 return 1 if (prepSign*measSign*outsign == 1) else 0
-                #OLD: if outcome_bit == "0":
-                #OLD:     return 1 if (prepSign == measSign) else 0
-                #OLD: if outcome_bit == "1":
-                #OLD:     return 0 if (prepSign == measSign) else 1
             else: return 1 # bases don't match
     
         if measBasis != errP: #then they don't commute (b/c neither can be 'I')
@@ -421,10 +142,6 @@ def affine_jac_element( prep, error, meas, outcome):
         else: # measBasis == errP != 'I'            
             if outcome_bit == "0": return measSign
             else: return measSign*-1
-            #OLD: if measSign == 1:
-            #OLD:     return 1 if (outcome_bit == "0") else -1
-            #OLD: else: #flipped basis, so now "0" decreases in probability.
-            #OLD:     return -1 if (outcome_bit == "0") else 1    
 
     return _np.prod( [_affhelper(s1,P1,Err,s2,P2,o) for s1,P1,s2,P2,Err,o
                       in zip(prep.signs, prep.rep, meas.signs, meas.rep,
@@ -464,74 +181,15 @@ def affine_jac_obs_element( prep, error, meas, observable ):
         else:
             return 2 if (obsP == errP) else 0
     
-
-    #OLD: Unnecessary: Get minus sign due to measurement bases
-    #OLD: observed_indices = [ i for i,letter in enumerate(observable.rep) if letter != 'I' ]
-    #OLD: minus_sign = _np.prod([meas.signs[i] for i in observed_indices]) # not accounted for below?
-
     return _np.prod( [_affhelper(s1,P1,Err,s2,P2,o) for s1,P1,s2,P2,Err,o
                       in zip(prep.signs, prep.rep, meas.signs, meas.rep,
                              error.rep, observable.rep)] )
 
 
-    # REMOVE
-    # prod = _np.prod( [_affhelper(s1,P1,Err,s2,P2,'0') for s1,P1,s2,P2,Err
-    #                   in zip(prep.signs, prep.rep, meas.signs, meas.rep,
-    #                          error.rep)] )
-    # prod *= 2**len(observed_indices) #* minus_sign
-    # return prod * observable.sign
-    # 
-    # ret = 1
-    # for i in observed_indices:
-    #     ret *= 2 * _affhelper(prep.signs[i],prep.rep[i],error.rep[i],
-    #                           meas.signs[i],meas.rep[i],"0")
-    # return ret * observable.sign * minus_sign # add observable's sign if it had one
+# -----------------------------------------------------------------------------
+# Experiment generation: 
+# -----------------------------------------------------------------------------
 
-    #REMOVE - more scratch
-        #w/minus sign if meas has minus sign (using 'obs'
-        # is equivalent to ('+' - '-')/2 result, as it is:
-        # == ( Tr( (I+obs) * ErrorOp[ prep ] ) - Tr((I-obs) * ErrorOp[ prep ] ) )/2
-        # == ( '+' - '-' ) /2  which == ('0'-'1')/2 if meas_sign==1 and == ('1'-'0')/2
-        # if meas_sign==-1.
-        
-        # What if observable has just 1 index but error has 2 observed indices, e.g. if
-        # observable = "ZIIZ" and error = "ZZII"?
-        # qubit 4: I on error (no error): Tr( Z * (I+/-P) ) = +/- if P == Z (if measuring in same basis as prep)
-        # qubit 3: I's on both: Tr( I * I * (I+/-P) ) = 1 regardless of prep/measure basis
-        # qubit 2: I on observable: Tr( I * AffZ[ I+/-P ]) = Tr( I * Z ) = 0
-        # qubit 1: No I's: Tr( Z * AffZ[ I+/-P ]) = Tr( I ) = 1
-        
-        # cmp with Tr( (I+/-P) (I+/-P) ) = Tr( I + s1*s2*I) 
-
-
-    #SCRATCH REMOVE
-    ##Get observable using all "+" bases:
-    ## <Z> = 0 count - 1 count (if measFid sign is +1, otherwise reversed via minus_sign)
-    #if len(observed_indices) == 1: 
-    #    i = observed_indices[0] # the qubit we care about
-    #    v0 = v1 = 0
-    #    #for outcome,cnt in drow.counts.items():
-    #    for outcome in alloutcomes(prep, meas, maxErrWeight):
-    #        val = affine_jac_element( prep, error, meas, outcome)
-    #        if outcome.rep[i] == '0': v0 += val
-    #        else: v1 += val
-    #    exptn = float(cnt0 - cnt1)/total
-    #    
-    #    # <ZZ> = 00 count - 01 count - 10 count + 11 count (* minus_sign)
-    #    elif len(observed_indices) == 2: 
-    #        i,j = observed_indices # the qubits we care about
-    #        cnt_even = cnt_odd = 0
-    #        for outcome,cnt in drow.counts.items():
-    #            if outcome[0][i] == outcome[0][j]: cnt_even += cnt
-    #            else: cnt_odd += cnt
-    #        exptn = float(cnt_even - cnt_odd)/total
-    #        fp = 0.5 + 0.5*float(cnt_even - cnt_odd + 1)/(total + 2)
-    #    else:
-    #        raise NotImplementedError("Expectation values of weight > 2 observables are not implemented!")
-
-
-
-#Experiment generation: HERE
 # we want a structure for the gate sequences that holds separately the prep & meas fiducials
 # b/c when actually doing idle tomography we don't want to rely on a particular set of fiducial
 # pairs (since this is non-unique) for Hamiltonian, Stochastic, etc.
@@ -545,96 +203,6 @@ def affine_jac_obs_element( prep, error, meas, observable ):
 #       get_obs_X_err_rate(fidpair, outcome/observable, ...)
 
 
-def alloutcomes(prep, meas, maxweight):
-    """
-    Lists every "error bit string" that could be caused by an error of weight
-    up to `maxweight` when performing prep & meas (must be in same basis, but may 
-    have different signs).
-
-    prep, meas : NQPauliState
-    """
-    if not (0 < maxweight <= 2): raise NotImplementedError("Only maxweight <= 2 is currently supported")
-    assert(prep.rep == meas.rep), "`prep` and `meas` must specify the same basis!"
-    expected = ["0" if s1==s2 else "1" for s1,s2 in zip(prep.signs,meas.signs)]
-      #whether '0' or '1' outcome is expected, i.e. what is an "error"
-
-    N = len(prep) # == len(meas)
-    eoutcome = NQOutcome(''.join(expected))
-    if maxweight == 1:
-        return [eoutcome.flip(i) for i in range(N)]
-    else:
-        return [eoutcome.flip(i) for i in range(N)] + \
-               [eoutcome.flip(i,j) for i in range(N) for j in range(i+1,N)]
-
-
-def allerrors(N, maxweight):
-    """ lists every Pauli error for N qubits with weight <= `maxweight` """
-    if not (0 < maxweight <= 2): raise NotImplementedError("Only maxweigth <= 2 is currently supported")
-    if maxweight == 1:
-        return [NQPauliOp.Weight1Pauli(N,loc,p) for loc in range(N) for p in range(3)]
-    else:
-        return [NQPauliOp.Weight1Pauli(N,loc,p) for loc in range(N) for p in range(3)] + \
-               [NQPauliOp.Weight2Pauli(N,loc1,loc2,p1,p2) for loc1 in range(N) 
-                for loc2 in range(loc1+1,N)
-                for p1 in range(3) for p2 in range(3)]
-
-def allobservables( meas, maxweight ):
-    """
-    Lists every weight <= `maxweight` observable whose expectation value can be
-    extracted from the local Pauli measurement described by "Meas".
-
-    Meas: NQPauliState (*not* precisely an N-qubit Pauli -- a list of 1-qubit Paulis, technically)
-    """
-    if not (0 < maxweight <= 2): raise NotImplementedError("Only maxweight <= 2 is currently supported")
-    #Note: returned observables always have '+' sign (i.e. .sign == +1).  We're
-    # not interested in meas.signs - this is take into account when we compute the
-    # expectation value of our observable given a prep & measurement fiducial.
-    if maxweight == 1:
-        return [NQPauliOp(meas.rep).subpauli([i]) for i in range(len(meas))]
-    else:
-        return [NQPauliOp(meas.rep).subpauli([i]) for i in range(len(meas))] + \
-               [NQPauliOp(meas.rep).subpauli([i,j]) for i in range(len(meas)) for j in range(i+1,len(meas))]
-
-#HERE - more TODO
-
-#Use NQPauliState.to_gatestring()
-#def paulibasisletters_to_gatestring(letters,typ):
-#    gstr = []
-#    for i,letter in enumerate(letters):
-#        gstr.extend( basis_to_fiducial(letter,i,typ))
-#    return _objs.GateString(gstr)
-
-def tile_pauli_fidpairs(base_fidpairs, nQubits, maxweight):
-    """ 
-    TODO: docstring - note els of "base_fidpairs" are 2-tuples of NQPauliState
-    objects of maxweight qubits, so sign of basis is included too.
-    """
-    nqubit_fidpairs = []
-    tmpl = _nqn.get_kcoverage_template(nQubits, maxweight)
-    for base_prep,base_meas in base_fidpairs:
-        for tmpl_row in tmpl:
-            #Replace 0...weight-1 integers in tmpl_row with Pauli basis
-            # designations (e.g. +X) to construct NQPauliState objects.
-            prep = NQPauliState( [ base_prep.rep[i] for i in tmpl_row ],
-                                 [ base_prep.signs[i] for i in tmpl_row] )
-            meas = NQPauliState( [ base_meas.rep[i] for i in tmpl_row ],
-                                 [ base_meas.signs[i] for i in tmpl_row] )
-            nqubit_fidpairs.append((prep,meas))
-
-    _tools.remove_duplicates_in_place(nqubit_fidpairs)
-    return nqubit_fidpairs
-
-
-
-
-#Scratch REMOVE
-#  prepDict & measDict are dicts w/keys like "+X","X" or "-X", etc. and values
-#  are gatename lists, e.g. ('Gx','Gx') without any qubit index.
-#    prepDict,measDict = pauliDicts
-#    fidpairs = [ (x.to_gatestring(prepDict),x.to_gatestring(measDict))
-#                 for x,y in base_fidpairs ] # e.g. convert ("XY","ZX") to tuple of GateStrings
-#    gatename_fidpair_lists = fidpairs_to_gatename_fidpair_list(fidpairs, nQubits)
-#    return _nqn.tile_idle_fidpairs(nQubits, gatename_fidpair_lists, maxweight) # returns *GateStrings*!
 
 
 def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
@@ -646,10 +214,6 @@ def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
     Returns a list of 2-tuples of NQPauliState objects of length `nQubits`
     representing fiducial pairs.
     """
-#                             sto_tmpl=("X","Y","Z") # could be "-X", etc. ("XX","YY","ZZ","ZY","ZX","XZ","YZ","YX","XY"),
-#                             aff_tmpl=??, maxweight=2):
-
-
     fidpairs = [] # list of 2-tuples of NQPauliState objects to return
 
     #convert +'s and -'s to dictionaries of +/-1 used later:
@@ -688,10 +252,10 @@ def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
                 # flip base (preferred) basis signs as instructed by fliptup
                 prepSigns = [ f*base_prep_signs[l] for f,l in zip(fliptup,basisLets)]
                 measSigns = [ f*base_meas_signs[l] for f,l in zip(fliptup,basisLets)]
-                sto_tmpl_pairs.append( (NQPauliState(''.join(basisLets), prepSigns),
-                                        NQPauliState(''.join(basisLets), measSigns)) )
+                sto_tmpl_pairs.append( (_pobjs.NQPauliState(''.join(basisLets), prepSigns),
+                                        _pobjs.NQPauliState(''.join(basisLets), measSigns)) )
 
-        fidpairs.extend( tile_pauli_fidpairs(sto_tmpl_pairs, nQubits, maxweight) )
+        fidpairs.extend( _idttools.tile_pauli_fidpairs(sto_tmpl_pairs, nQubits, maxweight) )
 
     elif include_affine:
         raise ValueError("Cannot include affine sequences without also including stochastic ones!")
@@ -712,10 +276,10 @@ def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
             #  so just use preferred signs
             prepSigns = [ base_prep_signs[l] for l in prepLets]
             measSigns = [ base_meas_signs[l] for l in measLets]
-            ham_tmpl_pairs.append( (NQPauliState(prepLets, prepSigns),
-                                    NQPauliState(measLets, measSigns)) )
+            ham_tmpl_pairs.append( (_pobjs.NQPauliState(prepLets, prepSigns),
+                                    _pobjs.NQPauliState(measLets, measSigns)) )
             
-        fidpairs.extend( tile_pauli_fidpairs(ham_tmpl_pairs, nQubits, maxweight) )
+        fidpairs.extend( _idttools.tile_pauli_fidpairs(ham_tmpl_pairs, nQubits, maxweight) )
 
     return fidpairs
 
@@ -784,194 +348,9 @@ def make_idle_tomography_list(nQubits, pauliDicts, maxLengths, maxErrWeight=2,
     return listOfExperiments
 
 
-# Finally, HamiltonianExptList() generates a list of experiments for detecting Hamiltonian errors.
-#def HamiltonianExptList( N ):
-#    if N==1:
-#        return ["X","Y","Z"]
-#    else:
-#        return ExtendPauliPairListToN( ["ZY","ZX","XZ","YZ","YX","XY"], N)
-#
-#
-## Stochastic errors affect definite-outcome circuits, so we work with effects and their probabilities
-## instead of traceless observables and their expectation values.
-## These are some functions that play the same role as the simple Weight-1&2 Pauli functions used earlier
-#
-## StochasticExptList() provides a list of all the experiments (prep and measurement are in the same Pauli basis)
-## required to diagnose stochastic Pauli errors
-#def StochasticExptList( N ):
-#    if N==1:
-#        return ["X","Y","Z"]
-#    else:
-#        return ExtendPauliPairListToN( ["XX","YY","ZZ","ZY","ZX","XZ","YZ","YX","XY"], N)
-#
-## AffineExptList() generates a list of experiments that is sufficient for diagnosing affine errors.  There
-## are 3x as many as stochastic -- unfortunately, it's not sufficient to just flip every experiment, nor
-## to just flip one bit in each pair.  We need to do 3 out of 4 of { ZZ, ZW, WZ, WW} in order to separate all affines.
-## I have chosen to do {ZZ, ZW, WZ}.
-#def AffineExptList( N ):
-#    Plist = ["X","Y","Z"]
-#    XPlist = ["U","V","W"]
-#    if N==1:
-#        return Plist+XPlist
-#    else:
-#        Pairlist = [a+b for a in Plist for b in Plist] + \
-#                   [a+b for a in Plist for b in XPlist] + \
-#                   [a+b for a in XPlist for b in Plist]
-#        return ExtendPauliPairListToN( Pairlist, N)
-
-
-
+# -----------------------------------------------------------------------------
 # Running idle tomography
-
-# NEEDED?
-def nontrivial_paulis(wt): 
-    "List all nontrivial paulis of given weight `wt` as tuples of letters"
-    ret = []
-    for tup in _itertools.product( *([['X','Y','Z']]*wt) ):
-        ret.append( tup )
-    return ret
-
-def set_Gi_errors(nQubits, gateset, errdict, rand_default=None, hamiltonian=True, stochastic=True, affine=True):
-    """ 
-    For setting specific or random error terms (for a data-generating gateset)
-    within a `gateset` created by `build_nqnoise_gateset`.
-    """
-    rand_rates = []; i_rand_default = 0
-    v = gateset.to_vector()
-    for i,factor in enumerate(gateset.gates['Gi'].factorgates): # each factor applies to some set of the qubits (of size 1 to the max-error-weight)
-        #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
-        assert(isinstance(factor, _objs.EmbeddedGateMap)), "Expected Gi to be a composition of embedded gates!"
-        sub_v = v[factor.gpindices]
-        bsH = factor.embedded_gate.ham_basis_size
-        bsO = factor.embedded_gate.other_basis_size
-        if hamiltonian: hamiltonian_sub_v = sub_v[0:bsH-1] # -1s b/c bsH, bsO include identity in basis
-        if stochastic:  stochastic_sub_v = sub_v[bsH-1:bsH-1+bsO-1]
-        if affine:      affine_sub_v = sub_v[bsH-1+bsO-1:bsH-1+2*(bsO-1)]
-
-        for k,tup in enumerate(nontrivial_paulis( len(factor.targetLabels) )):
-            lst = ['I']*nQubits
-            for ii,i in enumerate(factor.targetLabels):
-                lst[int(i[1:])] = tup[ii] # i is something like "Q0" so int(i[1:]) extracts the 0
-            label = "".join(lst)
-
-            if "S(%s)" % label in errdict:
-                Srate = errdict["S(%s)" % label]
-            elif rand_default is None:
-                Srate = 0.0
-            elif isinstance(rand_default,float):
-                Srate = rand_default *_np.random.random()
-                rand_rates.append(Srate)
-            else: #assume rand_default is array-like, and gives default rates
-                Srate = rand_default[i_rand_default]
-                i_rand_default += 1
-                
-            if "H(%s)" % label in errdict:
-                Hrate = errdict["H(%s)" % label]
-            elif rand_default is None:
-                Hrate = 0.0
-            elif isinstance(rand_default,float):
-                Hrate = rand_default *_np.random.random()
-                rand_rates.append(Hrate)
-            else: #assume rand_default is array-like, and gives default rates
-                Hrate = rand_default[i_rand_default]
-                i_rand_default += 1
-
-            if "A(%s)" % label in errdict:
-                Arate = errdict["A(%s)" % label]
-            elif rand_default is None:
-                Arate = 0.0
-            elif isinstance(rand_default,float):
-                Arate = rand_default *_np.random.random()
-                rand_rates.append(Arate)
-            else: #assume rand_default is array-like, and gives default rates
-                Arate = rand_default[i_rand_default]
-                i_rand_default += 1
-
-            if hamiltonian: hamiltonian_sub_v[k] = Hrate
-            if stochastic: stochastic_sub_v[k] = _np.sqrt(Srate) # b/c param gets squared
-            if affine: affine_sub_v[k] = Arate
-            
-    gateset.from_vector(v)
-    return _np.array(rand_rates,'d') # the random rates that were chosen (to keep track of them for later)
-
-
-def predicted_intrinsic_rates(nQubits, maxErrWeight, gateset, hamiltonian=True, stochastic=True, affine=True):
-    #Get rates Compare datagen to idle tomography results
-    error_labels = [str(pauliOp.rep) for pauliOp in allerrors(nQubits, maxErrWeight)]
-    v = gateset.to_vector()
-    
-    if hamiltonian:
-        ham_intrinsic_rates = _np.zeros(len(error_labels),'d')
-    else: ham_intrinsic_rates = None
-    
-    if stochastic:
-        sto_intrinsic_rates = _np.zeros(len(error_labels),'d')
-    else: sto_intrinsic_rates = None
-
-    if affine:
-        aff_intrinsic_rates = _np.zeros(len(error_labels),'d')
-    else: aff_intrinsic_rates = None
-
-    for i,factor in enumerate(gateset.gates['Gi'].factorgates):
-        #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
-        assert(isinstance(factor, _objs.EmbeddedGateMap)), "Expected Gi to be a composition of embedded gates!"
-        sub_v = v[factor.gpindices]
-        bsH = factor.embedded_gate.ham_basis_size
-        bsO = factor.embedded_gate.other_basis_size
-        if hamiltonian: hamiltonian_sub_v = sub_v[0:bsH-1] # -1s b/c bsH, bsO include identity in basis
-        if stochastic:  stochastic_sub_v = sub_v[bsH-1:bsH-1+bsO-1]
-        if affine:      affine_sub_v = sub_v[bsH-1+bsO-1:bsH-1+2*(bsO-1)]
-        
-        for k,tup in enumerate(nontrivial_paulis( len(factor.targetLabels) )):
-            lst = ['I']*nQubits
-            for ii,i in enumerate(factor.targetLabels):
-                lst[int(i[1:])] = tup[ii] # i is something like "Q0" so int(i[1:]) extracts the 0
-            label = "".join(lst)
-            if stochastic:  sval = stochastic_sub_v[k]
-            if hamiltonian: hval = hamiltonian_sub_v[k]
-            if affine:      aval = affine_sub_v[k]
-            
-            nTargetQubits = len(factor.targetLabels)
-            
-            if stochastic:
-                # each Stochastic term has two Paulis in it (on either side of rho), each of which is
-                # scaled by 1/sqrt(d), so 1/d in total, where d = 2**nQubits
-                sscaled_val = sval**2 / (2**nTargetQubits) # val**2 b/c it's a *stochastic* term parameter
-            
-            if hamiltonian:
-                # each Hamiltonian term, to fix missing scaling factors in Hamiltonian jacobian
-                # elements, needs a sqrt(d) for each trivial ('I') Pauli... ??
-                hscaled_val = hval * _np.sqrt(2**(2-nTargetQubits)) # TODO: figure this out...
-                # 1Q: sqrt(2) 
-                # 2Q: nqubits-targetqubits (sqrt(2) on 1Q)
-                # 4Q: sqrt(2)**-2
-
-            if affine:
-                ascaled_val = aval * 1/(_np.sqrt(2)**nTargetQubits ) # not exactly sure how this is derived
-                # 1Q: sqrt(2)/6
-                # 2Q: 1/3 * 10-2
-
-            result_index = error_labels.index(label)
-            if hamiltonian: ham_intrinsic_rates[result_index] = hscaled_val
-            if stochastic:  sto_intrinsic_rates[result_index] = sscaled_val
-            if affine:      aff_intrinsic_rates[result_index] = ascaled_val
-
-    return ham_intrinsic_rates, sto_intrinsic_rates, aff_intrinsic_rates
-
-
-
-#This should be an *argument* (or automatic? - but can't unless we're given the gate matrices/reps, which
-# we don't otherwise need) given to sequence gen functions - how to convert pauli-letters to fiducials,
-# or, more precisely, how to associate fiducials with NQPauliState objects.
-#def basis_to_fiducial(pauliLetter,i,typ):
-#    rep = 1 if (typ == "prep") else 1 # FUTURE (maybe w/affine we'll need to make some prep/meaures 3 reps)
-#    if pauliLetter == 'X': return (('Gy',i),)*rep # Gy preps in X state & measures in x-basis (when followed by Z POVM)
-#    if pauliLetter == 'Y': return (('Gx',i),)*rep
-#    if pauliLetter == 'Z': return () # native prep/meas is in Z-basis
-#    assert(False)
-
-    
-
+# -----------------------------------------------------------------------------
 
 def get_obs_stochastic_err_rate(dataset, pauli_fidpair, pauliDicts, GiStr, outcome, maxLengths, fitOrder=1):
     """
@@ -1038,15 +417,6 @@ def get_obs_hamiltonian_err_rate(dataset, pauli_fidpair, pauliDicts, GiStr, obse
     N = len(observable) # number of qubits
     minus_sign = _np.prod([pauli_meas.signs[i] for i in obs_indices])
     
-    #REMOVE
-    ## any preps in "Y" or measures in "X" basis generate minus signs
-    ## since we just use single "Gy" and "Gx" gates for this (instead of 3)
-    #minus_sign_cnt = 0 
-    #for i in obs_indices:
-    #    #if pauli_prep[i] == 'Y': minus_sign_cnt += 1 # taken care of separately when computing Jacobian element
-    #    if pauli_meas[i] == 'X': minus_sign_cnt += 1
-    ##print("DB: ",obs_indices, pauli_prep, pauli_meas, minus_sign_cnt)
-
     def unsigned_exptn_and_weight(gatestring, observed_indices):
         #compute expectation value of observable
         drow = dataset[gatestring] # dataset row
@@ -1106,14 +476,11 @@ def get_obs_hamiltonian_err_rate(dataset, pauli_fidpair, pauliDicts, GiStr, obse
 def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2, GiStr=('Gi',),
                        extract_hamiltonian=True, extract_stochastic=True, extract_affine=True,
                        advancedOptions=None, comm=None, verbosity=0):
-#HERE
-# pauliDict, hamFidPairs, stoFidPairs
-#fitOrder=1, extract_stochastic=True,
-# extract_hamiltonian=True, saved_fits=None, debug_true_obs_rates=None,
+
     if advancedOptions is None: 
         advancedOptions = {}
 
-    result = IdleTomographyResults()
+    result = _IdleTomographyResults()
     prepDict,measDict = pauliDicts
     GiStr = _objs.GateString( GiStr )
                        
@@ -1127,7 +494,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
     if preferred_meas_basis_signs == "auto":
         preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
 
-    errors = allerrors(nQubits,maxErrWeight)
+    errors = _idttools.allerrors(nQubits,maxErrWeight)
     fitOrder = advancedOptions.get('fit order',1)
 
     if extract_stochastic:
@@ -1148,7 +515,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
             #REM pauli_fidpair = (expt,expt) # Stochastic: prep & measure in same basis
             #NOTE: pauli_fidpair is a 2-tuple of NQPauliState objects
             
-            all_outcomes = alloutcomes(pauli_fidpair[0], pauli_fidpair[1], maxErrWeight)
+            all_outcomes = _idttools.alloutcomes(pauli_fidpair[0], pauli_fidpair[1], maxErrWeight)
             #REM debug_offset = iexpt * len(all_outcomes)
             t0 = _time.time()            
             for j,out in enumerate(all_outcomes):
@@ -1232,7 +599,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
         my_J = []; my_obs_infos = []; my_Jaff = []
         for i,(ifp,pauli_fidpair) in enumerate(my_FidpairList):
             #REM pauli_fidpair = (Prep(expt),Meas(expt))
-            all_observables = allobservables( pauli_fidpair[1], maxErrWeight )
+            all_observables = _idttools.allobservables( pauli_fidpair[1], maxErrWeight )
 
             #REM debug_offset = iexpt * len(all_observables) # all_observables is the same on every loop (TODO FIX)
             t0 = _time.time()            
@@ -1316,259 +683,3 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
         return result
     else: # no results on other ranks...
         return None
-
-
-
-
-#SCRATCH BELOW --------------------------------------------------------------------------------------------------------
-#SCRATCH BELOW --------------------------------------------------------------------------------------------------------
-#SCRATCH BELOW --------------------------------------------------------------------------------------------------------
-
-# In[5]:
-
-# These functions are designed to build particular experiments that I have found to work for Hamiltonian tomography.
-
-# The circuits that detect Hamiltonian errors treat each qubit independently.  And on each
-# qubit, they prep in one basis and measure in another, in order to detect the 3rd.  So they
-# can described by one Pauli for each qubit -- the one that the prep/measure pair on that qubit would detect.
-# For example, a "Z" circuit has prep/measure {Y / X}.  A "YX" circuit has prep/measure {XZ / ZY}.
-# The functions defined here create and define circuits like that.
-
-## First, some obvious things that are useful:  NextPauli just maps X -> Y -> Z -> X.
-#def NextPauli( P ):
-#    return {"X":"Y","Y":"Z","Z":"X"}[P]
-## PrevPauli does the inverse of NextPauli:  X -> Z -> Y -> X
-#def PrevPauli( P ):
-#    return {"X":"Z","Y":"X","Z":"Y"}[P]
-## Prep takes an N-qubit Pauli string and maps each Pauli to the previous Pauli in [X,Y,Z]
-#def Prep( expt ):
-#    return ''.join([PrevPauli(p) for p in expt])
-## Meas takes an N-qubit Pauli string and maps each Pauli to the next Pauli in [X,Y,Z]
-#def Meas( expt ):
-#    return ''.join([NextPauli(p) for p in expt])
-#
-## BStr defines strings like "01010101" and "00001111", and replaces 0 and 1 with symbols[0] and symbols[1]
-#def BStr( N, bit, symbols ):
-#    return ''.join([symbols[((i>>bit) & 1)] for i in range(N)])
-#
-## ExtendPauliPair() takes a 2-Pauli string "PauliPair" (e.g. "XY") and generates a set of N-Pauli strings 
-## such that every pair of qubits takes those two values in at least one string.
-#def ExtendPauliPairToN( PauliPair, N ):
-#    if PauliPair[0] == PauliPair[1]:
-#        return [PauliPair[0]*N]
-#    else:
-#        return [BStr(N,i,[PauliPair[0],PauliPair[1]]) for i in range(int(math.ceil(math.log(N,2))))]
-#
-## ExtendPauliPairListToN() just applies ExtendPauliPair to a list of Pauli pairs and flattens the result.
-#def ExtendPauliPairListToN( PauliPairList, N ):
-#    return [str for PP in PauliPairList for str in ExtendPauliPairToN(PP,N) ]
-
-
-
-
-
-#REMOVE
-## XOR() is just an XOR... but on string characters.  Duh.
-#def XOR( b1, b2 ):
-#    if b1==b2:
-#        return "0"
-#    else:
-#        return "1"
-#
-## To detect affine errors, we need a shorthand for experiments that initialize in the -1 eigenstate of
-## a given Pauli.  So I use U/V/W for this.  U ==> initialize in -X.  Same for V (-Y) and W (-Z).
-## SignedSinglePauliToPauli() converts a "signed" Pauli (e.g. U,V,W) to a real Pauli (X,Y,Z).
-#def SignedSinglePauliToPauli( SP ):
-#    return {"X":"X","Y":"Y","Z":"Z","U":"X","V":"Y","W":"Z"}[SP]
-#
-## SignedSinglePauliToMaskBit() extracts the sign of a "signed" Pauli, returning 0 if it's a real Pauli and 1 if flipped.
-#def SignedSinglePauliToMaskBit( SP ):
-#    if SignedPauliToPauli(SP)==SP:
-#        return "0"
-#    else:
-#        return "1"
-## SignedPauliToPauli() just applies SignedSinglePauliToPauli() to a string.
-#def SignedPauliToPauli( SPstring ):
-#    return ''.join( [SignedSinglePauliToPauli(sp) for sp in SPstring] )
-#
-## SignedPauliToMask() just applies SignedSinglePauliToMaskBit() to a string.
-#def SignedPauliToMask( SPstring ):
-#    return ''.join( [SignedSinglePauliToMaskBit(sp) for sp in SPstring] )
-#
-#
-## In[21]:
-## ExtendedStochasticMatrixElement() just computes a stochastic Jacobian element, but converts signed Paulis
-## to regular Paulis before doing so (sign has no effect on the behavior of a stochastic error)
-#def ExtendedStochasticMatrixElement( PrepMeas, Error, OutcomeString ):
-#    return StochasticMatrixElement( SignedPauliToPauli( PrepMeas ), Error, OutcomeString )
-#
-## ExtendedAffineMatrixElement() computes an affine Jacobian element, but converts signed Paulis
-## to regular Paulis *and* extracts the sign and converts it to an explicit mask 
-## (sign flips the effect of of affine errors)
-#def ExtendedAffineMatrixElement( PrepMeas, Error, OutcomeString ):
-#    return AffineMatrixElement( SignedPauliToPauli(PrepMeas), Error, OutcomeString, SignedPauliToMask(PrepMeas) )
-
-
-
-
-
-#HAMILTONIAN
-
-# In[4]:
-
-# Now, some convenience functions
-
-
-
-# In[6]:
-
-# Okay:  let's put things together and show that we can do idle tomography on Hamiltonian errors.
-
-def ShowThatHamiltonianWorks( N, verbose=False ):
-    # Make a list of the experiments that my secret sauce says we need
-    Expts = HamiltonianExptList( N )
-    # Create the Jacobian by constructing observables for each experiment and computing matrix elements w/errors.
-    J = _np.array( [[HamiltonianMatrixElement( Prep(expt), err, obs ) for err in AllErrors(N)]                       for expt in Expts for obs in AllObservables( Meas(expt) )] )
-
-    # Compute and print out a bunch of statistics and descriptive stuff
-    AllObsv = [obs for expt in Expts for obs in AllObservables(Meas(expt))]
-    print( len(Expts), "Experiments on",N,"qubits")
-    if verbose:
-        print( len(AllObsv),"Observables =",AllObsv )
-        print( len(AllErrors(N)),"Errors =",AllErrors(N) )
-        print( J )
-    else:
-        print( len(AllObsv),"Observables" )
-        print( len(AllErrors(N)),"Errors" )
-    # Now compute the singular values of the Jacobian and see if there's a >0 one for each error
-    sv = _np.linalg.svd(J)[1]
-    print( len(_np.where( sv > 1e-3)[0]),"singular values > 1e-3" )
-    print( "Smallest singular value is",min(sv) )
-    if verbose:
-        print("Singular values are",sv)
-
-
-
-# In[14]:
-
-# Next, let's turn to detecting stochastic errors.
-
-
-# In[7]:
-
-
-    
-# StochasticJacobian() computes the entire Jacobian matrix describing how the outcome probabilities of
-# all pairwise Pauli experiments vary with stochastic error rates.  This is a matrix that can multiply
-# a vector of stochastic Pauli error rates, and the result is a vector of observable bit error rates
-# (i.e., probabilities of weight-2 error strings.
-def StochasticJacobian( ExptList ):
-    N = len(ExptList[0])
-    return _np.array( [[StochasticMatrixElement( expt, err, out ) for err in AllErrors(N)]
-                      for expt in ExptList for out in AllOutcomes( N )] )
-
-# Okay, let's put it all together
-def ShowThatStochasticWorks( N ):
-    M = StochasticJacobian( StochasticExptList(N) )
-    print( len(StochasticExptList(N)),"experiments on",N,"qubits." )
-    print( "N =",N )
-    print( "Number of distinct weight-1&2 errors:", len(AllErrors(N)) )
-    print( "Number of distinct experiments:",len(StochasticExptList(N)) )
-    print( "Shape of Jacobian:",M.shape )
-    print( "Rank of Jacobian:",_np.linalg.matrix_rank(M) )
-    print( "Smallest singular value:",min(_np.linalg.svd(M)[1]) )
-
-
-
-# In[20]:
-
-
-
-# In[24]:
-
-    
-# AffineJacobian() just computes a Jacobian for the derivative of all the outcome probabilities of
-# experiments in "ExptList" with respect to *both* stochastic and affine errors.
-def AffineJacobian( ExptList ):
-    N = len(ExptList[0])
-    return _np.array( [[ExtendedStochasticMatrixElement( expt, err, out ) for err in AllErrors(N)] + \
-                       [ExtendedAffineMatrixElement( expt, err, out ) for err in AllErrors(N)]
-                       for expt in ExptList for out in AllOutcomes( N )] )
-
-# Now let's put it all together and show that this actually works.
-def ShowThatAffineWorks( N ):
-    M = AffineJacobian( AffineExptList(N) )
-    print( len(AffineExptList(N)),"experiments on",N,"qubits.")
-    print( "Number of distinct stochastic+affine weight-1&2 errors:", len(AllErrors(N))*2)
-    print( "Shape of Jacobian:",M.shape)
-    print( "Rank of Jacobian:",_np.linalg.matrix_rank(M))
-    print( "Smallest singular value:",min(_np.linalg.svd(M)[1]))
-
-
-# -------------------------------------------------
-# Routines for running Idle tomography (rough)
-# -------------------------------------------------
-
-
-
-
-def predicted_observable_rates(nQubits, gateset, hamiltonian=True, stochastic=True):
-    stoJ = []
-    hamJ = []
-
-    ham_intrinsic_rates, sto_intrinsic_rates = \
-        predicted_intrinsic_rates(nQubits, gateset, hamiltonian, stochastic)
-    
-    #Get jacobians
-    if stochastic:
-        ExptList = StochasticExptList(nQubits) #list of fidpairs / configs (a prep/meas that gets I^L placed btwn it)
-        for expt in ExptList:
-            for out in AllOutcomes( nQubits ): # probably don't need *all* these outcomes -- just those around 000..000 (TODO)
-                stoJ.append( [ StochasticMatrixElement( expt, err, out ) for err in AllErrors(nQubits) ] )
-        sto_observable_rates = _np.dot(stoJ,sto_intrinsic_rates)
-        
-    if hamiltonian:
-        ExptList = HamiltonianExptList(nQubits)
-        for expt in ExptList:
-            pauli_fidpair = (Prep(expt),Meas(expt)) # Stochastic: prep & measure in same basis
-            for obs in AllObservables( Meas(expt) ):
-                negs = [ bool(pauli_fidpair[0][i] == 'Y') for i in range(nQubits) ] # b/c use of 'Gx' for Y-basis prep really prepares -Y state
-                hamJ.append( [ HamiltonianMatrixElement( Prep(expt), err, obs, negs ) for err in AllErrors(nQubits) ] )
-    
-        ham_observable_rates = _np.dot(hamJ,ham_intrinsic_rates)
-    else:
-        ham_observable_rates = None
-
-    return ham_observable_rates, sto_observable_rates
-
-
-
-###########################################
-#DEBUGGING helper functions               
-###########################################
-sqrt2 = _np.sqrt(2)
-id2x2 = _np.array([[1,0],[0,1]])
-sigma = { 'X': _np.array([[0,1],[1,0]]),
-          'Y': _np.array([[0,-1.0j],[1.0j,0]]),
-          'Z': _np.array([[1,0],[0,-1]]),
-          'I': id2x2 }
-
-def _pmx(s):
-    """ 
-    Construct the pauli matrix from a string `s` of I,X,Y,Z letters.
-    (This is for debugging, as these matrices will get big fast.)
-    """
-    ret = sigma[s[0]].copy()
-    for letter in s[1:]:
-        ret = _np.kron(ret,sigma[letter])
-    return ret
-
-def _pcomm(s1,s2):
-    """
-    Construct the commutator (matrix) from a two pauli-strings `s1` and `s2`
-    of I,X,Y,Z letters.
-    (This is for debugging, as these matrices will get big fast.)
-    """
-    A = pmx(s1)
-    B = pmx(s2)
-    return _np.dot(A,B) - _np.dot(B,A)

@@ -6,8 +6,12 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-#from . import idtcore
-#from . import objects
+from . import idtcore
+from . import pauliobjs
+from . import tools
 
 #just import everything for now
 from .idtcore import * 
+from .tools import *
+from .pauliobjs import NQPauliState, NQPauliOp, NQOutcome
+from .idtresults import IdleTomographyResults
