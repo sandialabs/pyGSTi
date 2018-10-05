@@ -51,15 +51,17 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
 
         - "none"  - no sample error: counts are floating point numbers such
           that the exact probabilty can be found by the ratio of count / total.
-        - "round" - same as "none", except counts are rounded to the nearest
+        - "clip" - no sample error, but clip probabilities to [0,1] so, e.g.,
+          counts are always positive.
+        - "round" - same as "clip", except counts are rounded to the nearest
           integer.
         - "binomial" - the number of counts is taken from a binomial
-          distribution.  Distribution has parameters p = probability of the
-          gate string and n = number of samples.  This can only be used when
-          there are exactly two SPAM labels in gatesetOrDataset.
+          distribution.  Distribution has parameters p = (clipped) probability
+          of the gate string and n = number of samples.  This can only be used
+          when there are exactly two SPAM labels in gatesetOrDataset.
         - "multinomial" - counts are taken from a multinomial distribution.
-          Distribution has parameters p_k = probability of the gate string
-          using the k-th SPAM label and n = number of samples.
+          Distribution has parameters p_k = (clipped) probability of the gate
+          string using the k-th SPAM label and n = number of samples.
 
     seed : int, optional
         If not ``None``, a seed for numpy's random number generator, which
@@ -208,8 +210,10 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                     counts[ol] = countsArray[0,i]
             else:
                 for outcomeLabel,p in ps.items():
-                    pc = _np.clip(p,0,1)
+                    pc = _np.clip(p,0,1) # Note: *not* used in "none" case
                     if sampleError == "none":
+                        counts[outcomeLabel] = float(nWeightedSamples * p)
+                    elif sampleError == "clip":
                         counts[outcomeLabel] = float(nWeightedSamples * pc)
                     elif sampleError == "round":
                         counts[outcomeLabel] = int(round(nWeightedSamples*pc))
