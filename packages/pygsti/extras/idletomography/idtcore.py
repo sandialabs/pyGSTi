@@ -1,14 +1,15 @@
-from __future__ import print_function, division
+""" Core Idle Tomography routines """
+from __future__ import division, print_function, absolute_import, unicode_literals
 
-import math as _math
 import numpy as _np
 import itertools as _itertools
 import time as _time
 
-import pygsti
-import pygsti.construction.nqnoiseconstruction as _nqn
-import pygsti.tools.listtools as _lt
-from pygsti.baseobjs.label import Label as _Lbl
+from ... import objects as _objs
+from ... import construction as _cnst
+from ... import tools as _tools
+from ...construction import nqnoiseconstruction as _nqn
+from ...baseobjs.label import Label as _Lbl
 
 # This module implements idle tomography, which deals only with
 # many-qubit idle gates (on some number of qubits) and single-
@@ -143,7 +144,7 @@ class NQPauliState(object):
                                  % (key,str(list(pauliDict.keys()))))
             gstr.extend( [ _Lbl(gatenm,i) for gatenm in pauliDict[key] ] )
               # pauliDict just has 1Q gate *names* -- need to make into labels
-        return pygsti.obj.GateString(gstr).parallelize()
+        return _objs.GateString(gstr).parallelize()
 
 
 
@@ -601,7 +602,7 @@ def allobservables( meas, maxweight ):
 #    gstr = []
 #    for i,letter in enumerate(letters):
 #        gstr.extend( basis_to_fiducial(letter,i,typ))
-#    return pygsti.obj.GateString(gstr)
+#    return _objs.GateString(gstr)
 
 def tile_pauli_fidpairs(base_fidpairs, nQubits, maxweight):
     """ 
@@ -620,7 +621,7 @@ def tile_pauli_fidpairs(base_fidpairs, nQubits, maxweight):
                                  [ base_meas.signs[i] for i in tmpl_row] )
             nqubit_fidpairs.append((prep,meas))
 
-    _lt.remove_duplicates_in_place(nqubit_fidpairs)
+    _tools.remove_duplicates_in_place(nqubit_fidpairs)
     return nqubit_fidpairs
 
 
@@ -765,7 +766,7 @@ def make_idle_tomography_list(nQubits, pauliDicts, maxLengths, maxErrWeight=2,
     if preferred_meas_basis_signs == "auto":
         preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
         
-    GiStr = pygsti.obj.GateString( GiStr )
+    GiStr = _objs.GateString( GiStr )
 
     pauli_fidpairs = idle_tomography_fidpairs(
         nQubits, maxErrWeight, includeHamSeqs, includeStochasticSeqs,
@@ -839,7 +840,7 @@ def set_Gi_errors(nQubits, gateset, errdict, rand_default=None, hamiltonian=True
     v = gateset.to_vector()
     for i,factor in enumerate(gateset.gates['Gi'].factorgates): # each factor applies to some set of the qubits (of size 1 to the max-error-weight)
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
-        assert(isinstance(factor, pygsti.objects.EmbeddedGateMap)), "Expected Gi to be a composition of embedded gates!"
+        assert(isinstance(factor, _objs.EmbeddedGateMap)), "Expected Gi to be a composition of embedded gates!"
         sub_v = v[factor.gpindices]
         bsH = factor.embedded_gate.ham_basis_size
         bsO = factor.embedded_gate.other_basis_size
@@ -913,7 +914,7 @@ def predicted_intrinsic_rates(nQubits, maxErrWeight, gateset, hamiltonian=True, 
 
     for i,factor in enumerate(gateset.gates['Gi'].factorgates):
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
-        assert(isinstance(factor, pygsti.objects.EmbeddedGateMap)), "Expected Gi to be a composition of embedded gates!"
+        assert(isinstance(factor, _objs.EmbeddedGateMap)), "Expected Gi to be a composition of embedded gates!"
         sub_v = v[factor.gpindices]
         bsH = factor.embedded_gate.ham_basis_size
         bsO = factor.embedded_gate.other_basis_size
@@ -1114,7 +1115,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
 
     result = IdleTomographyResults()
     prepDict,measDict = pauliDicts
-    GiStr = pygsti.obj.GateString( GiStr )
+    GiStr = _objs.GateString( GiStr )
                        
     #idebug = 0
     rankStr = "" if (comm is None) else "Rank%d: " % comm.Get_rank()
@@ -1138,7 +1139,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
 
         #divide up strings among ranks
         indxFidpairList = list(enumerate(pauli_fidpairs))
-        my_FidpairList, _,_ = pygsti.tools.mpitools.distribute_indices(indxFidpairList,comm,False)
+        my_FidpairList, _,_ = _tools.mpitools.distribute_indices(indxFidpairList,comm,False)
 
         my_J = []; my_obs_infos = []
         #REM my_obs_err_rates = []
@@ -1226,7 +1227,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
 
         #divide up fiducial pairs among ranks
         indxFidpairList = list(enumerate(pauli_fidpairs))
-        my_FidpairList, _,_ = pygsti.tools.mpitools.distribute_indices(indxFidpairList,comm,False)
+        my_FidpairList, _,_ = _tools.mpitools.distribute_indices(indxFidpairList,comm,False)
 
         my_J = []; my_obs_infos = []; my_Jaff = []
         for i,(ifp,pauli_fidpair) in enumerate(my_FidpairList):
