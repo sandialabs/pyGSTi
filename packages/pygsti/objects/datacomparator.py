@@ -286,7 +286,7 @@ class DataComparator():
         try: assert len(self.dataset_list_or_multidataset) == 2
         except: raise ValueError("Can only compute TVD between two datasets.")  
 
-        return self.tvds.get(gatestring)
+        return self.tvds[gatestring]
 
     def get_SSTVD(self, gatestring):
         """
@@ -318,7 +318,7 @@ class DataComparator():
         """
         Todo docstring
         """
-        return self.llrs.get(gatestring)
+        return self.llrs[gatestring]
 
     def get_LLR_pseudothreshold(self):
         """
@@ -342,7 +342,7 @@ class DataComparator():
         """
         Todo docstring
         """
-        return self.pVals.get(gatestring)
+        return self.pVals[gatestring]
 
     def get_pvalue_pseudothreshold(self):
         """
@@ -405,28 +405,28 @@ class DataComparator():
     #     worst_strings = sorted(worst_strings, key=lambda x: x[1])[:number]
     #     return worst_strings
 
-    def rectify_datasets(self,confidence_level=0.95,target_score='dof'):
-        """
-        Todo
-        """
-        assert(False), "This method needs to be fixed by Tim!"
-        if target_score == 'dof':
-            target_score = self.dof
-        single_string_thresh = find_thresh(confidence_level,self.num_strs,self.dof)
-        single_thresh_violator_locs = _np.nonzero(_np.where(self.llrVals>single_string_thresh,1,0))[0]
-        self.alpha_dict = {}
-        if isinstance(self.dataset_list_or_multidataset,list):
-            dsList = [DS.copy_nonstatic() for DS in self.dataset_list_or_multidataset]
-        elif isinstance(self.dataset_list_or_multidataset,_MultiDataSet):
-            dsList = [self.dataset_list_or_multidataset[key].copy() for key in self.dataset_list_or_multidataset.keys()]
-        for violator_loc in single_thresh_violator_locs:
-            gatestring = self.llrVals_and_strings[violator_loc][0]
-            llr = self.llrVals_and_strings[violator_loc][1]
-            datalineList = [ds[gatestring] for ds in dsList]
-            nListList = _np.array([list(dataline.allcounts.values()) for dataline in datalineList],'d')
-            self.alpha_dict[gatestring] = target_score / llr
-            print('Rescaling counts for string '+str(gatestring)+' by '+str(self.alpha_dict[gatestring]))
-            print('|target score - new score| = '+str(loglikelihoodRatioTestObj(self.alpha_dict[gatestring],nListList,target_score)))
-            for ds in dsList:
-                ds[gatestring].scale(self.alpha_dict[gatestring])
-        self.rectified_datasets = dsList
+    # def rectify_datasets(self,confidence_level=0.95,target_score='dof'):
+    #     """
+    #     Todo
+    #     """
+    #     assert(False), "This method needs to be fixed by Tim!"
+    #     if target_score == 'dof':
+    #         target_score = self.dof
+    #     single_string_thresh = find_thresh(confidence_level,self.num_strs,self.dof)
+    #     single_thresh_violator_locs = _np.nonzero(_np.where(self.llrVals>single_string_thresh,1,0))[0]
+    #     self.alpha_dict = {}
+    #     if isinstance(self.dataset_list_or_multidataset,list):
+    #         dsList = [DS.copy_nonstatic() for DS in self.dataset_list_or_multidataset]
+    #     elif isinstance(self.dataset_list_or_multidataset,_MultiDataSet):
+    #         dsList = [self.dataset_list_or_multidataset[key].copy() for key in self.dataset_list_or_multidataset.keys()]
+    #     for violator_loc in single_thresh_violator_locs:
+    #         gatestring = self.llrVals_and_strings[violator_loc][0]
+    #         llr = self.llrVals_and_strings[violator_loc][1]
+    #         datalineList = [ds[gatestring] for ds in dsList]
+    #         nListList = _np.array([list(dataline.allcounts.values()) for dataline in datalineList],'d')
+    #         self.alpha_dict[gatestring] = target_score / llr
+    #         print('Rescaling counts for string '+str(gatestring)+' by '+str(self.alpha_dict[gatestring]))
+    #         print('|target score - new score| = '+str(loglikelihoodRatioTestObj(self.alpha_dict[gatestring],nListList,target_score)))
+    #         for ds in dsList:
+    #             ds[gatestring].scale(self.alpha_dict[gatestring])
+    #     self.rectified_datasets = dsList

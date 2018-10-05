@@ -6,6 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """Functions for Fourier analysis of equally spaced time-series data"""
 
+from . import signal as _sig
+from . import estimate as _est
 import numpy as _np
 
 class DriftResults(object):
@@ -118,8 +120,79 @@ class DriftResults(object):
         else:
             print("Statistical tests set at a global confidence level of: " + str(self.confidence))
             print("Result: The 'no drift' hypothesis is *not* rejected.")
-    
-    
+
+    def construct_probability_estimate(self, sequence, outcome=0, entity=0, method='MLE', epsilon=0.01, minp=1e-6,
+                                       maxp=1-1e-6):
+        """        
+        method :  'FFRaw', 'FFSharp', 'FFLogistic', 'FFUniReduce' 'MLE',
+        """
+
+        if not isinstance(outcome,int):
+            assert(self.outcomes is not None)
+            assert(outcome in self.outcomes)
+            outcomeind = self.outcomes.index(outcome)
+        else:
+            outcomeind = outcome
+
+        if not isinstance(sequence,int):
+            assert(self.sequences_to_indices is not None)
+            sequenceind = self.sequences_to_indices[sequence]
+        else:
+            sequenceind = sequence
+
+        T = self.number_of_timesteps
+        threshold = self.pspepo_significance_threshold
+        data = self.data[sequenceind,outcomeind,entity,:]
+        mean = _np.mean(data)
+        modes = self.pspepo_modes[sequenceind,outcomeind,entity,:]
+        omegas = _np.arange(T)
+        omegas = omegas[modes**2 >= threshold]
+        omegas = list(omegas)
+        omegas.insert(0,0)
+        normalizer = _np.sqrt(2/T)*_np.sqrt(mean*(1-mean))
+        rawalphas = list(normalizer*modes[modes**2 >= threshold])
+        rawalphas = list(rawalphas)
+        rawalphas.insert(0,mean)
+
+        assert(method in ('FFRaw','FFSharp','FFLogistic','FFUniReduce','MLE')), "Method choice is not valid!"
+
+        if method == 'FFRaw':
+            def pt(t):
+                return _sig.probability_from_DCT_amplitudes(rawalphas, omegas, T, t)
+            return pt, omegas, rawalphas
+
+        if method == 'FFSharp':
+            def pt(t):
+                raw = _sig.probability_from_DCT_amplitudes(rawalphas, omegas, T, t)
+                if raw > 1:
+                    return 1
+                elif raw < 0:
+                    return 0
+                else:
+                    return raw
+            return pt, omegas, rawalphas
+
+        if method == 'FFLogistic':
+            def pt(t):
+                return _sig.logistic_transform(_sig.probability_from_DCT_amplitudes(rawalphas, omegas, T, t),mean)
+            return pt, None, None
+
+        reducedalphas = _sig.reduce_DCT_amplitudes_until_probability_is_physical(rawalphas, omegas, T, epsilon=epsilon, step_size=0.001)
+
+        if method == 'FFUniReduce':
+            def pt(t):
+                return _sig.probability_from_DCT_amplitudes(reducedalphas, omegas, T, t)
+            return pt, omegas, reducedalphas
+
+        if method == 'MLE':
+            mle_alphas = _est.do_maximum_likelihood_estimation_of_time_resolved_probability(data, omegas, alphas_seed=reducedalphas, min_p=minp, max_p=maxp,
+                                                               method='Nelder-Mead', verbosity=1, return_aux=False)
+            def pt(t):
+                return _sig.probability_from_DCT_amplitudes(mle_alphas, omegas, T, t)
+            return pt, omegas, mle_alphas
+
+        return
+  
     def plot_power_spectrum(self, sequence='averaged', entity='averaged', 
                             outcome='averaged', threshold='default', figsize=(15,3), 
                             fix_ymax = False, savepath=None, loc=None, addtitle=True):
