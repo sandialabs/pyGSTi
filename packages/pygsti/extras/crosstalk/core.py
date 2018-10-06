@@ -25,7 +25,7 @@ def flatten(l):
             yield el
 
 def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.95, verbosity=1, name=None,
-                                 assume_independent_settings=False):
+                                 assume_independent_settings=True):
     """
     Implements crosstalk detection on multiqubit data (fine-grained data with entries for each experiment).
     
