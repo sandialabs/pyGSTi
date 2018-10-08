@@ -358,7 +358,8 @@ class DataComparator():
         self.llrs = llrs
         self.llrs_pseudothreshold = None
         self.jsds = jsds
-        self.tvds = tvds
+        if len(dataset_list_or_multidataset) == 2:
+            self.tvds = tvds
         self.gate_exclusions = gate_exclusions
         self.gate_inclusions = gate_inclusions
         self.pVals0 = str(len(self.pVals)-_np.count_nonzero(list(self.pVals.values())))
