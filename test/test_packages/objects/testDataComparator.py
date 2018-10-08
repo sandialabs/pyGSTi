@@ -59,9 +59,24 @@ class DataComparatorTestCase(BaseTestCase):
         comparator_1_2 = pygsti.objects.DataComparator([DS_1,DS_2])
         comparator_1_2.implement(significance=0.05)
 
-        #get the 10 worst offenders
-        #Currently not a function that exists/works.
-        #worst_strings = comparator_1_2.worst_strings(10)
+        # Tests all the "get" methods work.
+        gs = DS_0.keys()[10]
+        comparator_1_2.get_JSD(gs)
+        comparator_1_2.get_JSD_pseudothreshold()
+        comparator_1_2.get_LLR(gs)
+        comparator_1_2.get_LLR_pseudothreshold()
+        comparator_1_2.get_SSJSD(gs)
+        comparator_1_2.get_SSTVD(gs)
+        comparator_1_2.get_TVD(gs)
+        comparator_1_2.get_aggregate_LLR()
+        comparator_1_2.get_aggregate_LLR_threshold()
+        comparator_1_2.get_aggregate_nsigma()
+        comparator_1_2.get_aggregate_pvalue()
+        comparator_1_2.get_aggregate_pvalue_threshold()
+        comparator_1_2.get_maximum_SSTVD()
+        comparator_1_2.get_pvalue(gs)
+        comparator_1_2.get_pvalue_pseudothreshold()
+        comparator_1_2.get_worst_gatestrings(10)
 
         #Also test "rectification" (re-scaling to make consistent) here:
         #Currently not a function that exists/works.
