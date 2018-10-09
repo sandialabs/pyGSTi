@@ -32,11 +32,7 @@ from . import gatesetmember as _gatesetmember
 from . import term as _term
 from . import stabilizer as _stabilizer
 from .polynomial import Polynomial as _Polynomial
-
-try:
-    from . import fastreplib as replib
-except ImportError:
-    from . import replib
+from . import replib    
 
 IMAG_TOL = 1e-8 #tolerance for imaginary part being considered zero
 

@@ -35,15 +35,11 @@ from ..baseobjs.basis import basis_matrices as _basis_matrices
 
 from . import term as _term
 from .polynomial import Polynomial as _Polynomial
-
+from . import replib
 
 TOL = 1e-12
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
-try:
-    from . import fastreplib as replib
-except ImportError:
-    from . import replib
 
 def optimize_gate(gateToOptimize, targetGate):
     """

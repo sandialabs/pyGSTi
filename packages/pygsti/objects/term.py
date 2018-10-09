@@ -10,10 +10,7 @@ import numpy as _np
 import itertools as _itertools
 import numbers as _numbers
 from .polynomial import Polynomial as _Polynomial
-try:
-    from . import fastreplib as replib
-except ImportError:
-    from . import replib
+from . import replib
 
 
 def compose_terms(terms):
