@@ -79,7 +79,7 @@ def JensenShannonDivergence(nListList):
     """
     Calculates the Jensen-Shannon divergence (JSD) between between different
     observed frequencies, obtained in different "contexts", for the different 
-    outcomes of a "die".
+    outcomes of a "die" (i.e., coin with more than two outcomes).
 
     Parameters
     ----------
@@ -156,7 +156,7 @@ def llr_to_signed_nsigma(llrval, dof):
 def is_gatestring_allowed_by_exclusion(gate_exclusions, gatestring):
     """
     Returns True if `gatestring` does not contain any gates from `gate_exclusions`.
-    Otherwise, Returns False.
+    Otherwise, returns False.
     """
     for gate in gate_exclusions:
         if gate in gatestring:
@@ -177,7 +177,7 @@ def is_gatestring_allowed_by_inclusion(gate_inclusions,gatestring):
 
 def compute_llr_threshold(significance, dof):
     """
-    Given a pvalue threshold, *below* which a pvalue
+    Given a p-value threshold, *below* which a pvalue
     is considered statistically significant, it returns 
     the corresponding log-likelihood ratio threshold, *above* 
     which a LLR is considered statically significant. For a single
@@ -210,7 +210,7 @@ def compute_llr_threshold(significance, dof):
 
 def tvd(nListList):
     """
-    Calculates the total variational distance (TVD) between between different
+    Calculates the total variation distance (TVD) between between different
     observed frequencies, obtained in different "contexts", for the *two* set of 
     outcomes for roles of a "die".
 
@@ -225,7 +225,7 @@ def tvd(nListList):
     float
         The observed TVD between the two contexts
     """
-    assert(len(nListList) == 2), "Can onyl compute the TVD between two sets of outcomes!"
+    assert(len(nListList) == 2), "Can only compute the TVD between two sets of outcomes!"
     num_outcomes = len(nListList[0])
     assert(num_outcomes == len(nListList[1])), "The number of outcomes must be the same in both contexts!"
 
@@ -238,15 +238,16 @@ class DataComparator():
     """
     This object can be used to implement all of the "context dependence detection" methods described 
     in "Probing context-dependent errors in quantum processors", by Rudinger et al.
+    (See that paper's supplemental material for explicit demonstrations of this object.)
 
     This object stores the p-values and log-likelihood ratio values from a consistency comparison between
-    two or more datasets, and methods to:
+    two or more datasets, and provides methods to:
 
         - Perform a hypothesis test to decide which sequences contain statistically significant variation.
-        - Plotting of p-value histograms, and log-likelihood ratio box plots.
-        - Extraction of the "statistically significant total variational distance" for a circuit, and various
-          other quantifies of the "amount" of context dependence, and the level of statistical significance of
-          any detected context dependence.
+        - Plot p-value histograms and log-likelihood ratio box plots.
+        - Extract (1) the "statistically significant total variation distance" for a circuit, 
+          (2) various other quantifications of the "amount" of context dependence, and (3) 
+          the level of statistical significance at which any context dependence is detected.
 
     """
     def __init__(self, dataset_list_or_multidataset, gatestrings = 'all',
@@ -265,21 +266,21 @@ class DataComparator():
             that the outcome probabilities for these GateStrings has changed between the "contexts" that 
             the data was obtained in.
 
-        gatestrings : 'all' or list of GateStrings, optional
+        gatestrings : 'all' or list of GateStrings, optional (default is 'all')
             If 'all' the comparison is implemented for all GateStrings in the DataSets. Otherwise,
             this should be a list containing all the GateStrings to implement the comparison for (although
             note that some of these GateStrings may be ignored with non-default options for the next two
             inputs).
 
-        gate_exclusions : None or list of gates, optional
+        gate_exclusions : None or list of gates, optional (default is None)
             If not None, all GateStrings containing *any* of the gates in this list are discarded,
             and no comparison will be made for those strings.
 
-        gate_exclusions : None or list of gates, optional
+        gate_exclusions : None or list of gates, optional (default is None)
             If not None, a GateString will be dropped from the list to implement the comparisons for
             if it doesn't include *some* gate from this list (or is the empty gatestring). 
 
-        DS_names : None or list, optional
+        DS_names : None or list, optional (default is None)
             If `dataset_list_multidataset` is a list of DataSets, this can be used to specify names
             for the DataSets in the list. E.g., ["Time 0", "Time 1", "Time 3"] or ["Driving","NoDriving"].
         
@@ -410,23 +411,23 @@ class DataComparator():
 
         Parameters
         ----------
-        significance : float in (0,1), optional
+        significance : float in (0,1), optional (default is 0.05)
             The "global" statistical significance to implement the tests at. I.e, with
             the standard `per_sequence_correction` value (and some other values for this parameter)
             the probability that a sequence that has been flagged up as context dependent
             is actually from a context-independent circuit is no more than `significance`.
-            Precisely, `significance` is what the "family-wise error rate" of the full set
+            Precisely, `significance` is what the "family-wise error rate" (FWER) of the full set
             of hypothesis tests (1 "aggregate test", and 1 test per sequence) is controlled to, 
             as long as `per_sequence_correction` is set to the default value, or another option 
             that controls the FWER of the per-sequence comparion (see below).
         
-        per_sequence_correction : string, optional
+        per_sequence_correction : string, optional (default is 'Hochberg')
             The multi-hypothesis test correction used for the per-circuit/sequence comparisons.
             (See "Probing context-dependent errors in quantum processors", by Rudinger et al. for
             the details of what the per-circuit comparison is). This can be any string that is an allowed 
             value for the `localcorrections` input parameter of the HypothesisTest object. This includes:
 
-                - 'Hochberg'. This implements the Hockberg multi-test compensation technique. This
+                - 'Hochberg'. This implements the Hochberg multi-test compensation technique. This
                 is strictly the best method available in the code, if you wish to control the FWER, 
                 and it is the method described in "Probing context-dependent errors in quantum processors", 
                 by Rudinger et al.
@@ -447,8 +448,9 @@ class DataComparator():
 
                 -'Benjamini-Hochberg'. This implements the Benjamini-Hockberg multi-test compensation 
                 technique. This does *not* control the FWER, and instead controls the "False Detection Rate"
-                (FDR); see wikipedia. That means that the global significance is maintained for the test of 
-                "Is there any context dependence?". I.e., one or more tests will trigger when there is no context 
+                (FDR); see, for example, https://en.wikipedia.org/wiki/False_discovery_rate. That means that 
+                the global significance is maintained for the test of "Is there any context dependence?". I.e., 
+                one or more tests will trigger when there is no context 
                 dependence with at most a probability of `significance`. But, if one or more per-sequence tests 
                 trigger then we are only guaranteed that (in expectation) no more than a fraction of 
                 "local-signifiance" of the circuits that have been flagged up as context dependent actually aren't. 
@@ -458,13 +460,13 @@ class DataComparator():
                 method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
                 quantity.
         
-        aggregate_test_weighting : float in [0,1], optional
+        aggregate_test_weighting : float in [0,1], optional (default is 0.5)
             The weighting, in a generalized Bonferroni correction, to put on the "aggregate test", that jointly
             tests all of the data for context dependence (in contrast to the per-sequence tests). If this is 0 then 
             the aggreate test is not implemented, and if it is 1 only the aggregate test is implemented (unless it 
             triggers and `pass_alpha` is True).
 
-        pass_alpha : Bool, optional
+        pass_alpha : Bool, optional (default is True)
 
             The aggregate test is implemented first, at the "local" significance defined by `aggregate_test_weighting`
             and `significance` (see above). If `pass_alpha` is True, then when the aggregate test triggers all the 
@@ -476,7 +478,7 @@ class DataComparator():
             for discussions of why this "significance passing" still maintains a (global) FWER of `significance`.
             Note that The default value of True always results in a strictly more powerful test.
 
-        verbosity : int, optional
+        verbosity : int, optional (default is 1)
             If > 0 then a summary of the results of the tests is printed to screen. Otherwise, the
             various .get_...() methods need to be queried to obtain the results of the 
             hypothesis tests.
@@ -560,7 +562,7 @@ class DataComparator():
 
     def get_TVD(self, gatestring):
         """
-        Returns the observed total variational distacnce (TVD) for the specified gatestring.
+        Returns the observed total variation distacnce (TVD) for the specified gatestring.
         This is only possible if the comparison is between two sets of data. See Eq. (19) 
         in "Probing context-dependent errors in quantum processors", by Rudinger et al. for the 
         definition of this observed TVD.
@@ -585,7 +587,7 @@ class DataComparator():
 
     def get_SSTVD(self, gatestring):
         """
-        Returns the "statistically significant total variational distacnce" (SSTVD) for the specified 
+        Returns the "statistically significant total variation distacnce" (SSTVD) for the specified 
         gatestring. This is only possible if the comparison is between two sets of data. The SSTVD
         is None if the gatestring has not been found to have statistically significant variation.
         Otherwise it is equal to the observed TVD. See Eq. (20) and surrounding discussion in 
@@ -612,7 +614,7 @@ class DataComparator():
 
     def get_maximum_SSTVD(self):
         """
-        Returns the maximum, over gatestrings, of the "statistically significant total variational distance" 
+        Returns the maximum, over gatestrings, of the "statistically significant total variation distance" 
         (SSTVD). This is only possible if the comparison is between two sets of data. See the .get_SSTVD()
         method for information on SSTVD.
 
@@ -655,7 +657,7 @@ class DataComparator():
         Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence 
         p-values (obtained from the log-likehood ratio test). This is a "pseudo-threshold", because it 
         is data-dependent in general, but all the per-sequence p-values below this value are statistically 
-        significant. This quantity is given by Eq (9) in  "Probing context-dependent errors in quantum 
+        significant. This quantity is given by Eq. (9) in  "Probing context-dependent errors in quantum 
         processors", by Rudinger et al.
 
         Returns
