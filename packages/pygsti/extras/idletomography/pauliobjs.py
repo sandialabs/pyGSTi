@@ -33,8 +33,17 @@ class NQOutcome(object):
     def __init__(self, string_rep):
         self.rep = string_rep
 
+    def __str__(self):
+        return self.rep
+
+    def __repr__(self):
+        return "NQOutcome[%s]" % self.rep
+
     def __eq__(self, other):
         return self.rep == other.rep
+
+    def __hash__(self):
+        return hash(self.rep)
 
     def flip(self, *indices):
         """
@@ -80,6 +89,12 @@ class NQPauliState(object):
         sgn = {1:'+', -1:'-'}
         return "State[" + "".join(["%s%s" % (sgn[s],let)
                                    for s,let in zip(self.signs,self.rep)]) + "]"
+
+    def __eq__(self, other):
+        return (self.rep == other.rep) and (self.signs == other.signs)
+
+    def __hash__(self):
+        return hash(str(self))
 
     def to_gatestring(self, pauliDict):
         """ TODO: docstring """
@@ -133,6 +148,15 @@ class NQPauliOp(object):
 
     def __str__(self):
         return "%s%s" % ('-' if (self.sign == -1) else ' ',self.rep)
+
+    def __repr__(self):
+        return "NQPauliOp[%s%s]" % ('-' if (self.sign == -1) else ' ',self.rep)
+
+    def __eq__(self, other):
+        return (self.rep == other.rep) and (self.sign == other.sign)
+
+    def __hash__(self):
+        return hash(str(self))
 
     def subpauli(self, indices ):
         """

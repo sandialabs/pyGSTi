@@ -105,9 +105,9 @@ def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.
                                      advancedOptions=advanced, extract_hamiltonian=hamiltonian,
                                      extract_stochastic=stochastic, extract_affine=affine)
         
-    if hamiltonian: ham_intrinsic_rates = results.data['Intrinsic hamiltonian rates']
-    if stochastic:  sto_intrinsic_rates = results.data['Intrinsic stochastic rates'] 
-    if affine:      aff_intrinsic_rates = results.data['Intrinsic affine rates'] 
+    if hamiltonian: ham_intrinsic_rates = results.intrinsic_rates['hamiltonian']
+    if stochastic:  sto_intrinsic_rates = results.intrinsic_rates['stochastic'] 
+    if affine:      aff_intrinsic_rates = results.intrinsic_rates['affine'] 
         
     maxErrWeight=2 # hardcoded for now
     datagen_ham_rates, datagen_sto_rates, datagen_aff_rates = \
@@ -124,7 +124,7 @@ def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.
     if stochastic:  sto_diff = np.abs(sto_intrinsic_rates - datagen_sto_rates)
     if affine:      aff_diff = np.abs(aff_intrinsic_rates - datagen_aff_rates)
     
-    print("Err labels:", [ x.rep for x in results.data['Stochastic error names']])
+    print("Err labels:", [ x.rep for x in results.error_list])
     if hamiltonian: print("Ham diffs:", ham_diff)
     if stochastic:  print("Sto diffs:", sto_diff)
     #if stochastic:
