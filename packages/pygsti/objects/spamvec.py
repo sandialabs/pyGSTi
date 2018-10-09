@@ -91,7 +91,6 @@ def optimize_spamvec(vecToOptimize, targetVec):
 
 def convert(spamvec, toType, basis, extra=None):
     """
-    TODO: docstring: update toType options...
     Convert SPAM vector to a new type of parameterization, potentially
     creating a new SPAMVec object.  Raises ValueError for invalid conversions.
 
@@ -100,9 +99,9 @@ def convert(spamvec, toType, basis, extra=None):
     spamvec : SPAMVec
         SPAM vector to convert
 
-    toType : {"full","TP","CPTP","static","static unitary","H+S terms",
-              "H+S clifford terms","clifford"}
-        The type of parameterizaton to convert to.  See 
+    toType : {"full","TP","static","static unitary","clifford",LINDBLAD}
+        The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
+        for the various Lindblad parameterization types.  See
         :method:`GateSet.set_all_parameterizations` for more details.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -166,13 +165,6 @@ def convert(spamvec, toType, basis, extra=None):
         return LindbladParameterizedSPAMVec.from_spamvec_obj(
             spamvec, "prep", toType, None, proj_basis, basis,
             truncate=True, lazy=True)
-
-        #OLD (when used for just "H+S terms" and "H+S clifford terms"
-        #return LindbladParameterizedSPAMVec.from_spam_vector(
-        #    spamvec, purevec, "prep", ham_basis="pp", nonham_basis="pp", cptp=True,
-        #    nonham_diagonal_only=True, truncate=True, mxBasis="pp",
-        #    evotype=evotype)
-                                                             
 
     elif toType == "clifford":
         if isinstance(spamvec, StabilizerSPAMVec):
@@ -1974,9 +1966,11 @@ class TensorProdSPAMVec(SPAMVec):
 
 class PureStateSPAMVec(SPAMVec):
     """
-    TODO: docstring (fix this one!)
-    Encapsulates a SPAM vector that is completely fixed, or "static", meaning
-      that is contains no parameters.
+    Encapsulates a SPAM vector that is a pure state but evolves according to
+    one of the density matrix evolution types ("denstiymx", "svterm", and
+    "cterm").  It is parameterized by a contained pure-state SPAMVec which
+    evolves according to a state vector evolution type ("statevec" or
+    "stabilizer").
     """
 
     def __init__(self, pure_state_vec, evotype='densitymx', dm_basis='pp'):
@@ -2163,7 +2157,68 @@ class LindbladParameterizedSPAMVec(SPAMVec):
     def from_spamvec_obj(cls, spamvec, typ, paramType="GLND", purevec=None,
                          proj_basis="pp", mxBasis="pp", truncate=True,
                          lazy=False):
-        """ TODO: docstring - this is a conversion function """
+        """
+        Creates a LindbladParameterizedSPAMVec from an existing SPAMVec object
+        and some additional information.  
+
+        This function is different from `from_spam_vector` in that it assumes
+        that `spamvec` is a :class:`SPAMVec`-derived object, and if `lazy=True`
+        and if `spamvec` is already a matching LindbladParameterizedSPAMVec, it
+        is returned directly.  This routine is primarily used in spam vector
+        conversion functions, where conversion is desired only when necessary.
+
+        Parameters
+        ----------
+        spamvec : SPAMVec
+            The spam vector object to "convert" to a 
+            `LindbladParameterizedSPAMVec`.
+
+        typ : {"prep","effect"}
+            Whether this is a state preparation or POVM effect vector.
+
+        paramType : str, optional
+            The high-level "parameter type" of the gate to create.  This 
+            specifies both which Lindblad parameters are included and what
+            type of evolution is used.  Examples of valid values are
+            `"CPTP"`, `"H+S"`, `"S terms"`, and `"GLND clifford terms"`.
+
+        purevec : numpy array or SPAMVec object, optional
+            A SPAM vector which represents a pure-state, taken as the "ideal"
+            reference state when constructing the error generator of the
+            returned `LindbladParameterizedSPAMVec`.  Note that this vector
+            still acts on density matrices (if it's a SPAMVec it should have 
+            a "densitymx", "svterm", or "cterm" evolution type, and if it's
+            a numpy array it should have the same dimension as `spamvec`).
+            If None, then it is taken to be `spamvec`, and so `spamvec` must 
+            represent a pure state in this case.
+            
+        proj_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis used to construct the Lindblad-term error generators onto 
+            which the SPAM vector's error generator is projected.  Allowed values
+            are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given `spamvec` cannot
+            be realized by the specified set of Lindblad projections.
+            
+        lazy : bool, optional
+            If True, then if `spamvec` is already a LindbladParameterizedSPAMVec
+            with the requested details (given by the other arguments), then
+            `spamvec` is returned directly and no conversion/copying is
+            performed. If False, then a new object is always returned.
+
+        Returns
+        -------
+        LindbladParameterizedSPAMVec
+        """
 
         if not isinstance(spamvec, SPAMVec):
             spamvec = StaticSPAMVec(spamvec) #assume spamvec is just a vector
@@ -2244,25 +2299,30 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
-        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        nonham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
             The basis is used to construct the Stochastic-type lindblad error
             Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
-        cptp : bool, optional
-            Whether or not the new gate should be constrained to CPTP.
-            (if True, see behavior or `truncate`).
+        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+            Describes how the Lindblad coefficients/projections relate to the
+            SPAM vector's parameter values.  Allowed values are:
+            `"unconstrained"` (coeffs are independent unconstrained parameters),
+            `"cptp"` (independent parameters but constrained so map is CPTP),
+            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
+            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
 
-        nonham_diagonal_only : boolean, optional TODO docstring
-            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
-            included in the parameterization.
+        nonham_mode : {"diagonal", "diag_affine", "all"}
+            Which non-Hamiltonian Lindblad projections are potentially non-zero.
+            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
+            `"diag_affine"` (diagonal coefficients + affine projections), and
+            `"all"` (the entire matrix of coefficients is allowed).
 
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
-            order to preserve CPTP (when necessary).  If False, then an 
-            error is thrown when `cptp == True` and when Lindblad projections
-            result in a non-positive-definite matrix of non-Hamiltonian term
-            coefficients.
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given `gate` cannot 
+            be realized by the specified set of Lindblad projections.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
@@ -2359,20 +2419,25 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
-        cptp : bool, optional
-            Whether or not the new gate should be constrained to CPTP.
-            (if True, see behavior or `truncate`).
+        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+            Describes how the Lindblad coefficients/projections relate to the
+            SPAM vector's parameter values.  Allowed values are:
+            `"unconstrained"` (coeffs are independent unconstrained parameters),
+            `"cptp"` (independent parameters but constrained so map is CPTP),
+            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
+            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
 
-        nonham_diagonal_only : boolean, optional TODO docstring
-            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
-            included in the parameterization.
+        nonham_mode : {"diagonal", "diag_affine", "all"}
+            Which non-Hamiltonian Lindblad projections are potentially non-zero.
+            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
+            `"diag_affine"` (diagonal coefficients + affine projections), and
+            `"all"` (the entire matrix of coefficients is allowed).
 
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
-            order to preserve CPTP (when necessary).  If False, then an 
-            error is thrown when `cptp == True` and when Lindblad projections
-            result in a non-positive-definite matrix of non-Hamiltonian term
-            coefficients.
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given `gate` cannot 
+            be realized by the specified set of Lindblad projections.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
@@ -2417,16 +2482,16 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             by, respectively, the parameterized Lindblad-form error generator.
 
         Ltermdict : dict
-            A dictionary specifying which Linblad terms are present in the 
+            A dictionary specifying which Linblad terms are present in the gate
             parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` can be `"H"` (Hamiltonian) or `"S"`
-            (Stochastic).  Hamiltonian terms always have a single basis label 
-            (so key is a 2-tuple) whereas Stochastic tuples with 1 basis label
-            indicate a *diagonal* term, and are the only types of terms allowed
-            when `nonham_diagonal_only=True`.  Otherwise, Stochastic term tuples
-            can include 2 basis labels to specify "off-diagonal" non-Hamiltonian
-            Lindblad terms.  Basis labels can be strings or integers.  Values
-            are floating point coefficients (error rates).
+            tuples, where `termType` can be `"H"` (Hamiltonian), `"S"`
+            (Stochastic), or `"A"` (Affine).  Hamiltonian and Affine terms always
+            have a single basis label (so key is a 2-tuple) whereas Stochastic
+            tuples with 1 basis label indicate a *diagonal* term, and are the
+            only types of terms allowed when `nonham_mode != "all"`.  Otherwise,
+            Stochastic term tuples can include 2 basis labels to specify
+            "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
+            strings or integers.  Values are complex coefficients (error rates).
 
         typ : {"prep","effect"}
             Whether this is a state preparation or POVM effect vector.
@@ -2436,22 +2501,25 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             keys of `Ltermdict` to basis matrices (numpy arrays or Scipy sparse
             matrices).
 
-        cptp : bool, optional
-            Whether or not the new gate should be constrained to CPTP.
-            (if True, see behavior or `truncate`).
+        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+            Describes how the Lindblad coefficients/projections relate to the
+            SPAM vector's parameter values.  Allowed values are:
+            `"unconstrained"` (coeffs are independent unconstrained parameters),
+            `"cptp"` (independent parameters but constrained so map is CPTP),
+            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
+            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
 
-        nonham_diagonal_only : boolean or "auto", optional TODO docstring
-            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
-            included in the parameterization.  The default "auto" determines
-            whether off-diagonal terms are allowed by whether any are given 
-            in `Ltermdict`.
+        nonham_mode : {"diagonal", "diag_affine", "all"}
+            Which non-Hamiltonian Lindblad projections are potentially non-zero.
+            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
+            `"diag_affine"` (diagonal coefficients + affine projections), and
+            `"all"` (the entire matrix of coefficients is allowed).
 
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
-            order to preserve CPTP (when necessary).  If False, then an 
-            error is thrown when `cptp == True` and when Lindblad projections
-            result in a non-positive-definite matrix of non-Hamiltonian term
-            coefficients.
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given dictionary of
+            Lindblad terms doesn't conform to the constrains.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
@@ -2482,7 +2550,6 @@ class LindbladParameterizedSPAMVec(SPAMVec):
     
     def __init__(self, pureVec, errormap, typ):
         """
-        TODO: docstring? - can pureVec be an array or not??
         Initialize a LindbladParameterizedSPAMVec object.
 
         Essentially a pure state preparation or projection that is followed
@@ -2496,6 +2563,8 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             represents a pure-state preparation or projection.  This is used as
             the "base" preparation or projection that is followed or preceded
             by, respectively, the parameterized Lindblad-form error generator.
+            (This argument is *not* copied if it is a SPAMVec.  A numpy array
+             is converted to a new StaticSPAMVec.)
 
         errormap : GateMap
             The error generator action and parameterization, encapsulated in

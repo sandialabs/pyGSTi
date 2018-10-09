@@ -170,9 +170,9 @@ def convert(gate, toType, basis, extra=None):
     gate : Gate
         Gate to convert
 
-    toType : {"full", "TP", "CPTP", "H+S", "S", "static", "static unitary",
-              "GLND", "H+S terms", "H+S clifford terms", "clifford"}
-        The type of parameterizaton to convert to.  See 
+    toType : {"full","TP","static","static unitary","clifford",LINDBLAD}
+        The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
+        for the various Lindblad parameterization types.  See
         :method:`GateSet.set_all_parameterizations` for more details.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -1869,7 +1869,36 @@ class LindbladParameterizedGateMap(Gate):
 
     @classmethod 
     def decomp_paramtype(cls, paramType):
-        """ TODO: docstring 
+        """
+        A utility method for creating LindbladParameterizedGateMap objects.
+
+        Decomposes a high-level parameter-type `paramType` (e.g. `"H+S terms"`
+        into a "base" type (specifies parameterization without evolution type,
+        e.g. "H+S"), an evolution type (i.e. one of "densitymx", "svterm",
+        "cterm", or "statevec").  Furthermore, from the base type two "modes"
+        - one describing the number (and structure) of the non-Hamiltonian 
+        Lindblad coefficients and one describing how the Lindblad coefficients
+        are converted to/from parameters - are derived.
+
+        The "non-Hamiltonian mode" describes which non-Hamiltonian Lindblad
+        coefficients are stored in a LindbladParameterizedGateMap, and is one
+        of `"diagonal"` (only the diagonal elements of the full coefficient 
+        matrix as a 1D array), `"diag_affine"` (a 2-by-d array of the diagonal
+        coefficients on top of the affine projections), or `"all"` (the entire
+        coefficient matrix).
+
+        The "parameter mode" describes how the Lindblad coefficients/projections
+        are converted into parameter values.  This can be:
+        `"unconstrained"` (coefficients are independent unconstrained parameters),
+        `"cptp"` (independent parameters but constrained so map is CPTP),
+        `"depol"` (all non-Ham. diagonal coeffs are the *same, positive* value), or
+        `"reldepol"` (same as `"depol"` but no positivity constraint).
+
+        Parameters
+        ----------
+        paramType : str
+            The high-level Lindblad parameter type to decompose.  E.g "H+S", 
+            "H+S+A terms", "CPTP clifford terms".
 
         Returns
         -------
@@ -1910,7 +1939,62 @@ class LindbladParameterizedGateMap(Gate):
     @classmethod
     def from_gate_obj(cls, gate, paramType="GLND", unitary_postfactor=None,
                       proj_basis="pp", mxBasis="pp", truncate=True, lazy=False):
-        """ TODO: docstring """
+        """
+        Creates a LindbladParameterizedGateMap from an existing Gate object and
+        some additional information.  
+
+        This function is different from `from_gate_matrix` in that it assumes
+        that `gate` is a :class:`Gate`-derived object, and if `lazy=True` and 
+        if `gate` is already a matching LindbladParameterizedGateMap, it is
+        returned directly.  This routine is primarily used in gate conversion
+        functions, where conversion is desired only when necessary.
+
+        Parameters
+        ----------
+        gate : Gate
+            The gate object to "convert" to a `LindbladParameterizedGateMap`.
+
+        paramType : str
+            The high-level "parameter type" of the gate to create.  This 
+            specifies both which Lindblad parameters are included and what
+            type of evolution is used.  Examples of valid values are
+            `"CPTP"`, `"H+S"`, `"S terms"`, and `"GLND clifford terms"`.
+            
+        unitaryPostfactor : numpy array or SciPy sparse matrix, optional
+            a square 2D array of the same dimension of `gate`.  This specifies
+            a part of the gate action to remove before parameterization via
+            Lindblad projections.  Typically, this is a target (desired) gate
+            operation such that only the erroneous part of the gate (i.e. the
+            gate relative to the target), which should be close to the identity,
+            is parameterized.  If none, the identity is used by default.
+
+        proj_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis used to construct the Lindblad-term error generators onto 
+            which the gate's error generator is projected.  Allowed values are
+            Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given `gate` cannot 
+            be realized by the specified set of Lindblad projections.
+            
+        lazy : bool, optional
+            If True, then if `gate` is already a LindbladParameterizedGateMap
+            with the requested details (given by the other arguments), then
+            `gate` is returned directly and no conversion/copying is performed.
+            If False, then a new gate object is always created and returned.
+
+        Returns
+        -------
+        LindbladParameterizedGateMap
+        """
         RANK_TOL = 1e-6
 
         if unitary_postfactor is None:
@@ -1963,6 +2047,8 @@ class LindbladParameterizedGateMap(Gate):
         Creates a Lindblad-parameterized gate from a matrix and a basis which
         specifies how to decompose (project) the gate's error generator.
 
+        Parameters
+        ----------
         gateMatrix : numpy array or SciPy sparse matrix
             a square 2D array that gives the raw gate matrix, assumed to
             be in the `mxBasis` basis, to parameterize.  The shape of this
@@ -1990,20 +2076,25 @@ class LindbladParameterizedGateMap(Gate):
             Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
-        cptp : bool, optional TODO docstring
-            Whether or not the new gate should be constrained to CPTP.
-            (if True, see behavior or `truncate`).
+        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+            Describes how the Lindblad coefficients/projections relate to the
+            gate's parameter values.  Allowed values are:
+            `"unconstrained"` (coeffs are independent unconstrained parameters),
+            `"cptp"` (independent parameters but constrained so map is CPTP),
+            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
+            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
 
-        nonham_diagonal_only : boolean, optional TODO docstring
-            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
-            included in the parameterization.
+        nonham_mode : {"diagonal", "diag_affine", "all"}
+            Which non-Hamiltonian Lindblad projections are potentially non-zero.
+            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
+            `"diag_affine"` (diagonal coefficients + affine projections), and
+            `"all"` (the entire matrix of coefficients is allowed).
 
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
-            order to preserve CPTP (when necessary).  If False, then an 
-            error is thrown when `cptp == True` and when Lindblad projections
-            result in a non-positive-definite matrix of non-Hamiltonian term
-            coefficients.
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given `gate` cannot 
+            be realized by the specified set of Lindblad projections.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
@@ -2094,20 +2185,25 @@ class LindbladParameterizedGateMap(Gate):
             Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
-        cptp : bool, optional
-            Whether or not the new gate should be constrained to CPTP.
-            (if True, see behavior or `truncate`).
+        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+            Describes how the Lindblad coefficients/projections relate to the
+            gate's parameter values.  Allowed values are:
+            `"unconstrained"` (coeffs are independent unconstrained parameters),
+            `"cptp"` (independent parameters but constrained so map is CPTP),
+            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
+            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
 
-        nonham_diagonal_only : boolean, optional TODO docstring
-            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
-            included in the parameterization.
+        nonham_mode : {"diagonal", "diag_affine", "all"}
+            Which non-Hamiltonian Lindblad projections are potentially non-zero.
+            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
+            `"diag_affine"` (diagonal coefficients + affine projections), and
+            `"all"` (the entire matrix of coefficients is allowed).
 
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
-            order to preserve CPTP (when necessary).  If False, then an 
-            error is thrown when `cptp == True` and when Lindblad projections
-            result in a non-positive-definite matrix of non-Hamiltonian term
-            coefficients.
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given `errgen` cannot 
+            be realized by the specified set of Lindblad projections.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
@@ -2201,36 +2297,39 @@ class LindbladParameterizedGateMap(Gate):
         Ltermdict : dict
             A dictionary specifying which Linblad terms are present in the gate
             parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` can be `"H"` (Hamiltonian) or `"S"`
-            (Stochastic).  Hamiltonian terms always have a single basis label 
-            (so key is a 2-tuple) whereas Stochastic tuples with 1 basis label
-            indicate a *diagonal* term, and are the only types of terms allowed
-            when `nonham_diagonal_only=True`.  Otherwise, Stochastic term tuples
-            can include 2 basis labels to specify "off-diagonal" non-Hamiltonian
-            Lindblad terms.  Basis labels can be strings or integers.  Values
-            are floating point coefficients (error rates).
+            tuples, where `termType` can be `"H"` (Hamiltonian), `"S"`
+            (Stochastic), or `"A"` (Affine).  Hamiltonian and Affine terms always
+            have a single basis label (so key is a 2-tuple) whereas Stochastic
+            tuples with 1 basis label indicate a *diagonal* term, and are the
+            only types of terms allowed when `nonham_mode != "all"`.  Otherwise,
+            Stochastic term tuples can include 2 basis labels to specify
+            "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
+            strings or integers.  Values are complex coefficients (error rates).
 
         basisdict : dict, optional
             A dictionary mapping the basis labels (strings or ints) used in the
             keys of `Ltermdict` to basis matrices (numpy arrays or Scipy sparse
             matrices).
 
-        cptp : bool, optional
-            Whether or not the new gate should be constrained to CPTP.
-            (if True, see behavior or `truncate`).
+        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+            Describes how the Lindblad coefficients/projections relate to the
+            gate's parameter values.  Allowed values are:
+            `"unconstrained"` (coeffs are independent unconstrained parameters),
+            `"cptp"` (independent parameters but constrained so map is CPTP),
+            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
+            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
 
-        nonham_diagonal_only : boolean or "auto", optional TODO docstring
-            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
-            included in the parameterization.  The default "auto" determines
-            whether off-diagonal terms are allowed by whether any are given 
-            in `Ltermdict`.
+        nonham_mode : {"diagonal", "diag_affine", "all"}
+            Which non-Hamiltonian Lindblad projections are potentially non-zero.
+            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
+            `"diag_affine"` (diagonal coefficients + affine projections), and
+            `"all"` (the entire matrix of coefficients is allowed).
 
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
-            order to preserve CPTP (when necessary).  If False, then an 
-            error is thrown when `cptp == True` and when Lindblad projections
-            result in a non-positive-definite matrix of non-Hamiltonian term
-            coefficients.
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given dictionary of
+            Lindblad terms doesn't conform to the constrains.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The basis for this gate's linear mapping. Allowed
@@ -2931,7 +3030,29 @@ class LindbladParameterizedGateMap(Gate):
         self.dirty = True
 
     def get_errgen_coeffs(self):
-        """ TODO: docstring """
+        """
+        Constructs a dictionary of the Lindblad-error-generator coefficients 
+        (i.e. the "error rates") of this gate.  Note that these are not
+        necessarily the parameter values, as these coefficients are generally
+        functions of the parameters (so as to keep the coefficients positive,
+        for instance).
+
+        Returns
+        -------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Basis labels are integers starting at 0.  Values are complex
+            coefficients (error rates).
+    
+        basisdict : dict
+            A dictionary mapping the integer basis labels used in the
+            keys of `Ltermdict` to basis matrices..
+        """
         hamC, otherC = _gt.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
@@ -3107,35 +3228,38 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         Ltermdict : dict
             A dictionary specifying which Linblad terms are present in the gate
             parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` can be `"H"` (Hamiltonian) or `"S"`
-            (Stochastic).  Hamiltonian terms always have a single basis label 
-            (so key is a 2-tuple) whereas Stochastic tuples with 1 basis label
-            indicate a *diagonal* term, and are the only types of terms allowed
-            when `nonham_diagonal_only=True`.  Otherwise, Stochastic term tuples
-            can include 2 basis labels to specify "off-diagonal" non-Hamiltonian
-            Lindblad terms.  Basis labels can be strings or integers.  Values
-            are floating point coefficients (error rates).
+            tuples, where `termType` can be `"H"` (Hamiltonian), `"S"`
+            (Stochastic), or `"A"` (Affine).  Hamiltonian and Affine terms always
+            have a single basis label (so key is a 2-tuple) whereas Stochastic
+            tuples with 1 basis label indicate a *diagonal* term, and are the
+            only types of terms allowed when `nonham_mode != "all"`.  Otherwise,
+            Stochastic term tuples can include 2 basis labels to specify
+            "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
+            strings or integers.  Values are complex coefficients (error rates).
 
         basisdict : dict, optional
             A dictionary mapping the basis labels (strings or ints) used in the
             keys of `Ltermdict` to basis matrices (numpy arrays).
 
-        cptp : bool, optional
-            Whether or not the new gate should be constrained to CPTP.
-            (if True, see behavior or `truncate`).
+        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+            Describes how the Lindblad coefficients/projections relate to the
+            gate's parameter values.  Allowed values are:
+            `"unconstrained"` (coeffs are independent unconstrained parameters),
+            `"cptp"` (independent parameters but constrained so map is CPTP),
+            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
+            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
 
-        nonham_diagonal_only : boolean or "auto", optional TODO docstring
-            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
-            included in the parameterization.  The default "auto" determines
-            whether off-diagonal terms are allowed by whether any are given 
-            in `Ltermdict`.
+        nonham_mode : {"diagonal", "diag_affine", "all"}
+            Which non-Hamiltonian Lindblad projections are potentially non-zero.
+            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
+            `"diag_affine"` (diagonal coefficients + affine projections), and
+            `"all"` (the entire matrix of coefficients is allowed).
 
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
-            order to preserve CPTP (when necessary).  If False, then an 
-            error is thrown when `cptp == True` and when Lindblad projections
-            result in a non-positive-definite matrix of non-Hamiltonian term
-            coefficients.
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given dictionary of
+            Lindblad terms doesn't conform to the constrains.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
