@@ -574,7 +574,7 @@ def create_standard_report(results, filename, title="auto",
         - 4: Everything but summary figures disappears at brevity=4
 
     advancedOptions : dict, optional
-        A dictionary of advanced options for which the default values aer usually
+        A dictionary of advanced options for which the default values are usually
         are fine.  Here are the possible keys of `advancedOptions`:
 
         - connected : bool, optional
@@ -1079,7 +1079,128 @@ def create_nqnoise_report(results, filename, title="auto",
                           auto_open=False, link_to=None, brevity=0,
                           advancedOptions=None, verbosity=1):
     """
-    TODO: docstring 
+    Creates a report designed to display results containing for n-qubit noisy
+    gate set estimates.
+
+    Such gate sets are characterized by the fact that gates and SPAM objects may
+    not have dense representations (or it may be very expensive to compute them)
+    , and that these gate sets likely have the particular structure given by
+    :function:`build_nqnoise_gateset`.
+
+
+    Parameters
+    ----------
+    results : Results
+        An object which represents the set of results from one *or more* GST
+        estimation runs, typically obtained from running
+        :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`, OR a
+        dictionary of such objects, representing multiple GST runs to be
+        compared (typically all with *different* data sets). The keys of this
+        dictionary are used to label different data sets that are selectable
+        in the report.
+
+    filename : string, optional
+       The output filename where the report file(s) will be saved.  If
+       None, then no output file is produced (but returned Workspace
+       still caches all intermediate results).
+
+    title : string, optional
+       The title of the report.  "auto" causes a random title to be
+       generated (which you may or may not like).
+
+    confidenceLevel : int, optional
+       If not None, then the confidence level (between 0 and 100) used in
+       the computation of confidence regions/intervals. If None, no
+       confidence regions or intervals are computed.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    ws : Workspace, optional
+        The workspace used as a scratch space for performing the calculations
+        and visualizations required for this report.  If you're creating
+        multiple reports with similar tables, plots, etc., it may boost
+        performance to use a single Workspace for all the report generation.
+
+    auto_open : bool, optional
+        If True, automatically open the report in a web browser after it
+        has been generated.
+
+    link_to : list, optional
+        If not None, a list of one or more items from the set
+        {"tex", "pdf", "pkl"} indicating whether or not to
+        create and include links to Latex, PDF, and Python pickle
+        files, respectively.  "tex" creates latex source files for
+        tables; "pdf" renders PDFs of tables and plots ; "pkl" creates
+        Python versions of plots (pickled python data) and tables (pickled
+        pandas DataFrams).
+
+    brevity : int, optional
+        Amount of detail to include in the report.  Larger values mean smaller
+        "more briefr" reports, which reduce generation time, load time, and
+        disk space consumption.  In particular:
+
+        - 1: Plots showing per-sequences quantities disappear at brevity=1
+        - 2: Reference sections disappear at brevity=2
+        - 3: Germ-level estimate tables disappear at brevity=3
+        - 4: Everything but summary figures disappears at brevity=4
+
+    advancedOptions : dict, optional
+        A dictionary of advanced options for which the default values are usually
+        are fine.  Here are the possible keys of `advancedOptions`:
+
+        - connected : bool, optional
+            Whether output HTML should assume an active internet connection.  If
+            True, then the resulting HTML file size will be reduced because it
+            will link to web resources (e.g. CDN libraries) instead of embedding
+            them.
+
+        - cachefile : str, optional
+            filename with cached workspace results
+
+        - linlogPercentile : float, optional
+            Specifies the colorscale transition point for any logL or chi2 color
+            box plots.  The lower `(100 - linlogPercentile)` percentile of the
+            expected chi2 distribution is shown in a linear grayscale, and the
+            top `linlogPercentile` is shown on a logarithmic colored scale.
+
+        - nmthreshold : float, optional
+            The threshold, in units of standard deviations, that triggers the
+            usage of non-Markovian error bars.  If None, then non-Markovian
+            error bars are never computed.
+
+        - precision : int or dict, optional
+            The amount of precision to display.  A dictionary with keys
+            "polar", "sci", and "normal" can separately specify the
+            precision for complex angles, numbers in scientific notation, and
+            everything else, respectively.  If an integer is given, it this
+            same value is taken for all precision types.  If None, then
+            `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
+
+        - resizable : bool, optional
+            Whether plots and tables are made with resize handles and can be
+            resized within the report.
+
+        - autosize : {'none', 'initial', 'continual'}
+            Whether tables and plots should be resized, either initially --
+            i.e. just upon first rendering (`"initial"`) -- or whenever
+            the browser window is resized (`"continual"`).
+
+        - combine_robust : bool, optional
+            Whether robust estimates should automatically be combined with
+            their non-robust counterpart when displayed in reports. (default
+            is True).
+
+        - confidence_interval_brevity : int, optional
+            Roughly specifies how many figures will have confidence intervals
+            (when applicable). Defaults to '1'.  Smaller values mean more
+            tables will get confidence intervals (and reports will take longer
+            to generate).
+
+    verbosity : int, optional
+       How much detail to send to stdout.
+
 
     Returns
     -------
@@ -1091,14 +1212,14 @@ def create_nqnoise_report(results, filename, title="auto",
 
     if advancedOptions is None: advancedOptions = {}
     linlogPercentile = advancedOptions.get('linlog percentile',5)
-    errgen_type = advancedOptions.get('error generator type', "logGTi")
-    nmthreshold = advancedOptions.get('nm threshold',DEFAULT_BAD_FIT_THRESHOLD)
+    errgen_type = advancedOptions.get('error generator type', "logGTi") # REMOVE - also in docstring?
+    nmthreshold = advancedOptions.get('nm threshold',DEFAULT_BAD_FIT_THRESHOLD) # REMOVE - also in docstring?
     precision = advancedOptions.get('precision', None)
     cachefile = advancedOptions.get('cachefile',None)
     connected = advancedOptions.get('connected',False)
     resizable = advancedOptions.get('resizable',True)
     autosize = advancedOptions.get('autosize','initial')
-    combine_robust = advancedOptions.get('combine_robust',True)
+    combine_robust = advancedOptions.get('combine_robust',True) # REMOVE - also in docstring?
     ci_brevity = advancedOptions.get('confidence_interval_brevity',1)
 
     if filename and filename.endswith(".pdf"):
