@@ -21,8 +21,8 @@ MACH_PRECISION = 1e-12
 
 
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
-                   rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, comm=None,
-                   verbosity=0, profiler=None):
+                   rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
+                   max_dx_scale=1.0, comm=None, verbosity=0, profiler=None):
     """
     An implementation of the Levenberg-Marquardt least-squares optimization
     algorithm customized for use within pyGSTi.  This general purpose routine
@@ -62,6 +62,17 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     max_iter : int, optional
         The maximum number of (outer) interations.
 
+    num_fd_iters : int optional
+        Internally compute the Jacobian using a finite-difference method
+        for the first `num_fd_iters` iterations.  This is useful when `x0`
+        lies at a special or singular point where the analytic Jacobian is
+        misleading.
+
+    max_dx_scale : float, optional
+        If not None, impose a limit on the magnitude of the step, so that
+        `|dx|^2 < max_dx_scale^2 * len(dx)` (so elements of `dx` should be,
+        roughly, less than `max_dx_scale`).
+
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
@@ -71,6 +82,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     profiler : Profiler, optional
         A profiler object used for to track timing and memory usage.
+
 
     Returns
     -------
@@ -95,12 +107,17 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     mu = 0 #initialized on 1st iter
     my_cols_slice = None
 
+    # don't let any component change by more than ~max_dx_scale
+    if max_dx_scale:
+        max_norm_dx = (max_dx_scale**2)*x.size
+    else: max_norm_dx = None
+
     if not _np.isfinite(norm_f):
         msg = "Infinite norm of objective function at initial point!"
 
     # DB: from ..tools import matrixtools as _mt
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
-
+    # num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
         
     for k in range(max_iter): #outer loop
         # assume x, f, fnorm hold valid values
@@ -118,15 +135,21 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         Jac = None; JTJ = None; JTf = None
 
         if profiler: profiler.mem_check("custom_leastsq: begin outer iter")
-        Jac = jac_fn(x)
+        if k >= num_fd_iters:
+            Jac = jac_fn(x)
+        else:
+            eps = 1e-7
+            Jac = _np.empty((len(f),len(x)),'d')
+            for i in range(len(x)):
+                x_plus_dx = x.copy()
+                x_plus_dx[i] += eps
+                Jac[:,i] = (obj_fn(x_plus_dx)-f)/eps
 
-        ##DEBUG: use finite difference to compute jacobian
-        #eps = 1e-7
-        #Jac = _np.empty((len(f),len(x)),'d')
-        #for i in range(len(x)):
-        #    x_plus_dx = x.copy()
-        #    x_plus_dx[i] += eps
-        #    Jac[:,i] = (obj_fn(x_plus_dx)-f)/eps
+        #DEBUG: compare with analytic jacobian (need to uncomment num_fd_iters DEBUG line above too)
+        #Jac_analytic = jac_fn(x)
+        #if _np.linalg.norm(Jac_analytic-Jac) > 1e-6:
+        #    print("JACDIFF = ",_np.linalg.norm(Jac_analytic-Jac)," per el=",
+        #          _np.linalg.norm(Jac_analytic-Jac)/Jac.size," sz=",Jac.size)
         
         # DB: from ..tools import matrixtools as _mt
         # DB: print("DB JAC (%s)=" % str(Jac.shape)); _mt.print_mx(Jac,prec=0,width=4); assert(False)
@@ -134,7 +157,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                         + "shape=%s, GB=%.2f" % (str(Jac.shape),
                                                         Jac.nbytes/(1024.0**3)) )
 
-        Jnorm = _np.linalg.norm(Jac)
+        Jnorm = _np.linalg.norm(Jac)            
         printer.log("--- Outer Iter %d: norm_f = %g, mu=%g, |J|=%g" % (k,norm_f,mu,Jnorm))
 
         #assert(_np.isfinite(Jac).all()), "Non-finite Jacobian!" # NaNs tracking
@@ -196,6 +219,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             if success: #linear solve succeeded
                 new_x = x + dx
                 norm_dx = _np.dot(dx,dx) # _np.linalg.norm(dx)**2
+
+                #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
+                if max_norm_dx and norm_dx > max_norm_dx: 
+                    dx *= _np.sqrt(max_norm_dx / norm_dx) 
+                    new_x = x + dx
+                    norm_dx = _np.dot(dx,dx) # _np.linalg.norm(dx)**2
 
                 printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu,norm_dx),2)
 

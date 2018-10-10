@@ -441,7 +441,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                 #   Note: (S_inv * rho) is transformed rho
                 wt   = itemWeights.get(lbl, spamWeight)
                 Sinv_dS  = _np.dot(S_inv, dS) # shape (d1,n,d2)
-                result = -1 * _np.dot(Sinv_dS, rho).squeeze(2) # shape (d,n,1) => (d,n)
+                result = -1 * _np.dot(Sinv_dS, rho.todense()) # shape (d,n)
                 my_jacMx[start:start+d] = wt * result
                 start += d
 
@@ -452,7 +452,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                 for lbl,E in povm.items():
                     # d(ET_term) = E.T * dS
                     wt   = itemWeights.get(povmlbl+"_"+lbl, spamWeight)
-                    result = _np.dot(E.T, dS).T  # shape (1,n,d2).T => (d2,n,1)
+                    result = _np.dot(E.todense()[None,:], dS).T  # shape (1,n,d2).T => (d2,n,1)
                     my_jacMx[start:start+d] = wt * result.squeeze(2) # (d2,n)
                     start += d
 
@@ -669,7 +669,8 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs_pre, gs_post,
 
         #contract to get (note contract along both mx indices b/c treat like a
         # mx basis): d(|chi_std|_Tr)/dp = d(|chi_std|_Tr)/dchi_std * dchi_std/dp
-        v =  _np.einsum("ij,aij->a",sgnchi,dchi_std)
+        #v =  _np.einsum("ij,aij->a",sgnchi,dchi_std)
+        v =  _np.tensordot(sgnchi,dchi_std,((0,1),(1,2)))
         v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(chi))) #add 0.5/|chi|_Tr factor
         assert(_np.linalg.norm(v.imag) < 1e-4)
         cpPenaltyVecGradToFill[i,:] = v.real
@@ -715,7 +716,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]
-        denMx = _tools.vec_to_stdmx(prepvec, gateBasis)
+        denMx = _tools.vec_to_stdmx(prepvec.todense()[:,None], gateBasis)
         assert(_np.linalg.norm(denMx - denMx.T.conjugate()) < 1e-4), \
             "denMx should be Hermitian!"
 
@@ -729,7 +730,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
         # get d(prepvec')/dp = d(S_inv * prepvec)/dp in gateBasis [shape == (n,dim)]
         #                    = (-S_inv*dS*S_inv) * prepvec = -S_inv*dS * prepvec'
         Sinv_dS  = _np.dot(S_inv, dS) # shape (d1,n,d2)
-        dVdp = -1 * _np.dot(Sinv_dS, prepvec).squeeze(2) # shape (d,n,1) => (d,n)
+        dVdp = -1 * _np.dot(Sinv_dS, prepvec.todense()[:,None]).squeeze(2) # shape (d,n,1) => (d,n)
         assert(dVdp.shape == (d,n))
 
         # denMx = sum( spamvec[i] * Bmx[i] )
@@ -737,7 +738,8 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
         #contract to get (note contract along both mx indices b/c treat like a mx basis):
         # d(|denMx|_Tr)/dp = d(|denMx|_Tr)/d(denMx) * d(denMx)/d(spamvec) * d(spamvec)/dp
         # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, n]
-        v =  _np.einsum("ij,aij,ab->b",sgndm,ddenMxdV,dVdp)
+        #v =  _np.einsum("ij,aij,ab->b",sgndm,ddenMxdV,dVdp)
+        v =  _np.tensordot( _np.tensordot(sgndm,ddenMxdV,((0,1),(1,2))),dVdp, (0,0) )
         v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(denMx))) #add 0.5/|denMx|_Tr factor
         assert(_np.linalg.norm(v.imag) < 1e-4)
         spamPenaltyVecGradToFill[i,:] = v.real
@@ -754,7 +756,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
         for lbl,effectvec in povm.items():
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-            EMx = _tools.vec_to_stdmx(effectvec, gateBasis)
+            EMx = _tools.vec_to_stdmx(effectvec.todense()[:,None], gateBasis)
             dmDim = EMx.shape[0]
             assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
                 "denMx should be Hermitian!"
@@ -769,7 +771,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
             # get d(effectvec')/dp = [d(effectvec.T * S)/dp].T in gateBasis [shape == (n,dim)]
             #                      = [effectvec.T * dS].T
             #  OR = dS.T * effectvec
-            pre_effectvec = gs_pre.povms[povmlbl][lbl]
+            pre_effectvec = gs_pre.povms[povmlbl][lbl].todense()[:,None]
             dVdp = _np.dot( pre_effectvec.T, dS ).squeeze(0).T
               # shape = (1,d) * (n, d1,d2) = (1,n,d2) => (n,d2) => (d2,n)
             assert(dVdp.shape == (d,n))
@@ -779,7 +781,8 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
             #contract to get (note contract along both mx indices b/c treat like a mx basis):
             # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
             # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, n]
-            v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
+            #v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
+            v =  _np.tensordot( _np.tensordot(sgnE,dEMxdV,((0,1),(1,2))),dVdp, (0,0) )
             v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx))) #add 0.5/|EMx|_Tr factor
             assert(_np.linalg.norm(v.imag) < 1e-4)
             spamPenaltyVecGradToFill[i,:] = v.real

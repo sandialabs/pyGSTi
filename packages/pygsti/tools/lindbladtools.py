@@ -133,7 +133,7 @@ def affine_lindbladian(Q, sparse=False):
 
     for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
         rho1 = Q * _mt.safedot(Id,rho0.flatten()) # get |Q>><Id|rho0
-        lindbladian[:,i] = rho1.flatten()[:,None] if sparse else rho1.flatten()
+        lindbladian[:,i] = rho1.todense().flatten().T if sparse else rho1.flatten() #weird that need .T here
           # vectorize rho1 & set as linbladian column
 
     if sparse: lindbladian = lindbladian.tocsr()

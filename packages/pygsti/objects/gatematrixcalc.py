@@ -192,7 +192,7 @@ class GateMatrixCalc(GateCalc):
         # Allocate memory for the final result
         num_deriv_cols =  self.Np if (wrtFilter is None) else len(wrtFilter)
         flattened_dprod = _np.zeros((dim**2, num_deriv_cols),'d')
-        
+
         _fas(flattened_dprod, [None,gpindices], 
              gate.deriv_wrt_params(gate_wrtFilter)) # (dim**2, nParams[gateLabel])
 
@@ -502,85 +502,6 @@ class GateMatrixCalc(GateCalc):
             return _np.rollaxis( flattened_d2prod, 0, 3 ).reshape( (vec_kl_size, vec_ij_size, dim, dim) )
             # axes = (gateset_parameter1, gateset_parameter2, gateset_element_row, gateset_element_col)
 
-
-    #TODO REMOVE (UNUSED)
-    #def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
-    #    """
-    #    Compute probability of a single "outcome" (spam-tuple) for a single
-    #    gate string.
-    #
-    #    Parameters
-    #    ----------
-    #    spamTuple : (rho_label, compiled_effect_label)
-    #        Specifies the prep and POVM effect used to compute the probability.
-    #
-    #    gatestring : GateString or tuple
-    #        A tuple-like object of *compiled* gates (e.g. may include
-    #        instrument elements like 'Imyinst_0')
-    #
-    #    clipTo : 2-tuple
-    #      (min,max) to clip returned probability to if not None.
-    #      Only relevant when prMxToFill is not None.
-    #
-    #    bUseScaling : bool, optional
-    #      Whether to use a post-scaled product internally.  If False, this
-    #      routine will run slightly faster, but with a chance that the
-    #      product will overflow and the subsequent trace operation will
-    #      yield nan as the returned probability.
-    #
-    #    Returns
-    #    -------
-    #    probability: float
-    #    """
-    #    rho,E = self._rhoE_from_spamTuple(spamTuple)
-    #
-    #    if bUseScaling:
-    #        old_err = _np.seterr(over='ignore')
-    #        G,scale = self.product(gatestring, True)
-    #        if self.evotype == "statevec":
-    #            p =  float(abs(_np.dot(E, _np.dot(G, rho)) * scale)**2)
-    #        else: # evotype == "densitymx"
-    #            p = float(_np.dot(E, _np.dot(G, rho)) * scale) # probability, with scaling applied (may generate overflow, but OK)
-    #
-    #        #DEBUG: catch warnings to make sure correct (inf if value is large) evaluation occurs when there's a warning
-    #        #bPrint = False
-    #        #with _warnings.catch_warnings():
-    #        #    _warnings.filterwarnings('error')
-    #        #    try:
-    #        #        test = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) ) * scale
-    #        #    except Warning: bPrint = True
-    #        #if bPrint:  print 'Warning in Gateset.pr : scale=%g, trace=%g, p=%g' % (scale,_np.dot(self.SPAMs[spamLabel],G) ), p)
-    #        _np.seterr(**old_err)
-    #
-    #    else: #no scaling -- faster but susceptible to overflow
-    #        G = self.product(gatestring, False)
-    #        if self.evotype == "statevec":
-    #            p =  float(abs(_np.dot(E, _np.dot(G, rho)))**2)
-    #        else: # evotype == "densitymx"
-    #            p = float(_np.dot(E, _np.dot(G, rho)))
-    #
-    #
-    #    if _np.isnan(p):
-    #        if len(gatestring) < 10:
-    #            strToPrint = str(gatestring)
-    #        else:
-    #            strToPrint = str(gatestring[0:10]) + " ... (len %d)" % len(gatestring)
-    #        _warnings.warn("pr(%s) == nan" % strToPrint)
-    #        #DEBUG: print "backtrace" of product leading up to nan
-    #
-    #        #G = _np.identity( self.dim ); total_exp = 0.0
-    #        #for i,lGate in enumerate(gateLabelList):
-    #        #    G = _np.dot(G,self[lGate])  # product of gates, starting with G0
-    #        #    nG = norm(G); G /= nG; total_exp += log(nG) # scale and keep track of exponent
-    #        #
-    #        #    p = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) ) * exp(total_exp) # probability
-    #        #    print "%d: p = %g, norm %g, exp %g\n%s" % (i,p,norm(G),total_exp,str(G))
-    #        #    if _np.isnan(p): raise ValueError("STOP")
-    #
-    #    if clipTo is not None:
-    #        return _np.clip(p,clipTo[0],clipTo[1])
-    #    else: return p
-
         
     def prs(self, rholabel, elabels, gatestring, clipTo, bUseScaling=False):
         """
@@ -852,14 +773,20 @@ class GateMatrixCalc(GateCalc):
         #Note: these 2nd derivatives are non-zero when the spam vectors have
         # a more than linear dependence on their parameters.
         if self.preps[rholabel].has_nonzero_hessian():
+            derivWrtAnyRhovec = scale * _np.dot(E,prod) # may overflow, but OK
             d2pr_d2rhos = _np.zeros( (1, self.Np, self.Np) )
-            d2pr_d2rhos[0] = self.preps[rholabel].hessian_wrt_params()
+            _fas(d2pr_d2rhos,[0,self.preps[rholabel].gpindices,self.preps[rholabel].gpindices],
+                 _np.tensordot(derivWrtAnyRhovec, self.preps[rholabel].hessian_wrt_params(), (1,0)))
+                 # _np.einsum('ij,jkl->ikl', derivWrtAnyRhovec, self.preps[rholabel].hessian_wrt_params())
         else:
             d2pr_d2rhos = 0
 
         if self.effects[elabel].has_nonzero_hessian():
+            derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod,rho)) # may overflow, but OK
             d2pr_d2Es   = _np.zeros( (1, self.Np, self.Np) )
-            d2pr_d2Es[0] = self.effects[elabel].hessian_wrt_params()
+            _fas(d2pr_d2Es,[0,self.effects[elabel].gpindices,self.effects[elabel].gpindices],
+                 _np.tensordot(derivWrtAnyEvec,self.effects[elabel].hessian_wrt_params(), (1,0)))
+                 # _np.einsum('ij,jkl->ikl',derivWrtAnyEvec,self.effects[elabel].hessian_wrt_params())
         else:
             d2pr_d2Es = 0
 
@@ -1763,6 +1690,7 @@ class GateMatrixCalc(GateCalc):
         # dp_drhos[i,J0+J] = sum_kl E[0,k] Gs[i,k,l] drhoP[l,J]
         # dp_drhos[i,J0+J] = dot(E, Gs, drhoP)[0,i,J]
         # dp_drhos[:,J0+J] = squeeze(dot(E, Gs, drhoP),axis=(0,))[:,J]
+
         dp_drhos = _np.zeros( (nGateStrings, nDerivCols ) )
         _fas(dp_drhos, [None,rho_gpindices],
              _np.squeeze(_np.dot(_np.dot(E, Gs),
@@ -1953,16 +1881,24 @@ class GateMatrixCalc(GateCalc):
         #Note: these 2nd derivatives are non-zero when the spam vectors have
         # a more than linear dependence on their parameters.
         if self.preps[rholabel].has_nonzero_hessian():
+            dp_dAnyRho = _np.dot(E, Gs).squeeze(0) * scaleVals[:,None] #overflow OK
             d2pr_d2rhos = _np.zeros( (nGateStrings, nDerivCols1, nDerivCols2) )
             _fas(d2pr_d2rhos,[None, rho_gpindices1, rho_gpindices2],
-                 self.preps[rholabel].hessian_wrt_params(rho_wrtFilter1, rho_wrtFilter2)[None,:,:])
+                 _np.tensordot(dp_dAnyRho, self.preps[rholabel].hessian_wrt_params(
+                        rho_wrtFilter1, rho_wrtFilter2), (1,0)))
+                 # _np.einsum('ij,jkl->ikl', dp_dAnyRho, self.preps[rholabel].hessian_wrt_params(
+                 #    rho_wrtFilter1, rho_wrtFilter2))
         else:
             d2pr_d2rhos = 0
 
         if self.effects[elabel].has_nonzero_hessian():
+            dp_dAnyE = _np.dot(Gs, rho).squeeze(2) * scaleVals[:,None] #overflow OK
             d2pr_d2Es   = _np.zeros( (nGateStrings, nDerivCols1, nDerivCols2) )
             _fas(d2pr_d2Es,[None, E_gpindices1, E_gpindices2],
-                 self.effects[elabel].hessian_wrt_params(E_wrtFilter1, E_wrtFilter2)[None,:,:])
+                 _np.tensordot(dp_dAnyE, self.effects[elabel].hessian_wrt_params(
+                        E_wrtFilter1, E_wrtFilter2), (1,0)))
+                 # _np.einsum('ij,jkl->ikl', dp_dAnyE, self.effects[elabel].hessian_wrt_params(
+                 #    E_wrtFilter1, E_wrtFilter2))
         else:
             d2pr_d2Es = 0
 

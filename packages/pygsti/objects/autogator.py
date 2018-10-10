@@ -38,6 +38,7 @@ class AutoGator(_gsm.GateSetChild):
 
         """
         super(AutoGator,self).__init__(parent)
+
         
     def __call__(self, existing_gates, gatelabel):
         """
@@ -98,8 +99,17 @@ class SimpleCompositionAutoGator(AutoGator):
         #print("DB: SimpleCompositionAutoGator building gate %s for %s" %
         #      (('matrix' if dense else 'map'), str(gatelabel)) )
         if isinstance(gatelabel, _label.LabelTupTup):
-            factor_gates = [ existing_gates[l] for l in gatelabel.components ]
-            ret = Composed(factor_gates)
+            if self.parent.auto_idle_gatename is not None:
+                factor_gates = []
+                for l in gatelabel.components:
+                    if l.name == self.parent.auto_idle_gatename \
+                            and l not in existing_gates:
+                        continue #skip perfect idle placeholders
+                    factor_gates.append(existing_gates[l])
+            else:
+                factor_gates = [ existing_gates[l] for l in gatelabel.components ]
+            ret = Composed(factor_gates, dim=self.parent.dim,
+                           evotype=self.parent._evotype)
             self.parent._init_virtual_obj(ret) # so ret's gpindices get set
             return ret
         else: raise ValueError("Cannot auto-create gate for label %s" % str(gatelabel))
@@ -131,7 +141,7 @@ class SharedIdleAutoGator(AutoGator):
         ----------
         parent : GateSet
         """
-        super(SimpleCompositionAutoGator,self).__init__(parent)
+        super(SharedIdleAutoGator,self).__init__(parent)
 
     def __call__(self, existing_gates, gatelabel):
         """
@@ -155,15 +165,36 @@ class SharedIdleAutoGator(AutoGator):
         #print("DB: SharedIdleAutoGator building gate %s for %s" %
         #      (('matrix' if dense else 'map'), str(gatelabel)) )
         if isinstance(gatelabel, _label.LabelTupTup):
-            gates = [ existing_gates[l] for l in gatelabel.components ]
+
+            if self.parent.auto_idle_gatename is not None:
+                gates = []
+                for l in gatelabel.components:
+                    if l.name == self.parent.auto_idle_gatename \
+                            and l not in existing_gates:
+                        continue #skip perfect idle placeholders
+                    factor_gates.append(existing_gates[l])
+            else:
+                gates = [ existing_gates[l] for l in gatelabel.components ]
+
+            assert( all([len(g.factorgates) == 3 for g in gates]) )
             #each gate in gates is Composed([fullTargetOp,fullIdleErr,fullLocalErr])
             # so we compose 1st & 3rd factors of parallel gates and keep just a single 2nd factor...
             
-            targetOp = Composed([g.factorgates[0] for g in gates])
-            idleErr = gates[0].factorgate[1]
-            localErr = Composed([g.factorgates[2] for g in gates])
+            targetOp = Composed([g.factorgates[0] for g in gates], dim=self.parent.dim,
+                                evotype=self.parent._evotype)
+            idleErr = gates[0].factorgates[1]
+            localErr = Composed([g.factorgates[2] for g in gates], dim=self.parent.dim,
+                                evotype=self.parent._evotype)
+
+            #DEBUG could perform a check that gpindices are the same for idle gates
+            #import numpy as _np 
+            #from ..tools import slicetools as _slct
+            #for g in gates:
+            #    assert(_np.array_equal(_slct.as_array(g.factorgates[1].gpindices),
+            #                           _slct.as_array(idleErr.gpindices)))            
             
-            ret = Composed([targetOp,idleErr,localErr])
+            ret = Composed([targetOp,idleErr,localErr], dim=self.parent.dim,
+                           evotype=self.parent._evotype)
             self.parent._init_virtual_obj(ret) # so ret's gpindices get set
             return ret
         else: raise ValueError("Cannot auto-create gate for label %s" % str(gatelabel))

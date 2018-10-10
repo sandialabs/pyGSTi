@@ -48,8 +48,8 @@ class DataComparatorTestCase(BaseTestCase):
             DS_bad.done_adding_data()
             pygsti.objects.DataComparator([DS_0,DS_bad]) # but gate sequences don't match!
 
-        #Let's get the report from the comparator.
-        comparator_0_1.report(confidence_level=0.95)
+        #Let's run the comparator.
+        comparator_0_1.implement(significance=0.05)
 
         gs_exp_1 = std1Q_XYI.gs_target.copy()
         gs_exp_1 = gs_exp_1.randomize_with_unitary(.01,seed=1)
@@ -57,21 +57,33 @@ class DataComparatorTestCase(BaseTestCase):
         
         #Let's make the comparator and get the report.
         comparator_1_2 = pygsti.objects.DataComparator([DS_1,DS_2])
-        comparator_1_2.report(confidence_level=0.95)
+        comparator_1_2.implement(significance=0.05)
 
-        #get the 10 worst offenders
-        worst_strings = comparator_1_2.worst_strings(10)
+        # Tests all the "get" methods work.
+        gs = DS_0.keys()[10]
+        comparator_1_2.get_JSD(gs)
+        comparator_1_2.get_JSD_pseudothreshold()
+        comparator_1_2.get_LLR(gs)
+        comparator_1_2.get_LLR_pseudothreshold()
+        comparator_1_2.get_SSJSD(gs)
+        comparator_1_2.get_SSTVD(gs)
+        comparator_1_2.get_TVD(gs)
+        comparator_1_2.get_aggregate_LLR()
+        comparator_1_2.get_aggregate_LLR_threshold()
+        comparator_1_2.get_aggregate_nsigma()
+        comparator_1_2.get_aggregate_pvalue()
+        comparator_1_2.get_aggregate_pvalue_threshold()
+        comparator_1_2.get_maximum_SSTVD()
+        comparator_1_2.get_pvalue(gs)
+        comparator_1_2.get_pvalue_pseudothreshold()
+        comparator_1_2.get_worst_gatestrings(10)
 
         #Also test "rectification" (re-scaling to make consistent) here:
-        comparator_0_1.rectify_datasets(confidence_level=0.95,
-                                        target_score='dof')
-        comparator_0_1.rectify_datasets(confidence_level=0.1,
-                                        target_score='dof') #also use a low confidence_level to ensure "violator" cases get run
-
-        #Test TVD computation
-        comparator_0_1.compute_stat_sig_TVDs()
-
-
+        #Currently not a function that exists/works.
+        #comparator_0_1.rectify_datasets(confidence_level=0.95,
+        #                                target_score='dof')
+        #comparator_0_1.rectify_datasets(confidence_level=0.1,
+        #                                target_score='dof') #also use a low confidence_level to ensure "violator" cases get run
 
     def test_inclusion_exclusion(self):
         gs_exp_0 = std1Q_XYI.gs_target.copy()
@@ -91,8 +103,7 @@ class DataComparatorTestCase(BaseTestCase):
                                                        gate_inclusions=['Gi'], DS_names=["D0","D1"])
 
         #Let's get the report from the comparator.
-        comparator_0_1.report(confidence_level=0.95)
-
+        comparator_0_1.implement(significance=0.05)
 
 
     def test_multidataset(self):
@@ -115,21 +126,17 @@ class DataComparatorTestCase(BaseTestCase):
         comparator_0_1 = pygsti.objects.DataComparator(mds)
 
         #Let's get the report from the comparator.
-        comparator_0_1.report(confidence_level=0.95)
+        comparator_0_1.implement(significance=0.05)
 
         #Also test "rectification" (re-scaling to make consistent) here:
-        comparator_0_1.rectify_datasets(confidence_level=0.95,
-                                        target_score='dof')
-
+        #Currently not a function that exists/works.
+        #comparator_0_1.rectify_datasets(confidence_level=0.95,
+        #                                target_score='dof')
 
     def test_likelihood_fn(self):
         #Otherwise unused, so just make sure this runs
         pList = [0.5,0.5]; Nlist = [10,10]
         L = pygsti.objects.datacomparator.likelihood(pList,Nlist)
         
-
-
-        
-
 if __name__ == '__main__':
     unittest.main(verbosity=2)

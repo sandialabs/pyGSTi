@@ -269,8 +269,7 @@ class InstrumentTestCase(BaseTestCase):
         print("GateSet IO")
         pygsti.io.write_gateset(gateset, temp_files + "/testGateset.txt")
         gateset2 = pygsti.io.load_gateset(temp_files + "/testGateset.txt")
-        self.assertAlmostEqual(gateset.frobeniusdist(gateset2),0.0)
-        
+        self.assertAlmostEqual(gateset.frobeniusdist(gateset2),0.0)                
         print("Multiplication")
         
         gatestring1 = ('Gx','Gy')
@@ -307,10 +306,10 @@ class InstrumentTestCase(BaseTestCase):
         
         evt, lookup, outcome_lookup = gateset.bulk_evaltree( [gatestring1,gatestring2] )
         
-        p1 = np.dot( np.transpose(gateset.povms['Mdefault']['0']),
+        p1 = np.dot( np.transpose(gateset.povms['Mdefault']['0'].todense()),
                      np.dot( gateset.gates['Gy'],
                              np.dot(gateset.gates['Gx'],
-                                    gateset.preps['rho0'])))
+                                    gateset.preps['rho0'].todense())))
         probs = gateset.probs(gatestring1)
         print(probs)
         p20,p21 = probs[('0',)],probs[('1',)]
@@ -377,6 +376,7 @@ class InstrumentTestCase(BaseTestCase):
             filename = temp_files + "/gateset_with_instruments_%s.txt" % param
             pygsti.io.write_gateset(gs, filename)
             gs2 = pygsti.io.read_gateset(filename)
+
             self.assertAlmostEqual( gs.frobeniusdist(gs2), 0.0 )
             for lbl in gs.gates:
                 self.assertEqual( type(gs.gates[lbl]), type(gs2.gates[lbl]))

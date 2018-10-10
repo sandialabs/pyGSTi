@@ -631,7 +631,7 @@ def get_povm_map(gateset, povmlbl):
     numpy.ndarray
         The matrix of the "POVM map" in the `gateset.basis` basis.
     """
-    povmVectors = list(gateset.povms[povmlbl].values())
+    povmVectors = [v.todense()[:,None] for v in gateset.povms[povmlbl].values()]
     d = int(round(_np.sqrt(gateset.dim))) # density matrix is dxd
     nV = len(povmVectors)
     assert(d**2 == gateset.dim), "GateSet dimension (%d) is not a perfect square!" % gateset.dim
@@ -1420,7 +1420,7 @@ def _assert_shape(ar, shape, sparse=False):
 
 
 def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
-                              other_diagonal_only=False):
+                              other_mode="all"):
     """
     Compute the superoperator-generators corresponding to Lindblad terms.
 
@@ -1471,10 +1471,13 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
         numpy.linalg.norm(generator.flat) == 1.0  Note that the generators 
         will still, in general, be non-orthogonal.
 
-    other_diagonal_only : bool, optional
-        If True, only the "diagonal" Stochastic error generators are
-        returned; that is, the generators corresponding to the `i==j`
-        terms in the Lindblad expression.
+    other_mode : {"diagonal", "diag_affine", "all"}
+        Which non-Hamiltonian Lindblad error generators to construct.
+        Allowed values are: `"diagonal"` (only the diagonal Stochastic
+        generators are returned; that is, the generators corresponding to the
+        `i==j` terms in the Lindblad expression.), `"diag_affine"` (diagonal +
+        affine generators), and `"all"` (all generators).
+
 
     Returns
     -------
@@ -1485,10 +1488,13 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
         of shape (d,d) CSR matrices.
 
     other_generators : numpy.ndarray or list of lists of SciPy CSR matrices
-        If dense matrices where given, An array of shape (d-1,d-1,d,d), where d
-        is the size of the basis. `other_generators[i,j]` gives the matrix for
-        O_ij.  If sparse matrices were given, a list of lists of shape (d,d)
-        CSR matrices.
+        If dense matrices where given, An array of shape (d-1,d-1,d,d), 
+        (2,d-1,d,d), or (d-1,d,d), where d is the size of the basis, for
+        `other_mode` equal to `"all"`, `"diag_affine"`, or `"diagonal"`, 
+        respectively.  For instance, in the `"all"` case, 
+        `other_generators[i,j]` gives the matrix for O_ij.  If sparse matrices
+        were given, the all but the final 2 dimensions are lists (e.g. the
+        `"all"` case returns a list of lists of shape (d,d) CSR matrices).
     """
     if dmbasis_ham is not None:
         ham_mxs = dmbasis_ham # list of basis matrices (assumed to be in std basis)
@@ -1540,7 +1546,7 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
         assert(_np.isclose(normfn(other_mxs[0]-identityfn(d)/_np.sqrt(d)),0)),\
             "The first matrix in 'dmbasis_other' must be the identity"
 
-        if other_diagonal_only:
+        if other_mode == "diagonal":
             otherLindbladTerms = [ None ] * (other_nMxs-1) if sparse else \
                                  _np.empty( (other_nMxs-1,d2,d2), 'complex' )
             for i,Lm in enumerate(other_mxs[1:]): #don't include identity
@@ -1550,8 +1556,21 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
                     if not _np.isclose(norm,0):
                         otherLindbladTerms[i] /= norm #normalize projector
                         assert(_np.isclose(normfn(otherLindbladTerms[i]),1.0))
-        
-        else:
+
+        elif other_mode == "diag_affine":
+            otherLindbladTerms = [[ None ] * (other_nMxs-1)]*2 if sparse else \
+                                 _np.empty( (2,other_nMxs-1,d2,d2), 'complex' )
+            for i,Lm in enumerate(other_mxs[1:]): #don't include identity
+                otherLindbladTerms[0][i] = _lt.nonham_lindbladian(Lm,Lm,sparse)
+                otherLindbladTerms[1][i] = _lt.affine_lindbladian(Lm,sparse)
+                if normalize:
+                    for k in (0,1):
+                        norm = normfn(otherLindbladTerms[k][i]) #same as norm(term.flat)
+                        if not _np.isclose(norm,0):
+                            otherLindbladTerms[k][i] /= norm #normalize projector
+                            assert(_np.isclose(normfn(otherLindbladTerms[k][i]),1.0))
+
+        else: # other_mode == "all"
             otherLindbladTerms = \
                 [ [ None ] * (other_nMxs-1) for i in range(other_nMxs-1)] if sparse else \
                 _np.empty( (other_nMxs-1,other_nMxs-1,d2,d2), 'complex' )
@@ -1606,7 +1625,7 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
 def lindblad_errgen_projections(errgen, ham_basis,
                                 other_basis, mxBasis="gm",
                                 normalize=True, return_generators=False,
-                                other_diagonal_only=False, sparse=False):
+                                other_mode="all", sparse=False):
     """
     Compute the projections of a gate error generator onto generators
     for the Lindblad-term errors when expressed in the given 
@@ -1641,9 +1660,11 @@ def lindblad_errgen_projections(errgen, ham_basis,
       If True, return the error generators projected against along with the
       projection values themseves.
 
-    other_diagonal_only : bool, optional
-      If True, then only projections onto the "diagonal" terms in the
-      Lindblad expresssion are returned.
+    other_mode : {"diagonal", "diag_affine", "all"}
+      Which non-Hamiltonian Lindblad error projections to obtain.
+      Allowed values are: `"diagonal"` (only the diagonal Stochastic),
+      `"diag_affine"` (diagonal + affine generators), and `"all"`
+      (all generators).
 
     sparse : bool, optional
       Whether to create sparse or dense basis matrices when strings
@@ -1656,8 +1677,10 @@ def lindblad_errgen_projections(errgen, ham_basis,
       giving the projections onto the Hamiltonian-type Lindblad terms.
 
     other_projections : numpy.ndarray
-      An array of shape (d-1,d-1), where d is the dimension of the gate,
-      giving the projections onto the Stochastic-type Lindblad terms.
+      An array of shape (d-1,d-1), (2,d-1), or (d-1,), where d is the dimension
+      of the gate, for `other_mode` equal to `"all"`, `"diag_affine"`, or
+      `"diagonal"`, respectively.  Values give the projections onto the
+      non-Hamiltonian-type Lindblad terms.
 
     ham_generators : numpy.ndarray
       The Hamiltonian-type Lindblad term generators, as would be returned
@@ -1667,7 +1690,10 @@ def lindblad_errgen_projections(errgen, ham_basis,
     other_generators : numpy.ndarray
       The Stochastic-type Lindblad term generators, as would be returned
       from `lindblad_error_generators(pp_matrices(sqrt(d)), normalize)`.
-      Shape is (d-1,d-1,d,d), and `other_generators[i]` is in the std basis.
+      Shape is (d-1,d-1,d,d), (2,d-1,d,d), or (d-1,d,d) for `other_mode`
+      equal to `"all"`, `"diag_affine"`, or `"diagonal"`, respectively,
+      and `other_generators[i]` is in the std basis.
+
     """
     errgen_std = _bt.change_basis(errgen, mxBasis, "std")
     if _sps.issparse(errgen_std):
@@ -1699,7 +1725,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
         otherBasisMxs = other_basis
         
     hamGens, otherGens = lindblad_error_generators(
-        hamBasisMxs,otherBasisMxs,normalize,other_diagonal_only) # in std basis
+        hamBasisMxs,otherBasisMxs,normalize,other_mode) # in std basis
 
     if hamBasisMxs is not None:
         bsH = len(hamBasisMxs) #basis size (not necessarily d2)
@@ -1717,9 +1743,11 @@ def lindblad_errgen_projections(errgen, ham_basis,
     if bsH > 0:
         _assert_shape(hamGens, (bsH-1,d2,d2), sparse)
     if bsO > 0:
-        if other_diagonal_only:
+        if other_mode == "diagonal":
             _assert_shape(otherGens, (bsO-1,d2,d2), sparse)
-        else:
+        elif other_mode == "diag_affine":
+            _assert_shape(otherGens, (2,bsO-1,d2,d2), sparse)
+        else: #other_mode == "all"
             _assert_shape(otherGens, (bsO-1,bsO-1,d2,d2), sparse)
 
     #Perform linear least squares solve to find "projections" onto each otherGens element - defined so that
@@ -1755,8 +1783,10 @@ def lindblad_errgen_projections(errgen, ham_basis,
 
     if bsO > 0:
         if not sparse:
-            if other_diagonal_only:
+            if other_mode == "diagonal":
                 O = otherGens.reshape((bsO-1,d2**2)).T # other generators == columns
+            elif other_mode == "diag_affine":
+                O = otherGens.reshape((2*(bsO-1),d2**2)).T # other generators == columns
             else:
                 O = otherGens.reshape(((bsO-1)**2,d2**2)).T # other generators == columns
             Odag = O.T.conjugate()
@@ -1764,31 +1794,36 @@ def lindblad_errgen_projections(errgen, ham_basis,
             #Do linear least squares: this is what takes the bulk of the time
             otherProjs = _np.linalg.solve(_np.dot(Odag,O), _np.dot(Odag,errgen_std_flat))
     
-            if other_diagonal_only:
+            if other_mode == "diagonal":
                 otherProjs.shape = (otherGens.shape[0],)
+            elif other_mode == "diag_affine":
+                otherProjs.shape = (2,otherGens.shape[1])
             else:
                 otherProjs.shape = (otherGens.shape[0],otherGens.shape[1])
 
         else:
-            if other_diagonal_only:
+            if other_mode == "diagonal":
                 rows = [oGen.tolil().reshape((1,d2**2)) for oGen in otherGens]
                 O = _sps.vstack(rows, 'csr').transpose() # other generators == columns
-            else:
+            else: # "diag_affine" or "all"
                 rows = [oGen.tolil().reshape((1,d2**2)) for oGenRow in otherGens for oGen in oGenRow]
                 O = _sps.vstack(rows, 'csr').transpose() # other generators == columns
             Odag = O.copy().transpose().conjugate() #TODO: maybe conjugate copies data?
 
             #Do linear least squares: this is what takes the bulk of the time
-            if _mt.safenorm(errgen_std_flat) < 1e-8: #protect against singular RHS 
-                otherProjs = _np.zeros(bsO-1, 'd') if other_diagonal_only else \
-                             _np.zeros((bsO-1,bsO-1), 'd')
+            if _mt.safenorm(errgen_std_flat) < 1e-8: #protect against singular RHS
+                if other_mode == "diagonal":      otherProjs = _np.zeros(bsO-1, 'd')
+                elif other_mode == "diag_affine": otherProjs = _np.zeros((2,bsO-1), 'd')
+                else:                             otherProjs = _np.zeros((bsO-1,bsO-1), 'd')
             else:
                 otherProjs = _spsl.spsolve(Odag.dot(O), Odag.dot(errgen_std_flat))
                 if _sps.issparse(otherProjs): otherProjs = otherProjs.toarray().flatten()
     
-            if other_diagonal_only:
+            if other_mode == "diagonal":
                 otherProjs.shape = (bsO-1,)
-            else:
+            elif other_mode == "diag_affine":
+                otherProjs.shape = (2,bsO-1)
+            else: # other_mode == "all"
                 otherProjs.shape = (bsO-1,bsO-1)
     else:
         otherProjs = None
@@ -1814,7 +1849,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
         return hamProjs, otherProjs
 
 def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
-                                  other_diagonal_only=False):
+                                  other_mode="all"):
     """
     Converts the projections of an error generator onto basis elements into
     the Lindblad-term and basis dictionaries used to individually specify 
@@ -1828,31 +1863,35 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
         terms.
 
     otherProjs : numpy.ndarray
-        An array of shape (d-1,d-1), where d is the dimension of the projected
-        error generator, giving the projections onto the Stochastic-type (or,
-        more accurately, the non-Hamiltonian-type) Lindblad terms.
+        An array of shape (d-1,d-1), (2,d-1), or (d-1,), where d is the dimension
+        of the projected error generator, for `other_mode` equal to `"all"`,
+        `"diag_affine"`, or `"diagonal"`, respectively.  Values give the
+        projections onto the non-Hamiltonian-type Lindblad terms.
 
     ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
         The basis used to construct `hamProjs`.  Allowed values are Matrix-unit
         (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt), list of
         numpy arrays, or a custom basis object.
 
-    other_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+    other_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object 
         The basis used to construct `otherProjs`.  Allowed values are
         Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt),
         list of numpy arrays, or a custom basis object.
 
-    other_diagonal_only : bool, optional
-        Whether `otherProjs` includes all or only the diagonal elements of a
-        full Lindblad expansion.
+    other_mode : {"diagonal", "diag_affine", "all"}
+      Which non-Hamiltonian Lindblad error projections `otherProjs` includes.
+      Allowed values are: `"diagonal"` (only the diagonal Stochastic),
+      `"diag_affine"` (diagonal + affine generators), and `"all"`
+      (all generators).
+
 
     Returns
     -------
     Ltermdict : dict
         Keys are `(termType, basisLabel1, <basisLabel2>)`
-        tuples, where `termType` is `"H"` (Hamiltonian) or `"S"`
-        (Stochastic).  Hamiltonian terms always have a single basis label 
-        (so key is a 2-tuple) whereas Stochastic tuples have 1 basis label
+        tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic), or
+        `"A"` (Affine).  Hamiltonian and Affine terms always have a single basis
+        label (so key is a 2-tuple) whereas Stochastic tuples have 1 basis label
         to indicate a *diagonal* term and otherwise have 2 basis labels to
         specify off-diagonal non-Hamiltonian Lindblad terms.  Basis labels
         are integers starting at 0.  Values are complex coefficients (the 
@@ -1867,9 +1906,8 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
     # Make None => length-0 arrays so iteration code works below (when basis is None)
     if hamProjs is None: hamProjs = _np.empty(0,'d') 
     if otherProjs is None:
-        otherProjs = _np.empty(0,'d') if other_diagonal_only \
+        otherProjs = _np.empty(0,'d') if other_mode == "diagonal" \
                      else _np.empty((0,0),'d')
-
 
     # Construct a pair of dictionaries describing all of the
     # Lindblad-terms:
@@ -1898,11 +1936,21 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
 
     #Add "other" error elements
     other_mxs = other_basis.get_composite_matrices() #can be sparse
-    if other_diagonal_only:
+    if other_mode == "diagonal":
         assert(len(other_mxs[1:]) == len(otherProjs))
         for coeff, bmx in zip(otherProjs,other_mxs[1:]): # skip identity
             blbl,nextLbl = get_basislbl(bmx,nextLbl)
             Ltermdict[('S',blbl)] = coeff
+
+    elif other_mode == "diag_affine":
+        assert( (2,len(other_mxs[1:])) == otherProjs.shape)
+        for coeff, bmx in zip(otherProjs[0],other_mxs[1:]): # skip identity
+            blbl,nextLbl = get_basislbl(bmx,nextLbl)
+            Ltermdict[('S',blbl)] = coeff
+        for coeff, bmx in zip(otherProjs[1],other_mxs[1:]): # skip identity
+            blbl,nextLbl = get_basislbl(bmx,nextLbl)
+            Ltermdict[('A',blbl)] = coeff
+            
     else:
         assert((len(other_mxs[1:]),len(other_mxs[1:])) == otherProjs.shape)
         for i, bmx1 in enumerate(other_mxs[1:]): # skip identity
@@ -1919,7 +1967,7 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
     return Ltermdict, basisdict
 
 
-def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal_only=False):
+def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_mode="all"):
     """
     Convert a set of Lindblad terms into a dense matrix/grid of projections.
 
@@ -1930,14 +1978,14 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
     Ltermdict : dict
         A dictionary specifying which Linblad terms are present in the gate
         parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
-        tuples, where `termType` can be `"H"` (Hamiltonian) or `"S"`
-        (Stochastic).  Hamiltonian terms always have a single basis label 
-        (so key is a 2-tuple) whereas Stochastic tuples with 1 basis label
-        indicate a *diagonal* term, and are the only types of terms allowed
-        when `other_diagonal_only=True`.  Otherwise, Stochastic term tuples
-        can include 2 basis labels to specify "off-diagonal" non-Hamiltonian
-        Lindblad terms.  Basis labels can be strings or integers.  Values
-        are floating point coefficients (error rates).
+        tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic), or
+        `"A"` (Affine).  Hamiltonian and Affine terms always have a single basis
+        label (so key is a 2-tuple) whereas Stochastic tuples with 1 basis label
+        indicate a *diagonal* term, and are the only types of terms allowed when
+        `nonham_mode != "all"`.  Otherwise, Stochastic term tuples can include 2
+        basis labels to specify "off-diagonal" non-Hamiltonian Lindblad terms.
+        Basis labels can be strings or integers.  Values are complex
+        coefficients (error rates).
 
     basisdict : dict
         A dictionary mapping the basis labels (strings or ints) used in the
@@ -1948,9 +1996,11 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
         The dimension of the basis elements (2 for single-qubit).  Required
         for the case when `basisdict` is empty.
 
-    other_diagonal_only : boolean, optional
-        If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
-        allowed in `Ltermdict`.
+    other_mode : {"diagonal", "diag_affine", "all"}
+      Which non-Hamiltonian terms are allowed in `Ltermdict`.
+      Allowed values are: `"diagonal"` (only the diagonal Stochastic),
+      `"diag_affine"` (diagonal + affine generators), and `"all"`
+      (all generators).
 
     Returns
     -------
@@ -1960,9 +2010,10 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
         `ham_basis`).
 
     otherProjs : numpy.ndarray
-        An array of shape (d-1,d-1), where d=`basisdim^2`, giving the
-        projections onto a full set of Stochastic-type (or more accurately,
-        non-Hamiltonian-type) Lindblad terms.
+        An array of shape (d-1,d-1), (2,d-1), or (d-1,), where d=`basisdim^2`
+        for `other_mode` equal to `"all"`, `"diag_affine"`, or `"diagonal"`,
+        respectively.  Values give the projections onto the non-Hamiltonian
+        -type Lindblad terms.
 
     ham_basis: Basis
         The basis used to construct `hamProjs`.
@@ -1981,7 +2032,7 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
         to the integers 0 to `len(other_basis)`.  These are row and column
         indices into `otherProjs`, giving the projection associated with each
         pair of "other" basis elements (or single basis element if
-        `other_diagonal_only=True`).
+        `other_mode!="all"`).
     """
 
     d = basisdim
@@ -1997,8 +2048,8 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
             if termLbl[1] not in hamBasisIndices:
                 hamBasisIndices[ termLbl[1] ] = len(hamBasisIndices)
                 
-        elif termType == "S": # Stochastic                
-            if other_diagonal_only:
+        elif termType == "S": # Stochastic
+            if other_mode in ("diagonal","diag_affine"):
                 assert(len(termLbl) == 2),"Stochastic term labels should have form ('S',<basis element label>)"
                 if termLbl[1] not in otherBasisIndices:
                     otherBasisIndices[ termLbl[1] ] = len(otherBasisIndices)
@@ -2008,6 +2059,13 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
                     otherBasisIndices[ termLbl[1] ] = len(otherBasisIndices)
                 if termLbl[2] not in otherBasisIndices:
                     otherBasisIndices[ termLbl[2] ] = len(otherBasisIndices)
+                    
+        elif termType == "A": # Affine
+            assert(other_mode == "diag_affine"), "Affine labels are only allowed in an affine mode"
+            assert(len(termLbl) == 2),"Affine term labels should have form ('A',<basis element label>)"
+            if termLbl[1] not in otherBasisIndices:
+                otherBasisIndices[ termLbl[1] ] = len(otherBasisIndices)
+            
 
     #Construct bases
     ham_basis_mxs = [ basisdict[bl] for bl in hamBasisIndices ] # requires OrderedDict
@@ -2046,8 +2104,10 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
     # the corresponding basis is empty (as per our convention)
     hamProjs = _np.zeros(bsH-1, 'complex') if bsH > 0 else None
     if bsO > 0:
-        if other_diagonal_only:  # OK if this runs for 'auto' too since then len(otherBasisIndices) == 0
+        if other_mode == "diagonal":  # OK if this runs for 'auto' too since then len(otherBasisIndices) == 0
             otherProjs = _np.zeros(bsO-1,'complex')
+        elif other_mode == "diag_affine":
+            otherProjs = _np.zeros((2,bsO-1),'complex')
         else:
             otherProjs = _np.zeros((bsO-1,bsO-1),'complex')
     else: otherProjs = None
@@ -2059,19 +2119,26 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_diagonal
             k = hamBasisIndices[termLbl[1]] #index of coefficient in array
             hamProjs[k] = coeff
         elif termType == "S": # Stochastic
-            if other_diagonal_only:
+            if other_mode == "diagonal":
                 k = otherBasisIndices[termLbl[1]] #index of coefficient in array
                 otherProjs[k] = coeff
-            else:
+            elif other_mode == "diag_affine":
+                k = otherBasisIndices[termLbl[1]] #index of coefficient in array
+                otherProjs[0,k] = coeff
+            else: # other_mode == "all"
                 k = otherBasisIndices[termLbl[1]] #index of row in "other" coefficient matrix
                 j = otherBasisIndices[termLbl[2]] #index of col in "other" coefficient matrix
                 otherProjs[k,j] = coeff
+        elif termType == "A": #Affine
+            assert(other_mode == "diag_affine")
+            k = otherBasisIndices[termLbl[1]] #index of coefficient in array
+            otherProjs[1,k] = coeff
                 
     return hamProjs, otherProjs, ham_basis, other_basis, hamBasisIndices, otherBasisIndices
 
 
-def lindblad_projections_to_paramvals(hamProjs, otherProjs, cptp=True,
-                                      other_diagonal_only=False, truncate=True):
+def lindblad_projections_to_paramvals(hamProjs, otherProjs, param_mode="cptp",
+                                      other_mode="all", truncate=True):
     """
     Construct the array of Lindblad-gate parameter values from the separate 
     arrays of Hamiltonian and non-Hamiltonian Lindblad-term projections.
@@ -2089,32 +2156,37 @@ def lindblad_projections_to_paramvals(hamProjs, otherProjs, cptp=True,
         projections onto a full set of the Hamiltonian-type Lindblad terms.
 
     otherProjs : numpy.ndarray
-        An array of shape (d-1,d-1) or (d-1,) where d is the gate dimension,
-        giving the projections onto a full set of non-Hamiltonian-type Lindblad
-        terms.  See `other_diagonal_only` below.
+        An array of shape (d-1,d-1), (2,d-1), or (d-1,), where d is the gate
+        dimension, for `other_mode` equal to `"all"`,`"diag_affine"`, or
+        `"diagonal"`, respectively.  Values give the projections onto a full
+        set of non-Hamiltonian-type Lindblad terms.
 
-    cptp : bool, optional
-        Whether or not the parameterization should be setup with a CPTP
-        constraint (see above). If True, see behavior or `truncate`.
+    param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+        Describes how values in `hamProjs` and `otherProj` relate to the
+        returned parameter values.  Allowed values are:
+        `"unconstrained"` (projs are independent unconstrained parameters),
+        `"cptp"` (independent parameters but constrained so map is CPTP),
+        `"reldepol"` (all non-Ham. diagonal projs take the *same* value),
+        `"depol"` (same as `"reldepol"` but projs must be *positive*)
 
-    other_diagonal_only : boolean, optional
-        If True, only *diagonal* non-Hamiltonain terms are given by 
-        `otherProjs`, which is then expected bo be a 1D array of length
-        d-1.
+    other_mode : {"diagonal", "diag_affine", "all"}
+        Which non-Hamiltonian Lindblad error projections `otherProjs` includes.
+        Allowed values are: `"diagonal"` (only the diagonal Stochastic),
+        `"diag_affine"` (diagonal + affine generators), and `"all"`.
 
     truncate : bool, optional
         Whether to truncate the projections onto the Lindblad terms in
-        order to preserve CPTP (when necessary).  If False, then an 
-        error is thrown when `cptp == True` and when the given `otherProjs`
-        result in a non-positive-definite matrix of non-Hamiltonian term
-        coefficients.
+        order to meet constraints (e.g. to preserve CPTP) when necessary.
+        If False, then an error is thrown when the given projections 
+        cannot be parameterized as specified.
 
     Returns
     -------
     numpy.ndarray
         A 1D array of real parameter values consisting of d-1 Hamiltonian 
-        values followed by either (d-1)^2 or just d-1 non-Hamiltonian
-        values (the latter when `other_diagonal_only=True`).
+        values followed by either (d-1)^2, 2*(d-1), or just d-1 non-Hamiltonian
+        values for `other_mode` equal to `"all"`, `"diag_affine"`, or
+        `"diagonal"`, respectively.
     """
     if hamProjs is not None:
         assert(_np.isclose(_np.linalg.norm(hamProjs.imag),0)), \
@@ -2124,25 +2196,56 @@ def lindblad_projections_to_paramvals(hamProjs, otherProjs, cptp=True,
         hamParams = _np.empty(0,'d')
         
     if otherProjs is not None:
-        if other_diagonal_only:
+        if other_mode == "diagonal":
             assert(_np.isclose(_np.linalg.norm(_np.imag(otherProjs)),0)), \
                 "Diagonal stochastic projections (coefficients) are not all real!"
 
-            if cptp: #otherParams is a 1D vector of the sqrts of diagonal els
+            if param_mode == "depol": #otherParams is a *single-element* 1D vector of the sqrt of each diagonal el
+                assert(truncate or all([v >= -1e-12 for v in otherProjs])), \
+                    "Lindblad coefficients are not CPTP (truncate == False)!"
+                assert(truncate or all([_np.isclose(v,otherProjs[0]) for v in otherProjs])), \
+                    "Diagonal lindblad coefficients are not equal (truncate == False)!"
+                otherProj = _np.mean(otherProjs.clip(1e-16,1e100))
+                otherParams = _np.array(_np.sqrt(_np.real(otherProj)),'d') # shape (1,)
+                
+            elif param_mode == "cptp": #otherParams is a 1D vector of the sqrts of diagonal els
                 assert(truncate or all([v >= -1e-12 for v in otherProjs])), \
                     "Lindblad coefficients are not CPTP (truncate == False)!"
                 otherProjs = otherProjs.clip(1e-16,1e100)
                 otherParams = _np.sqrt(otherProjs.real) # shape (bsO-1,)
-            else: #otherParams is a 1D vector of the real diagonal els of otherProjs
+            else: # "unconstrained": otherParams is a 1D vector of the real diagonal els of otherProjs
                 otherParams = otherProjs.real # shape (bsO-1,)
-        else:
+                
+        elif other_mode == "diag_affine":
+            assert(_np.isclose(_np.linalg.norm(_np.imag(otherProjs)),0)), \
+                "Diagonal stochastic and affine projections (coefficients) are not all real!"
+            
+            if param_mode == "depol": #otherParams is a single depol value + unconstrained affine coeffs
+                assert(truncate or all([v >= -1e-12 for v in otherProjs[0]])), \
+                    "Lindblad coefficients are not CPTP (truncate == False)!"
+                assert(truncate or all([_np.isclose(v,otherProjs[0,0]) for v in otherProjs[0]])), \
+                    "Diagonal lindblad coefficients are not equal (truncate == False)!"
+                depolProj = _np.mean(otherProjs[0,:].clip(1e-16,1e100))
+                otherParams = _np.concatenate( ([_np.sqrt(_np.real(depolProj))],otherProjs[1].real) ) # shape (1+(bsO-1),)
+                
+            elif param_mode == "cptp": # Note: does not constrained affine coeffs to CPTP
+                assert(truncate or all([v >= -1e-12 for v in otherProjs[0]])), \
+                    "Lindblad coefficients are not CPTP (truncate == False)!"
+                diagParams = _np.sqrt(_np.real(otherProjs[0,:]).clip(1e-16,1e100)) # shape (bsO-1,)
+                otherParams = _np.concatenate( (diagParams, otherProjs[1].real) ) # diag + affine params
+
+            else: # param_mode == "unconstrained": otherParams is a 1D vector of the real diagonal els of otherProjs
+                otherParams = otherProjs.real # shape (2,bsO-1)
+                
+        else: # other_mode == "all"
             assert(_np.isclose(_np.linalg.norm(otherProjs-otherProjs.T.conjugate())
                                ,0)), "Other projection/coefficient mx is not Hermitian!"
+            assert(param_mode != "depol"), "`depol` is not supported when `other_mode == 'all'`"
 
             bsO = otherProjs.shape[0]+1 # +1 to keep convention that this is the basis (w/Identity) size
             otherParams = _np.empty((bsO-1,bsO-1),'d')
 
-            if cptp: #otherParams mx stores Cholesky decomp
+            if param_mode == "cptp": #otherParams mx stores Cholesky decomp
 
                 #push any slightly negative evals of otherProjs positive so that
                 # the Cholesky decomp will work.
@@ -2170,7 +2273,7 @@ def lindblad_projections_to_paramvals(hamProjs, otherProjs, cptp=True,
                         otherParams[i,j] = Lmx[i,j].real
                         otherParams[j,i] = Lmx[i,j].imag
 
-            else: #otherParams mx stores otherProjs (hermitian) directly
+            else: # param_mode == "unconstrained": otherParams mx stores otherProjs (hermitian) directly
                 for i in range(bsO-1):
                     assert(_np.linalg.norm(_np.imag(otherProjs[i,i])) < IMAG_TOL)
                     otherParams[i,i] = otherProjs[i,i].real
@@ -2180,8 +2283,157 @@ def lindblad_projections_to_paramvals(hamProjs, otherProjs, cptp=True,
     else:
         otherParams = _np.empty(0,'d')
 
+    assert(not _np.iscomplexobj(hamParams))   # params should always
+    assert(not _np.iscomplexobj(otherParams)) # be *real*
     return _np.concatenate( (hamParams, otherParams.flat) )
 
+
+
+def paramvals_to_lindblad_projections(paramvals, ham_basis_size,
+                                      other_basis_size, param_mode="cptp",
+                                      other_mode="all", Lmx=None):
+    """
+    Construct the separate arrays of Hamiltonian and non-Hamiltonian
+    Lindblad-term projections from the array of Lindblad-gate parameter values.
+
+    This function essentially performs the inverse of 
+    :function:`lindblad_projections_to_paramvals`.
+
+    Parameters
+    ----------
+    paramvals : numpy.ndarray
+        A 1D array of real parameter values consisting of d-1 Hamiltonian 
+        values followed by either (d-1)^2 or just d-1 non-Hamiltonian
+        values (the latter when `other_mode in ('diagonal','diag_affine')`).
+
+    ham_basis_size, other_basis_size : int
+        The number of elements in the Hamiltonian and non-Hamiltonian
+        bases used to construct `paramvals`.  As such, `ham_basis_size`
+        gives the offset into `paramvals` where the non-Hamiltonian
+        parameters begin.
+
+    param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+        Specifies how the Lindblad-term coefficients are mapped to the set of
+        (real) parameter values.  This really just applies to the "other"
+        (non-Hamiltonian) coefficients.  "unconstrained" means that ranging 
+        over the parameter values lets the coefficient-matrix vary over all
+        matrices, "cptp" restricts this to postitive matrices. "depol" 
+        maps all of the coefficients to the *same, positive* parameter (only
+        available for "diagonal" and "diag_affine" other-modes), and "reldepol"
+        does the same thing but without the positivity constraint.
+
+    other_mode : {"all", "diagonal", "diag_affine"}
+        Specifies the structure of the matrix of other (non-Hamiltonian)
+        coefficients.  If d is the gate dimension, "all" means a (d-1,d-1)
+        matrix is used; "diagonal" means just the (d2-1,) diagonal of this
+        matrix is used; "diag_affine" means the coefficients are in a (2,d2-1)
+        array with the diagonal-term coefficients being the first row and the
+        affine coefficients being the second row.
+
+    Lmx : ndarray, optional
+        Scratch space that is used to store the lower-triangular
+        Cholesky decomposition matrix that is used to construct
+        the "other" projections when there is a CPTP constraint.
+
+    Returns
+    -------
+    hamProjs : numpy.ndarray
+        An array of length d-1, where d is the gate dimension, giving the
+        projections onto a full set of the Hamiltonian-type Lindblad terms.
+
+    otherProjs : numpy.ndarray
+        An array of shape (d-1,d-1) or (d-1,) or (2,d-1) where d is the gate
+        dimension, giving the projections onto a full set of non-Hamiltonian
+        -type Lindblad terms (see `other_mode` above).
+    """
+    bsH = ham_basis_size
+    bsO = other_basis_size
+
+    if Lmx is None:
+        Lmx = _np.zeros((bsO-1,bsO-1),'complex') if bsO > 0 else None
+
+    # self.paramvals = [hamCoeffs] + [otherParams]
+    #  where hamCoeffs are *real* and of length d2-1 (self.dim == d2)
+    if bsH > 0:
+        hamCoeffs = paramvals[0:bsH-1]
+        nHam = bsH-1
+    else:
+        hamCoeffs = None
+        nHam = 0
+
+    #built up otherCoeffs based on param_mode and nonham_mode
+    if bsO > 0:
+        if other_mode == "diagonal":
+            otherParams = paramvals[nHam:]
+            expected_shape = (1,) if (param_mode in ("depol","reldepol")) else (bsO-1,)
+            assert(otherParams.shape == expected_shape)
+            
+            if param_mode in ("cptp","depol"):
+                otherCoeffs = otherParams**2 #Analagous to L*L_dagger
+            else: # "unconstrained"
+                otherCoeffs = otherParams
+                
+        elif other_mode == "diag_affine":
+
+            if param_mode in ("depol","reldepol"):
+                otherParams = paramvals[nHam:].reshape((1+bsO-1,))
+                otherCoeffs = _np.empty((2,bsO-1), 'd') #leave as real type b/c doesn't have complex entries
+                if param_mode == "depol":
+                    otherCoeffs[0,:] = otherParams[0]**2
+                else:
+                    otherCoeffs[0,:] = otherParams[0]
+                otherCoeffs[1,:] = otherParams[1:]
+
+            else:
+                otherParams = paramvals[nHam:].reshape((2,bsO-1))
+                if param_mode == "cptp":
+                    otherCoeffs = otherParams.copy()
+                    otherCoeffs[0,:] = otherParams[0]**2
+                else: # param_mode == "unconstrained"
+                    #otherCoeffs = _np.empty((2,bsO-1),'complex')
+                    otherCoeffs = otherParams
+                    
+        else: # other_mode == "all"
+            otherParams = paramvals[nHam:].reshape((bsO-1,bsO-1))
+    
+            if param_mode == "cptp":
+                #  otherParams is an array of length (bs-1)*(bs-1) that
+                #  encodes a lower-triangular matrix "Lmx" via:
+                #  Lmx[i,i] = otherParams[i,i]
+                #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
+                for i in range(bsO-1):
+                    Lmx[i,i] = otherParams[i,i]
+                    for j in range(i):
+                        Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
+        
+                #The matrix of (complex) "other"-coefficients is build by
+                # assuming Lmx is its Cholesky decomp; means otherCoeffs
+                # is pos-def.
+
+                # NOTE that the Cholesky decomp with all positive real diagonal
+                # elements is *unique* for a given positive-definite otherCoeffs
+                # matrix, but we don't care about this uniqueness criteria and so
+                # the diagonal els of Lmx can be negative and that's fine -
+                # otherCoeffs will still be posdef.
+                otherCoeffs = _np.dot(Lmx,Lmx.T.conjugate())
+    
+                #DEBUG - test for pos-def
+                #evals = _np.linalg.eigvalsh(otherCoeffs)
+                #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
+                #assert(all([ev >= -DEBUG_TOL for ev in evals]))
+    
+            else: # param_mode == "unconstrained"
+                #otherParams holds otherCoeff real and imaginary parts directly
+                otherCoeffs = _np.empty((bsO-1,bsO-1),'complex')
+                for i in range(bsO-1):
+                    otherCoeffs[i,i] = otherParams[i,i]
+                    for j in range(i):
+                        otherCoeffs[i,j] = otherParams[i,j] +1j*otherParams[j,i]
+                        otherCoeffs[j,i] = otherParams[i,j] -1j*otherParams[j,i]
+    else:
+        otherCoeffs = None
+
+    return hamCoeffs, otherCoeffs
 
 
 #TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
@@ -2301,13 +2553,15 @@ def project_gateset(gateset, targetGateset,
         if ('H' in projectiontypes) or ('H+S' in projectiontypes):
             hamProj, hamGens = std_errgen_projections(
                 errgen, "hamiltonian", basis.name, basis, True)
-            ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
+            #ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
+            ham_error_gen = _np.tensordot(hamProj, hamGens, (0,0))
             ham_error_gen = _bt.change_basis(ham_error_gen,"std",basis)
             
         if ('S' in projectiontypes) or ('H+S' in projectiontypes):
             stoProj, stoGens = std_errgen_projections(
                 errgen, "stochastic", basis.name, basis, True)
-            sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
+            #sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
+            sto_error_gen = _np.tensordot(stoProj, stoGens, (0,0))
             sto_error_gen = _bt.change_basis(sto_error_gen,"std",basis)
             
         if ('LND' in projectiontypes) or ('LNDF' in projectiontypes):
@@ -2316,8 +2570,10 @@ def project_gateset(gateset, targetGateset,
                     errgen, basis.name, basis.name, basis, normalize=False,
                     return_generators=True)
             #Note: return values *can* be None if an empty/None basis is given
-            lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
-                            _np.einsum('ij,ijkl', OProj, OGens)
+            #lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
+            #                _np.einsum('ij,ijkl', OProj, OGens)
+            lnd_error_gen = _np.tensordot(HProj, HGens, (0,0)) + \
+                            _np.tensordot(OProj, OGens, ((0,1),(0,1)))
             lnd_error_gen = _bt.change_basis(lnd_error_gen,"std",basis)
 
         targetGate = targetGateset.gates[gl]
@@ -2347,8 +2603,10 @@ def project_gateset(gateset, targetGateset,
             pos_evals = evals.clip(0,1e100) #clip negative eigenvalues to 0
             OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U)))
               #OProj_cp is now a pos-def matrix
-            lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
-                               _np.einsum('ij,ijkl', OProj_cp, OGens)
+            #lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
+            #                   _np.einsum('ij,ijkl', OProj_cp, OGens)
+            lnd_error_gen_cp = _np.tensordot(HProj, HGens, (0,0)) + \
+                               _np.tensordot(OProj_cp, OGens, ((0,1),(0,1)))
             lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp,"std",basis)
 
             gsDict['LND'].gates[gl] = gate_from_error_generator(
@@ -2445,3 +2703,59 @@ def unitary_to_pauligate(U):
     """
     assert U.shape[0] == U.shape[1], '"Unitary" matrix is not square'
     return _bt.change_basis(unitary_to_process_mx(U), 'std', 'pp')
+
+
+def is_valid_lindblad_paramtype(typ):
+    """
+    Whether `typ` is a recognized Lindblad-gate parameterization type.
+
+    A *Lindblad type* is comprised of a parameter specification followed
+    optionally by an evolution-type suffix.  The parameter spec can be
+    "GLND" (general unconstrained Lindbladian), "CPTP" (cptp-constrained),
+    or any/all of the letters "H" (Hamiltonian), "S" (Stochastic, CPTP),
+    "s" (Stochastic), "A" (Affine), "D" (Depolarization, CPTP), 
+    "d" (Depolarization) joined with plus (+) signs.  Note that "H"
+    cannot appear alone, and that "A" cannot appear without one of
+    {"S","s","D","d"}. The suffix can be non-existent (density-matrix),
+    "terms" (state-vector terms) or "clifford terms" (stabilizer-state
+    terms).  For example, valid Lindblad types are "H+S", "H+d+A",
+    "CPTP clifford terms", or "S+A terms".
+
+    Returns
+    -------
+    bool
+    """
+    try:
+        baseTyp, _ = split_lindblad_paramtype(typ)
+    except ValueError: 
+        return False # if can't even split `typ`
+    return baseTyp in ("CPTP","H+S","S","H+S+A","S+A","H+D","D","H+D+A","D+A",
+                       "GLND","H+s","s","H+s+A","s+A","H+d","d","H+d+A","d+A")
+
+def split_lindblad_paramtype(typ):
+    """
+    Splits a Lindblad-gate parameteriation type into 
+    a base-type (e.g. "H+S") and an evolution-type
+    string.
+
+    Parameters
+    ----------
+    typ : str
+        The parameterization type, e.g. "H+S terms".
+
+    Returns
+    -------
+    base_type : str
+        The "base-parameterization" part of `typ`.
+    evotype : str
+        The evolution type corresponding to `typ`.
+    """
+    bTyp = typ.split()[0] # "base" type
+    evostr = " ".join(typ.split()[1:])
+
+    if   evostr == "":               evotype = "densitymx"
+    elif evostr == "terms":          evotype = "svterm"
+    elif evostr == "clifford terms": evotype = "cterm"
+    else: raise ValueError("Unrecognized evotype in `paramType`=%s" % paramType)
+    return bTyp, evotype
+    

@@ -141,25 +141,25 @@ class GateTestCase(BaseTestCase):
         
         gates_to_test.append( pygsti.objects.LindbladParameterizedGate.from_gate_matrix(
             mx,unitaryPostfactor=None,
-            ham_basis="pp", nonham_basis="pp", cptp=True,
-            nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
+            ham_basis="pp", nonham_basis="pp", param_mode="cptp",
+            nonham_mode="all", truncate=True, mxBasis="pp") )
 
         gates_to_test.append( pygsti.objects.LindbladParameterizedGate.from_gate_matrix(
             mx,unitaryPostfactor=None,
-            ham_basis="pp", nonham_basis="pp", cptp=True,
-            nonham_diagonal_only=True, truncate=True, mxBasis="pp") )
+            ham_basis="pp", nonham_basis="pp", param_mode="cptp",
+            nonham_mode="diagonal", truncate=True, mxBasis="pp") )
 
         ppBasis = pygsti.obj.Basis("pp",2)
         gates_to_test.append( pygsti.objects.LindbladParameterizedGate.from_gate_matrix(
             mx,unitaryPostfactor=mx,
-            ham_basis=ppBasis, nonham_basis=ppBasis, cptp=False,
-            nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
+            ham_basis=ppBasis, nonham_basis=ppBasis, param_mode="unconstrained",
+            nonham_mode="all", truncate=True, mxBasis="pp") )
 
         ppMxs = pygsti.tools.pp_matrices(2)
         gates_to_test.append( pygsti.objects.LindbladParameterizedGate.from_gate_matrix(
             mx,unitaryPostfactor=None,
-            ham_basis=ppMxs, nonham_basis=ppMxs, cptp=False,
-            nonham_diagonal_only=True, truncate=True, mxBasis="pp") )
+            ham_basis=ppMxs, nonham_basis=ppMxs, param_mode="unconstrained",
+            nonham_mode="diagonal", truncate=True, mxBasis="pp") )
 
         compGate = pygsti.objects.ComposedGate(
             [pygsti.objects.StaticGate(mx),
@@ -179,8 +179,8 @@ class GateTestCase(BaseTestCase):
         # no need to truncate anymore... (?)
         pygsti.objects.LindbladParameterizedGate.from_gate_matrix(
             mx,unitaryPostfactor=mx,
-            ham_basis=ppBasis, nonham_basis=ppBasis, cptp=False,
-            nonham_diagonal_only=False, truncate=False, mxBasis="pp")
+            ham_basis=ppBasis, nonham_basis=ppBasis, param_mode="unconstrained",
+            nonham_mode="all", truncate=False, mxBasis="pp")
 
         for gate in gates_to_test:
             state = np.zeros( (4,1), 'd' )
@@ -297,41 +297,41 @@ class GateTestCase(BaseTestCase):
                 
         gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             densemx,unitaryPostfactor=None,
-            ham_basis="pp", nonham_basis="pp", cptp=True,
-            nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
+            ham_basis="pp", nonham_basis="pp", param_mode="cptp",
+            nonham_mode="all", truncate=True, mxBasis="pp") )
 
         gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             sparsemx,unitaryPostfactor=None,
-            ham_basis="pp", nonham_basis="pp", cptp=True,
-            nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
+            ham_basis="pp", nonham_basis="pp", param_mode="cptp",
+            nonham_mode="all", truncate=True, mxBasis="pp") )
 
         gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             None,unitaryPostfactor=densemx,
-            ham_basis="pp", nonham_basis="pp", cptp=True,
-            nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
+            ham_basis="pp", nonham_basis="pp", param_mode="cptp",
+            nonham_mode="all", truncate=True, mxBasis="pp") )
 
         gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             None, unitaryPostfactor=sparsemx,
-            ham_basis="pp", nonham_basis="pp", cptp=True,
-            nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
+            ham_basis="pp", nonham_basis="pp", param_mode="cptp",
+            nonham_mode="all", truncate=True, mxBasis="pp") )
 
         ppBasis = pygsti.obj.Basis("pp",2)
         gates_to_test.append( pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             densemx,unitaryPostfactor=None,
-            ham_basis=ppBasis, nonham_basis=ppBasis, cptp=False,
-            nonham_diagonal_only=True, truncate=True, mxBasis="pp") )
+            ham_basis=ppBasis, nonham_basis=ppBasis, param_mode="unconstrained",
+            nonham_mode="diagonal", truncate=True, mxBasis="pp") )
 
         ppMxs = pygsti.tools.pp_matrices(2)
         testGate= pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             densemx,unitaryPostfactor=None,
-            ham_basis=ppMxs, nonham_basis=ppMxs, cptp=False,
-            nonham_diagonal_only=True, truncate=True, mxBasis="pp")
+            ham_basis=ppMxs, nonham_basis=ppMxs, param_mode="unconstrained",
+            nonham_mode="diagonal", truncate=True, mxBasis="pp")
         gates_to_test.append( testGate )
 
         gates_to_test.append(pygsti.objects.LindbladParameterizedGateMap.from_gate_matrix(
             densemx,unitaryPostfactor=None,
-            ham_basis=None, nonham_basis=ppMxs, cptp=False,
-            nonham_diagonal_only=True, truncate=True, mxBasis="pp"))
+            ham_basis=None, nonham_basis=ppMxs, param_mode="unconstrained",
+            nonham_mode="diagonal", truncate=True, mxBasis="pp"))
 
         compGate = pygsti.objects.ComposedGateMap( [testGate, testGate, testGate] )
         dummyGS.gates['Gcomp'] = compGate # so to/from vector work in tests below
@@ -425,8 +425,8 @@ class GateTestCase(BaseTestCase):
         basis = pygsti.obj.Basis("pp",2)
         lndgate = pygsti.objects.LindbladParameterizedGate.from_gate_matrix(
             densemx,unitaryPostfactor=densemx,
-            ham_basis=basis, nonham_basis=basis, cptp=True,
-            nonham_diagonal_only=False, truncate=True, mxBasis=basis)
+            ham_basis=basis, nonham_basis=basis, param_mode="cptp",
+            nonham_mode="all", truncate=True, mxBasis=basis)
         g = pygsti.objects.gate.convert(lndgate,"CPTP",basis) 
         self.assertTrue(g is lndgate) #should be trivial (no) conversion
 

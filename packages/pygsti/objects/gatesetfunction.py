@@ -139,7 +139,7 @@ def gatefn_factory(fn):
             
         def evaluate(self, gateset):
             """ Evaluate this gate-set-function at `gateset`."""
-            return fn(gateset.gates[self.gl], gateset.basis,
+            return fn(gateset.gates[self.gl].todense(), gateset.basis,
                       *self.args, **self.kwargs)
         
     GSFTemp.__name__ = fn.__name__ + str("_class")
@@ -225,11 +225,11 @@ def vecfn_factory(fn):
         def evaluate(self, gateset):
             """ Evaluate this gate-set-function at `gateset`."""
             if self.typ == "prep":
-                return fn(gateset.preps[self.lbl], gateset.basis,
+                return fn(gateset.preps[self.lbl].todense(), gateset.basis,
                       *self.args, **self.kwargs)
             else:
                 povmlbl,Elbl = self.lbl.split(":") #for effect, lbl must == "povmLbl:ELbl"
-                return fn(gateset.povms[povmlbl][Elbl], gateset.basis,
+                return fn(gateset.povms[povmlbl][Elbl].todense(), gateset.basis,
                           *self.args, **self.kwargs)
 
     GSFTemp.__name__ = fn.__name__ + str("_class")
@@ -278,11 +278,11 @@ def vecsfn_factory(fn):
         def evaluate(self, gateset):
             """ Evaluate this gate-set-function at `gateset`."""
             if self.typ == "prep":
-                return fn(gateset.preps[self.lbl], self.other_vecsrc[self.lbl],
+                return fn(gateset.preps[self.lbl].todense(), self.other_vecsrc[self.lbl].todense(),
                       gateset.basis,  *self.args, **self.kwargs)
             else:
                 povmlbl,Elbl = self.lbl.split(":") #for effect, lbl must == "povmLbl:ELbl"
-                return fn(gateset.povms[povmlbl][Elbl], self.other_vecsrc[povmlbl][Elbl],
+                return fn(gateset.povms[povmlbl][Elbl].todense(), self.other_vecsrc[povmlbl][Elbl].todense(),
                           gateset.basis,  *self.args, **self.kwargs)
         
     GSFTemp.__name__ = fn.__name__ + str("_class")

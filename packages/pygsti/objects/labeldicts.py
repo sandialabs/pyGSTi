@@ -182,10 +182,14 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         basis = self.parent.basis if self.parent else None
         obj = None; 
         if self.typ == "spamvec":
-            typ = self.default_param
-            rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
+            # not needed anymore (spam vecs can be lindblad types now ) TODO REMOVE
+            #typ = self.default_param
+            #rtyp = "TP" if typ in ("CPTP","H+S","S") else typ 
+            #obj = _sv.StaticSPAMVec(value)
+            #obj = _sv.convert(obj, rtyp, basis)
+
             obj = _sv.StaticSPAMVec(value)
-            obj = _sv.convert(obj, rtyp, basis)
+            obj = _sv.convert(obj, self.default_param, basis)
         elif self.typ == "gate":
             obj = _gate.StaticGate(value)
             obj = _gate.convert(obj, self.default_param, basis)

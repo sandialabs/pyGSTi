@@ -1339,7 +1339,11 @@ class DataSet(object):
             new_gsIndex[ new_gstr  ] = indx
         self.gsIndex = new_gsIndex
         #Note: self.cnt_cache just remains None (a non-static DataSet)
-
+        auxInfo = _DefaultDict( dict )
+        for gstr in self.auxInfo.keys():
+            new_gstr = processor_fn(gstr)
+            auxInfo[new_gstr] = self.auxInfo[gstr]
+        self.auxInfo = auxInfo
 
     def copy(self):
         """ Make a copy of this DataSet. """
@@ -1359,6 +1363,7 @@ class DataSet(object):
             copyOfMe.timeType = self.timeType
             copyOfMe.repType  = self.repType
             copyOfMe.cnt_cache = None
+            copyOfMe.auxInfo = self.auxInfo.copy()
             return copyOfMe
 
 
@@ -1377,10 +1382,11 @@ class DataSet(object):
                 if self.repData is not None:
                     copyOfMe.repData.append( self.repData[slc].copy() )
 
-            copyOfMe.oliType  =self.oliType
+            copyOfMe.oliType  = self.oliType
             copyOfMe.timeType = self.timeType
             copyOfMe.repType  = self.repType
             copyOfMe.cnt_cache = None
+            copyOfMe.auxInfo = self.auxInfo.copy()
             return copyOfMe
         else:
             return self.copy()
@@ -1496,6 +1502,11 @@ class DataSet(object):
             else: self.cnt_cache = None
 
         self.auxInfo = state_dict.get('auxInfo', _DefaultDict(dict) )
+        if not isinstance(self.auxInfo, _DefaultDict) and isinstance(self.auxInfo,dict):
+            self.auxInfo = _DefaultDict(dict, self.auxInfo)
+            # some types of serialization (e.g. JSON) just save a *normal* dict
+            # so promote to a defaultdict if needed..
+            
         self.collisionAction = state_dict.get('collisionAction','aggregate')
         self.uuid = state_dict.get('uuid',None)
 

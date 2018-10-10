@@ -10,7 +10,6 @@ import hashlib   as _hashlib
 import functools as _functools
 import sys       as _sys
 import numpy     as _np
-import functools as _functools
 import inspect   as _inspect
 import pickle    as _pickle
 
@@ -73,6 +72,7 @@ class SmartCache(object):
             module and function being decorated by the smart cache
         '''
         self.cache       = dict()
+        self.outargs     = dict()
         self.ineffective = set()
         self.decoratingModule, self.decoratingFn = decorating
         self.customDigests = []
@@ -102,19 +102,24 @@ class SmartCache(object):
 
     def __getstate__(self):
         d = dict(self.__dict__)
-        pickleableCache = dict()
-        for k, v in self.cache.items():
-            try:
-                _pickle.dumps(v)
-                pickleableCache[k] = v
-            except TypeError as e:
-                if isinstance(v,dict):
-                    self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.keys())))
-                else:
-                    self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.__dict__.keys())))
-            except _pickle.PicklingError as e:
-                self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))
-        d['cache'] = pickleableCache
+
+        def get_pickleable_dict(cacheDict):
+            pickleableCache = dict()
+            for k, v in cacheDict.items():
+                try:
+                    _pickle.dumps(v)
+                    pickleableCache[k] = v
+                except TypeError as e:
+                    if isinstance(v,dict):
+                        self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.keys())))
+                    else:
+                        self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.__dict__.keys())))
+                except _pickle.PicklingError as e:
+                    self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))
+            return pickleableCache
+
+        d['cache'] = get_pickleable_dict(self.cache)
+        d['outargs'] = get_pickleable_dict(self.outargs)
         return d
 
     def add_digest(self, custom):
@@ -145,7 +150,7 @@ class SmartCache(object):
         else:
             times = dict()
             with _timed_block('hash', times):
-                key = call_key(fn, (argVals, kwargs), self.customDigests) # cache by call key
+                key = call_key(fn, tuple(argVals)+(kwargs,), self.customDigests) # cache by call key
             if key not in self.cache:
                 with _timed_block('call', times):
                     self.cache[key] = fn(*argVals, **kwargs)
@@ -171,12 +176,19 @@ class SmartCache(object):
 
         Returns
         -------
+        key: the key used to hash the function call
         result : result of fn called with argVals and kwargs
 
         '''
-
+        special_kwargs = dict()
         if kwargs is None:
             kwargs = dict()
+        else:
+            for k,v in kwargs.items():
+                if k.startswith('_'): 
+                    special_kwargs[k] = v
+            for k in special_kwargs: del kwargs[k]
+
         name_key = get_fn_name_key(fn)
         self.requests[name_key] += 1
         if name_key in self.ineffective:
@@ -184,16 +196,23 @@ class SmartCache(object):
             result = fn(*argVals, **kwargs)
             self.ineffectiveRequests[name_key] += 1
             self.misses[key] += 1
+            #DB: print(fn.__name__, " --> Ineffective!")
         else:
             times = dict()
             with _timed_block('hash', times):
-                key = call_key(fn, (argVals, kwargs), self.customDigests) # cache by call key
+                key = call_key(fn, tuple(argVals)+(kwargs,), self.customDigests) # cache by call key
             if key not in self.cache:
+                #DB: print(fn.__name__, " --> computing... (not found in %d keys)" % len(list(self.cache.keys())))
+                #DB: print("Key detail: ",key[0])
+                #DB: for a,k in zip(tuple(argVals)+(kwargs,),key[1:]): print(type(a),": ",repr(k))
                 typesig = str(tuple(str(type(arg)) for arg in argVals)) + \
                         str({k : str(type(v)) for k, v in kwargs.items()})
                 self.typesigs[name_key] = typesig
                 with _timed_block('call', times):
                     self.cache[key] = fn(*argVals, **kwargs)
+                    if "_filledarrays" in special_kwargs:
+                        self.outargs[key] = tuple((argVals[i] if isinstance(i,int) else kwargs[i]
+                                                   for i in special_kwargs['_filledarrays'])) # copy?
                 self.misses[key] += 1
                 hashtime = times['hash']
                 calltime = times['call']
@@ -205,9 +224,22 @@ class SmartCache(object):
                 self.hashTimes[name_key].append(hashtime)
                 self.callTimes[name_key].append(calltime)
             else:
-                #print('The function {} experienced a cache hit'.format(name_key))
+                #DB: print('The function {} experienced a cache hit'.format(name_key))
+                #DB: print(fn.__name__, " --> cache hit!")
                 self.hits[key] += 1
                 self.fhits[name_key] += 1
+
+                #Special kwarg processing: any keyword argument that starts with an
+                # underscore is considered to be directed the SmartCache.
+                if "_filledarrays" in special_kwargs:
+                    for i,pos in enumerate(special_kwargs["_filledarrays"]):
+                        if isinstance(pos,int):
+                            argVals[pos][:] = self.outargs[key][i]                            
+                        else:
+                            kwargs[pos][:] = self.outargs[key][i]
+                    
+            #Note - maybe we should .view or .copy arrays upon return 
+            # (now we just trust user not to alter mutable returned vals)
             result = self.cache[key]
         return key, result
 
@@ -354,8 +386,11 @@ def digest(obj, custom_digests=None):
         """Add `v` to the hash, recursively if needed."""
         with _timed_block(str(type(v)), DIGEST_TIMES):
             md5.update(str(type(v)).encode('utf-8'))
+            if isinstance(v, SmartCache): return # don't hash SmartCache args
             if isinstance(v, bytes):
                 md5.update(v)  #can add bytes directly
+            elif v is None:
+                md5.update(str(hash("(_NONE_)")).encode('utf-8')) #make all None's hash the same
             else:
                 try:
                     md5.update(str(hash(v)).encode('utf-8'))
@@ -418,5 +453,9 @@ def call_key(fn, args, custom_digests):
     tuple
     """
     fnName = get_fn_name_key(fn)
+    if fn.__name__ == "_create":
+        pass # special case: don't hash "self" in _create functions (b/c self doesn't matter - "self" is being created)
+    elif hasattr(fn, '__self__'): # add "self" to args when it's an instance's method call
+        args = (fn.__self__,) + args
     inner_digest = _functools.partial(digest, custom_digests=custom_digests)
     return (fnName,) + tuple(map(inner_digest,args))

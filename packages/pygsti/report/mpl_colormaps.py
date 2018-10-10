@@ -329,10 +329,11 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                 axes.set_yticks(_get_minor_tics(ytics), minor=True)
                 axes.grid(which='minor', axis='both', linestyle='-', linewidth=2)
 
+            off = False # Matplotlib used to allow 'off', but now False should be used
             if xlabels is None and ylabels is None:
-                axes.tick_params(labelcolor='w', top='off', bottom='off', left='off', right='off') #white tics                                           
+                axes.tick_params(labelcolor='w', top=off, bottom=off, left=off, right=off) #white tics                                           
             else:
-                axes.tick_params(top='off', bottom='off', left='off', right='off')
+                axes.tick_params(top=off, bottom=off, left=off, right=off)
 
             #print("DB ann = ", len(annotations))
             #boxLabels = bool( len(annotations) >= 1 ) #TODO: why not plt_data.size instead of 1?

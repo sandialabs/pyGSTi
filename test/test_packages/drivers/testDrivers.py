@@ -88,6 +88,7 @@ class TestDriversMethods(DriversTestCase):
                                 temp_files + "/driver_fiducials.txt",
                                 temp_files + "/driver_germs.txt",
                                 maxLens, advancedOptions={'truncScheme': ts,
+                                                          'randomizeStart': 1e-6,
                                                           'profile': 2,
                                                           'verbosity': 10,
                                                           'memoryLimitInBytes': 2*1000**3})
@@ -103,11 +104,11 @@ class TestDriversMethods(DriversTestCase):
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, None,
                                 std.germs, maxLens,
-                                advancedOptions={'contractStartToCPTP': True,
-                                                 'starting point': std.gs_target,
+                                advancedOptions={'starting point': std.gs_target,
                                                  'depolarizeStart': 0.05,
                                                  'truncScheme': ts,
                                                  'cptpPenaltyFactor': 1.0})
+                                            # OLD: 'contractStartToCPTP': True,
 
 
         #Check errors

@@ -690,21 +690,6 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
         assert(icount == 2) # should never get 1 or 3 (low bit should always be 0)
         return (0.0, 1.0, state_s, state_s, state_p, state_p)
 
-#OLD TODO REMOVE
-#def colsum_g(x1,z1,x2,z2):
-#    """ TODO: -- see PRA -- but different b/c 11 := XZ = -iY here, but 11 := Y in PRA
-#        (and this fn calcs the power of i when paulis rep'd by x1z1 and x2z2 are multiplied)  """
-#    i2 = 3 if (x2==1 and z2==1) else 0 # "intrinsic" to qubit 2
-#    
-#    if x1 == 0:
-#        if z1 == 0: return i2 # I*<x2z2>
-#        else: # Z*<x2z2> => 00->0, 01->0, 10->1, 11->-1+3
-#            return x2*(1-2*z2)+i2
-#    else:
-#        if z1 == 0: # X*<x2z2> => 00->0, 01->-1, 10->0, 11->1+3
-#            return z2*(2*x2-1)+i2
-#        else: # -iY*<x2z2>
-#            return 3+z2-x2+i2
     
 def colsum(i,j,s,p,n):
     """ 

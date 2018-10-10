@@ -60,13 +60,16 @@ class Label(object):
 
             #We're being asked to initialize from a non-string with no
             # stateSpaceLabels explicitly given.  `name` could either be:
+            # 0) an empty tuple: () -> LabelTupTup with *no* subLabels.
             # 1) a (name, ssl0, ssl1, ...) tuple -> LabelTup
             # 2) a (subLabel1_tup, subLabel2_tup, ...) tuple -> LabelTupTup if
             #     length > 1 otherwise just initialize from subLabel1_tup.
             # Note: subLabelX_tup could also be identified as a Label object
             #       (even a LabelStr)
             
-            if isinstance(name[0], (tuple,list,Label)): 
+            if len(name) == 0:
+                return LabelTupTup( () )
+            elif isinstance(name[0], (tuple,list,Label)): 
                 if len(name) > 1: return LabelTupTup(name)
                 else: return Label(name[0])
             else:
@@ -402,8 +405,10 @@ class LabelTupTup(Label,tuple):
 
     @property
     def name(self):
-        assert(False),"TODO - something intelligent here..." # no real "name" for a compound label...?
-        # return self[0]
+        # TODO - something intelligent here?
+        # no real "name" for a compound label... but want it to be a string so
+        # users can use .startswith, etc.
+        return "COMPOUND"
 
     @property
     def sslbls(self):

@@ -9,10 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from scipy.fftpack import dct as _dct
 from scipy.fftpack import idct as _idct
-#from scipy.stats import chi2 as _chi2
-#from scipy.optimize import leastsq as _leastsq
-#from scipy import convolve as _convolve
-
+from scipy import convolve as _convolve
 
 def DCT(x,counts=1,null_hypothesis=None):
     """
@@ -117,9 +114,48 @@ def bartlett_spectrum(x,num_spectra,counts=1,null_hypothesis=None):
                 
     return bartlett_spectrum
 
+def bartlett_spectrum_averaging(spectrum, num_spectra):
+    """
+    If N/num_spectra is not an integer, then 
+    not all of the data points are used.
+    
+    TODO: docstring
+    TODO: Make this work with multicount data.
+    """ 
+    length = int(_np.floor(len(spectrum)/num_spectra))  
+    spectra = _np.zeros((num_spectra,length))
+    for i in range(0,num_spectra):
+        spectra[i,:] = spectrum[i*length:((i+1)*length)]
+        
+    bartlett_spectrum = _np.mean(spectra,axis=0)
+                
+    return bartlett_spectrum
+
 def frequencies_from_timestep(timestep,T):
      
     return _np.arange(0,T)/(2*timestep*T)
+
+def DCT_basis_function(omega, T, t):
+    """
+    Todo
+
+    These are the *unnormalized* DCT amplitudes.
+    """
+    return _np.cos(omega*_np.pi*(t+0.5)/T)
+
+#def create_DCT_basis_function(omega, T):
+#
+#    def DCT_basis_function(t): return _np.cos(omega*_np.pi*(t+0.5)/T)
+#
+#    return DCT_basis_function
+
+def probability_from_DCT_amplitudes(alphas, omegas, T, t):
+    """
+    Todo
+
+    This uses the *unnormalized* DCT amplitudes.
+    """
+    return _np.sum(_np.array([alphas[i]*DCT_basis_function(omegas[i], T, t) for i in range(len(omegas))]))
 
 # -------------------------------- #
 # ---------- Signal tools -------- #
@@ -131,8 +167,6 @@ def hoyer_sparsity_measure(p):
     """
     n = len(p)
     return (_np.sqrt(n) - _np.linalg.norm(p,1)/_np.linalg.norm(p,2))/(_np.sqrt(n)-1)
-
-
 
 def renormalizer(p,method='logistic'):
     """
@@ -154,6 +188,48 @@ def renormalizer(p,method='logistic'):
         
     return out
 
+def logistic_transform(p, mean):
+    """
+    Todo
+    """
+    nu = min([1-mean ,mean ]) 
+    out = mean - nu + (2*nu)/(1 + _np.exp(-2*(p - mean)/nu))
+    return out
+
+def reduce_DCT_amplitudes_until_probability_is_physical(alphas, omegas, T, epsilon=0.01, step_size=0.005):
+    """
+
+    """
+    assert(0 in omegas)
+    assert(0 == omegas[0]), "This function assume that the 0 mode is first in the list!"
+    pt = [probability_from_DCT_amplitudes(alphas, omegas, T, t) for t in range(T)]
+    newalphas = alphas.copy()
+
+    if alphas[0] > (1 - epsilon) or alphas[0] < epsilon:
+        newalphas[1:] = _np.zeros(len(newalphas)-1)
+        print("Constraint can't be satisfied using this function, because the zero-mode contribution is outside the requested bounds!")
+        return newalphas
+
+    iteration = 0
+    while max(pt) >= 1-epsilon or min(pt) <= epsilon:
+        iteration += 1
+        print("Interation {} of amplitude reduction.".format(iteration))
+        # We don't change the amplitude of the DC component.
+        for i in range(1,len(newalphas)):
+            if newalphas[i] > 0.:
+                newalphas[i] = newalphas[i] - step_size
+                # If it changes sign we set it to zero.
+                if newalphas[i] < 0.:
+                    newalphas[i] = 0
+            if newalphas[i] < 0.:
+                newalphas[i] = newalphas[i] + step_size
+                # If it changes sign we set it to zero.
+                if newalphas[i] > 0.:
+                    newalphas[i] = 0
+        pt = [probability_from_DCT_amplitudes(newalphas, omegas, T, t) for t in range(T)]
+
+    print("Estimate within bounds.")
+    return newalphas 
 
 def low_pass_filter(data,max_freq = None):
     """

@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import warnings           as _warnings
 import numpy              as _np
+import scipy.sparse       as _sps
 
 from .. import construction as _cnst
 from .. import tools      as _tools
@@ -1006,6 +1007,226 @@ class GaugeRobustErrgenTable(WorkspaceTable):
         return table
 
 
+class NQubitErrgenTable(WorkspaceTable):
+    """
+    Table displaying the error rates (coefficients of error generators) of a
+    GateSet's gates.  The gates are assumed to have a particular structure.
+
+    Specifically, gates must be :class:`LinbladParameterizedGateMap` or
+    :class:`StaticGate` objects wrapped within :class:`EmbeddedGateMap` and/or 
+    :class:`ComposedGateMap` objects (this is consistent with the gates
+    constructed by :function:`build_nqnoise_gateset`).  As such, error rates
+    are read directly from the gate objects rather than being computed by
+    projecting dense gate representations onto a "basis" of fixed error
+    generators (e.g. H+S+A generators).
+    """
+
+    def __init__(self, ws, gateset, confidenceRegionInfo=None,
+                 display=("H","S","A"), display_as="boxes"):
+
+        """
+        Create a table listing the error rates of the gates in `gateset`.
+
+        The gates in `gateset` are assumed to have a particular structure,
+        namely: they must be :class:`LinbladParameterizedGateMap` or
+        :class:`StaticGate` objects wrapped within :class:`EmbeddedGateMap`
+        and/or :class:`ComposedGateMap` objects.  
+
+        Error rates are organized by order of composition and which qubits
+        the corresponding error generators act upon.
+
+        Parameters
+        ----------
+        gateset : GateSet
+            The gate set to analyze.
+
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.
+
+        display : tuple of {"H","S","A"}
+            Specifes which columns to include: Hamiltoian-type,
+            Pauli-Stochastic-type, and Affine-type rates, respectively.
+
+        display_as : {"numbers", "boxes"}, optional
+            How to display the requested matrices, as either numerical
+            grids (fine for small matrices) or as a plot of colored boxes
+            (space-conserving and better for large matrices).
+
+        Returns
+        -------
+        ReportTable
+        """
+        super(NQubitErrgenTable,self).__init__(ws, self._create, gateset,
+                                               confidenceRegionInfo,
+                                               display, display_as)
+
+    def _create(self, gateset, confidenceRegionInfo, display, display_as):
+        gateLabels  = list(gateset.gates.keys())  # gate labels
+        
+        #basis = gateset.basis
+        #basisPrefix = ""
+        #if basis.name == "pp": basisPrefix = "Pauli "
+        #elif basis.name == "qt": basisPrefix = "Qutrit "
+        #elif basis.name == "gm": basisPrefix = "GM "
+        #elif basis.name == "std": basisPrefix = "Mx unit "
+
+        colHeadings = ['Gate','Compos','SSLbls']
+
+        for disp in display:
+            #if disp == "errgen":
+            #    colHeadings.append('Error Generator')
+            if disp == "H":
+                colHeadings.append('Hamiltonian Coeffs')
+            elif disp == "S":
+                colHeadings.append('Stochastic Coeffs')
+            elif disp == "A":
+                colHeadings.append('Affine Coeffs')
+            else: raise ValueError("Invalid display element: %s" % disp)
+
+        assert(display_as == "boxes" or display_as == "numbers")
+        table = _ReportTable(colHeadings, (None,)*len(colHeadings),
+                             confidenceRegionInfo=confidenceRegionInfo)
+
+        #coeffsM = []
+
+        #OLD TODO REMOVE
+        #errgenAndProjs = { }  
+        #errgensM = []
+        #hamProjsM = []
+        #stoProjsM = []
+        #affProjsM = []
+
+        def getMinMax(max_lst, M):
+            """return a [min,max] already in list if there's one within an
+               order of magnitude"""
+            M = max(M, ABS_THRESHOLD)
+            for mx in max_lst:
+                if (abs(M) >= 1e-6 and 0.9999 < mx/M < 10) or (abs(mx)<1e-6 and abs(M)<1e-6):
+                    return -mx,mx
+            return None
+
+        ABS_THRESHOLD = 1e-6 #don't let color scales run from 0 to 0: at least this much!
+        def addMax(max_lst, M):
+            """add `M` to a list of maximas if it's different enough from
+               existing elements"""
+            M = max(M, ABS_THRESHOLD)
+            if not getMinMax(max_lst,M):
+                max_lst.append(M)
+
+        pre_rows = []; displayed_params = set()
+        def process_gate(lbl, gate, comppos_prefix, sslbls):
+            if isinstance(gate,_objs.ComposedGateMap):
+                for i,fgate in enumerate(gate.factorgates):
+                    process_gate(lbl,fgate, comppos_prefix + (i,), sslbls)
+            elif isinstance(gate,_objs.EmbeddedGateMap):
+                process_gate(lbl,gate.embedded_gate, comppos_prefix, gate.targetLabels)
+            elif isinstance(gate,_objs.StaticGate):
+                pass # no error coefficients associated w/static gates
+            elif isinstance(gate,_objs.LindbladParameterizedGateMap):
+
+                # Only display coeffs for gates that correspond to *new*
+                # (not yet displayed) parameters.
+                params = set(gate.gpindices_as_array())
+                if not params.issubset(displayed_params):
+                    displayed_params.update(params)
+
+                    Ldict, basisDict = gate.get_errgen_coeffs()
+                    basisdim = int(round(_np.sqrt(gate.dim)))
+                    if len(basisDict) > 0:
+                        sparse = _sps.issparse(list(basisDict.values())[0])
+                    else: sparse = False
+    
+                    #Try to find good labels for these basis elements
+                    # (so far, just try to match with "pp" basis els)
+                    ref_basis = _objs.Basis("pp", basisdim, sparse=sparse)
+                    basisLbls = {}
+                    for bl1,mx in basisDict.items():
+                        for bl2,mx2 in zip(ref_basis.labels, ref_basis.get_composite_matrices()):
+                            if (sparse and _tools.sparse_equal(mx,mx2)) or (not sparse and _np.allclose(mx,mx2)):
+                                basisLbls[bl1] = bl2; break
+                        else:
+                            basisLbls[bl1] = bl1
+                    
+                    pre_rows.append((lbl, comppos_prefix, sslbls, Ldict, basisLbls))
+            else:
+                raise ValueError("Unknown gate type for NQubitErrgenTable: %s" % str(type(gate)))
+
+        def get_plot_info(Ldict, basisLbls, typ):
+            # for now just make a 1D plot - can get fancy later...
+            ylabels = [""]
+            xlabels = []
+            coeffs = []
+            for termInfo,coeff in Ldict.items():
+                termtyp = termInfo[0]
+                if termtyp not in ("H","S","A"): raise ValueError("Unknown terminfo: ",termInfo)
+                if (termtyp == "H" and typ == "hamiltonian") or \
+                   (termtyp == "S" and typ == "stochastic") or \
+                   (termtyp == "A" and typ == "affine"):
+                    assert(len(termInfo) == 2), "Non-diagonal terms not suppoted (yet)!"
+                    xlabels.append( basisLbls[termInfo[1]] )
+                    coeffs.append(coeff)
+            return _np.array([coeffs]), xlabels, ylabels
+
+        #Do computation, so shared color scales can be computed
+        for gl in gateLabels:
+            process_gate(gl,gateset.gates[gl],(),None)
+
+        #get min/max
+        M = max(( max(map(abs,Ldict.values())) for _,_,_,Ldict,_ in pre_rows))
+        m = -M        
+
+        #Now pre_rows is filled, so we just need to create the plots:
+        for gl, comppos, sslbls, Ldict, basisLbls in pre_rows:
+            row_data = [gl, str(comppos), str(sslbls)]
+            row_formatters = [None, None, None]
+
+            for disp in display:
+                if disp == "H":
+                    hamCoeffs, xlabels, ylabels = get_plot_info(Ldict, basisLbls, "hamiltonian")
+                    if display_as == "boxes":
+                        #m,M = getMinMax(coeffsM,_np.max(_np.abs(hamCoeffs)))
+                        hamCoeffs_fig = _wp.MatrixPlot(
+                            self.ws, hamCoeffs, m, M, xlabels, ylabels, 
+                            boxLabels=True, prec="compacthp") # May need to add EB code and/or title to MatrixPlot in FUTURE
+                        row_data.append(hamCoeffs_fig) #HERE
+                        row_formatters.append('Figure')
+                    else:
+                        row_data.append(hamCoeffs)
+                        row_formatters.append('Brackets')
+
+                if disp == "S":
+                    stoCoeffs, xlabels, ylabels = get_plot_info(Ldict, basisLbls, "stochastic")
+                    if display_as == "boxes":
+                        #m,M = getMinMax(coeffsM,_np.max(_np.abs(stoCoeffs)))
+                        stoCoeffs_fig = _wp.MatrixPlot(
+                            self.ws, stoCoeffs, m, M, xlabels, ylabels, 
+                            boxLabels=True, prec="compacthp") # May need to add EB code and/or title to MatrixPlot in FUTURE
+                        row_data.append(stoCoeffs_fig)
+                        row_formatters.append('Figure')
+                    else:
+                        row_data.append(stoCoeffs)
+                        row_formatters.append('Brackets')
+
+                if disp == "A":
+                    affCoeffs, xlabels, ylabels = get_plot_info(Ldict, basisLbls, "affine")
+                    if display_as == "boxes":
+                        #m,M = getMinMax(coeffsM,_np.max(_np.abs(effCoeffs)))
+                        affCoeffs_fig = _wp.MatrixPlot(
+                            self.ws, affCoeffs, m, M, xlabels, ylabels, 
+                            boxLabels=True, prec="compacthp") # May need to add EB code and/or title to MatrixPlot in FUTURE
+                        row_data.append(affCoeffs_fig)
+                        row_formatters.append('Figure')
+                    else:
+                        row_data.append(affCoeffs)
+                        row_formatters.append('Brackets')
+
+            table.addrow(row_data, row_formatters)
+
+        table.finish()
+        return table
+
+
 
 class old_RotationAxisVsTargetTable(WorkspaceTable):
     """ Old 1-qubit-only gate rotation axis table """
@@ -1583,7 +1804,7 @@ class DataSetOverviewTable(WorkspaceTable):
 class FitComparisonTable(WorkspaceTable):
     """ Table showing how the goodness-of-fit evolved over GST iterations """
     def __init__(self, ws, Xs, gssByX, gatesetByX, dataset, objective="logl",
-                 Xlabel='L', NpByX=None):
+                 Xlabel='L', NpByX=None, comm=None):
         """
         Create a table showing how the chi^2 or log-likelihood changed with
         successive GST iterations.
@@ -1614,15 +1835,19 @@ class FitComparisonTable(WorkspaceTable):
             A list of parameter counts to use for each X.  If None, then
             the number of non-gauge parameters for each gate set is used.
 
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
 
         Returns
         -------
         ReportTable
         """
         super(FitComparisonTable,self).__init__(ws, self._create, Xs, gssByX, gatesetByX,
-                                                dataset, objective, Xlabel, NpByX)
+                                                dataset, objective, Xlabel, NpByX, comm)
 
-    def _create(self, Xs, gssByX, gatesetByX, dataset, objective, Xlabel, NpByX):
+    def _create(self, Xs, gssByX, gatesetByX, dataset, objective, Xlabel, NpByX, comm):
 
         if objective == "chi2":
             colHeadings = {
@@ -1655,6 +1880,11 @@ class FitComparisonTable(WorkspaceTable):
                                 " of non-gauge parameters.  Using total"
                                 " parameters instead."))
                 NpByX = [ gs.num_params() for gs in gatesetByX ]
+            except NotImplementedError:
+                _warnings.warn(("FitComparisonTable could not obtain number of"
+                                "*non-gauge* parameters - using total params instead"))
+                NpByX = [ gs.num_params() for gs in gatesetByX ]
+
 
         tooltips = ('', 'Difference in logL', 'number of degrees of freedom',
                     'difference between observed logl and expected mean',
@@ -1663,8 +1893,10 @@ class FitComparisonTable(WorkspaceTable):
         table = _ReportTable(colHeadings, None, colHeadingLabels=tooltips)
 
         for X,gs,gss,Np in zip(Xs,gatesetByX,gssByX,NpByX):
-            Nsig, rating, fitQty, k, Ns, Np = _ph.ratedNsigma(dataset, gs, gss,
-                                                              objective, Np, returnAll=True)
+            Nsig, rating, fitQty, k, Ns, Np = self._ccompute( 
+                _ph.ratedNsigma, dataset, gs, gss,
+                objective, Np, returnAll=True,
+                comm=comm, smartc=self.ws.smartCache)
             table.addrow((str(X),fitQty,k,fitQty-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
                          (None,'Normal','Normal','Normal','Normal','Rounded','Normal','Normal','Conversion'))
 
@@ -1705,7 +1937,9 @@ class GatestringTable(WorkspaceTable):
 
     def _create(self, gsLists, titles, nCols, commonTitle):
 
-        if isinstance(gsLists[0], _objs.GateString) or \
+        if len(gsLists) == 0:
+            gsLists = [ [] ]
+        elif isinstance(gsLists[0], _objs.GateString) or \
            (isinstance(gsLists[0], tuple) and _tools.isstr(gsLists[0][0])):
             gsLists = [ gsLists ]
 
@@ -2138,7 +2372,7 @@ class MetadataTable(WorkspaceTable):
             elif isinstance(gate, _objs.EigenvalueParameterizedGate): paramTyp = "eigenvalue"
             elif isinstance(gate, _objs.LindbladParameterizedGate):
                 paramTyp = "Lindblad"
-                if gate.cptp: paramTyp += " CPTP "
+                if gate.param_mode == "cptp": paramTyp += " CPTP "
                 paramTyp += "(%d, %d params)" % (gate.ham_basis_size, gate.other_basis_size)
             else: paramTyp = "unknown" # pragma: no cover
             table.addrow((gl + " parameterization", paramTyp), (None,'Verbatim'))

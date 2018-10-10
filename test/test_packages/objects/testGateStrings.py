@@ -33,8 +33,7 @@ class GateStringTestCase(BaseTestCase):
 
 
         gss = pygsti.objects.LsGermsStructure([1,2,4], std.germs, std.prepStrs, std.effectStrs)
-        with self.assertRaises(NotImplementedError):
-            gss.truncate()
+        gss.truncate([1,2])
 
 
 if __name__ == '__main__':

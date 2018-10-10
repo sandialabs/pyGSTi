@@ -498,59 +498,8 @@ class MultiDataSet(object):
                     self.oliDict[datasetName][new_slc_part2] = oliVal
                     self.timeDict[datasetName][new_slc_part2] = timeVal
                     # (leave self.repDict[datasetName] with zeros in remaining "part2" of slice)
-                        
+
                     
-        #OLD
-        #if len(self.oliDict) > 0:
-        #    firstKey =  list(self.oliDict.keys())[0]
-        #    dataLen = len(self.oliDict[firstKey])
-        #    assert( len(dataset.oliData) == dataLen ), "Incompatible data sizes!"
-        #
-        #    if (dataset.repData is not None) and self.repDict is None:
-        #        # buildup trivial repDatas for all existing datasets
-        #        self.repDict = _OrderedDict(
-        #            [ (nm,_np.ones(dataLen, self.repType)) for nm in self])
-        #        
-        #elif dataset.repData is not None:
-        #    self.repDict = _OrderedDict()
-        #        
-        #self.oliDict[datasetName] = dataset.oliData
-        #self.timeDict[datasetName] = dataset.timeData
-        #if dataset.repData is not None:
-        #    self.repDict[datasetName] = dataset.repData
-            
-
-
-    #REMOVE FOR NOW - Maybe revive later
-    #def add_dataset_counts(self, datasetName, datasetCounts,
-    #                       collisionAction="aggregate"):
-    #    """
-    #    Directly add a full set of counts for a specified dataset.
-    #
-    #    Parameters
-    #    ----------
-    #    datasetName : string
-    #        Counts are added for this data set.  This can be a new name, in
-    #        which case this method adds a new data set to the MultiDataSet.
-    #
-    #    datasetCounts: numpy array
-    #        A 2D array with rows = gate strings and cols = spam labels, to this
-    #        MultiDataSet.  The shape of dataSetCounts is checked for compatibility.
-    #
-    #    collisionAction : {"aggregate", "keepseparate"}
-    #        Specifies how duplicate gate sequences should be handled for this
-    #        data set.  This is applicable only if and when the dataset is copied
-    #        to a non-static one.  "aggregate" adds duplicate-sequence counts,
-    #        whereas "keepseparate" tags duplicate-sequence data with by appending
-    #        a final "#<number>" gate label to the duplicated gate sequence.
-    #    """
-    #
-    #    if self.gsIndex:  #Note: tests if not none and nonempty
-    #        maxIndex = max(self.gsIndex.values())
-    #        assert( datasetCounts.shape[0] > maxIndex and datasetCounts.shape[1] == len(self.slIndex) )
-    #    self.countsDict[datasetName] = datasetCounts
-    #    self.collisionActions[datasetName] = collisionAction
-
     def __str__(self):
         s  = "MultiDataSet containing: %d datasets, each with %d strings\n" % (len(self), len(self.gsIndex) if self.gsIndex is not None else 0)
         s += " Dataset names = " + ", ".join(list(self.keys())) + "\n"

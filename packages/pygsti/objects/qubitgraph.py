@@ -393,13 +393,13 @@ class QubitGraph(object):
         if not self.directed:
             # then just check that we can get from nodes[0] to all the others:
             glob = set(); add_to_glob(glob,nodes[0])
-            return bool(glob == set(nodes))
+            return set(nodes).issubset(glob)
         else:
             # we need to check that, starting at *any* initial node, we can
             # reach all the others:
             for node in nodes:
                 glob = set(); add_to_glob(glob,node)
-                if not bool(glob == set(nodes)): return False
+                if not set(nodes).issubset(glob): return False
             return True
             
 

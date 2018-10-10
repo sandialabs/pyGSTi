@@ -13,7 +13,7 @@ def chi2_terms(gateset, dataset, gateStrings=None,
                minProbClipForWeighting=1e-4, clipTo=None,
                useFreqWeightedChiSq=False, check=False,
                memLimit=None, gateLabelAliases=None,
-               evaltree_cache=None, comm=None):
+               evaltree_cache=None, comm=None, smartc=None):
     """
     Computes the chi^2 contributions from a set of gate strings.
 
@@ -34,6 +34,13 @@ def chi2_terms(gateset, dataset, gateStrings=None,
         Values are the chi2 contributions of the corresponding gate
         string aggregated over outcomes.
     """
+    def smart(fn, *args, **kwargs):
+        if smartc: 
+            return smartc.cached_compute(fn, args, kwargs)[1]
+        else:
+            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
+            return fn(*args, **kwargs)
+
     if useFreqWeightedChiSq:
         raise ValueError("frequency weighted chi2 is not implemented yet.")
 
@@ -47,8 +54,8 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     else:
         dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
         evTree, _,_, lookup, outcomes_lookup = \
-            gateset.bulk_evaltree_from_resources(
-            gateStrings, None, memLimit, "deriv", ['bulk_fill_probs'], dstree)
+            smart(gateset.bulk_evaltree_from_resources,
+                  gateStrings, None, memLimit, "deriv", ['bulk_fill_probs'], dstree)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
@@ -80,7 +87,7 @@ def chi2_terms(gateset, dataset, gateStrings=None,
         N[ lookup[i] ] = dataset[gateStr].total
         f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
 
-    gateset.bulk_fill_probs(probs, evTree, clipTo, check, comm)
+    smart(gateset.bulk_fill_probs, probs, evTree, clipTo, check, comm, _filledarrays=(0,))
 
     cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
     v = N * ((probs - f)**2/cprobs)
@@ -103,7 +110,7 @@ def chi2(gateset, dataset, gateStrings=None,
          useFreqWeightedChiSq=False, check=False,
          memLimit=None, gateLabelAliases=None,
          evaltree_cache=None, comm=None,
-         approximateHessian=False):
+         approximateHessian=False, smartc=None):
     """
     Computes the total chi^2 for a set of gate strings.
 
@@ -170,6 +177,11 @@ def chi2(gateset, dataset, gateStrings=None,
         `logl_approximate_hessian` for details on the analogous approximation
         for the log-likelihood Hessian.
 
+    smartc : SmartCache, optional
+        A cache object to cache & use previously cached values inside this
+        function.
+
+
     Returns
     -------
     chi2 : float
@@ -181,6 +193,12 @@ def chi2(gateset, dataset, gateStrings=None,
         Only returned if returnHessian == True. The Hessian matrix of
         shape (nGatesetParams, nGatesetParams).
     """
+    def smart(fn, *args, **kwargs):
+        if smartc: 
+            return smartc.cached_compute(fn, args, kwargs)[1]
+        else:
+            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
+            return fn(*args, **kwargs)
 
     # Scratch work:
     # chi^2 = sum_i N_i*(p_i-f_i)^2 / p_i  (i over gatestrings & spam labels)
@@ -202,7 +220,9 @@ def chi2(gateset, dataset, gateStrings=None,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
-        evTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gateStrings)
+        #OLD: evTree,lookup,outcomes_lookup = smart(gateset.bulk_evaltree,gateStrings)
+        evTree,_,_,lookup,outcomes_lookup = smart(gateset.bulk_evaltree_from_resources,
+                                                    gateStrings, comm, dataset=dataset)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
@@ -271,14 +291,14 @@ def chi2(gateset, dataset, gateStrings=None,
         f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
 
     if compute_hprobs:
-        gateset.bulk_fill_hprobs(hprobs, evTree,
-                                 probs, dprobs, clipTo, check, comm)
+        smart(gateset.bulk_fill_hprobs, hprobs, evTree,
+              probs, dprobs, clipTo, check, comm, _filledarrays=(0,2,3))
     elif returnGradient:
-        gateset.bulk_fill_dprobs(dprobs, evTree,
-                                 probs, clipTo, check, comm)
+        smart(gateset.bulk_fill_dprobs, dprobs, evTree,
+              probs, clipTo, check, comm, _filledarrays=(0,2))
     else:
-        gateset.bulk_fill_probs(probs, evTree,
-                                clipTo, check, comm)
+        smart(gateset.bulk_fill_probs, probs, evTree,
+              clipTo, check, comm, _filledarrays=(0,))
 
 
     #cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting) #clipped probabilities (also clip derivs to 0?)
