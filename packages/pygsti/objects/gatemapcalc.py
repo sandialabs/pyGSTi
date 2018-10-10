@@ -20,13 +20,8 @@ from ..baseobjs import DummyProfiler as _DummyProfiler
 from ..baseobjs import Label as _Label
 from .mapevaltree import MapEvalTree as _MapEvalTree
 from .gatecalc import GateCalc
-
-try:
-    from . import fastreplib as replib
-except ImportError:
-    from . import replib
-
-
+from . import replib
+    
 
 _dummy_profiler = _DummyProfiler()
 

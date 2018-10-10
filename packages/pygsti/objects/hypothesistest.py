@@ -10,47 +10,104 @@ import numpy as _np
 import copy as _copy
 from ..tools import compattools as _compat
 
-# -- To be put back in when we allow for non-p-value pvalues --
-# def pvalue_threshold_function(hypothesisname, p, significance):
-#     """
-#     Todo
-#     """
-#     if p < significance: 
-#         return True
-#     else: 
-#         return False
-
-#class NestedHypothesisTest(object)
-##
-#     def __init__(self, hypotheses, correction='Holms', significance=0.05):
-
 class HypothesisTest(object):
     """
-    An object to define a set of statistical hypothesis tests on a 
-    set of null hypotheses.
+    An object to defines, and can be used to implement, a set of statistical hypothesis 
+    tests on a set of null hypotheses. This object has *not* been carefully tested.
     """   
     def __init__(self, hypotheses, significance=0.05, weighting='equal', 
                  passing_graph='Holms', local_corrections='Holms'):
         """
-        Todo :
+        Initializes a HypothesisTest object. This specifies the set of null hypotheses,
+        and the tests to be implemented, it does *not* implement the tests. Methods are used
+        to add the data (.add_pvalues) and run the tests (.implement).
 
         Parameters
         ----------
-        nullhypotheses : ?
-            ?
+        hypotheses : list or tuple
+            Specifies the set of null hypotheses. This should be a list containing elements
+            that are either 
 
-        significance : float, optional
-            The significance level. (0.05 is 95% confidence, using the standard convention not the
-            current convention in pyGSTi / our papers).
+            - A "label" for a hypothesis, which is just some hashable object such
+              as a string.
+            - A tuple of "nested hypotheses", which are also just labels for some
+              null hypotheses.
 
-        control : str, optional
-            The general form of the multi-test false-detection-probability control. The options are:
+            The elements of this list are then subject to multi-test correction of the "closed test
+            procedure" type, with the exact correction method specified by `passing_graph`. For each element that 
+            is itself a tuple of hypotheses, these hypotheses are then further corrected using the method
+            specified by `local_corrections`.
 
-                - "FWER": Corresponds to 'Family-wise error rate', meaning ...
-                - "none": Corresponds to no corrections
+        significance : float in (0,1), optional
+            The global significance level. If either there are no "nested hypotheses" or the 
+            correction used for the nested hypotheses will locally control the family-wise error rate
+            (FWER) (such as if `local_correction`='Holms') then when the hypothesis test encoded by
+            this object will control the FWER to `significance`.
 
-        local_corrections : 'Holms', 'Hochberg', 'Bonferroni', 'none', 'Benjamini-Hochberg'
+        weighting : string or dict.
+            Specifies what proportion of `significance` is initially allocated to each element
+            of `hypotheses`. If a string, must be 'equal'. In this case, the local significance
+            allocated to each element of `hypotheses` is `significance`/len(`hypotheses`). If
+            not a string, a dictionary whereby each key is an element of `hypotheses` and each value
+            is a non-negative integer (which will be normalized to one inside the function).
+       
+        passing_graph : string or numpy.array
+            Specifies where the local significance from each test in `hypotheses` that triggers is
+            passed to. If a string, then must be 'Holms'. In this case a test that triggers passes
+            it's local significance to all the remaining hypotheses that have not yet triggered, split
+            evenly over these hypotheses. If it is an array then its value for [i,j] is the proportion
+            of the "local significance" that is passed from hypothesis with index i (in the tuple 
+            `hypotheses`) to the hypothesis with index j if the hypothesis with index i is rejected (and
+            if j hasn't yet been rejected; otherwise that proportion is re-distributed other the other
+            hypothesis that i is to pass it's significance to). The only restriction on restriction on
+            this array is that a row must sum to <= 1 (and it is sub-optimal for a row to sum to less
+            than 1).
 
+            Note that a nested hypothesis is not allowed to pass significance out of it, so any rows
+            that request doing this will be ignored. This is because a nested hypothesis represents a 
+            set of hypotheses that are to be jointly tested using some multi-test correction, and so
+            this can only pass significance out if *all* of the hypotheses in that nested hypothesis
+            are rejected. As this is unlikely in most use-cases, this has not been allowed for.
+
+        local_corrections : str, optional
+            The type of multi-test correction used for testing any nested hypotheses. After all
+            of the "top level" testing as been implemented on all non-nested hypotheses, whatever
+            the "local" significance is for each of the "nested hypotheses" is multi-test corrected
+            using this procedure. Must be one of:
+
+            - 'Holms'. This implements the Holms multi-test compensation technique. This
+            controls the FWER for each set of nested hypotheses (and so controls the global FWER, in
+            combination with the "top level" corrections). This requires no assumptions about the 
+            null hypotheses.
+
+            - 'Bonferroni'. This implements the well-known Bonferroni multi-test compensation 
+            technique. This is strictly less powerful test than the Hochberg correction.
+
+            Note that neither 'Holms' nor 'Bonferronni' gained any advantage from being implemented
+            using "nesting", as if all the hypotheses were put into the "top level" the same corrections
+            could be achieved.
+
+            - 'Hochberg'. This implements the Hockberg multi-test compensation technique. It is
+            not a "closed test procedure", so it is not something that can be implemented in the
+            top level. To be provably valid, it is necessary for the p-values of the nested 
+            hypotheses to be non-negatively dependent. When that is true, this is strictly better
+            than the Holms and Bonferroni corrections whilst still controlling the FWER.
+
+            - 'none'. This implements no multi-test compensation. This option does *not* control the 
+            FWER of the nested hypotheses. So it will generally not control the global FWER as specified.
+
+            -'Benjamini-Hochberg'. This implements the Benjamini-Hockberg multi-test compensation 
+            technique. This does *not* control the FWER of the nested hypotheses, and instead controls
+            the "False Detection Rate" (FDR); see wikipedia. That means that the global significance is 
+            maintained in the sense that the probability of one or more tests triggering is at most `significance`.
+            But, if one or more tests are triggered in a particular nested hypothesis test we are only guaranteed 
+            that (in expectation) no more than a fraction of  "local signifiance" of tests are false alarms.This
+            method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
+            quantity.
+
+        Returns 
+        -------
+        A HypothesisTest object.
         """
         assert(0. < significance and significance < 1.), 'The significance level in a hypotheses test must be > 0 and < 1!'
 
@@ -93,7 +150,7 @@ class HypothesisTest(object):
         else:
             self.local_corrections = local_corrections
 
-        self._check_permissible()
+        #self._check_permissible()
 
         # if is not _compat.isstr(threshold_function):
         #     raise ValueError ("Data that is not p-values is currently not supported!")
@@ -105,7 +162,7 @@ class HypothesisTest(object):
 
     def _initialize_to_weighted_holms_test(self):
         """
-        Todo
+        Initializes the passing graph to the weighted Holms test.
         """
         self.passing_graph = _np.zeros((len(self.hypotheses),len(self.hypotheses)),float)
         for hind, h in enumerate(self.hypotheses):
@@ -113,12 +170,12 @@ class HypothesisTest(object):
                 self.passing_graph[hind,:] = _np.ones(len(self.hypotheses),float)/(len(self.hypotheses)-1)
                 self.passing_graph[hind,hind] = 0.
 
-    def _check_permissible(self):
-        """
-        Todo
-        """
-        # Todo : test that the graph is acceptable.
-        return True
+    # def _check_permissible(self):
+    #     """
+    #     Todo
+    #     """
+    #     # Todo : test that the graph is acceptable.
+    #     return True
 
     def add_pvalues(self, pvalues):
         """
@@ -127,13 +184,13 @@ class HypothesisTest(object):
         Parameters
         ----------
         pvalues : dict
-            todo
+            A dictionary specifying the p-value for each hypothesis.
 
         Returns
         -------
         None
-        """
-        
+
+        """      
         # Testing this is slow, so we'll just leave it out.
         #for h in self.hypotheses:
         #    if self.nested_hypotheses[h]:
@@ -143,7 +200,6 @@ class HypothesisTest(object):
         #    else:
         #        assert(h in list(pvalues.keys())), "Some hypothese do not have a pvalue in this pvalue dictionary!"
         #        assert(pvalues[h] >= 0. and pvalues[h] <= 1.), "Invalid p-value!"
-
         self.pvalues = _copy.copy(pvalues)
 
         return
@@ -153,6 +209,11 @@ class HypothesisTest(object):
         Implements the multiple hypothesis testing routine encoded by this object. This populates
         the self.hypothesis_rejected dictionary, that shows which hypotheses can be rejected using
         the procedure specified.
+
+        Returns
+        -------
+        None
+
         """
         assert(self.pvalues is not None), "Data must be input before the test can be implemented!"
 
@@ -171,9 +232,9 @@ class HypothesisTest(object):
             if not self.nested_hypotheses[h]:
                 self.significance_tested_at[h] = 0.
         # Test the non-nested hypotheses. This can potentially pass significance on
-         # to the nested hypotheses, so these are tested after this (the nested
-         # hypotheses never pass significance out of them so can be tested last in any
-         # order).      
+        # to the nested hypotheses, so these are tested after this (the nested
+        # hypotheses never pass significance out of them so can be tested last in any
+        # order).      
         stop = False
         while not stop:
             stop = True
@@ -316,8 +377,3 @@ class HypothesisTest(object):
                    
         else: 
             raise ValueError("The choice of `{}` for the `correction` parameter is invalid.".format(correction))
-
-            
-    #def any_hypotheses_rejected():
-    #    assert(self.results is not None), "Test must be implemented before results can be queried!"
-    #    return

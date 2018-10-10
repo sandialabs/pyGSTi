@@ -17,10 +17,8 @@ import itertools as _itertools
 from .basistools import change_basis
 
 try:
-    #import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
     from ..tools import fastcalc as _fastcalc
 except ImportError:
-    _warnings.warn("Could not import Cython extension - falling back to slower pure-python routines")
     _fastcalc = None
 
 #EXPM_DEFAULT_TOL = 1e-7

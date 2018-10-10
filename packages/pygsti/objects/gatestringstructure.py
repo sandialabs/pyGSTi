@@ -587,8 +587,13 @@ class LsGermsSerialStructure(GatestringStructure):
     def __init__(self, Ls, germs, nMinorRows, nMinorCols, aliases=None,
                  sequenceRules=None):
         """
-        TODO: docstring - nMinorRows, etc.
-        Create an empty gate string structure.
+        Create an empty LsGermSerialStructure.
+
+        This type of gate string structure is useful for holding multi-qubit
+        gate strings which have a germ and max-length structure but which have
+        widely varying fiducial sequences so that is it not useful to use the
+        minor axes (rows/columns) to represent the *same* fiducials for all
+        (L,germ) plaquettes.
 
         Parameters
         ----------
@@ -598,11 +603,9 @@ class LsGermsSerialStructure(GatestringStructure):
         germs : list of GateStrings
             List of germ sequences (y values)
 
-        prepStrs : list of GateStrings
-            List of preparation fiducial sequences (minor x values)
-
-        effecStrs : list of GateStrings
-            List of measurement fiducial sequences (minor y values)
+        nMinorRows, nMinorCols : int
+            The number of minor rows and columns to allocate space for.
+            These should be the maximum values required for any plaquette.
 
         aliases : dict
             Gate label aliases to be propagated to all plaquettes.
@@ -637,32 +640,37 @@ class LsGermsSerialStructure(GatestringStructure):
         return self.germs
 
     def minor_xvals(self):
-        """ Returns a list of the minor x-values"""
+        """ Returns a list of the minor x-values (0-based integers)"""
         return list(range(self.nMinorCols))
 
     def minor_yvals(self):
-        """ Returns a list of the minor y-values"""
+        """ Returns a list of the minor y-values (0-based integers)"""
         return list(range(self.nMinorRows))
 
     def add_plaquette(self, basestr, L, germ, fidpairs, dsfilter=None):
         """
-        TODO: docstring fidpairs is now mandatory and must be a list of (GateString,GateString) tuples
         Adds a plaquette with the given fiducial pairs at the
         `(L,germ)` location.
 
         Parameters
         ----------
         basestr : GateString
-            The base gate string of the new plaquette.
+            The base gate string of the new plaquette, typically `germ^power` 
+            such that `len(germ^power) <= L`.
 
         L : int
+            The maximum length value.
 
         germ : GateString
+            The germ string.
 
         fidpairs : list
-            A list if `(i,j)` tuples of integers, where `i` is a prepation
-            fiducial index and `j` is a measurement fiducial index.  None
-            can be used to mean all pairs.
+            A list if `(prep,meas)` tuples of GateString objects, specifying
+            the fiducial pairs for this plaquette.  Note that this argument
+            is different from the corresponding one in 
+            :method:`LsGermsStructure.add_plaquette` which takes pairs of 
+            *integer* indices and can be None.  In the present case, this
+            argument is mandatory and contains tuples of gate strings.
 
         dsfilter : DataSet, optional
             If not None, check that this data set contains all of the
@@ -849,7 +857,6 @@ class LsGermsSerialStructure(GatestringStructure):
 
     def create_plaquette(self, baseStr, fidpairs):
         """
-        TODO: docstring - update: fidpairs is now a list of (GateString,GateString) tuples
         Creates a the plaquette for the given base string and pairs.
 
         Parameters
@@ -857,9 +864,9 @@ class LsGermsSerialStructure(GatestringStructure):
         baseStr : GateString
 
         fidpairs : list
-            A list if `(i,j)` tuples of integers, where `i` is a prepation
-            fiducial index and `j` is a measurement fiducial index.  If
-            None, then all pairs are included (a "full" plaquette is created).
+            A list if `(prep,meas)` tuples of GateString objects, specifying
+            the fiducial pairs for this plaquette.  Note that this argument
+            is mandatory and cannot be None as for :class:`LsGermsStructure`.
 
         Returns
         -------
@@ -890,7 +897,7 @@ class LsGermsSerialStructure(GatestringStructure):
 
     def copy(self):
         """
-        Returns a copy of this `LsGermsStructure`.
+        Returns a copy of this `LsGermsSerialStructure`.
         """
         cpy = LsGermsSerialStructure(self.Ls, self.germs, self.nMinorRows,
                                      self.nMinorCols, self.aliases, self.sequenceRules)

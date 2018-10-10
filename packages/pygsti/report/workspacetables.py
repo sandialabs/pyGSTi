@@ -1008,43 +1008,50 @@ class GaugeRobustErrgenTable(WorkspaceTable):
 
 
 class NQubitErrgenTable(WorkspaceTable):
-    """ Table displaying the error generators of a GateSet's gates as well
-        as their projections onto spaces of standard generators
-        TODO: docstring - update?
     """
+    Table displaying the error rates (coefficients of error generators) of a
+    GateSet's gates.  The gates are assumed to have a particular structure.
+
+    Specifically, gates must be :class:`LinbladParameterizedGateMap` or
+    :class:`StaticGate` objects wrapped within :class:`EmbeddedGateMap` and/or 
+    :class:`ComposedGateMap` objects (this is consistent with the gates
+    constructed by :function:`build_nqnoise_gateset`).  As such, error rates
+    are read directly from the gate objects rather than being computed by
+    projecting dense gate representations onto a "basis" of fixed error
+    generators (e.g. H+S+A generators).
+    """
+
     def __init__(self, ws, gateset, confidenceRegionInfo=None,
-                 display=("errgen","H","S","A"), display_as="boxes"):
+                 display=("H","S","A"), display_as="boxes"):
 
         """
-        TODO: docstring -update this!
-        Create a table listing the error generators obtained by
-        comparing a gateset's gates to a target gateset.
+        Create a table listing the error rates of the gates in `gateset`.
+
+        The gates in `gateset` are assumed to have a particular structure,
+        namely: they must be :class:`LinbladParameterizedGateMap` or
+        :class:`StaticGate` objects wrapped within :class:`EmbeddedGateMap`
+        and/or :class:`ComposedGateMap` objects.  
+
+        Error rates are organized by order of composition and which qubits
+        the corresponding error generators act upon.
 
         Parameters
         ----------
-        gateset, targetGateset : GateSet
-            The gate sets to compare
-
-        display : tuple of {"errgen","H","S","A"}
-            Specifes which columns to include: the error generator itself
-            and the projections of the generator onto Hamiltoian-type error
-            (generators), Stochastic-type errors, and Affine-type errors.
-
-        display_as : {"numbers", "boxes"}, optional
-            How to display the requested matrices, as either numerical
-            grids (fine for small matrices) or as a plot of colored boxes
-            (space-conserving and better for large matrices).
+        gateset : GateSet
+            The gate set to analyze.
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
             used to display error intervals.
 
-        genType : {"logG-logT", "logTiG", "logGTi"}
-            The type of error generator to compute.  Allowed values are:
+        display : tuple of {"H","S","A"}
+            Specifes which columns to include: Hamiltoian-type,
+            Pauli-Stochastic-type, and Affine-type rates, respectively.
 
-            - "logG-logT" : errgen = log(gate) - log(target_gate)
-            - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
-            - "logTiG" : errgen = log( dot(gate, inv(target_gate)) )
+        display_as : {"numbers", "boxes"}, optional
+            How to display the requested matrices, as either numerical
+            grids (fine for small matrices) or as a plot of colored boxes
+            (space-conserving and better for large matrices).
 
         Returns
         -------
@@ -1067,9 +1074,9 @@ class NQubitErrgenTable(WorkspaceTable):
         colHeadings = ['Gate','Compos','SSLbls']
 
         for disp in display:
-            if disp == "errgen":
-                colHeadings.append('Error Generator')
-            elif disp == "H":
+            #if disp == "errgen":
+            #    colHeadings.append('Error Generator')
+            if disp == "H":
                 colHeadings.append('Hamiltonian Coeffs')
             elif disp == "S":
                 colHeadings.append('Stochastic Coeffs')

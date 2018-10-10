@@ -23,15 +23,12 @@ from ..baseobjs import Label as _Label
 from .termevaltree import TermEvalTree as _TermEvalTree
 from .gatecalc import GateCalc
 from .polynomial import Polynomial as _Polynomial
+from . import replib
 
 # For debug: sometimes helpful as it prints (python-only) tracebacks from segfaults
 #import faulthandler
 #faulthandler.enable()
-
-try:
-    from . import fastreplib as replib
-except ImportError:
-    from . import replib
+    
 
 try:
     from . import fastgatecalc as _fastgatecalc

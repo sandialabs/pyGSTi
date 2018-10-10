@@ -50,7 +50,8 @@ def flatten(l):
         else:
             yield el
 
-def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.95, verbosity=1, name=None):
+def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.95, verbosity=1, name=None,
+                                 assume_independent_settings=True):
     """
     Implements crosstalk detection on multiqubit data (fine-grained data with entries for each experiment).
     
@@ -176,12 +177,15 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
     #     Calculate the causal graph skeleton           #
     # ------------------------------------------------- #
     
-    # List edges between settings so that these can be ignored when constructing skeleton
-    ignore_edges = []
-    for set1 in range(number_of_regions, num_columns) :
-        for set2 in range(number_of_regions, num_columns) :
-            if set1 > set2:
-                ignore_edges.append((set1,set2))
+    if assume_independent_settings:
+        # List edges between settings so that these can be ignored when constructing skeleton
+        ignore_edges = []
+        for set1 in range(number_of_regions, num_columns) :
+            for set2 in range(number_of_regions, num_columns) :
+                if set1 > set2:
+                    ignore_edges.append((set1,set2))
+    else:
+        ignore_edges = []
 
     print("Calculating causal graph skeleton ...")
     (skel,sep_set) = pcalg.estimate_skeleton(ci_test_dis, data, 1-confidence, ignore_edges)

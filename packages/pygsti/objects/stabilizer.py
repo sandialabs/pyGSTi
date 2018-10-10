@@ -13,11 +13,7 @@ import collections as _collections
 import copy as _copy
 from ..tools import symplectic as _symp
 from ..tools import matrixmod2 as _mtx
-
-try:
-    from . import fastreplib as replib
-except ImportError:
-    from . import replib
+from . import replib    
 
 
 #Notes regarding literature:
