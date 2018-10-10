@@ -197,6 +197,7 @@ function tackNav() {
 function loadLocal(url, selector, complete) {
    var request = new XMLHttpRequest();
     request.responseType = 'text';
+    request.withCredentials = true; //b/c jupyter notebooks use user authentication
     request.open('GET', url, true);
     request.onload = function() {
       // "0" is usually an error, but Safari completes request and then sets
@@ -220,6 +221,7 @@ function loadLocal(url, selector, complete) {
 function testLocalAjax(url, onerror) {
    var request = new XMLHttpRequest();
     request.responseType = 'text';
+    request.withCredentials = true; //b/c jupyter notebooks use user authentication
     request.open('GET', url, true);
     request.onload = function() {
 	if (request.status != 200) {
