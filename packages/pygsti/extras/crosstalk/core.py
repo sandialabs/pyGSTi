@@ -9,9 +9,35 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from . import objects as _obj
 from ... import objects as _pygobjs
+from ... import io as _pygio
 import pcalg
 from gsq.ci_tests import ci_test_dis
 import collections
+
+def load_pygsti_dataset(filename):
+	"""
+	Loads a pygsti dataset from file.
+
+	This is a wrapper that just checks the first line, and replaces it with the newer outcome specification 
+	format if its the old type.
+	"""
+	try:
+		file = open(filename, "r")
+	except IOError:
+		print("File not found, or other file IO error.")
+
+	lines = file.readlines()
+	file.close()
+
+	if lines[0] == "## Columns = 00 count, 01 count, 10 count, 11 count\n":
+		lines[0] = "## Columns = 0:0 count, 0:1 count, 1:0 count, 1:1 count\n"
+		file = open(filename, "w")
+		file.writelines(lines)
+		file.close()
+
+	data = _pygio.load_dataset(filename)
+	return data
+
 
 def flatten(l):
     """
@@ -38,9 +64,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
 
     number_of_regions: int, number of regions in experiment
     
-    settings: list of length number_of_regions, indicating the number of settings for each qubit region. Must be specified 
-    if input is an array. If input is a pyGSTi DataSet, this argument is ignored since the number of settings is 
-    extracted from the DataSet object.
+    settings: list of length number_of_regions, indicating the number of settings for each qubit region. 
     
     confidence : float, optional
     
@@ -86,11 +110,15 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
         gs = ds.keys()[0]
         temp = ds.auxInfo[gs]['settings']
         num_settings = len(temp)
-        
-        assert( num_settings == number_of_regions )
-        "The number of settings per experiment must be the same as the number_of_regions"
 
-        num_columns = 2*num_settings
+        settings_shape = _np.shape(settings)
+        # Check that settings is a list of length number_of_regions
+        assert( (len(settings_shape) == 1) and (settings_shape[0] == number_of_regions) )
+        "settings should be a list of the same length as number_of_regions."
+        
+        # num columns = number of settings + number of regions (b/c we assume one outcome per region)
+        num_columns = num_settings+number_of_regions
+
         num_data = len(ds.keys())
 
         data = []
@@ -111,9 +139,9 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
             
             outcomes_row = ds[gs]
             for outcome in outcomes_row:
-                templine_out = [0]*num_settings
+                templine_out = [0]*number_of_regions
 
-                for r in range(num_settings):
+                for r in range(number_of_regions):
                     templine_out[r] = int(outcome[0][r])  
                 num_rep = int(outcome[2])
 
@@ -125,9 +153,8 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
 
 
         num_seqs = [len(set(collect_settings[i])) for i in range(num_settings)]
-        settings = [1,1] # assumes only 1 setting for each region, which is the applied gate sequence
-        data = _np.asarray(data)
 
+        data = _np.asarray(data)
 
     # --------------------------------------------------------- #
     # Prepare a results object, and store the input information #
