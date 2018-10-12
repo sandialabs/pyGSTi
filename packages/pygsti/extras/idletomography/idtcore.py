@@ -4,6 +4,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import itertools as _itertools
 import time as _time
+import collections as _collections
 
 from ... import objects as _objs
 from ... import tools as _tools
@@ -320,6 +321,64 @@ def preferred_signs_from_paulidict(pauliDict):
     return preferred_signs
 
 
+def fidpairs_to_pauli_fidpairs(fidpairsList, pauliDicts, nQubits):
+    """ TODO: docstring - translate GST-like (GateString,GateString) 
+        fiducial pairs to (NQPauliState,NQPauliState) "pauli fiducial pairs"
+        using pauliDicts."""
+
+    #Example dicts:
+    #prepDict = { 'X': ('Gy',), 'Y': ('Gx',)*3, 'Z': (),
+    #         '-X': ('Gy',)*3, '-Y': ('Gx',), '-Z': ('Gx','Gx')}
+    #measDict = { 'X': ('Gy',)*3, 'Y': ('Gx',), 'Z': (),
+    #         '-X': ('Gy',), '-Y': ('Gx',)*3, '-Z': ('Gx','Gx')}    
+    prepDict,measDict = pauliDicts
+
+    for k,v in prepDict.items(): 
+        assert(k[-1] in ('X','Y','Z') and isinstance(v,tuple)), \
+            "Invalid prep pauli dict format!"
+    for k,v in measDict.items(): 
+        assert(k[-1] in ('X','Y','Z') and isinstance(v,tuple)), \
+            "Invalid measuse pauli dict format!"
+
+    rev_prepDict = { v:k for k,v in prepDict.items() }
+    rev_measDict = { v:k for k,v in measDict.items() }
+
+    def convert(gstr, rev_pauliDict):
+        #Get gatenames_per_qubit (keys = sslbls, vals = lists of gatenames)
+        #print("DB: Converting ",gstr)
+        gatenames_per_qubit = _collections.defaultdict(list)
+        for glbl in gstr:
+            for c in glbl.components: # in case of parallel labels
+                assert(len(c.sslbls) == 1)
+                assert(isinstance(c.sslbls[0],int))
+                gatenames_per_qubit[c.sslbls[0]].append(c.name)
+        #print("DB: gatenames_per_qubit =  ",gatenames_per_qubit)
+        #print("DB: rev keys = ",list(rev_pauliDict.keys()))
+
+        #Check if list of gatenames equals a known basis prep/meas:
+        letters = ""; signs = []
+        for i in range(nQubits):
+            basis = rev_pauliDict.get(tuple(gatenames_per_qubit[i]), None)
+            #print("DB:  Q%d: %s -> %s" % (i,str(gatenames_per_qubit[i]), str(basis)))
+            assert(basis is not None) # to indicate convert failed
+            letters += basis[-1] # last letter of basis should be 'X' 'Y' or 'Z'
+            signs.append( -1 if (basis[0] == '-') else 1 )
+
+        #print("DB: SUCCESS: --> ",letters,signs)
+        return _pobjs.NQPauliState(letters, signs)
+
+    ret = []
+    for prepStr,measStr in fidpairsList:
+        try:
+            prepPauli = convert(prepStr, rev_prepDict)
+            measPauli = convert(measStr, rev_measDict)
+        except AssertionError: 
+            continue #skip strings we can't convert
+        ret.append((prepPauli,measPauli))
+
+    return ret
+
+
 def make_idle_tomography_list(nQubits, pauliDicts, maxLengths, maxErrWeight=2,
                               includeHamSeqs=True, includeStochasticSeqs=True, includeAffineSeqs=True,
                               ham_tmpl=("ZY","ZX","XZ","YZ","YX","XY"), 
@@ -503,6 +562,19 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
     if preferred_meas_basis_signs == "auto":
         preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
 
+    if 'pauli_fidpairs' in advancedOptions:
+        same_basis_fidpairs = []
+        diff_basis_fidpairs = []
+        for pauli_fidpair in advancedOptions['pauli_fidpairs']:
+            #pauli_fidpair is a (prep,meas) tuple of NQPauliState objects
+            if pauli_fidpair[0].rep == pauli_fidpair[1].rep: #don't care about sign
+                same_basis_fidpairs.append(pauli_fidpair)
+            else:
+                diff_basis_fidpairs.append(pauli_fidpair)
+    else:
+        same_basis_fidpairs = None #just for 
+        diff_basis_fidpairs = None # safety
+
     errors = _idttools.allerrors(nQubits,maxErrWeight)
     fitOrder = advancedOptions.get('fit order',1)
     intrinsic_rates = {} 
@@ -511,10 +583,13 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
 
     if extract_stochastic:
         tStart = _time.time()
-        pauli_fidpairs = idle_tomography_fidpairs(
-            nQubits, maxErrWeight, False, extract_stochastic, extract_affine,
-            advancedOptions.get('ham_tmpl', ("ZY","ZX","XZ","YZ","YX","XY")),
-            preferred_prep_basis_signs, preferred_meas_basis_signs)
+        if 'pauli_fidpairs' in advancedOptions:
+            pauli_fidpairs = same_basis_fidpairs
+        else:
+            pauli_fidpairs = idle_tomography_fidpairs(
+                nQubits, maxErrWeight, False, extract_stochastic, extract_affine,
+                advancedOptions.get('ham_tmpl', ("ZY","ZX","XZ","YZ","YX","XY")),
+                preferred_prep_basis_signs, preferred_meas_basis_signs)
 
         #divide up strings among ranks
         indxFidpairList = list(enumerate(pauli_fidpairs))
@@ -578,6 +653,8 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
             obs_err_rates = _np.array([ info['rate'] 
                                         for fidpair_infos in infos_by_fidpair
                                         for info in fidpair_infos.values() ] )
+            #rank = _np.linalg.matrix_rank(J)
+            #print("STO Rank = ",rank, " num intrinsic rates = ",J.shape[1])
             invJ = _np.linalg.pinv(J)
             intrinsic_stochastic_rates = _np.dot(invJ,obs_err_rates)
             #REM print("INVJ = ",_np.linalg.norm(invJ))
@@ -604,10 +681,13 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
 
     if extract_hamiltonian:
         tStart = _time.time()
-        pauli_fidpairs = idle_tomography_fidpairs(
-            nQubits, maxErrWeight, extract_hamiltonian, False, False,
-            advancedOptions.get('ham_tmpl', ("ZY","ZX","XZ","YZ","YX","XY")),
-            preferred_prep_basis_signs, preferred_meas_basis_signs)
+        if 'pauli_fidpairs' in advancedOptions:
+            pauli_fidpairs = diff_basis_fidpairs
+        else:
+            pauli_fidpairs = idle_tomography_fidpairs(
+                nQubits, maxErrWeight, extract_hamiltonian, False, False,
+                advancedOptions.get('ham_tmpl', ("ZY","ZX","XZ","YZ","YX","XY")),
+                preferred_prep_basis_signs, preferred_meas_basis_signs)
 
         #divide up fiducial pairs among ranks
         indxFidpairList = list(enumerate(pauli_fidpairs))
@@ -686,6 +766,8 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
                 obs_err_rates -= corr
                 #REM print("AFTER = ",obs_err_rates)
             
+            #rank = _np.linalg.matrix_rank(J)
+            #print("HAM Rank = ",rank, " num intrinsic rates = ",J.shape[1])
             invJ = _np.linalg.pinv(J)
             intrinsic_hamiltonian_rates = _np.dot(invJ,obs_err_rates)
                         
