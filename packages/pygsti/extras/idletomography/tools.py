@@ -222,31 +222,50 @@ def predicted_intrinsic_rates(nQubits, maxErrWeight, gateset, hamiltonian=True, 
     return ham_intrinsic_rates, sto_intrinsic_rates, aff_intrinsic_rates
 
 
-def predicted_observable_rates(nQubits, gateset, hamiltonian=True, stochastic=True):
-    stoJ = []
-    hamJ = []
+def predicted_observable_rates(idtresults, typ, nQubits, maxErrWeight, gateset):
+    """
+    TODO: docstring - returns a dict of form: rate = ret[pauli_fidpair][obsORoutcome]
+    """
+    #Get intrinsic rates
+    hamiltonian = stochastic = affine = False
+    if typ == "hamiltonian": hamiltonian = True
+    if typ == "stochastic" or "stochastic/affine": stochastic = True
+    if typ == "affine" or "stochastic/affine": affine = True
+    ham_intrinsic_rates, sto_intrinsic_rates, aff_intrinsic_rates = \
+        predicted_intrinsic_rates(nQubits, maxErrWeight, gateset, hamiltonian, stochastic, affine)
 
-    ham_intrinsic_rates, sto_intrinsic_rates = \
-        predicted_intrinsic_rates(nQubits, gateset, hamiltonian, stochastic)
-    
-    #Get jacobians
-    if stochastic:
-        ExptList = StochasticExptList(nQubits) #list of fidpairs / configs (a prep/meas that gets I^L placed btwn it)
-        for expt in ExptList:
-            for out in AllOutcomes( nQubits ): # probably don't need *all* these outcomes -- just those around 000..000 (TODO)
-                stoJ.append( [ StochasticMatrixElement( expt, err, out ) for err in AllErrors(nQubits) ] )
-        sto_observable_rates = _np.dot(stoJ,sto_intrinsic_rates)
+    ret = {}
+    if typ in ("stochastic","stochastic/affine"):
+
+        intrinsic = _np.concatenate([sto_intrinsic_rates,aff_intrinsic_rates]) \
+            if typ == "stochastic/affine" else sto_intrinsic_rates
         
-    if hamiltonian:
-        ExptList = HamiltonianExptList(nQubits)
-        for expt in ExptList:
-            pauli_fidpair = (Prep(expt),Meas(expt)) # Stochastic: prep & measure in same basis
-            for obs in AllObservables( Meas(expt) ):
-                negs = [ bool(pauli_fidpair[0][i] == 'Y') for i in range(nQubits) ] # b/c use of 'Gx' for Y-basis prep really prepares -Y state
-                hamJ.append( [ HamiltonianMatrixElement( Prep(expt), err, obs, negs ) for err in AllErrors(nQubits) ] )
-    
-        ham_observable_rates = _np.dot(hamJ,ham_intrinsic_rates)
-    else:
-        ham_observable_rates = None
+        for fidpair, dict_of_infos in zip(idtresults.pauli_fidpairs[typ],
+                                       idtresults.observed_rate_infos[typ]):
+            ret[fidpair] = {}
+            for obsORoutcome,info_dict in dict_of_infos.items():
+                #Get jacobian row and compute predicted observed rate
+                Jrow = info_dict['jacobian row']
+                predicted_rate = _np.dot(Jrow,intrinsic)
+                ret[fidpair][obsORoutcome] = predicted_rate
+                
+    elif typ == "hamiltonian":
 
-    return ham_observable_rates, sto_observable_rates
+        # J_ham * Hintrinsic = observed_rates - J_aff * Aintrinsic
+        # so: observed_rates = J_ham * Hintrinsic + J_aff * Aintrinsic
+        for fidpair, dict_of_infos in zip(idtresults.pauli_fidpairs[typ],
+                                       idtresults.observed_rate_infos[typ]):
+            ret[fidpair] = {}
+            for obsORoutcome,info_dict in dict_of_infos.items():
+                #Get jacobian row and compute predicted observed rate
+                Jrow = info_dict['jacobian row']
+                predicted_rate = _np.dot(Jrow,ham_intrinsic_rates)
+                if 'affine jacobian row' in info_dict:
+                    affJrow = info_dict['affine jacobian row']
+                    predicted_rate += _np.dot(affJrow,aff_intrinsic_rates)
+                ret[fidpair][obsORoutcome] = predicted_rate
+
+    else:
+        raise ValueError("Unknown `typ` argument: %s" % typ)
+
+    return ret

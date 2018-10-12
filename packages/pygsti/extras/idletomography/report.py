@@ -94,13 +94,13 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
 class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
     """ TODO """
     def __init__(self, ws, idtresult, typ, fidpair, obsORoutcome, title="auto",
-                 true_rate=None, scale=1.0):
+                 scale=1.0):
         super(IdleTomographyObservedRatePlot,self).__init__(
             ws, self._create, idtresult, typ, fidpair, obsORoutcome,
-                 title, true_rate, scale)
+                 title, scale)
         
     def _create(self, idtresult, typ, fidpair, obsORoutcome,
-                 title, true_rate, scale):
+                title, scale):
 
         if title == "auto":
             title = typ + " fidpair=%s,%s" % (fidpair[0],fidpair[1])
@@ -123,8 +123,14 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
         weights = info_dict['weights']
         fitCoeffs = info_dict['fitCoeffs']
         fitOrder = info_dict['fitOrder']
-    
+        if idtresult.predicted_obs_rates is not None:
+            predictedRate = idtresult.predicted_obs_rates[typ][fidpair][obsORoutcome]
+        else:
+            predictedRate = None
+
         traces = []
+        x = _np.linspace(maxLens[0],maxLens[-1],50)
+
         traces.append( go.Scatter(
             x=maxLens,
             y=data_pts,
@@ -134,7 +140,6 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
                 size=10),
             name='observed data' ))
     
-        x = _np.linspace(maxLens[0],maxLens[-1],50)
         if len(fitCoeffs) == 2: # 1st order fit
             assert(_np.isclose(fitCoeffs[0], obs_rate))
             fit = fitCoeffs[0]*x + fitCoeffs[1]
@@ -174,17 +179,17 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
                         )),
                 name='o(%d) fit slope' % fitOrder))
     
-        if true_rate:
+        if predictedRate is not None:
             traces.append( go.Scatter(
                 x=x,
-                y=(fit[0]-true_rate*x[0])+true_rate*x,
+                y=(fit[0]-predictedRate*x[0])+predictedRate*x,
                 mode="lines", #dashed? "markers"? 
                 marker=dict(
-                    color = 'rgba(0,0,255,0.8)', # black?
+                    color = 'rgba(0,280,0,0.8)', # black?
                     line = dict(
                         width = 2,
                         )),
-                name='true rate = %g' % true_rate))
+                name='predicted rate = %g' % predictedRate))
     
         layout = go.Layout(
             width=700*scale,

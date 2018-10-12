@@ -38,6 +38,9 @@ class IdleTomographyResults(object):
         #    dict of info dicts whose keys are NQPauliState *outcomes*
         self.observed_rate_infos = observed_rate_infos.copy()
 
+        # can be used to store true or predicted 
+        self.predicted_obs_rates = None 
+
 
     def __str__(self):
         s = "Idle Tomography Results\n"
