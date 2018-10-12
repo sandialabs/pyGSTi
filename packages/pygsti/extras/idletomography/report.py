@@ -1,14 +1,19 @@
 """ Idle Tomography reporting and plotting functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
 
+import time as _time
 import numpy as _np
 import itertools as _itertools
 import collections as _collections
 
-from ...report import workspace as _workspace
+from ... import _version
+from ...baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ...report import workspace as _ws
 from ...report import workspaceplots as _wp
 from ...report import table as _reporttable
 from ...report import figure as _reportfigure
+from ...report import merge_helpers as _merge
+from ...tools  import timed_block as _timed_block
 from . import pauliobjs as _pobjs
 
 import plotly.graph_objs as go
@@ -26,7 +31,7 @@ import plotly.graph_objs as go
 #   observable rate plots.
 
 
-class IdleTomographyObservedRatesTable(_workspace.WorkspaceTable):
+class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
     """ 
     TODO: docstring
     """
@@ -86,7 +91,7 @@ class IdleTomographyObservedRatesTable(_workspace.WorkspaceTable):
 
 
 
-class IdleTomographyObservedRatePlot(_workspace.WorkspacePlot):
+class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
     """ TODO """
     def __init__(self, ws, idtresult, typ, fidpair, obsORoutcome, title="auto",
                  true_rate=None, scale=1.0):
@@ -135,9 +140,13 @@ class IdleTomographyObservedRatePlot(_workspace.WorkspacePlot):
             fit = fitCoeffs[0]*x + fitCoeffs[1]
             fit_line = None
         elif len(fitCoeffs) == 3:
-            assert(_np.isclose(fitCoeffs[1], obs_rate))
             fit = fitCoeffs[0]*x**2 + fitCoeffs[1]*x + fitCoeffs[2]
-            fit_line = fitCoeffs[1]*x + (fitCoeffs[0]*x[0]**2 + fitCoeffs[2])
+            #OLD: assert(_np.isclose(fitCoeffs[1], obs_rate))
+            #OLD: fit_line = fitCoeffs[1]*x + (fitCoeffs[0]*x[0]**2 + fitCoeffs[2])
+            det = fitCoeffs[1]**2 - 4*fitCoeffs[2]*fitCoeffs[0]
+            slope = -_np.sign(fitCoeffs[0])*_np.sqrt(det) if det >= 0 else fitCoeffs[1]
+            fit_line = slope*x + (fit[0]-slope*x[0])
+            assert(_np.isclose(slope, obs_rate))
         else:
             #print("DB: ",fitCoeffs)
             raise NotImplementedError("Only up to order 2 fits!")
@@ -153,7 +162,7 @@ class IdleTomographyObservedRatePlot(_workspace.WorkspacePlot):
                     )),
             name='o(%d) fit (slope=%.2g)' % (fitOrder,obs_rate)))
     
-        if fit_line:
+        if fit_line is not None:
             traces.append( go.Scatter(
                 x=x,
                 y=fit_line,
@@ -197,13 +206,13 @@ class IdleTomographyObservedRatePlot(_workspace.WorkspacePlot):
 
     
 
-class IdleTomographyIntrinsicErrorsTable(_workspace.WorkspaceTable):
+class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
     """ 
     TODO: docstring
     """
+
     def __init__(self, ws, idtresults, 
                  display=("H","S","A"), display_as="boxes"):
-
         """
         TODO: docstring
         idtresults may be a list or results too? titles?
@@ -326,3 +335,265 @@ class IdleTomographyIntrinsicErrorsTable(_workspace.WorkspaceTable):
 
         table.finish()
         return table
+
+#Note: SAME function as in report/factory.py (copied)
+def _add_new_labels(running_lbls, current_lbls):
+    """
+    Simple routine to add current-labels to a list of
+    running-labels without introducing duplicates and
+    preserving order as best we can.
+    """
+    if running_lbls is None:
+        return current_lbls[:] #copy!
+    elif running_lbls != current_lbls:
+        for lbl in current_lbls:
+            if lbl not in running_lbls:
+                running_lbls.append(lbl)
+    return running_lbls
+
+def _create_switchboard(ws, results_dict, printer, fmt):
+    """
+    Creates the switchboard used by the idle tomography report
+    """
+
+    if isinstance(results_dict, _collections.OrderedDict):
+        dataset_labels = list(results_dict.keys())
+    else:
+        dataset_labels = sorted(list(results_dict.keys()))
+
+    errortype_labels = None
+    errorop_labels = None
+    for results in results_dict.values():
+        errorop_labels = _add_new_labels(errorop_labels, [str(e).strip() for e in results.error_list])
+        errortype_labels   = _add_new_labels(errortype_labels, list(results.intrinsic_rates.keys()))
+    errortype_labels = list(sorted(errortype_labels))
+        
+    multidataset = bool(len(dataset_labels) > 1)
+
+    switchBd = ws.Switchboard(
+        ["Dataset","ErrorType","ErrorOp"],
+        [dataset_labels,errortype_labels,errorop_labels],
+        ["dropdown","dropdown","dropdown"], [0,0,0],
+        show=[multidataset,False,False] # only show dataset dropdown (for sidebar)
+    )
+
+    switchBd.add("results",(0,))
+    switchBd.add("errortype",(1,))
+    switchBd.add("errorop",(2,))
+
+    for d,dslbl in enumerate(dataset_labels):
+        switchBd.results[d] = results_dict[dslbl]
+
+    for i,etyp in enumerate(errortype_labels):
+        switchBd.errortype[i] = etyp
+
+    for i,eop in enumerate(errorop_labels):
+        switchBd.errorop[i] = eop
+        
+    return switchBd, dataset_labels
+
+
+
+def create_idletomography_report(results, filename, title="auto",
+                                 ws=None, auto_open=False, link_to=None,
+                                 brevity=0, advancedOptions=None, verbosity=1):
+    """
+    TODO: docstring 
+
+    Returns
+    -------
+    Workspace
+        The workspace object used to create the report
+    """
+    tStart = _time.time()
+    printer = _VerbosityPrinter.build_printer(verbosity) #, comm=comm)
+
+    if advancedOptions is None: advancedOptions = {}
+    precision = advancedOptions.get('precision', None)
+    cachefile = advancedOptions.get('cachefile',None)
+    connected = advancedOptions.get('connected',False)
+    resizable = advancedOptions.get('resizable',True)
+    autosize = advancedOptions.get('autosize','initial')
+
+    if filename and filename.endswith(".pdf"):
+        fmt = "latex"
+    else:
+        fmt = "html"
+        
+    printer.log('*** Creating workspace ***')
+    if ws is None: ws = _ws.Workspace(cachefile)
+
+    if title is None or title == "auto":
+        if filename is not None:
+            autoname = _autotitle.generate_name()
+            title = "Idle Tomography Report for " + autoname
+            _warnings.warn( ("You should really specify `title=` when generating reports,"
+                             " as this makes it much easier to identify them later on.  "
+                             "Since you didn't, pyGSTi has generated a random one"
+                             " for you: '{}'.").format(autoname))
+        else:
+            title = "N/A" # No title - but it doesn't matter since filename is None
+
+    results_dict = results if isinstance(results, dict) else {"unique": results}
+
+    renderMath = True
+
+    qtys = {} # stores strings to be inserted into report template
+    def addqty(b, name, fn, *args, **kwargs):
+        """Adds an item to the qtys dict within a timed block"""
+        if b is None or brevity < b:
+            with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
+                qtys[name] = fn(*args, **kwargs)
+
+    qtys['title'] = title
+    qtys['date'] = _time.strftime("%B %d, %Y")
+
+    pdfInfo = [('Author','pyGSTi'), ('Title', title),
+               ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__)]
+    qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
+
+    # Generate Switchboard
+    printer.log("*** Generating switchboard ***")
+
+    #Create master switchboard
+    switchBd, dataset_labels = \
+            _create_switchboard(ws, results_dict, printer, fmt)
+    if fmt == "latex" and (len(dataset_labels) > 1):
+        raise ValueError("PDF reports can only show a *single* dataset," +
+                         " estimate, and gauge optimization.")
+
+    # Generate Tables
+    printer.log("*** Generating tables ***")
+
+    multidataset = bool(len(dataset_labels) > 1)
+    intErrView = [False,True,True]
+
+    if fmt == "html":
+        qtys['topSwitchboard'] = switchBd
+        qtys['intrinsicErrSwitchboard'] = switchBd.view(intErrView,"v1")
+
+    results = switchBd.results
+    errortype = switchBd.errortype
+    errorop = switchBd.errorop
+    A = None # no brevity restriction: always display; for "Summary"- & "Help"-tab figs
+
+    #Brevity key:
+    # TODO - everything is always displayed for now
+
+    addqty(A,'intrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, results)
+    addqty(A,'observedRatesTable', ws.IdleTomographyObservedRatesTable, results, errortype, errorop)
+
+
+    # Generate plots
+    printer.log("*** Generating plots ***")
+
+    toggles = {}
+    toggles['CompareDatasets'] = False # not comparable by default
+    if multidataset:
+        #check if data sets are comparable (if they have the same sequences)
+        comparable = True
+        gstrCmpList = list(results_dict[ dataset_labels[0] ].dataset.keys()) #maybe use gatestring_lists['final']??
+        for dslbl in dataset_labels:
+            if list(results_dict[dslbl].dataset.keys()) != gstrCmpList:
+                _warnings.warn("Not all data sets are comparable - no comparisions will be made.")
+                comparable=False; break
+
+        if comparable:
+            #initialize a new "dataset comparison switchboard"
+            dscmp_switchBd = ws.Switchboard(
+                ["Dataset1","Dataset2"],
+                [dataset_labels, dataset_labels],
+                ["buttons","buttons"], [0,1]
+            )
+            dscmp_switchBd.add("dscmp",(0,1))
+            dscmp_switchBd.add("dscmp_gss",(0,))
+            dscmp_switchBd.add("refds",(0,))
+
+            for d1, dslbl1 in enumerate(dataset_labels):
+                dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
+                dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset #only used for #of spam labels below
+
+            dsComp = dict()
+            all_dsComps = dict()
+            indices = []
+            for i in range(len(dataset_labels)):
+                for j in range(len(dataset_labels)):
+                    indices.append((i, j))
+
+            #REMOVE (for using comm)
+            #if comm is not None:
+            #    _, indexDict, _ = _distribute_indices(indices, comm)
+            #    rank = comm.Get_rank()
+            #    for k, v in indexDict.items():
+            #        if v == rank:
+            #            d1, d2 = k
+            #            dslbl1 = dataset_labels[d1]
+            #            dslbl2 = dataset_labels[d2]
+            #
+            #            ds1 = results_dict[dslbl1].dataset
+            #            ds2 = results_dict[dslbl2].dataset
+            #            dsComp[(d1, d2)] = _DataComparator(
+            #                [ds1, ds2], DS_names=[dslbl1, dslbl2])
+            #    dicts = comm.gather(dsComp, root=0)
+            #    if rank == 0:
+            #        for d in dicts:
+            #            for k, v in d.items():
+            #                d1, d2 = k
+            #                dscmp_switchBd.dscmp[d1, d2] = v
+            #                all_dsComps[(d1,d2)] = v
+            #else:
+            for d1, d2 in indices:
+                dslbl1 = dataset_labels[d1]
+                dslbl2 = dataset_labels[d2]
+                ds1 = results_dict[dslbl1].dataset
+                ds2 = results_dict[dslbl2].dataset
+                all_dsComps[(d1,d2)] =  _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])
+                dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1,d2)]
+
+            qtys['dscmpSwitchboard'] = dscmp_switchBd
+            addqty(4,'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
+            #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
+            addqty(4,'dsComparisonHistogram', ws.ColorBoxPlot,
+                   'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
+                   dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm)
+            addqty(1,'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
+                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm)
+            toggles['CompareDatasets'] = True
+        else:
+            toggles['CompareDatasets'] = False # not comparable!
+    else:
+        toggles['CompareDatasets'] = False
+
+
+    if filename is not None:
+        if True: # comm is None or comm.Get_rank() == 0:
+            # 3) populate template file => report file
+            printer.log("*** Merging into template file ***")
+
+            if fmt == "html":
+                templateDir = "idletomography_html_report"
+                _merge.merge_html_template_dir(
+                    qtys, templateDir, filename, auto_open, precision, link_to,
+                    connected=connected, toggles=toggles, renderMath=renderMath,
+                    resizable=resizable, autosize=autosize, verbosity=printer)
+
+            elif fmt == "latex":
+                raise NotImplementedError("No PDF version of this report is available yet.")
+                templateFile = "idletomography_pdf_report.tex"
+                base = _os.path.splitext(filename)[0] # no extension
+                _merge.merge_latex_template(qtys, templateFile, base+".tex", toggles,
+                                            precision, printer)
+
+                # compile report latex file into PDF
+                cmd = _ws.WorkspaceOutput.default_render_options.get('latex_cmd',None)
+                flags = _ws.WorkspaceOutput.default_render_options.get('latex_flags',[])
+                assert(cmd), "Cannot render PDF documents: no `latex_cmd` render option."
+                printer.log("Latex file(s) successfully generated.  Attempting to compile with %s..." % cmd)
+                _merge.compile_latex_report(base, [cmd] + flags, printer, auto_open)
+            else:
+                raise ValueError("Unrecognized format: %s" % fmt)
+    else:
+        printer.log("*** NOT Merging into template file (filename is None) ***")
+    printer.log("*** Report Generation Complete!  Total time %gs ***" % (_time.time()-tStart))
+
+    return ws

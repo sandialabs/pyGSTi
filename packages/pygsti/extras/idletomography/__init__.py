@@ -15,4 +15,5 @@ from .idtcore import *
 from .tools import *
 from .pauliobjs import NQPauliState, NQPauliOp, NQOutcome
 from .idtresults import IdleTomographyResults
-from .report import IdleTomographyIntrinsicErrorsTable, IdleTomographyObservedRatesTable, IdleTomographyObservedRatePlot
+from .report import IdleTomographyIntrinsicErrorsTable, IdleTomographyObservedRatesTable, \
+    IdleTomographyObservedRatePlot, create_idletomography_report
