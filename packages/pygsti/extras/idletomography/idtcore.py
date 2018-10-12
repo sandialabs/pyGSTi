@@ -270,6 +270,9 @@ def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
 
         ham_tmpl_pairs = []
         for tmplLets in ham_tmpl: # "Lets" = "letters", i.e. 'X', 'Y', or 'Z'
+            assert(len(tmplLets) == maxweight), \
+                "Hamiltonian 'template' strings must have length == maxweight: len(%s) != %d!" % (tmplLets,maxweight)
+
             prepLets, measLets = prev(tmplLets), next(tmplLets)
 
             # basis sign doesn't matter for hamiltonian terms, 
@@ -388,7 +391,9 @@ def get_obs_stochastic_err_rate(dataset, pauli_fidpair, pauliDicts, GiStr, outco
     if fitOrder == 1:
         slope = coeffs[0]
     elif fitOrder == 2:
-        slope =  coeffs[1] # c2*x2 + c1*x + c0 ->deriv@x=0-> c1
+        #OLD: slope =  coeffs[1] # c2*x2 + c1*x + c0 ->deriv@x=0-> c1
+        det = coeffs[1]**2 - 4*coeffs[2]*coeffs[0]
+        slope = -_np.sign(coeffs[0])*_np.sqrt(det) if det >= 0 else coeffs[1]
     else: raise NotImplementedError("Only fitOrder <= 2 are supported!")
     
     #REMOVE - maybe use the description elsewhere?
@@ -461,7 +466,12 @@ def get_obs_hamiltonian_err_rate(dataset, pauli_fidpair, pauliDicts, GiStr, obse
     if fitOrder == 1:
         slope = coeffs[0]
     elif fitOrder == 2:
-        slope =  coeffs[1] # c2*x2 + c1*x + c0 ->deriv@x=0-> c1
+        #OLD: slope =  coeffs[1] # c2*x2 + c1*x + c0 ->deriv@x=0-> c1
+        det = coeffs[1]**2 - 4*coeffs[2]*coeffs[0]
+        slope = -_np.sign(coeffs[0])*_np.sqrt(det) if det >= 0 else coeffs[1]
+          # c2*x2 + c1*x + c0 ->deriv@y=0-> 2*c2*x0 + c1;
+          # x0=[-c1 +/- sqrt(c1^2 - 4c2*c0)] / 2*c2; take smaller root
+          # but if determinant is < 0, fall back to x=0 slope
     else: raise NotImplementedError("Only fitOrder <= 2 are supported!")
     
     #REMOVE
