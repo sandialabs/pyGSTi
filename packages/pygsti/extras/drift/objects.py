@@ -121,8 +121,8 @@ class DriftResults(object):
             print("Statistical tests set at a global confidence level of: " + str(self.confidence))
             print("Result: The 'no drift' hypothesis is *not* rejected.")
 
-    def construct_probability_estimate(self, sequence, outcome=0, entity=0, method='MLE', epsilon=0.01, minp=1e-6,
-                                       maxp=1-1e-6):
+    def construct_probability_estimate(self, sequence, outcome=0, entity=0, method='MLE', epsilon=0.001, minp=1e-6,
+                                       maxp=1-1e-6, verbosity=1):
         """        
         method :  'FFRaw', 'FFSharp', 'FFLogistic', 'FFUniReduce' 'MLE',
         """
@@ -177,7 +177,7 @@ class DriftResults(object):
                 return _sig.logistic_transform(_sig.probability_from_DCT_amplitudes(rawalphas, omegas, T, t),mean)
             return pt, None, None
 
-        reducedalphas = _sig.reduce_DCT_amplitudes_until_probability_is_physical(rawalphas, omegas, T, epsilon=epsilon, step_size=0.001)
+        reducedalphas = _sig.reduce_DCT_amplitudes_until_probability_is_physical(rawalphas, omegas, T, epsilon=epsilon, step_size=0.001, verbosity=verbosity)
 
         if method == 'FFUniReduce':
             def pt(t):
@@ -186,7 +186,7 @@ class DriftResults(object):
 
         if method == 'MLE':
             mle_alphas = _est.do_maximum_likelihood_estimation_of_time_resolved_probability(data, omegas, alphas_seed=reducedalphas, min_p=minp, max_p=maxp,
-                                                               method='Nelder-Mead', verbosity=1, return_aux=False)
+                                                               method='Nelder-Mead', verbosity=verbosity, return_aux=False)
             def pt(t):
                 return _sig.probability_from_DCT_amplitudes(mle_alphas, omegas, T, t)
             return pt, omegas, mle_alphas
