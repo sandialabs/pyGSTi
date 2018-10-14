@@ -8,6 +8,7 @@ import collections as _collections
 
 from ... import objects as _objs
 from ... import tools as _tools
+from ...baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 from . import pauliobjs as _pobjs
 from . import tools as _idttools
@@ -177,7 +178,9 @@ def affine_jac_obs_element( prep, error, meas, observable ):
         if obsP == 'I':
             return 1 if (errP == 'I') else 0
         elif errP == 'I':
-            assert(prepBasis != measBasis) # I think this is always how this function is called at least for now...
+            #assert(prepBasis != measBasis) # This is how this function is 
+            #  called w/"normal" IDT sequences, but can be otherwise in general
+            #  (e.g. with GST sequences that aren't all-same or all-other basis)
             return prepSign if (prepBasis == obsP) else 0
         else:
             return 2 if (obsP == errP) else 0
@@ -546,11 +549,17 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
                        extract_hamiltonian=True, extract_stochastic=True, extract_affine=True,
                        advancedOptions=None, comm=None, verbosity=0):
 
+    printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
+
     if advancedOptions is None: 
         advancedOptions = {}
 
     prepDict,measDict = pauliDicts
     GiStr = _objs.GateString( GiStr )
+
+    jacmode = advancedOptions.get("jacobian mode", "separate")
+    sto_aff_jac = None; sto_aff_obs_err_rates = None
+    ham_aff_jac = None; ham_aff_obs_err_rates = None
                        
     #idebug = 0
     rankStr = "" if (comm is None) else "Rank%d: " % comm.Get_rank()
@@ -563,14 +572,15 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
         preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
 
     if 'pauli_fidpairs' in advancedOptions:
-        same_basis_fidpairs = []
-        diff_basis_fidpairs = []
+        same_basis_fidpairs = [] # *all* qubits prep/meas in same basis
+        diff_basis_fidpairs = [] # at least one doesn't
         for pauli_fidpair in advancedOptions['pauli_fidpairs']:
             #pauli_fidpair is a (prep,meas) tuple of NQPauliState objects
             if pauli_fidpair[0].rep == pauli_fidpair[1].rep: #don't care about sign
                 same_basis_fidpairs.append(pauli_fidpair)
             else:
                 diff_basis_fidpairs.append(pauli_fidpair)
+        #print("DB: LENGTHS: same=",len(same_basis_fidpairs)," diff=",len(diff_basis_fidpairs))
     else:
         same_basis_fidpairs = None #just for 
         diff_basis_fidpairs = None # safety
@@ -590,6 +600,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
                 nQubits, maxErrWeight, False, extract_stochastic, extract_affine,
                 advancedOptions.get('ham_tmpl', ("ZY","ZX","XZ","YZ","YX","XY")),
                 preferred_prep_basis_signs, preferred_meas_basis_signs)
+        #print("DB: %d same-basis pairs" % len(pauli_fidpairs))
 
         #divide up strings among ranks
         indxFidpairList = list(enumerate(pauli_fidpairs))
@@ -607,7 +618,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
             t0 = _time.time(); infos_for_this_fidpair = {}
             for j,out in enumerate(all_outcomes):
 
-                if verbosity > 1: print("  - outcome %d of %d" % (j,len(all_outcomes)))
+                printer.log("  - outcome %d of %d" % (j,len(all_outcomes)), 2)
 
                 #REM def rev(x): return '0' if (x == '1') else '1'  # flips '0' <-> '1'
                 #REM fixed_out = "".join([ (rev(out[ii]) if expt[ii] in ('X','Y') else out[ii]) for ii in range(len(out)) ])
@@ -631,8 +642,8 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
                 #REM print("Jrow = ",Jrow)
 
             my_obs_infos.append(infos_for_this_fidpair)
-            if verbosity > 0: print("%sStochastic fidpair %d of %d: %d outcomes analyzed [%.1fs]" % 
-                                    (rankStr, i,len(my_ExptList),len(all_outcomes),_time.time()-t0))
+            printer.log("%sStochastic fidpair %d of %d: %d outcomes analyzed [%.1fs]" % 
+                        (rankStr, i,len(my_ExptList),len(all_outcomes),_time.time()-t0), 1)
 
         #Gather results
         info_list = [ my_obs_infos ] if (comm is None) else comm.gather(my_obs_infos, root=0)
@@ -653,28 +664,43 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
             obs_err_rates = _np.array([ info['rate'] 
                                         for fidpair_infos in infos_by_fidpair
                                         for info in fidpair_infos.values() ] )
-            #rank = _np.linalg.matrix_rank(J)
-            #print("STO Rank = ",rank, " num intrinsic rates = ",J.shape[1])
-            invJ = _np.linalg.pinv(J)
-            intrinsic_stochastic_rates = _np.dot(invJ,obs_err_rates)
-            #REM print("INVJ = ",_np.linalg.norm(invJ))
-            #REM print("OBS = ",_np.linalg.norm(obs_err_rates))
-            #REM result.data['Stochastic error names'] = errors # "key" to intrinsic rates
 
+            if jacmode == "separate":
+                rank = _np.linalg.matrix_rank(J)
+                if rank < J.shape[1]:
+                    _warnings.warn(("Idle tomography: stochastic/affine-jacobian rank "
+                                    "(%d) < #intrinsic rates (%d)") % (rank,J.shape[1]))
+                invJ = _np.linalg.pinv(J)
+                intrinsic_stochastic_rates = _np.dot(invJ,obs_err_rates)
+                #REM print("INVJ = ",_np.linalg.norm(invJ))
+                #REM print("OBS = ",_np.linalg.norm(obs_err_rates))
+                #REM result.data['Stochastic error names'] = errors # "key" to intrinsic rates
+
+    
             if extract_affine:
-                Nrates = len(intrinsic_stochastic_rates)
-                intrinsic_rates['stochastic'] = intrinsic_stochastic_rates[0:Nrates//2]
-                intrinsic_rates['affine'] = intrinsic_stochastic_rates[Nrates//2:]
-                #REM print("STO RATES = %g" % _np.linalg.norm(intrinsic_stochastic_rates[:Nrates//2]))
-                #REM print("AFFINE RATES = %g" % _np.linalg.norm(intrinsic_stochastic_rates[Nrates//2:]))
+                if jacmode == "separate":
+                    Nrates = len(intrinsic_stochastic_rates)
+                    intrinsic_rates['stochastic'] = intrinsic_stochastic_rates[0:Nrates//2]
+                    intrinsic_rates['affine'] = intrinsic_stochastic_rates[Nrates//2:]
+                    #REM print("STO RATES = %g" % _np.linalg.norm(intrinsic_stochastic_rates[:Nrates//2]))
+                    #REM print("AFFINE RATES = %g" % _np.linalg.norm(intrinsic_stochastic_rates[Nrates//2:]))
+                elif jacmode == "together":
+                    sto_aff_jac = J
+                    sto_aff_obs_err_rates = obs_err_rates
+                else: raise ValueError("Invalid `jacmode` == %s" % str(jacmode))
                 pauli_fidpair_dict['stochastic/affine'] = pauli_fidpairs # "key" to observed rates
                 observed_rate_infos['stochastic/affine'] = infos_by_fidpair
             else:
-                intrinsic_rates['stochastic'] = intrinsic_stochastic_rates
-                #REM print("STO RATES = %g" % _np.linalg.norm(intrinsic_stochastic_rates))
+                if jacmode == "separate":
+                    intrinsic_rates['stochastic'] = intrinsic_stochastic_rates
+                    #REM print("STO RATES = %g" % _np.linalg.norm(intrinsic_stochastic_rates))
+                elif jacmode == "together":
+                    sto_aff_jac = J
+                    sto_aff_obs_err_rates = obs_err_rates
                 pauli_fidpair_dict['stochastic'] = pauli_fidpairs # "key" to observed rates
                 observed_rate_infos['stochastic'] = infos_by_fidpair
-            print("Completed Stochastic/Affine in %.2fs" % (_time.time()-tStart))
+
+            printer.log("Completed Stochastic/Affine in %.2fs" % (_time.time()-tStart),1)
 
     elif extract_affine:
         raise ValueError("Cannot extract affine error rates without also extracting stochastic ones!")
@@ -688,6 +714,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
                 nQubits, maxErrWeight, extract_hamiltonian, False, False,
                 advancedOptions.get('ham_tmpl', ("ZY","ZX","XZ","YZ","YX","XY")),
                 preferred_prep_basis_signs, preferred_meas_basis_signs)
+        #print("DB: %d diff-basis pairs" % len(pauli_fidpairs))
 
         #divide up fiducial pairs among ranks
         indxFidpairList = list(enumerate(pauli_fidpairs))
@@ -701,7 +728,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
             #REM debug_offset = iexpt * len(all_observables) # all_observables is the same on every loop (TODO FIX)
             t0 = _time.time(); infos_for_this_fidpair = {}
             for j,obs in enumerate(all_observables):
-                if verbosity > 1: print("  - observable %d of %d" % (j,len(all_observables)))
+                printer.log("  - observable %d of %d" % (j,len(all_observables)),2)
 
                 #REM negs = [ bool(pauli_fidpair[0][ii] == 'Y') for ii in range(nQubits) ] 
                 #REM   b/c use of 'Gx' for Y-basis prep really prepares -Y state
@@ -727,8 +754,8 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
                 #REM print("Jrow = ",Jrow)
 
             my_obs_infos.append(infos_for_this_fidpair)
-            if verbosity > 0: print("%sHamiltonian fidpair %d of %d: %d observables analyzed [%.1fs]" % 
-                                    (rankStr, i,len(my_ExptList),len(all_observables),_time.time()-t0))
+            printer.log("%sHamiltonian fidpair %d of %d: %d observables analyzed [%.1fs]" % 
+                        (rankStr, i,len(my_ExptList),len(all_observables),_time.time()-t0), 1)
                 
         
         #Gather results
@@ -752,37 +779,90 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
             obs_err_rates = _np.array([ info['rate'] 
                                         for fidpair_infos in infos_by_fidpair
                                         for info in fidpair_infos.values() ] )
-            if extract_affine:
-                #'correct' observed rates due to known affine errors, i.e.:
-                # J_ham * Hintrinsic = observed_rates - J_aff * Aintrinsic
-                Jaff = _np.concatenate(Jaff_list, axis=0)
-                Aintrinsic = intrinsic_rates['affine']
-                corr = _np.dot(Jaff, Aintrinsic)
-                #REM #print("RAW = ",Jaff)
-                #REM #print("RAW = ",Aintrinsic)
-                #REM #print("RAW = ",corr)
-                #REM print("AFFINE CORR = ",_np.linalg.norm(corr), _np.linalg.norm(Jaff), _np.linalg.norm(Aintrinsic))
-                #REM print("BEFORE = ",obs_err_rates)
-                obs_err_rates -= corr
-                #REM print("AFTER = ",obs_err_rates)
-            
-            #rank = _np.linalg.matrix_rank(J)
-            #print("HAM Rank = ",rank, " num intrinsic rates = ",J.shape[1])
-            invJ = _np.linalg.pinv(J)
-            intrinsic_hamiltonian_rates = _np.dot(invJ,obs_err_rates)
+
+            if jacmode == "separate":
+                if extract_affine:
+                    #'correct' observed rates due to known affine errors, i.e.:
+                    # J_ham * Hintrinsic = observed_rates - J_aff * Aintrinsic
+                    Jaff = _np.concatenate(Jaff_list, axis=0)
+                    Aintrinsic = intrinsic_rates['affine']
+                    corr = _np.dot(Jaff, Aintrinsic)
+                    #REM #print("RAW = ",Jaff)
+                    #REM #print("RAW = ",Aintrinsic)
+                    #REM #print("RAW = ",corr)
+                    #REM print("AFFINE CORR = ",_np.linalg.norm(corr), _np.linalg.norm(Jaff), _np.linalg.norm(Aintrinsic))
+                    #REM print("BEFORE = ",obs_err_rates)
+                    obs_err_rates -= corr
+                    #REM print("AFTER = ",obs_err_rates)
+                                
+                rank = _np.linalg.matrix_rank(J)
+                if rank < J.shape[1]:
+                    _warnings.warn(("Idle tomography: hamiltonian-jacobian rank "
+                                    "(%d) < #intrinsic rates (%d)") % (rank,J.shape[1]))
+                invJ = _np.linalg.pinv(J)
+                intrinsic_hamiltonian_rates = _np.dot(invJ,obs_err_rates)
                         
-            #print("HAM J = ",J)
-            #REM print("HAM RATES = ",intrinsic_hamiltonian_rates)
-            #REM print("HAM INVJ = ",_np.linalg.norm(invJ))
-            #REM print("HAM OBS = ",_np.linalg.norm(obs_err_rates))
-            #REM print("HAM RATES = ",_np.linalg.norm(intrinsic_hamiltonian_rates))
-            #REM result.data['Hamiltonian error names'] = errors # "key" to intrinsic rates
-            intrinsic_rates['hamiltonian'] = intrinsic_hamiltonian_rates
+                #print("HAM J = ",J)
+                #REM print("HAM RATES = ",intrinsic_hamiltonian_rates)
+                #REM print("HAM INVJ = ",_np.linalg.norm(invJ))
+                #REM print("HAM OBS = ",_np.linalg.norm(obs_err_rates))
+                #REM print("HAM RATES = ",_np.linalg.norm(intrinsic_hamiltonian_rates))
+                #REM result.data['Hamiltonian error names'] = errors # "key" to intrinsic rates
+                intrinsic_rates['hamiltonian'] = intrinsic_hamiltonian_rates
+            elif jacmode == "together":
+                if extract_affine:
+                    Jaff = _np.concatenate(Jaff_list, axis=0)
+                    ham_aff_jac = _np.concatenate((J,Jaff),axis=1)
+                else:
+                    ham_aff_jac = J
+                ham_aff_obs_err_rates = obs_err_rates
+
             pauli_fidpair_dict['hamiltonian'] = pauli_fidpairs # give "key" to observed rates
             observed_rate_infos['hamiltonian'] = infos_by_fidpair
-            print("Completed Hamiltonian in %.2fs" % (_time.time()-tStart))
+            printer.log("Completed Hamiltonian in %.2fs" % (_time.time()-tStart),1)
 
     if comm is None or comm.Get_rank() == 0:
+        if jacmode == "together":
+            #Compute all intrinsic rates now, by inverting one big jacobian
+            rows = cols = 0; sto_off = 0
+            if extract_stochastic:
+                rows += sto_aff_jac.shape[0]; cols += len(errors)
+                if extract_affine: cols += len(errors)
+            r1 = rows; c1 = cols
+            if extract_hamiltonian:
+                sto_off = len(errors) #hamiltonian rates are first len(errors) cols
+                rows += ham_aff_jac.shape[0]; cols += len(errors)
+
+            Jbig = _np.zeros((rows,cols), 'd')
+            obs_to_concat = []
+
+            if extract_stochastic:
+                Jbig[0:r1,sto_off:] = sto_aff_jac
+                obs_to_concat.append(sto_aff_obs_err_rates)
+            if extract_hamiltonian:
+                Jbig[r1:,0:sto_off] = ham_aff_jac[:,0:sto_off]
+                obs_to_concat.append(ham_aff_obs_err_rates)
+                if extract_affine:
+                    Jbig[r1:,sto_off+len(errors):sto_off+2*len(errors)] = ham_aff_jac[:,sto_off:]
+            
+            rank = _np.linalg.matrix_rank(Jbig)
+            if rank < Jbig.shape[1]:
+                _warnings.warn(("Idle tomography: whole-jacobian rank "
+                                    "(%d) < #intrinsic rates (%d)") % (rank,Jbig.shape[1]))
+            invJ = _np.linalg.pinv(Jbig)
+            obs_err_rates = _np.concatenate(obs_to_concat)
+            all_intrinsic_rates = _np.dot(invJ,obs_err_rates)
+
+            off = 0
+            if extract_hamiltonian:
+                intrinsic_rates['hamiltonian'] = all_intrinsic_rates[off:off+len(errors)]
+                off += len(errors)
+            if extract_stochastic:
+                intrinsic_rates['stochastic'] = all_intrinsic_rates[off:off+len(errors)]
+                off += len(errors)
+            if extract_affine:
+                intrinsic_rates['affine'] = all_intrinsic_rates[off:off+len(errors)]
+
         return _IdleTomographyResults(dataset, maxLengths, maxErrWeight, fitOrder,
                                       errors, intrinsic_rates, pauli_fidpair_dict, observed_rate_infos)
     else: # no results on other ranks...

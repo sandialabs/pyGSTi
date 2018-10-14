@@ -949,7 +949,7 @@ def _onqubit(s,iQubit):
 def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfiducials=None,
                                        prepLbl=None, effectLbls=None, initJ=None, initJrank=None,
                                        wrtParams=None, algorithm="greedy", require_all_amped=True,
-                                       verbosity=0):
+                                       idtPauliDicts=None, verbosity=0):
     """
     Find fiducial pairs which amplify the parameters of a synthetic idle gate.
 
@@ -1122,6 +1122,17 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfi
                     prepFid = prepFid + _onqubit(el,qubit_filter[i])
                     
                 for meas in _itertools.product(*([singleQfiducials]*nQubits) ):
+
+                    if idtPauliDicts is not None:
+                        # For idle tomography compatibility, only consider fiducial pairs with either
+                        # all-the-same or all-different prep & measure basis (basis is determined
+                        # by the *last* letter in the value, e.g. ignore '-' sign in '-X').
+                        prepDict,measDict = idtPauliDicts
+                        rev_prepDict = { v[-1]:k for k,v in prepDict.items() } # could do this once above,
+                        rev_measDict = { v[-1]:k for k,v in measDict.items() } # but this isn't the bottleneck.
+                        cmp = [ (rev_prepDict[prep[kk]] == rev_measDict[meas[kk]]) for kk in range(nQubits) ]
+                        if not ( all(cmp) or not any(cmp) ): continue # if all are not the same or all are not different, skip
+
                     measFid = _objs.GateString(())
                     for i,el in enumerate(meas):
                         measFid = measFid + _onqubit(el,qubit_filter[i])
@@ -2115,7 +2126,8 @@ def get_candidates_for_core(gateset, core_qubits, candidate_counts, seedStart):
 
 def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWeight=1, maxhops=0,
                             extraWeight1Hops=0, extraGateWeight=0, paramroot="H+S",
-                            sparse=False, verbosity=0, cache=None, idleOnly=False, algorithm="greedy"):
+                            sparse=False, verbosity=0, cache=None, idleOnly=False, 
+                            idtPauliDicts=None, algorithm="greedy"):
     """ 
     Generate a list of sequences sufficient for amplifying all of the errors
     given by a geometrically local noise model defined by a graph and various
@@ -2191,6 +2203,16 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     idleOnly : bool, optional
         If True, only sequences for the idle germ are returned.  This is useful
         for idle tomography in particular.
+
+    idtPauliDicts : tuple, optional
+        A (prepDict,measDict) tuple of dicts that maps a 1-qubit Pauli basis
+        string (e.g. 'X' or '-Y') to a sequence of gate *names*.  If given,
+        the idle-germ fiducial pairs chosen by this function are restricted
+        to those where either 1) each qubit is prepared and measured in the
+        same basis or 2) each qubits is prepared and measured in different
+        bases (note: '-X' and 'X" are considered the *same* basis).  This
+        restriction makes the resulting sequences more like the "standard"
+        ones of idle tomography, and thereby easier to interpret.
 
     algorithm : {"greedy","sequential"}
         The algorithm is used internall by 
@@ -2297,7 +2319,8 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
             find_amped_polys_for_syntheticidle(list(range(maxIdleWeight)),
                                                idleGateStr, idle_gateset, singleQfiducials,
                                                prepLbl, None, wrtParams=idle_params, 
-                                               algorithm=algorithm, verbosity=printer-1)
+                                               algorithm=algorithm, idtPauliDicts=idtPauliDicts,
+                                               verbosity=printer-1)
         #ampedJ, ampedJ_rank, idle_maxwt_gatename_fidpair_lists = None,0,[] # DEBUG GRAPH ISO
         cache['Idle gatename fidpair lists'][maxIdleWeight] = idle_maxwt_gatename_fidpair_lists
 
