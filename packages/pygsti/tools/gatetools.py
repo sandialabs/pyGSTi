@@ -2637,8 +2637,8 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
     
     for gl,gate in gateset.gates.items():
         tgt_gate = targetGateset.gates[gl].copy()
-        tgt_gate = (1.0-EPS)*tgt_gate + EPS*gate # breaks tgt_gate's degeneracies w/same structure as gate
-        evals_gate = _np.linalg.eigvals(gate)
+        tgt_gate = (1.0-EPS)*tgt_gate.todense() + EPS*gate.todense() # breaks tgt_gate's degeneracies w/same structure as gate
+        evals_gate = _np.linalg.eigvals(gate.todense())
         evals_tgt, Utgt = _np.linalg.eig(tgt_gate)
         _, pairs = _mt.minweight_match(evals_tgt, evals_gate, return_pairs=True)
         
@@ -2653,6 +2653,7 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
             _warnings.warn(("Target-eigenspace-projected gate has an imaginary"
                             " component.  This usually isn't desired and"
                             " indicates a failure to match eigenvalues."))
+            epgate = _np.real(epgate) # just drop imag part so downstream code works
         ret.gates[gl] = epgate
 
     return ret
