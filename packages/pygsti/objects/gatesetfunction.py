@@ -180,8 +180,8 @@ def gatesfn_factory(fn):
             
         def evaluate(self, gateset):
             """ Evaluate this gate-set-function at `gateset`."""
-            return fn(gateset.gates[self.gl], self.other_gateset.gates[self.gl],
-                      gateset.basis, *self.args, **self.kwargs)
+            return fn(gateset.gates[self.gl].todense(), self.other_gateset.gates[self.gl].todense(),
+                      gateset.basis, *self.args, **self.kwargs) # assume functions want *dense* gates
         
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp

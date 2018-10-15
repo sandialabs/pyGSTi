@@ -18,6 +18,7 @@ import warnings as _warnings
 from .. import tools as _tools
 from .. import algorithms as _alg
 from ..baseobjs import Basis as _Basis
+from ..baseobjs import Label as _Lbl
 from ..objects.reportableqty import ReportableQty as _ReportableQty
 from ..objects import gatesetfunction as _gsf
 
@@ -137,7 +138,7 @@ class Gate_eigenvalues(_gsf.GateSetFunction):
             
     def evaluate(self, gateset):
         """Evaluate at `gateset`"""
-        evals,evecs = _np.linalg.eig(gateset.gates[self.gatelabel])
+        evals,evecs = _np.linalg.eig(gateset.gates[self.gatelabel].todense())
         
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup:abs(tup[1]), reverse=True)
@@ -506,7 +507,7 @@ def angles_btwn_rotn_axes(gateset):
     angles_btwn_rotn_axes = _np.zeros( (len(gateLabels), len(gateLabels)), 'd' )
 
     for i,gl in enumerate(gateLabels):
-        decomp = _tools.decompose_gate_matrix(gateset.gates[gl])
+        decomp = _tools.decompose_gate_matrix(gateset.gates[gl].todense())
         rotnAngle = decomp.get('pi rotations','X')
         axisOfRotn = decomp.get('axis of rotation',None)
 
@@ -586,15 +587,15 @@ if _cvxpy:
            `gatesetB.gates[gateLabel]` """
         def __init__(self, gatesetA, gatesetB, gatelabel):
             self.gatelabel = gatelabel
-            self.B = gatesetB.gates[gatelabel]
+            self.B = gatesetB.gates[gatelabel].todense()
             self.d = int(round(_np.sqrt(gatesetA.dim)))
-            _gsf.GateSetFunction.__init__(self, gatesetA, ["gate:"+gatelabel])
+            _gsf.GateSetFunction.__init__(self, gatesetA, ["gate:"+str(gatelabel)])
                 
         def evaluate(self, gateset):
             """Evaluate at `gatesetA = gateset` """
             gl = self.gatelabel
-            dm, W = _tools.diamonddist(gateset.gates[gl], self.B, gateset.basis,
-                                       return_x=True)
+            dm, W = _tools.diamonddist(gateset.gates[gl].todense(),
+                                       self.B, gateset.basis, return_x=True)
             self.W = W
             return 0.5*dm
     
@@ -602,7 +603,7 @@ if _cvxpy:
             """Evaluates at a nearby gate set"""
             gl = self.gatelabel; mxBasis = nearby_gateset.basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
-                nearby_gateset.gates[gl], mxBasis)
+                nearby_gateset.gates[gl].todense(), mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             Jt = (JBstd-JAstd).T
             return 0.5*_np.trace( Jt.real * self.W.real + Jt.imag * self.W.imag)
@@ -1021,8 +1022,8 @@ def general_decomposition(gatesetA, gatesetB):
     mxBasis = gatesetB.basis # B is usually the target which has a well-defined basis
     
     for gl in gateLabels:
-        gate = gatesetA.gates[gl]
-        targetGate = gatesetB.gates[gl]
+        gate = gatesetA.gates[gl].todense()
+        targetGate = gatesetB.gates[gl].todense()
         gl = str(gl) # Label -> str for decomp-dict keys
 
         target_evals = _np.linalg.eigvals(targetGate)
@@ -1236,7 +1237,7 @@ def evaluate_gatefn_by_name(name, gateset, targetGateset, gateLabelOrString,
     ReportableQty
     """
     gl = gateLabelOrString
-    b = bool(_tools.isstr(gl)) #whether this is a gate label or a string
+    b = bool(isinstance(gl,_Lbl) or _tools.isstr(gl)) #whether this is a gate label or a string
     
     if name == "inf":
         fn = Entanglement_infidelity if b else \

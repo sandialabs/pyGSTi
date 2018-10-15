@@ -652,9 +652,9 @@ class Gate(_gatesetmember.GateSetMember):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        assert(self.num_params() == 0), \
-            "Default deriv_wrt_params is only for 0-parameter (default) case (%s)" \
-            % str(self.__class__.__name__)
+        if(self.num_params() != 0):
+            raise NotImplementedError("Default deriv_wrt_params is only for 0-parameter (default) case (%s)"
+                                      % str(self.__class__.__name__))
 
         dtype = complex if self._evotype == 'statevec' else 'd'
         derivMx = _np.zeros((self.size,0),dtype)
@@ -2051,6 +2051,8 @@ class LindbladParameterizedGateMap(Gate):
                     _gt.error_generator(gateMatrix.toarray(), upost.toarray(),
                                         mxBasis, "logGTi"), dtype='d')
         else:
+            #DB: assert(_np.linalg.norm(gateMatrix.imag) < 1e-8)
+            #DB: assert(_np.linalg.norm(upost.imag) < 1e-8)
             errgen = _gt.error_generator(gateMatrix, upost, mxBasis, "logGTi")
 
         return cls.from_error_generator(unitaryPostfactor, errgen, ham_basis,
