@@ -49,6 +49,9 @@
 	#iftoggle(CompareDatasets)
 	<a href="#" class="tablink" onclick="openTab(event, 'DataComparison')">Data Comparison</a>
 	#endtoggle
+	#iftoggle(IdleTomography)
+	<a href="#" class="tablink" onclick="openTab(event, 'IdleTomography')">Idle Tomography</a>
+	#endtoggle
       </div>
 
       <div class="linkgroup">
@@ -108,7 +111,11 @@
       <div id="DataComparison" class="tabcontent">
       </div>
       #endtoggle
-      
+      #iftoggle(IdleTomography)
+      <div id="IdleTomography" class="tabcontent">
+      </div>
+      #endtoggle
+
 
       <div id="GaugeVariants" class="tabcontent">
       </div>
