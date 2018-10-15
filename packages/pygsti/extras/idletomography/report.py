@@ -356,7 +356,7 @@ def _add_new_labels(running_lbls, current_lbls):
                 running_lbls.append(lbl)
     return running_lbls
 
-def _create_switchboard(ws, results_dict, printer, fmt):
+def _create_switchboard(ws, results_dict):
     """
     Creates the switchboard used by the idle tomography report
     """
@@ -462,7 +462,7 @@ def create_idletomography_report(results, filename, title="auto",
 
     #Create master switchboard
     switchBd, dataset_labels = \
-            _create_switchboard(ws, results_dict, printer, fmt)
+            _create_switchboard(ws, results_dict)
     if fmt == "latex" and (len(dataset_labels) > 1):
         raise ValueError("PDF reports can only show a *single* dataset," +
                          " estimate, and gauge optimization.")

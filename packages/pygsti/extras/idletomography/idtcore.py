@@ -643,7 +643,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
 
             my_obs_infos.append(infos_for_this_fidpair)
             printer.log("%sStochastic fidpair %d of %d: %d outcomes analyzed [%.1fs]" % 
-                        (rankStr, i,len(my_ExptList),len(all_outcomes),_time.time()-t0), 1)
+                        (rankStr, i,len(my_FidpairList),len(all_outcomes),_time.time()-t0), 1)
 
         #Gather results
         info_list = [ my_obs_infos ] if (comm is None) else comm.gather(my_obs_infos, root=0)
@@ -755,7 +755,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
 
             my_obs_infos.append(infos_for_this_fidpair)
             printer.log("%sHamiltonian fidpair %d of %d: %d observables analyzed [%.1fs]" % 
-                        (rankStr, i,len(my_ExptList),len(all_observables),_time.time()-t0), 1)
+                        (rankStr, i,len(my_FidpairList),len(all_observables),_time.time()-t0), 1)
                 
         
         #Gather results
