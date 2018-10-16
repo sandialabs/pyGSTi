@@ -781,6 +781,142 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
         return min_weights
 
 
+def minweight_match_realmxeigs(a, b, metricfn=None,
+                               pass_indices_to_metricfn=False, EPS=1e-9):
+    """
+    Matches the elements of two vectors, `a` and `b` whose elements
+    are assumed to either real or one-half of a conjugate pair.
+
+    Matching is performed by minimizing the weight between elements,
+    defined as the sum of `metricfn(x,y)` over all `(x,y)` pairs
+    (`x` in `a` and `y` in `b`).  If straightforward matching fails
+    to preserve eigenvalue conjugacy relations, then real and conjugate-
+    pair eigenvalues are matched *separately* to ensure relations are
+    preserved (but this can result in a sub-optimal matching).  A 
+    ValueError is raised when the elements of `a` and `b` have incompatible
+    conjugacy structures (#'s of conjugate vs. real pairs).
+
+    Parameters
+    ----------
+    a, b : list or numpy.ndarray
+        1D arrays to match elements between.
+
+    metricfn : function, optional
+        A function of two float parameters, `x` and `y`,which defines the cost
+        associated with matching `x` with `y`.  If None, `abs(x-y)` is used.
+
+    pass_indices_to_metricfn : bool, optional
+        If True, the metric function is passed two *indices* into the `a` and
+        `b` arrays, respectively, instead of the values.
+
+    Returns
+    -------
+    pairs : list
+        A list of 2-tuple pairs of indices `(ix,iy)` giving the indices into
+        `a` and `b` respectively of each matched pair.
+    """
+
+    def check(pairs):
+        for i,(p0,p1) in enumerate(pairs):
+            for q0,q1 in pairs[i+1:]:
+                a_conj = _np.isclose(a[p0], _np.conjugate(a[q0]))
+                b_conj = _np.isclose(b[p1], _np.conjugate(b[q1]))
+                if (abs(a[p0].imag) > 1e-6 and a_conj and not b_conj) or \
+                   (abs(b[p1].imag) > 1e-6 and b_conj and not a_conj):
+                    #print("DB: FALSE at: ",(p0,p1),(q0,q1),(a[p0],b[p1]),(a[q0],b[q1]),a_conj,b_conj)
+                    return False
+        return  True
+     
+    #First attempt:
+    # See if matching everything at once satisfies conjugacy relations
+    # (if this works, this is the best, since it considers everything)
+    _,pairs = minweight_match(a, b, metricfn, True,
+                               pass_indices_to_metricfn)
+
+    # print("\nDB0:")
+    # for p0,p1 in pairs:
+    #     print(a[p0], " <->", b[p1])
+
+    if check(pairs):
+        return pairs # we're done! that was easy
+
+    #Otherwise we fall back to considering real values and conj pairs separately
+
+    #identify real values and conjugate pairs
+    def split_real_conj(ar):
+        real_inds = []; conj_inds = []
+        for i,v in enumerate(ar):
+            if abs(v.imag) < EPS: real_inds.append(i)
+            else:
+                for pair in conj_inds:
+                    if i in pair: break # ok, we've already found v's pair
+                else:
+                    for j,v2 in enumerate(ar[i+1:],start=i+1):
+                        if _np.isclose(_np.conj(v), v2): 
+                            conj_inds.append( (i,j) ); break
+                    else:
+                        raise ValueError("No conjugate pair found for %s" % str(v))
+
+        # choose 'a+ib' to be representative of pair 
+        conj_rep_inds = [ p0 if (ar[p0].imag > ar[p1].imag) else p1
+                          for (p0,p1) in conj_inds ] 
+
+        return real_inds, conj_inds, conj_rep_inds
+
+    def add_conjpair(ar, conj_inds, conj_rep_inds, real_inds):
+        for ii,i in enumerate(real_inds):
+            for jj,j in enumerate(real_inds[ii+1:],start=ii+1):
+                if _np.isclose(ar[i],ar[j]):
+                    conj_inds.append((i,j))
+                    conj_rep_inds.append(i)
+                    del real_inds[jj]; del real_inds[ii] # note: we know jj > ii
+                    return True
+        return False
+
+    a_real, a_conj, a_reps = split_real_conj(a) # hold indices to a & b arrays
+    b_real, b_conj, b_reps = split_real_conj(b) # hold indices to a & b arrays
+
+    while len(a_conj) > len(b_conj): #try to add real-pair(s) to b_conj 
+        if not add_conjpair(b, b_conj, b_reps, b_real):
+            raise ValueError(("Vectors `a` and `b` don't have the same conjugate-pair structure, "
+                              " and so they cannot be matched in a way the preserves this structure."))
+    while len(b_conj) > len(a_conj): #try to add real-pair(s) to a_conj 
+        if not add_conjpair(a, a_conj, a_reps, a_real):
+            raise ValueError(("Vectors `a` and `b` don't have the same conjugate-pair structure, "
+                              " and so they cannot be matched in a way the preserves this structure."))
+    #Note: problem with this approach is that we might convert a 
+    # real-pair -> conj-pair sub-optimally (i.e. there might be muliple
+    # such conversions and we just choose one at random).
+
+    #REMOVE
+    #print("DB: a_real = ",a[a_real])
+    #print("DB: b_real = ",b[b_real])
+    #print("DB: a_pairs = \n","\n".join([str( (a[p0],a[p1]) ) for p0,p1 in a_conj ] ))
+    #print("DB: b_pairs = \n","\n".join([str( (b[p0],b[p1]) ) for p0,p1 in b_conj ] ))
+
+    _,pairs1 = minweight_match(a[a_real], b[b_real], metricfn, True,
+                               pass_indices_to_metricfn)
+    _,pairs2 = minweight_match(a[a_reps], b[b_reps], metricfn, True,
+                               pass_indices_to_metricfn)
+    
+    #pair1 gives matching of real values, pairs2 gives that of conj pairs.
+    # Now just need to assemble a master pairs list to return.
+    pairs = []
+    for p0,p1 in pairs1: # p0 & p1 are indices into a_real & b_real
+        pairs.append( (a_real[p0], b_real[p1]) )
+    for p0,p1 in pairs2: # p0 & p1 are indices into a_reps & b_reps
+        pairs.append( (a_reps[p0], b_reps[p1]) )
+        a_other = a_conj[p0][0] if (a_conj[p0][0]!=a_reps[p0]) else a_conj[p0][1]
+        b_other = b_conj[p1][0] if (b_conj[p1][0]!=b_reps[p1]) else b_conj[p1][1]
+        pairs.append( (a_other,b_other) )
+
+    # print("\nDB:")
+    # for p0,p1 in pairs:
+    #     print(a[p0], " <->", b[p1])
+
+    return sorted(pairs, key=lambda x: x[0]) # sort by a's index
+
+
 def _fas(a, inds, rhs, add=False):
     """
     Fancy Assignment, equivalent to `a[*inds] = rhs` but with
