@@ -833,10 +833,6 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
     _,pairs = minweight_match(a, b, metricfn, True,
                                pass_indices_to_metricfn)
 
-    # print("\nDB0:")
-    # for p0,p1 in pairs:
-    #     print(a[p0], " <->", b[p1])
-
     if check(pairs):
         return pairs # we're done! that was easy
 
@@ -888,12 +884,6 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
     # real-pair -> conj-pair sub-optimally (i.e. there might be muliple
     # such conversions and we just choose one at random).
 
-    #REMOVE
-    #print("DB: a_real = ",a[a_real])
-    #print("DB: b_real = ",b[b_real])
-    #print("DB: a_pairs = \n","\n".join([str( (a[p0],a[p1]) ) for p0,p1 in a_conj ] ))
-    #print("DB: b_pairs = \n","\n".join([str( (b[p0],b[p1]) ) for p0,p1 in b_conj ] ))
-
     _,pairs1 = minweight_match(a[a_real], b[b_real], metricfn, True,
                                pass_indices_to_metricfn)
     _,pairs2 = minweight_match(a[a_reps], b[b_reps], metricfn, True,
@@ -909,10 +899,6 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
         a_other = a_conj[p0][0] if (a_conj[p0][0]!=a_reps[p0]) else a_conj[p0][1]
         b_other = b_conj[p1][0] if (b_conj[p1][0]!=b_reps[p1]) else b_conj[p1][1]
         pairs.append( (a_other,b_other) )
-
-    # print("\nDB:")
-    # for p0,p1 in pairs:
-    #     print(a[p0], " <->", b[p1])
 
     return sorted(pairs, key=lambda x: x[0]) # sort by a's index
 

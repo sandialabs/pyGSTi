@@ -2666,11 +2666,6 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
             else:
                 eigenspace[i] = [ Utgt[:,i] ] # new list = new eigenspace
 
-        #REMOVE DEBUG
-        # print("Eigenspace ids:")
-        # for k,v in eigenspace.items():
-        #     print(k,id(v))
-
         #Project each eigenvector (col of Ugate) onto space of cols
         evectors = {} # key = index of gate eigenval, val = assoc. (projected) eigenvec
         for ipair,(i,j) in enumerate(pairs):
@@ -2683,25 +2678,9 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
             # --> inv(E.dag * E) * E.dag * v = coeffs
             # E*coeffs = E * inv(E.dag * E) * E.dag * v
 
-            # E * invE * invEdag * Edag * v
-
-            #DB:
-            # E = _np.array(eigenspace[i]).T; Edag = E.T.conjugate()
-            # print("eigenspace shape = ",E.shape)
-            # _mt.print_mx( _np.dot(E, _np.dot( _np.linalg.inv(_np.dot(Edag,E)), Edag)), width=5,prec=1)
-            # E = (d,r)   inv( (r,d)*(d,r) ) * (r,d) * (d,1)
-
-            # c = E.dag*v; evec = E*c/|c|, so, assuming target eigenvectors E_i
-            # are orthonomal: |evec|^2 = |sum_i c_i * E_i|^2/|c|^2 = |c|^2 / |c|^2 = 1
             E = _np.array(eigenspace[i]).T; Edag = E.T.conjugate()
             coeffs = _np.dot( _np.dot( _np.linalg.inv(_np.dot(Edag,E)), Edag), Ugate[:,j])
-            #print("gate evec norm = ", _np.sqrt(_np.vdot(Ugate[:,j],Ugate[:,j])))
-            #print("coeff norm = ", _np.sqrt(_np.vdot(coeffs,coeffs)))
-            #coeffs /= _np.sqrt(_np.vdot(coeffs,coeffs)) # normalize
             evectors[j] = _np.dot(E, coeffs)
-            #assert(_np.linalg.norm(evectors[j] - Ugate[:,j]) < 1e-6) # TEMP
-            # print("DB: pair ",(i,j), " coeffs = ",coeffs)
-            # _mt.print_mx(E, width=5,prec=1)
             
             #check for conjugate pair
             for i2,j2 in pairs[ipair+1:]:
@@ -2709,39 +2688,15 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
                     evectors[j2] = _np.conjugate(evectors[j])
                     E2 = _np.array(eigenspace[i2]).T; E2dag = E2.T.conjugate()
                     x = _np.linalg.solve(_np.dot(Edag,E),_np.dot(Edag,evectors[j2]))
-                    #assert(_np.isclose(_np.linalg.norm(x),_np.linalg.norm(coeffs)))??
+                    #assert(_np.isclose(_np.linalg.norm(x),_np.linalg.norm(coeffs))) ??
                       #check that this vector is in the span of eigenspace[i2]?
                     
         #build new "Utgt" using specially chosen linear combos of degenerate-eigenvecs
         Uproj = _np.array([ evectors[i] for i in range(Utgt.shape[1])]).T
-        #assert(_np.linalg.norm(Uproj - Ugate) < 1e-6) #TEMP
         Uproj_inv = _np.linalg.inv(Uproj)
         epgate = _np.dot(Uproj, _np.dot(_np.diag(evals_gate), Uproj_inv))
         epgate = _np.real_if_close(epgate, tol=1000)
 
-        #OLD TODO REMOVE
-        # tgt_gate = (1.0-EPS)*tgt_gate.todense() + EPS*gate.todense() # breaks tgt_gate's degeneracies w/same structure as gate
-        # evals_gate = _np.linalg.eigvals(gate.todense())
-        # evals_tgt, Utgt = _np.linalg.eig(tgt_gate)
-        # #_, pairs = _mt.minweight_match(evals_tgt, evals_gate, return_pairs=True)
-        # 
-        # try:
-        #     pairs = _mt.minweight_match_realmxeigs(evals_tgt, evals_gate)
-        # except ValueError: # if match is not possible b/c of structure
-        #     _warnings.warn(("Failed to match %s eigenvalues while preserving "
-        #                     "eigenvalue conjugacy.  Cannot project to target "
-        #                     "eigenspace!") % str(gl))
-        #     ret.gates[gl] = gate.copy()
-        #     continue
-        # 
-        # evals = evals_gate.copy()
-        # for i,j in pairs: #replace target evals w/matching eval of gate
-        #     evals[i] = evals_gate[j]
-        #
-        # Utgt_inv = _np.linalg.inv(Utgt)
-        # epgate = _np.dot(Utgt, _np.dot(_np.diag(evals), Utgt_inv))
-        # epgate = _np.real_if_close(epgate, tol=1000)
-        
         assert(_np.linalg.norm(_np.imag(epgate)) < 1e-7)
           # this should never happen & indicates an uncaught failure in
           # minweight_match_realmxeigs(...)
