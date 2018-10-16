@@ -232,6 +232,10 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
     def _create(self, idtresults, display, display_as):
         colHeadings = ['Qubits']
 
+        irname = {'H': 'hamiltonian', 'S': 'stochastic', 'A': 'affine' }
+        display = [ disp for disp in display 
+                    if irname[disp] in idtresults.intrinsic_rates ]
+
         for disp in display:
             if disp == "H":
                 colHeadings.append('Hamiltonian')

@@ -699,7 +699,7 @@ def create_standard_report(results, filename, title="auto",
     autosize = advancedOptions.get('autosize','initial')
     combine_robust = advancedOptions.get('combine_robust',True)
     ci_brevity = advancedOptions.get('confidence_interval_brevity',1)
-    idtPauliDicts = advancedOptions.get('idt_basis_dicts',None)
+    idtPauliDicts = advancedOptions.get('idt_basis_dicts','auto')
     idtIdleGate = advancedOptions.get('idt_idle_gatelabel',_Lbl('Gi'))
 
     if filename and filename.endswith(".pdf"):
@@ -758,9 +758,21 @@ def create_standard_report(results, filename, title="auto",
     #  this before creating main switchboard)
     idt_results_dict = {}
     GiStr = _objs.GateString((idtIdleGate,))
-    if idtPauliDicts is not None:
+    if idtPauliDicts is not None:        
         from ..extras import idletomography as _idt
+        autodict = bool(idtPauliDicts == "auto")
         for ky,results in results_dict.items():
+
+            if autodict:
+                for est in results.estimates.values():
+                    if 'target' in est.gatesets:
+                        idt_target = est.gatesets['target']
+                        break
+                else: continue # can't find any target gatesets
+                idtPauliDicts = _idt.determine_paulidicts(idt_target)
+                if idtPauliDicts is None: 
+                    continue # automatic creation failed -> skip
+
             gss = results.gatestring_structs['final']
             if GiStr not in gss.germs: continue
             
@@ -780,8 +792,7 @@ def create_standard_report(results, filename, title="auto",
             printer.log(" * Running idle tomography on %s dataset *" % ky)
             idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idtPauliDicts,
                                                  maxErrWeight=2, #HARDCODED for now (FUTURE)
-                                                 advancedOptions=idt_advanced, extract_hamiltonian=True,
-                                                 extract_stochastic=True, extract_affine=True)
+                                                 advancedOptions=idt_advanced)
             idt_results_dict[ky] = idtresults
     toggles['IdleTomography'] = bool(len(idt_results_dict) > 0)
 
