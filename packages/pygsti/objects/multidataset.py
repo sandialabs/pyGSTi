@@ -15,6 +15,7 @@ from ..tools import compattools as _compat
 
 from .dataset import DataSet as _DataSet
 from . import gatestring as _gs
+from . import labeldicts as _ld
 
 
 
@@ -171,7 +172,7 @@ class MultiDataSet(object):
         if outcomeLabelIndices is not None:
             self.olIndex = outcomeLabelIndices
         elif outcomeLabels is not None:
-            tup_outcomeLabels = [ ((ol,) if _compat.isstr(ol) else ol)
+            tup_outcomeLabels = [ _ld.OutcomeLabelDict.to_outcome(ol)
                                   for ol in outcomeLabels] #strings -> tuple outcome labels
             self.olIndex = _OrderedDict( [(ol,i) for (i,ol) in enumerate(tup_outcomeLabels) ] )
         else:

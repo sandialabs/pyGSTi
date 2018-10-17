@@ -14,6 +14,7 @@ import itertools as _itertools
 
 from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
+from ..objects import labeldicts as _ld
 from ..baseobjs import label as _lbl
 from ..tools import compattools as _compat
 from . import gatestringconstruction as _gstrc
@@ -253,6 +254,10 @@ def merge_outcomes(dataset,label_merge_dict):
     merged_dataset : DataSet object
         The DataSet with outcomes merged according to the rules given in label_merge_dict.
     """
+    # strings -> tuple outcome labels in keys and values of label_merge_dict
+    to_outcome = _ld.OutcomeLabelDict.to_outcome #shorthand
+    label_merge_dict = { to_outcome(key): list(map(to_outcome,val)) 
+                         for key,val in label_merge_dict.items() }
 
     new_outcomes = label_merge_dict.keys()
     merged_dataset = _ds.DataSet(outcomeLabels=new_outcomes)
@@ -260,7 +265,7 @@ def merge_outcomes(dataset,label_merge_dict):
     if not set(dataset.get_outcome_labels()).issubset( merge_dict_old_outcomes ):
         raise ValueError(("`label_merge_dict` must account for all the outcomes in original dataset."
                           " It's missing directives for:\n%s") % 
-                         '\n'.join(set(dataset.get_outcome_labels()) - set(merge_dict_old_outcomes)))
+                         '\n'.join(set(map(str,dataset.get_outcome_labels())) - set(map(str,merge_dict_old_outcomes))))
 
     for key in dataset.keys():
         linecounts = dataset[key].counts
@@ -341,7 +346,8 @@ def create_merge_dict(indices_to_keep, outcome_labels):
     return dict(merge_dict) # return a *normal* dict
 
 
-def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=None):
+def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,
+                   new_sectors=None, idle='Gi'):
     """
     Creates a DataSet that restricts is the restriction of `dataset`
     to the sectors identified by `sectors_to_keep`.
@@ -395,6 +401,11 @@ def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=Non
         of a larger set.  Simply set `sectors_to_keep == [4,5]` and 
         `new_sectors == [0,1]`.
 
+    idle : string or Label, optional
+        The gate label to be used when there are no kept components of a 
+        "layer" (element) of a gatestring.
+
+
     Returns
     -------
     filtered_dataset : DataSet object
@@ -407,6 +418,7 @@ def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=Non
                                              dataset.get_outcome_labels()))
     ds_merged = ds_merged.copy_nonstatic()
     ds_merged.process_gate_strings(lambda s: _gstrc.filter_gatestring(
-                                       s, sectors_to_keep, new_sectors))
+                                       s, sectors_to_keep, new_sectors, idle),
+                                   aggregate=True)
     ds_merged.done_adding_data()
     return ds_merged

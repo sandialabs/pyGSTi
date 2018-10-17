@@ -3005,7 +3005,8 @@ def check_kcoverage_template(rows, n, k, verbosity=0):
     if verbosity > 0: print(" check succeeded!")                                                             
     
 
-def filter_nqubit_sequences(sequence_tuples,sectors_to_keep,new_sectors=None):
+def filter_nqubit_sequences(sequence_tuples,sectors_to_keep,
+                            new_sectors=None,idle='Gi'):
     """
     Creates a new set of qubit sequences-tuples that is the restriction of
     `sequence_tuples` to the sectors identified by `sectors_to_keep`.
@@ -3040,6 +3041,11 @@ def filter_nqubit_sequences(sequence_tuples,sectors_to_keep,new_sectors=None):
         of a larger set.  Simply set `sectors_to_keep == [4,5]` and
         `new_sectors == [0,1]`.
 
+    idle : string or Label, optional
+        The gate label to be used when there are no kept components of a 
+        "layer" (element) of a gatestring.
+
+
     Returns
     -------
     filtered_sequence_tuples : list
@@ -3047,11 +3053,11 @@ def filter_nqubit_sequences(sequence_tuples,sectors_to_keep,new_sectors=None):
     """
     ret = []
     for gstr, L, germ, prepfid, measfid in sequence_tuples:
-        new_germ = _gsc.filter_gatestring(germ,sectors_to_keep,new_sectors)
+        new_germ = _gsc.filter_gatestring(germ,sectors_to_keep,new_sectors,idle)
         if len(new_germ) > 0 or len(gstr) == 0: 
-            new_prep = _gsc.filter_gatestring(prepfid,sectors_to_keep,new_sectors)
-            new_meas = _gsc.filter_gatestring(measfid,sectors_to_keep,new_sectors)
-            new_gstr = _gsc.filter_gatestring(gstr,sectors_to_keep,new_sectors)
+            new_prep = _gsc.filter_gatestring(prepfid,sectors_to_keep,new_sectors,idle)
+            new_meas = _gsc.filter_gatestring(measfid,sectors_to_keep,new_sectors,idle)
+            new_gstr = _gsc.filter_gatestring(gstr,sectors_to_keep,new_sectors,idle)
             ret.append( (new_gstr, L, new_germ, new_prep, new_meas) )
 
     return ret
@@ -3095,3 +3101,105 @@ def fidpairs_to_gatename_fidpair_list(fidpairs, nQubits):
         gatenames_per_qubit = tuple([ (tuple(x[0]),tuple(x[1])) for x in gatenames_per_qubit])
         gatename_fidpair_list.append(gatenames_per_qubit)
     return gatename_fidpair_list
+
+
+def stdmodule_to_smqmodule(std_module):
+    """ TODO: docstring - returns the new module"""
+    from types import ModuleType as _ModuleType
+    import sys as _sys
+    import importlib
+
+    std_module_name_parts = std_module.__name__.split('.')
+    std_module_name_parts[-1] = std_module_name_parts[-1].replace('std','smq')
+    new_module_name = '.'.join(std_module_name_parts)
+    
+    try:
+        return importlib.import_module(new_module_name)
+    except ImportError:
+        pass # ok, this is what the rest of the function is for
+    
+    out_module = {}
+    dim = std_module.gs_target.dim
+    if dim == 4:
+        sslbls = [0]
+        find_replace_labels = {'Gx': ('Gx',0), 'Gy':('Gy',0),
+                               'Gz': ('Gz',0), 'Gn': ('Gn',0)}
+        find_replace_strs = [ ((oldgl,),(newgl,)) for oldgl,newgl 
+                              in find_replace_labels.items()]
+    elif dim == 16:
+        sslbls = [0,1]
+        find_replace_labels = {'Gii': 'Gi', 
+                               'Gxi': ('Gx',0), 'Gyi': ('Gy',0), 'Gzi': ('Gz',0),
+                               'Gix': ('Gx',1), 'Giy': ('Gy',1), 'Giz': ('Gz',1),
+                               'Gxx': ('Gxx',0,1), 'Gxy': ('Gxy',0,1),
+                               'Gyx': ('Gxy',0,1), 'Gyy': ('Gyy',0,1),
+                               'Gcnot': ('Gcnot',0,1), 'Gcphase': ('Gcphase',0,1) }
+        find_replace_strs = [ ((oldgl,),(newgl,)) for oldgl,newgl 
+                              in find_replace_labels.items()]
+        #find_replace_strs.append( (('Gxx',), (('Gx',0),('Gx',1))) )
+        #find_replace_strs.append( (('Gxy',), (('Gx',0),('Gy',1))) )
+        #find_replace_strs.append( (('Gyx',), (('Gy',0),('Gx',1))) )
+        #find_replace_strs.append( (('Gyy',), (('Gy',0),('Gy',1))) )
+    else:
+        #TODO: add qutrit?
+        raise ValueError("Unsupported gate set dimension: %d" % dim)
+
+    def upgrade_dataset(ds):
+        """
+        Update DataSet `ds` in-place to use  multi-qubit style labels.
+        """
+        ds.process_gate_strings(lambda s: _gsc.manipulate_gatestring(
+                                                s,find_replace_strs))
+
+    out_module['find_replace_gatelabels'] = find_replace_labels
+    out_module['find_replace_gatestrings'] = find_replace_strs
+    out_module['upgrade_dataset'] = upgrade_dataset
+        
+    
+    # gate names
+    out_module['gates'] = [ find_replace_labels.get(nm,nm) for nm in std_module.gates ]
+    
+    #Target gateset (update labels)
+    new_gs_target = _objs.GateSet()
+    new_gs_target._evotype = std_module.gs_target._evotype
+    new_gs_target._default_gauge_group = std_module.gs_target._default_gauge_group
+    new_gs_target.basis = std_module.gs_target.basis.copy()
+    new_gs_target.set_state_space_labels( sslbls )
+    for lbl,obj in std_module.gs_target.preps.items():
+        new_lbl = find_replace_labels.get(lbl,lbl)
+        new_gs_target.preps[new_lbl] = obj.copy()
+    for lbl,obj in std_module.gs_target.povms.items():
+        new_lbl = find_replace_labels.get(lbl,lbl)
+        new_gs_target.povms[new_lbl] = obj.copy()
+    for lbl,obj in std_module.gs_target.gates.items():
+        new_lbl = find_replace_labels.get(lbl,lbl)
+        new_gs_target.gates[new_lbl] = obj.copy()
+    for lbl,obj in std_module.gs_target.instruments.items():
+        new_lbl = find_replace_labels.get(lbl,lbl)
+        new_gs_target.instruments[new_lbl] = obj.copy()
+    out_module['gs_target'] = new_gs_target
+
+    # gatestring lists
+    gatestringlist_names = ['germs','germs_lite','prepStrs','effectStrs','fiducials']
+    for nm in gatestringlist_names:
+        if hasattr(std_module,nm):
+            out_module[nm] = _gsc.manipulate_gatestring_list(getattr(std_module,nm), find_replace_strs)
+    
+    # clifford compilation (keys are lists of gate labels)
+    if hasattr(std_module,'clifford_compilation'):
+        new_cc = _collections.OrderedDict()
+        for ky,val in std_module.clifford_compilation.items():
+            new_val = [find_replace_labels.get(lbl,lbl) for lbl in val]
+            new_cc[ky] = new_val
+    
+    passthrough_names = ['global_fidPairs','pergerm_fidPairsDict','global_fidPairs_lite','pergerm_fidPairsDict_lite']
+    for nm in passthrough_names:
+        if hasattr(std_module,nm):
+            out_module[nm] = getattr(std_module,nm)
+    
+    #Create the new module
+    new_module = _ModuleType(new_module_name)
+    for k,v in out_module.items():
+        setattr(new_module,k,v)
+    _sys.modules[new_module_name] = new_module
+    return new_module
