@@ -24,6 +24,117 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
     """ 
     TODO: docstring
     """
+    def __init__(self, ws, idtresult, threshold=1.0, gs_simulator=None):
+        """
+        TODO: docstring
+        idtresult may be a list or results too? titles?
+
+        threshold may be a float -> fraction of high-rates to display
+          or an integer -> number of high-rates to display
+
+        Returns
+        -------
+        ReportTable
+        """
+        super(IdleTomographyObservedRatesTable,self).__init__(
+            ws, self._create, idtresult, threshold, gs_simulator)
+
+    def _create(self, idtresult, threshold, gs_simulator):
+        colHeadings = ['Observable Rate', 'Relation to intrinsic rates', ]
+
+        # compute rate_threshold, so we know what to display
+        all_obs_rates = []
+        for typ in idtresult.pauli_fidpairs:
+            for dict_of_infos in idtresult.observed_rate_infos[typ]:
+                for info_dict in dict_of_infos.values():
+                    all_obs_rates.append( abs(info_dict['rate']) )
+        all_obs_rates.sort(reverse=True)
+
+        if isinstance(threshold,float):
+            i = int(round(len(all_obs_rates) * threshold))
+        elif isinstance(threshold,int):
+            i = threshold
+        else:
+            raise ValueError("Invalid `threshold` value: %s" % str(threshold))
+
+        if 0 <= i < len(all_obs_rates):
+            rate_threshold = all_obs_rates[i] # only display rates above this value
+        else:
+            rate_threshold = -1e100 #include everything
+
+
+
+        #if typ in ('stochastic','affine') and \
+        #        'stochastic/affine' in idtresult.pauli_fidpairs: 
+        #    typ = 'stochastic/affine' # for intrinsic stochastic and affine types
+        #    if typ == "affine":  # affine columns follow all stochastic columns in jacobian
+        #        intrinsicIndx += len(idtresult.error_list)
+
+
+        #get "specs" tuple for all the observable rates that we'll display
+        obs_rate_specs = []; nBelowThreshold = 0
+        for typ in idtresult.pauli_fidpairs: # keys == "types" of observed rates
+            for fidpair,dict_of_infos in zip(idtresult.pauli_fidpairs[typ],
+                                             idtresult.observed_rate_infos[typ]):
+                for obsORoutcome,info_dict in dict_of_infos.items():
+                    jac_row = info_dict['jacobian row']
+                    if 'affine jacobian row' in info_dict:
+                        jac_row = _np.concatenate( (jac_row,info_dict['affine jacobian row']) )
+                    rate = info_dict['rate']
+                    if abs(rate) > rate_threshold:
+                        obs_rate_specs.append( (typ, fidpair, obsORoutcome, jac_row, rate) )
+                    else: 
+                        nBelowThreshold += 1
+                            
+        #sort obs_rate_specs by rate
+        obs_rate_specs.sort(key=lambda x: x[4], reverse=True)
+
+        errlst = idtresult.error_list # shorthand
+        Ne = len(idtresult.error_list) 
+          # number of intrinsic rates for each type (ham, sto, aff)
+        
+        table = _reporttable.ReportTable(colHeadings, (None,)*len(colHeadings))
+        for typ, fidpair, obsOrOutcome, jac_row, _ in obs_rate_specs:
+            fig = IdleTomographyObservedRatePlot(self.ws, idtresult, typ, 
+                                                 fidpair, obsOrOutcome, title="auto",
+                                                 gs_simulator=gs_simulator)
+            intrinsic_reln = ""
+            for i,el in enumerate(jac_row):
+                if abs(el) > 1e-6:
+                    # get intrinsic name `iname` for i-th element:
+                    if typ == "hamiltonian":
+                        if i < Ne: iname = "H(%s)"%str(errlst[i]).strip()
+                        else: iname = "A(%s)"%str(errlst[i-Ne]).strip()
+                    else: # typ == "stochastic" or "stochastic/affine"
+                        if i < Ne: iname = "S(%s)"%str(errlst[i]).strip()
+                        else: iname = "A(%s)"%str(errlst[i-Ne]).strip()
+                        
+                    if len(intrinsic_reln) == 0:
+                        if el == 1.0: elstr = "" 
+                        elif el == -1.0: elstr = "-"
+                        else: elstr = "%g" % el
+                    else:
+                        elstr = " + " if el >= 0 else " - "
+                        elstr += "" if abs(el) == 1.0 else "%g" % abs(el)
+                    intrinsic_reln += elstr + iname
+            
+            row_data = [fig, intrinsic_reln]
+            row_formatters = ['Figure', None]
+            table.addrow(row_data, row_formatters)
+
+        if nBelowThreshold > 0:
+            table.addrow( ["", "%d observed rates below %g" % (nBelowThreshold,rate_threshold)],
+                          [None, None])
+
+        table.finish()
+        return table
+        
+
+
+class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
+    """ 
+    TODO: docstring
+    """
     def __init__(self, ws, idtresult, typ, errorOp, threshold=1.0,
                  gs_simulator=None):
         """
@@ -37,7 +148,7 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         -------
         ReportTable
         """
-        super(IdleTomographyObservedRatesTable,self).__init__(
+        super(IdleTomographyObservedRatesForIntrinsicRateTable,self).__init__(
             ws, self._create, idtresult, typ, errorOp, threshold,
             gs_simulator)
 
@@ -454,34 +565,48 @@ def _create_switchboard(ws, results_dict):
     else:
         dataset_labels = sorted(list(results_dict.keys()))
 
-    errortype_labels = None
-    errorop_labels = None
-    for results in results_dict.values():
-        errorop_labels = _add_new_labels(errorop_labels, [str(e).strip() for e in results.error_list])
-        errortype_labels   = _add_new_labels(errortype_labels, list(results.intrinsic_rates.keys()))
-    errortype_labels = list(sorted(errortype_labels))
-        
     multidataset = bool(len(dataset_labels) > 1)
-
+    
     switchBd = ws.Switchboard(
-        ["Dataset","ErrorType","ErrorOp"],
-        [dataset_labels,errortype_labels,errorop_labels],
-        ["dropdown","dropdown","dropdown"], [0,0,0],
-        show=[multidataset,False,False] # only show dataset dropdown (for sidebar)
+        ["Dataset"],
+        [dataset_labels],
+        ["dropdown"], [0],
+        show=[multidataset] # only show dataset dropdown (for sidebar)
     )
-
+    
     switchBd.add("results",(0,))
-    switchBd.add("errortype",(1,))
-    switchBd.add("errorop",(2,))
-
     for d,dslbl in enumerate(dataset_labels):
         switchBd.results[d] = results_dict[dslbl]
 
-    for i,etyp in enumerate(errortype_labels):
-        switchBd.errortype[i] = etyp
-
-    for i,eop in enumerate(errorop_labels):
-        switchBd.errorop[i] = eop
+    #OLD TODO REMOVE
+    # errortype_labels = None
+    # errorop_labels = None
+    # for results in results_dict.values():
+    #     errorop_labels = _add_new_labels(errorop_labels, [str(e).strip() for e in results.error_list])
+    #     errortype_labels   = _add_new_labels(errortype_labels, list(results.intrinsic_rates.keys()))
+    # errortype_labels = list(sorted(errortype_labels))
+    #     
+    # multidataset = bool(len(dataset_labels) > 1)
+    #
+    # switchBd = ws.Switchboard(
+    #     ["Dataset","ErrorType","ErrorOp"],
+    #     [dataset_labels,errortype_labels,errorop_labels],
+    #     ["dropdown","dropdown","dropdown"], [0,0,0],
+    #     show=[multidataset,False,False] # only show dataset dropdown (for sidebar)
+    # )
+    # 
+    # switchBd.add("results",(0,))
+    # switchBd.add("errortype",(1,))
+    # switchBd.add("errorop",(2,))
+    # 
+    # for d,dslbl in enumerate(dataset_labels):
+    #     switchBd.results[d] = results_dict[dslbl]
+    # 
+    # for i,etyp in enumerate(errortype_labels):
+    #     switchBd.errortype[i] = etyp
+    # 
+    # for i,eop in enumerate(errorop_labels):
+    #     switchBd.errorop[i] = eop
         
     return switchBd, dataset_labels
 
@@ -560,15 +685,15 @@ def create_idletomography_report(results, filename, title="auto",
     printer.log("*** Generating tables ***")
 
     multidataset = bool(len(dataset_labels) > 1)
-    intErrView = [False,True,True]
+    #REM intErrView = [False,True,True]
 
     if fmt == "html":
         qtys['topSwitchboard'] = switchBd
-        qtys['intrinsicErrSwitchboard'] = switchBd.view(intErrView,"v1")
+        #REM qtys['intrinsicErrSwitchboard'] = switchBd.view(intErrView,"v1")
 
     results = switchBd.results
-    errortype = switchBd.errortype
-    errorop = switchBd.errorop
+    #REM errortype = switchBd.errortype
+    #REM errorop = switchBd.errorop
     A = None # no brevity restriction: always display; for "Summary"- & "Help"-tab figs
 
     #Brevity key:
@@ -576,7 +701,8 @@ def create_idletomography_report(results, filename, title="auto",
 
     addqty(A,'intrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, results)
     addqty(A,'observedRatesTable', ws.IdleTomographyObservedRatesTable, results,
-           errortype, errorop, 20, gs_sim) # HARDCODED - show only top 20 rates
+           20, gs_sim) # HARDCODED - show only top 20 rates
+    # errortype, errorop, 
 
 
     # Generate plots

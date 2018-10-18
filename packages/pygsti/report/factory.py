@@ -439,32 +439,33 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs
 
-def _create_idle_tomography_switchboard(ws, idt_results_dict):
-    
-    errortype_labels = None
-    errorop_labels = None
-    for results in idt_results_dict.values():
-        errorop_labels = _add_new_labels(errorop_labels, [str(e).strip() for e in results.error_list])
-        errortype_labels   = _add_new_labels(errortype_labels, list(results.intrinsic_rates.keys()))
-    errortype_labels = list(sorted(errortype_labels))
-
-    switchBd = ws.Switchboard(
-        ["ErrorType","ErrorOp"],
-        [errortype_labels,errorop_labels],
-        ["dropdown","dropdown"], [0,0],
-        show=[True,True]
-    )
-
-    switchBd.add("errortype",(0,))
-    switchBd.add("errorop",(1,))
-
-    for i,etyp in enumerate(errortype_labels):
-        switchBd.errortype[i] = etyp
-
-    for i,eop in enumerate(errorop_labels):
-        switchBd.errorop[i] = eop
-        
-    return switchBd
+#UNUSED TODO REMOVE
+#def _create_idle_tomography_switchboard(ws, idt_results_dict):
+#    
+#    errortype_labels = None
+#    errorop_labels = None
+#    for results in idt_results_dict.values():
+#        errorop_labels = _add_new_labels(errorop_labels, [str(e).strip() for e in results.error_list])
+#        errortype_labels   = _add_new_labels(errortype_labels, list(results.intrinsic_rates.keys()))
+#    errortype_labels = list(sorted(errortype_labels))
+#
+#    switchBd = ws.Switchboard(
+#        ["ErrorType","ErrorOp"],
+#        [errortype_labels,errorop_labels],
+#        ["dropdown","dropdown"], [0,0],
+#        show=[True,True]
+#    )
+#
+#    switchBd.add("errortype",(0,))
+#    switchBd.add("errorop",(1,))
+#
+#    for i,etyp in enumerate(errortype_labels):
+#        switchBd.errortype[i] = etyp
+#
+#    for i,eop in enumerate(errorop_labels):
+#        switchBd.errorop[i] = eop
+#        
+#    return switchBd
 
 
 def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
@@ -935,11 +936,12 @@ def create_standard_report(results, filename, title="auto",
 
     if len(idt_results_dict) > 0:
         #Plots & tables for idle tomography tab
-        idt_switchBd = _create_idle_tomography_switchboard(ws, idt_results_dict)
-        qtys['idtSwitchboard'] = idt_switchBd
+        #idt_switchBd = _create_idle_tomography_switchboard(ws, idt_results_dict)
+        #qtys['idtSwitchboard'] = idt_switchBd
         addqty(A,'idtIntrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, switchBd.idtresults)
         addqty(3,'idtObservedRatesTable', ws.IdleTomographyObservedRatesTable, switchBd.idtresults,
-               idt_switchBd.errortype, idt_switchBd.errorop, 20, gsGIRep) # HARDCODED - show only top 20 rates
+               20, gsGIRep) # HARDCODED - show only top 20 rates
+        #OLD REMOVE: previous args: idt_switchBd.errortype, idt_switchBd.errorop
 
     #Ls and Germs specific
     gss = switchBd.gss
