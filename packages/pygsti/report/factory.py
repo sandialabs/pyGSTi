@@ -939,7 +939,7 @@ def create_standard_report(results, filename, title="auto",
         qtys['idtSwitchboard'] = idt_switchBd
         addqty(A,'idtIntrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, switchBd.idtresults)
         addqty(3,'idtObservedRatesTable', ws.IdleTomographyObservedRatesTable, switchBd.idtresults,
-               idt_switchBd.errortype, idt_switchBd.errorop)
+               idt_switchBd.errortype, idt_switchBd.errorop, 20, gsGIRep) # HARDCODED - show only top 20 rates
 
     #Ls and Germs specific
     gss = switchBd.gss

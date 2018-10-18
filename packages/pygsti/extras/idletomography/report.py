@@ -8,6 +8,7 @@ import collections as _collections
 
 from ... import _version
 from ...baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ...objects import GateString as _GateString
 from ...report import workspace as _ws
 from ...report import workspaceplots as _wp
 from ...report import table as _reporttable
@@ -19,35 +20,28 @@ from . import pauliobjs as _pobjs
 import plotly.graph_objs as go
 
 
-#HERE - need to create this table of intrinsic values, then
-# - map each intrinsic value to a set of observable rates via jacobians,
-#   maybe as a list of (typ, fidpair, obs/outcome, jac_element) tuples?
-# - create plots for a/each observable rate, i.e., for any such tuple above,
-#   and maybe allow multiple idtresults as input...
-# - create another workspace table that displays all the above such plots
-#   that affect a given intrinsic rate.
-# - report/tab will show intrinsic-rates table and a switchboard that allows the
-#   user to select a given intrinsic rate and displays the corresponding table of
-#   observable rate plots.
-
-
 class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
     """ 
     TODO: docstring
     """
-    def __init__(self, ws, idtresult, typ, errorOp):
+    def __init__(self, ws, idtresult, typ, errorOp, threshold=1.0,
+                 gs_simulator=None):
         """
         TODO: docstring
         idtresult may be a list or results too? titles?
+
+        threshold may be a float -> fraction of high-rates to display
+          or an integer -> number of high-rates to display
 
         Returns
         -------
         ReportTable
         """
         super(IdleTomographyObservedRatesTable,self).__init__(
-            ws, self._create, idtresult, typ, errorOp)
+            ws, self._create, idtresult, typ, errorOp, threshold,
+            gs_simulator)
 
-    def _create(self, idtresult, typ, errorOp):
+    def _create(self, idtresult, typ, errorOp, threshold, gs_simulator):
         colHeadings = ['Jacobian El', 'Observable Rate']
 
         if not isinstance(errorOp, _pobjs.NQPauliOp):
@@ -61,29 +55,59 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
             if typ == "affine":  # affine columns follow all stochastic columns in jacobian
                 intrinsicIndx += len(idtresult.error_list)
 
+        #thresholding:
+        all_obs_rates = []
+        for dict_of_infos in idtresult.observed_rate_infos[typ]:
+            for info_dict in dict_of_infos.values():
+                all_obs_rates.append( abs(info_dict['rate']) )
+        all_obs_rates.sort(reverse=True)
+
+        if isinstance(threshold,float):
+            i = int(round(len(all_obs_rates) * threshold))
+        elif isinstance(threshold,int):
+            i = threshold
+        else:
+            raise ValueError("Invalid `threshold` value: %s" % str(threshold))
+
+        if 0 <= i < len(all_obs_rates):
+            rate_threshold = all_obs_rates[i] # only display rates above this value
+        else:
+            rate_threshold = -1e100 #include everything
+
         #get all the observable rates that contribute to the intrinsic
         # rate specified by `typ` and `errorOp`
-        obs_rate_specs = []
+        obs_rate_specs = []; nBelowThreshold = 0
         #print("DB: err list = ",idtresult.error_list, " LEN=",len(idtresult.error_list))
         #print("DB: Intrinsic index = ",intrinsicIndx)
         for fidpair,dict_of_infos in zip(idtresult.pauli_fidpairs[typ],
                                          idtresult.observed_rate_infos[typ]):
             for obsORoutcome,info_dict in dict_of_infos.items():
                 jac_element = info_dict['jacobian row'][intrinsicIndx]
+                rate = info_dict['rate']
                 if abs(jac_element) > 0:
                     #print("DB: found in Jrow=",info_dict['jacobian row'], " LEN=",len(info_dict['jacobian row']))
                     #print("   (fidpair = ",fidpair[0],fidpair[1]," o=",obsORoutcome)
-                    obs_rate_specs.append( (fidpair, obsORoutcome, jac_element) )
+                    if abs(rate) > rate_threshold:
+                        obs_rate_specs.append( (fidpair, obsORoutcome, jac_element, rate) )
+                    else: 
+                        nBelowThreshold += 1
+                        
 
-        #TODO: sort obs_rate_specs in some sensible way
+        #sort obs_rate_specs by rate
+        obs_rate_specs.sort(key=lambda x: x[3], reverse=True)
         
         table = _reporttable.ReportTable(colHeadings, (None,)*len(colHeadings))
-        for fidpair, obsOrOutcome, jac_element in obs_rate_specs:
+        for fidpair, obsOrOutcome, jac_element, _ in obs_rate_specs:
             fig = IdleTomographyObservedRatePlot(self.ws, idtresult, typ, 
-                                                 fidpair, obsOrOutcome, title="auto")
+                                                 fidpair, obsOrOutcome, title="auto",
+                                                 gs_simulator=gs_simulator)
             row_data = [str(jac_element), fig]
             row_formatters = [None, 'Figure']
             table.addrow(row_data, row_formatters)
+
+        if nBelowThreshold > 0:
+            table.addrow( ["", "%d observed rates below %g" % (nBelowThreshold,rate_threshold)],
+                          [None, None])
 
         table.finish()
         return table
@@ -92,34 +116,26 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
 
 
 class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
-    """ TODO """
+    """ TODO: docstrings!"""
     def __init__(self, ws, idtresult, typ, fidpair, obsORoutcome, title="auto",
-                 scale=1.0):
+                 scale=1.0, gs_simulator=None):
         super(IdleTomographyObservedRatePlot,self).__init__(
             ws, self._create, idtresult, typ, fidpair, obsORoutcome,
-                 title, scale)
+                 title, scale, gs_simulator)
         
     def _create(self, idtresult, typ, fidpair, obsORoutcome,
-                title, scale):
-
-        if title == "auto":
-            title = typ + " fidpair=%s,%s" % (fidpair[0],fidpair[1])
-            if typ == "hamiltonian":
-                title += " observable="+str(obsORoutcome)
-            else:
-                title += " outcome="+str(obsORoutcome)   
-
-        xlabel = "Length"
-        if typ == "hamiltonian": 
-            ylabel =  "Expectation value"
-        else:
-            ylabel = "Outcome probability"
+                title, scale, gs_simulator):
     
         maxLens = idtresult.max_lengths
+        GiStr = _GateString(idtresult.idle_str)
+        prepStr = fidpair[0].to_gatestring(idtresult.prep_basis_strs)
+        measStr = fidpair[1].to_gatestring(idtresult.meas_basis_strs)
+
         ifidpair = idtresult.pauli_fidpairs[typ].index(fidpair)
         info_dict = idtresult.observed_rate_infos[typ][ifidpair][obsORoutcome]
         obs_rate = info_dict['rate']
         data_pts = info_dict['data']
+        errorbars = info_dict['errbars']
         weights = info_dict['weights']
         fitCoeffs = info_dict['fitCoeffs']
         fitOrder = info_dict['fitOrder']
@@ -128,17 +144,84 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
         else:
             predictedRate = None
 
+        if title == "auto":
+            title = "Prep: %s (%s), Meas: %s (%s)" % (str(prepStr),str(fidpair[0]),
+                                                      str(measStr),str(fidpair[1]))
+        xlabel = "Length"
+        if typ == "hamiltonian": 
+            ylabel =  "<" + str(obsORoutcome).strip() + ">" #Expectation value
+        else:
+            ylabel = "Prob(" + str(obsORoutcome).strip() + ")" #Outcome probability
+
+
         traces = []
         x = _np.linspace(maxLens[0],maxLens[-1],50)
 
         traces.append( go.Scatter(
             x=maxLens,
             y=data_pts,
+            error_y=dict(
+                    type='data',
+                    array=errorbars,
+                    visible=True,
+                    color='#000000',
+                    thickness=1,
+                    width=2
+                    ),
             mode="markers",
             marker=dict(
                 color = 'black',
                 size=10),
             name='observed data' ))
+
+        if gs_simulator:
+            gatestrings = [ prepStr + GiStr*L + measStr for L in maxLens ]
+            probs = gs_simulator.bulk_probs(gatestrings)
+            sim_data = []
+            for gstr in gatestrings:
+                ps = probs[gstr]
+
+                #Expectation value - assume weight at most 2 for now
+                if typ == "hamiltonian": 
+                    obs_indices = [ i for i,letter in enumerate(obsORoutcome.rep) if letter != 'I' ]
+                    N = len(obsORoutcome) # number of qubits
+                    minus_sign = _np.prod([fidpair[1].signs[i] for i in obs_indices])
+                    
+                    # <Z> = p0 - p1 (* minus_sign)
+                    if len(obs_indices) == 1: 
+                        i = obs_indices[0] # the qubit we care about
+                        p0 = p1 = 0
+                        for outcome,p in ps.items():
+                            if outcome[0][i] == '0': p0 += p # [0] b/c outcomes are actually 1-tuples 
+                            else: p1 += p
+                        exptn = p0 - p1
+                        
+                    # <ZZ> = p00 - p01 - p10 + p11 (* minus_sign)
+                    elif len(obs_indices) == 2: 
+                        i,j = obs_indices # the qubits we care about
+                        p_even = p_odd = 0
+                        for outcome,p in ps.items():
+                            if outcome[0][i] == outcome[0][j]: p_even += p
+                            else: p_odd += p
+                            exptn = p_even - p_odd
+                    else:
+                        raise NotImplementedError("Expectation values of weight > 2 observables are not implemented!")
+                    val = minus_sign * exptn
+
+                #Outcome probability
+                else: 
+                    outcomeStr = str(obsORoutcome)
+                    val = ps[outcomeStr]
+                sim_data.append( val )
+
+            traces.append( go.Scatter(
+                x=maxLens,
+                y=sim_data,
+                mode="markers",
+                marker=dict(
+                    color='#DD00DD',
+                    size=5),
+                name='simulated' ))
     
         if len(fitCoeffs) == 2: # 1st order fit
             assert(_np.isclose(fitCoeffs[0], obs_rate))
@@ -173,11 +256,12 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
                 y=fit_line,
                 mode="lines",
                 marker=dict(
-                    color = 'rgba(0,0,200,0.8)',
-                    line = dict(
+                    color = 'rgba(0,0,280,0.8)'),
+                line = dict(
                         width = 1,
-                        )),
-                name='o(%d) fit slope' % fitOrder))
+                        dash='dash'),
+                name='o(%d) fit line' % fitOrder,
+                showlegend=False))
     
         if predictedRate is not None:
             traces.append( go.Scatter(
@@ -423,6 +507,7 @@ def create_idletomography_report(results, filename, title="auto",
     connected = advancedOptions.get('connected',False)
     resizable = advancedOptions.get('resizable',True)
     autosize = advancedOptions.get('autosize','initial')
+    gs_sim = advancedOptions.get('simulator',None) # a gateset
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -490,7 +575,8 @@ def create_idletomography_report(results, filename, title="auto",
     # TODO - everything is always displayed for now
 
     addqty(A,'intrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, results)
-    addqty(A,'observedRatesTable', ws.IdleTomographyObservedRatesTable, results, errortype, errorop)
+    addqty(A,'observedRatesTable', ws.IdleTomographyObservedRatesTable, results,
+           errortype, errorop, 20, gs_sim) # HARDCODED - show only top 20 rates
 
 
     # Generate plots

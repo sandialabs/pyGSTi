@@ -87,8 +87,11 @@ class NQPauliState(object):
 
     def __str__(self):
         sgn = {1:'+', -1:'-'}
-        return "State[" + "".join(["%s%s" % (sgn[s],let)
-                                   for s,let in zip(self.signs,self.rep)]) + "]"
+        return "".join(["%s%s" % (sgn[s],let)
+                        for s,let in zip(self.signs,self.rep)])
+
+    def __repr__(self):
+        return "State[" + str(self) + "]"
 
     def __eq__(self, other):
         return (self.rep == other.rep) and (self.signs == other.signs)

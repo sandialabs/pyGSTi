@@ -524,16 +524,18 @@ def get_obs_stochastic_err_rate(dataset, pauli_fidpair, pauliDicts, GiStr, outco
         total = sum(cnts.values())
         f = cnts.get((outcome.rep,),0) / total # (py3 division) NOTE: outcomes are actually 1-tuples 
         fp = (cnts.get((outcome.rep,),0)+1)/ (total+2) # Note: can't == 1
-        wt = _np.sqrt(total) / _np.sqrt(abs(fp*(1.0-fp))) # abs to deal with non-CP data (simulated using termorder:1)
-        return f,wt
+        wt = _np.sqrt(total/abs(fp*(1.0-fp))) # abs to deal with non-CP data (simulated using termorder:1)
+        err = _np.sqrt(abs(f*(1.0-f))/total) # no need to use fp
+        return f,wt,err
 
     #Get data to fit and weights to use in fitting
-    data_to_fit = []; wts = []
+    data_to_fit = []; wts = []; errbars = []
     for L in maxLengths:
         gstr = prepFid + GiStr*L + measFid
-        f,wt = freq_and_weight(gstr, outcome)
+        f,wt,err = freq_and_weight(gstr, outcome)
         data_to_fit.append( f )
         wts.append( wt )
+        errbars.append( err )
         
     #curvefit -> slope
     coeffs = _np.polyfit(maxLengths,data_to_fit,fitOrder,w=wts) # when fitOrder = 1 = line
@@ -551,7 +553,7 @@ def get_obs_stochastic_err_rate(dataset, pauli_fidpair, pauliDicts, GiStr, outco
     #    saved_fits.append( (desc, maxLengths, data_to_fit, coeffs, debug_obs_rate) ) # description, Xs, Ys, fit_coeffs
     #print("FIT (%s,%s) %s: " % (str(prepFid),str(measFid), outcome.rep),maxLengths,data_to_fit," -> slope = ",slope)
     
-    return { 'rate': slope, 'fitOrder': fitOrder, 'fitCoeffs': coeffs, 'data': data_to_fit, 'weights': wts }
+    return { 'rate': slope, 'fitOrder': fitOrder, 'fitCoeffs': coeffs, 'data': data_to_fit, 'errbars': errbars, 'weights': wts }
 
 
 def get_obs_hamiltonian_err_rate(dataset, pauli_fidpair, pauliDicts, GiStr, observable, maxLengths, fitOrder=1):
@@ -599,16 +601,19 @@ def get_obs_hamiltonian_err_rate(dataset, pauli_fidpair, pauliDicts, GiStr, obse
             raise NotImplementedError("Expectation values of weight > 2 observables are not implemented!")
             
         wt =_np.sqrt(total) / _np.sqrt(fp*(1.0-fp))
-        return exptn, wt
+        f = 0.5 + 0.5*exptn
+        err = 2*_np.sqrt(f*(1.0-f) / total) # factor of 2 b/c expectation is addition of 2 terms
+        return exptn, wt, err
     
     
     #Get data to fit and weights to use in fitting
-    data_to_fit = []; wts = []
+    data_to_fit = []; wts = []; errbars = []
     for L in maxLengths:
         gstr = prepFid + GiStr*L + measFid
-        exptn,wt = unsigned_exptn_and_weight(gstr, obs_indices)
+        exptn,wt,err = unsigned_exptn_and_weight(gstr, obs_indices)
         data_to_fit.append( minus_sign * exptn )
         wts.append( wt )
+        errbars.append( err )
         
     #curvefit -> slope 
     coeffs = _np.polyfit(maxLengths,data_to_fit,fitOrder,w=wts) # when fitOrder = 1 = line
@@ -629,7 +634,7 @@ def get_obs_hamiltonian_err_rate(dataset, pauli_fidpair, pauliDicts, GiStr, obse
     #    saved_fits.append( (desc, maxLengths, data_to_fit, coeffs, (-1)**minus_sign_cnt * debug_obs_rate) ) # description Xs, Ys, fit_coeffs
     #print("FIT (%s,%s): " % (str(prepFid),str(measFid)),maxLengths,data_to_fit," -> slope = ",slope, " sign=", minus_sign)
     
-    return { 'rate': slope, 'fitOrder': fitOrder, 'fitCoeffs': coeffs, 'data': data_to_fit, 'weights': wts }
+    return { 'rate': slope, 'fitOrder': fitOrder, 'fitCoeffs': coeffs, 'data': data_to_fit, 'errbars': errbars, 'weights': wts }
 
 
 def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2, GiStr=('Gi',),
@@ -998,7 +1003,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliDicts, maxErrWeight=2,
             if extract_affine:
                 intrinsic_rates['affine'] = all_intrinsic_rates[off:off+len(errors)]
 
-        return _IdleTomographyResults(dataset, maxLengths, maxErrWeight, fitOrder,
+        return _IdleTomographyResults(dataset, maxLengths, maxErrWeight, fitOrder, pauliDicts, GiStr,
                                       errors, intrinsic_rates, pauli_fidpair_dict, observed_rate_infos)
     else: # no results on other ranks...
         return None

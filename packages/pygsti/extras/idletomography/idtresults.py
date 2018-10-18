@@ -3,14 +3,16 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 class IdleTomographyResults(object):
     """ TODO: docstrings! """
-    def __init__(self, dataset, maxLengths, maxErrWeight, fitOrder, 
-                 error_list, intrinsic_rates, pauli_fidpairs,
-                 observed_rate_infos):
+    def __init__(self, dataset, max_lengths, max_error_weight, fit_order, 
+                 pauli_dicts, idle_str, error_list, intrinsic_rates,
+                 pauli_fidpairs, observed_rate_infos):
 
         self.dataset = dataset
-        self.max_lengths = maxLengths
-        self.max_error_weight = maxErrWeight
-        self.fit_order = fitOrder
+        self.max_lengths = max_lengths
+        self.max_error_weight = max_error_weight
+        self.fit_order = fit_order
+        self.prep_basis_strs, self.meas_basis_strs = pauli_dicts
+        self.idle_str = idle_str
         
         # the intrinsic error Paulis, as a list of NQPauliOp objects.  Gives the ordering of 
         #  each value of self.intrinsic_rates
