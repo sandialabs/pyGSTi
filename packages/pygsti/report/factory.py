@@ -439,6 +439,55 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs
 
+def _construct_idtresults(idtIdleGate, idtPauliDicts, gst_results_dict, printer):
+    """ 
+    Constructs a dictionary of idle tomography results, parallel
+    to the GST results in `gst_results_dict`, where possible.
+    """
+    if idtPauliDicts is None: 
+        return {}
+
+    idt_results_dict = {}
+    GiStr = _objs.GateString((idtIdleGate,))
+
+    from ..extras import idletomography as _idt
+    autodict = bool(idtPauliDicts == "auto")
+    for ky,results in gst_results_dict.items():
+
+        if autodict:
+            for est in results.estimates.values():
+                if 'target' in est.gatesets:
+                    idt_target = est.gatesets['target']
+                    break
+            else: continue # can't find any target gatesets
+            idtPauliDicts = _idt.determine_paulidicts(idt_target)
+            if idtPauliDicts is None: 
+                continue # automatic creation failed -> skip
+
+        gss = results.gatestring_structs['final']
+        if GiStr not in gss.germs: continue
+        
+        try: # to get a dimension -> nQubits
+            estLabels = list(results.estimates.keys())
+            estimate0 = results.estimates[estLabels[0]]
+            dim = estimate0.gatesets['target'].dim
+            nQubits = int(round(_np.log2(dim)//2))
+        except:
+            printer.log(" ! Skipping idle tomography on %s dataset (can't get # qubits) !" % ky)
+            continue # skip if we can't get dimension
+
+        maxLengths = gss.Ls
+        plaq = gss.get_plaquette(maxLengths[0], GiStr) # just use "L0" (first maxLength) - all should have same fidpairs
+        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idtPauliDicts, nQubits)
+        idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
+        printer.log(" * Running idle tomography on %s dataset *" % ky)
+        idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idtPauliDicts,
+                                             maxweight=2, #HARDCODED for now (FUTURE)
+                                             advancedOptions=idt_advanced)
+        idt_results_dict[ky] = idtresults
+
+    return idt_results_dict
+
 #UNUSED TODO REMOVE
 #def _create_idle_tomography_switchboard(ws, idt_results_dict):
 #    
@@ -757,46 +806,9 @@ def create_standard_report(results, filename, title="auto",
 
     # Perform idle tomography on datasets if desired (need to do
     #  this before creating main switchboard)
-    idt_results_dict = {}
-    GiStr = _objs.GateString((idtIdleGate,))
-    if idtPauliDicts is not None:        
-        from ..extras import idletomography as _idt
-        autodict = bool(idtPauliDicts == "auto")
-        for ky,results in results_dict.items():
-
-            if autodict:
-                for est in results.estimates.values():
-                    if 'target' in est.gatesets:
-                        idt_target = est.gatesets['target']
-                        break
-                else: continue # can't find any target gatesets
-                idtPauliDicts = _idt.determine_paulidicts(idt_target)
-                if idtPauliDicts is None: 
-                    continue # automatic creation failed -> skip
-
-            gss = results.gatestring_structs['final']
-            if GiStr not in gss.germs: continue
-            
-            try: # to get a dimension -> nQubits
-                estLabels = list(results.estimates.keys())
-                estimate0 = results.estimates[estLabels[0]]
-                dim = estimate0.gatesets['target'].dim
-                nQubits = int(round(_np.log2(dim)//2))
-            except:
-                printer.log(" ! Skipping idle tomography on %s dataset (can't get # qubits) !" % ky)
-                continue # skip if we can't get dimension
-
-            maxLengths = gss.Ls
-            plaq = gss.get_plaquette(maxLengths[0], GiStr) # just use "L0" (first maxLength) - all should have same fidpairs
-            pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idtPauliDicts, nQubits)
-            idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
-            printer.log(" * Running idle tomography on %s dataset *" % ky)
-            idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idtPauliDicts,
-                                                 maxweight=2, #HARDCODED for now (FUTURE)
-                                                 advancedOptions=idt_advanced)
-            idt_results_dict[ky] = idtresults
+    idt_results_dict = _construct_idtresults(idtIdleGate, idtPauliDicts,
+                                             results_dict, printer)
     toggles['IdleTomography'] = bool(len(idt_results_dict) > 0)
-
 
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
@@ -1198,6 +1210,8 @@ def create_nqnoise_report(results, filename, title="auto",
     autosize = advancedOptions.get('autosize','initial')
     combine_robust = advancedOptions.get('combine_robust',True)
     ci_brevity = advancedOptions.get('confidence_interval_brevity',1)
+    idtPauliDicts = advancedOptions.get('idt_basis_dicts','auto')
+    idtIdleGate = advancedOptions.get('idt_idle_gatelabel',_Lbl('Gi'))
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -1251,6 +1265,12 @@ def create_nqnoise_report(results, filename, title="auto",
                ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__)]
     qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
 
+    # Perform idle tomography on datasets if desired (need to do
+    #  this before creating main switchboard)
+    idt_results_dict = _construct_idtresults(idtIdleGate, idtPauliDicts,
+                                             results_dict, printer)
+    toggles['IdleTomography'] = bool(len(idt_results_dict) > 0)
+
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
 
@@ -1258,7 +1278,7 @@ def create_nqnoise_report(results, filename, title="auto",
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
             _create_master_switchboard(ws, results_dict, confidenceLevel,
                                        nmthreshold, printer, fmt,
-                                       combine_robust)
+                                       combine_robust, idt_results_dict)
     if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 or
                          len(gauge_opt_labels) > 1 or len(swLs) > 1):
         raise ValueError("PDF reports can only show a *single* dataset," +
@@ -1382,6 +1402,12 @@ def create_nqnoise_report(results, filename, title="auto",
     #X     addqty(4,'singleMetricTable_gi', ws.GatesSingleMetricTable, gimetric_switchBd.metric,
     #X            switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, None,
     #X            gimetric_switchBd.cmpTableTitle, confidenceRegionInfo=None)
+
+    if len(idt_results_dict) > 0:
+        #Plots & tables for idle tomography tab
+        addqty(A,'idtIntrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, switchBd.idtresults)
+        addqty(3,'idtObservedRatesTable', ws.IdleTomographyObservedRatesTable, switchBd.idtresults,
+               20, gsGIRep) # HARDCODED - show only top 20 rates
 
     #Ls and Germs specific
     gss = switchBd.gss
