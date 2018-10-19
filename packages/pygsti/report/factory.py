@@ -792,7 +792,7 @@ def create_standard_report(results, filename, title="auto",
             idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
             printer.log(" * Running idle tomography on %s dataset *" % ky)
             idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idtPauliDicts,
-                                                 maxErrWeight=2, #HARDCODED for now (FUTURE)
+                                                 maxweight=2, #HARDCODED for now (FUTURE)
                                                  advancedOptions=idt_advanced)
             idt_results_dict[ky] = idtresults
     toggles['IdleTomography'] = bool(len(idt_results_dict) > 0)

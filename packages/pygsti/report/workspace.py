@@ -340,6 +340,7 @@ class Workspace(object):
         self.IdleTomographyIntrinsicErrorsTable = makefactory(_idt.IdleTomographyIntrinsicErrorsTable)
         self.IdleTomographyObservedRatePlot = makefactory(_idt.IdleTomographyObservedRatePlot)
         self.IdleTomographyObservedRatesTable = makefactory(_idt.IdleTomographyObservedRatesTable)
+        self.IdleTomographyObservedRatesForIntrinsicRateTable = makefactory(_idt.IdleTomographyObservedRatesForIntrinsicRateTable)
 
         
     def init_notebook_mode(self, connected=False, autodisplay=False):

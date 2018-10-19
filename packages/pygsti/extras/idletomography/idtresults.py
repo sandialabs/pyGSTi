@@ -2,10 +2,62 @@
 from __future__ import division, print_function, absolute_import, unicode_literals
 
 class IdleTomographyResults(object):
-    """ TODO: docstrings! """
+    """ 
+    A container for idle tomography results:  intrinsic and observable errors,
+    along with supporting information.
+    """
     def __init__(self, dataset, max_lengths, max_error_weight, fit_order, 
                  pauli_dicts, idle_str, error_list, intrinsic_rates,
                  pauli_fidpairs, observed_rate_infos):
+        """
+        Create a IdleTomographyResults object.
+
+        Parameters
+        ----------
+        dataset : DataSet
+            The dataset that was analyzed, containing the observed counts.
+
+        max_lengths : list
+            The series of maximum lengths used.
+
+        max_error_weight : int
+            The maximum error weight.
+            
+        fit_order : int
+            The order of the polynomial fits used.
+            
+        pauli_dicts : tuple
+            A 2-tuple of `(prepDict,measDict)` Pauli basis dictionaries.
+
+        idle_str : GateString
+            The idle operation that was characterized.
+
+        error_list : list
+            A list of :class:`NQPauliOp` objects describing the errors
+            Paulis considered for each intrinsic-error type.
+            
+        intrinsic_rates : dict
+            A dictionary of the intrinsic rates.  Keys are intrinsic-rate-types,
+            i.e. 'hamiltonian', 'stochastic', or 'affine'.  Values are numpy
+            arrays of length `len(error_list)`.
+
+        pauli_fidpairs : dict
+            A dictionary of the pauli-state fiducial pairs.  Keys are
+            observed-rate-types, i.e. 'samebasis' or 'diffbasis', and 
+            values are lists of `(prep,meas)` 2-tuples of
+            :class:`NQPauliState` objects. 
+            
+        observed_rate_infos : dict
+            A dictionary of observed-rate information dictionaries.  Keys are
+            observed-rate-types, i.e. 'samebasis' or 'diffbasis', and 
+            values are further dictionaries indexed by fiducial pair (i.e. an
+            element of `pauli_fidpairs`, then either a :class:`NQOutcome` (for 
+            the "samebasis" case) or :class:`NQPauliOp` (for "diffbasis") case.
+            After these two indexes, the value is *another* dictionary of
+            information about the observeable rate so defined.  So, to get to
+            an actual "info dict" you need to do something like:
+            `observed_rate_infos[typ][fidpair][obsORoutcome]`
+        """
 
         self.dataset = dataset
         self.max_lengths = max_lengths
@@ -65,6 +117,3 @@ class IdleTomographyResults(object):
             s += "\n"
 
         return s
-
-    def plot_observable_rate(self, typ, fidpair):
-        pass

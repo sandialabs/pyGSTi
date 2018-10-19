@@ -22,30 +22,42 @@ import plotly.graph_objs as go
 
 class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
     """ 
-    TODO: docstring
+    A table of the largest N (in absolute value) observed error rates.
     """
-    def __init__(self, ws, idtresult, threshold=1.0, gs_simulator=None):
+    def __init__(self, ws, idtresults, threshold=1.0, gs_simulator=None):
         """
-        TODO: docstring
-        idtresult may be a list or results too? titles?
+        Create a IdleTomographyObservedRatesTable object.
 
-        threshold may be a float -> fraction of high-rates to display
-          or an integer -> number of high-rates to display
+        Parameters
+        ----------
+        idtresults : IdleTomographyResults
+            The idle tomography results object from which to extract
+            observed-rate data.
+
+        threshold : int or float
+            Specifies how many observed error rates to display.
+            If an integer, display the top `threshold` rates.
+            If a float, display the top `threshold` fraction of all the rates
+            (e.g. 0.2 will show the to 20%).
+            
+        gs_simulator : GateSet, optional
+            If not None, use this GateSet to simulate the observed data
+            points and plot these simulated values alongside the data.
 
         Returns
         -------
         ReportTable
         """
         super(IdleTomographyObservedRatesTable,self).__init__(
-            ws, self._create, idtresult, threshold, gs_simulator)
+            ws, self._create, idtresults, threshold, gs_simulator)
 
-    def _create(self, idtresult, threshold, gs_simulator):
+    def _create(self, idtresults, threshold, gs_simulator):
         colHeadings = ['Observable Rate', 'Relation to intrinsic rates', ]
 
         # compute rate_threshold, so we know what to display
         all_obs_rates = []
-        for typ in idtresult.pauli_fidpairs:
-            for dict_of_infos in idtresult.observed_rate_infos[typ]:
+        for typ in idtresults.pauli_fidpairs:
+            for dict_of_infos in idtresults.observed_rate_infos[typ]:
                 for info_dict in dict_of_infos.values():
                     all_obs_rates.append( abs(info_dict['rate']) )
         all_obs_rates.sort(reverse=True)
@@ -65,17 +77,17 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
 
 
         #if typ in ('stochastic','affine') and \
-        #        'stochastic/affine' in idtresult.pauli_fidpairs: 
+        #        'stochastic/affine' in idtresults.pauli_fidpairs: 
         #    typ = 'stochastic/affine' # for intrinsic stochastic and affine types
         #    if typ == "affine":  # affine columns follow all stochastic columns in jacobian
-        #        intrinsicIndx += len(idtresult.error_list)
+        #        intrinsicIndx += len(idtresults.error_list)
 
 
         #get "specs" tuple for all the observable rates that we'll display
         obs_rate_specs = []; nBelowThreshold = 0
-        for typ in idtresult.pauli_fidpairs: # keys == "types" of observed rates
-            for fidpair,dict_of_infos in zip(idtresult.pauli_fidpairs[typ],
-                                             idtresult.observed_rate_infos[typ]):
+        for typ in idtresults.pauli_fidpairs: # keys == "types" of observed rates
+            for fidpair,dict_of_infos in zip(idtresults.pauli_fidpairs[typ],
+                                             idtresults.observed_rate_infos[typ]):
                 for obsORoutcome,info_dict in dict_of_infos.items():
                     jac_row = info_dict['jacobian row']
                     if 'affine jacobian row' in info_dict:
@@ -89,13 +101,13 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         #sort obs_rate_specs by rate
         obs_rate_specs.sort(key=lambda x: x[4], reverse=True)
 
-        errlst = idtresult.error_list # shorthand
-        Ne = len(idtresult.error_list) 
+        errlst = idtresults.error_list # shorthand
+        Ne = len(idtresults.error_list) 
           # number of intrinsic rates for each type (ham, sto, aff)
         
         table = _reporttable.ReportTable(colHeadings, (None,)*len(colHeadings))
         for typ, fidpair, obsOrOutcome, jac_row, _ in obs_rate_specs:
-            fig = IdleTomographyObservedRatePlot(self.ws, idtresult, typ, 
+            fig = IdleTomographyObservedRatePlot(self.ws, idtresults, typ, 
                                                  fidpair, obsOrOutcome, title="auto",
                                                  gs_simulator=gs_simulator)
             intrinsic_reln = ""
@@ -133,42 +145,65 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
 
 class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
     """ 
-    TODO: docstring
+    A table showing the observed error rates relevant for determining a
+    particular intrinsic rate.  Output can be limited to just the largest
+    observed rates.
     """
-    def __init__(self, ws, idtresult, typ, errorOp, threshold=1.0,
+    def __init__(self, ws, idtresults, typ, errorOp, threshold=1.0,
                  gs_simulator=None):
         """
-        TODO: docstring
-        idtresult may be a list or results too? titles?
+        Create a IdleTomographyObservedRatesForIntrinsicRateTable.
 
-        threshold may be a float -> fraction of high-rates to display
-          or an integer -> number of high-rates to display
+        Parameters
+        ----------
+        idtresults : IdleTomographyResults
+            The idle tomography results object from which to extract
+            observed-rate data.
+
+        typ : {"hamiltonian", "stochastic", "affine"}
+            The type of the intrinsic rate to target.
+
+        errorOp : NQPauliOp
+            The intrinsic error (of the given `typ`), specified as
+            a N-qubit Pauli operator.
+
+        threshold : int or float
+            Specifies how many observed error rates to consider.
+            If an integer, display the top `threshold` rates of *all* the
+            observed rates.  For example, if `threshold=10` and none of the
+            top 10 rates are applicable to the given `typ`,`errorOp` error,
+            then nothing is displayed.  If a float, display the top `threshold`
+            fraction, again of *all* the rates (e.g. 0.2 means the top 20%).
+            
+        gs_simulator : GateSet, optional
+            If not None, use this GateSet to simulate the observed data
+            points and plot these simulated values alongside the data.
 
         Returns
         -------
         ReportTable
         """
         super(IdleTomographyObservedRatesForIntrinsicRateTable,self).__init__(
-            ws, self._create, idtresult, typ, errorOp, threshold,
+            ws, self._create, idtresults, typ, errorOp, threshold,
             gs_simulator)
 
-    def _create(self, idtresult, typ, errorOp, threshold, gs_simulator):
+    def _create(self, idtresults, typ, errorOp, threshold, gs_simulator):
         colHeadings = ['Jacobian El', 'Observable Rate']
 
         if not isinstance(errorOp, _pobjs.NQPauliOp):
             errorOp = _pobjs.NQPauliOp(errorOp) # try to init w/whatever we've been given
 
-        intrinsicIndx = idtresult.error_list.index(errorOp)
+        intrinsicIndx = idtresults.error_list.index(errorOp)
 
         if typ in ('stochastic','affine') and \
-                'stochastic/affine' in idtresult.pauli_fidpairs: 
+                'stochastic/affine' in idtresults.pauli_fidpairs: 
             typ = 'stochastic/affine' # for intrinsic stochastic and affine types
             if typ == "affine":  # affine columns follow all stochastic columns in jacobian
-                intrinsicIndx += len(idtresult.error_list)
+                intrinsicIndx += len(idtresults.error_list)
 
         #thresholding:
         all_obs_rates = []
-        for dict_of_infos in idtresult.observed_rate_infos[typ]:
+        for dict_of_infos in idtresults.observed_rate_infos[typ]:
             for info_dict in dict_of_infos.values():
                 all_obs_rates.append( abs(info_dict['rate']) )
         all_obs_rates.sort(reverse=True)
@@ -188,10 +223,10 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
         #get all the observable rates that contribute to the intrinsic
         # rate specified by `typ` and `errorOp`
         obs_rate_specs = []; nBelowThreshold = 0
-        #print("DB: err list = ",idtresult.error_list, " LEN=",len(idtresult.error_list))
+        #print("DB: err list = ",idtresults.error_list, " LEN=",len(idtresults.error_list))
         #print("DB: Intrinsic index = ",intrinsicIndx)
-        for fidpair,dict_of_infos in zip(idtresult.pauli_fidpairs[typ],
-                                         idtresult.observed_rate_infos[typ]):
+        for fidpair,dict_of_infos in zip(idtresults.pauli_fidpairs[typ],
+                                         idtresults.observed_rate_infos[typ]):
             for obsORoutcome,info_dict in dict_of_infos.items():
                 jac_element = info_dict['jacobian row'][intrinsicIndx]
                 rate = info_dict['rate']
@@ -209,7 +244,7 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
         
         table = _reporttable.ReportTable(colHeadings, (None,)*len(colHeadings))
         for fidpair, obsOrOutcome, jac_element, _ in obs_rate_specs:
-            fig = IdleTomographyObservedRatePlot(self.ws, idtresult, typ, 
+            fig = IdleTomographyObservedRatePlot(self.ws, idtresults, typ, 
                                                  fidpair, obsOrOutcome, title="auto",
                                                  gs_simulator=gs_simulator)
             row_data = [str(jac_element), fig]
@@ -227,31 +262,68 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
 
 
 class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
-    """ TODO: docstrings!"""
-    def __init__(self, ws, idtresult, typ, fidpair, obsORoutcome, title="auto",
+    """
+    A plot showing how an observed error rate is obtained by fitting a sequence
+    of observed data to a simple polynomial.
+    """
+    def __init__(self, ws, idtresults, typ, fidpair, obsORoutcome, title="auto",
                  scale=1.0, gs_simulator=None):
+        """
+        Create a IdleTomographyObservedRatePlot.
+
+        Parameters
+        ----------
+        idtresults : IdleTomographyResults
+            The idle tomography results object from which to extract
+            observed-rate data.
+
+        typ : {"samebasis","diffbasis"}
+            The type of observed-rate: same-basis or definite-outcome rates
+            prepare and measure in the same Pauli basis.  Other rates prepare
+            and measure in different bases, and so have non-definite-outcomes.
+
+        fidpair : tuple
+            A `(prep,measure)` 2-tuple of :class:`NQPauliState` objects specifying
+            the fiducial pair (a constant) for the data used to obtain the 
+            observed rate being plotted.
+            
+        obsORoutcome : NQPauliOp or NQOutcome
+            The observable (if `typ` == "diffbasis") or outcome (if `typ`
+            == "samebasis") identifying the observed rate to plot.
+
+        title : str, optional
+            The plot title to use.  If `"auto"`, then one is created based on
+            the parameters.
+
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
+
+        gs_simulator : GateSet, optional
+            If not None, use this GateSet to simulate the observed data
+            points and plot these simulated values alongside the data.
+        """
         super(IdleTomographyObservedRatePlot,self).__init__(
-            ws, self._create, idtresult, typ, fidpair, obsORoutcome,
+            ws, self._create, idtresults, typ, fidpair, obsORoutcome,
                  title, scale, gs_simulator)
         
-    def _create(self, idtresult, typ, fidpair, obsORoutcome,
+    def _create(self, idtresults, typ, fidpair, obsORoutcome,
                 title, scale, gs_simulator):
     
-        maxLens = idtresult.max_lengths
-        GiStr = _GateString(idtresult.idle_str)
-        prepStr = fidpair[0].to_gatestring(idtresult.prep_basis_strs)
-        measStr = fidpair[1].to_gatestring(idtresult.meas_basis_strs)
+        maxLens = idtresults.max_lengths
+        GiStr = _GateString(idtresults.idle_str)
+        prepStr = fidpair[0].to_gatestring(idtresults.prep_basis_strs)
+        measStr = fidpair[1].to_gatestring(idtresults.meas_basis_strs)
 
-        ifidpair = idtresult.pauli_fidpairs[typ].index(fidpair)
-        info_dict = idtresult.observed_rate_infos[typ][ifidpair][obsORoutcome]
+        ifidpair = idtresults.pauli_fidpairs[typ].index(fidpair)
+        info_dict = idtresults.observed_rate_infos[typ][ifidpair][obsORoutcome]
         obs_rate = info_dict['rate']
         data_pts = info_dict['data']
         errorbars = info_dict['errbars']
         weights = info_dict['weights']
         fitCoeffs = info_dict['fitCoeffs']
         fitOrder = info_dict['fitOrder']
-        if idtresult.predicted_obs_rates is not None:
-            predictedRate = idtresult.predicted_obs_rates[typ][fidpair][obsORoutcome]
+        if idtresults.predicted_obs_rates is not None:
+            predictedRate = idtresults.predicted_obs_rates[typ][fidpair][obsORoutcome]
         else:
             predictedRate = None
 
@@ -259,7 +331,7 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
             title = "Prep: %s (%s), Meas: %s (%s)" % (str(prepStr),str(fidpair[0]),
                                                       str(measStr),str(fidpair[1]))
         xlabel = "Length"
-        if typ == "hamiltonian": 
+        if typ == "diffbasis": 
             ylabel =  "<" + str(obsORoutcome).strip() + ">" #Expectation value
         else:
             ylabel = "Prob(" + str(obsORoutcome).strip() + ")" #Outcome probability
@@ -293,7 +365,7 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
                 ps = probs[gstr]
 
                 #Expectation value - assume weight at most 2 for now
-                if typ == "hamiltonian": 
+                if typ == "diffbasis": 
                     obs_indices = [ i for i,letter in enumerate(obsORoutcome.rep) if letter != 'I' ]
                     N = len(obsORoutcome) # number of qubits
                     minus_sign = _np.prod([fidpair[1].signs[i] for i in obs_indices])
@@ -408,14 +480,30 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
 
 class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
     """ 
-    TODO: docstring
+    A table of all the intrinsic rates found by idle tomography.
     """
 
     def __init__(self, ws, idtresults, 
                  display=("H","S","A"), display_as="boxes"):
         """
-        TODO: docstring
-        idtresults may be a list or results too? titles?
+        Create a IdleTomographyIntrinsicErrorsTable.
+
+        Parameters
+        ----------
+        idtresults : IdleTomographyResults
+            The idle tomography results object from which to extract
+            observed-rate data.
+
+        display : tuple of {"H","S","A"}
+            Specifes which columns to include: the intrinsic Hamiltonian,
+            Stochastic, and/or Affine errors.  Note that if an error type
+            is not included in `idtresults` it's column will not be displayed
+            regardless of the value of `display`.
+
+        display_as : {"numbers", "boxes"}, optional
+            How to display the matrices, as either numerical
+            grids (fine for small matrices) or as a plot of colored
+            boxes (space-conserving and better for large matrices).
 
         Returns
         -------
@@ -443,8 +531,9 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
         assert(display_as == "boxes" or display_as == "numbers")
         table = _reporttable.ReportTable(colHeadings, (None,)*len(colHeadings))
 
-        #Process list of intrinsic rates, binning into rates for different sets of qubits
+        
         def process_rates(typ):
+            """Process list of intrinsic rates, binning into rates for different sets of qubits"""
             rates = _collections.defaultdict(dict)
             for err, value in zip(idtresults.error_list,
                                   idtresults.intrinsic_rates[typ]):
@@ -616,8 +705,80 @@ def create_idletomography_report(results, filename, title="auto",
                                  ws=None, auto_open=False, link_to=None,
                                  brevity=0, advancedOptions=None, verbosity=1):
     """
-    TODO: docstring 
+    Creates an Idle Tomography report, summarizing the results of running
+    idle tomography on a data set.
 
+    Parameters
+    ----------
+    results : IdleTomographyResults
+        An object which represents the set of results from an idle tomography
+        run, typically obtained from running :func:`do_idle_tomography` OR a
+        dictionary of such objects, representing multiple idle tomography runs
+        to be compared (typically all with *different* data sets). The keys of
+        this dictionary are used to label different data sets that are
+        selectable in the report.
+
+    filename : string, optional
+       The output filename where the report file(s) will be saved.  If
+       None, then no output file is produced (but returned Workspace
+       still caches all intermediate results).
+
+    title : string, optional
+       The title of the report.  "auto" causes a random title to be
+       generated (which you may or may not like).
+
+    ws : Workspace, optional
+        The workspace used as a scratch space for performing the calculations
+        and visualizations required for this report.  If you're creating
+        multiple reports with similar tables, plots, etc., it may boost
+        performance to use a single Workspace for all the report generation.
+
+    auto_open : bool, optional
+        If True, automatically open the report in a web browser after it
+        has been generated.
+
+    link_to : list, optional
+        If not None, a list of one or more items from the set
+        {"tex", "pdf", "pkl"} indicating whether or not to
+        create and include links to Latex, PDF, and Python pickle
+        files, respectively.  "tex" creates latex source files for
+        tables; "pdf" renders PDFs of tables and plots ; "pkl" creates
+        Python versions of plots (pickled python data) and tables (pickled
+        pandas DataFrams).
+
+    advancedOptions : dict, optional
+        A dictionary of advanced options for which the default values aer usually
+        are fine.  Here are the possible keys of `advancedOptions`:
+
+        - connected : bool, optional
+            Whether output HTML should assume an active internet connection.  If
+            True, then the resulting HTML file size will be reduced because it
+            will link to web resources (e.g. CDN libraries) instead of embedding
+            them.
+
+        - cachefile : str, optional
+            filename with cached workspace results
+
+        - precision : int or dict, optional
+            The amount of precision to display.  A dictionary with keys
+            "polar", "sci", and "normal" can separately specify the
+            precision for complex angles, numbers in scientific notation, and
+            everything else, respectively.  If an integer is given, it this
+            same value is taken for all precision types.  If None, then
+            `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
+
+        - resizable : bool, optional
+            Whether plots and tables are made with resize handles and can be
+            resized within the report.
+
+        - autosize : {'none', 'initial', 'continual'}
+            Whether tables and plots should be resized, either initially --
+            i.e. just upon first rendering (`"initial"`) -- or whenever
+            the browser window is resized (`"continual"`).
+
+    verbosity : int, optional
+       How much detail to send to stdout.
+        
     Returns
     -------
     Workspace

@@ -17,7 +17,16 @@ def alloutcomes(prep, meas, maxweight):
     up to `maxweight` when performing prep & meas (must be in same basis, but may 
     have different signs).
 
+    Parameters
+    ----------
     prep, meas : NQPauliState
+
+    maxweight : int
+
+    Returns
+    -------
+    list
+        A list of :class:`NQOutcome` objects.
     """
     if not (0 < maxweight <= 2): raise NotImplementedError("Only maxweight <= 2 is currently supported")
     assert(prep.rep == meas.rep), "`prep` and `meas` must specify the same basis!"
@@ -34,7 +43,18 @@ def alloutcomes(prep, meas, maxweight):
 
 
 def allerrors(N, maxweight):
-    """ lists every Pauli error for N qubits with weight <= `maxweight` """
+    """
+    Lists every Pauli error operator for `N` qubits with weight <= `maxweight`
+
+    Parameters
+    ----------
+    N, maxweight : int
+
+    Returns
+    -------
+    list
+        A list of :class:`NQPauliOp` objects.
+    """
     if not (0 < maxweight <= 2): raise NotImplementedError("Only maxweigth <= 2 is currently supported")
     if maxweight == 1:
         return [_pobjs.NQPauliOp.Weight1Pauli(N,loc,p) for loc in range(N) for p in range(3)]
@@ -44,12 +64,21 @@ def allerrors(N, maxweight):
                 for loc2 in range(loc1+1,N)
                 for p1 in range(3) for p2 in range(3)]
 
-def allobservables( meas, maxweight ):
+def allobservables(meas, maxweight):
     """
     Lists every weight <= `maxweight` observable whose expectation value can be
-    extracted from the local Pauli measurement described by "Meas".
+    extracted from the local Pauli measurement described by `meas`.
 
-    Meas: NQPauliState (*not* precisely an N-qubit Pauli -- a list of 1-qubit Paulis, technically)
+    Parameters
+    ----------
+    meas : NQPauliState
+
+    maxweight : int
+    
+    Returns
+    -------
+    list
+        A list of :class:`NQPauliOp` objects.
     """
     if not (0 < maxweight <= 2): raise NotImplementedError("Only maxweight <= 2 is currently supported")
     #Note: returned observables always have '+' sign (i.e. .sign == +1).  We're
@@ -64,8 +93,29 @@ def allobservables( meas, maxweight ):
 
 def tile_pauli_fidpairs(base_fidpairs, nQubits, maxweight):
     """ 
-    TODO: docstring - note els of "base_fidpairs" are 2-tuples of NQPauliState
-    objects of maxweight qubits, so sign of basis is included too.
+    Tiles a set of base fiducial pairs on `maxweight` qubits to a
+    set of fiducial pairs on `nQubits` qubits such that every set
+    of `maxweight` qubits takes on the values in each base pair in
+    at least one of the returned pairs.
+
+    Parameters
+    ----------
+    base_fidpairs : list
+        A list of 2-tuples of :class:`NQPauliState` objects (on `maxweight`
+        qubits).
+
+    nQubits : int
+        The number of qubits.
+
+    maxweight : int
+        The maximum weight errors the base qubits are meant to
+        detect.  Equal to the number of qubits in the base pairs.
+
+    Returns
+    -------
+    list
+        A list of 2-tuples of :class:`NQPauliState` objects (on `nQubits`
+        qubits).
     """
     nqubit_fidpairs = []
     tmpl = _nqn.get_kcoverage_template(nQubits, maxweight)
@@ -88,16 +138,59 @@ def tile_pauli_fidpairs(base_fidpairs, nQubits, maxweight):
 # ----------------------------------------------------------------------------
 
 def nontrivial_paulis(wt): 
-    "List all nontrivial paulis of given weight `wt` as tuples of letters"
+    """
+    List all nontrivial paulis of given weight `wt`.
+
+    Parameters
+    ----------
+    wt : int
+
+    Returns
+    -------
+    list
+        A list of tuples of 'X', 'Y', and 'Z', e.g. `('X','Z')`.
+    """
     ret = []
     for tup in _itertools.product( *([['X','Y','Z']]*wt) ):
         ret.append( tup )
     return ret
 
-def set_Gi_errors(nQubits, gateset, errdict, rand_default=None, hamiltonian=True, stochastic=True, affine=True):
+def set_Gi_errors(nQubits, gateset, errdict, rand_default=None,
+                  hamiltonian=True, stochastic=True, affine=True):
     """ 
-    For setting specific or random error terms (for a data-generating gateset)
+    Set specific or random error terms (typically for a data-generating gateset)
     within a `gateset` created by `build_nqnoise_gateset`.
+
+    Parameters
+    ----------
+    nQubits : int
+        The number of qubits.
+
+    gateset : GateSet
+        The gate set, created by `build_nqnoise_gateset`, to set the "Gi"-gate
+        errors of.
+        
+    errdict : dict
+        A dictionary of errors to include.  Keys are `"S(<>)"`, `"H(<>)"`, and
+        `"A(<>)"` where <> is a string of 'X','Y','Z',and 'I' (e.g. `"S(XIZ)"`)
+        and values are floating point error rates.
+
+    rand_default : float or numpy array, optional
+        Random error rates to insert into values not specified in `errdict`.
+        If a floating point number, a random value between 0 and `rand_default`
+        is used.  If an array, then values are taken directly and sequentially 
+        from this array (typically of random rates).  The array must be long
+        enough to provide values for all unspecified rates.
+
+    hamiltonian, stochastic, affine : bool, optional
+        Whether `gateset` includes Hamiltonian, Stochastic, and/or Affine
+        errors (e.g. if the gate set was built with "H+S" parameterization,
+        then only `hamiltonian` and `stochastic` should be set to True).
+
+    Returns
+    -------
+    numpy.ndarray
+        The random rates the were used.
     """
     rand_rates = []; i_rand_default = 0
     v = gateset.to_vector()
@@ -158,9 +251,36 @@ def set_Gi_errors(nQubits, gateset, errdict, rand_default=None, hamiltonian=True
     return _np.array(rand_rates,'d') # the random rates that were chosen (to keep track of them for later)
 
 
-def predicted_intrinsic_rates(nQubits, maxErrWeight, gateset, hamiltonian=True, stochastic=True, affine=True):
-    #Get rates Compare datagen to idle tomography results
-    error_labels = [str(pauliOp.rep) for pauliOp in allerrors(nQubits, maxErrWeight)]
+def predicted_intrinsic_rates(nQubits, maxweight, gateset,
+                              hamiltonian=True, stochastic=True, affine=True):
+    """
+    Get the exact intrinsic rates that would be produced by simulating `gateset`
+    (for comparison with idle tomography results).
+
+    Parameters
+    ----------
+    nQubits : int
+        The number of qubits.
+
+    maxweight : int, optional
+        The maximum weight of errors to consider.
+
+    gateset : GateSet
+        The gate set, created by `build_nqnoise_gateset`, to extract intrinsic
+        error rates from.
+
+    hamiltonian, stochastic, affine : bool, optional
+        Whether `gateset` includes Hamiltonian, Stochastic, and/or Affine
+        errors (e.g. if the gate set was built with "H+S" parameterization,
+        then only `hamiltonian` and `stochastic` should be set to True).
+
+    Returns
+    -------
+    ham_intrinsic_rates, sto_intrinsic_rates, aff_intrinsic_rates : numpy.ndarray
+        Arrays of intrinsic rates.  None if corresponding `hamiltonian`, 
+        `stochastic` or `affine` is set to False.
+    """
+    error_labels = [str(pauliOp.rep) for pauliOp in allerrors(nQubits, maxweight)]
     v = gateset.to_vector()
     
     if hamiltonian:
@@ -222,34 +342,62 @@ def predicted_intrinsic_rates(nQubits, maxErrWeight, gateset, hamiltonian=True, 
     return ham_intrinsic_rates, sto_intrinsic_rates, aff_intrinsic_rates
 
 
-def predicted_observable_rates(idtresults, typ, nQubits, maxErrWeight, gateset):
+def predicted_observable_rates(idtresults, typ, nQubits, maxweight, gateset):
     """
-    TODO: docstring - returns a dict of form: rate = ret[pauli_fidpair][obsORoutcome]
-    """
-    #Get intrinsic rates
-    hamiltonian = stochastic = affine = False
-    if typ == "hamiltonian": hamiltonian = True
-    if typ == "stochastic" or "stochastic/affine": stochastic = True
-    if typ == "affine" or "stochastic/affine": affine = True
-    ham_intrinsic_rates, sto_intrinsic_rates, aff_intrinsic_rates = \
-        predicted_intrinsic_rates(nQubits, maxErrWeight, gateset, hamiltonian, stochastic, affine)
+    Get the exact observable rates that would be produced by simulating
+    `gateset` (for comparison with idle tomography results).
 
+    Parameters
+    ----------
+    idtresults : IdleTomographyResults
+        The idle tomography results object used to determing which observable
+        rates should be computed, and the provider of the Jacobian relating
+        the intrinsic rates internal to `gateset` to these observable rates.
+
+    typ : {"samebasis","diffbasis"}
+        The type of observable rates to predict and return.
+
+    nQubits : int
+        The number of qubits.
+
+    maxweight : int
+        The maximum weight of errors to consider.
+
+    gateset : GateSet
+        The gate set, created by `build_nqnoise_gateset`, to extract
+        error rates from.
+
+    Returns
+    -------
+    rates : dict
+        A dictionary of the form: `rate = rates[pauli_fidpair][obsORoutcome]`,
+        to match the structure of an IdleTomographyResults object's 
+        `
+    """
+    intrinsic = None
     ret = {}
-    if typ in ("stochastic","stochastic/affine"):
 
-        intrinsic = _np.concatenate([sto_intrinsic_rates,aff_intrinsic_rates]) \
-            if typ == "stochastic/affine" else sto_intrinsic_rates
-        
+    if typ == "samebasis":
+
+        Ne = len(idtresults.error_list)        
         for fidpair, dict_of_infos in zip(idtresults.pauli_fidpairs[typ],
                                        idtresults.observed_rate_infos[typ]):
             ret[fidpair] = {}
             for obsORoutcome,info_dict in dict_of_infos.items():
                 #Get jacobian row and compute predicted observed rate
                 Jrow = info_dict['jacobian row']
+
+                if intrinsic is None: 
+                    # compute intrinsic (wait for jac row to check length)
+                    affine = bool(len(Jrow) == 2*Ne) # affine included?
+                    _, sto_intrinsic_rates, aff_intrinsic_rates = \
+                        predicted_intrinsic_rates(nQubits, maxweight, gateset, False, True, affine)
+                    intrinsic = _np.concatenate([sto_intrinsic_rates,aff_intrinsic_rates]) \
+                     
                 predicted_rate = _np.dot(Jrow,intrinsic)
                 ret[fidpair][obsORoutcome] = predicted_rate
                 
-    elif typ == "hamiltonian":
+    elif typ == "diffbasis":
 
         # J_ham * Hintrinsic = observed_rates - J_aff * Aintrinsic
         # so: observed_rates = J_ham * Hintrinsic + J_aff * Aintrinsic
@@ -259,6 +407,13 @@ def predicted_observable_rates(idtresults, typ, nQubits, maxErrWeight, gateset):
             for obsORoutcome,info_dict in dict_of_infos.items():
                 #Get jacobian row and compute predicted observed rate
                 Jrow = info_dict['jacobian row']
+
+                if intrinsic is None: 
+                    # compute intrinsic (wait for jac row to check for affine)
+                    affine = bool('affine jacobian row' in info_dict)
+                    ham_intrinsic_rates, _, aff_intrinsic_rates = \
+                        predicted_intrinsic_rates(nQubits, maxweight, gateset, True, False, affine)
+
                 predicted_rate = _np.dot(Jrow,ham_intrinsic_rates)
                 if 'affine jacobian row' in info_dict:
                     affJrow = info_dict['affine jacobian row']

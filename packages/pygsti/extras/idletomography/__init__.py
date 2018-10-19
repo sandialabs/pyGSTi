@@ -7,13 +7,14 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 from . import idtcore
+from . import idttools
 from . import pauliobjs
-from . import tools
+#from . import idtreport
 
 #just import everything for now
 from .idtcore import * 
-from .tools import *
+from .idttools import *
 from .pauliobjs import NQPauliState, NQPauliOp, NQOutcome
 from .idtresults import IdleTomographyResults
-from .report import IdleTomographyIntrinsicErrorsTable, IdleTomographyObservedRatesTable, \
-    IdleTomographyObservedRatePlot, create_idletomography_report
+from .idtreport import IdleTomographyIntrinsicErrorsTable, IdleTomographyObservedRatesTable, \
+    IdleTomographyObservedRatePlot, IdleTomographyObservedRatesForIntrinsicRateTable, create_idletomography_report
