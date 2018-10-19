@@ -281,7 +281,7 @@ def affine_jac_obs_element(prep, error, observable):
 
 def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
                              include_stochastic=True, include_affine=True,
-                             ham_tmpl=("ZY","ZX","XZ","YZ","YX","XY"),
+                             ham_tmpl="auto",
                              preferred_prep_basis_signs=("+","+","+"),
                              preferred_meas_basis_signs=("+","+","+") ):
     """
@@ -306,7 +306,10 @@ def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
     ham_tmpl : tuple, optional
         A tuple of length-`maxweight` Pauli strings (i.e. string w/letters "X",
         "Y", or "Z"), describing how to construct the fiducial pairs used to
-        detect Hamiltonian errors.  The default is a good set for `maxweight=2`.
+        detect Hamiltonian errors.  The special (and default) value "auto"
+        uses `("X","Y","Z")` and `("ZY","ZX","XZ","YZ","YX","XY")` for 
+        `maxweight` equal to 1 and 2, repectively, and will generate an error
+        if `maxweight > 2`.
 
     preferred_prep_basis_signs, preferred_meas_basis_signs: tuple, optional
         A 3-tuple of "+" or "-" strings indicating which sign for preparing
@@ -374,6 +377,10 @@ def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
         def prev( expt ): return ''.join([prevPauli[p] for p in expt])
         def next( expt ): return ''.join([nextPauli[p] for p in expt])
 
+        if ham_tmpl == "auto":
+            if maxweight == 1: ham_tmpl = ("X","Y","Z")
+            elif maxweight == 2: ham_tmpl = ("ZY","ZX","XZ","YZ","YX","XY")
+            else: raise ValueError("Must supply `ham_tmpl` when `maxweight > 2`!")
         ham_tmpl_pairs = []
         for tmplLets in ham_tmpl: # "Lets" = "letters", i.e. 'X', 'Y', or 'Z'
             assert(len(tmplLets) == maxweight), \
@@ -625,8 +632,7 @@ def determine_paulidicts(gateset):
 def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
                               idle_string = ('Gi',), include_hamiltonian=True,
                               include_stochastic=True, include_affine=True,
-                              ham_tmpl=("ZY","ZX","XZ","YZ","YX","XY"), 
-                              preferred_prep_basis_signs="auto",
+                              ham_tmpl="auto",preferred_prep_basis_signs="auto",
                               preferred_meas_basis_signs="auto"):
     """
     Construct the list of experiments needed to perform idle tomography.
@@ -659,11 +665,14 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
     include_hamiltonian, include_stochastic, include_affine : bool, optional
         Whether to include fiducial pairs for finding Hamiltonian-, Stochastic-,
         and Affine-type errors.
-        
+
     ham_tmpl : tuple, optional
         A tuple of length-`maxweight` Pauli strings (i.e. string w/letters "X",
         "Y", or "Z"), describing how to construct the fiducial pairs used to
-        detect Hamiltonian errors.  The default is a good set for `maxweight=2`.
+        detect Hamiltonian errors.  The special (and default) value "auto"
+        uses `("X","Y","Z")` and `("ZY","ZX","XZ","YZ","YX","XY")` for 
+        `maxweight` equal to 1 and 2, repectively, and will generate an error
+        if `maxweight > 2`.
 
     preferred_prep_basis_signs, preferred_meas_basis_signs: tuple, optional
         A 3-tuple of "+" or "-" strings indicating which sign for preparing
@@ -1020,7 +1029,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
         else:
             pauli_fidpairs = idle_tomography_fidpairs(
                 nQubits, maxweight, False, include_stochastic, include_affine,
-                advancedOptions.get('ham_tmpl', ("ZY","ZX","XZ","YZ","YX","XY")),
+                advancedOptions.get('ham_tmpl', "auto"),
                 preferred_prep_basis_signs, preferred_meas_basis_signs)
         #print("DB: %d same-basis pairs" % len(pauli_fidpairs))
 
@@ -1129,7 +1138,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
         else:
             pauli_fidpairs = idle_tomography_fidpairs(
                 nQubits, maxweight, include_hamiltonian, False, False,
-                advancedOptions.get('ham_tmpl', ("ZY","ZX","XZ","YZ","YX","XY")),
+                advancedOptions.get('ham_tmpl', "auto"),
                 preferred_prep_basis_signs, preferred_meas_basis_signs)
         #print("DB: %d diff-basis pairs" % len(pauli_fidpairs))
 
