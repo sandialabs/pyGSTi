@@ -88,6 +88,7 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 
 	//1) set widths & heights of plot-containing TDs to the
 	//   "desired" or "native" values
+	TDtoCheck = null; // the TD element used to check for width settling
 	wstable.find("td.plotContainingTD").each( function(k,td) {
 	    var plots = $(td).find(".plotly-graph-div");
 	    var padding = $(td).css("padding-left");
@@ -97,13 +98,38 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
             desiredH =	max_height(plots)+2*padding
             $(td).css("width", desiredW);
             $(td).css("height", desiredH);
+	    if(TDtoCheck === null) TDtoCheck = $(td); //just take the first one
 	    if(!initial_autosize) {
 		firstChild = $(td).children("div.pygsti-wsoutput-group").first()
 		firstChild.css("width", max_width(plots)+2*padding);
 		firstChild.css("height", max_height(plots)+2*padding);
 	    }
 	});
-	
+
+	//1.5) wait for the computed widths of the table cells (just one representative
+	//  TDtoCheck cell currently) to settle.  In some browser, Firefox in ptic,
+	//  it takes some time for the browser to respond to the desired withs set above
+	//  and update the widths of the TD elements in the table.  The code below
+	//  waits for this settling to occur before proceeding to step 2.
+	last_w = 0; cnt = 0; 
+	nSettle = 2; //number of times we need to get the same width to call it "settled"
+        var intervalFn = setInterval( function() {
+	    w = TDtoCheck.width();
+	    if(last_w == parseFloat(w)) {
+		if(cnt < 2) cnt += 1;
+		else {
+		    clearInterval(intervalFn);
+		    wstable.trigger("after_widths_settle");
+		}
+	    }
+	    else last_w = parseFloat(w);
+	}, 200);
+    });
+    
+    $("#"+id).on("after_widths_settle", function(event) {
+	var wstable = $("#"+id); //actually a div, a "workspace table"                            
+	console.log("Widths settled; Creating table " + id + " plots");
+
         //2) lock down initial widths of non-plot cells to they don't change later
 	// (since we assume non-plot cells don't need to expand/contract).
 	// We go through individual tables one-by-one, making each visible if
@@ -141,7 +167,7 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	//   expand their height to their contents, ignoring any max-height or
 	//   height attributes when they are too small unless you use
 	//   'display: block', which isn't what we want.]
-        console.log("Creating table " + id + " plots");
+        //console.log("Creating table " + id + " plots");
         wstable.find(".pygsti-plotgroup-master").trigger("create");
 
 	//Finish the rest of plot creation *after* all the plots have been 

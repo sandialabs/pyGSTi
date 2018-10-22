@@ -737,7 +737,7 @@ def manipulate_gatestring_list(gatestringList, sequenceRules):
         return [ manipulate_gatestring(gs, sequenceRules) for gs in gatestringList ]
 
 
-def filter_gatestrings(gatestrings, sslbls_to_keep, new_sslbls=None, drop=False):
+def filter_gatestrings(gatestrings, sslbls_to_keep, new_sslbls=None, drop=False, idle='Gi'):
     """
     Removes any labels from `gatestrings` whose state-space labels are not
     entirely in `sslbls_to_keep`.  If a gates label's state-space labels
@@ -767,6 +767,10 @@ def filter_gatestrings(gatestrings, sslbls_to_keep, new_sslbls=None, drop=False)
         If False, then the returned list is always the same length as the 
         input list.
 
+    idle : string or Label, optional
+        The gate label to be used when there are no kept components of a 
+        "layer" (element) of a gatestring.
+
     Returns
     -------
     list
@@ -775,14 +779,14 @@ def filter_gatestrings(gatestrings, sslbls_to_keep, new_sslbls=None, drop=False)
     if drop:
         ret = []
         for s in gatestrings:
-            fs = filter_gatestring(s,sslbls_to_keep,new_sslbls)
+            fs = filter_gatestring(s,sslbls_to_keep,new_sslbls,idle)
             if len(fs) > 0 or len(s) == 0: ret.append(fs)
         return ret
     else: # drop == False (the easy case)
-        return [filter_gatestring(s,sslbls_to_keep,new_sslbls) for s in gatestrings]
+        return [filter_gatestring(s,sslbls_to_keep,new_sslbls,idle) for s in gatestrings]
     
 
-def filter_gatestring(gatestring, sslbls_to_keep, new_sslbls=None):
+def filter_gatestring(gatestring, sslbls_to_keep, new_sslbls=None, idle='Gi'):
     """ 
     Removes any labels from `gatestring` whose state-space labels are not
     entirely in `sslbls_to_keep`.  If a gates label's state-space labels
@@ -806,6 +810,10 @@ def filter_gatestring(gatestring, sslbls_to_keep, new_sslbls=None):
         If not None, a list of the same length as `sslbls_to_keep` specifying
         a new set of state space labels to replace those in `sslbls_to_keep`.
 
+    idle : string or Label, optional
+        The gate label to be used when there are no kept components of a 
+        "layer" (element) of `gatestring`.
+
     Returns
     -------
     GateString
@@ -816,7 +824,7 @@ def filter_gatestring(gatestring, sslbls_to_keep, new_sslbls=None):
 
     lbls = []
     for lbl in gatestring:
-        sublbls = []
+        sublbls = []; pintersect = False #btwn lbl's sslbls & to-keep
         for sublbl in lbl.components:
             if (sublbl.sslbls is None or
                 set(sublbl.sslbls).issubset(sslbls_to_keep)): # then keep this comp
@@ -828,10 +836,24 @@ def filter_gatestring(gatestring, sslbls_to_keep, new_sslbls=None):
                 else: # leave labels as-is
                     sublbls.append(sublbl)
 
+            elif len(set(sublbl.sslbls).intersection(sslbls_to_keep)) > 0:
+                pintersect = True # partial intersection w/to-keep!
+
+        if pintersect:
+            # there was partial intersection with at least one component,
+            # so there's no way to cleanly cast this gate sequence as
+            # just a sequence of labels in "sslbls_to_keep"
+            return None
+
         if len(sublbls) > 0:
             if len(sublbls) == 1: # necessary?
                 lbls.append(sublbls[0])
             else:
                 lbls.append(sublbls)
+        elif len(lbl.components) > 0:
+            # no mention of any of sslbls_to_keep in all components (otherwise
+            # either pintersect would be set or len(sublbls) > 0), so this layer
+            # is just an idle: add idle placeholder if there were any components
+            if idle is not None: lbls.append(_Lbl(idle))
 
     return _gs.GateString(lbls)

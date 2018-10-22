@@ -17,6 +17,7 @@ import uuid as _uuid
 import pickle as _pickle
 import copy as _copy
 import warnings as _warnings
+import bisect as _bisect
 
 from collections import OrderedDict as _OrderedDict
 from collections import defaultdict as _DefaultDict
@@ -187,8 +188,7 @@ class DataSetRow(object):
             except KeyError:
                 # if outcome label isn't in counts but *is* in the dataset's
                 # outcome labels then return 0 (~= return self.allcounts[...])
-                key = indexOrOutcomeLabel
-                key = (key,) if _compat.isstr(key) else tuple(key) # as in OutcomeLabelDict
+                key = _ld.OutcomeLabelDict.to_outcome(indexOrOutcomeLabel)
                 if key in self.dataset.get_outcome_labels(): return 0
                 raise KeyError("%s is not an index, timestamp, or outcome label!"
                                % str(indexOrOutcomeLabel))
@@ -197,7 +197,7 @@ class DataSetRow(object):
         if isinstance(indexOrOutcomeLabel, _numbers.Integral):
             index = indexOrOutcomeLabel; tup = val
             assert(len(tup) in (2,3) ), "Must set to a (<outcomeLabel>,<time>[,<repetitions>]) value"
-            ol = (tup[0],) if _compat.isstr(tup[0]) else tup[0] #strings -> tuple outcome labels
+            ol = _ld.OutcomeLabelDict.to_outcome(tup[0]) #strings -> tuple outcome labels
             self.oli[index] = self.dataset.olIndex[ ol ]
             self.time[index] = tup[1]
 
@@ -206,8 +206,8 @@ class DataSetRow(object):
             else:
                 assert(len(tup) == 2 or tup[2] == 1),"Repetitions must == 1 (not tracking reps)"
         else:
-            outcomeLbl = indexOrOutcomeLabel; count = val
-            if _compat.isstr(outcomeLbl): outcomeLbl = (outcomeLbl,) #strings -> tuple outcome labels
+            outcomeLbl = _ld.OutcomeLabelDict.to_outcome(indexOrOutcomeLabel) #strings -> tuple outcome labels
+            count = val
 
             assert( all([t == self.time[0] for t in self.time]) ), \
                 "Cannot set outcome counts directly on a DataSet with non-trivially timestamped data"
@@ -314,8 +314,7 @@ class DataSetRow(object):
         if outcomelabel == 'all':
             olis = list(self.dataset.olIndex.values())
         else:
-            outcomelabel = (outcomelabel,) if _compat.isstr(outcomelabel) \
-                           else tuple(outcomelabel)
+            outcomelabel = _ld.OutcomeLabelDict.to_outcome(outcomelabel)
             olis = [self.dataset.olIndex[outcomelabel]]
 
         times = []
@@ -544,7 +543,7 @@ class DataSet(object):
         if outcomeLabelIndices is not None:
             self.olIndex = outcomeLabelIndices
         elif outcomeLabels is not None:
-            tup_outcomeLabels = [ ((ol,) if _compat.isstr(ol) else ol)
+            tup_outcomeLabels = [ _ld.OutcomeLabelDict.to_outcome(ol)
                                   for ol in outcomeLabels] #strings -> tuple outcome labels
             self.olIndex = _OrderedDict( [(ol,i) for (i,ol) in enumerate(tup_outcomeLabels) ] )
         else:
@@ -651,6 +650,11 @@ class DataSet(object):
 
     def __setitem__(self, gatestring, outcomeDictOrSeries):
         return self.set_row(gatestring, outcomeDictOrSeries)
+
+    def __delitem__(self, gatestring):
+        if not isinstance(gatestring,_gs.GateString):
+            gatestring = _gs.GateString(gatestring)
+        self._remove( [self.gsIndex[gatestring]] )
 
     def get_row(self, gatestring, occurrence=0):
         """
@@ -999,7 +1003,7 @@ class DataSet(object):
         gateString = self._keepseparate_update_gatestr(gateString)
 
         #strings -> tuple outcome labels
-        tup_outcomeLabelList = [ ((ol,) if _compat.isstr(ol) else ol)
+        tup_outcomeLabelList = [ _ld.OutcomeLabelDict.to_outcome(ol)
                                  for ol in outcomeLabelList]
 
         #Add any new outcome labels
@@ -1200,7 +1204,7 @@ class DataSet(object):
             return s + "\n"
 
 
-    def truncate(self, listOfGateStringsToKeep, bThrowErrorIfStringIsMissing=True):
+    def truncate(self, listOfGateStringsToKeep, missingAction='raise'):
         """
         Create a truncated dataset comprised of a subset of the gate strings
         in this dataset.
@@ -1210,18 +1214,18 @@ class DataSet(object):
         listOfGateStringsToKeep : list of (tuples or GateStrings)
             A list of the gate strings for the new returned dataset.  If a
             gate string is given in this list that isn't in the original
-            data set, bThrowErrorIfStringIsMissing determines the behavior.
+            data set, `missingAction` determines the behavior.
 
-        bThrowErrorIfStringIsMissing : bool, optional
-            When true, a ValueError exception is raised when a strin)g
-            if verbosity > 0:
-            in listOfGateStringsToKeep is not in the data set.
+        missingAction : {"raise","warn","ignore"}
+            What to do when a string in `listOfGateStringsToKeep` is not in
+            the data set (raise a KeyError, issue a warning, or do nothing).
 
         Returns
         -------
         DataSet
             The truncated data set.
         """
+        missingStrs = [] # to issue warning - only used if missingAction=="warn"
         if self.bStatic:
             gateStringIndices = []
             gateStrings = []
@@ -1229,19 +1233,28 @@ class DataSet(object):
                 gateString = gs if isinstance(gs, _gs.GateString) else _gs.GateString(gs)
 
                 if gateString not in self.gsIndex:
-                    if bThrowErrorIfStringIsMissing:
-                        raise ValueError("Gate string %s was not found in dataset begin truncated and bThrowErrorIfStringIsMissing == True" % str(gateString))
-                    else: continue
+                    if missingAction == "raise":
+                        raise KeyError(("Gate string %s was not found in "
+                                        "dataset being truncated and "
+                                        "`missingAction` == 'raise'") % str(gateString))
+                    elif missingAction == "warn":
+                        missingStrs.append(gateString)
+                        continue
+                    elif missingAction == "ignore":
+                        continue
+                    else:
+                        raise ValueError("Invalid `missingAction`: %s" % str(missingAction))
 
                 #only keep track of gate strings if they could be different from listOfGateStringsToKeep
-                if not bThrowErrorIfStringIsMissing: gateStrings.append( gateString )
+                if missingAction != "raise": gateStrings.append( gateString )
                 gateStringIndices.append( self.gsIndex[gateString] )
 
-            if bThrowErrorIfStringIsMissing: gateStrings = listOfGateStringsToKeep
+            if missingAction == "raise": gateStrings = listOfGateStringsToKeep
             trunc_gsIndex = _OrderedDict( zip(gateStrings, gateStringIndices) )
             trunc_dataset = DataSet(self.oliData, self.timeData, self.repData,
                                     gateStringIndices=trunc_gsIndex,
                                     outcomeLabelIndices=self.olIndex, bStatic=True) #don't copy counts, just reference
+            
         else:
             trunc_dataset = DataSet(outcomeLabels=self.get_outcome_labels())
             for gs in _lt.remove_duplicates(listOfGateStringsToKeep):
@@ -1251,8 +1264,20 @@ class DataSet(object):
                     repData = self.repData[ gateStringIndx ].copy() if (self.repData is not None) else None
                     trunc_dataset.add_raw_series_data( gateString, [ self.ol[i] for i in self.oliData[ gateStringIndx ] ],
                                                    self.timeData[ gateStringIndx ].copy(), repData) #Copy operation so truncated dataset can be modified
-                elif bThrowErrorIfStringIsMissing:
-                    raise ValueError("Gate string %s was not found in dataset begin truncated and bThrowErrorIfStringIsMissing == True" % str(gateString))
+                elif missingAction == "raise":
+                    raise KeyError(("Gate string %s was not found in "
+                                    "dataset being truncated and "
+                                    "`missingAction` == 'raise'") % str(gateString))
+                elif missingAction == "warn":
+                    missingStrs.append(gateString)
+                elif missingAction != "ignore":
+                    raise ValueError("Invalid `missingAction`: %s" % str(missingAction))
+
+        if len(missingStrs) > 0:
+            missingStrs.append("...") # so elipses are shown when there's more strings
+            _warnings.warn(("DataSet.truncate(...) was given %s strings to keep"
+                            " that weren't in the original dataset:\n%s") % 
+                           (len(missingStrs)-1, "\n".join(map(str,missingStrs[0:10]))))
 
         return trunc_dataset
 
@@ -1313,7 +1338,7 @@ class DataSet(object):
         return ds
 
 
-    def process_gate_strings(self, processor_fn):
+    def process_gate_strings(self, processor_fn, aggregate=False):
         """
         Manipulate this DataSet's gate sequences according to `processor_fn`.
 
@@ -1325,26 +1350,148 @@ class DataSet(object):
         ----------
         processor_fn : function
             A function which takes a single GateString argument and returns
-            another (or the same) GateString.
+            another (or the same) GateString.  This function may also return
+            `None`, in which case the data for that string is deleted.
+
+        aggregate : bool, optional
+            When `True`, aggregate the data for gate strings that `processor_fn`
+            assigns to the same "new" gate string.  When `False`, use the data
+            from the *last* original string that maps to a given "new" string.
 
         Returns
         -------
         None
         """
         if self.bStatic: raise ValueError("Cannot process_gate_strings on a static DataSet object")
+
+        to_delete = []
         new_gsIndex = _OrderedDict()
         for gstr,indx in self.gsIndex.items():
             new_gstr = processor_fn(gstr)
-            assert(isinstance(new_gstr, _gs.GateString)), "`processor_fn` must return a GateString!"
-            new_gsIndex[ new_gstr  ] = indx
+            if new_gstr is None:
+                to_delete.append(indx)
+            elif new_gstr not in new_gsIndex or aggregate == False:
+                assert(isinstance(new_gstr, _gs.GateString)), "`processor_fn` must return a GateString!"
+                new_gsIndex[ new_gstr  ] = indx
+            else: # aggregate data from indx --> new_gsIndex[new_gstr]
+                # A subset of what is in add_raw_series_data(...), but we
+                # don't need to do many of the checks there since the
+                # incoming data is known to have no new outcome labels, etc.
+                assert(isinstance(new_gstr, _gs.GateString)), "`processor_fn` must return a GateString!"
+                iSrc, iDest = indx, new_gsIndex[new_gstr]
+                self.oliData[ iDest ] = _np.concatenate((self.oliData[iDest],self.oliData[iSrc]))
+                self.timeData[ iDest ] = _np.concatenate((self.timeData[iDest],self.timeData[iSrc]))
+                if self.repData is not None:
+                    self.repData[ iDest ] = _np.concatenate((self.repData[iDest],self.repData[iSrc]))
+                #FUTURE: just add counts for same timestamp & same outcome
+                #  label data? (and in add_raw_series_data(...) too).
+
+                # mark indx for deletion (don't do it yet, as this will
+                # mess up the values in new_gsIndex)
+                to_delete.append(indx)
+
         self.gsIndex = new_gsIndex
+        self._remove(to_delete)
+
         #Note: self.cnt_cache just remains None (a non-static DataSet)
+
+        #Process self.auxInfo
         auxInfo = _DefaultDict( dict )
         for gstr in self.auxInfo.keys():
             new_gstr = processor_fn(gstr)
-            auxInfo[new_gstr] = self.auxInfo[gstr]
+            if new_gstr is None:
+                continue
+            elif new_gstr not in auxInfo or aggregate == False:
+                auxInfo[new_gstr] = self.auxInfo[gstr]
+            else: # "aggregate" auxinfo by merging dictionaries
+                #FUTURE: better merging - do something for key collisions?
+                auxInfo[new_gstr].update( self.auxInfo[gstr] )
         self.auxInfo = auxInfo
 
+
+
+    def remove(self, gatestrings, missingAction="raise"):
+        """
+        Remove (delete) the data for `gatestrings` from this :class:`DataSet`.
+
+        Parameters
+        ----------
+        gatestrings : iterable
+            An iterable over GateString-like objects specifying the keys
+            (gate strings) to remove.
+
+        missingAction : {"raise","warn","ignore"}
+            What to do when a string in `gatestrings` is not in this data
+            set (raise a KeyError, issue a warning, or do nothing).
+
+        Returns
+        -------
+        None
+        """
+        missingStrs = [] # to issue warning - only used if missingAction=="warn"
+        gstr_indices = []; auxkeys_to_remove = []
+        for gs in gatestrings:
+            if not isinstance(gs,_gs.GateString):
+                gs = _gs.GateString(gs)
+
+            if self.has_key(gs):
+                gstr_indices.append( self.gsIndex[gs] )
+                if gs in self.auxInfo:
+                    auxkeys_to_remove.append(gs)
+            elif missingAction == "raise":
+                raise KeyError(("Gate string %s does not exist and therefore "
+                                "cannot be removed when `missingAction` == "
+                                "'raise'") % str(gs))
+            elif missingAction == "warn":
+                missingStrs.append(gs)
+            elif missingAction != "ignore":
+                raise ValueError("Invalid `missingAction`: %s" % str(missingAction))
+
+        # the actual removal operations
+        self._remove(gstr_indices) 
+        for ky in auxkeys_to_remove:
+             del self.auxInfo[ky]
+
+        if len(missingStrs) > 0: #Print a warning with missing strings
+            missingStrs.append("...") # so elipses are shown when there's more strings
+            _warnings.warn(("DataSet.remove(...) cannot remove %s strings because"
+                            " they don't exist in the original dataset:\n%s") % 
+                           (len(missingStrs)-1, "\n".join(map(str,missingStrs[0:10]))))
+            
+
+    def _remove(self, gstr_indices):
+        """ Removes the data in indices given by gstr_indices """
+        if self.bStatic: raise ValueError("Cannot _remove on a static DataSet object")
+
+        #Removing elements from oliData, timeData, and repData is easy since
+        # these are just lists.  Hard part is adjusting gsIndex values: we
+        # need to subtract k from index n, where k is the number of indices
+        # in `gstr_indices` less than n.
+        inds = sorted(list(gstr_indices))
+
+        #remove indices from lists (high->low)
+        for i in reversed(inds): 
+            del self.oliData[i]
+            del self.timeData[i]
+            if self.repData:
+                del self.repData[i]
+            
+        #remove elements of gsIndex assoc. w/deleted indices
+        keys_to_delete = []; inds_set = set(inds)
+        for k,v in self.gsIndex.items():
+            if v in inds_set: 
+                keys_to_delete.append(k)
+        for k in keys_to_delete:
+            del self.gsIndex[k]
+
+        #adjust remaining indices in gsIndex
+        inds_ar = _np.array(inds, _np.int64)
+        for k in self.gsIndex.keys():
+            cnt = _bisect.bisect(inds_ar, self.gsIndex[k]) # cnt == number of removed 
+            self.gsIndex[k] -= cnt                         # indices < self.gsIndex[k]
+
+
+            
     def copy(self):
         """ Make a copy of this DataSet. """
         if self.bStatic:

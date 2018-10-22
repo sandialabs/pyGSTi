@@ -376,8 +376,8 @@ def L_matrix(gs, gs_target, weights=None):
             
     normalizer = _np.sum(_np.array([weights[key] for key in list(gs_target.gates.keys())]))           
     dim = len(list(gs_target.gates.keys()))
-    L_matrix = (1 / normalizer) * _np.sum(weights[key]*_np.kron(gs.gates[key].T,
-                 _np.linalg.inv(gs_target.gates[key])) for key in list(gs_target.gates.keys()))
+    L_matrix = (1 / normalizer) * _np.sum(weights[key]*_np.kron(gs.gates[key].todense().T,
+                 _np.linalg.inv(gs_target.gates[key].todense())) for key in gs_target.gates.keys())
     
     return L_matrix
 

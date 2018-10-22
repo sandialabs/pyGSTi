@@ -1,4 +1,10 @@
 from __future__ import print_function
+
+#quiet down matplotlib!
+import logging
+mpl_logger = logging.getLogger('matplotlib')
+mpl_logger.setLevel(logging.WARNING)
+
 import unittest
 import numpy as np
 import scipy.linalg as spl
@@ -10,7 +16,6 @@ from pygsti.objects import Label as L
 from pygsti.io import json
 
 import sys, os
-
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
