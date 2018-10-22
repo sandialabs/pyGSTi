@@ -795,7 +795,7 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, idle_str
         det = coeffs[1]**2 - 4*coeffs[2]*coeffs[0]
         slope = -_np.sign(coeffs[0])*_np.sqrt(det) if det >= 0 else coeffs[1]
     else: raise NotImplementedError("Only fitOrder <= 2 are supported!")
-        
+
     return { 'rate': slope, 'fitOrder': fitOrder, 'fitCoeffs': coeffs, 'data': data_to_fit, 'errbars': errbars, 'weights': wts }
 
 
@@ -992,7 +992,6 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
     sto_aff_jac = None; sto_aff_obs_err_rates = None
     ham_aff_jac = None; ham_aff_obs_err_rates = None
                        
-    #idebug = 0
     rankStr = "" if (comm is None) else "Rank%d: " % comm.Get_rank()
 
     preferred_prep_basis_signs = advancedOptions.get('preferred_prep_basis_signs', 'auto')
@@ -1042,7 +1041,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
             #NOTE: pauli_fidpair is a 2-tuple of NQPauliState objects
             
             all_outcomes = _idttools.alloutcomes(pauli_fidpair[0], pauli_fidpair[1], maxweight)
-            t0 = _time.time(); infos_for_this_fidpair = {}
+            t0 = _time.time(); infos_for_this_fidpair = _collections.OrderedDict()
             for j,out in enumerate(all_outcomes):
 
                 printer.log("  - outcome %d of %d" % (j,len(all_outcomes)), 2)
@@ -1150,7 +1149,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
         for i,(ifp,pauli_fidpair) in enumerate(my_FidpairList):
             all_observables = _idttools.allobservables( pauli_fidpair[1], maxweight )
 
-            t0 = _time.time(); infos_for_this_fidpair = {}
+            t0 = _time.time(); infos_for_this_fidpair = _collections.OrderedDict()
             for j,obs in enumerate(all_observables):
                 printer.log("  - observable %d of %d" % (j,len(all_observables)),2)
 

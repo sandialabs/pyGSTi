@@ -3198,7 +3198,7 @@ def stdmodule_to_smqmodule(std_module):
             out_module[nm] = getattr(std_module,nm)
     
     #Create the new module
-    new_module = _ModuleType(new_module_name)
+    new_module = _ModuleType(str(new_module_name)) #str(.) converts to native string for Python 2 compatibility
     for k,v in out_module.items():
         setattr(new_module,k,v)
     _sys.modules[new_module_name] = new_module
