@@ -356,9 +356,9 @@ class TermEvalTree(EvalTree):
             subTree.myFinalToParentFinalMap = sliceIntoParentsFinalArray
             subTree.num_final_strs = numFinal
             subTree[:] = [None]*len(parentIndices)
-            subTree.p_polys = None
-            subTree.dp_polys = None
-            subTree.hp_polys = None
+            subTree.p_polys = {}
+            subTree.dp_polys = {}
+            subTree.hp_polys = {}
 
             mapParentIndxToSubTreeIndx = { k: ik for ik,k in enumerate(parentIndices) }
             curCacheSize = 0
