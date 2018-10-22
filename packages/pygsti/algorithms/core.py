@@ -135,6 +135,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
         guessGatesetForGauge = targetGateset
 
     lgstGateset = _objs.GateSet()
+    lgstGateset.stateSpaceLabels = targetGateset.stateSpaceLabels
 
     # the dimensions of the LGST matrices, called (nESpecs, nRhoSpecs),
     # are determined by the number of outcomes obtained by compiling the

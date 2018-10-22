@@ -949,7 +949,7 @@ def _onqubit(s,iQubit):
 def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfiducials=None,
                                        prepLbl=None, effectLbls=None, initJ=None, initJrank=None,
                                        wrtParams=None, algorithm="greedy", require_all_amped=True,
-                                       verbosity=0):
+                                       idtPauliDicts=None, verbosity=0):
     """
     Find fiducial pairs which amplify the parameters of a synthetic idle gate.
 
@@ -1122,6 +1122,17 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, gateset, singleQfi
                     prepFid = prepFid + _onqubit(el,qubit_filter[i])
                     
                 for meas in _itertools.product(*([singleQfiducials]*nQubits) ):
+
+                    if idtPauliDicts is not None:
+                        # For idle tomography compatibility, only consider fiducial pairs with either
+                        # all-the-same or all-different prep & measure basis (basis is determined
+                        # by the *last* letter in the value, e.g. ignore '-' sign in '-X').
+                        prepDict,measDict = idtPauliDicts
+                        rev_prepDict = { v[-1]:k for k,v in prepDict.items() } # could do this once above,
+                        rev_measDict = { v[-1]:k for k,v in measDict.items() } # but this isn't the bottleneck.
+                        cmp = [ (rev_prepDict[prep[kk]] == rev_measDict[meas[kk]]) for kk in range(nQubits) ]
+                        if not ( all(cmp) or not any(cmp) ): continue # if all are not the same or all are not different, skip
+
                     measFid = _objs.GateString(())
                     for i,el in enumerate(meas):
                         measFid = measFid + _onqubit(el,qubit_filter[i])
@@ -1817,11 +1828,11 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
 
     def merge_into_1Q(gStr, gate_names, qubit_label):
         """ Add gate_names, all acting on qubit_label, to gStr """
-        while len(gStr) < len(gate_names): gStr.append([]) # make sure prepStr is long enough
+        while len(gStr) < len(gate_names): gStr.append([]) # make sure gStr is long enough
         for iLayer,name in enumerate(gate_names):
             assert(qubit_label not in set( _itertools.chain(*[l.sslbls for l in gStr[iLayer]]))) # only 1 op per qubit per layer!
             gStr[iLayer].append( _Lbl(name,qubit_label) ) # gStr[i] is a list of i-th layer labels
-            if iLayer > 0: assert(qubit_label in set( _itertools.chain(*[l.sslbls for l in gStr[iLayer-1]]))) # only 1 op per qubit per layer!
+            if iLayer > 0: assert(qubit_label in set( _itertools.chain(*[l.sslbls for l in gStr[iLayer-1]]))) # just to be safe
     
     for gatename_fidpair_list in idle_gatename_fidpair_lists:
         # replace 0..(k-1) in each template string with the corresponding
@@ -2115,7 +2126,8 @@ def get_candidates_for_core(gateset, core_qubits, candidate_counts, seedStart):
 
 def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWeight=1, maxhops=0,
                             extraWeight1Hops=0, extraGateWeight=0, paramroot="H+S",
-                            sparse=False, verbosity=0, cache=None, idleOnly=False, algorithm="greedy"):
+                            sparse=False, verbosity=0, cache=None, idleOnly=False, 
+                            idtPauliDicts=None, algorithm="greedy"):
     """ 
     Generate a list of sequences sufficient for amplifying all of the errors
     given by a geometrically local noise model defined by a graph and various
@@ -2192,6 +2204,16 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
         If True, only sequences for the idle germ are returned.  This is useful
         for idle tomography in particular.
 
+    idtPauliDicts : tuple, optional
+        A (prepDict,measDict) tuple of dicts that maps a 1-qubit Pauli basis
+        string (e.g. 'X' or '-Y') to a sequence of gate *names*.  If given,
+        the idle-germ fiducial pairs chosen by this function are restricted
+        to those where either 1) each qubit is prepared and measured in the
+        same basis or 2) each qubits is prepared and measured in different
+        bases (note: '-X' and 'X" are considered the *same* basis).  This
+        restriction makes the resulting sequences more like the "standard"
+        ones of idle tomography, and thereby easier to interpret.
+
     algorithm : {"greedy","sequential"}
         The algorithm is used internall by 
         :function:`find_amped_polys_for_syntheticidle`.  You should leave this 
@@ -2264,7 +2286,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     ideal_gateset = build_nqnoise_gateset(nQubits, qubitGraph, cnot_edges, 0, 0, 0,
                                           0, 0, False, verbosity=printer-5,
                                           sim_type="map", parameterization=paramroot)
-                                          # for testing for synthetic idles - so no "terms"
+                                          # for testing for synthetic idles - so no " terms"
     
     Np = gateset.num_params()
     idleGateStr = _objs.GateString(("Gi",))
@@ -2297,7 +2319,8 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
             find_amped_polys_for_syntheticidle(list(range(maxIdleWeight)),
                                                idleGateStr, idle_gateset, singleQfiducials,
                                                prepLbl, None, wrtParams=idle_params, 
-                                               algorithm=algorithm, verbosity=printer-1)
+                                               algorithm=algorithm, idtPauliDicts=idtPauliDicts,
+                                               verbosity=printer-1)
         #ampedJ, ampedJ_rank, idle_maxwt_gatename_fidpair_lists = None,0,[] # DEBUG GRAPH ISO
         cache['Idle gatename fidpair lists'][maxIdleWeight] = idle_maxwt_gatename_fidpair_lists
 
@@ -2322,7 +2345,30 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     printer.log("%d idle sequences (for all max-lengths: %s)" % (len(sequences), str(maxLengths)))
     
     if idleOnly: #Exit now when we just wanted idle-tomography sequences
-        return sequences, selected_germs 
+        #OLD: return sequences, selected_germs
+
+        #Post processing: convert sequence tuples to a gate string structure
+        Gi_fidpairs = _collections.defaultdict(list) # lists of fidpairs for each L value
+        for _,L,_,prepFid,measFid in sequences:
+            Gi_fidpairs[L].append( (prepFid,measFid) )
+            
+        maxPlaqEls = max([len(fidpairs) for fidpairs in Gi_fidpairs.values()])
+        nMinorRows = nMinorCols = int(_np.floor(_np.sqrt(maxPlaqEls)))
+        if nMinorRows*nMinorCols < maxPlaqEls: nMinorCols += 1
+        if nMinorRows*nMinorCols < maxPlaqEls: nMinorRows += 1
+        assert(nMinorRows*nMinorCols >= maxPlaqEls), "Logic Error!"
+        
+        germList = [ idleGateStr ]
+        Ls = sorted(maxLengths)
+        gss = _objs.LsGermsSerialStructure(Ls,germList,nMinorRows,nMinorCols,
+                                           aliases=None,sequenceRules=None)
+        serial_germ = idleGateStr.serialize() #must serialize to get correct count
+        for L,fidpairs in Gi_fidpairs.items():            
+            germ_power = _gsc.repeat_with_max_length(serial_germ,L)
+            gss.add_plaquette(germ_power, L, idleGateStr, fidpairs) #returns 'missing_list'; useful if using dsfilter arg
+                
+        return gss                
+
     
     #Compute "true-idle" fidpairs for checking synthetic idle errors for 1 & 2Q gates (HARDCODED OK?)
     # NOTE: this works when ideal gates are cliffords and Gi has same type of errors as gates...
@@ -2739,7 +2785,7 @@ def get_kcoverage_template(n, k, verbosity=0):
     of the `k` distinct letters (symbols) appears in those positions for at 
     least one element (word) in the set.  Such a set of sequences is returned
     by this function, namely a list length-`n` lists containing the integers
-    0 to `n-1`.
+    0 to `k-1`.
 
     This notion has application to idle-gate fiducial pair tiling, when we have
     found a set of fiducial pairs for `k` qubits and want to find a set of
@@ -2959,7 +3005,8 @@ def check_kcoverage_template(rows, n, k, verbosity=0):
     if verbosity > 0: print(" check succeeded!")                                                             
     
 
-def filter_nqubit_sequences(sequence_tuples,sectors_to_keep,new_sectors=None):
+def filter_nqubit_sequences(sequence_tuples,sectors_to_keep,
+                            new_sectors=None,idle='Gi'):
     """
     Creates a new set of qubit sequences-tuples that is the restriction of
     `sequence_tuples` to the sectors identified by `sectors_to_keep`.
@@ -2994,6 +3041,11 @@ def filter_nqubit_sequences(sequence_tuples,sectors_to_keep,new_sectors=None):
         of a larger set.  Simply set `sectors_to_keep == [4,5]` and
         `new_sectors == [0,1]`.
 
+    idle : string or Label, optional
+        The gate label to be used when there are no kept components of a 
+        "layer" (element) of a gatestring.
+
+
     Returns
     -------
     filtered_sequence_tuples : list
@@ -3001,12 +3053,153 @@ def filter_nqubit_sequences(sequence_tuples,sectors_to_keep,new_sectors=None):
     """
     ret = []
     for gstr, L, germ, prepfid, measfid in sequence_tuples:
-        new_germ = _gsc.filter_gatestring(germ,sectors_to_keep,new_sectors)
+        new_germ = _gsc.filter_gatestring(germ,sectors_to_keep,new_sectors,idle)
         if len(new_germ) > 0 or len(gstr) == 0: 
-            new_prep = _gsc.filter_gatestring(prepfid,sectors_to_keep,new_sectors)
-            new_meas = _gsc.filter_gatestring(measfid,sectors_to_keep,new_sectors)
-            new_gstr = _gsc.filter_gatestring(gstr,sectors_to_keep,new_sectors)
+            new_prep = _gsc.filter_gatestring(prepfid,sectors_to_keep,new_sectors,idle)
+            new_meas = _gsc.filter_gatestring(measfid,sectors_to_keep,new_sectors,idle)
+            new_gstr = _gsc.filter_gatestring(gstr,sectors_to_keep,new_sectors,idle)
             ret.append( (new_gstr, L, new_germ, new_prep, new_meas) )
 
     return ret
 
+
+#Utility functions
+def gatename_fidpair_list_to_fidpairs(gatename_fidpair_list):
+    """ TODO: docstring """
+    fidpairs = []
+    for gatenames_per_qubit in gatename_fidpair_list:
+        prepStr = []
+        measStr = []
+        for iQubit,gatenames in enumerate(gatenames_per_qubit):
+            prepnames, measnames = gatenames
+            prepStr.extend( [_Lbl(name,iQubit) for name in prepnames] )
+            measStr.extend( [_Lbl(name,iQubit) for name in measnames] )
+        fidpair = (pygsti.obj.GateString(prepStr), pygsti.obj.GateString(measStr)) 
+        fidpairs.append(fidpair)
+    return fidpairs
+
+def fidpairs_to_gatename_fidpair_list(fidpairs, nQubits):
+    """ TODO: docstring Note: fidpairs must have only 1Q gates!"""
+    gatename_fidpair_list = []
+    for fidpair in fidpairs:
+        gatenames_per_qubit = [ (list(),list()) for i in range(nQubits) ] # prepnames, measnames for each qubit
+        prepStr, measStr = fidpair
+        
+        for lbl in prepStr:
+            assert(len(lbl.sslbls) == 1), "Can only convert strings with solely 1Q gates"
+            gatename = lbl.name
+            iQubit = lbl.sslbls[0]
+            gatenames_per_qubit[iQubit][0].append(gatename)
+        
+        for lbl in measStr:
+            assert(len(lbl.sslbls) == 1), "Can only convert strings with solely 1Q gates"
+            gatename = lbl.name
+            iQubit = lbl.sslbls[0]
+            gatenames_per_qubit[iQubit][1].append(gatename)
+
+        #Convert lists -> tuples
+        gatenames_per_qubit = tuple([ (tuple(x[0]),tuple(x[1])) for x in gatenames_per_qubit])
+        gatename_fidpair_list.append(gatenames_per_qubit)
+    return gatename_fidpair_list
+
+
+def stdmodule_to_smqmodule(std_module):
+    """ TODO: docstring - returns the new module"""
+    from types import ModuleType as _ModuleType
+    import sys as _sys
+    import importlib
+
+    std_module_name_parts = std_module.__name__.split('.')
+    std_module_name_parts[-1] = std_module_name_parts[-1].replace('std','smq')
+    new_module_name = '.'.join(std_module_name_parts)
+    
+    try:
+        return importlib.import_module(new_module_name)
+    except ImportError:
+        pass # ok, this is what the rest of the function is for
+    
+    out_module = {}
+    dim = std_module.gs_target.dim
+    if dim == 4:
+        sslbls = [0]
+        find_replace_labels = {'Gx': ('Gx',0), 'Gy':('Gy',0),
+                               'Gz': ('Gz',0), 'Gn': ('Gn',0)}
+        find_replace_strs = [ ((oldgl,),(newgl,)) for oldgl,newgl 
+                              in find_replace_labels.items()]
+    elif dim == 16:
+        sslbls = [0,1]
+        find_replace_labels = {'Gii': 'Gi', 
+                               'Gxi': ('Gx',0), 'Gyi': ('Gy',0), 'Gzi': ('Gz',0),
+                               'Gix': ('Gx',1), 'Giy': ('Gy',1), 'Giz': ('Gz',1),
+                               'Gxx': ('Gxx',0,1), 'Gxy': ('Gxy',0,1),
+                               'Gyx': ('Gxy',0,1), 'Gyy': ('Gyy',0,1),
+                               'Gcnot': ('Gcnot',0,1), 'Gcphase': ('Gcphase',0,1) }
+        find_replace_strs = [ ((oldgl,),(newgl,)) for oldgl,newgl 
+                              in find_replace_labels.items()]
+        #find_replace_strs.append( (('Gxx',), (('Gx',0),('Gx',1))) )
+        #find_replace_strs.append( (('Gxy',), (('Gx',0),('Gy',1))) )
+        #find_replace_strs.append( (('Gyx',), (('Gy',0),('Gx',1))) )
+        #find_replace_strs.append( (('Gyy',), (('Gy',0),('Gy',1))) )
+    else:
+        #TODO: add qutrit?
+        raise ValueError("Unsupported gate set dimension: %d" % dim)
+
+    def upgrade_dataset(ds):
+        """
+        Update DataSet `ds` in-place to use  multi-qubit style labels.
+        """
+        ds.process_gate_strings(lambda s: _gsc.manipulate_gatestring(
+                                                s,find_replace_strs))
+
+    out_module['find_replace_gatelabels'] = find_replace_labels
+    out_module['find_replace_gatestrings'] = find_replace_strs
+    out_module['upgrade_dataset'] = upgrade_dataset
+        
+    
+    # gate names
+    out_module['gates'] = [ find_replace_labels.get(nm,nm) for nm in std_module.gates ]
+    
+    #Target gateset (update labels)
+    new_gs_target = _objs.GateSet()
+    new_gs_target._evotype = std_module.gs_target._evotype
+    new_gs_target._default_gauge_group = std_module.gs_target._default_gauge_group
+    new_gs_target.basis = std_module.gs_target.basis.copy()
+    new_gs_target.set_state_space_labels( sslbls )
+    for lbl,obj in std_module.gs_target.preps.items():
+        new_lbl = find_replace_labels.get(lbl,lbl)
+        new_gs_target.preps[new_lbl] = obj.copy()
+    for lbl,obj in std_module.gs_target.povms.items():
+        new_lbl = find_replace_labels.get(lbl,lbl)
+        new_gs_target.povms[new_lbl] = obj.copy()
+    for lbl,obj in std_module.gs_target.gates.items():
+        new_lbl = find_replace_labels.get(lbl,lbl)
+        new_gs_target.gates[new_lbl] = obj.copy()
+    for lbl,obj in std_module.gs_target.instruments.items():
+        new_lbl = find_replace_labels.get(lbl,lbl)
+        new_gs_target.instruments[new_lbl] = obj.copy()
+    out_module['gs_target'] = new_gs_target
+
+    # gatestring lists
+    gatestringlist_names = ['germs','germs_lite','prepStrs','effectStrs','fiducials']
+    for nm in gatestringlist_names:
+        if hasattr(std_module,nm):
+            out_module[nm] = _gsc.manipulate_gatestring_list(getattr(std_module,nm), find_replace_strs)
+    
+    # clifford compilation (keys are lists of gate labels)
+    if hasattr(std_module,'clifford_compilation'):
+        new_cc = _collections.OrderedDict()
+        for ky,val in std_module.clifford_compilation.items():
+            new_val = [find_replace_labels.get(lbl,lbl) for lbl in val]
+            new_cc[ky] = new_val
+    
+    passthrough_names = ['global_fidPairs','pergerm_fidPairsDict','global_fidPairs_lite','pergerm_fidPairsDict_lite']
+    for nm in passthrough_names:
+        if hasattr(std_module,nm):
+            out_module[nm] = getattr(std_module,nm)
+    
+    #Create the new module
+    new_module = _ModuleType(str(new_module_name)) #str(.) converts to native string for Python 2 compatibility
+    for k,v in out_module.items():
+        setattr(new_module,k,v)
+    _sys.modules[new_module_name] = new_module
+    return new_module

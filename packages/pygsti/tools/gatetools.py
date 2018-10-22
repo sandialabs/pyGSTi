@@ -1139,9 +1139,9 @@ def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
         target_gate_inv = _spl.inv(target_gate)
         try:
             errgen = _mt.near_identity_matrix_log(_np.dot(gate,target_gate_inv), TOL)
-        except AssertionError: #not near the identity, fall back to the real log
+        except AssertionError as e: #not near the identity, fall back to the real log
             _warnings.warn(("Near-identity matrix log failed; falling back "
-                            "to approximate log for logGTi error generator"))
+                            "to approximate log for logGTi error generator:\n%s") % str(e))
             errgen = _mt.real_matrix_log(_np.dot(gate,target_gate_inv), "warn", TOL)
             
         if _np.linalg.norm(errgen.imag) > TOL:
@@ -2660,22 +2660,70 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
     
     for gl,gate in gateset.gates.items():
         tgt_gate = targetGateset.gates[gl].copy()
-        tgt_gate = (1.0-EPS)*tgt_gate + EPS*gate # breaks tgt_gate's degeneracies w/same structure as gate
-        evals_gate = _np.linalg.eigvals(gate)
-        evals_tgt, Utgt = _np.linalg.eig(tgt_gate)
-        _, pairs = _mt.minweight_match(evals_tgt, evals_gate, return_pairs=True)
-        
-        evals = evals_gate.copy()
-        for i,j in pairs: #replace target evals w/matching eval of gate
-            evals[i] = evals_gate[j]
+        evals_gate = _np.linalg.eigvals(gate.todense())
 
-        Utgt_inv = _np.linalg.inv(Utgt)
-        epgate = _np.dot(Utgt, _np.dot(_np.diag(evals), Utgt_inv))
+        #Essentially, we want to replace the eigenvalues of `tgt_gate`
+        # (and *only* the eigenvalues) with those of `gate`.  A complication
+        # is that the eigenvalues of `tgt_gate` are usually highly degenerate,
+        # and so matching up eigenvalues can't be done just based on value.
+        # Our algorithm consists of two steps:
+        # 1) match gate & target eigenvalues based on value, ensuring conjugacy
+        #    relationships between eigenvalues are preserved.
+        # 2) for each eigenvalue/vector of `gate`, project the eigenvector onto
+        #    the eigenspace of `tgt_gate` corresponding to the matched eigenvalue.
+        #    (treat conj-pair eigenvalues of `gate` together).
+
+        evals_tgt, Utgt = _np.linalg.eig(tgt_gate.todense())
+        evals_gate, Ugate = _np.linalg.eig(gate.todense())
+        #_, pairs = _mt.minweight_match(evals_tgt, evals_gate, return_pairs=True)
+        pairs = _mt.minweight_match_realmxeigs(evals_tgt, evals_gate)
+
+        #Form eigenspaces of Utgt
+        eigenspace = {} # key = index of target eigenval, val = assoc. eigenspace
+        for i,ev in enumerate(evals_tgt):
+            for j in eigenspace:
+                if _np.isclose(ev,evals_tgt[j]): # then add evector[i] to this eigenspace
+                    eigenspace[j].append(Utgt[:,i])
+                    eigenspace[i] = eigenspace[j] # reference!
+                    break
+            else:
+                eigenspace[i] = [ Utgt[:,i] ] # new list = new eigenspace
+
+        #Project each eigenvector (col of Ugate) onto space of cols
+        evectors = {} # key = index of gate eigenval, val = assoc. (projected) eigenvec
+        for ipair,(i,j) in enumerate(pairs):
+            tgt_eval = evals_tgt[i]
+            if j in evectors: continue # we already processed this one!
+
+            # non-orthog projection:
+            # v = E * coeffs s.t. |E*coeffs-v|^2 is minimal  (E is not square so can't invert)
+            # --> E.dag * v = E.dag * E * coeffs
+            # --> inv(E.dag * E) * E.dag * v = coeffs
+            # E*coeffs = E * inv(E.dag * E) * E.dag * v
+
+            E = _np.array(eigenspace[i]).T; Edag = E.T.conjugate()
+            coeffs = _np.dot( _np.dot( _np.linalg.inv(_np.dot(Edag,E)), Edag), Ugate[:,j])
+            evectors[j] = _np.dot(E, coeffs)
+            
+            #check for conjugate pair
+            for i2,j2 in pairs[ipair+1:]:
+                if abs(evals_gate[j].imag) > 1e-6 and _np.isclose( evals_gate[j], _np.conjugate(evals_gate[j2])):
+                    evectors[j2] = _np.conjugate(evectors[j])
+                    E2 = _np.array(eigenspace[i2]).T; E2dag = E2.T.conjugate()
+                    x = _np.linalg.solve(_np.dot(Edag,E),_np.dot(Edag,evectors[j2]))
+                    #assert(_np.isclose(_np.linalg.norm(x),_np.linalg.norm(coeffs))) ??
+                      #check that this vector is in the span of eigenspace[i2]?
+                    
+        #build new "Utgt" using specially chosen linear combos of degenerate-eigenvecs
+        Uproj = _np.array([ evectors[i] for i in range(Utgt.shape[1])]).T
+        Uproj_inv = _np.linalg.inv(Uproj)
+        epgate = _np.dot(Uproj, _np.dot(_np.diag(evals_gate), Uproj_inv))
         epgate = _np.real_if_close(epgate, tol=1000)
-        if _np.linalg.norm(_np.imag(epgate)) > 1e-7:
-            _warnings.warn(("Target-eigenspace-projected gate has an imaginary"
-                            " component.  This usually isn't desired and"
-                            " indicates a failure to match eigenvalues."))
+
+        assert(_np.linalg.norm(_np.imag(epgate)) < 1e-7)
+          # this should never happen & indicates an uncaught failure in
+          # minweight_match_realmxeigs(...)
+
         ret.gates[gl] = epgate
 
     return ret

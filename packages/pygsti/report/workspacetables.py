@@ -334,7 +334,7 @@ class GatesTable(WorkspaceTable):
                     row_data.append(gateset.gates[gl])
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
-                    fig = _wp.GateMatrixPlot(self.ws, gateset.gates[gl],
+                    fig = _wp.GateMatrixPlot(self.ws, gateset.gates[gl].todense(),
                                              colorbar=False,
                                              mxBasis=basis)
 
@@ -1309,11 +1309,12 @@ class GateDecompTable(WorkspaceTable):
         gateLabels = list(gateset.gates.keys())  # gate labels
 
         colHeadings = ('Gate','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') \
-                      + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
+                      + tuple( [ "Axis angle w/%s" % str(gl) for gl in gateLabels] )
         tooltips = ('Gate','Hamiltonian Eigenvalues','Rotation angle','Rotation axis',
                     'Taking the log of a gate may be performed approximately.  This is ' +
                     'error in that estimate, i.e. norm(G - exp(approxLogG)).') + \
-                    tuple( [ "Angle between the rotation axis of %s and the gate of the current row" % gl for gl in gateLabels] )
+                    tuple( [ "Angle between the rotation axis of %s and the gate of the current row"
+                             % str(gl) for gl in gateLabels] )
         formatters = [None]*len(colHeadings)
 
         table = _ReportTable(colHeadings, formatters,
@@ -1634,8 +1635,9 @@ class GateEigenvalueTable(WorkspaceTable):
 
             #import time as _time #DEBUG
             #tStart = _time.time() #DEBUG
-            fn = _reportables.Gate_eigenvalues if _tools.isstr(gl) else \
-                 _reportables.Gatestring_eigenvalues
+            fn = _reportables.Gate_eigenvalues if \
+                isinstance(gl,_objs.Label) or _tools.isstr(gl) else \
+                _reportables.Gatestring_eigenvalues
             evals = _ev(fn(gateset,gl), confidenceRegionInfo)
             #tm = _time.time() - tStart #DEBUG
             #if tm > 0.01: print("DB: Gate eigenvalues in %gs" % tm) #DEBUG
@@ -1648,13 +1650,13 @@ class GateEigenvalueTable(WorkspaceTable):
             if targetGateset is not None:
                 #TODO: move this to a reportable qty to get error bars?
 
-                if _tools.isstr(gl):
-                    target_evals = _np.linalg.eigvals( targetGateset.gates[gl] ) #no error bars
+                if isinstance(gl,_objs.Label) or _tools.isstr(gl):
+                    target_evals = _np.linalg.eigvals( targetGateset.gates[gl].todense() ) #no error bars
                 else:
                     target_evals = _np.linalg.eigvals( targetGateset.product(gl) ) #no error bars
 
                 if any([(x in display) for x in ('rel','log-rel','relpolar')]):
-                    if _tools.isstr(gl):
+                    if isinstance(gl,_objs.Label) or _tools.isstr(gl):
                         rel_evals = _ev(_reportables.Rel_gate_eigenvalues(gateset, targetGateset, gl), confidenceRegionInfo)
                     else:
                         rel_evals = _ev(_reportables.Rel_gatestring_eigenvalues(gateset, targetGateset, gl), confidenceRegionInfo)
@@ -1716,7 +1718,8 @@ class GateEigenvalueTable(WorkspaceTable):
 
                 elif disp == "evdm":
                     if targetGateset is not None:
-                        fn = _reportables.Eigenvalue_diamondnorm if _tools.isstr(gl) else \
+                        fn = _reportables.Eigenvalue_diamondnorm if \
+                            isinstance(gl,_objs.Label) or _tools.isstr(gl) else \
                              _reportables.Gatestring_eigenvalue_diamondnorm
                         gidm = _ev(fn(gateset, targetGateset, gl), confidenceRegionInfo)
                         row_data.append( gidm )
@@ -1724,8 +1727,9 @@ class GateEigenvalueTable(WorkspaceTable):
 
                 elif disp == "evinf":
                     if targetGateset is not None:
-                        fn = _reportables.Eigenvalue_entanglement_infidelity if _tools.isstr(gl) else \
-                             _reportables.Gatestring_eigenvalue_entanglement_infidelity
+                        fn = _reportables.Eigenvalue_entanglement_infidelity if \
+                            isinstance(gl,_objs.Label) or _tools.isstr(gl) else \
+                            _reportables.Gatestring_eigenvalue_entanglement_infidelity
                         giinf = _ev(fn(gateset, targetGateset, gl), confidenceRegionInfo)
                         row_data.append( giinf )
                         row_formatters.append('Normal')

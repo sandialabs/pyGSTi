@@ -144,12 +144,12 @@ class TestDataSetMethods(BaseTestCase):
         #Test truncation
         ds2.truncate( [('Gx',),('Gx','Gy')] ) #non-static
         ds4.truncate( [('Gx',),('Gx','Gy')] ) #static
-        ds2.truncate( [('Gx',),('Gx','Gy'),('Gz',)], bThrowErrorIfStringIsMissing=False ) #non-static
-        ds4.truncate( [('Gx',),('Gx','Gy'),('Gz',)], bThrowErrorIfStringIsMissing=False ) #static
-        with self.assertRaises(ValueError):
-            ds2.truncate( [('Gx',),('Gx','Gy'),('Gz',)], bThrowErrorIfStringIsMissing=True ) #Gz is missing
-        with self.assertRaises(ValueError):
-            ds4.truncate( [('Gx',),('Gx','Gy'),('Gz',)], bThrowErrorIfStringIsMissing=True ) #Gz is missing
+        ds2.truncate( [('Gx',),('Gx','Gy'),('Gz',)], missingAction="warn" ) #non-static
+        ds4.truncate( [('Gx',),('Gx','Gy'),('Gz',)], missingAction="ignore" ) #static
+        with self.assertRaises(KeyError):
+            ds2.truncate( [('Gx',),('Gx','Gy'),('Gz',)], missingAction="raise" ) #Gz is missing
+        with self.assertRaises(KeyError):
+            ds4.truncate( [('Gx',),('Gx','Gy'),('Gz',)], missingAction="raise" ) #Gz is missing
 
         #test copy
         ds2_copy = ds2.copy() #non-static
@@ -691,12 +691,12 @@ Gx^4 20 80 0.2 100
         #Test truncation
         dsWritable.truncate( [('Gx',),('Gy',)] ) #non-static
         ds.truncate( [('Gx',),('Gy',)] ) #static
-        dsWritable.truncate( [('Gx',),('Gy',),('Gz',)], bThrowErrorIfStringIsMissing=False ) #non-static
-        ds.truncate( [('Gx',),('Gy',),('Gz',)], bThrowErrorIfStringIsMissing=False ) #static
-        with self.assertRaises(ValueError):
-            dsWritable.truncate( [('Gx',),('Gy',),('Gz',)], bThrowErrorIfStringIsMissing=True ) #Gz is missing
-        with self.assertRaises(ValueError):
-            ds.truncate( [('Gx',),('Gy',),('Gz',)], bThrowErrorIfStringIsMissing=True ) #Gz is missing
+        dsWritable.truncate( [('Gx',),('Gy',),('Gz',)], missingAction="warn" ) #non-static
+        ds.truncate( [('Gx',),('Gy',),('Gz',)], missingAction="ignore" ) #static
+        with self.assertRaises(KeyError):
+            dsWritable.truncate( [('Gx',),('Gy',),('Gz',)], missingAction="raise" ) #Gz is missing
+        with self.assertRaises(KeyError):
+            ds.truncate( [('Gx',),('Gy',),('Gz',)], missingAction="raise" ) #Gz is missing
 
         #Test time slicing
         print("Before [1,2) time slice")
