@@ -2804,6 +2804,6 @@ def split_lindblad_paramtype(typ):
     if   evostr == "":               evotype = "densitymx"
     elif evostr == "terms":          evotype = "svterm"
     elif evostr == "clifford terms": evotype = "cterm"
-    else: raise ValueError("Unrecognized evotype in `paramType`=%s" % paramType)
+    else: raise ValueError("Unrecognized evotype in `typ`=%s" % typ)
     return bTyp, evotype
     
