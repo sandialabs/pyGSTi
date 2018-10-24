@@ -4042,6 +4042,12 @@ class ComposedGateMap(Gate):
         
         Gate.__init__(self, dim, evotype)
 
+    def _obj_refcount(self, obj):
+        """ Number of references to `obj` contained within this GateSet """
+        cnt = _gatesetmember.GateSetMember._obj_refcount(self,obj)
+        for gate in self.factorgates:
+            cnt += gate._obj_refcount(obj)
+        return cnt
 
     def allocate_gpindices(self, startingIndex, parent):
         """
@@ -4086,6 +4092,22 @@ class ComposedGateMap(Gate):
         _gatesetmember.GateSetMember.set_gpindices(
             self, _slct.list_to_slice(all_gpindices, array_ok=True), parent)
         return tot_new_params
+
+
+    def unlink_parent(self):
+        """
+        Called when at least one reference (via `key`) to this object is being
+        disassociated with `parent`.   If *all* references are to this object
+        are now gone, set parent to None, invalidating any gpindices.
+        `startingIndex`.
+
+        Returns
+        -------
+        None
+        """
+        for gate in self.factorgates:
+            gate.unlink_parent()
+        _gatesetmember.GateSetMember.unlink_parent(self)
 
 
     def relink_parent(self, parent):
@@ -4563,6 +4585,11 @@ class EmbeddedGateMap(Gate):
     def __setstate__(self, d):
         self.__dict__.update(d)
 
+    def _obj_refcount(self, obj):
+        """ Number of references to `obj` contained within this GateSet """
+        return self.embedded_gate._obj_refcount(obj) + \
+            _gatesetmember.GateSetMember._obj_refcount(self,obj)
+
     def allocate_gpindices(self, startingIndex, parent):
         """
         Sets gpindices array for this object or any objects it
@@ -4594,6 +4621,21 @@ class EmbeddedGateMap(Gate):
         _gatesetmember.GateSetMember.set_gpindices(
             self, self.embedded_gate.gpindices, parent)
         return num_new_params
+
+
+    def unlink_parent(self):
+        """
+        Called when at least one reference (via `key`) to this object is being
+        disassociated with `parent`.   If *all* references are to this object
+        are now gone, set parent to None, invalidating any gpindices.
+        `startingIndex`.
+
+        Returns
+        -------
+        None
+        """
+        self.embedded_gate.unlink_parent()
+        _gatesetmember.GateSetMember.unlink_parent(self)
 
 
     def relink_parent(self, parent):
