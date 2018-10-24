@@ -199,7 +199,7 @@ class GateSet(object):
             self.stateSpaceLabels = _ld.StateSpaceLabels(lbls)
 
 
-    def _embedGate(self, gateTargetLabels, gateVal):
+    def _embedGate(self, gateTargetLabels, gateVal, force=False):
         """
         Called by OrderedMemberDict._auto_embed to create an embedded-gate
         object that embeds `gateVal` into the sub-space of
@@ -214,6 +214,10 @@ class GateSet(object):
             The gate object to embed.  Note this should be a legitimate
             Gate-derived object and not just a numpy array.
 
+        force : bool, optional
+            Always wrap with an embedded Gate, even if the
+            dimension of `gateVal` is the full gate set dimension.
+
         Returns
         -------
         Gate
@@ -224,10 +228,8 @@ class GateSet(object):
         if self.stateSpaceLabels is None:
             raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
 
-        if gateVal.dim == self.dim and len(self.stateSpaceLabels.labels) == 1 \
-                and gateTargetLabels == self.stateSpaceLabels.labels[0]:
-            return gateVal # if gate operates on full dimension and on all the
-                           # state space labels (in order!), no need to embed.
+        if gateVal.dim == self.dim and not force:
+            return gateVal # if gate operates on full dimension, no need to embed.
 
         if self._sim_type == "matrix":
             return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
