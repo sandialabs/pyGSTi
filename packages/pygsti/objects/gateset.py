@@ -224,8 +224,10 @@ class GateSet(object):
         if self.stateSpaceLabels is None:
             raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
 
-        if gateVal.dim == self.dim:
-            return gateVal # if gate operates on full dimension, no need to embed
+        if gateVal.dim == self.dim and len(self.stateSpaceLabels.labels) == 1 \
+                and gateTargetLabels == self.stateSpaceLabels.labels[0]:
+            return gateVal # if gate operates on full dimension and on all the
+                           # state space labels (in order!), no need to embed.
 
         if self._sim_type == "matrix":
             return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
