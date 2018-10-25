@@ -979,7 +979,7 @@ class LindbladParameterizedPOVM(POVM):
         
         if mxBasis is None:
             if isinstance(errormap, _gate.LindbladParameterizedGateMap):
-                mxBasis = errormap.matrix_basis
+                mxBasis = errormap.errorgen.matrix_basis
             else:
                 raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"
                                  % str(type(errormap)))

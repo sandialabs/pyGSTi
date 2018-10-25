@@ -771,6 +771,7 @@ class GateSet(object):
             assert(obj.parent is self), "%s's parent is not set correctly (%s)!" % (lbl,msg)
             if obj.gpindices is not None and len(w) > 0:
                 if _np.linalg.norm(self._paramvec[obj.gpindices]-w) > TOL:
+                    if debug: print(lbl,".to_vector() = ",w," but GateSet's paramvec = ",self._paramvec[obj.gpindices])
                     raise ValueError("%s is out of sync with paramvec!!!" % lbl)
 
 
