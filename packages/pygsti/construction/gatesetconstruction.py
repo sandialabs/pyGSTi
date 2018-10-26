@@ -1269,7 +1269,11 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
             
         for inds in availList:
             try:
-                gs.gates[_label.Label(gateName,inds)] = gate # uses automatic-embedding
+                # Note: can't use automatic-embedding b/c we need to force embedding
+                # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qubits needs to embed)
+                embedded_gate = gate if inds == tuple(qubit_labels) \
+                    else gs._embedGate(inds,gate,force=True)
+                gs.gates[_label.Label(gateName,inds)] = embedded_gate
             except Exception as e:
                 if on_construction_error == 'warn':
                     _warnings.warn("Failed to embed %s gate %s. Dropping it." %

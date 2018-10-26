@@ -25,3 +25,10 @@ def maxpower_threshold_chi2(confidence,timesteps,spectra_averaged):
     threshold = _chi2.isf(1-confidence**(1/timesteps),spectra_averaged)/spectra_averaged
     
     return threshold
+
+
+def power_significance_threshold(significance, numtests, dof):
+
+    threshold = _chi2.isf(significance/numtests,dof)/dof
+
+    return threshold
