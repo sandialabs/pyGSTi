@@ -14,7 +14,15 @@ from scipy.optimize import minimize as _minimize
 
 def xlogp_rectified(x, p, min_p=1e-4, max_p=1-1e-6):
     """
-    Todo
+    Returns x*log(p) where p is bound within (0,1], with
+    adjustments at the boundarys that are useful in minimization
+    algorithms.
+
+    If x == 0, returns 0.
+    Otherwse:
+        If p > min_p and p < max_p returns x*log(p)
+        If ...
+        If ...
     """
     if x == 0: return 0
     # Fix pos_p to be no smaller than min_p and no larger than max_p
@@ -33,7 +41,7 @@ def xlogp_rectified(x, p, min_p=1e-4, max_p=1-1e-6):
     elif p > max_p:
         # The derivative of xlog(y) evaluated at max_p  
         S = x / max_p               
-        # The 2nd derivative of xlog(y)evaluated at min_p                                                                                   
+        # The 2nd derivative of xlog(y)evaluated at max_p                                                                                   
         S2 = -0.5 * x / (max_p**2)
         # Adds a fairly arbitrary drop-off term, to smooth out the hard boundary that should be imposed at p=1.                                                                                           
         xlogp_rectified += S*(p - max_p) + S2*(1 + p - max_p)**100

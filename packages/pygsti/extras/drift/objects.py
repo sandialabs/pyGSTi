@@ -122,7 +122,7 @@ class DriftResults(object):
             print("Result: The 'no drift' hypothesis is *not* rejected.")
 
     def construct_probability_estimate(self, sequence, outcome=0, entity=0, method='MLE', epsilon=0.001, minp=1e-6,
-                                       maxp=1-1e-6, verbosity=1):
+                                       maxp=1-1e-6, verbosity=1, model_selection='local'):
         """        
         method :  'FFRaw', 'FFSharp', 'FFLogistic', 'FFUniReduce' 'MLE',
         """
@@ -141,18 +141,32 @@ class DriftResults(object):
             sequenceind = sequence
 
         T = self.number_of_timesteps
-        threshold = self.pspepo_significance_threshold
+        
         data = self.data[sequenceind,outcomeind,entity,:]
-        mean = _np.mean(data)
         modes = self.pspepo_modes[sequenceind,outcomeind,entity,:]
-        omegas = _np.arange(T)
-        omegas = omegas[modes**2 >= threshold]
-        omegas = list(omegas)
-        omegas.insert(0,0)
-        normalizer = _np.sqrt(2/T)*_np.sqrt(mean*(1-mean))
-        rawalphas = list(normalizer*modes[modes**2 >= threshold])
-        rawalphas = list(rawalphas)
-        rawalphas.insert(0,mean)
+        mean = _np.mean(data)
+        # This normalizer undoes the normalization done before converting to a power spectrum, and
+        # the DCT normalization, and multiples by 1/N to make this a probability estimate rather than
+        # a counts trace estimate.
+        normalizer = _np.sqrt(2/T)*_np.sqrt(mean*(self.number_of_counts-mean)/self.number_of_counts)/self.number_of_counts
+
+        if model_selection == 'local':
+            threshold = self.pspepo_significance_threshold           
+            omegas = _np.arange(T)
+            omegas = omegas[modes**2 >= threshold]
+            omegas = list(omegas)
+            omegas.insert(0,0)
+            rawalphas = list(normalizer*modes[modes**2 >= threshold])
+            rawalphas = list(rawalphas)
+            rawalphas.insert(0,mean/self.number_of_counts)
+
+        if model_selection == 'global':
+            omegas = self.global_drift_frequencies
+            omegas = list(omegas)
+            rawalphas = list(normalizer*modes[omegas])
+            rawalphas = list(rawalphas)
+            omegas.insert(0,0)       
+            rawalphas.insert(0,mean/self.number_of_counts)
 
         assert(method in ('FFRaw','FFSharp','FFLogistic','FFUniReduce','MLE')), "Method choice is not valid!"
 
