@@ -199,7 +199,7 @@ class GateSet(object):
             self.stateSpaceLabels = _ld.StateSpaceLabels(lbls)
 
 
-    def _embedGate(self, gateTargetLabels, gateVal):
+    def _embedGate(self, gateTargetLabels, gateVal, force=False):
         """
         Called by OrderedMemberDict._auto_embed to create an embedded-gate
         object that embeds `gateVal` into the sub-space of
@@ -214,6 +214,10 @@ class GateSet(object):
             The gate object to embed.  Note this should be a legitimate
             Gate-derived object and not just a numpy array.
 
+        force : bool, optional
+            Always wrap with an embedded Gate, even if the
+            dimension of `gateVal` is the full gate set dimension.
+
         Returns
         -------
         Gate
@@ -224,8 +228,8 @@ class GateSet(object):
         if self.stateSpaceLabels is None:
             raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
 
-        if gateVal.dim == self.dim:
-            return gateVal # if gate operates on full dimension, no need to embed
+        if gateVal.dim == self.dim and not force:
+            return gateVal # if gate operates on full dimension, no need to embed.
 
         if self._sim_type == "matrix":
             return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
@@ -526,19 +530,27 @@ class GateSet(object):
         ----------
         parameterization_type : string
             The gate and SPAM vector parameterization type.  Allowed
-            values are:
+            values are (where '*' means " terms" and " clifford terms"
+            evolution-type suffixes are allowed):
 
             - "full" : each gate / SPAM element is an independent parameter
             - "TP" : Trace-Preserving gates and state preps
-            - "CPTP" : Completely-Positive-Trace-Preserving gates
-            - "H+S" : Hamiltonian and Pauli-Stochastic errors only
-            - "S" : Pauli-Stochastic errors only
             - "static" : no parameters
             - "static unitary" : no parameters; convert superops to unitaries
-            - "H+S terms" : like H+S, but support "svterm" evolution type
-            - "H+S clifford terms" : like H+S, but support "cterm" evo. type
             - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
-        TODO: docstring - need to update these parameters
+            - "GLND*" : General unconstrained Lindbladian
+            - "CPTP*" : Completely-Positive-Trace-Preserving
+            - "H+S+A*" : Hamiltoian, Pauli-Stochastic, and Affine errors
+            - "H+S*" : Hamiltonian and Pauli-Stochastic errors
+            - "S+A*" : Pauli-Stochastic and Affine errors
+            - "S*" : Pauli-Stochastic errors
+            - "H+D+A*" : Hamiltoian, Depolarization, and Affine errors
+            - "H+D*" : Hamiltonian and Depolarization errors
+            - "D+A*" : Depolarization and Affine errors
+            - "D*" : Depolarization errors
+            - Any of the above with "S" replaced with "s" or "D" replaced with
+              "d". This removes the CPTP constraint on the Gates and SPAM (and
+              as such is seldom used).
 
         extra : dict, optional
             For `"H+S terms"` type, this may specify a dictionary
@@ -588,8 +600,7 @@ class GateSet(object):
         if extra is None: extra = {}
 
         povmtyp = rtyp = typ #assume spam types are available to all objects
-        ityp = "TP" if baseType in ("CPTP","H+S","S","H+S+A","S+A","H+D+A", "D+A", "D") else typ
-        #povmtyp = ityp # OLD TODO REMOVE
+        ityp = "TP" if _gt.is_valid_lindblad_paramtype(typ) else typ
 
         for lbl,gate in self.gates.items():
             self.gates[lbl] = _gate.convert(gate, typ, basis,
@@ -808,7 +819,7 @@ class GateSet(object):
         v = self._paramvec; Np = self.num_params()
         off = 0; shift = 0
 
-        #ellist = ", ".join(list(self.preps.keys()) +list(self.povms.keys()) +list(self.gates.keys()))
+        #ellist = ", ".join(map(str,list(self.preps.keys()) +list(self.povms.keys()) +list(self.gates.keys())))
         #print("DEBUG: rebuilding... %s" % ellist)
 
         #Step 1: remove any unused indices from paramvec and shift accordingly
@@ -844,7 +855,7 @@ class GateSet(object):
 
         # Step 2: add parameters that don't exist yet
         memo = set() #keep track of which object's gpindices have been set
-        for _,obj in self.iter_objs():
+        for lbl,obj in self.iter_objs():
 
             if shift > 0 and obj.gpindices is not None:
                 if isinstance(obj.gpindices, slice):
@@ -868,11 +879,11 @@ class GateSet(object):
 
                 shift += num_new_params
                 off += num_new_params
-                #print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " % (lbl,obj.num_params()), obj.gpindices, " off=",off)
+                #print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " % (str(lbl),obj.num_params()), obj.gpindices, " off=",off)
             else:
                 inds = obj.gpindices_as_array()
                 M = max(inds) if len(inds)>0 else -1; L = len(v)
-                #print("DEBUG: %s: existing indices = " % (lbl), obj.gpindices, " M=",M," L=",L)
+                #print("DEBUG: %s: existing indices = " % (str(lbl)), obj.gpindices, " M=",M," L=",L)
                 if M >= L:
                     #Some indices specified by obj are absent, and must be created.
                     w = obj.to_vector()
@@ -881,7 +892,8 @@ class GateSet(object):
                     for ii,i in enumerate(inds):
                         if i >= L: v[i] = w[ii]
                     #print("DEBUG:    --> added %d new params" % (M+1-L))
-                off = M+1
+                if M >= 0: # M == -1 signifies this object has no parameters, so we'll just leave `off` alone
+                    off = M+1
 
         self._paramvec = v
         #print("DEBUG: Done rebuild: %d params" % len(v))
@@ -904,6 +916,13 @@ class GateSet(object):
         #Assume all parameters of obj are new independent parameters
         num_new_params = obj.allocate_gpindices(self.num_params(), self)
         assert(num_new_params == 0),"Virtual object is requesting %d new params!" % num_new_params
+
+    def _obj_refcount(self, obj):
+        """ Number of references to `obj` contained within this GateSet """
+        cnt = 0
+        for lbl,o in self.iter_objs():
+            cnt += obj._obj_refcount(o)
+        return cnt
 
 
     def to_vector(self):

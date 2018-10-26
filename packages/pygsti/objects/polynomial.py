@@ -8,10 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import collections as _collections
-try:
-    from . import fastreplib as replib
-except ImportError:
-    from . import replib
+from . import replib    
 
 
 class Polynomial(dict):

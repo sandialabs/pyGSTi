@@ -185,10 +185,28 @@ class GateSetMember(GateSetChild):
                                       startingIndex+Np), parent )
             #print(" -- allocated %d indices" % Np)
             return Np
-        else: #assume gpindices is good & everything's allocated already
+        else: # assume gpindices is good & everything's allocated already
             #print(" -- no need to allocate anything")
             return 0
 
+
+    def unlink_parent(self):
+        """
+        Called when at least one reference (via `key`) to this object is being
+        disassociated with `parent`.   If *all* references are to this object
+        are now gone, set parent to None, invalidating any gpindices.
+        `startingIndex`.
+
+        Returns
+        -------
+        None
+        """
+        if (self.parent is not None) and (self.parent._obj_refcount(self) == 0):
+            self._parent = None
+
+    def _obj_refcount(self, obj):
+        """ Number of references to `obj` contained within this object """
+        return 1 if (obj is self) else 0
         
     def gpindices_as_array(self):
         """ 

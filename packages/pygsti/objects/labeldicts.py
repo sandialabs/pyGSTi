@@ -220,7 +220,19 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
 
             if not hasattr(value, "_evotype"): value._evotype = "densitymx" # for backward compatibility
             self._check_evotype(value._evotype)
+
+            if self.parent is not None and key in self:
+                existing = super(OrderedMemberDict,self).__getitem__(key)
+            else: existing = None
+
             super(OrderedMemberDict,self).__setitem__(key, value)
+
+            # let the now-replaced existing object know it's been
+            # removed from the parent, allowing it to reset (to None)
+            # its parent link if there are no more references to it.
+            if existing is not None and value is not existing:
+                assert(existing.parent is self.parent), "GateSet object not setup correctly"
+                existing.unlink_parent()
 
         elif key in self: #if a object already exists...
             #try to set its value
@@ -295,6 +307,14 @@ class OutcomeLabelDict(_collections.OrderedDict):
     #Whether mapping from strings to 1-tuples is performed
     _strict = False
 
+    @classmethod
+    def to_outcome(cls,val):
+        """
+        Converts string outcomes like "0" to proper outcome tuples, like ("0",)
+        (also converts non-tuples to tuples, e.g. `["0","1"]` to `("0","1")` )
+        """
+        return (val,) if _compat.isstr(val) else tuple(val)
+
     def __init__(self, items=[]):
         """
         Creates a new OutcomeLabelDict.
@@ -310,17 +330,17 @@ class OutcomeLabelDict(_collections.OrderedDict):
 
     def __getitem__(self, key):
         if not OutcomeLabelDict._strict:
-            key = (key,) if _compat.isstr(key) else tuple(key)
+            key = OutcomeLabelDict.to_outcome(key)
         return super(OutcomeLabelDict,self).__getitem__(key)
         
     def __setitem__(self, key, val):
         if not OutcomeLabelDict._strict:
-            key = (key,) if _compat.isstr(key) else tuple(key)
+            key = OutcomeLabelDict.to_outcome(key)
         super(OutcomeLabelDict,self).__setitem__(key,val)
 
     def __contains__(self, key):
         if not OutcomeLabelDict._strict:
-            key = (key,) if _compat.isstr(key) else tuple(key)
+            key = OutcomeLabelDict.to_outcome(key)
         return key in super(OutcomeLabelDict,self).keys()
 
     def copy(self):

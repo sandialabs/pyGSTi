@@ -21,6 +21,7 @@ from ..tools   import timed_block as _timed_block
 from ..tools.mpitools import distribute_indices as _distribute_indices
 
 from .. import tools as _tools
+from .. import objects as _objs
 from .. import _version
 
 from . import workspace as _ws
@@ -28,6 +29,7 @@ from . import autotitle as _autotitle
 from . import merge_helpers as _merge
 from . import reportables as _reportables
 from .notebook import Notebook as _Notebook
+from ..baseobjs.label import Label as _Lbl
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
@@ -200,7 +202,7 @@ def _set_toggles(results_dict, brevity, combine_robust):
 
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
                                nmthreshold, printer, fmt,
-                               combine_robust):
+                               combine_robust, idt_results_dict=None):
     """
     Creates the "master switchboard" used by several of the reports
     """
@@ -276,6 +278,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("gssAllL",(0,))
     switchBd.add("gsFinalGrid",(2,))
 
+    switchBd.add("idtresults",(0,))
+
     if confidenceLevel is not None:
         switchBd.add("cri",(0,1,2))
         switchBd.add("criGIRep",(0,1))
@@ -296,6 +300,9 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 k = results.gatestring_structs['final'].Ls.index(L)
                 switchBd.gss[d,iL] = results.gatestring_structs['iteration'][k]
         switchBd.gssAllL[d] = results.gatestring_structs['iteration']
+
+        if idt_results_dict is not None:
+            switchBd.idtresults[d] = idt_results_dict.get(dslbl,None)
 
         for i,lbl in enumerate(est_labels):
             est = results.estimates.get(lbl,None)
@@ -431,6 +438,83 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
              if el in results_list[0].estimates else None) for el in est_labels])
 
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs
+
+def _construct_idtresults(idtIdleGate, idtPauliDicts, gst_results_dict, printer):
+    """ 
+    Constructs a dictionary of idle tomography results, parallel
+    to the GST results in `gst_results_dict`, where possible.
+    """
+    if idtPauliDicts is None: 
+        return {}
+
+    idt_results_dict = {}
+    GiStr = _objs.GateString((idtIdleGate,))
+
+    from ..extras import idletomography as _idt
+    autodict = bool(idtPauliDicts == "auto")
+    for ky,results in gst_results_dict.items():
+
+        if autodict:
+            for est in results.estimates.values():
+                if 'target' in est.gatesets:
+                    idt_target = est.gatesets['target']
+                    break
+            else: continue # can't find any target gatesets
+            idtPauliDicts = _idt.determine_paulidicts(idt_target)
+            if idtPauliDicts is None: 
+                continue # automatic creation failed -> skip
+
+        gss = results.gatestring_structs['final']
+        if GiStr not in gss.germs: continue
+        
+        try: # to get a dimension -> nQubits
+            estLabels = list(results.estimates.keys())
+            estimate0 = results.estimates[estLabels[0]]
+            dim = estimate0.gatesets['target'].dim
+            nQubits = int(round(_np.log2(dim)//2))
+        except:
+            printer.log(" ! Skipping idle tomography on %s dataset (can't get # qubits) !" % ky)
+            continue # skip if we can't get dimension
+
+        maxLengths = gss.Ls
+        plaq = gss.get_plaquette(maxLengths[0], GiStr) # just use "L0" (first maxLength) - all should have same fidpairs
+        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idtPauliDicts, nQubits)
+        idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
+        printer.log(" * Running idle tomography on %s dataset *" % ky)
+        idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idtPauliDicts,
+                                             maxweight=2, #HARDCODED for now (FUTURE)
+                                             advancedOptions=idt_advanced)
+        idt_results_dict[ky] = idtresults
+
+    return idt_results_dict
+
+#UNUSED TODO REMOVE
+#def _create_idle_tomography_switchboard(ws, idt_results_dict):
+#    
+#    errortype_labels = None
+#    errorop_labels = None
+#    for results in idt_results_dict.values():
+#        errorop_labels = _add_new_labels(errorop_labels, [str(e).strip() for e in results.error_list])
+#        errortype_labels   = _add_new_labels(errortype_labels, list(results.intrinsic_rates.keys()))
+#    errortype_labels = list(sorted(errortype_labels))
+#
+#    switchBd = ws.Switchboard(
+#        ["ErrorType","ErrorOp"],
+#        [errortype_labels,errorop_labels],
+#        ["dropdown","dropdown"], [0,0],
+#        show=[True,True]
+#    )
+#
+#    switchBd.add("errortype",(0,))
+#    switchBd.add("errorop",(1,))
+#
+#    for i,etyp in enumerate(errortype_labels):
+#        switchBd.errortype[i] = etyp
+#
+#    for i,eop in enumerate(errorop_labels):
+#        switchBd.errorop[i] = eop
+#        
+#    return switchBd
 
 
 def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
@@ -574,7 +658,7 @@ def create_standard_report(results, filename, title="auto",
         - 4: Everything but summary figures disappears at brevity=4
 
     advancedOptions : dict, optional
-        A dictionary of advanced options for which the default values aer usually
+        A dictionary of advanced options for which the default values are usually
         are fine.  Here are the possible keys of `advancedOptions`:
 
         - connected : bool, optional
@@ -632,6 +716,15 @@ def create_standard_report(results, filename, title="auto",
             tables will get confidence intervals (and reports will take longer
             to generate).
 
+        - idt_basis_dicts : tuple, optional
+            Tuple of (prepDict,measDict) pauli-basis dictionaries, which map
+            between 1-qubit Pauli basis strings (e.g. `'-X'` or `'Y'`) and tuples
+            of gate names (e.g. `('Gx','Gx')`).  If given, idle tomography will
+            be performed on the 'Gi' gate and included in the report.
+
+        - idt_idle_gatelabel : Label, optional
+            The label identifying the idle gate (for use with idle tomography).
+
 
     verbosity : int, optional
        How much detail to send to stdout.
@@ -656,6 +749,8 @@ def create_standard_report(results, filename, title="auto",
     autosize = advancedOptions.get('autosize','initial')
     combine_robust = advancedOptions.get('combine_robust',True)
     ci_brevity = advancedOptions.get('confidence_interval_brevity',1)
+    idtPauliDicts = advancedOptions.get('idt_basis_dicts','auto')
+    idtIdleGate = advancedOptions.get('idt_idle_gatelabel',_Lbl('Gi'))
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -709,6 +804,12 @@ def create_standard_report(results, filename, title="auto",
                ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__)]
     qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
 
+    # Perform idle tomography on datasets if desired (need to do
+    #  this before creating main switchboard)
+    idt_results_dict = _construct_idtresults(idtIdleGate, idtPauliDicts,
+                                             results_dict, printer)
+    toggles['IdleTomography'] = bool(len(idt_results_dict) > 0)
+
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
 
@@ -716,7 +817,7 @@ def create_standard_report(results, filename, title="auto",
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
             _create_master_switchboard(ws, results_dict, confidenceLevel,
                                        nmthreshold, printer, fmt,
-                                       combine_robust)
+                                       combine_robust, idt_results_dict)
     if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 or
                          len(gauge_opt_labels) > 1 or len(swLs) > 1):
         raise ValueError("PDF reports can only show a *single* dataset," +
@@ -844,6 +945,15 @@ def create_standard_report(results, filename, title="auto",
         addqty(4,'singleMetricTable_gi', ws.GatesSingleMetricTable, gimetric_switchBd.metric,
                switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, None,
                gimetric_switchBd.cmpTableTitle, confidenceRegionInfo=None)
+
+    if len(idt_results_dict) > 0:
+        #Plots & tables for idle tomography tab
+        #idt_switchBd = _create_idle_tomography_switchboard(ws, idt_results_dict)
+        #qtys['idtSwitchboard'] = idt_switchBd
+        addqty(A,'idtIntrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, switchBd.idtresults)
+        addqty(3,'idtObservedRatesTable', ws.IdleTomographyObservedRatesTable, switchBd.idtresults,
+               20, gsGIRep) # HARDCODED - show only top 20 rates
+        #OLD REMOVE: previous args: idt_switchBd.errortype, idt_switchBd.errorop
 
     #Ls and Germs specific
     gss = switchBd.gss
@@ -1079,7 +1189,128 @@ def create_nqnoise_report(results, filename, title="auto",
                           auto_open=False, link_to=None, brevity=0,
                           advancedOptions=None, verbosity=1):
     """
-    TODO: docstring 
+    Creates a report designed to display results containing for n-qubit noisy
+    gate set estimates.
+
+    Such gate sets are characterized by the fact that gates and SPAM objects may
+    not have dense representations (or it may be very expensive to compute them)
+    , and that these gate sets likely have the particular structure given by
+    :function:`build_nqnoise_gateset`.
+
+
+    Parameters
+    ----------
+    results : Results
+        An object which represents the set of results from one *or more* GST
+        estimation runs, typically obtained from running
+        :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`, OR a
+        dictionary of such objects, representing multiple GST runs to be
+        compared (typically all with *different* data sets). The keys of this
+        dictionary are used to label different data sets that are selectable
+        in the report.
+
+    filename : string, optional
+       The output filename where the report file(s) will be saved.  If
+       None, then no output file is produced (but returned Workspace
+       still caches all intermediate results).
+
+    title : string, optional
+       The title of the report.  "auto" causes a random title to be
+       generated (which you may or may not like).
+
+    confidenceLevel : int, optional
+       If not None, then the confidence level (between 0 and 100) used in
+       the computation of confidence regions/intervals. If None, no
+       confidence regions or intervals are computed.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    ws : Workspace, optional
+        The workspace used as a scratch space for performing the calculations
+        and visualizations required for this report.  If you're creating
+        multiple reports with similar tables, plots, etc., it may boost
+        performance to use a single Workspace for all the report generation.
+
+    auto_open : bool, optional
+        If True, automatically open the report in a web browser after it
+        has been generated.
+
+    link_to : list, optional
+        If not None, a list of one or more items from the set
+        {"tex", "pdf", "pkl"} indicating whether or not to
+        create and include links to Latex, PDF, and Python pickle
+        files, respectively.  "tex" creates latex source files for
+        tables; "pdf" renders PDFs of tables and plots ; "pkl" creates
+        Python versions of plots (pickled python data) and tables (pickled
+        pandas DataFrams).
+
+    brevity : int, optional
+        Amount of detail to include in the report.  Larger values mean smaller
+        "more briefr" reports, which reduce generation time, load time, and
+        disk space consumption.  In particular:
+
+        - 1: Plots showing per-sequences quantities disappear at brevity=1
+        - 2: Reference sections disappear at brevity=2
+        - 3: Germ-level estimate tables disappear at brevity=3
+        - 4: Everything but summary figures disappears at brevity=4
+
+    advancedOptions : dict, optional
+        A dictionary of advanced options for which the default values are usually
+        are fine.  Here are the possible keys of `advancedOptions`:
+
+        - connected : bool, optional
+            Whether output HTML should assume an active internet connection.  If
+            True, then the resulting HTML file size will be reduced because it
+            will link to web resources (e.g. CDN libraries) instead of embedding
+            them.
+
+        - cachefile : str, optional
+            filename with cached workspace results
+
+        - linlogPercentile : float, optional
+            Specifies the colorscale transition point for any logL or chi2 color
+            box plots.  The lower `(100 - linlogPercentile)` percentile of the
+            expected chi2 distribution is shown in a linear grayscale, and the
+            top `linlogPercentile` is shown on a logarithmic colored scale.
+
+        - nmthreshold : float, optional
+            The threshold, in units of standard deviations, that triggers the
+            usage of non-Markovian error bars.  If None, then non-Markovian
+            error bars are never computed.
+
+        - precision : int or dict, optional
+            The amount of precision to display.  A dictionary with keys
+            "polar", "sci", and "normal" can separately specify the
+            precision for complex angles, numbers in scientific notation, and
+            everything else, respectively.  If an integer is given, it this
+            same value is taken for all precision types.  If None, then
+            `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
+
+        - resizable : bool, optional
+            Whether plots and tables are made with resize handles and can be
+            resized within the report.
+
+        - autosize : {'none', 'initial', 'continual'}
+            Whether tables and plots should be resized, either initially --
+            i.e. just upon first rendering (`"initial"`) -- or whenever
+            the browser window is resized (`"continual"`).
+
+        - combine_robust : bool, optional
+            Whether robust estimates should automatically be combined with
+            their non-robust counterpart when displayed in reports. (default
+            is True).
+
+        - confidence_interval_brevity : int, optional
+            Roughly specifies how many figures will have confidence intervals
+            (when applicable). Defaults to '1'.  Smaller values mean more
+            tables will get confidence intervals (and reports will take longer
+            to generate).
+
+    verbosity : int, optional
+       How much detail to send to stdout.
+
 
     Returns
     -------
@@ -1091,15 +1322,17 @@ def create_nqnoise_report(results, filename, title="auto",
 
     if advancedOptions is None: advancedOptions = {}
     linlogPercentile = advancedOptions.get('linlog percentile',5)
-    errgen_type = advancedOptions.get('error generator type', "logGTi")
-    nmthreshold = advancedOptions.get('nm threshold',DEFAULT_BAD_FIT_THRESHOLD)
+    errgen_type = advancedOptions.get('error generator type', "logGTi") # REMOVE - also in docstring?
+    nmthreshold = advancedOptions.get('nm threshold',DEFAULT_BAD_FIT_THRESHOLD) # REMOVE - also in docstring?
     precision = advancedOptions.get('precision', None)
     cachefile = advancedOptions.get('cachefile',None)
     connected = advancedOptions.get('connected',False)
     resizable = advancedOptions.get('resizable',True)
     autosize = advancedOptions.get('autosize','initial')
-    combine_robust = advancedOptions.get('combine_robust',True)
+    combine_robust = advancedOptions.get('combine_robust',True) # REMOVE - also in docstring?
     ci_brevity = advancedOptions.get('confidence_interval_brevity',1)
+    idtPauliDicts = advancedOptions.get('idt_basis_dicts','auto')
+    idtIdleGate = advancedOptions.get('idt_idle_gatelabel',_Lbl('Gi'))
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -1153,6 +1386,12 @@ def create_nqnoise_report(results, filename, title="auto",
                ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__)]
     qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
 
+    # Perform idle tomography on datasets if desired (need to do
+    #  this before creating main switchboard)
+    idt_results_dict = _construct_idtresults(idtIdleGate, idtPauliDicts,
+                                             results_dict, printer)
+    toggles['IdleTomography'] = bool(len(idt_results_dict) > 0)
+
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
 
@@ -1160,7 +1399,7 @@ def create_nqnoise_report(results, filename, title="auto",
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
             _create_master_switchboard(ws, results_dict, confidenceLevel,
                                        nmthreshold, printer, fmt,
-                                       combine_robust)
+                                       combine_robust, idt_results_dict)
     if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 or
                          len(gauge_opt_labels) > 1 or len(swLs) > 1):
         raise ValueError("PDF reports can only show a *single* dataset," +
@@ -1284,6 +1523,12 @@ def create_nqnoise_report(results, filename, title="auto",
     #X     addqty(4,'singleMetricTable_gi', ws.GatesSingleMetricTable, gimetric_switchBd.metric,
     #X            switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, None,
     #X            gimetric_switchBd.cmpTableTitle, confidenceRegionInfo=None)
+
+    if len(idt_results_dict) > 0:
+        #Plots & tables for idle tomography tab
+        addqty(A,'idtIntrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, switchBd.idtresults)
+        addqty(3,'idtObservedRatesTable', ws.IdleTomographyObservedRatesTable, switchBd.idtresults,
+               20, gsGIRep) # HARDCODED - show only top 20 rates
 
     #Ls and Germs specific
     gss = switchBd.gss

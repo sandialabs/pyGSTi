@@ -117,6 +117,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     # DB: from ..tools import matrixtools as _mt
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
+    # num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
         
     for k in range(max_iter): #outer loop
         # assume x, f, fnorm hold valid values
@@ -144,15 +145,11 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 x_plus_dx[i] += eps
                 Jac[:,i] = (obj_fn(x_plus_dx)-f)/eps
 
-        ##DEBUG: use finite difference to compute jacobian (rename Jac -> Jac_analytic above)
-        #eps = 1e-7
-        #Jac = _np.empty((len(f),len(x)),'d')
-        #for i in range(len(x)):
-        #    x_plus_dx = x.copy()
-        #    x_plus_dx[i] += eps
-        #    Jac[:,i] = (obj_fn(x_plus_dx)-f)/eps
+        #DEBUG: compare with analytic jacobian (need to uncomment num_fd_iters DEBUG line above too)
+        #Jac_analytic = jac_fn(x)
         #if _np.linalg.norm(Jac_analytic-Jac) > 1e-6:
-        #    print("JACDIFF = ",_np.linalg.norm(Jac_analytic-Jac)," per el=",_np.linalg.norm(Jac_analytic-Jac)/Jac.size," sz=",Jac.size)
+        #    print("JACDIFF = ",_np.linalg.norm(Jac_analytic-Jac)," per el=",
+        #          _np.linalg.norm(Jac_analytic-Jac)/Jac.size," sz=",Jac.size)
         
         # DB: from ..tools import matrixtools as _mt
         # DB: print("DB JAC (%s)=" % str(Jac.shape)); _mt.print_mx(Jac,prec=0,width=4); assert(False)

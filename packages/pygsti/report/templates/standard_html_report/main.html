@@ -49,6 +49,9 @@
 	#iftoggle(CompareDatasets)
 	<a href="#" class="tablink" onclick="openTab(event, 'DataComparison')">Data Comparison</a>
 	#endtoggle
+	#iftoggle(IdleTomography)
+	<a href="#" class="tablink" onclick="openTab(event, 'IdleTomography')">Idle Tomography</a>
+	#endtoggle
       </div>
 
       <div class="linkgroup">
@@ -108,7 +111,11 @@
       <div id="DataComparison" class="tabcontent">
       </div>
       #endtoggle
-      
+      #iftoggle(IdleTomography)
+      <div id="IdleTomography" class="tabcontent">
+      </div>
+      #endtoggle
+
 
       <div id="GaugeVariants" class="tabcontent">
       </div>
@@ -137,12 +144,26 @@
 	<p><b>Report loading failed!</b><p>
 	<p>Your browser does not allow locally-loaded html files to load other local files.  This is a security restriction present in many standard browsers (don't worry).  There are several things you can do to fix this problem:
 	  <ul>
-	    <li> <b>Firefox</b> seems to at least currently allow files to load other files, so if you're not using Firefox right now <b>just switching to Firefox may cause this report to load properly.</b></li>
-	    <li> Running any type of <b>local web server</b> and loading this page (main.html) through the web server instead of by opening the file directly (so the address bar begins with <q>http://</q> instead of <q>file://</q> (which it probably does now) will almost certainly fix the problem.  Three fairly simple ways of doing this are:
+	    <li> If the URL in your address bar begins with <b><q>file://</q></b>, then you have several options:
+	      <ul>
+		<li> <b>Firefox</b> currently allow files to load other files by default, so if you're not using Firefox right now <b>just switching to Firefox may cause this report to load properly.</b></li>
+		<li> <b>Safari</b> will work if you first enable the "Disable Local File Restrictions" under the Develop menu (go to Preferences, Advanced to show the Develop menu if you don't see it now).</li>
+		<li> <b>Chrome</b> will work if it's started with the <tt>--allow-file-access-from-files</tt> flag.  On Windows, this can be done by executing <tt>chrome.exe --allow-file-access-from-files</tt> from a command prompt; on a Mac you'll need to execute something like <tt>/Applications/Google Chrome.app/Contents/MacOS/Google Chrome --allow-file-access-from-files</tt>.</li>
+	      </ul>
+	    </li>
+	    <li> If your URL is using a Jupyter notebook server, and begins with <b><q>localhost:8888/files/</q></b> or similar, then the issue is likely due to server and browser cross-domain security restrictions.  Recent versions of Jupyter notebooks, may require a couple modifications to your <tt>~/.jupyter/jupyter_notebook_config.py</tt> file (created by <tt>jupyter notebook --generate-config</tt> if it doesn't exist already) to get things working.  Add the following two lines to your configuration file, restart the notebook server, and reload this page. 
+<pre>
+c.NotebookApp.allow_origin = 'null'
+c.NotebookApp.tornado_settings = { 'headers': { 'Access-Control-Allow-Credentials': 'true' } }
+</pre>
+	    </li>
+	    <li> Finally, if none of the above worked or you'd rather a different approach, you can load this page through a legitimate web server.  <b>Running a local web server</b> and loading this page (main.html) through the web server instead of by opening the file directly (so the address bar begins with <q>http://</q> will almost certainly fix any problems.  Three fairly simple ways of doing this are:
 	      <ol>
 		<li><b>If you have Python installed</b>, running <pre>python -m SimpleHTTPServer</pre> on Mac/Linux or <pre>python -m http.server</pre> on Windows from a command line will start a local web server rooted in the current directory.  Access this server from a browser by typing <pre>localhost:8000</pre> in the address bar.  Navigate from there to main.html and you should be all set.</li>
 		<li><b>If you have the Google Chrome browser</b> (even if you're not using it), then download the <b>Web Server for Chrome</b> app (do a web search to find the app on Google's web store) and follow the instructions to start a local web server running out of a given local directory.</li>
-		<li><b>If you use Jupyter/iPython notebooks</b> and have a notebook server running, you can use that same server to access this main.html page.  To do so, you must place <q>files</q> in front of the actual path to main.html (from your notebook server's root).  For example, <q>http://localhost:8888/files/path/to/myReport/main.html</q>.  A trick for accessing files like this is to <b>navigate to main.html using Jupyter's web interface (which will <i>edit</i> the HTML page instead of opening it) and then changing <q>edit</q> to <q>files</q> in the address bar.</b></li>
+		<li><b>If you use Jupyter notebooks</b> you can use the notebook server to access this main.html page.  You just place <q>files</q> in front of the actual path to main.html (from your notebook server's root).  For example, <q>http://localhost:8888/files/path/to/myReport/main.html</q>.  A trick for accessing files like this is to <b>navigate to main.html using Jupyter's web interface</b> (which sometimes will <i>edit</i> the HTML page instead of opening it) and then changing <q>edit</q> to <q>files</q> in the address bar.  If this doesn't work, you probably need to fix the configuration as described above (the jupyter server isn't quite a full-fledged web server and needs some tweaking).
+		</li>
+
 	      </ol>
 	    </li>
 	  </ul>		  

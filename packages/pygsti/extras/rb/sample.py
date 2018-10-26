@@ -678,7 +678,7 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
 
 def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimination', samplerargs=[], addlocal=False, lsargs=[]):
     """
-    Generates arandom circuit of the specified length.
+    Generates a random circuit of the specified length.
 
     Parameters
     ----------

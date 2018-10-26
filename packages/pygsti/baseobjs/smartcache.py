@@ -10,7 +10,6 @@ import hashlib   as _hashlib
 import functools as _functools
 import sys       as _sys
 import numpy     as _np
-import functools as _functools
 import inspect   as _inspect
 import pickle    as _pickle
 

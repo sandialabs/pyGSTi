@@ -334,7 +334,7 @@ class GatesTable(WorkspaceTable):
                     row_data.append(gateset.gates[gl])
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
-                    fig = _wp.GateMatrixPlot(self.ws, gateset.gates[gl],
+                    fig = _wp.GateMatrixPlot(self.ws, gateset.gates[gl].todense(),
                                              colorbar=False,
                                              mxBasis=basis)
 
@@ -1008,43 +1008,50 @@ class GaugeRobustErrgenTable(WorkspaceTable):
 
 
 class NQubitErrgenTable(WorkspaceTable):
-    """ Table displaying the error generators of a GateSet's gates as well
-        as their projections onto spaces of standard generators
-        TODO: docstring - update?
     """
+    Table displaying the error rates (coefficients of error generators) of a
+    GateSet's gates.  The gates are assumed to have a particular structure.
+
+    Specifically, gates must be :class:`LinbladParameterizedGateMap` or
+    :class:`StaticGate` objects wrapped within :class:`EmbeddedGateMap` and/or 
+    :class:`ComposedGateMap` objects (this is consistent with the gates
+    constructed by :function:`build_nqnoise_gateset`).  As such, error rates
+    are read directly from the gate objects rather than being computed by
+    projecting dense gate representations onto a "basis" of fixed error
+    generators (e.g. H+S+A generators).
+    """
+
     def __init__(self, ws, gateset, confidenceRegionInfo=None,
-                 display=("errgen","H","S","A"), display_as="boxes"):
+                 display=("H","S","A"), display_as="boxes"):
 
         """
-        TODO: docstring -update this!
-        Create a table listing the error generators obtained by
-        comparing a gateset's gates to a target gateset.
+        Create a table listing the error rates of the gates in `gateset`.
+
+        The gates in `gateset` are assumed to have a particular structure,
+        namely: they must be :class:`LinbladParameterizedGateMap` or
+        :class:`StaticGate` objects wrapped within :class:`EmbeddedGateMap`
+        and/or :class:`ComposedGateMap` objects.  
+
+        Error rates are organized by order of composition and which qubits
+        the corresponding error generators act upon.
 
         Parameters
         ----------
-        gateset, targetGateset : GateSet
-            The gate sets to compare
-
-        display : tuple of {"errgen","H","S","A"}
-            Specifes which columns to include: the error generator itself
-            and the projections of the generator onto Hamiltoian-type error
-            (generators), Stochastic-type errors, and Affine-type errors.
-
-        display_as : {"numbers", "boxes"}, optional
-            How to display the requested matrices, as either numerical
-            grids (fine for small matrices) or as a plot of colored boxes
-            (space-conserving and better for large matrices).
+        gateset : GateSet
+            The gate set to analyze.
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
             used to display error intervals.
 
-        genType : {"logG-logT", "logTiG", "logGTi"}
-            The type of error generator to compute.  Allowed values are:
+        display : tuple of {"H","S","A"}
+            Specifes which columns to include: Hamiltoian-type,
+            Pauli-Stochastic-type, and Affine-type rates, respectively.
 
-            - "logG-logT" : errgen = log(gate) - log(target_gate)
-            - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
-            - "logTiG" : errgen = log( dot(gate, inv(target_gate)) )
+        display_as : {"numbers", "boxes"}, optional
+            How to display the requested matrices, as either numerical
+            grids (fine for small matrices) or as a plot of colored boxes
+            (space-conserving and better for large matrices).
 
         Returns
         -------
@@ -1067,9 +1074,9 @@ class NQubitErrgenTable(WorkspaceTable):
         colHeadings = ['Gate','Compos','SSLbls']
 
         for disp in display:
-            if disp == "errgen":
-                colHeadings.append('Error Generator')
-            elif disp == "H":
+            #if disp == "errgen":
+            #    colHeadings.append('Error Generator')
+            if disp == "H":
                 colHeadings.append('Hamiltonian Coeffs')
             elif disp == "S":
                 colHeadings.append('Stochastic Coeffs')
@@ -1302,11 +1309,12 @@ class GateDecompTable(WorkspaceTable):
         gateLabels = list(gateset.gates.keys())  # gate labels
 
         colHeadings = ('Gate','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') \
-                      + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
+                      + tuple( [ "Axis angle w/%s" % str(gl) for gl in gateLabels] )
         tooltips = ('Gate','Hamiltonian Eigenvalues','Rotation angle','Rotation axis',
                     'Taking the log of a gate may be performed approximately.  This is ' +
                     'error in that estimate, i.e. norm(G - exp(approxLogG)).') + \
-                    tuple( [ "Angle between the rotation axis of %s and the gate of the current row" % gl for gl in gateLabels] )
+                    tuple( [ "Angle between the rotation axis of %s and the gate of the current row"
+                             % str(gl) for gl in gateLabels] )
         formatters = [None]*len(colHeadings)
 
         table = _ReportTable(colHeadings, formatters,
@@ -1627,8 +1635,9 @@ class GateEigenvalueTable(WorkspaceTable):
 
             #import time as _time #DEBUG
             #tStart = _time.time() #DEBUG
-            fn = _reportables.Gate_eigenvalues if _tools.isstr(gl) else \
-                 _reportables.Gatestring_eigenvalues
+            fn = _reportables.Gate_eigenvalues if \
+                isinstance(gl,_objs.Label) or _tools.isstr(gl) else \
+                _reportables.Gatestring_eigenvalues
             evals = _ev(fn(gateset,gl), confidenceRegionInfo)
             #tm = _time.time() - tStart #DEBUG
             #if tm > 0.01: print("DB: Gate eigenvalues in %gs" % tm) #DEBUG
@@ -1641,13 +1650,13 @@ class GateEigenvalueTable(WorkspaceTable):
             if targetGateset is not None:
                 #TODO: move this to a reportable qty to get error bars?
 
-                if _tools.isstr(gl):
-                    target_evals = _np.linalg.eigvals( targetGateset.gates[gl] ) #no error bars
+                if isinstance(gl,_objs.Label) or _tools.isstr(gl):
+                    target_evals = _np.linalg.eigvals( targetGateset.gates[gl].todense() ) #no error bars
                 else:
                     target_evals = _np.linalg.eigvals( targetGateset.product(gl) ) #no error bars
 
                 if any([(x in display) for x in ('rel','log-rel','relpolar')]):
-                    if _tools.isstr(gl):
+                    if isinstance(gl,_objs.Label) or _tools.isstr(gl):
                         rel_evals = _ev(_reportables.Rel_gate_eigenvalues(gateset, targetGateset, gl), confidenceRegionInfo)
                     else:
                         rel_evals = _ev(_reportables.Rel_gatestring_eigenvalues(gateset, targetGateset, gl), confidenceRegionInfo)
@@ -1709,7 +1718,8 @@ class GateEigenvalueTable(WorkspaceTable):
 
                 elif disp == "evdm":
                     if targetGateset is not None:
-                        fn = _reportables.Eigenvalue_diamondnorm if _tools.isstr(gl) else \
+                        fn = _reportables.Eigenvalue_diamondnorm if \
+                            isinstance(gl,_objs.Label) or _tools.isstr(gl) else \
                              _reportables.Gatestring_eigenvalue_diamondnorm
                         gidm = _ev(fn(gateset, targetGateset, gl), confidenceRegionInfo)
                         row_data.append( gidm )
@@ -1717,8 +1727,9 @@ class GateEigenvalueTable(WorkspaceTable):
 
                 elif disp == "evinf":
                     if targetGateset is not None:
-                        fn = _reportables.Eigenvalue_entanglement_infidelity if _tools.isstr(gl) else \
-                             _reportables.Gatestring_eigenvalue_entanglement_infidelity
+                        fn = _reportables.Eigenvalue_entanglement_infidelity if \
+                            isinstance(gl,_objs.Label) or _tools.isstr(gl) else \
+                            _reportables.Gatestring_eigenvalue_entanglement_infidelity
                         giinf = _ev(fn(gateset, targetGateset, gl), confidenceRegionInfo)
                         row_data.append( giinf )
                         row_formatters.append('Normal')

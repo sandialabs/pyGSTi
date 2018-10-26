@@ -1210,11 +1210,12 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
 
     boxSizeX = boxSizeY = 15
 
+    maxTextLen = -1 #DB
     if boxLabels:
         if prec in ('compact','compacthp'):
-            precnum = 3
+            precnum = 3+1 # +1 for - sign, e.g. "-1e4"
         else: precnum = abs(prec)+1
-        boxSizeX = boxSizeY = 8*precnum
+        boxSizeX = boxSizeY = 8*precnum 
 
         if len(annotations) > 0:
             maxTextLen = max([len(ann['text']) for ann in annotations])
@@ -1227,6 +1228,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
       
     width = lmargin + boxSizeX*matrix.shape[1] + rmargin
     height = tmargin + boxSizeY*matrix.shape[0] + bmargin
+    #print("DB: matrix_color_boxplot dims: ",width,height) # to check auto-width/height
 
     width *= scale
     height *= scale
@@ -1994,9 +1996,10 @@ class MatrixPlot(WorkspacePlot):
         if colormap is None:
             colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
             
-        return matrix_color_boxplot(
+        ret = matrix_color_boxplot(
             matrix, xlabels, ylabels, xlabel, ylabel,
             boxLabels, None, colorbar, colormap, prec, scale, grid=grid)
+        return ret
 
 
 
@@ -2697,12 +2700,11 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
         for i,_ in enumerate(dslabels):
             for j,_ in enumerate(dslabels[i+1:],start=i+1):
                 dsc = dsc_dict.get( (i,j), dsc_dict.get( (j,i), None) )
-                
-                val = dsc.composite_nsigma if (dsc is not None) else None                
+                val = dsc.aggregate_nsigma if (dsc is not None) else None                
                 nSigmaMx[i,j] = nSigmaMx[j,i] = val
                 if val and val > max_nSigma: max_nSigma = val
 
-                val = dsc.composite_llr if (dsc is not None) else None
+                val = dsc.aggregate_llr if (dsc is not None) else None
                 logLMx[i,j] = logLMx[j,i] = val
                 if val and val > max_2DeltaLogL: max_2DeltaLogL = val
                 

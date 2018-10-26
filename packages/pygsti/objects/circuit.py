@@ -1644,6 +1644,10 @@ class Circuit(_gstr.GateString):
         quil = ''
         depth = self.depth()
         
+        quil += 'DECLARE ro BIT[{0}]\n'.format(str(depth))
+        
+        quil += 'PRAGMA INITIAL_REWIRING "NAIVE"\n'
+        
         # Go through the layers, and add the quil for each layer in turn.
         for l in range(depth):
             
@@ -1698,7 +1702,8 @@ class Circuit(_gstr.GateString):
         
         # Add in a measurement at the end.
         for q in self.line_labels:
-            quil += "MEASURE {0} [{1}]\n".format(str(qubit_conversion[q]),str(qubit_conversion[q]))
+#            quil += "MEASURE {0} [{1}]\n".format(str(qubit_conversion[q]),str(qubit_conversion[q]))
+            quil += "MEASURE {0} ro[{1}]\n".format(str(qubit_conversion[q]),str(qubit_conversion[q]))
             
         return quil  
 
