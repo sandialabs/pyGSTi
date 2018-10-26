@@ -1857,6 +1857,298 @@ class EigenvalueParameterizedGate(GateMatrix):
         return False
     
 
+class ComposedErrorgen(Gate):
+    """ Not a CPTP map - just the Lindbladian exponent
+        TODO: docstring  -- a *sum* (not product) of other error generators """
+    
+    def __init__(self, errgens_to_compose, dim="auto", evotype="auto"):
+        """
+        Creates a new ComposedErrorgen.
+
+        Parameters
+        ----------
+        errgens_to_compose : list
+            List of `Gate`-derived objects that are summed together (composed)
+            to form this error generator. 
+            
+        dim : int or "auto"
+            Dimension of this error generator.  Can be set to `"auto"` to take
+            the dimension from `errgens_to_compose[0]` *if* there's at least one
+            error generator being composed.
+
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
+            The evolution type of this error generator.  Can be set to `"auto"`
+            to take the evolution type of `errgens_to_compose[0]` *if* there's
+            at least one error generator being composed.
+        """
+        assert(len(errgens_to_compose) > 0 or dim != "auto"), \
+            "Must compose at least one error generator when dim='auto'!"
+        self.factors = errgens_to_compose
+
+        if dim == "auto":
+            dim = errgens_to_compose[0].dim
+        assert(all([dim == eg.dim for eg in errgens_to_compose])), \
+            "All error generators must have the same dimension (%d expected)!" % dim
+
+        if evotype == "auto":
+            evotype = errgens_to_compose[0]._evotype
+        assert(all([evotype == eg._evotype for eg in errgens_to_compose])), \
+            "All error generators must have the same evolution type (%s expected)!" % evotype
+
+        # set "API" error-generator members (to interface properly w/other objects)        
+        self.sparse = errgens_to_compose[0].sparse \
+            if len(errgens_to_compose) > 0 else False
+        assert(all([self.sparse == eg.sparse for eg in errgens_to_compose])), \
+            "All error generators must have the same sparsity (%s expected)!" % self.sparse
+
+        self.matrix_basis = errgens_to_compose[0].matrix_basis \
+            if len(errgens_to_compose) > 0 else None
+        assert(all([self.matrix_basis == eg.matrix_basis for eg in errgens_to_compose])), \
+            "All error generators must have the same matrix basis (%s expected)!" % self.matrix_basis
+
+        if evotype == "densitymx":
+            self.err_gen_mx = self._construct_errgen_matrix()        
+        else:
+            self.err_gen_mx = None
+        
+        Gate.__init__(self, dim, evotype)
+
+    def _construct_errgen_matrix(self):
+        """ TODO: docstring """
+        self.factors[0]._construct_errgen_matrix()
+        mx = self.factors[0].err_gen_mx
+        for eg in self.factors[1:]:
+            eg._construct_errgen_matrix()
+            mx += eg.err_gen_mx
+        return mx
+
+    def get_coeffs(self):
+        """ TODO: docstring - see other get_coeffs for a start """
+        Ltermdict = {}; basisdict = {}; next_available = 0
+        for eg in self.factors:
+            ltdict, bdict = eg.get_coeffs()
+
+            # see if we need to update basisdict to avoid collisions
+            # and avoid duplicating basis elements
+            final_basisLbls = {}
+            for lbl,basisEl in bdict.items():
+                lblsEqual = bool(lbl == existingLbl)
+                for existing_lbl,existing_basisEl in basisdict.values():
+                    if _mt.safenorm(basisEl-existing_basisEl) < 1e-6:
+                        final_basisLbls[lbl] = existingLbl
+                        break
+                else: # no existing basis element found - need a new element
+                    if lbl in basisdict: # then can't keep current label
+                        final_basisLbls[lbl] = next_available
+                        next_available += 1
+                    else:
+                        #fine to keep lbl since it's unused
+                        final_basisLbls[lbl] = lbl
+                        if isinstance(lbl,int):
+                            next_available = max(next_available,lbl+1)
+
+                    #Add new basis element
+                    basisdict[ final_basisLbls[lbl] ] = basisEl
+                    
+            for key, coeff in ltdict:
+                new_key = tuple( [key[0]] + [ final_basisLbls[l] for l in key[1:] ] )
+                if new_key in Ltermdict:
+                    Ltermdict[new_key] += coeff
+                else:
+                    Ltermdict[new_key] = coeff
+
+        return Ltermdict, basisdict
+
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        TODO: docstring - look at other for ref
+        """
+        #TODO: in the furture could do this more cleverly so 
+        # each factor gets an appropriate wrtFilter instead of
+        # doing all filtering at the end
+        
+        assert(not self.sparse), \
+            "ComposedErrorgen.deriv_wrt_params(...) can only be called when using *dense* basis elements!"
+
+        d2 = self.dim
+        derivMx = _np.zeros( (d2**2,self.num_params()), 'd')
+        for eg in self.factors:
+            factor_deriv = eg.deriv_wrt_params(None) # do filtering at end
+            rel_gpindices = _gatesetmember._decompose_gpindices(
+                self.gpindices, eg.gpindices)
+            derivMx[:,rel_gpindices] += factor_deriv[:,:]
+
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
+
+        return derivMx
+        
+
+    def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
+        """
+        TODO: docstring - look at other for ref
+        """
+        #TODO: in the furture could do this more cleverly so 
+        # each factor gets an appropriate wrtFilter instead of
+        # doing all filtering at the end
+        
+        assert(not self.sparse), \
+            "ComposedErrorgen.deriv_wrt_params(...) can only be called when using *dense* basis elements!"
+
+        d2 = self.dim
+        nP = self.num_params()
+        hessianMx = _np.zeros( (d2**2,nP,nP), 'd')
+        for eg in self.factors:
+            factor_hessian = eg.hessian_wrt_params(None,None) # do filtering at end
+            rel_gpindices = _gatesetmember._decompose_gpindices(
+                self.gpindices, eg.gpindices)
+            hessianMx[:,rel_gpindices,rel_gpindices] += factor_hessian[:,:,:]
+
+        if wrtFilter1 is None:
+            if wrtFilter2 is None:
+                return hessianMx
+            else:
+                return _np.take(hessianMx, wrtFilter2, axis=2 )
+        else:
+            if wrtFilter2 is None:
+                return _np.take(hessianMx, wrtFilter1, axis=1 )
+            else:
+                return _np.take( _np.take(hessianMx, wrtFilter1, axis=1),
+                                 wrtFilter2, axis=2 )
+
+
+    def submembers(self):
+        """
+        Get the GateSetMember-derived objects contained in this one.
+        
+        Returns
+        -------
+        list
+        """
+        return self.factors
+
+
+    def copy(self, parent=None):
+        """
+        Copy this object.
+
+        Returns
+        -------
+        Gate
+            A copy of this object.
+        """
+        # We need to override this method so that factors have their 
+        # parent reset correctly.
+        cls = self.__class__ # so that this method works for derived classes too
+        copyOfMe = cls([ f.copy(parent) for f in self.factors ], self.dim, self._evotype)
+        return self._copy_gpindices(copyOfMe, parent)
+
+    def tosparse(self):
+        """ Return the gate as a sparse matrix """
+        mx = self.factors[0].tosparse()
+        for eg in self.factors[1:]:
+            mx += eg.tosparse()
+        return mx
+
+    def todense(self):
+        """ TODO: docstring """
+        mx = self.factors[0].todense()
+        for eg in self.factors[1:]:
+            mx += eg.todense()
+        return mx
+
+    def get_order_terms(self, order):
+        """ TODO: docstring """
+        assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
+        return list(_itertools.chain(*[eg.get_order_terms(order) for eg in self.factors]))
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this error generator.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.gpindices_as_array())
+
+
+    def to_vector(self):
+        """
+        Get the error generator parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The gate parameters as a 1D array with length num_params().
+        """
+        v = _np.empty(self.num_params(), 'd')
+        for eg in self.factors:
+            factor_local_inds = _gatesetmember._decompose_gpindices(
+                    self.gpindices, eg.gpindices)
+            v[factor_local_inds] = eg.to_vector()
+        return v
+
+
+    def from_vector(self, v):
+        """
+        Initialize the error generator using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        for eg in self.factors:
+            factor_local_inds = _gatesetmember._decompose_gpindices(
+                    self.gpindices, eg.gpindices)
+            eg.from_vector( v[factor_local_inds] )
+        self.dirty = True
+
+
+    def transform(self, S):
+        """
+        Update gate matrix G with inv(S) * G * S,
+
+        Generally, the transform function updates the *parameters* of 
+        the gate such that the resulting gate matrix is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        In this particular case any TP gauge transformation is possible,
+        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
+        corresponds to a TP-like transform matrix.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+        """
+        for eg in self.factors:
+            eg.transform(S)
+
+
+    def __str__(self):
+        """ Return string representation """
+        s = "Composed error generator of %d factors:\n" % len(self.factors)
+        for i,eg in enumerate(self.factors):
+            s += "Factor %d:\n" % i
+            s += str(eg)
+        return s
+
+
+
+
 class LindbladErrorgen(Gate):
     """ Not a CPTP map - just the Lindbladian exponent
         TODO: docstring """
@@ -2128,7 +2420,7 @@ class LindbladErrorgen(Gate):
             bsO = self.other_basis_size
             self.Lmx = _np.zeros((bsO-1,bsO-1),'complex') if bsO > 0 else None
 
-            self.err_gen_mx =self._construct_errgen_matrix()
+            self._construct_errgen_matrix() # sets self.err_gen_mx
             self.Lterms = None # Unused
             
         else: # Term-based evolution
@@ -2178,7 +2470,7 @@ class LindbladErrorgen(Gate):
                 hamGens = [ _mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
                                               inplace=True, check=True) for mx in hamGens ]
                 for mx in hamGens: mx.sort_indices()
-                  # for faster addition ops in _construct_errgen
+                  # for faster addition ops in _construct_errgen_matrix
             else:
                 #hamGens = _np.einsum("ik,akl,lj->aij", leftTrans, hamGens, rightTrans)
                 hamGens = _np.transpose( _np.tensordot( 
@@ -2198,7 +2490,7 @@ class LindbladErrorgen(Gate):
                     otherGens = [ _mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
                                                     inplace=True, check=True) for mx in otherGens ]
                     for mx in hamGens: mx.sort_indices()
-                      # for faster addition ops in _construct_errgen
+                      # for faster addition ops in _construct_errgen_matrix
                 else:
                     #otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
                     otherGens = _np.transpose( _np.tensordot( 
@@ -2215,7 +2507,7 @@ class LindbladErrorgen(Gate):
 
                     for mxRow in otherGens:
                         for mx in mxRow: mx.sort_indices()
-                          # for faster addition ops in _construct_errgen:
+                          # for faster addition ops in _construct_errgen_matrix
                 else:
                     #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
                     #                          otherGens, rightTrans)
@@ -2235,7 +2527,7 @@ class LindbladErrorgen(Gate):
 
                     for mxRow in otherGens:
                         for mx in mxRow: mx.sort_indices()
-                          # for faster addition ops in _construct_errgen:
+                          # for faster addition ops in _construct_errgen_matrix
                 else:
                     #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
                     #                            otherGens, rightTrans)
@@ -2506,7 +2798,7 @@ class LindbladErrorgen(Gate):
 
         assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0))
         #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)        
-        return _mt.safereal(lnd_error_gen, inplace=True)
+        self.err_gen_mx = _mt.safereal(lnd_error_gen, inplace=True)
 
 
     def todense(self):
@@ -2664,7 +2956,7 @@ class LindbladErrorgen(Gate):
             #conjugate Lindbladian exponent by U:
             self.err_gen_mx = _mt.safedot(Uinv,_mt.safedot(self.err_gen_mx, U))
             self._set_params_from_matrix(self.err_gen_mx, truncate=True)
-            self.err_gen_mx = self._construct_errgen_matrix() # unnecessary? (TODO)
+            self._construct_errgen_matrix() # unnecessary? (TODO)
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -2712,7 +3004,7 @@ class LindbladErrorgen(Gate):
                 self.err_gen_mx = _mt.safedot(self.err_gen_mx, U)
                 
             self._set_params_from_matrix(self.err_gen_mx, truncate=True)
-            self.err_gen_mx = self._construct_errgen_matrix() # unnecessary? (TODO)
+            self._construct_errgen_matrix() # unnecessary? (TODO)
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -2913,6 +3205,7 @@ class LindbladErrorgen(Gate):
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
+        TODO: docstring - this is an *error generator* now
         Construct a matrix whose columns are the vectorized derivatives of the
         flattened error generator matrix with respect to a single gate
         parameter.  Thus, each column is of length gate_dim^2 and there is one
@@ -3186,7 +3479,8 @@ class LindbladParameterizedGateMap(Gate):
             return _mt.safenorm(a-b) < 1e-6 # what about possibility of Clifford gates?
         
         if isinstance(gate, LindbladParameterizedGateMap) and \
-           normeq(gate.unitary_postfactor,unitary_postfactor) \
+           normeq(gate.unitary_postfactor,unitary_postfactor) and \
+           isinstance(gate.errorgen, LindbladErrorgen) \
            and beq(ham_basis,gate.errorgen.ham_basis) and beq(nonham_basis,gate.errorgen.other_basis) \
            and param_mode==gate.errorgen.param_mode and nonham_mode==gate.errorgen.nonham_mode \
            and beq(mxBasis,gate.errorgen.matrix_basis) and gate._evotype == evotype and lazy:
@@ -3404,8 +3698,10 @@ class LindbladParameterizedGateMap(Gate):
             elif self.errorgen.sparse == True and not _sps.issparse(unitaryPostfactor):
                 unitaryPostfactor = _sps.csr_matrix( unitaryPostfactor.toarray() ) # dense -> sparse
 
+        self.full_unitary_postfactor = unitaryPostfactor # for use in copy(...)
         evotype = self.errorgen._evotype
         Gate.__init__(self, d2, evotype) #sets self.dim
+
 
         #Finish initialization based on evolution type
         if evotype == "densitymx":
@@ -3439,12 +3735,42 @@ class LindbladParameterizedGateMap(Gate):
             self.err_gen_prep = self.exp_err_gen = None
 
         #Done with __init__(...)
+
+
+    def submembers(self):
+        """
+        Get the GateSetMember-derived objects contained in this one.
+        
+        Returns
+        -------
+        list
+        """
+        return [self.errorgen]
+
+
+    def copy(self, parent=None):
+        """
+        Copy this object.
+
+        Returns
+        -------
+        Gate
+            A copy of this object.
+        """
+        # We need to override this method so that error map has its
+        # parent reset correctly.
+        upost = self.full_unitary_postfactor.copy() \
+            if (self.full_unitary_postfactor is not None) else None
+        cls = self.__class__ # so that this method works for derived classes too
+        copyOfMe = cls(upost, self.errorgen.copy(parent))
+        return self._copy_gpindices(copyOfMe, parent)
+
         
     def _construct_exp_errgen(self):
         """ Constructs Sets self.err_gen_prep or self.exp_err_gen 
         TODO: docstring (better?)
         """
-        err_gen_matrix = self.errorgen._construct_errgen_matrix()
+        err_gen_matrix = self.errorgen.err_gen_mx
                 
         #Pre-compute the exponential of the error generator if dense matrices
         # are used, otherwise cache prepwork for sparse expm calls
@@ -3472,12 +3798,8 @@ class LindbladParameterizedGateMap(Gate):
         -------
         None
         """
-        if memo is None: memo = set()
-        elif id(self) in memo: return
-        memo.add(id(self))
-
         self.terms = {} # clear terms cache since param indices have changed now
-        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
+        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent, memo)
 
 
     def todense(self):
@@ -3689,7 +4011,12 @@ class LindbladParameterizedGateMap(Gate):
         -------
         None
         """
+
         #TODO: move this function to errorgen?
+        if not isinstance(self.errorgen, LindbladErrorgen):
+            raise NotImplementedError(("Can only set the value of a LindbladParameterizedGate that "
+                                       "contains a single LindbladErrorgen error generator"))
+
         tGate = LindbladParameterizedGateMap.from_gate_matrix(
             M,self.unitary_postfactor,
             self.errorgen.ham_basis, self.errorgen.other_basis,
@@ -3697,7 +4024,7 @@ class LindbladParameterizedGateMap(Gate):
             True, self.errorgen.matrix_basis, self._evotype)
 
         #Note: truncate=True to be safe
-        self.errorgen.paramvals[:] = tGate.errorgen.paramvals[:]
+        self.errorgen.from_vector(tGate.errorgen.to_vector())
         if self._evotype == "densitymx":
             self._construct_exp_errgen()
         self.dirty = True
@@ -3801,7 +4128,6 @@ class LindbladParameterizedGateMap(Gate):
         return s
 
 
-#HERE - all except reps is done above...
 class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
     """
     Encapsulates a gate matrix that is parameterized by a Lindblad-form
@@ -3895,7 +4221,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         assert(not self.errorgen.sparse), \
             "LindbladParameterizedGate objects must use *dense* basis elements!"
         
-        self._construct_exp_errgen() # construct matrix (may be unnecessary since base class calls this...)
+        #self._construct_exp_errgen() # construct matrix (may be unnecessary since base class calls this...)
         
             
     def _construct_exp_errgen(self): 
@@ -4423,121 +4749,15 @@ class ComposedGateMap(Gate):
         
         Gate.__init__(self, dim, evotype)
 
-    def _obj_refcount(self, obj):
-        """ Number of references to `obj` contained within this GateSet """
-        cnt = _gatesetmember.GateSetMember._obj_refcount(self,obj)
-        for gate in self.factorgates:
-            cnt += gate._obj_refcount(obj)
-        return cnt
-
-    def allocate_gpindices(self, startingIndex, parent):
+    def submembers(self):
         """
-        Sets gpindices array for this object or any objects it
-        contains (i.e. depends upon).  Indices may be obtained
-        from contained objects which have already been initialized
-        (e.g. if a contained object is shared with other
-         top-level objects), or given new indices starting with
-        `startingIndex`.
-
-        Parameters
-        ----------
-        startingIndex : int
-            The starting index for un-allocated parameters.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
+        Get the GateSetMember-derived objects contained in this one.
+        
         Returns
         -------
-        num_new: int
-            The number of *new* allocated parameters (so 
-            the parent should mark as allocated parameter
-            indices `startingIndex` to `startingIndex + new_new`).
+        list
         """
-        #figure out how many parameters we need to allocate based on
-        # which factorgates still need to be "allocated" within the
-        # parent's parameter array:
-        tot_new_params = 0
-        all_gpindices = []
-        #TODO: REMOVE below DB: statements (for debugging parameter allocation)
-        #DB: print("DB: Composed gate ALLOC: start =",startingIndex, "p=",str(type(self.parent)),"gp=",self.gpindices)
-        for gate in self.factorgates:
-            #DB: print("Factor%d: %s" % (i,str(type(gate))), id(gate), "p=",str(type(gate.parent)),"gp=",gate.gpindices)
-            num_new_params = gate.allocate_gpindices( startingIndex, parent ) # *same* parent as this ComposedGate
-            startingIndex += num_new_params
-            tot_new_params += num_new_params
-            all_gpindices.extend( gate.gpindices_as_array() )
-            #DB: print("Factor%d: %d new params.  Gate params = " % (i,num_new_params),gate.gpindices)
-        #DB: print("All indices = ",_slct.list_to_slice(all_gpindices, array_ok=True))
-
-        _gatesetmember.GateSetMember.set_gpindices(
-            self, _slct.list_to_slice(all_gpindices, array_ok=True), parent)
-        return tot_new_params
-
-
-    def unlink_parent(self):
-        """
-        Called when at least one reference (via `key`) to this object is being
-        disassociated with `parent`.   If *all* references are to this object
-        are now gone, set parent to None, invalidating any gpindices.
-        `startingIndex`.
-
-        Returns
-        -------
-        None
-        """
-        for gate in self.factorgates:
-            gate.unlink_parent()
-        _gatesetmember.GateSetMember.unlink_parent(self)
-
-
-    def relink_parent(self, parent):
-        """ 
-        Sets the parent of this object *without* altering its gpindices.
-
-        In addition to setting the parent of this object, this method 
-        sets the parent of any objects this object contains (i.e.
-        depends upon) - much like allocate_gpindices.  To ensure a valid
-        parent is not overwritten, the existing parent *must be None*
-        prior to this call.
-        """
-        for gate in self.factorgates:
-            gate.relink_parent(parent)
-        _gatesetmember.GateSetMember.relink_parent(self, parent)
-
-    
-    def set_gpindices(self, gpindices, parent, memo=None):
-        """
-        Set the parent and indices into the parent's parameter vector that
-        are used by this GateSetMember object.
-
-        Parameters
-        ----------
-        gpindices : slice or integer ndarray
-            The indices of this objects parameters in its parent's array.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
-        Returns
-        -------
-        None
-        """
-        if memo is None: memo = set()
-        elif id(self) in memo: return
-        memo.add(id(self))
-
-        #must set the gpindices of self.factorgates based on new
-        my_old_gpindices = self.gpindices
-        for gate in self.factorgates:
-            if id(gate) in memo: continue #already processed
-            rel_gate_gpindices = _gatesetmember._decompose_gpindices(
-                my_old_gpindices, gate.gpindices)
-            new_gate_gpindices = _gatesetmember._compose_gpindices(
-                gpindices, rel_gate_gpindices)
-            gate.set_gpindices(new_gate_gpindices, parent, memo)
-            
-        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
+        return self.factorgates
 
 
     def copy(self, parent=None):
@@ -4552,7 +4772,7 @@ class ComposedGateMap(Gate):
         # We need to override this method so that factor gates have their 
         # parent reset correctly.
         cls = self.__class__ # so that this method works for derived classes too
-        copyOfMe = cls([ g.copy(parent) for g in self.factorgates ])
+        copyOfMe = cls([ g.copy(parent) for g in self.factorgates ], self.dim, self._evotype)
         return self._copy_gpindices(copyOfMe, parent)
 
 
@@ -4564,6 +4784,7 @@ class ComposedGateMap(Gate):
         return mx
 
     def todense(self):
+        """ TODO: docstring """
         mx = self.factorgates[0].todense()
         for gate in self.factorgates[1:]:
             mx = _np.dot(gate.todense(),mx)
@@ -4593,6 +4814,7 @@ class ComposedGateMap(Gate):
 
 
     def get_order_terms(self, order):
+        """ TODO: docstring """
         terms = []
         for p in _lt.partition_into(order, len(self.factorgates)):
             factor_lists = [ self.factorgates[i].get_order_terms(pi) for i,pi in enumerate(p) ]
@@ -4966,98 +5188,16 @@ class EmbeddedGateMap(Gate):
     def __setstate__(self, d):
         self.__dict__.update(d)
 
-    def _obj_refcount(self, obj):
-        """ Number of references to `obj` contained within this GateSet """
-        return self.embedded_gate._obj_refcount(obj) + \
-            _gatesetmember.GateSetMember._obj_refcount(self,obj)
 
-    def allocate_gpindices(self, startingIndex, parent):
+    def submembers(self):
         """
-        Sets gpindices array for this object or any objects it
-        contains (i.e. depends upon).  Indices may be obtained
-        from contained objects which have already been initialized
-        (e.g. if a contained object is shared with other
-         top-level objects), or given new indices starting with
-        `startingIndex`.
-
-        Parameters
-        ----------
-        startingIndex : int
-            The starting index for un-allocated parameters.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
+        Get the GateSetMember-derived objects contained in this one.
+        
         Returns
         -------
-        num_new: int
-            The number of *new* allocated parameters (so 
-            the parent should mark as allocated parameter
-            indices `startingIndex` to `startingIndex + new_new`).
+        list
         """
-        #TODO: REMOVE
-        #DB: print("  Embedded ALLOC of gate ",str(type(self.embedded_gate)),"p=",str(type(self.embedded_gate.parent)),
-        #DB:      "gp=",self.embedded_gate.gpindices)
-        num_new_params = self.embedded_gate.allocate_gpindices(startingIndex, parent)
-        _gatesetmember.GateSetMember.set_gpindices(
-            self, self.embedded_gate.gpindices, parent)
-        return num_new_params
-
-
-    def unlink_parent(self):
-        """
-        Called when at least one reference (via `key`) to this object is being
-        disassociated with `parent`.   If *all* references are to this object
-        are now gone, set parent to None, invalidating any gpindices.
-        `startingIndex`.
-
-        Returns
-        -------
-        None
-        """
-        self.embedded_gate.unlink_parent()
-        _gatesetmember.GateSetMember.unlink_parent(self)
-
-
-    def relink_parent(self, parent):
-        """ 
-        Sets the parent of this object *without* altering its gpindices.
-
-        In addition to setting the parent of this object, this method 
-        sets the parent of any objects this object contains (i.e.
-        depends upon) - much like allocate_gpindices.  To ensure a valid
-        parent is not overwritten, the existing parent *must be None*
-        prior to this call.
-        """
-        self.embedded_gate.relink_parent(parent)
-        _gatesetmember.GateSetMember.relink_parent(self, parent)
-
-    
-    def set_gpindices(self, gpindices, parent, memo=None):
-        """
-        Set the parent and indices into the parent's parameter vector that
-        are used by this GateSetMember object.
-
-        Parameters
-        ----------
-        gpindices : slice or integer ndarray
-            The indices of this objects parameters in its parent's array.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
-        Returns
-        -------
-        None
-        """
-        if memo is None: memo = set()
-        elif id(self) in memo: return
-        memo.add(id(self))
-
-        #must set the gpindices of self.embedded_gate
-        self.embedded_gate.set_gpindices(gpindices, parent, memo)
-        _gatesetmember.GateSetMember.set_gpindices(
-            self, gpindices, parent) #could have used self.embedded_gate.gpindices (same)
+        return [self.embedded_gate]
 
 
     def copy(self, parent=None):

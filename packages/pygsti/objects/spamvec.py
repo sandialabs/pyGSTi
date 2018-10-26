@@ -2602,48 +2602,31 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         SPAMVec.__init__(self, d2, evotype) #sets self.dim
 
 
-    def allocate_gpindices(self, startingIndex, parent):
+    def submembers(self):
         """
-        Sets gpindices array for this object or any objects it
-        contains (i.e. depends upon).  Indices may be obtained
-        from contained objects which have already been initialized
-        (e.g. if a contained object is shared with other
-         top-level objects), or given new indices starting with
-        `startingIndex`.
+        Get the GateSetMember-derived objects contained in this one.
+        
+        Returns
+        -------
+        list
+        """
+        return [self.error_map]
 
-        Parameters
-        ----------
-        startingIndex : int
-            The starting index for un-allocated parameters.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
+    
+    def copy(self, parent=None):
+        """
+        Copy this object.
 
         Returns
         -------
-        num_new: int
-            The number of *new* allocated parameters (so 
-            the parent should mark as allocated parameter
-            indices `startingIndex` to `startingIndex + new_new`).
+        Gate
+            A copy of this object.
         """
-        num_new_params = self.error_map.allocate_gpindices( startingIndex, parent ) # *same* parent as this SPAMVec
-        _gatesetmember.GateSetMember.set_gpindices(
-            self, self.error_map.gpindices, parent)
-        return num_new_params
-
-
-    def relink_parent(self, parent):
-        """ 
-        Sets the parent of this object *without* altering its gpindices.
-
-        In addition to setting the parent of this object, this method 
-        sets the parent of any objects this object contains (i.e.
-        depends upon) - much like allocate_gpindices.  To ensure a valid
-        parent is not overwritten, the existing parent *must be None*
-        prior to this call.
-        """
-        self.error_map.relink_parent(parent)
-        _gatesetmember.GateSetMember.relink_parent(self, parent)
+        # We need to override this method so that embedded gate has its
+        # parent reset correctly.
+        cls = self.__class__ # so that this method works for derived classes too
+        copyOfMe = cls(self.state_vec, self.error_map.copy(parent), self.typ)
+        return self._copy_gpindices(copyOfMe, parent)
 
         
     def set_gpindices(self, gpindices, parent, memo=None):
@@ -2663,13 +2646,8 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         -------
         None
         """
-        if memo is None: memo = set()
-        elif id(self) in memo: return
-        memo.add(id(self))
-
-        self.error_map.set_gpindices(gpindices, parent, memo)
         self.terms = {} # clear terms cache since param indices have changed now
-        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
+        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent, memo)
 
         
     def todense(self, scratch=None):

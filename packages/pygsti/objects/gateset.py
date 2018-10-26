@@ -812,6 +812,11 @@ class GateSet(object):
             if modified_indices.intersection(obj.gpindices_as_array()):
                 obj.from_vector(self._paramvec[obj.gpindices])
 
+    def _print_gpindices(self):
+        print("PRINTING GATESET GPINDICES!!!")
+        for lbl,obj in self.iter_objs():
+            print("LABEL ",lbl)
+            obj._print_gpindices()
 
     def _rebuild_paramvec(self):
         """ Resizes self._paramvec and updates gpindices & parent members as needed,
