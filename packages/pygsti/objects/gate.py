@@ -2240,9 +2240,8 @@ class LindbladParameterizedGateMap(Gate):
             if self.errorgen.sparse == False and _sps.issparse(unitaryPostfactor):
                 unitaryPostfactor = unitaryPostfactor.toarray() # sparse -> dense
             elif self.errorgen.sparse == True and not _sps.issparse(unitaryPostfactor):
-                unitaryPostfactor = _sps.csr_matrix( unitaryPostfactor.toarray() ) # dense -> sparse
+                unitaryPostfactor = _sps.csr_matrix( _np.asarray(unitaryPostfactor) ) # dense -> sparse
 
-        self.full_unitary_postfactor = unitaryPostfactor # for use in copy(...)
         evotype = self.errorgen._evotype
         Gate.__init__(self, d2, evotype) #sets self.dim
 
@@ -2303,8 +2302,22 @@ class LindbladParameterizedGateMap(Gate):
         """
         # We need to override this method so that error map has its
         # parent reset correctly.
-        upost = self.full_unitary_postfactor.copy() \
-            if (self.full_unitary_postfactor is not None) else None
+        if self.unitary_postfactor is None:
+            upost = None
+        elif self._evotype == "densitymx":
+            upost = self.unitary_postfactor
+        else:
+            #self.unitary_postfactor is actually the *unitary* not the postfactor
+            termtype = "dense" if self._evotype == "svterm" else "clifford"
+
+            # automatically "up-convert" gate to CliffordGate if needed
+            if termtype == "clifford":
+                assert(isinstance(self.unitary_postfactor, CliffordGate)) # see __init__
+                U = self.unitary_postfactor.unitary
+            else: U = self.unitary_postfactor
+            gate_std = _gt.unitary_to_process_mx(U)
+            upost = _bt.change_basis(gate_std, 'std', self.errorgen.matrix_basis)
+
         cls = self.__class__ # so that this method works for derived classes too
         copyOfMe = cls(upost, self.errorgen.copy(parent))
         return self._copy_gpindices(copyOfMe, parent)
@@ -2758,10 +2771,10 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         
         #Start with base class construction
         LindbladParameterizedGateMap.__init__(
-            self, unitaryPostfactor, errorgen) # (sets self.dim)
-        
-        GateMatrix.__init__(self, _np.identity(self.dim,'d'), "densitymx")
+            self, unitaryPostfactor, errorgen) # (sets self.dim and self.base)
 
+        GateMatrix.__init__(self, self.base, "densitymx")
+        
         assert(not self.errorgen.sparse), \
             "LindbladParameterizedGate objects must use *dense* basis elements!"
         
@@ -2785,7 +2798,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         self.base = matrix.real
         self.base.flags.writeable = False
         self.base_deriv = None
-        self.base_hessian = None        
+        self.base_hessian = None
 
         ##TEST FOR CP: DEBUG!!!
         #from ..tools import jamiolkowski as _jt
