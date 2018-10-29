@@ -196,7 +196,8 @@ def logistic_transform(p, mean):
     out = mean - nu + (2*nu)/(1 + _np.exp(-2*(p - mean)/nu))
     return out
 
-def reduce_DCT_amplitudes_until_probability_is_physical(alphas, omegas, T, epsilon=0.01, step_size=0.005):
+def reduce_DCT_amplitudes_until_probability_is_physical(alphas, omegas, T, epsilon=0.001, step_size=0.005,
+                                                        verbosity=1):
     """
 
     """
@@ -213,7 +214,8 @@ def reduce_DCT_amplitudes_until_probability_is_physical(alphas, omegas, T, epsil
     iteration = 0
     while max(pt) >= 1-epsilon or min(pt) <= epsilon:
         iteration += 1
-        print("Interation {} of amplitude reduction.".format(iteration))
+        if verbosity > 0:
+            print("Interation {} of amplitude reduction.".format(iteration))
         # We don't change the amplitude of the DC component.
         for i in range(1,len(newalphas)):
             if newalphas[i] > 0.:
@@ -228,7 +230,8 @@ def reduce_DCT_amplitudes_until_probability_is_physical(alphas, omegas, T, epsil
                     newalphas[i] = 0
         pt = [probability_from_DCT_amplitudes(newalphas, omegas, T, t) for t in range(T)]
 
-    print("Estimate within bounds.")
+    if verbosity > 0:
+        print("Estimate within bounds.")
     return newalphas 
 
 def low_pass_filter(data,max_freq = None):
