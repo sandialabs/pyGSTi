@@ -2376,8 +2376,8 @@ class MetadataTable(WorkspaceTable):
             elif isinstance(gate, _objs.EigenvalueParameterizedGate): paramTyp = "eigenvalue"
             elif isinstance(gate, _objs.LindbladParameterizedGate):
                 paramTyp = "Lindblad"
-                if gate.param_mode == "cptp": paramTyp += " CPTP "
-                paramTyp += "(%d, %d params)" % (gate.ham_basis_size, gate.other_basis_size)
+                if gate.errorgen.param_mode == "cptp": paramTyp += " CPTP "
+                paramTyp += "(%d, %d params)" % (gate.errorgen.ham_basis_size, gate.errorgen.other_basis_size)
             else: paramTyp = "unknown" # pragma: no cover
             table.addrow((gl + " parameterization", paramTyp), (None,'Verbatim'))
 

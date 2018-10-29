@@ -1855,7 +1855,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         bool
         """
         return False
-    
+        
 
 class LindbladParameterizedGateMap(Gate):
     """
@@ -2023,10 +2023,11 @@ class LindbladParameterizedGateMap(Gate):
             return _mt.safenorm(a-b) < 1e-6 # what about possibility of Clifford gates?
         
         if isinstance(gate, LindbladParameterizedGateMap) and \
-           normeq(gate.unitary_postfactor,unitary_postfactor) \
-           and beq(ham_basis,gate.ham_basis) and beq(nonham_basis,gate.other_basis) \
-           and param_mode==gate.param_mode and nonham_mode==gate.nonham_mode \
-           and beq(mxBasis,gate.matrix_basis) and gate._evotype == evotype and lazy:
+           normeq(gate.unitary_postfactor,unitary_postfactor) and \
+           isinstance(gate.errorgen, LindbladErrorgen) \
+           and beq(ham_basis,gate.errorgen.ham_basis) and beq(nonham_basis,gate.errorgen.other_basis) \
+           and param_mode==gate.errorgen.param_mode and nonham_mode==gate.errorgen.nonham_mode \
+           and beq(mxBasis,gate.errorgen.matrix_basis) and gate._evotype == evotype and lazy:
             return gate #no creation necessary!
         else:
             return cls.from_gate_matrix(
@@ -2122,7 +2123,6 @@ class LindbladParameterizedGateMap(Gate):
             if _sps.issparse(gateMatrix):
                 upost = _sps.identity(gateMatrix.shape[0],'d','csr')
             else: upost = _np.identity(gateMatrix.shape[0],'d')
-            unitaryPostfactor = gateMatrix.shape[0] # just set as dimension (see __init__)
         else: upost = unitaryPostfactor
 
         #Init base from error generator: sets basis members and ultimately
@@ -2132,145 +2132,29 @@ class LindbladParameterizedGateMap(Gate):
             # we require sparse matrices to have trivial initial error generators
             # or we convert to dense:
             if(_mt.safenorm(gateMatrix-upost) < 1e-8):
-                errgen = _sps.csr_matrix( gateMatrix.shape, dtype='d' ) # all zeros
+                errgenMx = _sps.csr_matrix( gateMatrix.shape, dtype='d' ) # all zeros
             else:
-                errgen = _sps.csr_matrix(
+                errgenMx = _sps.csr_matrix(
                     _gt.error_generator(gateMatrix.toarray(), upost.toarray(),
                                         mxBasis, "logGTi"), dtype='d')
         else:
             #DB: assert(_np.linalg.norm(gateMatrix.imag) < 1e-8)
             #DB: assert(_np.linalg.norm(upost.imag) < 1e-8)
-            errgen = _gt.error_generator(gateMatrix, upost, mxBasis, "logGTi")
+            errgenMx = _gt.error_generator(gateMatrix, upost, mxBasis, "logGTi")
 
-        return cls.from_error_generator(unitaryPostfactor, errgen, ham_basis,
+        errgen = LindbladErrorgen.from_error_generator(errgenMx, ham_basis,
                                         nonham_basis, param_mode, nonham_mode,
                                         truncate, mxBasis, evotype)
 
-    
-    @classmethod
-    def from_error_generator(cls, unitaryPostfactor, errgen,
-                             ham_basis="pp", nonham_basis="pp",
-                             param_mode="cptp", nonham_mode="all",
-                             truncate=True, mxBasis="pp", evotype="densitymx"):
+        return cls(unitaryPostfactor, errgen)
+
+
+    def __init__(self, unitaryPostfactor, errorgen):     
         """
-        Create a Lindblad-parameterized gate from an error generator and a
-        basis which specifies how to decompose (project) the error generator.
-            
-        unitaryPostfactor : numpy array or SciPy sparse matrix or int
-            a square 2D array which specifies a part of the gate action 
-            to remove before parameterization via Lindblad projections.
-            While this is termed a "post-factor" because it occurs to the
-            right of the exponentiated Lindblad terms, this means it is applied
-            to a state *before* the Lindblad terms (which usually represent
-            gate errors).  Typically, this is a target (desired) gate operation.
-            If None, then the identity is assumed.
+        TODO: docstring (fix!) - note: unitaryPostfactor doesn't need to be
+          a dimension since we can take it from errorgen.dim... so unitaryPostFactor
+          *can* be None and that's ok.
 
-        errgen : numpy array or SciPy sparse matrix
-            a square 2D array that gives the full error generator `L` such 
-            that the gate action is `exp(L)*unitaryPostFactor`.  The shape of
-            this array sets the dimension of the gate. The projections of this
-            quantity onto the `ham_basis` and `nonham_basis` are closely related
-            to the parameters of the gate (they may not be exactly equal if,
-            e.g `cptp=True`).
-
-        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the Hamiltonian-type lindblad error
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt), list of numpy arrays, or a custom basis object.
-
-        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the Stochastic-type lindblad error
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt), list of numpy arrays, or a custom basis object.
-
-        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
-            Describes how the Lindblad coefficients/projections relate to the
-            gate's parameter values.  Allowed values are:
-            `"unconstrained"` (coeffs are independent unconstrained parameters),
-            `"cptp"` (independent parameters but constrained so map is CPTP),
-            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
-            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
-
-        nonham_mode : {"diagonal", "diag_affine", "all"}
-            Which non-Hamiltonian Lindblad projections are potentially non-zero.
-            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
-            `"diag_affine"` (diagonal coefficients + affine projections), and
-            `"all"` (the entire matrix of coefficients is allowed).
-
-        truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in
-            order to meet constraints (e.g. to preserve CPTP) when necessary.
-            If False, then an error is thrown when the given `errgen` cannot 
-            be realized by the specified set of Lindblad projections.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        evotype : {"densitymx","svterm","cterm"}
-            The evolution type of the gate being constructed.  `"densitymx"` is
-            usual Lioville density-matrix-vector propagation via matrix-vector
-            products.  `"svterm"` denotes state-vector term-based evolution
-            (action of gate is obtained by evaluating the rank-1 terms up to
-            some order).  `"cterm"` is similar but uses Clifford gate action
-            on stabilizer states.
-
-        Returns
-        -------
-        LindbladParameterizedGateMap                
-        """
-
-        d2 = errgen.shape[0]
-        d = int(round(_np.sqrt(d2)))
-        if d*d != d2: raise ValueError("Gate dim must be a perfect square")
-
-        if unitaryPostfactor is None:
-            unitaryPostfactor = errgen.shape[0] # just set as dimension (for __init__)
-        
-        #Determine whether we're using sparse bases or not
-        sparse = None
-        if ham_basis is not None:
-            if isinstance(ham_basis, _Basis): sparse = ham_basis.sparse
-            elif _compat.isstr(ham_basis): sparse = _sps.issparse(errgen)
-            elif len(ham_basis) > 0: sparse = _sps.issparse(ham_basis[0])
-        if sparse is None and nonham_basis is not None:
-            if isinstance(nonham_basis, _Basis): sparse = nonham_basis.sparse
-            elif _compat.isstr(nonham_basis): sparse = _sps.issparse(errgen)
-            elif len(nonham_basis) > 0: sparse = _sps.issparse(nonham_basis[0])
-        if sparse is None: sparse = False #the default
-
-        #Create or convert bases to appropriate sparsity
-        if isinstance(ham_basis, _Basis) or _compat.isstr(ham_basis):
-            ham_basis = _Basis(ham_basis,d,sparse=sparse)
-        else: # ham_basis is a list of matrices
-            ham_basis = _Basis(matrices=ham_basis,dim=d,sparse=sparse)
-        
-        if isinstance(nonham_basis, _Basis) or _compat.isstr(nonham_basis):
-            other_basis = _Basis(nonham_basis,d,sparse=sparse)
-        else: # ham_basis is a list of matrices
-            other_basis = _Basis(matrices=nonham_basis,dim=d,sparse=sparse)
-        
-        matrix_basis = _Basis(mxBasis,d,sparse=sparse)
-
-        # errgen + bases => coeffs
-        hamC, otherC = \
-            _gt.lindblad_errgen_projections(
-                errgen, ham_basis, other_basis, matrix_basis, normalize=False,
-                return_generators=False, other_mode=nonham_mode, sparse=sparse)
-
-        # coeffs + bases => Ltermdict, basisdict
-        Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
-            hamC, otherC, ham_basis, other_basis, nonham_mode)
-        
-        return cls(unitaryPostfactor, Ltermdict, basisdict,
-                   param_mode, nonham_mode, truncate, matrix_basis, evotype )
-
-        
-    def __init__(self, unitaryPostfactor, Ltermdict, basisdict=None,
-                 param_mode="cptp", nonham_mode="all", truncate=True,
-                 mxBasis="pp", evotype="densitymx"): 
-        """
         Create a new LinbladParameterizedMap based on a set of Lindblad terms.
 
         Note that if you want to construct a LinbladParameterizedMap from a
@@ -2343,112 +2227,43 @@ class LindbladParameterizedGateMap(Gate):
             on stabilizer states.
         """
 
-        #FUTURE:
-        # - maybe allow basisdict values to specify an "embedded matrix" w/a tuple like
-        #  e.g. a *list* of (matrix, state_space_label) elements -- e.g. [(sigmaX,'Q1'), (sigmaY,'Q4')]
-        # - maybe let keys be tuples of (basisname, state_space_label) e.g. (('X','Q1'),('Y','Q4')) -- and
-        # maybe allow ('XY','Q1','Q4')? format when can assume single-letter labels.
-        # - could add standard basis dict items so labels like "X", "XY", etc. are understood?
-
-        # Extract superop dimension from 'unitaryPostfactor'
-        # (which can just be an integer dimension)
-        if isinstance(unitaryPostfactor,_numbers.Integral): 
-            d2 = unitaryPostfactor
-            unitaryPostfactor = None
-        else:
-            try:
-                d2 = unitaryPostfactor.dim # if a gate
-            except:
-                if not _sps.issparse(unitaryPostfactor): # sparse matrix is OK
-                    unitaryPostfactor = Gate.convert_to_matrix(unitaryPostfactor)
-                d2 = unitaryPostfactor.shape[0] # otherwise try to treat as array
+        # Extract superop dimension from 'errorgen'
+        d2 = errorgen.dim
         d = int(round(_np.sqrt(d2)))
         assert(d*d == d2), "Gate dim must be a perfect square"
 
-        self.nonham_mode = nonham_mode
-        self.param_mode = param_mode
+        self.errorgen = errorgen # don't copy (allow object reuse)
         
-        # Ltermdict, basisdict => bases + parameter values
-        # but maybe we want Ltermdict, basisdict => basis + projections/coeffs, then projections/coeffs => paramvals?
-        # since the latter is what set_errgen needs
-        hamC, otherC, self.ham_basis, self.other_basis, hamBInds, otherBInds = \
-            _gt.lindblad_terms_to_projections(Ltermdict, basisdict, d, self.nonham_mode)
-
-        self.ham_basis_size = len(self.ham_basis)
-        self.other_basis_size = len(self.other_basis)
-
-        if self.ham_basis_size > 0: self.sparse = _sps.issparse(self.ham_basis[0])
-        elif self.other_basis_size > 0: self.sparse = _sps.issparse(self.other_basis[0])
-        else: self.sparse = False
-
         # conform unitary postfactor to the sparseness of the basis mxs (self.sparse)
         # FUTURE: warn if there is a sparsity mismatch btwn basis and postfactor?
         if unitaryPostfactor is not None:
-            if self.sparse == False and _sps.issparse(unitaryPostfactor):
+            if self.errorgen.sparse == False and _sps.issparse(unitaryPostfactor):
                 unitaryPostfactor = unitaryPostfactor.toarray() # sparse -> dense
-            elif self.sparse == True and not _sps.issparse(unitaryPostfactor):
-                unitaryPostfactor = _sps.csr_matrix( unitaryPostfactor.toarray() ) # dense -> sparse
+            elif self.errorgen.sparse == True and not _sps.issparse(unitaryPostfactor):
+                unitaryPostfactor = _sps.csr_matrix( _np.asarray(unitaryPostfactor) ) # dense -> sparse
 
-        self.matrix_basis = _Basis(mxBasis,d,sparse=self.sparse)
-
-        self.paramvals = _gt.lindblad_projections_to_paramvals(
-            hamC, otherC, self.param_mode, self.nonham_mode, truncate)
-
+        evotype = self.errorgen._evotype
         Gate.__init__(self, d2, evotype) #sets self.dim
 
-        #Finish initialization based on evolution type
-        assert(evotype in ("densitymx","svterm","cterm")), \
-            "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
-        #Fast CSR-matrix summing variables: N/A if not sparse or using terms
-        self.hamCSRSumIndices = None
-        self.otherCSRSumIndices = None
-        self.sparse_err_gen_template = None            
-        
+        #Finish initialization based on evolution type
         if evotype == "densitymx":
             self.unitary_postfactor = unitaryPostfactor #can be None
-            self.hamGens, self.otherGens = self._init_generators()
-
-            if self.sparse:
-                #Precompute for faster CSR sums in _construct_errgen
-                all_csr_matrices = []
-                if self.hamGens is not None:
-                    all_csr_matrices.extend(self.hamGens)
-
-                if self.otherGens is not None:
-                    if self.nonham_mode == "diagonal":
-                        oList = self.otherGens
-                    else: # nonham_mode in ("diag_affine", "all")
-                        oList = [ mx for mxRow in self.otherGens for mx in mxRow ]                        
-                    all_csr_matrices.extend(oList)
-    
-                csr_sum_array, indptr, indices, N = \
-                        _mt.get_csr_sum_indices(all_csr_matrices)
-                self.hamCSRSumIndices = csr_sum_array[0:len(self.hamGens)]
-                self.otherCSRSumIndices = csr_sum_array[len(self.hamGens):]
-                self.sparse_err_gen_template = (indptr, indices, N)
-
-            #initialize intermediate storage for matrix and for deriv computation
-            # (needed for _construct_errgen)
-            bsO = self.other_basis_size
-            self.Lmx = _np.zeros((bsO-1,bsO-1),'complex') if bsO > 0 else None
-
-            self.err_gen = None
-            self.err_gen_prep = None
             self.exp_err_gen = None
-            self._construct_errgen() #sets the above three members as needed
-            
-            self.Lterms = self.terms = None # Unused
+            self.err_gen_prep = None
+            self._construct_exp_errgen() #sets one of the above two members
+                                         # depending on self.errorgen.sparse
+            self.terms = None # Unused
             
         else: # Term-based evolution
 
-            assert(not self.sparse), "Sparse bases are not supported for term-based evolution"
+            assert(not self.errorgen.sparse), "Sparse bases are not supported for term-based evolution"
               #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitaryPostfactor
             termtype = "dense" if evotype == "svterm" else "clifford"
 
             # Store *unitary* as self.unitary_postfactor - NOT a superop
             if unitaryPostfactor is not None: #can be None
-                gate_std = _bt.change_basis(unitaryPostfactor, self.matrix_basis, 'std')
+                gate_std = _bt.change_basis(unitaryPostfactor, self.errorgen.matrix_basis, 'std')
                 self.unitary_postfactor = _gt.process_mx_to_unitary(gate_std)
 
                 # automatically "up-convert" gate to CliffordGate if needed
@@ -2457,387 +2272,69 @@ class LindbladParameterizedGateMap(Gate):
             else:
                 self.unitary_postfactor = None
             
-            self.Lterms = self._init_terms(Ltermdict, basisdict, hamBInds,
-                                           otherBInds, termtype)
             self.terms = {}
             
             # Unused
-            self.hamGens = self.other = self.Lmx = None
-            self.err_gen_prep = self.exp_err_gen = self.err_gen = None
+            self.err_gen_prep = self.exp_err_gen = None
 
         #Done with __init__(...)
 
 
-    def _init_generators(self):
-        #assumes self.dim, self.ham_basis, self.other_basis, and self.matrix_basis are setup...
+    def submembers(self):
+        """
+        Get the GateSetMember-derived objects contained in this one.
         
-        d2 = self.dim
-        d = int(round(_np.sqrt(d2)))
-        assert(d*d == d2), "Gate dim must be a perfect square"
+        Returns
+        -------
+        list
+        """
+        return [self.errorgen]
 
-        # Get basis transfer matrix
-        mxBasisToStd = _bt.transform_matrix(self.matrix_basis, "std", d)
-        leftTrans  = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
-                          else _np.linalg.inv(mxBasisToStd)
-        rightTrans = mxBasisToStd
+
+    def copy(self, parent=None):
+        """
+        Copy this object.
+
+        Returns
+        -------
+        Gate
+            A copy of this object.
+        """
+        # We need to override this method so that error map has its
+        # parent reset correctly.
+        if self.unitary_postfactor is None:
+            upost = None
+        elif self._evotype == "densitymx":
+            upost = self.unitary_postfactor
+        else:
+            #self.unitary_postfactor is actually the *unitary* not the postfactor
+            termtype = "dense" if self._evotype == "svterm" else "clifford"
+
+            # automatically "up-convert" gate to CliffordGate if needed
+            if termtype == "clifford":
+                assert(isinstance(self.unitary_postfactor, CliffordGate)) # see __init__
+                U = self.unitary_postfactor.unitary
+            else: U = self.unitary_postfactor
+            gate_std = _gt.unitary_to_process_mx(U)
+            upost = _bt.change_basis(gate_std, 'std', self.errorgen.matrix_basis)
+
+        cls = self.__class__ # so that this method works for derived classes too
+        copyOfMe = cls(upost, self.errorgen.copy(parent))
+        return self._copy_gpindices(copyOfMe, parent)
 
         
-        hamBasisMxs = _basis_matrices(self.ham_basis, d, sparse=self.sparse)
-        otherBasisMxs = _basis_matrices(self.other_basis, d, sparse=self.sparse)
-        hamGens, otherGens = _gt.lindblad_error_generators(
-            hamBasisMxs,otherBasisMxs,normalize=False,
-            other_mode=self.nonham_mode) # in std basis
-
-        # Note: lindblad_error_generators will return sparse generators when
-        #  given a sparse basis (or basis matrices)
-
-        if hamGens is not None:
-            bsH = len(hamGens)+1 #projection-basis size (not nec. == d2)
-            _gt._assert_shape(hamGens, (bsH-1,d2,d2), self.sparse)
-
-            # apply basis change now, so we don't need to do so repeatedly later
-            if self.sparse:
-                hamGens = [ _mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
-                                              inplace=True, check=True) for mx in hamGens ]
-                for mx in hamGens: mx.sort_indices()
-                  # for faster addition ops in _construct_errgen
-            else:
-                #hamGens = _np.einsum("ik,akl,lj->aij", leftTrans, hamGens, rightTrans)
-                hamGens = _np.transpose( _np.tensordot( 
-                        _np.tensordot(leftTrans, hamGens, (1,1)), rightTrans, (2,0)), (1,0,2))
-        else:
-            bsH = 0
-        assert(bsH == self.ham_basis_size)
-            
-        if otherGens is not None:
-
-            if self.nonham_mode == "diagonal":
-                bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
-                _gt._assert_shape(otherGens, (bsO-1,d2,d2), self.sparse)
-
-                # apply basis change now, so we don't need to do so repeatedly later
-                if self.sparse:
-                    otherGens = [ _mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
-                                                    inplace=True, check=True) for mx in otherGens ]
-                    for mx in hamGens: mx.sort_indices()
-                      # for faster addition ops in _construct_errgen
-                else:
-                    #otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
-                    otherGens = _np.transpose( _np.tensordot( 
-                            _np.tensordot(leftTrans, otherGens, (1,1)), rightTrans, (2,0)), (1,0,2))
-
-            elif self.nonham_mode == "diag_affine":
-                bsO = len(otherGens[0])+1 # projection-basis size (not nec. == d2) [~shape[1] but works for lists too]
-                _gt._assert_shape(otherGens, (2,bsO-1,d2,d2), self.sparse)
-
-                # apply basis change now, so we don't need to do so repeatedly later
-                if self.sparse:
-                    otherGens = [ [_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans))
-                                        for mx in mxRow ] for mxRow in otherGens ]
-
-                    for mxRow in otherGens:
-                        for mx in mxRow: mx.sort_indices()
-                          # for faster addition ops in _construct_errgen:
-                else:
-                    #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
-                    #                          otherGens, rightTrans)
-                    otherGens = _np.transpose( _np.tensordot( 
-                            _np.tensordot(leftTrans, otherGens, (1,2)), rightTrans, (3,0)), (1,2,0,3))
-                    
-            else:
-                bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
-                _gt._assert_shape(otherGens, (bsO-1,bsO-1,d2,d2), self.sparse)
-
-                # apply basis change now, so we don't need to do so repeatedly later
-                if self.sparse:
-                    otherGens = [ [_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans))
-                                        for mx in mxRow ] for mxRow in otherGens ]
-                    #Note: complex OK here, as only linear combos of otherGens (like (i,j) + (j,i)
-                    # terms) need to be real
-
-                    for mxRow in otherGens:
-                        for mx in mxRow: mx.sort_indices()
-                          # for faster addition ops in _construct_errgen:
-                else:
-                    #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
-                    #                            otherGens, rightTrans)
-                    otherGens = _np.transpose( _np.tensordot( 
-                            _np.tensordot(leftTrans, otherGens, (1,2)), rightTrans, (3,0)), (1,2,0,3))
-
-        else:
-            bsO = 0
-        assert(bsO == self.other_basis_size)
-        return hamGens, otherGens
-
-    
-    def _init_terms(self, Ltermdict, basisdict, hamBasisLabels, otherBasisLabels, termtype):
-
-        d2 = self.dim
-        d = int(round(_np.sqrt(d2)))
-        tt = termtype # shorthand - used to construct RankOneTerm objects below,
-                      # as we expect `basisdict` will contain *dense* basis
-                      # matrices (maybe change in FUTURE?)
-        numHamParams = len(hamBasisLabels)
-        numOtherBasisEls = len(otherBasisLabels)
-                      
-        # Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
-        # coeffs (w/ *local* variable indices) that get converted to per-order
-        # terms later.
-        IDENT = None # sentinel for the do-nothing identity op
-        Lterms = []
-        for termLbl in Ltermdict:
-            termType = termLbl[0]
-            if termType == "H": # Hamiltonian
-                k = hamBasisLabels[termLbl[1]] #index of parameter
-                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT, tt) )
-                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T, tt) )
-
-            elif termType == "S": # Stochastic
-                if self.nonham_mode in ("diagonal","diag_affine"):
-                    if self.param_mode in ("depol","reldepol"): # => same single param for all stochastic terms
-                        k = numHamParams + 0 #index of parameter
-                    else:
-                        k = numHamParams + otherBasisLabels[termLbl[1]] #index of parameter
-                    Lm = Ln = basisdict[termLbl[1]]
-                    pw = 2 if self.param_mode in ("cptp","depol") else 1 # power to raise parameter to in order to get coeff
-
-                    Lm_dag = Lm.conjugate().T # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
-                    Ln_dag = Ln.conjugate().T
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw:  1.0} ), Ln, Lm_dag, tt) )
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm), tt) )
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT, tt) )
-                        
-                else:
-                    i = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
-                    j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
-                    Lm, Ln = basisdict[termLbl[1]],basisdict[termLbl[2]]
-
-                    # TODO: create these polys and place below...
-                    polyTerms = {}
-                    assert(self.param_mode != "depol"), "`depol` mode not supported when nonham_mode=='all'"
-                    assert(self.param_mode != "reldepol"), "`reldepol` mode not supported when nonham_mode=='all'"
-                    if self.param_mode == "cptp":
-                        # otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
-                        # coeff_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
-                        #          = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
-                        def iRe(a,b): return numHamParams + (a*numOtherBasisEls + b)
-                        def iIm(a,b): return numHamParams + (b*numOtherBasisEls + a)
-                        for k in range(0,min(i,j)+1):
-                            if k <= i and k <= j:
-                                polyTerms[ (iRe(i,k),iRe(j,k)) ] = 1.0
-                            if k <= i and k < j:
-                                polyTerms[ (iRe(i,k),iIm(j,k)) ] = -1.0j
-                            if k < i and k <= j:
-                                polyTerms[ (iIm(i,k),iRe(j,k)) ] = 1.0j
-                            if k < i and k < j:
-                                polyTerms[ (iIm(i,k),iIm(j,k)) ] = 1.0
-                    else: # param_mode == "unconstrained"
-                        # coeff_ij = otherParam[i,j] + 1j*otherParam[j,i] (otherCoeffs is Hermitian)
-                        ijIndx = numHamParams + (i*numOtherBasisEls + j)
-                        jiIndx = numHamParams + (j*numOtherBasisEls + i)
-                        polyTerms = { (ijIndx,): 1.0, (jiIndx,): 1.0j }
-
-                    base_poly = _Polynomial(polyTerms)
-                    Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                    Lterms.append( _term.RankOneTerm(1.0*base_poly, Ln, Lm, tt) )
-                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm), tt) ) # adjoint(_np.dot(Lm_dag,Ln))
-                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT, tt ) )
-
-            elif termType == "A": # Affine
-                assert(self.nonham_mode == "diag_affine")
-                if self.param_mode in ("depol","reldepol"): # => same single param for all stochastic terms
-                    k = numHamParams + 1 + otherBasisLabels[termLbl[1]] #index of parameter
-                else:
-                    k = numHamParams + numOtherBasisEls + otherBasisLabels[termLbl[1]] #index of parameter
-
-                # rho -> basisdict[termLbl[1]] * I = basisdict[termLbl[1]] * sum{ P_i rho P_i } where Pi's
-                #  are the normalized paulis (including the identity), and rho has trace == 1
-                #  (all but "I/d" component of rho are annihilated by pauli sum; for the I/d component, all
-                #   d^2 of the terms in the sum is P/sqrt(d) * I/d * P/sqrt(d) == I/d^2, so the result is just "I")
-                L = basisdict[termLbl[1]]
-                Bmxs = _bt.basis_matrices("pp",d, sparse=False) #Note: only works when `d` corresponds to integral # of qubits!
-
-                for B in Bmxs: # Note: *include* identity! (see pauli scratch notebook for details)
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,): 1.0} ), _np.dot(L,B), B, tt) ) # /(d2-1.)
-                    
-                #TODO: check normalization of these terms vs those used in projections.
-
+    def _construct_exp_errgen(self):
+        """ Constructs Sets self.err_gen_prep or self.exp_err_gen 
+        TODO: docstring (better?)
+        """
+        err_gen_matrix = self.errorgen.err_gen_mx
                 
-
-        #DEBUG
-        #print("DB: params = ", list(enumerate(self.paramvals)))
-        #print("DB: Lterms = ")
-        #for i,lt in enumerate(Lterms):
-        #    print("Term %d:" % i)
-        #    print("  coeff: ", str(lt.coeff)) # list(lt.coeff.keys()) )
-        #    print("  pre:\n", lt.pre_ops[0] if len(lt.pre_ops) else "IDENT")
-        #    print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
-
-        return Lterms
-
-    
-    def _set_params_from_errgen(self, errgen, truncate):
-        """ Sets self.paramvals based on `errgen` """
-        hamC, otherC  = \
-            _gt.lindblad_errgen_projections(
-                errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
-                return_generators=False, other_mode=self.nonham_mode,
-                sparse=self.sparse) # in std basis
-
-        self.paramvals = _gt.lindblad_projections_to_paramvals(
-            hamC, otherC, self.param_mode, self.nonham_mode, truncate)
-
-            
-    def _construct_errgen(self):
-        """
-        Build the error generator matrix using the current parameters.
-        """
-        d2 = self.dim
-        hamCoeffs, otherCoeffs = _gt.paramvals_to_lindblad_projections(
-            self.paramvals, self.ham_basis_size, self.other_basis_size,
-            self.param_mode, self.nonham_mode, self.Lmx)
-
-        #TODO REMOVE
-        #bsH = self.ham_basis_size
-        #bsO = self.other_basis_size
-        #
-        ## self.paramvals = [hamCoeffs] + [otherParams]
-        ##  where hamCoeffs are *real* and of length d2-1 (self.dim == d2)
-        #if bsH > 0:
-        #    hamCoeffs = self.paramvals[0:bsH-1]
-        #    nHam = bsH-1
-        #else:
-        #    nHam = 0
-        #
-        ##built up otherCoeffs based on self.param_mode and self.nonham_mode
-        #if bsO > 0:
-        #    if self.nonham_mode == "diagonal":
-        #        otherParams = self.paramvals[nHam:]
-        #        expected_shape = (1,) if (self.param_mode in ("depol","reldepol")) else (bsO-1,)
-        #        assert(otherParams.shape == expected_shape)
-        #        
-        #        if self.param_mode in ("cptp","depol"):
-        #            otherCoeffs = otherParams**2 #Analagous to L*L_dagger
-        #        else: # "unconstrained"
-        #            otherCoeffs = otherParams
-        #            
-        #    elif self.nonham_mode == "diag_affine":
-        #
-        #        if self.param_mode in ("depol","reldepol"):
-        #            otherParams = self.paramvals[nHam:].reshape((1+bsO-1,))
-        #            otherCoeffs = _np.empty((2,bsO-1), 'd') #leave as real type b/c doesn't have complex entries
-        #            if self.param_mode == "depol":
-        #                otherCoeffs[0,:] = otherParams[0]**2
-        #            else:
-        #                otherCoeffs[0,:] = otherParams[0]
-        #            otherCoeffs[1,:] = otherParams[1:]
-        #
-        #        else:
-        #            otherParams = self.paramvals[nHam:].reshape((2,bsO-1))
-        #            if self.param_mode == "cptp":
-        #                otherCoeffs = otherParams.copy()
-        #                otherCoeffs[0,:] = otherParams[0]**2
-        #            else: # param_mode == "unconstrained"
-        #                #otherCoeffs = _np.empty((2,bsO-1),'complex')
-        #                otherCoeffs = otherParams
-        #                
-        #    else: # self.nonham_mode == "all"
-        #        otherParams = self.paramvals[nHam:].reshape((bsO-1,bsO-1))
-        #
-        #        if self.param_mode == "cptp":
-        #            #  otherParams is an array of length (bs-1)*(bs-1) that
-        #            #  encodes a lower-triangular matrix "Lmx" via:
-        #            #  Lmx[i,i] = otherParams[i,i]
-        #            #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
-        #            for i in range(bsO-1):
-        #                self.Lmx[i,i] = otherParams[i,i]
-        #                for j in range(i):
-        #                    self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
-        #    
-        #            #The matrix of (complex) "other"-coefficients is build by
-        #            # assuming Lmx is its Cholesky decomp; means otherCoeffs
-        #            # is pos-def.
-        #
-        #            # NOTE that the Cholesky decomp with all positive real diagonal
-        #            # elements is *unique* for a given positive-definite otherCoeffs
-        #            # matrix, but we don't care about this uniqueness criteria and so
-        #            # the diagonal els of Lmx can be negative and that's fine -
-        #            # otherCoeffs will still be posdef.
-        #            otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
-        #
-        #            #DEBUG - test for pos-def
-        #            #evals = _np.linalg.eigvalsh(otherCoeffs)
-        #            #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
-        #            #assert(all([ev >= -DEBUG_TOL for ev in evals]))
-        #
-        #        else: # param_mode == "unconstrained"
-        #            #otherParams holds otherCoeff real and imaginary parts directly
-        #            otherCoeffs = _np.empty((bsO-1,bsO-1),'complex')
-        #            for i in range(bsO-1):
-        #                otherCoeffs[i,i] = otherParams[i,i]
-        #                for j in range(i):
-        #                    otherCoeffs[i,j] = otherParams[i,j] +1j*otherParams[j,i]
-        #                    otherCoeffs[j,i] = otherParams[i,j] -1j*otherParams[j,i]
-        #END REMOVE
-                            
-        #Finally, build gate matrix from generators and coefficients:
-        if self.sparse:
-            #FUTURE: could try to optimize the sum-scalar-mults ops below, as these take the
-            # bulk of from_vector time, which recurs frequently.
-            indptr, indices, N = self.sparse_err_gen_template # the CSR arrays giving
-               # the structure of a CSR matrix with 0-elements in all possible places
-            data = _np.zeros(len(indices),'complex') # data starts at zero
-            
-            #if bsH > 0: REMOVE
-            if hamCoeffs is not None:
-                # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
-                _mt.csr_sum(data,hamCoeffs, self.hamGens, self.hamCSRSumIndices)
-
-            #if bsO > 0: REMOVE
-            if otherCoeffs is not None:
-                if self.nonham_mode == "diagonal":
-                    # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
-                    _mt.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
-                    
-                else: # nonham_mode in ("diag_affine", "all")
-                    # lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
-                    #                      for c,gen in zip(cRow,genRow)])
-                    _mt.csr_sum(data, otherCoeffs.flat,
-                                [oGen for oGenRow in self.otherGens for oGen in oGenRow],
-                                self.otherCSRSumIndices)
-            lnd_error_gen = _sps.csr_matrix( (data, indices.copy(), indptr.copy()), shape=(N,N) ) #copies needed (?)
-            
-
-        else: #dense matrices
-            #if bsH > 0: REMOVE
-            if hamCoeffs is not None:
-                #lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
-                lnd_error_gen = _np.tensordot(hamCoeffs, self.hamGens, (0,0))
-            else:
-                lnd_error_gen = _np.zeros( (d2,d2), 'complex')
-
-            #if bsO > 0: REMOVE
-            if otherCoeffs is not None:
-                if self.nonham_mode == "diagonal":
-                    #lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
-                    lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, (0,0))
-
-                else: # nonham_mode in ("diag_affine", "all")
-                    #lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs,
-                    #                            self.otherGens)
-                    lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, ((0,1),(0,1)))
-
-
-        assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0))
-        #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)        
-        self.err_gen = _mt.safereal(lnd_error_gen, inplace=True)
-
         #Pre-compute the exponential of the error generator if dense matrices
         # are used, otherwise cache prepwork for sparse expm calls
-        if self.sparse:
-            self.err_gen_prep = _mt.expm_multiply_prep(self.err_gen)
+        if self.errorgen.sparse:
+            self.err_gen_prep = _mt.expm_multiply_prep(err_gen_matrix)
         else:
-            self.exp_err_gen = _spl.expm(self.err_gen)
+            self.exp_err_gen = _spl.expm(err_gen_matrix)
 
 
         
@@ -2858,19 +2355,15 @@ class LindbladParameterizedGateMap(Gate):
         -------
         None
         """
-        if memo is None: memo = set()
-        elif id(self) in memo: return
-        memo.add(id(self))
-
         self.terms = {} # clear terms cache since param indices have changed now
-        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
+        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent, memo)
 
 
     def todense(self):
         """
         Return this gate as a dense matrix.
         """
-        if self.sparse: raise NotImplementedError("todense() not implemented for sparse LindbladParameterizedGateMap objects")
+        if self.errorgen.sparse: raise NotImplementedError("todense() not implemented for sparse LindbladParameterizedGateMap objects")
         if self._evotype in ("svterm","cterm"): 
             raise NotImplementedError("todense() not implemented for term-based LindbladParameterizedGateMap objects")
 
@@ -2888,8 +2381,8 @@ class LindbladParameterizedGateMap(Gate):
         _warnings.warn(("Constructing the sparse matrix of a LindbladParameterizedGate."
                         "  Usually this is *NOT* a sparse matrix (the exponential of a"
                         " sparse matrix isn't generally sparse)!"))
-        if self.sparse:
-            exp_err_gen = _spsl.expm(self.err_gen.tocsc()).tocsr()
+        if self.errorgen.sparse:
+            exp_err_gen = _spsl.expm(self.errorgen.tosparse().tocsc()).tocsr()
             if self.unitary_postfactor is not None:
                 return exp_err_gen.dot(self.unitary_postfactor)
             else:
@@ -2910,7 +2403,7 @@ class LindbladParameterizedGateMap(Gate):
         GateRep
         """
         if self._evotype == "densitymx":
-            if self.sparse:
+            if self.errorgen.sparse:
                 if self.unitary_postfactor is None:
                     Udata = _np.empty(0,'d')
                     Uindices = Uindptr = _np.empty(0,_np.int64)
@@ -2980,8 +2473,12 @@ class LindbladParameterizedGateMap(Gate):
               # for now - until StaticGate and CliffordGate can init themselves from a *sparse* matrix
             postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.unitary_postfactor,
                                          self.unitary_postfactor, tt) 
-            loc_terms = _term.exp_terms(self.Lterms, [order], postTerm)[order]
-            #loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
+            #Note: for now, *all* of an error generator's terms are considered 0-th order,
+            # so the below call to get_order_terms just gets all of them.  In the FUTURE
+            # we might want to allow a distinction among the error generator terms, in which
+            # case this term-exponentiation step will need to become more complicated...
+            loc_terms = _term.exp_terms(self.errorgen.get_order_terms(0), [order], postTerm)[order]
+            #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
             self.terms[order] = _compose_poly_indices(loc_terms)
         return self.terms[order]
 
@@ -2995,7 +2492,7 @@ class LindbladParameterizedGateMap(Gate):
         int
            the number of independent parameters.
         """
-        return len(self.paramvals)
+        return self.errorgen.num_params()
 
 
     def to_vector(self):
@@ -3007,7 +2504,7 @@ class LindbladParameterizedGateMap(Gate):
         numpy array
             a 1D numpy array with length == num_params().
         """
-        return self.paramvals
+        return self.errorgen.to_vector()
 
 
     def from_vector(self, v):
@@ -3024,10 +2521,9 @@ class LindbladParameterizedGateMap(Gate):
         -------
         None
         """
-        assert(len(v) == self.num_params())
-        self.paramvals = v
+        self.errorgen.from_vector(v)
         if self._evotype == "densitymx":
-            self._construct_errgen()                
+            self._construct_exp_errgen()
         self.dirty = True
 
     def get_errgen_coeffs(self):
@@ -3054,13 +2550,7 @@ class LindbladParameterizedGateMap(Gate):
             A dictionary mapping the integer basis labels used in the
             keys of `Ltermdict` to basis matrices..
         """
-        hamC, otherC = _gt.paramvals_to_lindblad_projections(
-            self.paramvals, self.ham_basis_size, self.other_basis_size,
-            self.param_mode, self.nonham_mode, self.Lmx)
-
-        Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
-            hamC, otherC, self.ham_basis, self.other_basis, self.nonham_mode)
-        return Ltermdict, basisdict
+        return self.errorgen.get_coeffs()
 
         
     def set_value(self, M):
@@ -3078,16 +2568,22 @@ class LindbladParameterizedGateMap(Gate):
         -------
         None
         """
+
+        #TODO: move this function to errorgen?
+        if not isinstance(self.errorgen, LindbladErrorgen):
+            raise NotImplementedError(("Can only set the value of a LindbladParameterizedGate that "
+                                       "contains a single LindbladErrorgen error generator"))
+
         tGate = LindbladParameterizedGateMap.from_gate_matrix(
             M,self.unitary_postfactor,
-            self.ham_basis, self.other_basis,
-            self.param_mode,self.nonham_mode,
-            True, self.matrix_basis, self._evotype)
+            self.errorgen.ham_basis, self.errorgen.other_basis,
+            self.errorgen.param_mode,self.errorgen.nonham_mode,
+            True, self.errorgen.matrix_basis, self._evotype)
 
         #Note: truncate=True to be safe
-        self.paramvals[:] = tGate.paramvals[:]
+        self.errorgen.from_vector(tGate.errorgen.to_vector())
         if self._evotype == "densitymx":
-            self._construct_errgen()
+            self._construct_exp_errgen()
         self.dirty = True
 
     
@@ -3114,9 +2610,8 @@ class LindbladParameterizedGateMap(Gate):
             #just conjugate postfactor and Lindbladian exponent by U:
             if self.unitary_postfactor is not None:
                 self.unitary_postfactor = _mt.safedot(Uinv,_mt.safedot(self.unitary_postfactor, U))
-            self.err_gen = _mt.safedot(Uinv,_mt.safedot(self.err_gen, U))
-            self._set_params_from_errgen(self.err_gen, truncate=True)
-            self._construct_errgen() # unnecessary? (TODO)
+            self.errorgen.transform(S)
+            self._construct_exp_errgen() # needed to rebuild exponentiated error gen
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -3168,14 +2663,12 @@ class LindbladParameterizedGateMap(Gate):
             if typ == "prep":
                 if self.unitary_postfactor is not None:
                     self.unitary_postfactor = _mt.safedot(Uinv,self.unitary_postfactor)
-                self.err_gen = _mt.safedot(Uinv,self.err_gen)
             else:
                 if self.unitary_postfactor is not None:
                     self.unitary_postfactor = _mt.safedot(self.unitary_postfactor, U)
-                self.err_gen = _mt.safedot(self.err_gen, U)
                 
-            self._set_params_from_errgen(self.err_gen, truncate=True)
-            self._construct_errgen() # unnecessary? (TODO)
+            self.errorgen.spam_transform(S,typ)
+            self._construct_exp_errgen() # needed to rebuild exponentiated error gen
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -3201,10 +2694,9 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
     form is referred to as the "projection basis".
     """
 
-    def __init__(self, unitaryPostfactor, Ltermdict, basisdict=None,
-                 param_mode="cptp", nonham_mode="all",
-                 truncate=True, mxBasis="pp", evotype="densitymx"):
+    def __init__(self, unitaryPostfactor, errorgen):     
         """
+        TODO: docstring (fix!) - similar to above class
         Create a new LinbladParameterizedGate based on a set of Lindblad terms.
 
         Note that if you want to construct a LinbladParameterizedGate from a
@@ -3272,25 +2764,24 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             only `"densitymx"` (Lioville density-matrix vector) is supported.
             For more options, see :class:`LindbladParameterizedMap`.
         """
-        assert(evotype == "densitymx"), \
+        assert(errorgen._evotype == "densitymx"), \
             "LindbladParameterizedGate objects can only be used for the 'densitymx' evolution type"
             #Note: cannot remove the evotype argument b/c we need to maintain the same __init__
             # signature as LindbladParameterizedGateMap so its @classmethods will work on us.
         
         #Start with base class construction
         LindbladParameterizedGateMap.__init__(
-            self, unitaryPostfactor, Ltermdict, basisdict, param_mode,
-            nonham_mode, truncate, mxBasis, evotype) #(sets self.dim)
-        
-        GateMatrix.__init__(self, _np.identity(self.dim,'d'), "densitymx")
+            self, unitaryPostfactor, errorgen) # (sets self.dim and self.base)
 
-        assert(not self.sparse), \
+        GateMatrix.__init__(self, self.base, "densitymx")
+        
+        assert(not self.errorgen.sparse), \
             "LindbladParameterizedGate objects must use *dense* basis elements!"
         
-        self._construct_errgen() # construct matrix (may be unnecessary since base class calls this...)
+        #self._construct_exp_errgen() # construct matrix (may be unnecessary since base class calls this...)
         
             
-    def _construct_errgen(self): 
+    def _construct_exp_errgen(self): 
         """
         Build the internal gate matrix using the current parameters.
         """
@@ -3298,7 +2789,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         # LindbladParmaeterizedGateMap's version, which just constructs
         # self.err_gen & self.exp_err_gen, to constructing the entire
         # final matrix.
-        LindbladParameterizedGateMap._construct_errgen(self) 
+        LindbladParameterizedGateMap._construct_exp_errgen(self) 
         matrix = self.todense()  # dot(exp_err_gen, unitary_postfactor)
 
         assert(_np.linalg.norm(matrix.imag) < IMAG_TOL)
@@ -3307,7 +2798,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         self.base = matrix.real
         self.base.flags.writeable = False
         self.base_deriv = None
-        self.base_hessian = None        
+        self.base_hessian = None
 
         ##TEST FOR CP: DEBUG!!!
         #from ..tools import jamiolkowski as _jt
@@ -3348,194 +2839,6 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
                              (self._evotype, self.__class__.__name__))
 
         
-    def _dHdp(self):
-        return self.hamGens.transpose((1,2,0)) #PRETRANS
-        #return _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
-
-    def _dOdp(self):
-        bsH = self.ham_basis_size
-        bsO = self.other_basis_size
-        nHam = bsH-1 if (bsH > 0) else 0
-        d2 = self.dim
-        
-        assert(bsO > 0),"Cannot construct dOdp when other_basis_size == 0!"
-        if self.nonham_mode == "diagonal":
-            otherParams = self.paramvals[nHam:]
-            
-            # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
-            #  except "depol" & "reldepol" cases, when shape == [d2,d2,1]
-            if self.param_mode == "depol": # all coeffs same & == param^2
-                assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'depol' case!"
-                #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None] * 2*otherParams[0]
-                dOdp  = _np.transpose(self.otherGens, (1,2,0)) * 2*otherParams[0]
-            elif self.param_mode == "reldepol": # all coeffs same & == param
-                assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'reldepol' case!"
-                #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None]
-                dOdp  = _np.transpose(self.otherGens, (1,2,0)) * 2*otherParams[0]
-            elif self.param_mode == "cptp": # (coeffs = params^2)
-                #dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams) 
-                dOdp = _np.transpose(self.otherGens,(1,2,0)) * 2*otherParams # just a broadcast
-            else: # "unconstrained" (coeff == params)
-                #dOdp  = _np.einsum('alj->lja', self.otherGens)
-                dOdp  = _np.transpose(self.otherGens, (1,2,0))
-
-
-        elif self.nonham_mode == "diag_affine":
-            otherParams = self.paramvals[nHam:]
-            # Note: otherGens has shape (2,bsO-1,d2,d2) with diag-term generators
-            # in first "row" and affine generators in second row.
-            
-            # Derivative of exponent wrt other param; shape == [d2,d2,2,bs-1]
-            #  except "depol" & "reldepol" cases, when shape == [d2,d2,bs]
-            if self.param_mode == "depol": # all coeffs same & == param^2
-                diag_params, affine_params = otherParams[0:1], otherParams[1:]
-                dOdp  = _np.empty((d2,d2,bsO),'complex')
-                #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2*diag_params[0] # single diagonal term
-                #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
-                dOdp[:,:,0]  = _np.squeeze(self.otherGens[0],0) * 2*diag_params[0] # single diagonal term
-                dOdp[:,:,1:] = _np.transpose(self.otherGens[1],(1,2,0)) # no need for affine_params
-            elif self.param_mode == "reldepol": # all coeffs same & == param^2
-                dOdp  = _np.empty((d2,d2,bsO),'complex')
-                #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) # single diagonal term
-                #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # affine part: each gen has own param
-                dOdp[:,:,0]  = _np.squeeze(self.otherGens[0],0) # single diagonal term
-                dOdp[:,:,1:] = _np.transpose(self.otherGens[1],(1,2,0)) # affine part: each gen has own param
-            elif self.param_mode == "cptp": # (coeffs = params^2)
-                diag_params, affine_params = otherParams[0:bsO-1], otherParams[bsO-1:]
-                dOdp  = _np.empty((d2,d2,2,bsO-1),'complex')
-                #dOdp[:,:,0,:] = _np.einsum('alj,a->lja', self.otherGens[0], 2*diag_params)
-                #dOdp[:,:,1,:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
-                dOdp[:,:,0,:] = _np.transpose(self.otherGens[0],(1,2,0)) * 2*diag_params # broadcast works
-                dOdp[:,:,1,:] = _np.transpose(self.otherGens[1],(1,2,0)) # no need for affine_params
-            else: # "unconstrained" (coeff == params)
-                #dOdp  = _np.einsum('ablj->ljab', self.otherGens) # -> shape (d2,d2,2,bsO-1)
-                dOdp  = _np.transpose(self.otherGens, (2,3,0,1) ) # -> shape (d2,d2,2,bsO-1)
-
-        else: # nonham_mode == "all" ; all lindblad terms included
-            assert(self.param_mode in ("cptp","unconstrained"))
-            
-            if self.param_mode == "cptp":
-                L,Lbar = self.Lmx,self.Lmx.conjugate()
-                F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'))
-                F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
-                
-                  # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-                  # Note: replacing einsums here results in at least 3 numpy calls (probably slower?)
-                dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
-                dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
-                dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
-                dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
-            else: # "unconstrained"
-                F0 = _np.identity(bsO-1,'d')
-                F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'),-1)
-                F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
-            
-                # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-                #dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
-                #dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
-                #           _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
-                #dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
-                #           _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
-                tmp_ablj = _np.transpose(self.otherGens, (2,3,0,1)) # ablj -> ljab
-                tmp_balj = _np.transpose(self.otherGens, (2,3,1,0)) # balj -> ljab
-                dOdp  = tmp_ablj * F0  # a == b case
-                dOdp += tmp_ablj * F1 + tmp_balj * F1 # a > b (F1)
-                dOdp += tmp_balj * F2 - tmp_ablj * F2 # a < b (F2)
-
-        # apply basis transform
-        tr = len(dOdp.shape) #tensor rank
-        assert( (tr-2) in (1,2)), "Currently, dodp can only have 1 or 2 derivative dimensions"
-
-        assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
-        return _np.real(dOdp)
-
-
-    def _d2Odp2(self):
-        bsH = self.ham_basis_size
-        bsO = self.other_basis_size
-        nHam = bsH-1 if (bsH > 0) else 0
-        d2 = self.dim
-        
-        assert(bsO > 0),"Cannot construct dOdp when other_basis_size == 0!"
-        if self.nonham_mode == "diagonal":
-            otherParams = self.paramvals[nHam:]
-            nP = len(otherParams); 
-            
-            # Derivative of exponent wrt other param; shape == [d2,d2,nP,nP]
-            if self.param_mode == "depol":
-                assert(nP == 1)
-                #d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
-                d2Odp2  = _np.squeeze(self.otherGens,0)[:,:,None,None] * 2
-            elif self.param_mode == "cptp":
-                assert(nP == bsO-1)
-                #d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
-                d2Odp2  = _np.transpose(self.otherGens, (1,2,0))[:,:,:,None] * 2*_np.identity(nP,'d')
-            else: # param_mode == "unconstrained" or "reldepol"
-                assert(nP == bsO-1)
-                d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')
-
-        elif self.nonham_mode == "diag_affine":
-            otherParams = self.paramvals[nHam:]
-            nP = len(otherParams); 
-            
-            # Derivative of exponent wrt other param; shape == [d2,d2,nP,nP]
-            if self.param_mode == "depol":
-                assert(nP == bsO) # 1 diag param + (bsO-1) affine params
-                d2Odp2  = _np.empty((d2,d2,nP,nP),'complex')
-                #d2Odp2[:,:,0,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2 # single diagonal term
-                d2Odp2[:,:,0,0]  = _np.squeeze(self.otherGens[0],0) * 2 # single diagonal term
-                d2Odp2[:,:,1:,1:]  = 0 # 2nd deriv wrt. all affine params == 0
-            elif self.param_mode == "cptp":
-                assert(nP == 2*(bsO-1)); hnP = bsO-1 # half nP
-                d2Odp2  = _np.empty((d2,d2,nP,nP),'complex')
-                #d2Odp2[:,:,0:hnP,0:hnp] = _np.einsum('alj,aq->ljaq', self.otherGens[0], 2*_np.identity(nP,'d'))
-                d2Odp2[:,:,0:hnP,0:hnp] = _np.transpose(self.otherGens[0],(1,2,0))[:,:,:,None] * 2*_np.identity(nP,'d')
-                d2Odp2[:,:,hnP:,hnp:]   = 0 # 2nd deriv wrt. all affine params == 0
-            else: # param_mode == "unconstrained" or "reldepol"
-                assert(nP == 2*(bsO-1))
-                d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')
-
-        else: # nonham_mode == "all" : all lindblad terms included
-            nP = bsO-1
-            if self.param_mode == "cptp":
-                d2Odp2  = _np.zeros([d2,d2,nP,nP,nP,nP],'complex') #yikes! maybe make this SPARSE in future?
-                
-                #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
-                # indices of d2Odp2 are [i,j,a,b,q,r]
-                
-                def iter_base_ab_qr(ab_inc_eq, qr_inc_eq):
-                    """ Generates (base,ab,qr) tuples such that `base` runs over
-                        all possible 'other' params and 'ab' and 'qr' run over
-                        parameter indices s.t. ab > base and qr > base.  If
-                        ab_inc_eq == True then the > becomes a >=, and likewise
-                        for qr_inc_eq.  Used for looping over nonzero hessian els. """
-                    for _base in range(nP):
-                        start_ab = _base if ab_inc_eq else _base+1
-                        start_qr = _base if qr_inc_eq else _base+1
-                        for _ab in range(start_ab,nP):
-                            for _qr in range(start_qr,nP):
-                                yield (_base,_ab,_qr)
-                                
-                for base,a,q in iter_base_ab_qr(True,True): # Case1: base=b=r, ab=a, qr=q
-                    d2Odp2[:,:,a,base,q,base] = self.otherGens[a,q] + self.otherGens[q,a]
-                for base,a,r in iter_base_ab_qr(True,False): # Case2: base=b=q, ab=a, qr=r
-                    d2Odp2[:,:,a,base,base,r] = -1j*self.otherGens[a,r] + 1j*self.otherGens[r,a]
-                for base,b,q in iter_base_ab_qr(False,True): # Case3: base=a=r, ab=b, qr=q
-                    d2Odp2[:,:,base,b,q,base] = 1j*self.otherGens[b,q] - 1j*self.otherGens[q,b]
-                for base,b,r in iter_base_ab_qr(False,False): # Case4: base=a=q, ab=b, qr=r
-                    d2Odp2[:,:,base,b,base,r] = self.otherGens[b,r] + self.otherGens[r,b]
-                
-            else: # param_mode == "unconstrained"
-                d2Odp2  = _np.zeros([d2,d2,nP,nP,nP,nP],'d') #all params linear
-
-        # apply basis transform
-        tr = len(d2Odp2.shape) #tensor rank
-        assert( (tr-2) in (2,4)), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
-
-        assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)
-        return _np.real(d2Odp2)
-
-
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized
@@ -3550,30 +2853,14 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         """    
         if self.base_deriv is None:
             d2 = self.dim
-            bsH = self.ham_basis_size
-            bsO = self.other_basis_size
-    
+
             #Deriv wrt hamiltonian params
-            if bsH > 0:
-                dexpL = _dexpX(self.err_gen, self._dHdp(), self.exp_err_gen,
-                               self.unitary_postfactor)
-                dH = dexpL.reshape((d2**2,bsH-1)) # [iFlattenedGate,iHamParam]
-            else:
-                dH = _np.empty( (d2**2,0), 'd') #so concat works below
-    
-            #Deriv wrt other params
-            if bsO > 0:
-                dexpL = _dexpX(self.err_gen, self._dOdp(), self.exp_err_gen,
-                               self.unitary_postfactor)
+            derrgen = self.errorgen.deriv_wrt_params(None) #apply filter below; cache *full* deriv
+            derrgen.shape = (d2,d2,-1) # separate 1st d2**2 dim to (d2,d2)
+            dexpL = _dexpX(self.errorgen.err_gen_mx, derrgen, self.exp_err_gen,
+                           self.unitary_postfactor)
+            derivMx = dexpL.reshape(d2**2,self.num_params()) # [iFlattenedGate,iParam]
 
-                #Reshape so index as [iFlattenedGate,iOtherParam]
-                # 2nd dim will be 1 (diagonal-depol), bsO-1 (diagonal-cptp),
-                # bsO (diag_affine-depol), 2*(bsO-1) (diag_affine-) or (bsO-1)**2 (all-) depending on tensor rank
-                dO = dexpL.reshape((d2**2,-1))
-            else:
-                dO = _np.empty( (d2**2,0), 'd') #so concat works below
-
-            derivMx = _np.concatenate((dH,dO), axis=1)
             assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL), \
                 ("Deriv matrix has imaginary part = %s.  This can result from "
                  "evaluating a GateSet derivative at a 'bad' point where the "
@@ -3609,7 +2896,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
 
     def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
         """
-        Construct the Hessian of this gate with respect to it's parameters.
+        Construct the Hessian of this gate with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
         flattened gate matrix and whose 2nd and 3rd axes correspond to the
@@ -3629,52 +2916,29 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         """
         if self.base_hessian is None:
             d2 = self.dim
-            bsH = self.ham_basis_size
-            bsO = self.other_basis_size
-            nHam = bsH-1 if (bsH > 0) else 0
-
-            #Split hessian in 4 pieces:   d2H  |  dHdO
-            #                             dHdO |  d2O
-            # But only d2O is non-zero - and only when cptp == True
-
-            nTotParams = self.num_params()
-            hessianMx = _np.zeros( (d2**2, nTotParams, nTotParams), 'd' )
+            nP = self.num_params()
+            hessianMx = _np.zeros( (d2**2, nP, nP), 'd' )
     
             #Deriv wrt other params
-            if bsO > 0: #if there are any "other" params
-                dOdp = self._dOdp()
-                d2Odp2 = self._d2Odp2()
-                tr = len(dOdp.shape)
-                    
-                series, series2 = _d2expSeries(self.err_gen, dOdp, d2Odp2)
-                term1 = series2
-                if tr == 3: #one deriv dimension "a"
-                    nP = dOdp.shape[2] # e.g. (bsO-1)
-                    term2 = _np.einsum("ija,jkq->ikaq",series,series)
-                    if self.unitary_postfactor is None:
-                        d2expL = _np.einsum("ikaq,kj->ijaq", term1+term2,
-                                            self.exp_err_gen)
-                    else:
-                        d2expL = _np.einsum("ikaq,kl,lj->ijaq", term1+term2,
-                                            self.exp_err_gen, self.unitary_postfactor)
-                    dO = d2expL.reshape((d2**2,nP,nP))
-                    #d2expL.shape = (d2**2,nP,nP); dO = d2expL
+            dEdp = self.errorgen.deriv_wrt_params(None) # filter later, cache *full*
+            d2Edp2 = self.errorgen.hessian_wrt_params(None,None) # hessian
+            dEdp.shape = (d2,d2,nP) # separate 1st d2**2 dim to (d2,d2)
+            d2Edp2.shape = (d2,d2,nP,nP) # ditto
 
-                elif tr == 4: #two deriv dimension "ab"
-                    nP = dOdp.shape[2]*dOdp.shape[3] # e.g. (bsO-1)**2
-                    term2 = _np.einsum("ijab,jkqr->ikabqr",series,series)
-                    if self.unitary_postfactor is None:
-                        d2expL = _np.einsum("ikabqr,kj->ijabqr", term1+term2,
-                                            self.exp_err_gen)                                                
-                    else:
-                        d2expL = _np.einsum("ikabqr,kl,lj->ijabqr", term1+term2,
-                                            self.exp_err_gen, self.unitary_postfactor)
-                    dO = d2expL.reshape((d2**2, nP, nP ))
-                    #d2expL.shape = (d2**2, nP, nP); dO = d2expL
+            series, series2 = _d2expSeries(self.errorgen.err_gen_mx, dEdp, d2Edp2)
+            term1 = series2
+            term2 = _np.einsum("ija,jkq->ikaq",series,series)
+            if self.unitary_postfactor is None:
+                d2expL = _np.einsum("ikaq,kj->ijaq", term1+term2,
+                                    self.exp_err_gen)
+            else:
+                d2expL = _np.einsum("ikaq,kl,lj->ijaq", term1+term2,
+                                    self.exp_err_gen, self.unitary_postfactor)
+            hessianMx = d2expL.reshape((d2**2,nP,nP))
 
-                #dO has been reshape so index as [iFlattenedGate,iDeriv1,iDeriv2]
-                assert(_np.linalg.norm(_np.imag(dO)) < IMAG_TOL)
-                hessianMx[:,nHam:,nHam:] = _np.real(dO) # d2O block of hessian
+            #hessian has been made so index as [iFlattenedGate,iDeriv1,iDeriv2]
+            assert(_np.linalg.norm(_np.imag(hessianMx)) < IMAG_TOL)
+            hessianMx = _np.real(hessianMx) # d2O block of hessian
 
             self.base_hessian = hessianMx
 
@@ -4042,121 +3306,15 @@ class ComposedGateMap(Gate):
         
         Gate.__init__(self, dim, evotype)
 
-    def _obj_refcount(self, obj):
-        """ Number of references to `obj` contained within this GateSet """
-        cnt = _gatesetmember.GateSetMember._obj_refcount(self,obj)
-        for gate in self.factorgates:
-            cnt += gate._obj_refcount(obj)
-        return cnt
-
-    def allocate_gpindices(self, startingIndex, parent):
+    def submembers(self):
         """
-        Sets gpindices array for this object or any objects it
-        contains (i.e. depends upon).  Indices may be obtained
-        from contained objects which have already been initialized
-        (e.g. if a contained object is shared with other
-         top-level objects), or given new indices starting with
-        `startingIndex`.
-
-        Parameters
-        ----------
-        startingIndex : int
-            The starting index for un-allocated parameters.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
+        Get the GateSetMember-derived objects contained in this one.
+        
         Returns
         -------
-        num_new: int
-            The number of *new* allocated parameters (so 
-            the parent should mark as allocated parameter
-            indices `startingIndex` to `startingIndex + new_new`).
+        list
         """
-        #figure out how many parameters we need to allocate based on
-        # which factorgates still need to be "allocated" within the
-        # parent's parameter array:
-        tot_new_params = 0
-        all_gpindices = []
-        #TODO: REMOVE below DB: statements (for debugging parameter allocation)
-        #DB: print("DB: Composed gate ALLOC: start =",startingIndex, "p=",str(type(self.parent)),"gp=",self.gpindices)
-        for gate in self.factorgates:
-            #DB: print("Factor%d: %s" % (i,str(type(gate))), id(gate), "p=",str(type(gate.parent)),"gp=",gate.gpindices)
-            num_new_params = gate.allocate_gpindices( startingIndex, parent ) # *same* parent as this ComposedGate
-            startingIndex += num_new_params
-            tot_new_params += num_new_params
-            all_gpindices.extend( gate.gpindices_as_array() )
-            #DB: print("Factor%d: %d new params.  Gate params = " % (i,num_new_params),gate.gpindices)
-        #DB: print("All indices = ",_slct.list_to_slice(all_gpindices, array_ok=True))
-
-        _gatesetmember.GateSetMember.set_gpindices(
-            self, _slct.list_to_slice(all_gpindices, array_ok=True), parent)
-        return tot_new_params
-
-
-    def unlink_parent(self):
-        """
-        Called when at least one reference (via `key`) to this object is being
-        disassociated with `parent`.   If *all* references are to this object
-        are now gone, set parent to None, invalidating any gpindices.
-        `startingIndex`.
-
-        Returns
-        -------
-        None
-        """
-        for gate in self.factorgates:
-            gate.unlink_parent()
-        _gatesetmember.GateSetMember.unlink_parent(self)
-
-
-    def relink_parent(self, parent):
-        """ 
-        Sets the parent of this object *without* altering its gpindices.
-
-        In addition to setting the parent of this object, this method 
-        sets the parent of any objects this object contains (i.e.
-        depends upon) - much like allocate_gpindices.  To ensure a valid
-        parent is not overwritten, the existing parent *must be None*
-        prior to this call.
-        """
-        for gate in self.factorgates:
-            gate.relink_parent(parent)
-        _gatesetmember.GateSetMember.relink_parent(self, parent)
-
-    
-    def set_gpindices(self, gpindices, parent, memo=None):
-        """
-        Set the parent and indices into the parent's parameter vector that
-        are used by this GateSetMember object.
-
-        Parameters
-        ----------
-        gpindices : slice or integer ndarray
-            The indices of this objects parameters in its parent's array.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
-        Returns
-        -------
-        None
-        """
-        if memo is None: memo = set()
-        elif id(self) in memo: return
-        memo.add(id(self))
-
-        #must set the gpindices of self.factorgates based on new
-        my_old_gpindices = self.gpindices
-        for gate in self.factorgates:
-            if id(gate) in memo: continue #already processed
-            rel_gate_gpindices = _gatesetmember._decompose_gpindices(
-                my_old_gpindices, gate.gpindices)
-            new_gate_gpindices = _gatesetmember._compose_gpindices(
-                gpindices, rel_gate_gpindices)
-            gate.set_gpindices(new_gate_gpindices, parent, memo)
-            
-        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
+        return self.factorgates
 
 
     def copy(self, parent=None):
@@ -4171,7 +3329,7 @@ class ComposedGateMap(Gate):
         # We need to override this method so that factor gates have their 
         # parent reset correctly.
         cls = self.__class__ # so that this method works for derived classes too
-        copyOfMe = cls([ g.copy(parent) for g in self.factorgates ])
+        copyOfMe = cls([ g.copy(parent) for g in self.factorgates ], self.dim, self._evotype)
         return self._copy_gpindices(copyOfMe, parent)
 
 
@@ -4183,6 +3341,7 @@ class ComposedGateMap(Gate):
         return mx
 
     def todense(self):
+        """ TODO: docstring """
         mx = self.factorgates[0].todense()
         for gate in self.factorgates[1:]:
             mx = _np.dot(gate.todense(),mx)
@@ -4212,6 +3371,7 @@ class ComposedGateMap(Gate):
 
 
     def get_order_terms(self, order):
+        """ TODO: docstring """
         terms = []
         for p in _lt.partition_into(order, len(self.factorgates)):
             factor_lists = [ self.factorgates[i].get_order_terms(pi) for i,pi in enumerate(p) ]
@@ -4477,7 +3637,6 @@ class EmbeddedGateMap(Gate):
         self.basisdim = basisdim
 
         labels = targetLabels
-        gatemx = gate_to_embed
 
         blockDims = self.stateSpaceLabels.dim.blockDims
         if basisdim: 
@@ -4585,98 +3744,16 @@ class EmbeddedGateMap(Gate):
     def __setstate__(self, d):
         self.__dict__.update(d)
 
-    def _obj_refcount(self, obj):
-        """ Number of references to `obj` contained within this GateSet """
-        return self.embedded_gate._obj_refcount(obj) + \
-            _gatesetmember.GateSetMember._obj_refcount(self,obj)
 
-    def allocate_gpindices(self, startingIndex, parent):
+    def submembers(self):
         """
-        Sets gpindices array for this object or any objects it
-        contains (i.e. depends upon).  Indices may be obtained
-        from contained objects which have already been initialized
-        (e.g. if a contained object is shared with other
-         top-level objects), or given new indices starting with
-        `startingIndex`.
-
-        Parameters
-        ----------
-        startingIndex : int
-            The starting index for un-allocated parameters.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
+        Get the GateSetMember-derived objects contained in this one.
+        
         Returns
         -------
-        num_new: int
-            The number of *new* allocated parameters (so 
-            the parent should mark as allocated parameter
-            indices `startingIndex` to `startingIndex + new_new`).
+        list
         """
-        #TODO: REMOVE
-        #DB: print("  Embedded ALLOC of gate ",str(type(self.embedded_gate)),"p=",str(type(self.embedded_gate.parent)),
-        #DB:      "gp=",self.embedded_gate.gpindices)
-        num_new_params = self.embedded_gate.allocate_gpindices(startingIndex, parent)
-        _gatesetmember.GateSetMember.set_gpindices(
-            self, self.embedded_gate.gpindices, parent)
-        return num_new_params
-
-
-    def unlink_parent(self):
-        """
-        Called when at least one reference (via `key`) to this object is being
-        disassociated with `parent`.   If *all* references are to this object
-        are now gone, set parent to None, invalidating any gpindices.
-        `startingIndex`.
-
-        Returns
-        -------
-        None
-        """
-        self.embedded_gate.unlink_parent()
-        _gatesetmember.GateSetMember.unlink_parent(self)
-
-
-    def relink_parent(self, parent):
-        """ 
-        Sets the parent of this object *without* altering its gpindices.
-
-        In addition to setting the parent of this object, this method 
-        sets the parent of any objects this object contains (i.e.
-        depends upon) - much like allocate_gpindices.  To ensure a valid
-        parent is not overwritten, the existing parent *must be None*
-        prior to this call.
-        """
-        self.embedded_gate.relink_parent(parent)
-        _gatesetmember.GateSetMember.relink_parent(self, parent)
-
-    
-    def set_gpindices(self, gpindices, parent, memo=None):
-        """
-        Set the parent and indices into the parent's parameter vector that
-        are used by this GateSetMember object.
-
-        Parameters
-        ----------
-        gpindices : slice or integer ndarray
-            The indices of this objects parameters in its parent's array.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
-
-        Returns
-        -------
-        None
-        """
-        if memo is None: memo = set()
-        elif id(self) in memo: return
-        memo.add(id(self))
-
-        #must set the gpindices of self.embedded_gate
-        self.embedded_gate.set_gpindices(gpindices, parent, memo)
-        _gatesetmember.GateSetMember.set_gpindices(
-            self, gpindices, parent) #could have used self.embedded_gate.gpindices (same)
+        return [self.embedded_gate]
 
 
     def copy(self, parent=None):
@@ -5244,3 +4321,1576 @@ class CliffordGate(Gate):
 # - so LindbladParameterizedGate doesn't need to deal w/"kite-structure" bases of terms;
 #    leave this to some higher level constructor which can create compositions
 #    of multiple LindbladParameterizedGates based on kite structure (one per kite block).
+
+
+
+class ComposedErrorgen(Gate):
+    """ Not a CPTP map - just the Lindbladian exponent
+        TODO: docstring  -- a *sum* (not product) of other error generators """
+    
+    def __init__(self, errgens_to_compose, dim="auto", evotype="auto"):
+        """
+        Creates a new ComposedErrorgen.
+
+        Parameters
+        ----------
+        errgens_to_compose : list
+            List of `Gate`-derived objects that are summed together (composed)
+            to form this error generator. 
+            
+        dim : int or "auto"
+            Dimension of this error generator.  Can be set to `"auto"` to take
+            the dimension from `errgens_to_compose[0]` *if* there's at least one
+            error generator being composed.
+
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
+            The evolution type of this error generator.  Can be set to `"auto"`
+            to take the evolution type of `errgens_to_compose[0]` *if* there's
+            at least one error generator being composed.
+        """
+        assert(len(errgens_to_compose) > 0 or dim != "auto"), \
+            "Must compose at least one error generator when dim='auto'!"
+        self.factors = errgens_to_compose
+
+        if dim == "auto":
+            dim = errgens_to_compose[0].dim
+        assert(all([dim == eg.dim for eg in errgens_to_compose])), \
+            "All error generators must have the same dimension (%d expected)!" % dim
+
+        if evotype == "auto":
+            evotype = errgens_to_compose[0]._evotype
+        assert(all([evotype == eg._evotype for eg in errgens_to_compose])), \
+            "All error generators must have the same evolution type (%s expected)!" % evotype
+
+        # set "API" error-generator members (to interface properly w/other objects)        
+        # FUTURE: create a base class that defines this interface (maybe w/properties?)
+        self.sparse = errgens_to_compose[0].sparse \
+            if len(errgens_to_compose) > 0 else False
+        assert(all([self.sparse == eg.sparse for eg in errgens_to_compose])), \
+            "All error generators must have the same sparsity (%s expected)!" % self.sparse
+
+        self.matrix_basis = errgens_to_compose[0].matrix_basis \
+            if len(errgens_to_compose) > 0 else None
+        assert(all([self.matrix_basis == eg.matrix_basis for eg in errgens_to_compose])), \
+            "All error generators must have the same matrix basis (%s expected)!" % self.matrix_basis
+
+        if evotype == "densitymx":
+            self._construct_errgen_matrix()        
+        else:
+            self.err_gen_mx = None
+        
+        Gate.__init__(self, dim, evotype)
+
+    def _construct_errgen_matrix(self):
+        """ TODO: docstring """
+        self.factors[0]._construct_errgen_matrix()
+        mx = self.factors[0].err_gen_mx
+        for eg in self.factors[1:]:
+            eg._construct_errgen_matrix()
+            mx += eg.err_gen_mx
+        self.err_gen_mx = mx
+
+
+    def get_coeffs(self):
+        """ TODO: docstring - see other get_coeffs for a start """
+        Ltermdict = {}; basisdict = {}; next_available = 0
+        for eg in self.factors:
+            ltdict, bdict = eg.get_coeffs()
+
+            # see if we need to update basisdict to avoid collisions
+            # and avoid duplicating basis elements
+            final_basisLbls = {}
+            for lbl,basisEl in bdict.items():
+                lblsEqual = bool(lbl == existingLbl)
+                for existing_lbl,existing_basisEl in basisdict.values():
+                    if _mt.safenorm(basisEl-existing_basisEl) < 1e-6:
+                        final_basisLbls[lbl] = existingLbl
+                        break
+                else: # no existing basis element found - need a new element
+                    if lbl in basisdict: # then can't keep current label
+                        final_basisLbls[lbl] = next_available
+                        next_available += 1
+                    else:
+                        #fine to keep lbl since it's unused
+                        final_basisLbls[lbl] = lbl
+                        if isinstance(lbl,int):
+                            next_available = max(next_available,lbl+1)
+
+                    #Add new basis element
+                    basisdict[ final_basisLbls[lbl] ] = basisEl
+                    
+            for key, coeff in ltdict:
+                new_key = tuple( [key[0]] + [ final_basisLbls[l] for l in key[1:] ] )
+                if new_key in Ltermdict:
+                    Ltermdict[new_key] += coeff
+                else:
+                    Ltermdict[new_key] = coeff
+
+        return Ltermdict, basisdict
+
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        TODO: docstring - look at other for ref
+        """
+        #TODO: in the furture could do this more cleverly so 
+        # each factor gets an appropriate wrtFilter instead of
+        # doing all filtering at the end
+        
+        assert(not self.sparse), \
+            "ComposedErrorgen.deriv_wrt_params(...) can only be called when using *dense* basis elements!"
+
+        d2 = self.dim
+        derivMx = _np.zeros( (d2**2,self.num_params()), 'd')
+        for eg in self.factors:
+            factor_deriv = eg.deriv_wrt_params(None) # do filtering at end
+            rel_gpindices = _gatesetmember._decompose_gpindices(
+                self.gpindices, eg.gpindices)
+            derivMx[:,rel_gpindices] += factor_deriv[:,:]
+
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
+
+        return derivMx
+        
+
+    def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
+        """
+        TODO: docstring - look at other for ref
+        """
+        #TODO: in the furture could do this more cleverly so 
+        # each factor gets an appropriate wrtFilter instead of
+        # doing all filtering at the end
+        
+        assert(not self.sparse), \
+            "ComposedErrorgen.deriv_wrt_params(...) can only be called when using *dense* basis elements!"
+
+        d2 = self.dim
+        nP = self.num_params()
+        hessianMx = _np.zeros( (d2**2,nP,nP), 'd')
+        for eg in self.factors:
+            factor_hessian = eg.hessian_wrt_params(None,None) # do filtering at end
+            rel_gpindices = _gatesetmember._decompose_gpindices(
+                self.gpindices, eg.gpindices)
+            hessianMx[:,rel_gpindices,rel_gpindices] += factor_hessian[:,:,:]
+
+        if wrtFilter1 is None:
+            if wrtFilter2 is None:
+                return hessianMx
+            else:
+                return _np.take(hessianMx, wrtFilter2, axis=2 )
+        else:
+            if wrtFilter2 is None:
+                return _np.take(hessianMx, wrtFilter1, axis=1 )
+            else:
+                return _np.take( _np.take(hessianMx, wrtFilter1, axis=1),
+                                 wrtFilter2, axis=2 )
+
+
+    def submembers(self):
+        """
+        Get the GateSetMember-derived objects contained in this one.
+        
+        Returns
+        -------
+        list
+        """
+        return self.factors
+
+
+    def copy(self, parent=None):
+        """
+        Copy this object.
+
+        Returns
+        -------
+        Gate
+            A copy of this object.
+        """
+        # We need to override this method so that factors have their 
+        # parent reset correctly.
+        cls = self.__class__ # so that this method works for derived classes too
+        copyOfMe = cls([ f.copy(parent) for f in self.factors ], self.dim, self._evotype)
+        return self._copy_gpindices(copyOfMe, parent)
+
+    def tosparse(self):
+        """ Return the gate as a sparse matrix """
+        mx = self.factors[0].tosparse()
+        for eg in self.factors[1:]:
+            mx += eg.tosparse()
+        return mx
+
+    def todense(self):
+        """ TODO: docstring """
+        mx = self.factors[0].todense()
+        for eg in self.factors[1:]:
+            mx += eg.todense()
+        return mx
+
+    def get_order_terms(self, order):
+        """ TODO: docstring """
+        assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
+        return list(_itertools.chain(*[eg.get_order_terms(order) for eg in self.factors]))
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this error generator.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.gpindices_as_array())
+
+
+    def to_vector(self):
+        """
+        Get the error generator parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The gate parameters as a 1D array with length num_params().
+        """
+        v = _np.empty(self.num_params(), 'd')
+        for eg in self.factors:
+            factor_local_inds = _gatesetmember._decompose_gpindices(
+                    self.gpindices, eg.gpindices)
+            v[factor_local_inds] = eg.to_vector()
+        return v
+
+
+    def from_vector(self, v):
+        """
+        Initialize the error generator using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        for eg in self.factors:
+            factor_local_inds = _gatesetmember._decompose_gpindices(
+                    self.gpindices, eg.gpindices)
+            eg.from_vector( v[factor_local_inds] )
+        self.dirty = True
+
+
+    def transform(self, S):
+        """
+        Update gate matrix G with inv(S) * G * S,
+
+        Generally, the transform function updates the *parameters* of 
+        the gate such that the resulting gate matrix is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        In this particular case any TP gauge transformation is possible,
+        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
+        corresponds to a TP-like transform matrix.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+        """
+        for eg in self.factors:
+            eg.transform(S)
+
+
+    def __str__(self):
+        """ Return string representation """
+        s = "Composed error generator of %d factors:\n" % len(self.factors)
+        for i,eg in enumerate(self.factors):
+            s += "Factor %d:\n" % i
+            s += str(eg)
+        return s
+
+
+# Idea:
+# Op = exp(Errgen); Errgen is an error just on 2nd qubit
+# so Op = I x (I+eps*A) x I (small eps limit); eps*A is 1-qubit error generator
+# also Op ~= I+Errgen in small eps limit, so
+# Errgen = I x (I+eps*A) x I - I x I x I 
+#        = I x I x I + eps I x A x I - I x I x I
+#        = eps I x A x I = I x eps*A x I
+# --> we embed error generators by tensoring with I's on non-target sectors.
+#  (identical to how be embed gates)
+
+class EmbeddedErrorgen(EmbeddedGateMap):
+    """
+    An error generator containing a single lower (or equal) dimensional gate within it.
+    An EmbeddedErrorGen acts as the null map (zero) on all of its domain except the 
+    subspace of its contained error generator, where it acts as the contained item does.
+    """
+    
+    def __init__(self, stateSpaceLabels, targetLabels, errgen_to_embed, basisdim=None): # TODO: remove basisdim as arg
+        """
+        Initialize an EmbeddedErrorgen object.
+
+        Parameters
+        ----------
+        stateSpaceLabels : a list of tuples
+            This argument specifies the density matrix space upon which this
+            generator acts.  Each tuple corresponds to a block of a density matrix
+            in the standard basis (and therefore a component of the direct-sum
+            density matrix space). Elements of a tuple are user-defined labels
+            beginning with "L" (single Level) or "Q" (two-level; Qubit) which
+            interpret the d-dimensional state space corresponding to a d x d
+            block as a tensor product between qubit and single level systems.
+            (E.g. a 2-qubit space might be labelled `[('Q0','Q1')]`).
+
+        targetLabels : list of strs
+            The labels contained in `stateSpaceLabels` which demarcate the
+            portions of the state space acted on by `errgen_to_embed` (the
+            "contained" error generator).
+
+        errgen_to_embed : Gate
+            The error generator object that is to be contained within this
+            error generator, and that specifies the only non-trivial action
+            of the EmbeddedErrorgen.
+
+        basisdim : Dim, optional
+            Specifies the basis dimension for the *entire* density-matrix
+            space described by `stateSpaceLabels`.  Thus, this must be the
+            same dimension and direct-sum structure given by the
+            `stateSpaceLabels`.  If None, then this dimension is assumed.
+        """
+        EmbeddedGateMap.__init__(self, stateSpaceLabels, targetLabels, errgen_to_embed, basisdim)
+
+        # set "API" error-generator members (to interface properly w/other objects)
+        # FUTURE: create a base class that defines this interface (maybe w/properties?)
+        self.sparse = True # Embedded error generators are *always* sparse (pointless to
+                           # have dense versions of these)
+        
+        embedded_matrix_basis = errgen_to_embed.matrix_basis
+        if _compat.isstr(embedded_matrix_basis):
+            self.matrix_basis = embedded_matrix_basis
+        else: # assume a Basis object
+            self.matrix_basis = _Basis(
+                name="embedded_" + embedded_matrix_basis.name,
+                matrices=[self._embed_basis_mx(mx) for mx in 
+                          embedded_matrix_basis.get_composite_matrices()],
+                sparse=True)
+
+        if evotype == "densitymx":
+            self._construct_errgen_matrix()        
+        else:
+            self.err_gen_mx = None
+
+    def _construct_errgen_matrix(self):
+        """ TODO: docstring """
+        #Always construct a sparse errgen matrix, so just use
+        # base class's .tosparse() (which calls embedded errorgen's
+        # .tosparse(), which will convert a dense->sparse embedded
+        # error generator, but this is fine).
+        self.err_gen_mx = self.tosparse()
+
+    def _embed_basis_mx(mx):
+        """ Take a dense or sparse basis matrix and embed it. """
+        mxAsGate = StaticGate(mx) if isinstance(mx,_np.ndarray) \
+            else StaticGate(mx.todense()) #assume mx is a sparse matrix
+        return EmbeddedGateMap(self.stateSpaceLabels, self.targetLabels,
+                               mxAsGate).tosparse() # always convert to *sparse* basis els
+
+    def get_coeffs(self):
+        """ TODO: docstring - see other get_coeffs for a start """
+        Ltermdict, basisdict = self.embedded_gate.get_coeffs()
+        
+        #go through basis and embed basis matrices
+        new_basisdict = {}
+        for lbl, basisEl in basisdict.items():
+            new_basisdict[lbl] = self._embed_basis_mx(basisEl)
+        
+        return Ltermdict, new_basisdict
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        TODO: docstring - look at other for ref
+        """
+        raise NotImplementedError("deriv_wrt_params is not implemented for EmbeddedErrorGen objects")
+
+    def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
+        """
+        TODO: docstring - look at other for ref
+        """
+        raise NotImplementedError("hessian_wrt_params is not implemented for EmbeddedErrorGen objects")
+
+    def __str__(self):
+        """ Return string representation """
+        s = "Embedded error generator with full dimension %d and state space %s\n" % (self.dim,self.stateSpaceLabels)
+        s += " that embeds the following %d-dimensional gate into acting on the %s space\n" \
+             % (self.embedded_gate.dim, str(self.targetLabels))
+        s += str(self.embedded_gate)
+        return s
+
+
+class LindbladErrorgen(Gate):
+    """ Not a CPTP map - just the Lindbladian exponent
+        TODO: docstring """
+
+    # REMOVE - and remove reference in docstrings to unitaryPostfactor?
+    #    unitaryPostfactor : numpy array or SciPy sparse matrix or int
+    #        a square 2D array which specifies a part of the gate action 
+    #        to remove before parameterization via Lindblad projections.
+    #        While this is termed a "post-factor" because it occurs to the
+    #        right of the exponentiated Lindblad terms, this means it is applied
+    #        to a state *before* the Lindblad terms (which usually represent
+    #        gate errors).  Typically, this is a target (desired) gate operation.
+    #        If None, then the identity is assumed.
+
+    @classmethod
+    def from_error_generator(cls, errgen, ham_basis="pp", nonham_basis="pp",
+                             param_mode="cptp", nonham_mode="all",
+                             truncate=True, mxBasis="pp", evotype="densitymx"):
+        """
+        TODO: docstring (fix!) - just creates a Lindblad error gen now
+        Create a Lindblad-parameterized gate from an error generator and a
+        basis which specifies how to decompose (project) the error generator.
+            
+        errgen : numpy array or SciPy sparse matrix
+            a square 2D array that gives the full error generator `L` such 
+            that the gate action is `exp(L)*unitaryPostFactor`.  The shape of
+            this array sets the dimension of the gate. The projections of this
+            quantity onto the `ham_basis` and `nonham_basis` are closely related
+            to the parameters of the gate (they may not be exactly equal if,
+            e.g `cptp=True`).
+
+        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Hamiltonian-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Stochastic-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+            Describes how the Lindblad coefficients/projections relate to the
+            gate's parameter values.  Allowed values are:
+            `"unconstrained"` (coeffs are independent unconstrained parameters),
+            `"cptp"` (independent parameters but constrained so map is CPTP),
+            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
+            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
+
+        nonham_mode : {"diagonal", "diag_affine", "all"}
+            Which non-Hamiltonian Lindblad projections are potentially non-zero.
+            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
+            `"diag_affine"` (diagonal coefficients + affine projections), and
+            `"all"` (the entire matrix of coefficients is allowed).
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given `errgen` cannot 
+            be realized by the specified set of Lindblad projections.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        evotype : {"densitymx","svterm","cterm"}
+            The evolution type of the gate being constructed.  `"densitymx"` is
+            usual Lioville density-matrix-vector propagation via matrix-vector
+            products.  `"svterm"` denotes state-vector term-based evolution
+            (action of gate is obtained by evaluating the rank-1 terms up to
+            some order).  `"cterm"` is similar but uses Clifford gate action
+            on stabilizer states.
+
+        Returns
+        -------
+        LindbladParameterizedGateMap                
+        """
+
+        d2 = errgen.shape[0]
+        d = int(round(_np.sqrt(d2)))
+        if d*d != d2: raise ValueError("Gate dim must be a perfect square")
+        
+        #Determine whether we're using sparse bases or not
+        sparse = None
+        if ham_basis is not None:
+            if isinstance(ham_basis, _Basis): sparse = ham_basis.sparse
+            elif _compat.isstr(ham_basis): sparse = _sps.issparse(errgen)
+            elif len(ham_basis) > 0: sparse = _sps.issparse(ham_basis[0])
+        if sparse is None and nonham_basis is not None:
+            if isinstance(nonham_basis, _Basis): sparse = nonham_basis.sparse
+            elif _compat.isstr(nonham_basis): sparse = _sps.issparse(errgen)
+            elif len(nonham_basis) > 0: sparse = _sps.issparse(nonham_basis[0])
+        if sparse is None: sparse = False #the default
+
+        #Create or convert bases to appropriate sparsity
+        if isinstance(ham_basis, _Basis) or _compat.isstr(ham_basis):
+            ham_basis = _Basis(ham_basis,d,sparse=sparse)
+        else: # ham_basis is a list of matrices
+            ham_basis = _Basis(matrices=ham_basis,dim=d,sparse=sparse)
+        
+        if isinstance(nonham_basis, _Basis) or _compat.isstr(nonham_basis):
+            other_basis = _Basis(nonham_basis,d,sparse=sparse)
+        else: # ham_basis is a list of matrices
+            other_basis = _Basis(matrices=nonham_basis,dim=d,sparse=sparse)
+        
+        matrix_basis = _Basis(mxBasis,d,sparse=sparse)
+
+        # errgen + bases => coeffs
+        hamC, otherC = \
+            _gt.lindblad_errgen_projections(
+                errgen, ham_basis, other_basis, matrix_basis, normalize=False,
+                return_generators=False, other_mode=nonham_mode, sparse=sparse)
+
+        # coeffs + bases => Ltermdict, basisdict
+        Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
+            hamC, otherC, ham_basis, other_basis, nonham_mode)
+        
+        return cls(d2, Ltermdict, basisdict,
+                   param_mode, nonham_mode, truncate,
+                   matrix_basis, evotype )
+
+        
+    def __init__(self, dim, Ltermdict, basisdict=None,
+                 param_mode="cptp", nonham_mode="all", truncate=True,
+                 mxBasis="pp", evotype="densitymx"): 
+        """
+        TODO: docstring (fix!) - no unitaryPostfactor...
+        Create a new LinbladParameterizedMap based on a set of Lindblad terms.
+
+        Note that if you want to construct a LinbladParameterizedMap from a
+        gate error generator or a gate matrix, you can use the 
+        :method:`from_error_generator` and :method:`from_gate_matrix` class
+        methods and save youself some time and effort.
+
+        Parameters
+        ----------
+        unitaryPostfactor : numpy array or SciPy sparse matrix or int
+            a square 2D array which specifies a part of the gate action 
+            to remove before parameterization via Lindblad projections.
+            While this is termed a "post-factor" because it occurs to the
+            right of the exponentiated Lindblad terms, this means it is applied
+            to a state *before* the Lindblad terms (which usually represent
+            gate errors).  Typically, this is a target (desired) gate operation.
+            This argument is needed at the very least to specify the dimension 
+            of the gate, and if this post-factor is just the identity you can
+            simply pass the integer dimension as `unitaryPostfactor` instead of
+            a matrix.
+
+        Ltermdict : dict
+            A dictionary specifying which Linblad terms are present in the gate
+            parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` can be `"H"` (Hamiltonian), `"S"`
+            (Stochastic), or `"A"` (Affine).  Hamiltonian and Affine terms always
+            have a single basis label (so key is a 2-tuple) whereas Stochastic
+            tuples with 1 basis label indicate a *diagonal* term, and are the
+            only types of terms allowed when `nonham_mode != "all"`.  Otherwise,
+            Stochastic term tuples can include 2 basis labels to specify
+            "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
+            strings or integers.  Values are complex coefficients (error rates).
+
+        basisdict : dict, optional
+            A dictionary mapping the basis labels (strings or ints) used in the
+            keys of `Ltermdict` to basis matrices (numpy arrays or Scipy sparse
+            matrices).
+
+        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+            Describes how the Lindblad coefficients/projections relate to the
+            gate's parameter values.  Allowed values are:
+            `"unconstrained"` (coeffs are independent unconstrained parameters),
+            `"cptp"` (independent parameters but constrained so map is CPTP),
+            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
+            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
+
+        nonham_mode : {"diagonal", "diag_affine", "all"}
+            Which non-Hamiltonian Lindblad projections are potentially non-zero.
+            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
+            `"diag_affine"` (diagonal coefficients + affine projections), and
+            `"all"` (the entire matrix of coefficients is allowed).
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given dictionary of
+            Lindblad terms doesn't conform to the constrains.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The basis for this gate's linear mapping. Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        evotype : {"densitymx","svterm","cterm"}
+            The evolution type of the gate being constructed.  `"densitymx"` is
+            usual Lioville density-matrix-vector propagation via matrix-vector
+            products.  `"svterm"` denotes state-vector term-based evolution
+            (action of gate is obtained by evaluating the rank-1 terms up to
+            some order).  `"cterm"` is similar but uses Clifford gate action
+            on stabilizer states.
+        """
+
+        #FUTURE:
+        # - maybe allow basisdict values to specify an "embedded matrix" w/a tuple like
+        #  e.g. a *list* of (matrix, state_space_label) elements -- e.g. [(sigmaX,'Q1'), (sigmaY,'Q4')]
+        # - maybe let keys be tuples of (basisname, state_space_label) e.g. (('X','Q1'),('Y','Q4')) -- and
+        # maybe allow ('XY','Q1','Q4')? format when can assume single-letter labels.
+        # - could add standard basis dict items so labels like "X", "XY", etc. are understood?
+
+        # Store superop dimension
+        d2 = dim
+        d = int(round(_np.sqrt(d2)))
+        assert(d*d == d2), "Gate dim must be a perfect square"
+
+        self.nonham_mode = nonham_mode
+        self.param_mode = param_mode
+        
+        # Ltermdict, basisdict => bases + parameter values
+        # but maybe we want Ltermdict, basisdict => basis + projections/coeffs, then projections/coeffs => paramvals?
+        # since the latter is what set_errgen needs
+        hamC, otherC, self.ham_basis, self.other_basis, hamBInds, otherBInds = \
+            _gt.lindblad_terms_to_projections(Ltermdict, basisdict, d, self.nonham_mode)
+
+        self.ham_basis_size = len(self.ham_basis)
+        self.other_basis_size = len(self.other_basis)
+
+        if self.ham_basis_size > 0: self.sparse = _sps.issparse(self.ham_basis[0])
+        elif self.other_basis_size > 0: self.sparse = _sps.issparse(self.other_basis[0])
+        else: self.sparse = False
+
+        self.matrix_basis = _Basis(mxBasis,d,sparse=self.sparse)
+
+        self.paramvals = _gt.lindblad_projections_to_paramvals(
+            hamC, otherC, self.param_mode, self.nonham_mode, truncate)
+
+        Gate.__init__(self, d2, evotype) #sets self.dim
+
+        #Finish initialization based on evolution type
+        assert(evotype in ("densitymx","svterm","cterm")), \
+            "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
+
+        #Fast CSR-matrix summing variables: N/A if not sparse or using terms
+        self.hamCSRSumIndices = None
+        self.otherCSRSumIndices = None
+        self.sparse_err_gen_template = None            
+        
+        if evotype == "densitymx":
+            self.hamGens, self.otherGens = self._init_generators()
+
+            if self.sparse:
+                #Precompute for faster CSR sums in _construct_errgen
+                all_csr_matrices = []
+                if self.hamGens is not None:
+                    all_csr_matrices.extend(self.hamGens)
+
+                if self.otherGens is not None:
+                    if self.nonham_mode == "diagonal":
+                        oList = self.otherGens
+                    else: # nonham_mode in ("diag_affine", "all")
+                        oList = [ mx for mxRow in self.otherGens for mx in mxRow ]                        
+                    all_csr_matrices.extend(oList)
+    
+                csr_sum_array, indptr, indices, N = \
+                        _mt.get_csr_sum_indices(all_csr_matrices)
+                self.hamCSRSumIndices = csr_sum_array[0:len(self.hamGens)]
+                self.otherCSRSumIndices = csr_sum_array[len(self.hamGens):]
+                self.sparse_err_gen_template = (indptr, indices, N)
+
+            #initialize intermediate storage for matrix and for deriv computation
+            # (needed for _construct_errgen)
+            bsO = self.other_basis_size
+            self.Lmx = _np.zeros((bsO-1,bsO-1),'complex') if bsO > 0 else None
+
+            self._construct_errgen_matrix() # sets self.err_gen_mx
+            self.Lterms = None # Unused
+            
+        else: # Term-based evolution
+
+            assert(not self.sparse), "Sparse bases are not supported for term-based evolution"
+              #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitaryPostfactor
+            termtype = "dense" if evotype == "svterm" else "clifford"
+            
+            self.Lterms = self._init_terms(Ltermdict, basisdict, hamBInds,
+                                           otherBInds, termtype)
+            # Unused
+            self.hamGens = self.other = self.Lmx = None
+            self.err_gen_mx = None
+
+        #Done with __init__(...)
+
+
+    def _init_generators(self):
+        #assumes self.dim, self.ham_basis, self.other_basis, and self.matrix_basis are setup...
+        
+        d2 = self.dim
+        d = int(round(_np.sqrt(d2)))
+        assert(d*d == d2), "Gate dim must be a perfect square"
+
+        # Get basis transfer matrix
+        mxBasisToStd = _bt.transform_matrix(self.matrix_basis, "std", d)
+        leftTrans  = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
+                          else _np.linalg.inv(mxBasisToStd)
+        rightTrans = mxBasisToStd
+
+        
+        hamBasisMxs = _basis_matrices(self.ham_basis, d, sparse=self.sparse)
+        otherBasisMxs = _basis_matrices(self.other_basis, d, sparse=self.sparse)
+        hamGens, otherGens = _gt.lindblad_error_generators(
+            hamBasisMxs,otherBasisMxs,normalize=False,
+            other_mode=self.nonham_mode) # in std basis
+
+        # Note: lindblad_error_generators will return sparse generators when
+        #  given a sparse basis (or basis matrices)
+
+        if hamGens is not None:
+            bsH = len(hamGens)+1 #projection-basis size (not nec. == d2)
+            _gt._assert_shape(hamGens, (bsH-1,d2,d2), self.sparse)
+
+            # apply basis change now, so we don't need to do so repeatedly later
+            if self.sparse:
+                hamGens = [ _mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
+                                              inplace=True, check=True) for mx in hamGens ]
+                for mx in hamGens: mx.sort_indices()
+                  # for faster addition ops in _construct_errgen_matrix
+            else:
+                #hamGens = _np.einsum("ik,akl,lj->aij", leftTrans, hamGens, rightTrans)
+                hamGens = _np.transpose( _np.tensordot( 
+                        _np.tensordot(leftTrans, hamGens, (1,1)), rightTrans, (2,0)), (1,0,2))
+        else:
+            bsH = 0
+        assert(bsH == self.ham_basis_size)
+            
+        if otherGens is not None:
+
+            if self.nonham_mode == "diagonal":
+                bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
+                _gt._assert_shape(otherGens, (bsO-1,d2,d2), self.sparse)
+
+                # apply basis change now, so we don't need to do so repeatedly later
+                if self.sparse:
+                    otherGens = [ _mt.safereal(_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans)),
+                                                    inplace=True, check=True) for mx in otherGens ]
+                    for mx in hamGens: mx.sort_indices()
+                      # for faster addition ops in _construct_errgen_matrix
+                else:
+                    #otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
+                    otherGens = _np.transpose( _np.tensordot( 
+                            _np.tensordot(leftTrans, otherGens, (1,1)), rightTrans, (2,0)), (1,0,2))
+
+            elif self.nonham_mode == "diag_affine":
+                bsO = len(otherGens[0])+1 # projection-basis size (not nec. == d2) [~shape[1] but works for lists too]
+                _gt._assert_shape(otherGens, (2,bsO-1,d2,d2), self.sparse)
+
+                # apply basis change now, so we don't need to do so repeatedly later
+                if self.sparse:
+                    otherGens = [ [_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans))
+                                        for mx in mxRow ] for mxRow in otherGens ]
+
+                    for mxRow in otherGens:
+                        for mx in mxRow: mx.sort_indices()
+                          # for faster addition ops in _construct_errgen_matrix
+                else:
+                    #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
+                    #                          otherGens, rightTrans)
+                    otherGens = _np.transpose( _np.tensordot( 
+                            _np.tensordot(leftTrans, otherGens, (1,2)), rightTrans, (3,0)), (1,2,0,3))
+                    
+            else:
+                bsO = len(otherGens)+1 #projection-basis size (not nec. == d2)
+                _gt._assert_shape(otherGens, (bsO-1,bsO-1,d2,d2), self.sparse)
+
+                # apply basis change now, so we don't need to do so repeatedly later
+                if self.sparse:
+                    otherGens = [ [_mt.safedot(leftTrans, _mt.safedot(mx, rightTrans))
+                                        for mx in mxRow ] for mxRow in otherGens ]
+                    #Note: complex OK here, as only linear combos of otherGens (like (i,j) + (j,i)
+                    # terms) need to be real
+
+                    for mxRow in otherGens:
+                        for mx in mxRow: mx.sort_indices()
+                          # for faster addition ops in _construct_errgen_matrix
+                else:
+                    #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
+                    #                            otherGens, rightTrans)
+                    otherGens = _np.transpose( _np.tensordot( 
+                            _np.tensordot(leftTrans, otherGens, (1,2)), rightTrans, (3,0)), (1,2,0,3))
+
+        else:
+            bsO = 0
+        assert(bsO == self.other_basis_size)
+        return hamGens, otherGens
+
+    
+    def _init_terms(self, Ltermdict, basisdict, hamBasisLabels, otherBasisLabels, termtype):
+
+        d2 = self.dim
+        d = int(round(_np.sqrt(d2)))
+        tt = termtype # shorthand - used to construct RankOneTerm objects below,
+                      # as we expect `basisdict` will contain *dense* basis
+                      # matrices (maybe change in FUTURE?)
+        numHamParams = len(hamBasisLabels)
+        numOtherBasisEls = len(otherBasisLabels)
+                      
+        # Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
+        # coeffs (w/ *local* variable indices) that get converted to per-order
+        # terms later.
+        IDENT = None # sentinel for the do-nothing identity op
+        Lterms = []
+        for termLbl in Ltermdict:
+            termType = termLbl[0]
+            if termType == "H": # Hamiltonian
+                k = hamBasisLabels[termLbl[1]] #index of parameter
+                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT, tt) )
+                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T, tt) )
+
+            elif termType == "S": # Stochastic
+                if self.nonham_mode in ("diagonal","diag_affine"):
+                    if self.param_mode in ("depol","reldepol"): # => same single param for all stochastic terms
+                        k = numHamParams + 0 #index of parameter
+                    else:
+                        k = numHamParams + otherBasisLabels[termLbl[1]] #index of parameter
+                    Lm = Ln = basisdict[termLbl[1]]
+                    pw = 2 if self.param_mode in ("cptp","depol") else 1 # power to raise parameter to in order to get coeff
+
+                    Lm_dag = Lm.conjugate().T # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
+                    Ln_dag = Ln.conjugate().T
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw:  1.0} ), Ln, Lm_dag, tt) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm), tt) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT, tt) )
+                        
+                else:
+                    i = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
+                    j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
+                    Lm, Ln = basisdict[termLbl[1]],basisdict[termLbl[2]]
+
+                    # TODO: create these polys and place below...
+                    polyTerms = {}
+                    assert(self.param_mode != "depol"), "`depol` mode not supported when nonham_mode=='all'"
+                    assert(self.param_mode != "reldepol"), "`reldepol` mode not supported when nonham_mode=='all'"
+                    if self.param_mode == "cptp":
+                        # otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
+                        # coeff_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
+                        #          = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
+                        def iRe(a,b): return numHamParams + (a*numOtherBasisEls + b)
+                        def iIm(a,b): return numHamParams + (b*numOtherBasisEls + a)
+                        for k in range(0,min(i,j)+1):
+                            if k <= i and k <= j:
+                                polyTerms[ (iRe(i,k),iRe(j,k)) ] = 1.0
+                            if k <= i and k < j:
+                                polyTerms[ (iRe(i,k),iIm(j,k)) ] = -1.0j
+                            if k < i and k <= j:
+                                polyTerms[ (iIm(i,k),iRe(j,k)) ] = 1.0j
+                            if k < i and k < j:
+                                polyTerms[ (iIm(i,k),iIm(j,k)) ] = 1.0
+                    else: # param_mode == "unconstrained"
+                        # coeff_ij = otherParam[i,j] + 1j*otherParam[j,i] (otherCoeffs is Hermitian)
+                        ijIndx = numHamParams + (i*numOtherBasisEls + j)
+                        jiIndx = numHamParams + (j*numOtherBasisEls + i)
+                        polyTerms = { (ijIndx,): 1.0, (jiIndx,): 1.0j }
+
+                    base_poly = _Polynomial(polyTerms)
+                    Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
+                    Lterms.append( _term.RankOneTerm(1.0*base_poly, Ln, Lm, tt) )
+                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm), tt) ) # adjoint(_np.dot(Lm_dag,Ln))
+                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT, tt ) )
+
+            elif termType == "A": # Affine
+                assert(self.nonham_mode == "diag_affine")
+                if self.param_mode in ("depol","reldepol"): # => same single param for all stochastic terms
+                    k = numHamParams + 1 + otherBasisLabels[termLbl[1]] #index of parameter
+                else:
+                    k = numHamParams + numOtherBasisEls + otherBasisLabels[termLbl[1]] #index of parameter
+
+                # rho -> basisdict[termLbl[1]] * I = basisdict[termLbl[1]] * sum{ P_i rho P_i } where Pi's
+                #  are the normalized paulis (including the identity), and rho has trace == 1
+                #  (all but "I/d" component of rho are annihilated by pauli sum; for the I/d component, all
+                #   d^2 of the terms in the sum is P/sqrt(d) * I/d * P/sqrt(d) == I/d^2, so the result is just "I")
+                L = basisdict[termLbl[1]]
+                Bmxs = _bt.basis_matrices("pp",d, sparse=False) #Note: only works when `d` corresponds to integral # of qubits!
+
+                for B in Bmxs: # Note: *include* identity! (see pauli scratch notebook for details)
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,): 1.0} ), _np.dot(L,B), B, tt) ) # /(d2-1.)
+                    
+                #TODO: check normalization of these terms vs those used in projections.
+
+        #DEBUG
+        #print("DB: params = ", list(enumerate(self.paramvals)))
+        #print("DB: Lterms = ")
+        #for i,lt in enumerate(Lterms):
+        #    print("Term %d:" % i)
+        #    print("  coeff: ", str(lt.coeff)) # list(lt.coeff.keys()) )
+        #    print("  pre:\n", lt.pre_ops[0] if len(lt.pre_ops) else "IDENT")
+        #    print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
+
+        return Lterms
+
+    
+    def _set_params_from_matrix(self, errgen, truncate):
+        """ Sets self.paramvals based on `errgen` """
+        hamC, otherC  = \
+            _gt.lindblad_errgen_projections(
+                errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
+                return_generators=False, other_mode=self.nonham_mode,
+                sparse=self.sparse) # in std basis
+
+        self.paramvals = _gt.lindblad_projections_to_paramvals(
+            hamC, otherC, self.param_mode, self.nonham_mode, truncate)
+
+            
+    def _construct_errgen_matrix(self):
+        """
+        Build the error generator matrix using the current parameters.
+        """
+        d2 = self.dim
+        hamCoeffs, otherCoeffs = _gt.paramvals_to_lindblad_projections(
+            self.paramvals, self.ham_basis_size, self.other_basis_size,
+            self.param_mode, self.nonham_mode, self.Lmx)
+
+        #TODO REMOVE
+        #bsH = self.ham_basis_size
+        #bsO = self.other_basis_size
+        #
+        ## self.paramvals = [hamCoeffs] + [otherParams]
+        ##  where hamCoeffs are *real* and of length d2-1 (self.dim == d2)
+        #if bsH > 0:
+        #    hamCoeffs = self.paramvals[0:bsH-1]
+        #    nHam = bsH-1
+        #else:
+        #    nHam = 0
+        #
+        ##built up otherCoeffs based on self.param_mode and self.nonham_mode
+        #if bsO > 0:
+        #    if self.nonham_mode == "diagonal":
+        #        otherParams = self.paramvals[nHam:]
+        #        expected_shape = (1,) if (self.param_mode in ("depol","reldepol")) else (bsO-1,)
+        #        assert(otherParams.shape == expected_shape)
+        #        
+        #        if self.param_mode in ("cptp","depol"):
+        #            otherCoeffs = otherParams**2 #Analagous to L*L_dagger
+        #        else: # "unconstrained"
+        #            otherCoeffs = otherParams
+        #            
+        #    elif self.nonham_mode == "diag_affine":
+        #
+        #        if self.param_mode in ("depol","reldepol"):
+        #            otherParams = self.paramvals[nHam:].reshape((1+bsO-1,))
+        #            otherCoeffs = _np.empty((2,bsO-1), 'd') #leave as real type b/c doesn't have complex entries
+        #            if self.param_mode == "depol":
+        #                otherCoeffs[0,:] = otherParams[0]**2
+        #            else:
+        #                otherCoeffs[0,:] = otherParams[0]
+        #            otherCoeffs[1,:] = otherParams[1:]
+        #
+        #        else:
+        #            otherParams = self.paramvals[nHam:].reshape((2,bsO-1))
+        #            if self.param_mode == "cptp":
+        #                otherCoeffs = otherParams.copy()
+        #                otherCoeffs[0,:] = otherParams[0]**2
+        #            else: # param_mode == "unconstrained"
+        #                #otherCoeffs = _np.empty((2,bsO-1),'complex')
+        #                otherCoeffs = otherParams
+        #                
+        #    else: # self.nonham_mode == "all"
+        #        otherParams = self.paramvals[nHam:].reshape((bsO-1,bsO-1))
+        #
+        #        if self.param_mode == "cptp":
+        #            #  otherParams is an array of length (bs-1)*(bs-1) that
+        #            #  encodes a lower-triangular matrix "Lmx" via:
+        #            #  Lmx[i,i] = otherParams[i,i]
+        #            #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
+        #            for i in range(bsO-1):
+        #                self.Lmx[i,i] = otherParams[i,i]
+        #                for j in range(i):
+        #                    self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
+        #    
+        #            #The matrix of (complex) "other"-coefficients is build by
+        #            # assuming Lmx is its Cholesky decomp; means otherCoeffs
+        #            # is pos-def.
+        #
+        #            # NOTE that the Cholesky decomp with all positive real diagonal
+        #            # elements is *unique* for a given positive-definite otherCoeffs
+        #            # matrix, but we don't care about this uniqueness criteria and so
+        #            # the diagonal els of Lmx can be negative and that's fine -
+        #            # otherCoeffs will still be posdef.
+        #            otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
+        #
+        #            #DEBUG - test for pos-def
+        #            #evals = _np.linalg.eigvalsh(otherCoeffs)
+        #            #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
+        #            #assert(all([ev >= -DEBUG_TOL for ev in evals]))
+        #
+        #        else: # param_mode == "unconstrained"
+        #            #otherParams holds otherCoeff real and imaginary parts directly
+        #            otherCoeffs = _np.empty((bsO-1,bsO-1),'complex')
+        #            for i in range(bsO-1):
+        #                otherCoeffs[i,i] = otherParams[i,i]
+        #                for j in range(i):
+        #                    otherCoeffs[i,j] = otherParams[i,j] +1j*otherParams[j,i]
+        #                    otherCoeffs[j,i] = otherParams[i,j] -1j*otherParams[j,i]
+        #END REMOVE
+                            
+        #Finally, build gate matrix from generators and coefficients:
+        if self.sparse:
+            #FUTURE: could try to optimize the sum-scalar-mults ops below, as these take the
+            # bulk of from_vector time, which recurs frequently.
+            indptr, indices, N = self.sparse_err_gen_template # the CSR arrays giving
+               # the structure of a CSR matrix with 0-elements in all possible places
+            data = _np.zeros(len(indices),'complex') # data starts at zero
+            
+            #if bsH > 0: REMOVE
+            if hamCoeffs is not None:
+                # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
+                _mt.csr_sum(data,hamCoeffs, self.hamGens, self.hamCSRSumIndices)
+
+            #if bsO > 0: REMOVE
+            if otherCoeffs is not None:
+                if self.nonham_mode == "diagonal":
+                    # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
+                    _mt.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
+                    
+                else: # nonham_mode in ("diag_affine", "all")
+                    # lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
+                    #                      for c,gen in zip(cRow,genRow)])
+                    _mt.csr_sum(data, otherCoeffs.flat,
+                                [oGen for oGenRow in self.otherGens for oGen in oGenRow],
+                                self.otherCSRSumIndices)
+            lnd_error_gen = _sps.csr_matrix( (data, indices.copy(), indptr.copy()), shape=(N,N) ) #copies needed (?)
+            
+
+        else: #dense matrices
+            #if bsH > 0: REMOVE
+            if hamCoeffs is not None:
+                #lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
+                lnd_error_gen = _np.tensordot(hamCoeffs, self.hamGens, (0,0))
+            else:
+                lnd_error_gen = _np.zeros( (d2,d2), 'complex')
+
+            #if bsO > 0: REMOVE
+            if otherCoeffs is not None:
+                if self.nonham_mode == "diagonal":
+                    #lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
+                    lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, (0,0))
+
+                else: # nonham_mode in ("diag_affine", "all")
+                    #lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs,
+                    #                            self.otherGens)
+                    lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, ((0,1),(0,1)))
+
+
+        assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0))
+        #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)        
+        self.err_gen_mx = _mt.safereal(lnd_error_gen, inplace=True)
+
+
+    def todense(self):
+        """
+        Return this error generator as a dense matrix.
+        """
+        if self.sparse: raise NotImplementedError("todense() not implemented for sparse LindbladErrorgen objects")
+        if self._evotype in ("svterm","cterm"): 
+            raise NotImplementedError("todense() not implemented for term-based LindbladErrorgen objects")
+        return self.err_gen_mx
+
+    #FUTURE: maybe remove this function altogether, as it really shouldn't be called
+    def tosparse(self):
+        """
+        Return the error generator as a sparse matrix.
+        """
+        _warnings.warn(("Constructing the sparse matrix of a LindbladParameterizedGate."
+                        "  Usually this is *NOT* a sparse matrix (the exponential of a"
+                        " sparse matrix isn't generally sparse)!"))
+        if self.sparse:
+            return self.err_gen_mx
+        else:
+            return _sps.csr_matrix(self.todense())
+
+
+    def get_order_terms(self, order):
+        """ 
+        Get the `order`-th order Taylor-expansion terms of this gate.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the gate's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the gate's parent (usually a :class:`GateSet`), not the 
+        gate's local parameter array (i.e. that returned from `to_vector`).
+
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        Returns
+        -------
+        list
+            A list of :class:`RankOneTerm` objects.
+        """
+        assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
+        return self.Lterms
+
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this gate.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.paramvals)
+
+
+    def to_vector(self):
+        """
+        Extract a vector of the underlying gate parameters from this gate.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        return self.paramvals
+
+
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params().
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == self.num_params())
+        self.paramvals = v
+        if self._evotype == "densitymx":
+            self._construct_errgen_matrix()
+        self.dirty = True
+
+
+    def get_coeffs(self):
+        """
+        TODO: docstring - this *is* an error generator, not a 'gate'
+        Constructs a dictionary of the Lindblad-error-generator coefficients 
+        (i.e. the "error rates") of this gate.  Note that these are not
+        necessarily the parameter values, as these coefficients are generally
+        functions of the parameters (so as to keep the coefficients positive,
+        for instance).
+
+        Returns
+        -------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Basis labels are integers starting at 0.  Values are complex
+            coefficients (error rates).
+    
+        basisdict : dict
+            A dictionary mapping the integer basis labels used in the
+            keys of `Ltermdict` to basis matrices..
+        """
+        hamC, otherC = _gt.paramvals_to_lindblad_projections(
+            self.paramvals, self.ham_basis_size, self.other_basis_size,
+            self.param_mode, self.nonham_mode, self.Lmx)
+
+        Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
+            hamC, otherC, self.ham_basis, self.other_basis, self.nonham_mode)
+        return Ltermdict, basisdict
+
+
+    def transform(self, S):
+        """
+        Update error generator E with inv(S) * E * S,
+
+        Generally, the transform function updates the *parameters* of 
+        the gate such that the resulting gate matrix is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+        """
+        if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement) or \
+           isinstance(S, _gaugegroup.TPSpamGaugeGroupElement):
+            U = S.get_transform_matrix()
+            Uinv = S.get_transform_matrix_inverse()
+
+            #conjugate Lindbladian exponent by U:
+            self.err_gen_mx = _mt.safedot(Uinv,_mt.safedot(self.err_gen_mx, U))
+            self._set_params_from_matrix(self.err_gen_mx, truncate=True)
+            self._construct_errgen_matrix() # unnecessary? (TODO)
+            self.dirty = True
+            #Note: truncate=True above because some unitary transforms seem to
+            ## modify eigenvalues to be negative beyond the tolerances
+            ## checked when truncate == False.  I'm not sure why this occurs,
+            ## since a true unitary should map CPTP -> CPTP...
+
+        else:
+            raise ValueError("Invalid transform for this LindbladErrorgen: type %s"
+                             % str(type(S)))
+
+    def spam_transform(self, S, typ):
+        """
+        Update gate matrix G with inv(S) * G OR G * S,
+        depending on the value of `typ`.
+
+        This functions as `transform(...)` but is used when this
+        Lindblad-parameterized gate is used as a part of a SPAM
+        vector.  When `typ == "prep"`, the spam vector is assumed
+        to be `rho = dot(self, <spamvec>)`, which transforms as
+        `rho -> inv(S) * rho`, so `self -> inv(S) * self`. When
+        `typ == "effect"`, `e.dag = dot(e.dag, self)` (not that
+        `self` is NOT `self.dag` here), and `e.dag -> e.dag * S`
+        so that `self -> self * S`.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        assert(typ in ('prep','effect')), "Invalid `typ` argument: %s" % typ
+        
+        if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement) or \
+           isinstance(S, _gaugegroup.TPSpamGaugeGroupElement):
+            U = S.get_transform_matrix()
+            Uinv = S.get_transform_matrix_inverse()
+
+            #just act on postfactor and Lindbladian exponent:
+            if typ == "prep":
+                self.err_gen_mx = _mt.safedot(Uinv,self.err_gen_mx)
+            else:
+                self.err_gen_mx = _mt.safedot(self.err_gen_mx, U)
+                
+            self._set_params_from_matrix(self.err_gen_mx, truncate=True)
+            self._construct_errgen_matrix() # unnecessary? (TODO)
+            self.dirty = True
+            #Note: truncate=True above because some unitary transforms seem to
+            ## modify eigenvalues to be negative beyond the tolerances
+            ## checked when truncate == False.  I'm not sure why this occurs,
+            ## since a true unitary should map CPTP -> CPTP...
+        else:
+            raise ValueError("Invalid transform for this LindbladParameterizedGate: type %s"
+                             % str(type(S)))
+
+
+    def _dHdp(self):
+        return self.hamGens.transpose((1,2,0)) #PRETRANS
+        #return _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
+
+    def _dOdp(self):
+        bsH = self.ham_basis_size
+        bsO = self.other_basis_size
+        nHam = bsH-1 if (bsH > 0) else 0
+        d2 = self.dim
+        
+        assert(bsO > 0),"Cannot construct dOdp when other_basis_size == 0!"
+        if self.nonham_mode == "diagonal":
+            otherParams = self.paramvals[nHam:]
+            
+            # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
+            #  except "depol" & "reldepol" cases, when shape == [d2,d2,1]
+            if self.param_mode == "depol": # all coeffs same & == param^2
+                assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'depol' case!"
+                #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None] * 2*otherParams[0]
+                dOdp  = _np.transpose(self.otherGens, (1,2,0)) * 2*otherParams[0]
+            elif self.param_mode == "reldepol": # all coeffs same & == param
+                assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'reldepol' case!"
+                #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None]
+                dOdp  = _np.transpose(self.otherGens, (1,2,0)) * 2*otherParams[0]
+            elif self.param_mode == "cptp": # (coeffs = params^2)
+                #dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams) 
+                dOdp = _np.transpose(self.otherGens,(1,2,0)) * 2*otherParams # just a broadcast
+            else: # "unconstrained" (coeff == params)
+                #dOdp  = _np.einsum('alj->lja', self.otherGens)
+                dOdp  = _np.transpose(self.otherGens, (1,2,0))
+
+
+        elif self.nonham_mode == "diag_affine":
+            otherParams = self.paramvals[nHam:]
+            # Note: otherGens has shape (2,bsO-1,d2,d2) with diag-term generators
+            # in first "row" and affine generators in second row.
+            
+            # Derivative of exponent wrt other param; shape == [d2,d2,2,bs-1]
+            #  except "depol" & "reldepol" cases, when shape == [d2,d2,bs]
+            if self.param_mode == "depol": # all coeffs same & == param^2
+                diag_params, affine_params = otherParams[0:1], otherParams[1:]
+                dOdp  = _np.empty((d2,d2,bsO),'complex')
+                #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2*diag_params[0] # single diagonal term
+                #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
+                dOdp[:,:,0]  = _np.squeeze(self.otherGens[0],0) * 2*diag_params[0] # single diagonal term
+                dOdp[:,:,1:] = _np.transpose(self.otherGens[1],(1,2,0)) # no need for affine_params
+            elif self.param_mode == "reldepol": # all coeffs same & == param^2
+                dOdp  = _np.empty((d2,d2,bsO),'complex')
+                #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) # single diagonal term
+                #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # affine part: each gen has own param
+                dOdp[:,:,0]  = _np.squeeze(self.otherGens[0],0) # single diagonal term
+                dOdp[:,:,1:] = _np.transpose(self.otherGens[1],(1,2,0)) # affine part: each gen has own param
+            elif self.param_mode == "cptp": # (coeffs = params^2)
+                diag_params, affine_params = otherParams[0:bsO-1], otherParams[bsO-1:]
+                dOdp  = _np.empty((d2,d2,2,bsO-1),'complex')
+                #dOdp[:,:,0,:] = _np.einsum('alj,a->lja', self.otherGens[0], 2*diag_params)
+                #dOdp[:,:,1,:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
+                dOdp[:,:,0,:] = _np.transpose(self.otherGens[0],(1,2,0)) * 2*diag_params # broadcast works
+                dOdp[:,:,1,:] = _np.transpose(self.otherGens[1],(1,2,0)) # no need for affine_params
+            else: # "unconstrained" (coeff == params)
+                #dOdp  = _np.einsum('ablj->ljab', self.otherGens) # -> shape (d2,d2,2,bsO-1)
+                dOdp  = _np.transpose(self.otherGens, (2,3,0,1) ) # -> shape (d2,d2,2,bsO-1)
+
+        else: # nonham_mode == "all" ; all lindblad terms included
+            assert(self.param_mode in ("cptp","unconstrained"))
+            
+            if self.param_mode == "cptp":
+                L,Lbar = self.Lmx,self.Lmx.conjugate()
+                F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'))
+                F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
+                
+                  # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+                  # Note: replacing einsums here results in at least 3 numpy calls (probably slower?)
+                dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
+                dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
+                dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
+                dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
+            else: # "unconstrained"
+                F0 = _np.identity(bsO-1,'d')
+                F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'),-1)
+                F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
+            
+                # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+                #dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
+                #dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
+                #           _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
+                #dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
+                #           _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
+                tmp_ablj = _np.transpose(self.otherGens, (2,3,0,1)) # ablj -> ljab
+                tmp_balj = _np.transpose(self.otherGens, (2,3,1,0)) # balj -> ljab
+                dOdp  = tmp_ablj * F0  # a == b case
+                dOdp += tmp_ablj * F1 + tmp_balj * F1 # a > b (F1)
+                dOdp += tmp_balj * F2 - tmp_ablj * F2 # a < b (F2)
+
+        # apply basis transform
+        tr = len(dOdp.shape) #tensor rank
+        assert( (tr-2) in (1,2)), "Currently, dodp can only have 1 or 2 derivative dimensions"
+
+        assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
+        return _np.real(dOdp)
+
+
+    def _d2Odp2(self):
+        bsH = self.ham_basis_size
+        bsO = self.other_basis_size
+        nHam = bsH-1 if (bsH > 0) else 0
+        d2 = self.dim
+        
+        assert(bsO > 0),"Cannot construct dOdp when other_basis_size == 0!"
+        if self.nonham_mode == "diagonal":
+            otherParams = self.paramvals[nHam:]
+            nP = len(otherParams); 
+            
+            # Derivative of exponent wrt other param; shape == [d2,d2,nP,nP]
+            if self.param_mode == "depol":
+                assert(nP == 1)
+                #d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
+                d2Odp2  = _np.squeeze(self.otherGens,0)[:,:,None,None] * 2
+            elif self.param_mode == "cptp":
+                assert(nP == bsO-1)
+                #d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
+                d2Odp2  = _np.transpose(self.otherGens, (1,2,0))[:,:,:,None] * 2*_np.identity(nP,'d')
+            else: # param_mode == "unconstrained" or "reldepol"
+                assert(nP == bsO-1)
+                d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')
+
+        elif self.nonham_mode == "diag_affine":
+            otherParams = self.paramvals[nHam:]
+            nP = len(otherParams); 
+            
+            # Derivative of exponent wrt other param; shape == [d2,d2,nP,nP]
+            if self.param_mode == "depol":
+                assert(nP == bsO) # 1 diag param + (bsO-1) affine params
+                d2Odp2  = _np.empty((d2,d2,nP,nP),'complex')
+                #d2Odp2[:,:,0,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2 # single diagonal term
+                d2Odp2[:,:,0,0]  = _np.squeeze(self.otherGens[0],0) * 2 # single diagonal term
+                d2Odp2[:,:,1:,1:]  = 0 # 2nd deriv wrt. all affine params == 0
+            elif self.param_mode == "cptp":
+                assert(nP == 2*(bsO-1)); hnP = bsO-1 # half nP
+                d2Odp2  = _np.empty((d2,d2,nP,nP),'complex')
+                #d2Odp2[:,:,0:hnP,0:hnp] = _np.einsum('alj,aq->ljaq', self.otherGens[0], 2*_np.identity(nP,'d'))
+                d2Odp2[:,:,0:hnP,0:hnp] = _np.transpose(self.otherGens[0],(1,2,0))[:,:,:,None] * 2*_np.identity(nP,'d')
+                d2Odp2[:,:,hnP:,hnp:]   = 0 # 2nd deriv wrt. all affine params == 0
+            else: # param_mode == "unconstrained" or "reldepol"
+                assert(nP == 2*(bsO-1))
+                d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')
+
+        else: # nonham_mode == "all" : all lindblad terms included
+            nP = bsO-1
+            if self.param_mode == "cptp":
+                d2Odp2  = _np.zeros([d2,d2,nP,nP,nP,nP],'complex') #yikes! maybe make this SPARSE in future?
+                
+                #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
+                # indices of d2Odp2 are [i,j,a,b,q,r]
+                
+                def iter_base_ab_qr(ab_inc_eq, qr_inc_eq):
+                    """ Generates (base,ab,qr) tuples such that `base` runs over
+                        all possible 'other' params and 'ab' and 'qr' run over
+                        parameter indices s.t. ab > base and qr > base.  If
+                        ab_inc_eq == True then the > becomes a >=, and likewise
+                        for qr_inc_eq.  Used for looping over nonzero hessian els. """
+                    for _base in range(nP):
+                        start_ab = _base if ab_inc_eq else _base+1
+                        start_qr = _base if qr_inc_eq else _base+1
+                        for _ab in range(start_ab,nP):
+                            for _qr in range(start_qr,nP):
+                                yield (_base,_ab,_qr)
+                                
+                for base,a,q in iter_base_ab_qr(True,True): # Case1: base=b=r, ab=a, qr=q
+                    d2Odp2[:,:,a,base,q,base] = self.otherGens[a,q] + self.otherGens[q,a]
+                for base,a,r in iter_base_ab_qr(True,False): # Case2: base=b=q, ab=a, qr=r
+                    d2Odp2[:,:,a,base,base,r] = -1j*self.otherGens[a,r] + 1j*self.otherGens[r,a]
+                for base,b,q in iter_base_ab_qr(False,True): # Case3: base=a=r, ab=b, qr=q
+                    d2Odp2[:,:,base,b,q,base] = 1j*self.otherGens[b,q] - 1j*self.otherGens[q,b]
+                for base,b,r in iter_base_ab_qr(False,False): # Case4: base=a=q, ab=b, qr=r
+                    d2Odp2[:,:,base,b,base,r] = self.otherGens[b,r] + self.otherGens[r,b]
+                
+            else: # param_mode == "unconstrained"
+                d2Odp2  = _np.zeros([d2,d2,nP,nP,nP,nP],'d') #all params linear
+
+        # apply basis transform
+        tr = len(d2Odp2.shape) #tensor rank
+        assert( (tr-2) in (2,4)), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
+
+        assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)
+        return _np.real(d2Odp2)
+
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        TODO: docstring - this is an *error generator* now
+        Construct a matrix whose columns are the vectorized derivatives of the
+        flattened error generator matrix with respect to a single gate
+        parameter.  Thus, each column is of length gate_dim^2 and there is one
+        column per gate parameter.
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives, shape == (dimension^2, num_params)
+        """    
+        assert(not self.sparse), \
+            "LindbladErrorgen.deriv_wrt_params(...) can only be called when using *dense* basis elements!"
+
+        d2 = self.dim
+        bsH = self.ham_basis_size
+        bsO = self.other_basis_size
+    
+        #Deriv wrt hamiltonian params
+        if bsH > 0:
+            dH = self._dHdp()
+            dH = dH.reshape((d2**2,bsH-1)) # [iFlattenedGate,iHamParam]
+        else: 
+            dH = _np.empty( (d2**2,0), 'd') #so concat works below
+
+        #Deriv wrt other params
+        if bsO > 0:
+            dO = self._dOdp()
+            dO = dO.reshape((d2**2,-1)) # [iFlattenedGate,iOtherParam]
+        else:
+            dO = _np.empty( (d2**2,0), 'd') #so concat works below
+
+        derivMx = _np.concatenate((dH,dO), axis=1)
+        assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL) #allowed to be complex?
+        derivMx = _np.real(derivMx)
+
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
+
+
+    def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
+        """
+        Construct the Hessian of this error generator with respect to
+        its parameters.
+
+        This function returns a tensor whose first axis corresponds to the
+        flattened gate matrix and whose 2nd and 3rd axes correspond to the
+        parameters that are differentiated with respect to.
+
+        Parameters
+        ----------
+        wrtFilter1, wrtFilter2 : list
+            Lists of indices of the paramters to take first and second
+            derivatives with respect to.  If None, then derivatives are
+            taken with respect to all of the gate's parameters.
+
+        Returns
+        -------
+        numpy array
+            Hessian with shape (dimension^2, num_params1, num_params2)
+        """
+        assert(not self.sparse), \
+            "LindbladErrorgen.hessian_wrt_params(...) can only be called when using *dense* basis elements!"
+
+        d2 = self.dim
+        bsH = self.ham_basis_size
+        bsO = self.other_basis_size
+        nHam = bsH-1 if (bsH > 0) else 0
+        
+        #Split hessian in 4 pieces:   d2H  |  dHdO
+        #                             dHdO |  d2O
+        # But only d2O is non-zero - and only when cptp == True
+
+        nTotParams = self.num_params()
+        hessianMx = _np.zeros( (d2**2, nTotParams, nTotParams), 'd' )
+    
+        #Deriv wrt other params
+        if bsO > 0: #if there are any "other" params
+            nP = nTotParams-nHam #num "other" params, e.g. (bsO-1) or (bsO-1)**2
+            d2Odp2 = self._d2Odp2()
+            d2Odp2 = d2Odp2.reshape((d2**2, nP, nP))
+
+            #d2Odp2 has been reshape so index as [iFlattenedGate,iDeriv1,iDeriv2]
+            assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)
+            hessianMx[:,nHam:,nHam:] = _np.real(d2Odp2) # d2O block of hessian
+            
+        if wrtFilter1 is None:
+            if wrtFilter2 is None:
+                return hessianMx
+            else:
+                return _np.take(hessianMx, wrtFilter2, axis=2 )
+        else:
+            if wrtFilter2 is None:
+                return _np.take(hessianMx, wrtFilter1, axis=1 )
+            else:
+                return _np.take( _np.take(hessianMx, wrtFilter1, axis=1),
+                                 wrtFilter2, axis=2 )
+        
+    def __str__(self):
+        s = "Lindblad error generator with dim = %d, num params = %d\n" % \
+            (self.dim, self.num_params())
+        return s

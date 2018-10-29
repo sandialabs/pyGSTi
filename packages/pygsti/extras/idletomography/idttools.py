@@ -198,8 +198,8 @@ def set_Gi_errors(nQubits, gateset, errdict, rand_default=None,
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
         assert(isinstance(factor, _objs.EmbeddedGateMap)), "Expected Gi to be a composition of embedded gates!"
         sub_v = v[factor.gpindices]
-        bsH = factor.embedded_gate.ham_basis_size
-        bsO = factor.embedded_gate.other_basis_size
+        bsH = factor.embedded_gate.errorgen.ham_basis_size
+        bsO = factor.embedded_gate.errorgen.other_basis_size
         if hamiltonian: hamiltonian_sub_v = sub_v[0:bsH-1] # -1s b/c bsH, bsO include identity in basis
         if stochastic:  stochastic_sub_v = sub_v[bsH-1:bsH-1+bsO-1]
         if affine:      affine_sub_v = sub_v[bsH-1+bsO-1:bsH-1+2*(bsO-1)]
@@ -299,8 +299,8 @@ def predicted_intrinsic_rates(nQubits, maxweight, gateset,
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
         assert(isinstance(factor, _objs.EmbeddedGateMap)), "Expected Gi to be a composition of embedded gates!"
         sub_v = v[factor.gpindices]
-        bsH = factor.embedded_gate.ham_basis_size
-        bsO = factor.embedded_gate.other_basis_size
+        bsH = factor.embedded_gate.errorgen.ham_basis_size
+        bsO = factor.embedded_gate.errorgen.other_basis_size
         if hamiltonian: hamiltonian_sub_v = sub_v[0:bsH-1] # -1s b/c bsH, bsO include identity in basis
         if stochastic:  stochastic_sub_v = sub_v[bsH-1:bsH-1+bsO-1]
         if affine:      affine_sub_v = sub_v[bsH-1+bsO-1:bsH-1+2*(bsO-1)]
