@@ -1493,9 +1493,14 @@ class ColorBoxPlot(WorkspacePlot):
         dscomparator : DataComparator, optional
             The data set comparator used to produce the "dscmp" plot type.
         
-        driftresults : BasicDriftResults, optional
-            The results of a drift analysis, used to produce the "driftpv" and
-            "driftpw" boxplots.
+        driftresults : tuple containing DriftResults, optional
+            Only used to produce the "driftpv" and "driftpw" boxplots. 
+            The first element of the tuple is a DriftResults object, containing
+            The results of a drift analysis. The second element of the tuple
+            is None, or a string specifying which of the DriftDetectors to use
+            (this is only relevant if the DriftResults objects contains multiple
+            analysis, which it won't when created using the canned routines with
+            the default settings).
         
         submatrices : dict, optional
             A dictionary whose keys correspond to other potential plot
@@ -1699,12 +1704,14 @@ class ColorBoxPlot(WorkspacePlot):
             elif ptyp == "driftpv":
                 assert(driftresults is not None), \
                     "Must specify `driftresults` argument to create `driftpv` plot!"
-                assert(driftresults.indices_to_sequences is not None), \
-                    "The `driftresults` must contain the mapping between indices and GateStrings!"
+                detectorname = driftresults[1]
+                driftresults = driftresults[0]
+                assert(driftresults.number_of_entities == 1), \
+                    "Currently cannot create a box-plot for multi-entity DriftResults!"
                 precomp=False
                 colormapType = "manuallinlog"
                 linlog_color = "green"
-                linlog_trans = 1/(1-driftresults.confidence)
+                linlog_trans = 1/driftresults.get_power_pvalue_significance_threshold(sequence='per',detectorname=detectorname)
                 ytitle="1 / pvalue"
                     
                 def _mx_fn(plaq,x,y):
@@ -1713,12 +1720,14 @@ class ColorBoxPlot(WorkspacePlot):
             elif ptyp == "driftpwr":
                 assert(driftresults is not None), \
                     "Must specify `driftresults` argument to create `driftpv` plot!"
-                assert(driftresults.indices_to_sequences is not None), \
-                    "The `driftresults` must contain the mapping between indices and GateStrings!"
+                detectorname = driftresults[1]
+                driftresults = driftresults[0]
+                assert(driftresults.number_of_entities == 1), \
+                    "Currently cannot create a box-plot for multi-entity DriftResults!"
                 precomp=False
                 colormapType = "manuallinlog"
                 linlog_color = "green"
-                linlog_trans = driftresults.ps_significance_threshold
+                linlog_trans = driftresults.get_power_significance_threshold(sequence='per', detectorname=detectorname)
                 ytitle="Maximum power in spectrum"
                 
                 def _mx_fn(plaq,x,y):

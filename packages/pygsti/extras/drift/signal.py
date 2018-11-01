@@ -4,14 +4,92 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""Functions for Fourier analysis of equally spaced time-series data"""
+"""Functions for Fourier analysis of time-series data"""
 
 import numpy as _np
 from scipy.fftpack import dct as _dct
 from scipy.fftpack import idct as _idct
+from scipy.fftpack import fft as _fft
+from scipy.fftpack import ifft as _ifft
 from scipy import convolve as _convolve
 
-def DCT(x,counts=1,null_hypothesis=None):
+try:
+    from astropy.stats import LombScargle as _LombScargle
+except:
+    pass
+
+# def spectrum(x, times=None, frequencies='auto', counts=1, null_hypothesis=None, stype='DCT'):
+
+#     x_mean = _np.mean(x)
+#     T = len(x)
+    
+#     # If the null hypothesis is not specified, we take our null hypothesis to be a constant bias
+#     # coin, with the bias given by the mean of the data / number of counts.
+#     if null_hypothesis is None:    
+#         null_hypothesis = x_mean/counts
+#         if null_hypothesis <=0 or null_hypothesis >= 1:
+#             return _np.zeros(T)
+
+#     normalizer = _np.sqrt(counts*null_hypothesis * (1 - null_hypothesis))
+#     rescaled_x = (x -  counts*null_hypothesis)/normalizer
+    
+#     if stype == 'DCT':
+#         return _dct(rescaled_x,norm='ortho')**2
+
+#     elif stype == 'LSP':
+#         assert(times is not None)
+#         if frequencies == 'auto':
+#             freq = frequencies_from_timestep((max(times)-min(times))/T,T)
+#         else:
+#             freq = frequencies
+#         power = _LombScargle(times,rescaled_x).power(freq, normalization='psd')
+#         return  freq, power
+
+#     elif stype == 'DFT':
+#         return _np.abs(_fft(rescaled_x))**2/T
+
+def DFT(x, times=None, counts=1, null_hypothesis=None):
+
+    x_mean = _np.mean(x)
+    T = len(x)
+
+    # If the null hypothesis is not specified, we take our null hypothesis to be a constant bias
+    # coin, with the bias given by the mean of the data / number of counts.
+    if null_hypothesis is None:    
+        null_hypothesis = x_mean/counts
+        if null_hypothesis <=0 or null_hypothesis >= 1:
+            return _np.zeros(T)
+
+    normalizer = _np.sqrt(counts*null_hypothesis * (1 - null_hypothesis))
+    rescaled_x = (x -  counts*null_hypothesis)/normalizer
+
+    return _np.abs(_fft(rescaled_x))**2/T
+
+def LSP(x, times=None, frequencies='auto', counts=1, null_hypothesis=None):
+
+    x_mean = _np.mean(x)
+    T = len(x)
+    
+    # If the null hypothesis is not specified, we take our null hypothesis to be a constant bias
+    # coin, with the bias given by the mean of the data / number of counts.
+    if null_hypothesis is None:    
+        null_hypothesis = x_mean/counts
+        if null_hypothesis <=0 or null_hypothesis >= 1:
+            return _np.zeros(T)
+
+    normalizer = _np.sqrt(counts*null_hypothesis * (1 - null_hypothesis))
+    rescaled_x = (x -  counts*null_hypothesis)/normalizer
+
+    assert(times is not None)
+    if isinstance(frequencies,str):
+        freq = frequencies_from_timestep((max(times)-min(times))/T,T)
+    else:
+        freq = frequencies
+    power = _LombScargle(times,rescaled_x).power(freq, normalization='psd')
+    
+    return  freq, power
+
+def DCT(x, counts=1, null_hypothesis=None):
     """
     Returns the Type-II discrete cosine transform of y, with an orthogonal normalization, where
     y is an array with elements related to the x array by
@@ -45,8 +123,8 @@ def DCT(x,counts=1,null_hypothesis=None):
     x_mean = _np.mean(x)
     N = len(x)
     
-    assert(min(counts*_np.ones(N) - x) >= 0), "The number of counts must be >= to the maximum of the data array!"
-    assert(min(x) >= 0), "The elements of the data array must be >= 0"
+    #assert(min(counts*_np.ones(N) - x) >= 0), "The number of counts must be >= to the maximum of the data array!"
+    #assert(min(x) >= 0), "The elements of the data array must be >= 0"
     
     # If the null hypothesis is not specified, we take our null hypothesis to be a constant bias
     # coin, with the bias given by the mean of the data / number of counts.
@@ -54,9 +132,9 @@ def DCT(x,counts=1,null_hypothesis=None):
         null_hypothesis = x_mean/counts
         if null_hypothesis <= 0 or null_hypothesis >= 1:
             return _np.zeros(N)
-    else:
-        assert(min(null_hypothesis)>0 and max(null_hypothesis)<1), "All element of null_hypothesis must be in (0,1)!"
-        assert(len(null_hypothesis) == N), "The null hypothesis array must be the same length as the data array!"
+    #else:
+    #    assert(min(null_hypothesis)>0 and max(null_hypothesis)<1), "All element of null_hypothesis must be in (0,1)!"
+    #    assert(len(null_hypothesis) == N), "The null hypothesis array must be the same length as the data array!"
     
     return _dct((x - counts*null_hypothesis)/_np.sqrt(counts*null_hypothesis * (1 - null_hypothesis)),norm='ortho')
 
@@ -82,8 +160,8 @@ def IDCT(modes,null_hypothesis,counts=1):
         Inverse of the DCT function
         
     """
-    assert(min(null_hypothesis)>0 and max(null_hypothesis)<1), "All element of null_hypothesis must be in (0,1)!"
-    assert(len(null_hypothesis) == len(modes)), "The null hypothesis array must be the same length as the data array!"
+    #assert(min(null_hypothesis)>0 and max(null_hypothesis)<1), "All element of null_hypothesis must be in (0,1)!"
+    #assert(len(null_hypothesis) == len(modes)), "The null hypothesis array must be the same length as the data array!"
     
     return  _idct(modes,norm='ortho')*_np.sqrt(counts*null_hypothesis * (1 - null_hypothesis)) + counts*null_hypothesis
 
@@ -156,10 +234,6 @@ def probability_from_DCT_amplitudes(alphas, omegas, T, t):
     This uses the *unnormalized* DCT amplitudes.
     """
     return _np.sum(_np.array([alphas[i]*DCT_basis_function(omegas[i], T, t) for i in range(len(omegas))]))
-
-# -------------------------------- #
-# ---------- Signal tools -------- #
-# -------------------------------- #
 
 def hoyer_sparsity_measure(p):
     """

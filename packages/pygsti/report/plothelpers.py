@@ -645,12 +645,12 @@ def drift_oneoverpvalue_matrices(gsplaq, driftresults):
 
     """
     pvalues_and_strings_dict = {}
-    for s in range(0,driftresults.number_of_sequences):
-        pvalues_and_strings_dict[driftresults.indices_to_sequences[s]] = driftresults.ps_pvalue[s]
+    for gs in driftresults.gatestringlist:
+        pvalues_and_strings_dict[gs] = driftresults.get_maxpower_pvalue(sequence=gs)
 
     ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for i,j,gstr in gsplaq:
-        if gstr in driftresults.indices_to_sequences:
+        try:
             # If the pvalue is infinite (which, because of how the pvalues are calculated, can happen
             # when the true pvalue is well within the range of a float), we map it to twice the maximum
             # non-infinity pvalue. The true pvalue must be greater than this value, but might not be as
@@ -662,6 +662,8 @@ def drift_oneoverpvalue_matrices(gsplaq, driftresults):
                 ret[i,j] = 2*_np.round(_np.max(oneoverpvls))
             else:
                 ret[i,j] = 1./pvalues_and_strings_dict[gstr]
+        except:
+            pass
     return ret
 
 @smart_cached
@@ -689,13 +691,15 @@ def drift_maxpower_matrices(gsplaq, driftresults):
 
     """
     maxpowers_and_strings_dict = {}
-    for s in range(0,driftresults.number_of_sequences):
-        maxpowers_and_strings_dict[driftresults.indices_to_sequences[s]] = driftresults.ps_max_power[s]
+    for gs in driftresults.gatestringlist:
+        maxpowers_and_strings_dict[gs] = driftresults.get_maxpower(sequence=gs)
 
     ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for i,j,gstr in gsplaq:
-        if gstr in driftresults.indices_to_sequences:
+        try:
             ret[i,j] = maxpowers_and_strings_dict[gstr]
+        except:
+            pass
     return ret
 
 
