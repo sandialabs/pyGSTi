@@ -2371,94 +2371,104 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
 
         assert(pureVec._evotype == evotype), "`pureVec` must have evotype == '%s'" % evotype
-        return cls.from_error_generator(pureVec, errgen, typ, ham_basis,
-                                        nonham_basis, param_mode, nonham_mode,
-                                        truncate, mxBasis, evotype)
 
-
-    @classmethod
-    def from_error_generator(cls, pureVec, errgen, typ, ham_basis="pp",
-                             nonham_basis="pp", param_mode="cptp",
-                             nonham_mode="all", truncate=True, mxBasis="pp",
-                             evotype="densitymx"):
-        """
-        Create a Lindblad-parameterized spamvec from an error generator and a
-        basis which specifies how to decompose (project) the error generator.
-
-        Parameters
-        ----------
-        pureVec : numpy array or SPAMVec
-            An array or SPAMVec in the *full* density-matrix space (this
-            vector will have dimension 4 in the case of a single qubit) which
-            represents a pure-state preparation or projection.  This is used as
-            the "base" preparation or projection that is followed or preceded
-            by, respectively, the action of `errgen`.
-            
-        errgen : numpy array or SciPy sparse matrix
-            a square 2D array that gives the full error generator `L` such 
-            that the spamvec is `exp(L)*pureVec` in the case of state
-            preparations and `pureVec*exp(L)` in the case of POVM effects. The
-            projections of this quantity onto the `ham_basis` and `nonham_basis`
-            are closely related to the parameters of the spamvec (they may not
-            be exactly equal if, e.g `cptp=True`).
-
-        typ : {"prep","effect"}
-            Whether this is a state preparation or POVM effect vector.
-
-        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the Hamiltonian-type lindblad error
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt), list of numpy arrays, or a custom basis object.
-
-        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the Stochastic-type lindblad error
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt), list of numpy arrays, or a custom basis object.
-
-        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
-            Describes how the Lindblad coefficients/projections relate to the
-            SPAM vector's parameter values.  Allowed values are:
-            `"unconstrained"` (coeffs are independent unconstrained parameters),
-            `"cptp"` (independent parameters but constrained so map is CPTP),
-            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
-            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
-
-        nonham_mode : {"diagonal", "diag_affine", "all"}
-            Which non-Hamiltonian Lindblad projections are potentially non-zero.
-            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
-            `"diag_affine"` (diagonal coefficients + affine projections), and
-            `"all"` (the entire matrix of coefficients is allowed).
-
-        truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in
-            order to meet constraints (e.g. to preserve CPTP) when necessary.
-            If False, then an error is thrown when the given `gate` cannot 
-            be realized by the specified set of Lindblad projections.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        evotype : {"densitymx","svterm","cterm"}
-            The evolution type of the spamvec being constructed.  `"densitymx"` is
-            usual Lioville density-matrix-vector propagation via matrix-vector
-            products.  `"svterm"` denotes state-vector term-based evolution
-            (spamvec is obtained by evaluating the rank-1 terms up to
-            some order).  `"cterm"` is similar but stabilizer states.
-
-        Returns
-        -------
-        LindbladParameterizedSPAMVec
-        """
+        from .gate import LindbladErrorgen as _LErrorgen
         from .gate import LindbladParameterizedGateMap as _LPGMap
         from .gate import LindbladParameterizedGate as _LPGate
+
+        errgen = _LErrorgen.from_error_generator(errgen, ham_basis,
+                                                 nonham_basis, param_mode, nonham_mode,
+                                                 truncate, mxBasis, evotype)
         errcls = _LPGate if (pureVec.dim <= 64 and evotype == "densitymx") else _LPGMap
-        errmap = errcls.from_error_generator(
-            None, errgen, ham_basis, nonham_basis, param_mode,
-            nonham_mode, truncate, mxBasis, evotype)
+        errmap = errcls(None,errgen)
 
         return cls(pureVec, errmap, typ)
+
+
+    #TODO REMOVE
+    #@classmethod
+    #def from_error_generator(cls, pureVec, errgen, typ, ham_basis="pp",
+    #                         nonham_basis="pp", param_mode="cptp",
+    #                         nonham_mode="all", truncate=True, mxBasis="pp",
+    #                         evotype="densitymx"):
+    #    """
+    #    Create a Lindblad-parameterized spamvec from an error generator and a
+    #    basis which specifies how to decompose (project) the error generator.
+    #
+    #    Parameters
+    #    ----------
+    #    pureVec : numpy array or SPAMVec
+    #        An array or SPAMVec in the *full* density-matrix space (this
+    #        vector will have dimension 4 in the case of a single qubit) which
+    #        represents a pure-state preparation or projection.  This is used as
+    #        the "base" preparation or projection that is followed or preceded
+    #        by, respectively, the action of `errgen`.
+    #        
+    #    errgen : numpy array or SciPy sparse matrix
+    #        a square 2D array that gives the full error generator `L` such 
+    #        that the spamvec is `exp(L)*pureVec` in the case of state
+    #        preparations and `pureVec*exp(L)` in the case of POVM effects. The
+    #        projections of this quantity onto the `ham_basis` and `nonham_basis`
+    #        are closely related to the parameters of the spamvec (they may not
+    #        be exactly equal if, e.g `cptp=True`).
+    #
+    #    typ : {"prep","effect"}
+    #        Whether this is a state preparation or POVM effect vector.
+    #
+    #    ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+    #        The basis is used to construct the Hamiltonian-type lindblad error
+    #        Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+    #        and Qutrit (qt), list of numpy arrays, or a custom basis object.
+    #
+    #    other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+    #        The basis is used to construct the Stochastic-type lindblad error
+    #        Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+    #        and Qutrit (qt), list of numpy arrays, or a custom basis object.
+    #
+    #    param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+    #        Describes how the Lindblad coefficients/projections relate to the
+    #        SPAM vector's parameter values.  Allowed values are:
+    #        `"unconstrained"` (coeffs are independent unconstrained parameters),
+    #        `"cptp"` (independent parameters but constrained so map is CPTP),
+    #        `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
+    #        `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
+    #
+    #    nonham_mode : {"diagonal", "diag_affine", "all"}
+    #        Which non-Hamiltonian Lindblad projections are potentially non-zero.
+    #        Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
+    #        `"diag_affine"` (diagonal coefficients + affine projections), and
+    #        `"all"` (the entire matrix of coefficients is allowed).
+    #
+    #    truncate : bool, optional
+    #        Whether to truncate the projections onto the Lindblad terms in
+    #        order to meet constraints (e.g. to preserve CPTP) when necessary.
+    #        If False, then an error is thrown when the given `gate` cannot 
+    #        be realized by the specified set of Lindblad projections.
+    #
+    #    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+    #        The source and destination basis, respectively.  Allowed
+    #        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+    #        and Qutrit (qt) (or a custom basis object).
+    #
+    #    evotype : {"densitymx","svterm","cterm"}
+    #        The evolution type of the spamvec being constructed.  `"densitymx"` is
+    #        usual Lioville density-matrix-vector propagation via matrix-vector
+    #        products.  `"svterm"` denotes state-vector term-based evolution
+    #        (spamvec is obtained by evaluating the rank-1 terms up to
+    #        some order).  `"cterm"` is similar but stabilizer states.
+    #
+    #    Returns
+    #    -------
+    #    LindbladParameterizedSPAMVec
+    #    """
+    #    from .gate import LindbladParameterizedGateMap as _LPGMap
+    #    from .gate import LindbladParameterizedGate as _LPGate
+    #    errcls = _LPGate if (pureVec.dim <= 64 and evotype == "densitymx") else _LPGMap
+    #    errmap = errcls.from_error_generator(
+    #        None, errgen, ham_basis, nonham_basis, param_mode,
+    #        nonham_mode, truncate, mxBasis, evotype)
+    #
+    #    return cls(pureVec, errmap, typ)
 
         
     @classmethod
@@ -2592,48 +2602,31 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         SPAMVec.__init__(self, d2, evotype) #sets self.dim
 
 
-    def allocate_gpindices(self, startingIndex, parent):
+    def submembers(self):
         """
-        Sets gpindices array for this object or any objects it
-        contains (i.e. depends upon).  Indices may be obtained
-        from contained objects which have already been initialized
-        (e.g. if a contained object is shared with other
-         top-level objects), or given new indices starting with
-        `startingIndex`.
+        Get the GateSetMember-derived objects contained in this one.
+        
+        Returns
+        -------
+        list
+        """
+        return [self.error_map]
 
-        Parameters
-        ----------
-        startingIndex : int
-            The starting index for un-allocated parameters.
-
-        parent : GateSet or GateSetMember
-            The parent whose parameter array gpindices references.
+    
+    def copy(self, parent=None):
+        """
+        Copy this object.
 
         Returns
         -------
-        num_new: int
-            The number of *new* allocated parameters (so 
-            the parent should mark as allocated parameter
-            indices `startingIndex` to `startingIndex + new_new`).
+        Gate
+            A copy of this object.
         """
-        num_new_params = self.error_map.allocate_gpindices( startingIndex, parent ) # *same* parent as this SPAMVec
-        _gatesetmember.GateSetMember.set_gpindices(
-            self, self.error_map.gpindices, parent)
-        return num_new_params
-
-
-    def relink_parent(self, parent):
-        """ 
-        Sets the parent of this object *without* altering its gpindices.
-
-        In addition to setting the parent of this object, this method 
-        sets the parent of any objects this object contains (i.e.
-        depends upon) - much like allocate_gpindices.  To ensure a valid
-        parent is not overwritten, the existing parent *must be None*
-        prior to this call.
-        """
-        self.error_map.relink_parent(parent)
-        _gatesetmember.GateSetMember.relink_parent(self, parent)
+        # We need to override this method so that embedded gate has its
+        # parent reset correctly.
+        cls = self.__class__ # so that this method works for derived classes too
+        copyOfMe = cls(self.state_vec, self.error_map.copy(parent), self.typ)
+        return self._copy_gpindices(copyOfMe, parent)
 
         
     def set_gpindices(self, gpindices, parent, memo=None):
@@ -2653,13 +2646,8 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         -------
         None
         """
-        if memo is None: memo = set()
-        elif id(self) in memo: return
-        memo.add(id(self))
-
-        self.error_map.set_gpindices(gpindices, parent, memo)
         self.terms = {} # clear terms cache since param indices have changed now
-        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
+        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent, memo)
 
         
     def todense(self, scratch=None):
@@ -2892,6 +2880,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         # error_map -> inv(S) * error_map ("prep" case) OR
         # error_map -> error_map * S      ("effect" case)
         self.error_map.spam_transform(S,typ)
+        self.dirty = True
 
         
     def depolarize(self, amount):

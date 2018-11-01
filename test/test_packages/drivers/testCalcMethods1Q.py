@@ -114,6 +114,15 @@ class CalcMethods1QTestCase(BaseTestCase):
         gs_target.set_simtype('matrix') # the default for 1Q, so we could remove this line
         results = pygsti.do_long_sequence_gst(self.ds, gs_target, std.prepStrs, std.effectStrs,
                                               std.germs, self.maxLengths, verbosity=4)
+
+        #CHECK that copy gives identical gatesets - this is checked by other 
+        # unit tests but here we're using a true "GST gateset" - so do it again:
+        print("CHECK COPY")
+        gs = results.estimates['default'].gatesets['go0']
+        gs_copy = gs.copy()
+        print(gs.strdiff(gs_copy))
+        self.assertAlmostEqual( gs.frobeniusdist(gs_copy), 0, places=3)        
+
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
         #pygsti.io.json.dump(results.estimates['default'].gatesets['go0'],
         #                    open(compare_files + "/test1Qcalc_std_exact.gateset",'w'))

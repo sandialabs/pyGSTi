@@ -771,6 +771,7 @@ class GateSet(object):
             assert(obj.parent is self), "%s's parent is not set correctly (%s)!" % (lbl,msg)
             if obj.gpindices is not None and len(w) > 0:
                 if _np.linalg.norm(self._paramvec[obj.gpindices]-w) > TOL:
+                    if debug: print(lbl,".to_vector() = ",w," but GateSet's paramvec = ",self._paramvec[obj.gpindices])
                     raise ValueError("%s is out of sync with paramvec!!!" % lbl)
 
 
@@ -811,6 +812,11 @@ class GateSet(object):
             if modified_indices.intersection(obj.gpindices_as_array()):
                 obj.from_vector(self._paramvec[obj.gpindices])
 
+    def _print_gpindices(self):
+        print("PRINTING GATESET GPINDICES!!!")
+        for lbl,obj in self.iter_objs():
+            print("LABEL ",lbl)
+            obj._print_gpindices()
 
     def _rebuild_paramvec(self):
         """ Resizes self._paramvec and updates gpindices & parent members as needed,
