@@ -8,50 +8,49 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 
-def bonferroni_correction(confidence,numtests):
+def bonferroni_correction(significance, numtests):
     """
-    Calculates the standard Bonferroni correction, for raising the 
-    confidence level of statistical tests when implementing more
-    than a single test. This is as described on wiki.
+    Calculates the standard Bonferroni correction, for reducing
+    the "local" significance for > 1 statistical hypothesis
+    test to guarantee maintaining a "global" significance (i.e.,
+    a family-wise error rate) of `significance`.
     
     Parameters
     ----------
     confidence : float
-        The desired overall confidence of the composite tests.
+        The desired global significance (often 0.05).
         
     numtests : int
-        
+        The number of hypothesis tests
                 
     Returns
     -------
-    array
-        Todo.....
-    
+    The Boferroni-corrected local significance, given by 
+    `significance` / `numtests`.    
     """
-    adjusted_confidence = 1 - (1 - confidence) / numtests
+    local_significance = significance / numtests
       
-    return adjusted_confidence
+    return local_significance
 
-def sidak_correction(confidence,numtests):
+def sidak_correction(significance,numtests):
     """
     Todo: docstring
     """
-    adjusted_confidence = confidence**(1/numtests)
+    adjusted_significance = 1 - (1-significance)**(1/numtests)
       
-    return adjusted_confidence
+    return adjusted_significance
 
-def generalized_bonferroni_correction(confidence, weights, numtests=None,
-                                     nested_method='bonferroni',tol=1e-10):
+def generalized_bonferroni_correction(significance, weights, numtests=None,
+                                     nested_method='bonferroni', tol=1e-10):
 
     """
-    Todo: docstring
-    
+    Todo: docstring   
     """
     weights = _np.array(weights)
     assert(_np.abs(_np.sum(weights) - 1.)<tol), "Invalid weighting! The weights must add up to 1."
     
-    adjusted_confidence = _np.zeros(len(weights),float)
-    adjusted_confidence = 1 - (1 - confidence)*weights
+    adjusted_significance = _np.zeros(len(weights),float)
+    adjusted_significance = significance*weights
 
     if numtests is not None:
         
@@ -59,11 +58,9 @@ def generalized_bonferroni_correction(confidence, weights, numtests=None,
         for i in range(0,len(weights)):
             
             if nested_method == 'bonferroni':
-                adjusted_confidence[i] = bonferroni_correction(adjusted_confidence[i],numtests[i])
+                adjusted_significance[i] = bonferroni_correction(adjusted_significance[i],numtests[i])
                 
             if nested_method == 'sidak':
-                adjusted_confidence[i] = sidak_correction(adjusted_confidence[i],numtests[i])
+                adjusted_significance[i] = sidak_correction(adjusted_significance[i],numtests[i])
                 
-    return adjusted_confidence
-    
-#Todo: add generalized sidak correction.          
+    return adjusted_significance
