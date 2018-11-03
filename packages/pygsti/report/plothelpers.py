@@ -651,17 +651,18 @@ def drift_oneoverpvalue_matrices(gsplaq, driftresults):
     ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for i,j,gstr in gsplaq:
         try:
-            # If the pvalue is infinite (which, because of how the pvalues are calculated, can happen
-            # when the true pvalue is well within the range of a float), we map it to twice the maximum
-            # non-infinity pvalue. The true pvalue must be greater than this value, but might not be as
-            # large as twice this value. It is rounded, as this will help identify cases where this
-            # fairly arbitrary procedure has been implemented.
+            #If the pvalue is infinite (which, because of how the pvalues are calculated, can happen
+            #when the true pvalue is well within the range of a float), we map it to twice the maximum
+            #non-infinity pvalue. The true pvalue must be greater than this value, but might not be as
+            #large as twice this value. It is rounded, as this will help identify cases where this
+            #fairly arbitrary procedure has been implemented.
             if 1./pvalues_and_strings_dict[gstr]  == _np.inf:
-                oneoverpvls = 1./driftresults.ps_pvalue.copy()
-                oneoverpvls = oneoverpvls[_np.isfinite(oneoverpvls)]
-                ret[i,j] = 2*_np.round(_np.max(oneoverpvls))
+                #oneoverpvls = 1./driftresults.ps_pvalue.copy()
+                #oneoverpvls = oneoverpvls[_np.isfinite(oneoverpvls)]
+                #ret[i,j] = 2*_np.round(_np.max(oneoverpvls))
+                ret[i,j] = 16
             else:
-                ret[i,j] = 1./pvalues_and_strings_dict[gstr]
+                ret[i,j] = _np.log10(1./pvalues_and_strings_dict[gstr])
         except:
             pass
     return ret
