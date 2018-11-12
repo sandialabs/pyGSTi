@@ -1644,6 +1644,7 @@ class DataSet(object):
             self.oliType  = _np.dtype(state_dict['oliType'])
             self.timeType = _np.dtype(state_dict['timeType'])
             self.repType  = _np.dtype(state_dict['repType'])
+            self.comment  = _np.dtype(state_dict['comment'])
             if bStatic: #always empty - don't save this, just init
                 self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
             else: self.cnt_cache = None

@@ -25,6 +25,7 @@ from .gate import StaticGate
 from .gate import EigenvalueParameterizedGate
 from .gate import LindbladParameterizedGate
 from .gate import LindbladParameterizedGateMap
+from .gate import LindbladErrorgen
 from .gate import TPInstrumentGate
 from .gate import EmbeddedGateMap
 from .gate import EmbeddedGate

@@ -1900,18 +1900,18 @@ class GateSet(object):
             ng = Ng = 1
             if bNp2Matters:
                 if nprocs > num_params**2:
-                    np1 = np2 = num_params
-                    ng = Ng = set_Ng(nprocs / num_params**2) #Note __future__ division
+                    np1 = np2 = max(num_params,1)
+                    ng = Ng = set_Ng(nprocs / max(num_params**2,1)) #Note __future__ division
                 elif nprocs > num_params:
-                    np1 = num_params
-                    np2 = int(_np.ceil(nprocs / num_params))
+                    np1 = max(num_params,1)
+                    np2 = int(_np.ceil(nprocs / max(num_params,1)))
                 else:
                     np1 = nprocs; np2 = 1
             else:
                 np2 = 1
                 if nprocs > num_params:
-                    np1 = num_params
-                    ng = Ng = set_Ng(nprocs / num_params)
+                    np1 = max(num_params,1)
+                    ng = Ng = set_Ng(nprocs / max(num_params,1))
                 else:
                     np1 = nprocs
 
