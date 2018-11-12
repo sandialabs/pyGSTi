@@ -12,6 +12,7 @@ from scipy.fftpack import idct as _idct
 from scipy.fftpack import fft as _fft
 from scipy.fftpack import ifft as _ifft
 from scipy import convolve as _convolve
+import warnings as _warnings
 
 try:
     from astropy.stats import LombScargle as _LombScargle
@@ -210,8 +211,23 @@ def bartlett_spectrum_averaging(spectrum, num_spectra):
     return bartlett_spectrum
 
 def frequencies_from_timestep(timestep,T):
-     
+    
     return _np.arange(0,T)/(2*timestep*T)
+
+# Todo : make a method of a transform object.
+def amplitudes_at_frequencies(freqInds, timeseries, transform='DCT'):
+    """
+    todo
+    """
+    amplitudes = {}
+    for o in timeseries.keys():
+        if transform == 'DCT':
+            amplitudes[o] = list(_dct(timeseries[o])[freqInds]/(2*len(timeseries[o])))
+        elif transform == 'DFT':
+            # todo : check this normalization (this bit of function never been used)
+            amplitudes[o] = list(_fft(timeseries[o])[freqInds]/len(timeseries[o]))
+    
+    return  amplitudes
 
 def DCT_basis_function(omega, T, t):
     """
@@ -227,24 +243,40 @@ def DCT_basis_function(omega, T, t):
 #
 #    return DCT_basis_function
 
-def probability_from_DCT_amplitudes(alphas, omegas, T, t):
-    """
-    Todo
+# def probability_from_DCT_amplitudes(alphas, omegas, T, t):
+#     """
+#     Todo
 
-    This uses the *unnormalized* DCT amplitudes.
-    """
-    return _np.sum(_np.array([alphas[i]*DCT_basis_function(omegas[i], T, t) for i in range(len(omegas))]))
+#     This uses the *unnormalized* DCT amplitudes.
+#     """
+#     return _np.sum(_np.array([alphas[i]*DCT_basis_function(omegas[i], T, t) for i in range(len(omegas))]))
 
-def hoyer_sparsity_measure(p):
+def sparsity(p):
     """
+    Returns the Hoyer index of the input vector.
     TODO: docstring
     """
     n = len(p)
     return (_np.sqrt(n) - _np.linalg.norm(p,1)/_np.linalg.norm(p,2))/(_np.sqrt(n)-1)
 
-def renormalizer(p,method='logistic'):
+def renormalizer(p, method='logistic'):
     """
-    TODO: docstring
+    Takes an arbitrary input vector and maps it to a vector
+    bounded within [0,1].
+
+    Parameters
+    ----------
+    p : array of floats
+        The vector with values to be mapped to [0,1]
+
+    method : {'logistic', 'sharp'}
+
+
+    Returns
+    -------
+    numpy.array
+        If method is 'sharp' then...
+        If method is 'logistic' then..
     """
     if method == 'logistic':
     
@@ -270,45 +302,109 @@ def logistic_transform(p, mean):
     out = mean - nu + (2*nu)/(1 + _np.exp(-2*(p - mean)/nu))
     return out
 
-def reduce_DCT_amplitudes_until_probability_is_physical(alphas, omegas, T, epsilon=0.001, step_size=0.005,
-                                                        verbosity=1):
+def constrain_model_via_uniform_amplitude_compression(model, times, epsilon=0.001, stepsize=0.005,
+                                                       verbosity=1):
     """
+    Todo. This only works given that parameter 0 is the DC-mode and the probablities sum to
+    1 at each time.
+
+    Returns
+    -------
 
     """
-    assert(0 in omegas)
-    assert(0 == omegas[0]), "This function assume that the 0 mode is first in the list!"
-    pt = [probability_from_DCT_amplitudes(alphas, omegas, T, t) for t in range(T)]
-    newalphas = alphas.copy()
+    newmodel = model.copy()
+    if len(newmodel.basisfunctionInds) <= 1:
+        return model, False
 
-    if alphas[0] > (1 - epsilon) or alphas[0] < epsilon:
-        newalphas[1:] = _np.zeros(len(newalphas)-1)
-        print("Constraint can't be satisfied using this function, because the zero-mode contribution is outside the requested bounds!")
-        return newalphas
+    pt = newmodel.get_probabilities(times)
 
-    iteration = 0
-    while max(pt) >= 1-epsilon or min(pt) <= epsilon:
+    maxpt = max([max(pt[o]) for o in model.parameters.keys()])
+    minpt = min([min(pt[o]) for o in model.parameters.keys()])
+
+    iteration = 1
+    modelchanged = False
+    while maxpt >= 1-epsilon or minpt <= epsilon:
+        
+        modelchanged = True
+        newparameters = model.parameters.copy()
+        for i in model.parameters.keys():
+            newparameters[i][1:] = [decrease_magnitude(p,stepsize) for p in newparameters[i][1:]]
+
+        print(newparameters)
+        
+        # Input the new parameters to the model
+        newmodel.set_parameters(newparameters)
+        # Get the new probabilities trajectory
+        pt = model.get_probabilities(times)
+        # Find out it's max and min value
+        maxpt = max([max(pt[o]) for o in model.parameters.keys()])
+        minpt = min([min(pt[o]) for o in model.parameters.keys()])
+
+        if iteration >= 10000:
+            _warnings.warning("10,000 iterations implemented trying to make model physical! Quiting and returning unphysical model.")
+            return model 
+
         iteration += 1
-        if verbosity > 0:
-            print("Interation {} of amplitude reduction.".format(iteration))
-        # We don't change the amplitude of the DC component.
-        for i in range(1,len(newalphas)):
-            if newalphas[i] > 0.:
-                newalphas[i] = newalphas[i] - step_size
-                # If it changes sign we set it to zero.
-                if newalphas[i] < 0.:
-                    newalphas[i] = 0
-            if newalphas[i] < 0.:
-                newalphas[i] = newalphas[i] + step_size
-                # If it changes sign we set it to zero.
-                if newalphas[i] > 0.:
-                    newalphas[i] = 0
-        pt = [probability_from_DCT_amplitudes(newalphas, omegas, T, t) for t in range(T)]
 
-    if verbosity > 0:
-        print("Estimate within bounds.")
-    return newalphas 
+    return newmodel, modelchanged
 
-def low_pass_filter(data,max_freq = None):
+def decrease_magnitude(p, epsilon):
+    """
+    todo.
+    """
+    if p > 0:
+        p = p - epsilon
+        if p > 0:
+            return p
+        else:
+            return 0
+    elif p < 0:
+        p = p + epsilon
+        if p < 0:
+            return p
+        else:
+            return 0
+    else:
+        return 0.
+
+# def reduce_DCT_amplitudes_until_probability_is_physical(alphas, omegas, T, epsilon=0.001, step_size=0.005,
+#                                                         verbosity=1):
+#     """
+#     """
+#     assert(0 in omegas)
+#     assert(0 == omegas[0]), "This function assume that the 0 mode is first in the list!"
+#     pt = [probability_from_DCT_amplitudes(alphas, omegas, T, t) for t in range(T)]
+#     newalphas = alphas.copy()
+
+#     if alphas[0] > (1 - epsilon) or alphas[0] < epsilon:
+#         newalphas[1:] = _np.zeros(len(newalphas)-1)
+#         print("Constraint can't be satisfied using this function, because the zero-mode contribution is outside the requested bounds!")
+#         return newalphas
+
+#     iteration = 0
+#     while max(pt) >= 1-epsilon or min(pt) <= epsilon:
+#         iteration += 1
+#         if verbosity > 0:
+#             print("Interation {} of amplitude reduction.".format(iteration))
+#         # We don't change the amplitude of the DC component.
+#         for i in range(1,len(newalphas)):
+#             if newalphas[i] > 0.:
+#                 newalphas[i] = newalphas[i] - step_size
+#                 # If it changes sign we set it to zero.
+#                 if newalphas[i] < 0.:
+#                     newalphas[i] = 0
+#             if newalphas[i] < 0.:
+#                 newalphas[i] = newalphas[i] + step_size
+#                 # If it changes sign we set it to zero.
+#                 if newalphas[i] > 0.:
+#                     newalphas[i] = 0
+#         pt = [probability_from_DCT_amplitudes(newalphas, omegas, T, t) for t in range(T)]
+
+#     if verbosity > 0:
+#         print("Estimate within bounds.")
+#     return newalphas 
+
+def low_pass_filter(data, max_freq=None):
     """
     TODO: docstring
     """
