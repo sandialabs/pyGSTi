@@ -133,7 +133,7 @@ class SharedIdleAutoGator(AutoGator):
     should be the same for all the gates).
     """
 
-    def __init__(self, parent):
+    def __init__(self, parent, errcomp_type):
         """
         Create a new SharedIdleAutoGator
 
@@ -142,6 +142,7 @@ class SharedIdleAutoGator(AutoGator):
         parent : GateSet
         """
         super(SharedIdleAutoGator,self).__init__(parent)
+        self.errcomp_type = errcomp_type
 
     def __call__(self, existing_gates, gatelabel):
         """

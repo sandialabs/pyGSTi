@@ -797,6 +797,12 @@ class GateMatrix(Gate):
         return _np.asarray(self.base)
           # *must* be a numpy array for Cython arg conversion
 
+    def tosparse(self):
+        """
+        Return the gate as a sparse matrix.
+        """
+        return _sps.csr_matrix(self.todense())
+
     def __copy__(self):
         # We need to implement __copy__ because we defer all non-existing
         # attributes to self.base (a numpy array) which *has* a __copy__
@@ -2144,7 +2150,7 @@ class LindbladParameterizedGateMap(Gate):
 
         errgen = LindbladErrorgen.from_error_generator(errgenMx, ham_basis,
                                         nonham_basis, param_mode, nonham_mode,
-                                        truncate, mxBasis, evotype)
+                                        mxBasis, truncate, evotype)
 
         return cls(unitaryPostfactor, errgen)
 
@@ -2768,16 +2774,16 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             "LindbladParameterizedGate objects can only be used for the 'densitymx' evolution type"
             #Note: cannot remove the evotype argument b/c we need to maintain the same __init__
             # signature as LindbladParameterizedGateMap so its @classmethods will work on us.
+
+        assert(not errorgen.sparse), \
+            "LindbladParameterizedGate objects must use *dense* basis elements!"
         
         #Start with base class construction
         LindbladParameterizedGateMap.__init__(
             self, unitaryPostfactor, errorgen) # (sets self.dim and self.base)
 
         GateMatrix.__init__(self, self.base, "densitymx")
-        
-        assert(not self.errorgen.sparse), \
-            "LindbladParameterizedGate objects must use *dense* basis elements!"
-        
+                
         #self._construct_exp_errgen() # construct matrix (may be unnecessary since base class calls this...)
         
             
@@ -2789,7 +2795,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         # LindbladParmaeterizedGateMap's version, which just constructs
         # self.err_gen & self.exp_err_gen, to constructing the entire
         # final matrix.
-        LindbladParameterizedGateMap._construct_exp_errgen(self) 
+        LindbladParameterizedGateMap._construct_exp_errgen(self) #constructs self.exp_err_gen b/c *not sparse*
         matrix = self.todense()  # dot(exp_err_gen, unitary_postfactor)
 
         assert(_np.linalg.norm(matrix.imag) < IMAG_TOL)
@@ -4516,7 +4522,7 @@ class ComposedErrorgen(Gate):
         return self._copy_gpindices(copyOfMe, parent)
 
     def tosparse(self):
-        """ Return the gate as a sparse matrix """
+        """ Return the error generator as a sparse matrix """
         mx = self.factors[0].tosparse()
         for eg in self.factors[1:]:
             mx += eg.tosparse()
@@ -4581,6 +4587,8 @@ class ComposedErrorgen(Gate):
             factor_local_inds = _gatesetmember._decompose_gpindices(
                     self.gpindices, eg.gpindices)
             eg.from_vector( v[factor_local_inds] )
+        if self._evotype == "densitymx":
+            self._construct_errgen_matrix()        
         self.dirty = True
 
 
@@ -4676,13 +4684,17 @@ class EmbeddedErrorgen(EmbeddedGateMap):
         if _compat.isstr(embedded_matrix_basis):
             self.matrix_basis = embedded_matrix_basis
         else: # assume a Basis object
-            self.matrix_basis = _Basis(
-                name="embedded_" + embedded_matrix_basis.name,
-                matrices=[self._embed_basis_mx(mx) for mx in 
-                          embedded_matrix_basis.get_composite_matrices()],
-                sparse=True)
+            my_basis_dim = self.stateSpaceLabels.dim.dmDim # density matrix dimension
+            self.matrix_basis = _Basis(embedded_matrix_basis.name, my_basis_dim)
 
-        if evotype == "densitymx":
+            #OLD: constructs a subset of this errorgen's full mxbasis, but not the whole thing:
+            #self.matrix_basis = _Basis(
+            #    name="embedded_" + embedded_matrix_basis.name,
+            #    matrices=[self._embed_basis_mx(mx) for mx in 
+            #              embedded_matrix_basis.get_composite_matrices()],
+            #    sparse=True)
+
+        if errgen_to_embed._evotype == "densitymx":
             self._construct_errgen_matrix()        
         else:
             self.err_gen_mx = None
@@ -4695,12 +4707,33 @@ class EmbeddedErrorgen(EmbeddedGateMap):
         # error generator, but this is fine).
         self.err_gen_mx = self.tosparse()
 
-    def _embed_basis_mx(mx):
+    def _embed_basis_mx(self, mx):
         """ Take a dense or sparse basis matrix and embed it. """
         mxAsGate = StaticGate(mx) if isinstance(mx,_np.ndarray) \
             else StaticGate(mx.todense()) #assume mx is a sparse matrix
         return EmbeddedGateMap(self.stateSpaceLabels, self.targetLabels,
                                mxAsGate).tosparse() # always convert to *sparse* basis els
+
+
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        EmbeddedGateMap.from_vector(self, v) 
+        if self._evotype == "densitymx":
+            self._construct_errgen_matrix()        
+        self.dirty = True
+
 
     def get_coeffs(self):
         """ TODO: docstring - see other get_coeffs for a start """
@@ -4751,7 +4784,7 @@ class LindbladErrorgen(Gate):
     @classmethod
     def from_error_generator(cls, errgen, ham_basis="pp", nonham_basis="pp",
                              param_mode="cptp", nonham_mode="all",
-                             truncate=True, mxBasis="pp", evotype="densitymx"):
+                             mxBasis="pp", truncate=True, evotype="densitymx"):
         """
         TODO: docstring (fix!) - just creates a Lindblad error gen now
         Create a Lindblad-parameterized gate from an error generator and a
@@ -4789,16 +4822,16 @@ class LindbladErrorgen(Gate):
             `"diag_affine"` (diagonal coefficients + affine projections), and
             `"all"` (the entire matrix of coefficients is allowed).
 
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
             order to meet constraints (e.g. to preserve CPTP) when necessary.
             If False, then an error is thrown when the given `errgen` cannot 
             be realized by the specified set of Lindblad projections.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
 
         evotype : {"densitymx","svterm","cterm"}
             The evolution type of the gate being constructed.  `"densitymx"` is

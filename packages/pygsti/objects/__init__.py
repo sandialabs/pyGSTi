@@ -25,13 +25,15 @@ from .gate import StaticGate
 from .gate import EigenvalueParameterizedGate
 from .gate import LindbladParameterizedGate
 from .gate import LindbladParameterizedGateMap
-from .gate import LindbladErrorgen
 from .gate import TPInstrumentGate
 from .gate import EmbeddedGateMap
 from .gate import EmbeddedGate
 from .gate import ComposedGateMap
 from .gate import ComposedGate
 from .gate import CliffordGate
+from .gate import LindbladErrorgen
+from .gate import ComposedErrorgen
+from .gate import EmbeddedErrorgen
 from .spamvec import SPAMVec
 from .spamvec import DenseSPAMVec
 from .spamvec import FullyParameterizedSPAMVec
