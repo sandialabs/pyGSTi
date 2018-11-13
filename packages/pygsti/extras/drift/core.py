@@ -616,7 +616,6 @@ def estimate_probability_trajectories(results, modelSelector=(('per','per','avg'
                     null = False
                 hyperparameters = {"basisfunctionInds":freqs, 'starttime':results.timestamps[s][0], 'endtime':results.timestamps[s][-1]}
                 parameters = _sig.amplitudes_at_frequencies(freqs, timeseries, transform='DCT')
-                                
                 ffmodel = _mdl.ProbabilityTrajectoryModel(outcomeIndlist, modeltype='DCT', hyperparameters=hyperparameters, parameters=parameters)
                 results.add_reconstruction(e, s, ffmodel, modelSelector=modelSelector, estimator='DCT-filter-unbounded', 
                                         auxDict={'null':null}, overwrite=overwrite)

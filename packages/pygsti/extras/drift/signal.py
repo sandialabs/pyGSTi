@@ -222,9 +222,9 @@ def amplitudes_at_frequencies(freqInds, timeseries, transform='DCT'):
     amplitudes = {}
     for o in timeseries.keys():
         if transform == 'DCT':
-            amplitudes[o] = list(_dct(timeseries[o])[freqInds]/(2*len(timeseries[o])))
+            amplitudes[o] = list(_dct(timeseries[o],norm='ortho')[freqInds]/_np.sqrt(len(timeseries[o])))
         elif transform == 'DFT':
-            # todo : check this normalization (this bit of function never been used)
+            # todo : check this normalization (this bit of function has never been used)
             amplitudes[o] = list(_fft(timeseries[o])[freqInds]/len(timeseries[o]))
     
     return  amplitudes
