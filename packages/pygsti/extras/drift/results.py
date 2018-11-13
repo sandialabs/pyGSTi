@@ -69,7 +69,7 @@ class DriftResults(object):
         else:
             timesteps = _np.array(self.timestamps[seqInd][1:]) - _np.array(self.timestamps[seqInd][:self.number_of_timesteps[seqInd]-1])
 
-        return _np.array(timesteps)
+        return _np.array(_copy.deepcopy(timesteps))
 
     # Todo
     #def has_equally_spaced_timestamps(self, stype='absolute', rtol=1e-2):
@@ -176,7 +176,7 @@ class DriftResults(object):
                 assert(freqInds is None), "Only allowed to store the full modes set!"
                 self.modes[tup] = modes
 
-            return modes
+            return _copy.deepcopy(modes)
 
     def get_spectra_set(self, tup, freqInds=None, store=False):
         """
@@ -209,7 +209,7 @@ class DriftResults(object):
             assert(freqInds is None), "Only allowed to store the full spectra set!"
             self.spectra[tup] = specta 
 
-        return spectra
+        return _copy.deepcopy(spectra)
 
     def get_spectrum(self, entity='avg', sequence='avg', outcome='avg'):
         """
@@ -219,7 +219,7 @@ class DriftResults(object):
         spectra = self.get_spectra_set(testclasstup, None)
         dicttup = self._create_dict_tup(entity, sequence, outcome, pad=False)
 
-        return spectra[dicttup]
+        return _copy.deepcopy(spectra[dicttup])
 
     def get_maxpower(self, entity='avg', sequence='avg', outcome='avg', onlyTestedFreqs=False):
         """
@@ -288,13 +288,6 @@ class DriftResults(object):
         self._sigFreqIndsinClass[name] = sigFreqIndsinClass
         self._powerSignificancePseudothreshold[name] = powerSignificancePseudothreshold
         self._significanceForClass[name] = significanceForClass
-
-        # Todo : writing this in by adding it has part of the results is maybe a bit odd, as it's a property
-        # of the data not the hypothesis testing. So maybe this should be a method of the results object.
-        # for key in dofPerSpectrumInClass:
-        #     # This over-writes any cases where we already had this.
-        #     self._dofPerSpectrumInClass[key] = dofPerSpectrumInClass[key]       
-        #     self._numTestsinClass[key] = numTestsinClass[key]
 
         return None 
 
@@ -388,7 +381,7 @@ class DriftResults(object):
         if sort:
             driftfreqInds.sort()
 
-        return driftfreqInds
+        return _copy.deepcopy(driftfreqInds)
 
     def get_drift_frequencies(self, entity='avg', sequence='avg', outcome='avg', detectorkey=None):
         """
@@ -396,7 +389,7 @@ class DriftResults(object):
         """
         freqInd = self.get_drift_frequency_indices(entity=entity, sequence=sequence, outcome= outcome, sort=False, detectorkey=detectorkey)
 
-        return self.frequenciesInHz[freqInd]
+        return _copy.deepcopy(self.frequenciesInHz[freqInd])
 
     def get_power_significance_threshold(self, entity='avg', sequence='avg', outcome='avg', detectorkey=None):
         """
