@@ -661,6 +661,7 @@ class DriftResults(object):
         # _plt.ylabel("Power",fontsize=15)
         # _plt.xlim(xlim)
         
+        _plt.tight_layout()
         if savepath is not None:
             _plt.savefig(savepath)
         else:
@@ -778,6 +779,7 @@ class DriftResults(object):
         _plt.xlabel('Time (seconds)',fontsize=15)
         _plt.ylabel("Probability",fontsize=15)
         
+        _plt.tight_layout()
         if savepath is not None:
             _plt.savefig(savepath)
         else:
