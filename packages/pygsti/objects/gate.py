@@ -2125,15 +2125,16 @@ class LindbladParameterizedGateMap(Gate):
             assert(unitaryPostfactor is not None), "arguments cannot both be None"
             gateMatrix = unitaryPostfactor
             
+        sparseGate = _sps.issparse(gateMatrix)
         if unitaryPostfactor is None:
-            if _sps.issparse(gateMatrix):
+            if sparseGate:
                 upost = _sps.identity(gateMatrix.shape[0],'d','csr')
             else: upost = _np.identity(gateMatrix.shape[0],'d')
         else: upost = unitaryPostfactor
 
         #Init base from error generator: sets basis members and ultimately
         # the parameters in self.paramvals
-        if _sps.issparse(gateMatrix):
+        if sparseGate:
             #Instead of making error_generator(...) compatible with sparse matrices
             # we require sparse matrices to have trivial initial error generators
             # or we convert to dense:
@@ -2152,10 +2153,11 @@ class LindbladParameterizedGateMap(Gate):
                                         nonham_basis, param_mode, nonham_mode,
                                         mxBasis, truncate, evotype)
 
-        return cls(unitaryPostfactor, errgen)
+        #Use "sparse" matrix exponentiation when given gate matrix was sparse.
+        return cls(unitaryPostfactor, errgen, sparse_expm=sparseGate)
 
 
-    def __init__(self, unitaryPostfactor, errorgen):     
+    def __init__(self, unitaryPostfactor, errorgen, sparse_expm=False):     
         """
         TODO: docstring (fix!) - note: unitaryPostfactor doesn't need to be
           a dimension since we can take it from errorgen.dim... so unitaryPostFactor
@@ -2240,12 +2242,16 @@ class LindbladParameterizedGateMap(Gate):
 
         self.errorgen = errorgen # don't copy (allow object reuse)
         
-        # conform unitary postfactor to the sparseness of the basis mxs (self.sparse)
+        # make unitary postfactor sparse when sparse_expm == True and vice versa.
+        # (This doens't have to be the case, but we link these two "sparseness" noitions:
+        #  when we perform matrix exponentiation in a "sparse" way we assume the matrices
+        #  are large and so the unitary postfactor (if present) should be sparse).
         # FUTURE: warn if there is a sparsity mismatch btwn basis and postfactor?
+        self.sparse_expm = sparse_expm
         if unitaryPostfactor is not None:
-            if self.errorgen.sparse == False and _sps.issparse(unitaryPostfactor):
+            if self.sparse_expm == False and _sps.issparse(unitaryPostfactor):
                 unitaryPostfactor = unitaryPostfactor.toarray() # sparse -> dense
-            elif self.errorgen.sparse == True and not _sps.issparse(unitaryPostfactor):
+            elif self.sparse_expm == True and not _sps.issparse(unitaryPostfactor):
                 unitaryPostfactor = _sps.csr_matrix( _np.asarray(unitaryPostfactor) ) # dense -> sparse
 
         evotype = self.errorgen._evotype
@@ -2257,14 +2263,14 @@ class LindbladParameterizedGateMap(Gate):
             self.unitary_postfactor = unitaryPostfactor #can be None
             self.exp_err_gen = None
             self.err_gen_prep = None
-            self._construct_exp_errgen() #sets one of the above two members
-                                         # depending on self.errorgen.sparse
+            self._prepare_for_torep() #sets one of the above two members
+                                      # depending on self.errorgen.sparse
             self.terms = None # Unused
             
         else: # Term-based evolution
-
-            assert(not self.errorgen.sparse), "Sparse bases are not supported for term-based evolution"
-              #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitaryPostfactor
+            
+            assert(not self.sparse_expm), "Sparse unitary postfactors are not supported for term-based evolution"
+              #TODO: make terms init-able from sparse elements, and below code work with a *sparse* unitaryPostfactor
             termtype = "dense" if evotype == "svterm" else "clifford"
 
             # Store *unitary* as self.unitary_postfactor - NOT a superop
@@ -2325,22 +2331,21 @@ class LindbladParameterizedGateMap(Gate):
             upost = _bt.change_basis(gate_std, 'std', self.errorgen.matrix_basis)
 
         cls = self.__class__ # so that this method works for derived classes too
-        copyOfMe = cls(upost, self.errorgen.copy(parent))
+        copyOfMe = cls(upost, self.errorgen.copy(parent), self.sparse_expm)
         return self._copy_gpindices(copyOfMe, parent)
 
         
-    def _construct_exp_errgen(self):
+    def _prepare_for_torep(self):
         """ Constructs Sets self.err_gen_prep or self.exp_err_gen 
         TODO: docstring (better?)
-        """
-        err_gen_matrix = self.errorgen.err_gen_mx
-                
+        """                
         #Pre-compute the exponential of the error generator if dense matrices
         # are used, otherwise cache prepwork for sparse expm calls
-        if self.errorgen.sparse:
-            self.err_gen_prep = _mt.expm_multiply_prep(err_gen_matrix)
+        if self.sparse_expm: # "sparse mode" => don't ever compute matrix-exponential explicitly
+            self.err_gen_prep = _mt.expop_multiply_prep(
+                self.errorgen.torep().aslinearoperator())
         else:
-            self.exp_err_gen = _spl.expm(err_gen_matrix)
+            self.exp_err_gen = _spl.expm(self.errorgen.todense())
 
 
         
@@ -2369,7 +2374,7 @@ class LindbladParameterizedGateMap(Gate):
         """
         Return this gate as a dense matrix.
         """
-        if self.errorgen.sparse: raise NotImplementedError("todense() not implemented for sparse LindbladParameterizedGateMap objects")
+        if self.sparse_expm: raise NotImplementedError("todense() not implemented for sparse-expm-mode LindbladParameterizedGateMap objects")
         if self._evotype in ("svterm","cterm"): 
             raise NotImplementedError("todense() not implemented for term-based LindbladParameterizedGateMap objects")
 
@@ -2387,7 +2392,7 @@ class LindbladParameterizedGateMap(Gate):
         _warnings.warn(("Constructing the sparse matrix of a LindbladParameterizedGate."
                         "  Usually this is *NOT* a sparse matrix (the exponential of a"
                         " sparse matrix isn't generally sparse)!"))
-        if self.errorgen.sparse:
+        if self.sparse_expm:
             exp_err_gen = _spsl.expm(self.errorgen.tosparse().tocsc()).tocsr()
             if self.unitary_postfactor is not None:
                 return exp_err_gen.dot(self.unitary_postfactor)
@@ -2409,7 +2414,7 @@ class LindbladParameterizedGateMap(Gate):
         GateRep
         """
         if self._evotype == "densitymx":
-            if self.errorgen.sparse:
+            if self.sparse_expm:
                 if self.unitary_postfactor is None:
                     Udata = _np.empty(0,'d')
                     Uindices = Uindptr = _np.empty(0,_np.int64)
@@ -2420,10 +2425,9 @@ class LindbladParameterizedGateMap(Gate):
                     Uindptr = _np.ascontiguousarray(self.unitary_postfactor.indptr, _np.int64)
                     Uindices = _np.ascontiguousarray(self.unitary_postfactor.indices, _np.int64)
                            
-                A, mu, m_star, s, eta = self.err_gen_prep
-                return replib.DMGateRep_Lindblad(A.data,
-                                                 _np.ascontiguousarray(A.indices, _np.int64),
-                                                 _np.ascontiguousarray(A.indptr, _np.int64),
+                mu, m_star, s, eta = self.err_gen_prep
+                errorgen_rep = self.errorgen.torep()
+                return replib.DMGateRep_Lindblad(errorgen_rep,
                                                  mu, eta, m_star, s,
                                                  Udata, Uindices, Uindptr)
             else:
@@ -2529,7 +2533,7 @@ class LindbladParameterizedGateMap(Gate):
         """
         self.errorgen.from_vector(v)
         if self._evotype == "densitymx":
-            self._construct_exp_errgen()
+            self._prepare_for_torep()
         self.dirty = True
 
     def get_errgen_coeffs(self):
@@ -2589,7 +2593,7 @@ class LindbladParameterizedGateMap(Gate):
         #Note: truncate=True to be safe
         self.errorgen.from_vector(tGate.errorgen.to_vector())
         if self._evotype == "densitymx":
-            self._construct_exp_errgen()
+            self._prepare_for_torep()
         self.dirty = True
 
     
@@ -2617,7 +2621,7 @@ class LindbladParameterizedGateMap(Gate):
             if self.unitary_postfactor is not None:
                 self.unitary_postfactor = _mt.safedot(Uinv,_mt.safedot(self.unitary_postfactor, U))
             self.errorgen.transform(S)
-            self._construct_exp_errgen() # needed to rebuild exponentiated error gen
+            self._prepare_for_torep() # needed to rebuild exponentiated error gen
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -2674,7 +2678,7 @@ class LindbladParameterizedGateMap(Gate):
                     self.unitary_postfactor = _mt.safedot(self.unitary_postfactor, U)
                 
             self.errorgen.spam_transform(S,typ)
-            self._construct_exp_errgen() # needed to rebuild exponentiated error gen
+            self._prepare_for_torep() # needed to rebuild exponentiated error gen
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -2700,7 +2704,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
     form is referred to as the "projection basis".
     """
 
-    def __init__(self, unitaryPostfactor, errorgen):     
+    def __init__(self, unitaryPostfactor, errorgen, sparse_expm=False):     
         """
         TODO: docstring (fix!) - similar to above class
         Create a new LinbladParameterizedGate based on a set of Lindblad terms.
@@ -2775,19 +2779,19 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             #Note: cannot remove the evotype argument b/c we need to maintain the same __init__
             # signature as LindbladParameterizedGateMap so its @classmethods will work on us.
 
-        assert(not errorgen.sparse), \
-            "LindbladParameterizedGate objects must use *dense* basis elements!"
+        # sparse_expm mode must be an arguement to mirror the call
+        # signature of LindbladParameterizedGateMap
+        assert(not sparse_expm), \
+            "LindbladParameterizedGate objects must have `sparse_expm=False`!"
         
         #Start with base class construction
         LindbladParameterizedGateMap.__init__(
-            self, unitaryPostfactor, errorgen) # (sets self.dim and self.base)
+            self, unitaryPostfactor, errorgen, sparse_expm=False) # (sets self.dim and self.base)
 
         GateMatrix.__init__(self, self.base, "densitymx")
-                
-        #self._construct_exp_errgen() # construct matrix (may be unnecessary since base class calls this...)
-        
             
-    def _construct_exp_errgen(self): 
+
+    def _prepare_for_torep(self): 
         """
         Build the internal gate matrix using the current parameters.
         """
@@ -2795,7 +2799,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
         # LindbladParmaeterizedGateMap's version, which just constructs
         # self.err_gen & self.exp_err_gen, to constructing the entire
         # final matrix.
-        LindbladParameterizedGateMap._construct_exp_errgen(self) #constructs self.exp_err_gen b/c *not sparse*
+        LindbladParameterizedGateMap._prepare_for_torep(self) #constructs self.exp_err_gen b/c *not sparse*
         matrix = self.todense()  # dot(exp_err_gen, unitary_postfactor)
 
         assert(_np.linalg.norm(matrix.imag) < IMAG_TOL)
@@ -2863,7 +2867,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             #Deriv wrt hamiltonian params
             derrgen = self.errorgen.deriv_wrt_params(None) #apply filter below; cache *full* deriv
             derrgen.shape = (d2,d2,-1) # separate 1st d2**2 dim to (d2,d2)
-            dexpL = _dexpX(self.errorgen.err_gen_mx, derrgen, self.exp_err_gen,
+            dexpL = _dexpX(self.errorgen.todense(), derrgen, self.exp_err_gen,
                            self.unitary_postfactor)
             derivMx = dexpL.reshape(d2**2,self.num_params()) # [iFlattenedGate,iParam]
 
@@ -2931,7 +2935,7 @@ class LindbladParameterizedGate(LindbladParameterizedGateMap,GateMatrix):
             dEdp.shape = (d2,d2,nP) # separate 1st d2**2 dim to (d2,d2)
             d2Edp2.shape = (d2,d2,nP,nP) # ditto
 
-            series, series2 = _d2expSeries(self.errorgen.err_gen_mx, dEdp, d2Edp2)
+            series, series2 = _d2expSeries(self.errorgen.todense(), dEdp, d2Edp2)
             term1 = series2
             term2 = _np.einsum("ija,jkq->ikaq",series,series)
             if self.unitary_postfactor is None:
@@ -4370,31 +4374,23 @@ class ComposedErrorgen(Gate):
 
         # set "API" error-generator members (to interface properly w/other objects)        
         # FUTURE: create a base class that defines this interface (maybe w/properties?)
-        self.sparse = errgens_to_compose[0].sparse \
-            if len(errgens_to_compose) > 0 else False
-        assert(all([self.sparse == eg.sparse for eg in errgens_to_compose])), \
-            "All error generators must have the same sparsity (%s expected)!" % self.sparse
+        #self.sparse = errgens_to_compose[0].sparse \
+        #    if len(errgens_to_compose) > 0 else False
+        #assert(all([self.sparse == eg.sparse for eg in errgens_to_compose])), \
+        #    "All error generators must have the same sparsity (%s expected)!" % self.sparse
 
         self.matrix_basis = errgens_to_compose[0].matrix_basis \
             if len(errgens_to_compose) > 0 else None
         assert(all([self.matrix_basis == eg.matrix_basis for eg in errgens_to_compose])), \
             "All error generators must have the same matrix basis (%s expected)!" % self.matrix_basis
 
-        if evotype == "densitymx":
-            self._construct_errgen_matrix()        
-        else:
-            self.err_gen_mx = None
+        #OLD: when a generators "rep" was self.err_gen_mx
+        #if evotype == "densitymx":
+        #    self._construct_errgen_matrix()        
+        #else:
+        #    self.err_gen_mx = None
         
         Gate.__init__(self, dim, evotype)
-
-    def _construct_errgen_matrix(self):
-        """ TODO: docstring """
-        self.factors[0]._construct_errgen_matrix()
-        mx = self.factors[0].err_gen_mx
-        for eg in self.factors[1:]:
-            eg._construct_errgen_matrix()
-            mx += eg.err_gen_mx
-        self.err_gen_mx = mx
 
 
     def get_coeffs(self):
@@ -4443,9 +4439,6 @@ class ComposedErrorgen(Gate):
         # each factor gets an appropriate wrtFilter instead of
         # doing all filtering at the end
         
-        assert(not self.sparse), \
-            "ComposedErrorgen.deriv_wrt_params(...) can only be called when using *dense* basis elements!"
-
         d2 = self.dim
         derivMx = _np.zeros( (d2**2,self.num_params()), 'd')
         for eg in self.factors:
@@ -4470,9 +4463,6 @@ class ComposedErrorgen(Gate):
         # each factor gets an appropriate wrtFilter instead of
         # doing all filtering at the end
         
-        assert(not self.sparse), \
-            "ComposedErrorgen.deriv_wrt_params(...) can only be called when using *dense* basis elements!"
-
         d2 = self.dim
         nP = self.num_params()
         hessianMx = _np.zeros( (d2**2,nP,nP), 'd')
@@ -4535,6 +4525,40 @@ class ComposedErrorgen(Gate):
             mx += eg.todense()
         return mx
 
+    #OLD: UNUSED - now use tosparse/todense
+    #def _construct_errgen_matrix(self):
+    #    """ TODO: docstring """
+    #    self.factors[0]._construct_errgen_matrix()
+    #    mx = self.factors[0].err_gen_mx
+    #    for eg in self.factors[1:]:
+    #        eg._construct_errgen_matrix()
+    #        mx += eg.err_gen_mx
+    #    self.err_gen_mx = mx
+
+
+    def torep(self):
+        """
+        Return a "representation" object for this error generator.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        GateRep
+        """
+        factor_reps = [ factor.torep() for factor in self.factors ]
+        if self._evotype == "densitymx":
+            return replib.DMGateRep_Sum(factor_reps, self.dim)
+        elif self._evotype == "statevec":
+            return replib.SVGateRep_Sum(factor_reps, self.dim)
+        elif self._evotype == "stabilizer":
+            nQubits = int(round(_np.log2(self.dim))) # "stabilizer" is a unitary-evolution type mode
+            return replib.SBGateRep_Sum(factor_reps, nQubits)
+        
+        assert(False), "Invalid internal _evotype: %s" % self._evotype
+
+
     def get_order_terms(self, order):
         """ TODO: docstring """
         assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
@@ -4587,8 +4611,9 @@ class ComposedErrorgen(Gate):
             factor_local_inds = _gatesetmember._decompose_gpindices(
                     self.gpindices, eg.gpindices)
             eg.from_vector( v[factor_local_inds] )
-        if self._evotype == "densitymx":
-            self._construct_errgen_matrix()        
+        #OLD TODO REMOVE
+        #if self._evotype == "densitymx":
+        #    self._construct_errgen_matrix()        
         self.dirty = True
 
 
@@ -4624,8 +4649,8 @@ class ComposedErrorgen(Gate):
         return s
 
 
-# Idea:
-# Op = exp(Errgen); Errgen is an error just on 2nd qubit
+# Idea: 
+# Op = exp(Errgen); Errgen is an error just on 2nd qubit (and say we have 3 qubits)
 # so Op = I x (I+eps*A) x I (small eps limit); eps*A is 1-qubit error generator
 # also Op ~= I+Errgen in small eps limit, so
 # Errgen = I x (I+eps*A) x I - I x I x I 
@@ -4677,8 +4702,8 @@ class EmbeddedErrorgen(EmbeddedGateMap):
 
         # set "API" error-generator members (to interface properly w/other objects)
         # FUTURE: create a base class that defines this interface (maybe w/properties?)
-        self.sparse = True # Embedded error generators are *always* sparse (pointless to
-                           # have dense versions of these)
+        #self.sparse = True # Embedded error generators are *always* sparse (pointless to
+        #                   # have dense versions of these)
         
         embedded_matrix_basis = errgen_to_embed.matrix_basis
         if _compat.isstr(embedded_matrix_basis):
@@ -4694,18 +4719,19 @@ class EmbeddedErrorgen(EmbeddedGateMap):
             #              embedded_matrix_basis.get_composite_matrices()],
             #    sparse=True)
 
-        if errgen_to_embed._evotype == "densitymx":
-            self._construct_errgen_matrix()        
-        else:
-            self.err_gen_mx = None
+        #OLD: when a generators "rep" was self.err_gen_mx
+        #if errgen_to_embed._evotype == "densitymx":
+        #    self._construct_errgen_matrix()        
+        #else:
+        #    self.err_gen_mx = None
 
-    def _construct_errgen_matrix(self):
-        """ TODO: docstring """
-        #Always construct a sparse errgen matrix, so just use
-        # base class's .tosparse() (which calls embedded errorgen's
-        # .tosparse(), which will convert a dense->sparse embedded
-        # error generator, but this is fine).
-        self.err_gen_mx = self.tosparse()
+    #def _construct_errgen_matrix(self):
+    #    """ TODO: docstring """
+    #    #Always construct a sparse errgen matrix, so just use
+    #    # base class's .tosparse() (which calls embedded errorgen's
+    #    # .tosparse(), which will convert a dense->sparse embedded
+    #    # error generator, but this is fine).
+    #    self.err_gen_mx = self.tosparse()
 
     def _embed_basis_mx(self, mx):
         """ Take a dense or sparse basis matrix and embed it. """
@@ -4730,8 +4756,9 @@ class EmbeddedErrorgen(EmbeddedGateMap):
         None
         """
         EmbeddedGateMap.from_vector(self, v) 
-        if self._evotype == "densitymx":
-            self._construct_errgen_matrix()        
+        #OLD TODO REMOVE
+        #if self._evotype == "densitymx":
+        #    self._construct_errgen_matrix()        
         self.dirty = True
 
 
@@ -5393,7 +5420,6 @@ class LindbladErrorgen(Gate):
                                 self.otherCSRSumIndices)
             lnd_error_gen = _sps.csr_matrix( (data, indices.copy(), indptr.copy()), shape=(N,N) ) #copies needed (?)
             
-
         else: #dense matrices
             #if bsH > 0: REMOVE
             if hamCoeffs is not None:
@@ -5440,6 +5466,31 @@ class LindbladErrorgen(Gate):
             return self.err_gen_mx
         else:
             return _sps.csr_matrix(self.todense())
+
+
+    def torep(self):
+        """
+        Return a "representation" object for this error generator.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        GateRep
+        """
+        if self._evotype == "densitymx":
+            if self.sparse:
+                A = self.err_gen_mx
+                return replib.DMGateRep_Sparse(
+                    _np.ascontiguousarray(A.data),
+                    _np.ascontiguousarray(A.indices, _np.int64),
+                    _np.ascontiguousarray(A.indptr, _np.int64) )
+            else:
+                return replib.DMGateRep_Dense(_np.ascontiguousarray(self.err_gen_mx,'d'))
+        else:
+            raise NotImplementedError("torep(%s) not implemented for %s objects!" %
+                                      (self._evotype, self.__class__.__name__))            
 
 
     def get_order_terms(self, order):

@@ -660,7 +660,7 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
         errgen = Composed(termops)
         LindbladGate = _objs.LindbladParameterizedGate if sim_type == "matrix" \
             else _objs.LindbladParameterizedGateMap
-        return LindbladGate(None, errgen)
+        return LindbladGate(None, errgen, sparse)
     else: assert(False)
     
     
@@ -996,7 +996,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
             errgen = Composed([fullIdleErr.errorgen, fullLocalErr])
             LindbladGate = _objs.LindbladParameterizedGate if sim_type == "matrix" \
                 else _objs.LindbladParameterizedGateMap
-        expErrgen = LindbladGate(None, errgen) # don't stick fullTargetOp as unitaryPostFactor here?
+        expErrgen = LindbladGate(None, errgen, sparse) # don't stick fullTargetOp as unitaryPostFactor here?
         return ComposedGate([fullTargetOp, expErrgen])
     else: assert(False)
 

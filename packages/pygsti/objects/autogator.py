@@ -163,8 +163,10 @@ class SharedIdleAutoGator(AutoGator):
         """
         dense = bool(self.parent._sim_type == "matrix") # whether dense matrix gates should be created
         Composed = _gate.ComposedGate if dense else _gate.ComposedGateMap
-        #print("DB: SharedIdleAutoGator building gate %s for %s" %
-        #      (('matrix' if dense else 'map'), str(gatelabel)) )
+        Lindblad = _gate.LindbladParameterizedGate if dense else _gate.LindbladParameterizedGateMap
+        Sum = _gate.ComposedErrorgen
+        #print("DB: SharedIdleAutoGator building gate %s for %s w/comp-type %s" %
+        #      (('matrix' if dense else 'map'), str(gatelabel), self.errcomp_type) )
         if isinstance(gatelabel, _label.LabelTupTup):
 
             if self.parent.auto_idle_gatename is not None:
@@ -173,38 +175,59 @@ class SharedIdleAutoGator(AutoGator):
                     if l.name == self.parent.auto_idle_gatename \
                             and l not in existing_gates:
                         continue #skip perfect idle placeholders
-                    factor_gates.append(existing_gates[l])
+                    gates.append(existing_gates[l])
             else:
                 gates = [ existing_gates[l] for l in gatelabel.components ]
 
-            assert( all([len(g.factorgates) == 3 for g in gates]) or
-                    all([len(g.factorgates) == 2 for g in gates]) )
-            #each gate in gates is Composed([fullTargetOp,fullIdleErr,fullLocalErr]) OR
-            # just Composed([fullTargetOp,fullLocalErr]).  In the former case, 
-            # we compose 1st & 3rd factors of parallel gates and keep just a single 2nd factor.
-            # In the latter case, we just compose the 1st and 2nd factors of parallel gates.
-            
-            if len(gates[0].factorgates) == 3:
+            if self.errcomp_type == "gates":
+                assert( all([len(g.factorgates) == 3 for g in gates]) or
+                        all([len(g.factorgates) == 2 for g in gates]) )
+                #each gate in gates is Composed([fullTargetOp,fullIdleErr,fullLocalErr]) OR
+                # just Composed([fullTargetOp,fullLocalErr]).  In the former case, 
+                # we compose 1st & 3rd factors of parallel gates and keep just a single 2nd factor.
+                # In the latter case, we just compose the 1st and 2nd factors of parallel gates.
+                
+                if len(gates[0].factorgates) == 3:
+                    targetOp = Composed([g.factorgates[0] for g in gates], dim=self.parent.dim,
+                                        evotype=self.parent._evotype)
+                    idleErr = gates[0].factorgates[1]
+                    localErr = Composed([g.factorgates[2] for g in gates], dim=self.parent.dim,
+                                        evotype=self.parent._evotype)
+                    gates_to_compose = [targetOp,idleErr,localErr]
+    
+                else: # == 2 case
+                    targetOp = Composed([g.factorgates[0] for g in gates], dim=self.parent.dim,
+                                        evotype=self.parent._evotype)
+                    localErr = Composed([g.factorgates[1] for g in gates], dim=self.parent.dim,
+                                        evotype=self.parent._evotype)
+                    gates_to_compose = [targetOp,localErr]
+    
+                #DEBUG could perform a check that gpindices are the same for idle gates
+                #import numpy as _np 
+                #from ..tools import slicetools as _slct
+                #for g in gates:
+                #    assert(_np.array_equal(_slct.as_array(g.factorgates[1].gpindices),
+                #                           _slct.as_array(idleErr.gpindices)))
+
+            elif self.errcomp_type == "errorgens":
+                assert( all([len(g.factorgates) == 2 for g in gates]) )
+                assert( all([(g.factorgates[1].unitary_postfactor is None) for g in gates]) )
+                #each gate in gates is Composed([fullTargetOp,fullErr]), where fullErr is 
+                # a 'exp(Errgen)' Lindblad gate. We compose the target operations to create a
+                # final target op, and compose this with a *singe* Lindblad gate which has as
+                # its error generator the composition (sum) of all the factors' error gens.
+                # (Note: the 'Gi' gate is only a single Lindblad gate, but it shouldn't be 
+                #  in the list of factors as it acts on *all* the qubits).
+                
                 targetOp = Composed([g.factorgates[0] for g in gates], dim=self.parent.dim,
                                     evotype=self.parent._evotype)
-                idleErr = gates[0].factorgates[1]
-                localErr = Composed([g.factorgates[2] for g in gates], dim=self.parent.dim,
-                                    evotype=self.parent._evotype)
-                gates_to_compose = [targetOp,idleErr,localErr]
-
-            else: # == 2 case
-                targetOp = Composed([g.factorgates[0] for g in gates], dim=self.parent.dim,
-                                    evotype=self.parent._evotype)
-                localErr = Composed([g.factorgates[1] for g in gates], dim=self.parent.dim,
-                                    evotype=self.parent._evotype)
-                gates_to_compose = [targetOp,localErr]
-
-            #DEBUG could perform a check that gpindices are the same for idle gates
-            #import numpy as _np 
-            #from ..tools import slicetools as _slct
-            #for g in gates:
-            #    assert(_np.array_equal(_slct.as_array(g.factorgates[1].gpindices),
-            #                           _slct.as_array(idleErr.gpindices)))            
+                errorGens = [g.factorgates[1].errorgen for g in gates]
+                error = Lindblad(None, Sum(errorGens, dim=self.parent.dim,
+                                           evotype=self.parent._evotype),
+                                 sparse_expm=not dense)
+                gates_to_compose = [targetOp,error]
+            else:
+                raise ValueError("Invalid errcomp_type in SharedIdleAutoGator: %s" % self.errcomp_type)
             
             ret = Composed(gates_to_compose, dim=self.parent.dim,
                            evotype=self.parent._evotype)

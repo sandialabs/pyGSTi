@@ -1233,16 +1233,18 @@ def build_nqubit_gateset(nQubits, gatedict, availability={}, qubit_labels=None,
 
     else:
         # parameterization should be a type amenable to Lindblad
-        # create lindblad SPAM ops w/maxWeight == 1 (HARDCODED for now)
+        # create lindblad SPAM ops w/maxWeight == 1 & errcomp_type = 'gates' (HARDCODED for now)
         from . import nqnoiseconstruction as _nqn
-        maxSpamWeight = 1; sparse = False; verbosity=0 #HARDCODED
+        maxSpamWeight = 1; sparse = False; errcomp_type = 'gates'; verbosity=0 #HARDCODED
         qubitGraph = _qubitgraph.QubitGraph.common_graph(nQubits, "line") # doesn't matter while maxSpamWeight==1
         
         prepPure = _spamvec.ComputationalSPAMVec([0]*nQubits, evotype)
-        prepNoiseMap = _nqn.build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, verbosity)
+        prepNoiseMap = _nqn.build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type,
+                                                  parameterization, errcomp_type, verbosity)
         gs.preps['rho0'] = _spamvec.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep")
 
-        povmNoiseMap = _nqn.build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, verbosity)
+        povmNoiseMap = _nqn.build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, 
+                                                  parameterization, errcomp_type, verbosity)
         gs.povms['Mdefault'] = _povm.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
 
 
