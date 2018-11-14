@@ -516,11 +516,70 @@ namespace CReps {
     return out_state;
   }
 
+  /****************************************************************************\
+  |* DMGateCRep_Sum                                                           *|
+  \****************************************************************************/
+  DMGateCRep_Sum::DMGateCRep_Sum(std::vector<DMGateCRep*> factor_creps, INT dim)
+    :DMGateCRep(dim),_factor_creps(factor_creps)
+  {
+  }
+  DMGateCRep_Sum::~DMGateCRep_Sum() { }
+  
+  DMStateCRep* DMGateCRep_Sum::acton(DMStateCRep* state, DMStateCRep* out_state) {
+
+    DEBUG(std::cout << "Sum acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    std::size_t nfactors = _factor_creps.size();
+    DMStateCRep temp_state(_dim);
+
+    //zero-out output state
+    for(INT k=0; k<_dim; k++)
+      out_state->_dataptr[k] = 0.0;
+
+    //if length is 0 just return "0" state --> outstate
+    if(nfactors == 0) return out_state;
+
+    //Act with factors and accumulate into out_state
+    for(std::size_t i=0; i < nfactors; i++) {
+      _factor_creps[i]->acton(state,&temp_state);
+      for(INT k=0; k<_dim; k++)
+	out_state->_dataptr[k] += temp_state._dataptr[k];
+    }
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
+  DMStateCRep* DMGateCRep_Sum::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
+
+    //Note: same as acton(...) but perform adjoint_acton
+    DEBUG(std::cout << "Sum adjoint_acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    std::size_t nfactors = _factor_creps.size();
+    DMStateCRep temp_state(_dim);
+
+    //zero-out output state
+    for(INT k=0; k<_dim; k++)
+      out_state->_dataptr[k] = 0.0;
+
+    //if length is 0 just return "0" state --> outstate
+    if(nfactors == 0) return out_state;
+
+    //Act with factors and accumulate into out_state
+    for(std::size_t i=0; i < nfactors; i++) {
+      _factor_creps[i]->adjoint_acton(state,&temp_state);
+      for(INT k=0; k<_dim; k++)
+	out_state->_dataptr[k] += temp_state._dataptr[k];
+    }
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
 
   /****************************************************************************\
   |* DMGateCRep_Lindblad                                                      *|
   \****************************************************************************/
-  DMGateCRep_Lindblad::DMGateCRep_Lindblad(double* A_data, INT* A_indices, INT* A_indptr, INT nnz,
+
+  DMGateCRep_Lindblad::DMGateCRep_Lindblad(DMGateCRep* errgen_rep,
 			double mu, double eta, INT m_star, INT s, INT dim,
 			double* unitarypost_data, INT* unitarypost_indices,
 			INT* unitarypost_indptr, INT unitarypost_nnz)
@@ -531,10 +590,7 @@ namespace CReps {
     _U_indptr = unitarypost_indptr;
     _U_nnz = unitarypost_nnz;
     
-    _A_data = A_data;
-    _A_indices = A_indices;
-    _A_indptr = A_indptr;
-    _A_nnz = nnz;
+    _errgen_rep = errgen_rep;
     
     _mu = mu;
     _eta = eta;
@@ -579,8 +635,8 @@ namespace CReps {
     double tol = 1e-16; // 2^-53 (=Scipy default) -- TODO: make into an arg...
 
     // F = expm(A)*B
-    expm_multiply_simple_core(_A_data, _A_indptr, _A_indices, B,
-			      N, _mu, _m_star, _s, tol, _eta, F, scratch);
+    expm_multiply_simple_core_rep(_errgen_rep, B, N, _mu,
+				  _m_star, _s, tol, _eta, F, scratch);
 
     //cleanup what we allocated
     delete [] scratch;
@@ -592,6 +648,44 @@ namespace CReps {
 
   DMStateCRep* DMGateCRep_Lindblad::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
     assert(false); //ajoint_acton not implemented yet for Lindblad gates (TODO LATER)
+    return NULL; //to avoid compiler warning
+  }
+
+
+  /****************************************************************************\
+  |* DMGateCRep_Sparse                                                        *|
+  \****************************************************************************/
+
+  DMGateCRep_Sparse::DMGateCRep_Sparse(double* A_data, INT* A_indices, INT* A_indptr,
+				       INT nnz, INT dim)
+    :DMGateCRep(dim)
+  {
+    _A_data = A_data;
+    _A_indices = A_indices;
+    _A_indptr = A_indptr;
+    _A_nnz = nnz;
+  }
+      
+  DMGateCRep_Sparse::~DMGateCRep_Sparse() { }
+
+  DMStateCRep* DMGateCRep_Sparse::acton(DMStateCRep* state, DMStateCRep* out_state)
+  {
+    // csr_matvec: implements out_state = A * state
+    int r,k;
+    INT N = _dim; // = length(_A_indptr)-1
+    double* indata = state->_dataptr;
+    double* outdata = out_state->_dataptr;
+    for(r=0; r<N; r++) {
+      outdata[r] = 0;
+      for(k=_A_indptr[r]; k<_A_indptr[r+1]; k++)
+	outdata[r] += _A_data[k] * indata[ _A_indices[k]];
+    }
+    return out_state;
+  }
+
+  DMStateCRep* DMGateCRep_Sparse::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
+    //Need to take transpose of a CSR matrix then mult by vector...
+    assert(false); //ajoint_acton not implemented yet for Sparse gates (TODO LATER)
     return NULL; //to avoid compiler warning
   }
 
@@ -1065,6 +1159,67 @@ namespace CReps {
     DEBUG(out_state->print("OUTPUT"));
     return out_state;
   }
+
+
+
+  /****************************************************************************\
+  |* SVGateCRep_Sum                                                           *|
+  \****************************************************************************/
+  SVGateCRep_Sum::SVGateCRep_Sum(std::vector<SVGateCRep*> factor_creps, INT dim)
+    :SVGateCRep(dim),_factor_creps(factor_creps)
+  {
+  }
+  SVGateCRep_Sum::~SVGateCRep_Sum() { }
+  
+  SVStateCRep* SVGateCRep_Sum::acton(SVStateCRep* state, SVStateCRep* out_state) {
+
+    DEBUG(std::cout << "Sum acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    std::size_t nfactors = _factor_creps.size();
+    SVStateCRep temp_state(_dim);
+
+    //zero-out output state
+    for(INT k=0; k<_dim; k++)
+      out_state->_dataptr[k] = 0.0;
+
+    //if length is 0 just return "0" state --> outstate
+    if(nfactors == 0) return out_state;
+
+    //Act with factors and accumulate into out_state
+    for(std::size_t i=0; i < nfactors; i++) {
+      _factor_creps[i]->acton(state,&temp_state);
+      for(INT k=0; k<_dim; k++)
+	out_state->_dataptr[k] += temp_state._dataptr[k];
+    }
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
+  SVStateCRep* SVGateCRep_Sum::adjoint_acton(SVStateCRep* state, SVStateCRep* out_state) {
+
+    //Note: same as acton(...) but perform adjoint_acton
+    DEBUG(std::cout << "Sum adjoint_acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    std::size_t nfactors = _factor_creps.size();
+    SVStateCRep temp_state(_dim);
+
+    //zero-out output state
+    for(INT k=0; k<_dim; k++)
+      out_state->_dataptr[k] = 0.0;
+
+    //if length is 0 just return "0" state --> outstate
+    if(nfactors == 0) return out_state;
+
+    //Act with factors and accumulate into out_state
+    for(std::size_t i=0; i < nfactors; i++) {
+      _factor_creps[i]->adjoint_acton(state,&temp_state);
+      for(INT k=0; k<_dim; k++)
+	out_state->_dataptr[k] += temp_state._dataptr[k];
+    }
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
 
 
   // STABILIZER propagation
@@ -1957,6 +2112,27 @@ namespace CReps {
   }
 
 
+
+  /****************************************************************************\
+  |* SBGateCRep_Sum                                                           *|
+  \****************************************************************************/
+  SBGateCRep_Sum::SBGateCRep_Sum(std::vector<SBGateCRep*> factor_creps, INT n)
+    :SBGateCRep(n),_factor_creps(factor_creps)
+  {
+  }
+  SBGateCRep_Sum::~SBGateCRep_Sum() { }
+
+  SBStateCRep* SBGateCRep_Sum::acton(SBStateCRep* state, SBStateCRep* out_state) {
+    assert(false); // need further stabilizer frame support to represent the sum of stabilizer states
+    return NULL; //to avoid compiler warning
+  }
+
+  SBStateCRep* SBGateCRep_Sum::adjoint_acton(SBStateCRep* state, SBStateCRep* out_state) {
+    assert(false); // need further stabilizer frame support to represent the sum of stabilizer states
+    return NULL; //to avoid compiler warning
+  }
+
+
   /****************************************************************************\
   |* SBGateCRep_Clifford                                                      *|
   \****************************************************************************/
@@ -2014,11 +2190,11 @@ namespace CReps {
   //                                         self.baseinds)
 
 
-  void expm_multiply_simple_core(double* Adata, INT* Aindptr,
-				 INT* Aindices, double* B,
-				 INT N, double mu, INT m_star,
-				 INT s, double tol, double eta,
-				 double* F, double* scratch) {
+  void expm_multiply_simple_core_sparsemx(double* Adata, INT* Aindptr,
+					  INT* Aindices, double* B,
+					  INT N, double mu, INT m_star,
+					  INT s, double tol, double eta,
+					  double* F, double* scratch) {
     INT i;
     INT j;
     INT r;
@@ -2067,6 +2243,73 @@ namespace CReps {
 	  for(k=Aindptr[r]; k<Aindptr[r+1]; k++)
 	    scratch[r] += Adata[k] * B[ Aindices[k]];
 	}
+
+	// if(j % 3 == 0) {...   // every == 3 TODO: work on this?
+	c2 = 0.0;
+	normF = 0.0;
+	for(k=0; k<N; k++) {
+	  B[k] = coeff * scratch[k]; //finishes B = coeff * A.dot(B) 
+	  F[k] += B[k]; //F += B
+        
+	  a = (B[k] >= 0)? B[k] : -B[k]; //abs(B[k])
+	  if(a > c2) c2 = a; // c2 = vec_inf_norm(B) // _exact_inf_norm(B)
+	  a = (F[k] >= 0)? F[k] : -F[k]; //abs(F[k])
+	  if(a > normF) normF = a; // normF = vec_inf_norm(F) // _exact_inf_norm(F)
+	}
+
+        // print("Iter %d,%d of %d,%d: %g+%g=%g < %g?" % (i,j,s,m_star,c1,c2,c1+c2,tol*normF))
+	if(c1 + c2 <= tol * normF) {
+	  // print(" --> YES - break early at %d of %d" % (i+1,s))
+	  break;
+	}
+	c1 = c2;
+      }
+
+      // F *= eta
+      // B = F
+      for(k=0; k<N; k++) {
+	F[k] *= eta;
+	B[k] = F[k];
+      }
+    }
+    // output value is in F upon returning
+  }
+
+
+  void expm_multiply_simple_core_rep(DMGateCRep* A_rep, double* B,
+				     INT N, double mu, INT m_star,
+				     INT s, double tol, double eta,
+				     double* F, double* scratch) {
+    INT i;
+    INT j;
+    INT k;
+
+    double a;
+    double c1;
+    double c2;
+    double coeff;
+    double normF;
+
+    DMStateCRep B_st(B, N); // just a wrapper
+    DMStateCRep scratch_st(scratch, N); // just a wrapper
+
+    for(i=0; i<N; i++) F[i] = B[i];
+    
+    for(i=0; i<s; i++) {
+      if(m_star > 0) { //added by EGN
+	//c1 = vec_inf_norm(B) #_exact_inf_norm(B)
+	c1 = 0.0;
+	for(k=0; k<N; k++) {
+	  a = (B[k] >= 0) ? B[k] : -B[k]; // abs(B[k])
+	  if(a > c1) c1 = a;
+	}
+      }
+      
+      for(j=0; j<m_star; j++) {
+	coeff = 1.0 / (s*(j+1)); // t == 1.0
+	
+	// B = coeff * A.dot(B)
+	A_rep->acton(&B_st,&scratch_st); // scratch = A.dot(B)
 
 	// if(j % 3 == 0) {...   // every == 3 TODO: work on this?
 	c2 = 0.0;

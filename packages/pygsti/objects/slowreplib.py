@@ -16,6 +16,8 @@ from ..tools import slicetools as _slct
 from ..tools import matrixtools as _mt
 from ..tools import listtools as _lt
 
+from scipy.sparse.linalg import LinearOperator
+
 # DEBUG!!!
 DEBUG_FCOUNT = 0
 
@@ -25,6 +27,13 @@ class DMStateRep(object):
 
     def copy_from(self, other):
         self.data = other.data.copy()
+
+    def todense(self):
+        return self.data
+
+    @property
+    def dim(self):
+        return len(self.data)
 
     def __str__(self):
         return str(self.data)
@@ -189,6 +198,18 @@ class DMGateRep(object):
     def adjoint_acton(self, state):
         raise NotImplementedError()
 
+    def aslinearoperator(self):
+        def mv(v):
+            if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
+            in_state = DMStateRep(np.ascontiguousarray(v,'d'))
+            return self.acton(in_state).todense()
+        def rmv(v):
+            if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
+            in_state = DMStateRep(np.ascontiguousarray(v,'d'))
+            return self.adjoint_acton(in_state).todense()
+        return LinearOperator((self.dim,self.dim), matvec=mv, rmatvec=rmv) # transpose, adjoint, dot, matmat?
+
+
 
 class DMGateRep_Dense(DMGateRep):
     def __init__(self, data):
@@ -303,12 +324,33 @@ class DMGateRep_Composed(DMGateRep):
         return state
 
 
+class DMGateRep_Sum(DMGateRep):
+    def __init__(self, factor_reps, dim):
+        #assert(len(factor_reps) > 0), "Summed gates must contain at least one factor gate!"
+        self.factors = factor_reps
+        super(DMGateRep_Sum,self).__init__(dim)
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        output_state = DMStateRep( _np.zeros(state.data.shape, 'd') )
+        for f in self.factors:
+            output_state.data += f.acton(state).data
+        return output_state
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this gate matrix on an input state """
+        output_state = DMStateRep( _np.zeros(state.data.shape, 'd') )
+        for f in self.factors:
+            output_state.data += f.adjoint_acton(state).data
+        return output_state
+
+
 class DMGateRep_Lindblad(DMGateRep):
-    def __init__(self, A_data, A_indices, A_indptr,
+    def __init__(self, errgen_rep,
                  mu, eta, m_star, s, unitarypost_data,
                  unitarypost_indices, unitarypost_indptr):
-        dim = len(A_indptr)-1;
-        self.A = _sps.csr_matrix( (A_data,A_indices,A_indptr), shape=(dim,dim) )
+        dim = errgen.dim
+        self.errgen_rep = errgen_rep
         if len(unitarypost_data) > 0: # (nnz > 0)
             self.unitary_postfactor = _sps.csr_matrix(
                 (unitarypost_data,unitarypost_indices,
@@ -330,13 +372,30 @@ class DMGateRep_Lindblad(DMGateRep):
             statedata = state.data
 
         tol = 1e-16; # 2^-53 (=Scipy default) -- TODO: make into an arg?
+        A = self.errgen_rep.aslinearoperator() # ~= a sparse matrix for call below
         statedata = _mt._custom_expm_multiply_simple_core(
-            self.A, statedata, self.mu, self.m_star, self.s, tol, self.eta)
+            A, statedata, self.mu, self.m_star, self.s, tol, self.eta)
         return DMStateRep(statedata)
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate matrix on an input state """
         raise NotImplementedError("No adjoint action implemented for sparse Lindblad Gate Reps yet.")
+
+
+class DMGateRep_Sparse(DMGateRep):
+    def __init__(self, A_data, A_indices, A_indptr):
+        dim = len(A_indptr)-1
+        self.A = _sps.csr_matrix( (A_data,A_indices,A_indptr), shape=(dim,dim) )
+        super(DMGateRep_Sparse,self).__init__(dim)
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        return DMStateRep( self.A.dot(state.data) )
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this gate matrix on an input state """
+        Aadj = A.conjugate(copy=True).transpose()
+        return DMStateRep( self.Aadj.dot(state.data) )
 
 
 # State vector (SV) propagation wrapper classes
@@ -346,6 +405,10 @@ class SVStateRep(object):
 
     def copy_from(self, other):
         self.data = other.data.copy()
+
+    @property
+    def dim(self):
+        return len(self.data)
 
     def __str__(self):
         return str(self.data)
@@ -576,6 +639,28 @@ class SVGateRep_Composed(SVGateRep):
         return state
 
 
+class SVGateRep_Sum(SVGateRep):
+    # exactly the same as DM case
+    def __init__(self, factor_reps, dim):
+        #assert(len(factor_reps) > 0), "Composed gates must contain at least one factor gate!"
+        self.factors = factor_reps
+        super(SVGateRep_Sum,self).__init__(dim)
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        output_state = SVStateRep( _np.zeros(state.data.shape, complex) )
+        for f in self.factors:
+            output_state.data += f.acton(state).data
+        return output_state
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this gate matrix on an input state """
+        output_state = SVStateRep( _np.zeros(state.data.shape, complex) )
+        for f in self.factors:
+            output_state.data += f.adjoint_acton(state).data
+        return output_state
+
+
 
 # Stabilizer state (SB) propagation wrapper classes
 class SBStateRep(object):
@@ -589,6 +674,10 @@ class SBStateRep(object):
         cpy.sframe = self.sframe.copy() # a legit copy *with* qubit filers copied too
         return cpy
 
+    @property
+    def nqubits(self):
+        return self.sframe.n
+
     def __str__(self):
         return "SBStateRep:\n" + str(self.sframe)
 
@@ -596,6 +685,10 @@ class SBStateRep(object):
 class SBEffectRep(object):
     def __init__(self, zvals):
         self.zvals = zvals
+
+    @property
+    def nqubits(self):
+        return len(self.zvals)
 
     def probability(self, state):
         return state.sframe.measurement_probability(self.zvals, check=True) # use check for now?
@@ -612,6 +705,10 @@ class SBGateRep(object):
         raise NotImplementedError()
     def adjoint_acton(self, state):
         raise NotImplementedError()
+    @property
+    def nqubits(self):
+        return self.n
+
 
 
 class SBGateRep_Embedded(SBGateRep):
@@ -655,6 +752,24 @@ class SBGateRep_Composed(SBGateRep):
         for gate in reversed(self.factorgates):
             state = gate.adjoint_acton(state)
         return state
+
+
+class SBGateRep_Sum(SBGateRep):
+    # exactly the same as DM case except .dim -> .n
+    def __init__(self, factor_reps, n):
+        #assert(len(factor_reps) > 0), "Composed gates must contain at least one factor gate!"
+        self.factors = factor_reps
+        super(SBGateRep_Sum,self).__init__(n)
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        # need further stabilizer frame support to represent the sum of stabilizer states
+        raise NotImplementedError() 
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this gate matrix on an input state """
+        # need further stabilizer frame support to represent the sum of stabilizer states
+        raise NotImplementedError() 
 
 
 class SBGateRep_Clifford(SBGateRep):

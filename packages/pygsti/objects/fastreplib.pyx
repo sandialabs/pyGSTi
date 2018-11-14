@@ -16,6 +16,7 @@ cimport cython
 import itertools as _itertools
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
+from scipy.sparse.linalg import LinearOperator
 
 #Use 64-bit integers
 ctypedef long long INT
@@ -86,13 +87,25 @@ cdef extern from "fastreps.h" namespace "CReps":
         DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
         DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
 
+    cdef cppclass DMGateCRep_Sum(DMGateCRep):
+        DMGateCRep_Sum(vector[DMGateCRep*], INT) except +
+        DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
+        DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
+
     cdef cppclass DMGateCRep_Lindblad(DMGateCRep):
-        DMGateCRep_Lindblad(double* A_data, INT* A_indices, INT* A_indptr, INT nnz,
+        DMGateCRep_Lindblad(DMGateCRep* errgen_rep,
 			    double mu, double eta, INT m_star, INT s, INT dim,
 			    double* unitarypost_data, INT* unitarypost_indices,
                             INT* unitarypost_indptr, INT unitarypost_nnz) except +
         DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
         DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
+
+    cdef cppclass DMGateCRep_Sparse(DMGateCRep):
+        DMGateCRep_Sparse(double* A_data, INT* A_indices, INT* A_indptr,
+                          INT nnz, INT dim) except +
+        DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
+        DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
+
 
     # State vector (SV) propagation classes
     cdef cppclass SVStateCRep:
@@ -155,6 +168,11 @@ cdef extern from "fastreps.h" namespace "CReps":
         SVStateCRep* acton(SVStateCRep*, SVStateCRep*)
         SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
 
+    cdef cppclass SVGateCRep_Sum(SVGateCRep):
+        SVGateCRep_Sum(vector[SVGateCRep*], INT) except +
+        SVStateCRep* acton(SVStateCRep*, SVStateCRep*)
+        SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
+
         
     # Stabilizer state (SB) propagation classes
     cdef cppclass SBStateCRep:
@@ -190,6 +208,11 @@ cdef extern from "fastreps.h" namespace "CReps":
 
     cdef cppclass SBGateCRep_Composed(SBGateCRep):
         SBGateCRep_Composed(vector[SBGateCRep*], INT) except +
+        SBStateCRep* acton(SBStateCRep*, SBStateCRep*)
+        SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
+
+    cdef cppclass SBGateCRep_Sum(SBGateCRep):
+        SBGateCRep_Sum(vector[SBGateCRep*], INT) except +
         SBStateCRep* acton(SBStateCRep*, SBStateCRep*)
         SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
 
@@ -284,11 +307,19 @@ cdef class DMStateRep: #(StateRep):
         #self.c_state = new DMStateCRep(<double*>np_cbuf.data,<INT>np_cbuf.shape[0],<bool>0)
         self.c_state = new DMStateCRep(<double*>data.data,<INT>data.shape[0],<bool>0)
 
+    def todense(self):
+        return self.data_ref
+
+    @property
+    def dim(self):
+        return self.c_state._dim
+
     def __dealloc__(self):
         del self.c_state
 
     def __str__(self):
         return str([self.c_state._dataptr[i] for i in range(self.c_state._dim)])
+
 
 
 cdef class DMEffectRep:
@@ -298,10 +329,14 @@ cdef class DMEffectRep:
         pass # no init; could set self.c_effect = NULL? could assert(False)?
     def __dealloc__(self):
         del self.c_effect # check for NULL?
+    @property
+    def dim(self):
+        return self.c_effect._dim
 
     def probability(self, DMStateRep state not None):
         #unnecessary (just put in signature): cdef DMStateRep st = <DMStateRep?>state
         return self.c_effect.probability(state.c_state)
+
 
 cdef class DMEffectRep_Dense(DMEffectRep):
     cdef np.ndarray data_ref
@@ -360,6 +395,10 @@ cdef class DMGateRep:
     def __dealloc__(self):
         del self.c_gate
 
+    @property
+    def dim(self):
+        return self.c_gate._dim
+
     def acton(self, DMStateRep state not None):
         cdef DMStateRep out_state = DMStateRep(np.empty(self.c_gate._dim, dtype='d'))
         #print("PYX acton called w/dim ", self.c_gate._dim, out_state.c_state._dim)
@@ -373,6 +412,19 @@ cdef class DMGateRep:
         # assert(state.c_state._dataptr != out_state.c_state._dataptr) # DEBUG
         self.c_gate.adjoint_acton(state.c_state, out_state.c_state)
         return out_state
+
+    def aslinearoperator(self):
+        def mv(v):
+            if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
+            in_state = DMStateRep(np.ascontiguousarray(v,'d'))
+            return self.acton(in_state).todense()
+        def rmv(v):
+            if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
+            in_state = DMStateRep(np.ascontiguousarray(v,'d'))
+            return self.adjoint_acton(in_state).todense()
+        dim = self.c_gate._dim
+        return LinearOperator((dim,dim), matvec=mv, rmatvec=rmv) # transpose, adjoint, dot, matmat?
+        
 
         
 cdef class DMGateRep_Dense(DMGateRep):
@@ -472,35 +524,58 @@ cdef class DMGateRep_Composed(DMGateRep):
         self.c_gate = new DMGateCRep_Composed(gate_creps, dim)
 
 
+cdef class DMGateRep_Sum(DMGateRep):
+    cdef object list_of_factors # list of DMGateRep objs?
+
+    def __cinit__(self, factor_reps, INT dim):
+        self.list_of_factors = factor_reps
+        cdef INT i
+        cdef INT nfactors = len(factor_reps)
+        cdef vector[DMGateCRep*] factor_creps = vector[DMGateCRep_ptr](nfactors)
+        for i in range(nfactors):
+            factor_creps[i] = (<DMGateRep?>factor_reps[i]).c_gate
+        self.c_gate = new DMGateCRep_Sum(factor_creps, dim)
+
+
 cdef class DMGateRep_Lindblad(DMGateRep):
-    cdef np.ndarray data_ref1
+    cdef object data_ref1
     cdef np.ndarray data_ref2
     cdef np.ndarray data_ref3
     cdef np.ndarray data_ref4
-    cdef np.ndarray data_ref5
-    cdef np.ndarray data_ref6
 
-    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] A_data,
-                  np.ndarray[np.int64_t, ndim=1, mode='c'] A_indices,
-                  np.ndarray[np.int64_t, ndim=1, mode='c'] A_indptr,
+    def __cinit__(self, errgen_rep,
                   double mu, double eta, INT m_star, INT s,
                   np.ndarray[double, ndim=1, mode='c'] unitarypost_data,
                   np.ndarray[np.int64_t, ndim=1, mode='c'] unitarypost_indices,
                   np.ndarray[np.int64_t, ndim=1, mode='c'] unitarypost_indptr):
-        self.data_ref1 = A_data
-        self.data_ref2 = A_indices
-        self.data_ref3 = A_indptr
-        self.data_ref4 = unitarypost_data
-        self.data_ref5 = unitarypost_indices
-        self.data_ref6 = unitarypost_indptr
-        cdef INT nnz = A_data.shape[0]
-        cdef INT dim = A_indptr.shape[0]-1
+        self.data_ref1 = errgen_rep
+        self.data_ref2 = unitarypost_data
+        self.data_ref3 = unitarypost_indices
+        self.data_ref4 = unitarypost_indptr
+        cdef INT dim = errgen_rep.dim
         cdef INT upost_nnz = unitarypost_data.shape[0]
-        self.c_gate = new DMGateCRep_Lindblad(<double*>A_data.data, <INT*>A_indices.data,
-                                              <INT*>A_indptr.data, nnz, mu, eta, m_star, s, dim,
+        self.c_gate = new DMGateCRep_Lindblad((<DMGateRep?>errgen_rep).c_gate,
+                                              mu, eta, m_star, s, dim,
                                               <double*>unitarypost_data.data,
                                               <INT*>unitarypost_indices.data,
                                               <INT*>unitarypost_indptr.data, upost_nnz)
+
+cdef class DMGateRep_Sparse(DMGateRep):
+    cdef np.ndarray data_ref1
+    cdef np.ndarray data_ref2
+    cdef np.ndarray data_ref3
+
+    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] A_data,
+                  np.ndarray[np.int64_t, ndim=1, mode='c'] A_indices,
+                  np.ndarray[np.int64_t, ndim=1, mode='c'] A_indptr):
+        self.data_ref1 = A_data
+        self.data_ref2 = A_indices
+        self.data_ref3 = A_indptr
+        cdef INT nnz = A_data.shape[0]
+        cdef INT dim = A_indptr.shape[0]-1
+        self.c_gate = new DMGateCRep_Sparse(<double*>A_data.data, <INT*>A_indices.data,
+                                             <INT*>A_indptr.data, nnz, dim);
+
 
 # State vector (SV) propagation wrapper classes
 cdef class SVStateRep: #(StateRep):
@@ -510,6 +585,10 @@ cdef class SVStateRep: #(StateRep):
     def __cinit__(self, np.ndarray[np.complex128_t, ndim=1, mode='c'] data):
         self.data_ref = data # holds reference to data so it doesn't get garbage collected - or could copy=true
         self.c_state = new SVStateCRep(<double complex*>data.data,<INT>data.shape[0],<bool>0)
+
+    @property
+    def dim(self):
+        return self.c_state._dim
 
     def __dealloc__(self):
         del self.c_state
@@ -529,6 +608,11 @@ cdef class SVEffectRep:
     def probability(self, SVStateRep state not None):
         #unnecessary (just put in signature): cdef SVStateRep st = <SVStateRep?>state
         return self.c_effect.probability(state.c_state)
+
+    @property
+    def dim(self):
+        return self.c_effect._dim
+
 
 cdef class SVEffectRep_Dense(SVEffectRep):
     cdef np.ndarray data_ref
@@ -584,6 +668,11 @@ cdef class SVGateRep:
         return out_state
 
     #FUTURE: adjoint acton
+
+    @property
+    def dim(self):
+        return self.c_gate._dim
+
         
 cdef class SVGateRep_Dense(SVGateRep):
     cdef np.ndarray data_ref
@@ -593,6 +682,7 @@ cdef class SVGateRep_Dense(SVGateRep):
         #print("PYX dense gate constructed w/dim ",data.shape[0])
         self.c_gate = new SVGateCRep_Dense(<double complex*>data.data,
                                            <INT>data.shape[0])
+
     def __str__(self):
         s = ""
         cdef SVGateCRep_Dense* my_cgate = <SVGateCRep_Dense*>self.c_gate # b/c we know it's a _Dense gate...
@@ -682,6 +772,19 @@ cdef class SVGateRep_Composed(SVGateRep):
             gate_creps[i] = (<SVGateRep?>factor_gate_reps[i]).c_gate
         self.c_gate = new SVGateCRep_Composed(gate_creps, dim)
 
+
+cdef class SVGateRep_Sum(SVGateRep):
+    cdef object list_of_factors # list of SVGateRep objs?
+
+    def __cinit__(self, factor_reps, INT dim):
+        self.list_of_factors = factor_reps
+        cdef INT i
+        cdef INT nfactors = len(factor_reps)
+        cdef vector[SVGateCRep*] factor_creps = vector[SVGateCRep_ptr](nfactors)
+        for i in range(nfactors):
+            factor_creps[i] = (<SVGateRep?>factor_reps[i]).c_gate
+        self.c_gate = new SVGateCRep_Sum(factor_creps, dim)
+
         
 # Stabilizer state (SB) propagation wrapper classes
 cdef class SBStateRep: #(StateRep):
@@ -700,6 +803,10 @@ cdef class SBStateRep: #(StateRep):
         cdef INT n = smatrix.shape[0] // 2
         self.c_state = new SBStateCRep(<INT*>smatrix.data,<INT*>pvectors.data,
                                        <double complex*>amps.data, namps, n)
+
+    @property
+    def nqubits(self):
+        return self.c_state._n
 
     def __dealloc__(self):
         del self.c_state
@@ -728,6 +835,10 @@ cdef class SBEffectRep:
     def __dealloc__(self):
         del self.c_effect # check for NULL?
 
+    @property
+    def nqubits(self):
+        return self.c_effect._n
+
     def probability(self, SBStateRep state not None):
         #unnecessary (just put in signature): cdef SBStateRep st = <SBStateRep?>state
         return self.c_effect.probability(state.c_state)
@@ -745,6 +856,10 @@ cdef class SBGateRep:
     
     def __dealloc__(self):
         del self.c_gate
+
+    @property
+    def nqubits(self):
+        return self.c_gate._n
 
     def acton(self, SBStateRep state not None):
         cdef INT n = self.c_gate._n
@@ -789,6 +904,18 @@ cdef class SBGateRep_Composed(SBGateRep):
             gate_creps[i] = (<SBGateRep?>factor_gate_reps[i]).c_gate
         self.c_gate = new SBGateCRep_Composed(gate_creps, n)
 
+
+cdef class SBGateRep_Sum(SBGateRep):
+    cdef object list_of_factors # list of SBGateRep objs?
+
+    def __cinit__(self, factor_reps, INT n):
+        self.list_of_factors = factor_reps
+        cdef INT i
+        cdef INT nfactors = len(factor_reps)
+        cdef vector[SBGateCRep*] factor_creps = vector[SBGateCRep_ptr](nfactors)
+        for i in range(nfactors):
+            factor_creps[i] = (<SBGateRep?>factor_reps[i]).c_gate
+        self.c_gate = new SBGateCRep_Sum(factor_creps, n)
 
 
 cdef class SBGateRep_Clifford(SBGateRep):

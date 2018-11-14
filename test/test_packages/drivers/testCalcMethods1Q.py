@@ -223,7 +223,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         # Using dense embedded matrices and map-based calcs (maybe not really necessary to include?)
         gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                              extraWeight1Hops=0, extraGateWeight=1, sparse=False,
-                                             sim_type="map", verbosity=1)
+                                             sim_type="map", errcomp_type='gates', verbosity=1)
         print("Num params = ",gs_target.num_params())
         gs_target.from_vector(self.rand_start25)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
@@ -238,11 +238,27 @@ class CalcMethods1QTestCase(BaseTestCase):
           # how to optimizize over exactly - so this is a very loose test...
 
 
+    def test_reducedmod_map1_errorgens(self):
+        # Using dense embedded matrices and map-based calcs (same as above)
+        # but w/*errcomp_type=errogens* GateSet (maybe not really necessary to include?)
+        gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
+                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False,
+                                             sim_type="map", errcomp_type='errorgens', verbosity=1)
+        print("Num params = ",gs_target.num_params())
+        gs_target.from_vector(self.rand_start25)
+        results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
+                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+
+        print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
+        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
+        #Note: we don't compare errorgens gatesets to a reference gateset yet...
+
     def test_reducedmod_map2(self):
         # Using sparse embedded matrices and map-based calcs
         gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                              extraWeight1Hops=0, extraGateWeight=1, sparse=True,
-                                             sim_type="map", verbosity=1)
+                                             sim_type="map", errcomp_type='gates', verbosity=1)
         print("Num params = ",gs_target.num_params())
         gs_target.from_vector(self.rand_start25)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
@@ -258,12 +274,28 @@ class CalcMethods1QTestCase(BaseTestCase):
           # how to optimizize over exactly - so this is a very loose test...
 
 
+    def test_reducedmod_map2_errorgens(self):
+        # Using sparse embedded matrices and map-based calcs (same as above)
+        # but w/*errcomp_type=errogens* GateSet (maybe not really necessary to include?)
+        gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
+                                             extraWeight1Hops=0, extraGateWeight=1, sparse=True,
+                                             sim_type="map", errcomp_type='errorgens', verbosity=1)
+        print("Num params = ",gs_target.num_params())
+        gs_target.from_vector(self.rand_start25)
+        results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
+                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+
+        print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
+        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
+        #Note: we don't compare errorgens gatesets to a reference gateset yet...
+
 
     def test_reducedmod_svterm(self):
         # Using term-based calcs using map-based state-vector propagation
         gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                       extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
-                                      sim_type="termorder:1", parameterization="H+S terms")
+                                      sim_type="termorder:1", parameterization="H+S terms", errcomp_type='gates')
         print("Num params = ",gs_target.num_params())
         gs_target.from_vector(self.rand_start36)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
@@ -280,12 +312,28 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].gatesets['go0'].to_vector()
                                                - gs_compare.to_vector()), 0, places=3)
 
+    def test_reducedmod_svterm_errogens(self):
+        # Using term-based calcs using map-based state-vector propagation (same as above)
+        # but w/errcomp_type=errogens GateSet
+        gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
+                                      extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
+                                      sim_type="termorder:1", parameterization="H+S terms", errcomp_type='errorgens')
+        print("Num params = ",gs_target.num_params())
+        gs_target.from_vector(self.rand_start36)
+        results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
+                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+
+        print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
+        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
+        #Note: we don't compare errorgens gatesets to a reference gateset yet...
+
 
     def test_reducedmod_cterm(self):
         # Using term-based calcs using map-based stabilizer-state propagation
         gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                              extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
-                                             sim_type="termorder:1", parameterization="H+S clifford terms")
+                                             sim_type="termorder:1", parameterization="H+S clifford terms", errcomp_type='gates')
         print("Num params = ",gs_target.num_params())
         gs_target.from_vector(self.rand_start36)
         results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
@@ -298,6 +346,21 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].gatesets['go0'].to_vector()
                                                - gs_compare.to_vector()), 0, places=3)
 
+    def test_reducedmod_cterm_errorgens(self):
+        # Using term-based calcs using map-based stabilizer-state propagation (same as above)
+        # but w/errcomp_type=errogens GateSet
+        gs_target = pc.build_nqnoise_gateset(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
+                                             extraWeight1Hops=0, extraGateWeight=1, sparse=False, verbosity=1,
+                                             sim_type="termorder:1", parameterization="H+S clifford terms", errcomp_type='errorgens')
+        print("Num params = ",gs_target.num_params())
+        gs_target.from_vector(self.rand_start36)
+        results = pygsti.do_long_sequence_gst(self.redmod_ds, gs_target, self.redmod_fiducials,
+                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                              verbosity=4, advancedOptions={'tolerance': 1e-3})
+
+        print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
+        self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
+        #Note: we don't compare errorgens gatesets to a reference gateset yet...
 
 
     # ### Circuit Simulation

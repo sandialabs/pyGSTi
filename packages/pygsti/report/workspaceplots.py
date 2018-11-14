@@ -1712,7 +1712,6 @@ class ColorBoxPlot(WorkspacePlot):
                 colormapType = "manuallinlog"
                 linlog_color = "green"
                 linlog_trans = _np.log10(1/driftresults.get_power_pvalue_significance_threshold(sequence='per',detectorkey=detectorkey))
-                print(linlog_trans)
                 ytitle="1 / pvalue"
                     
                 def _mx_fn(plaq,x,y):

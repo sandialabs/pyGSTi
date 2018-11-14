@@ -145,7 +145,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
                           gateNoise=None, prepNoise=None, povmNoise=None,
                           sim_type="matrix", parameterization="H+S",
                           spamtype="lindblad", addIdleNoiseToAllGates=True,
-                          return_clouds=False, verbosity=0): #, debug=False):
+                          errcomp_type="gates", return_clouds=False, verbosity=0): #, debug=False):
     """ 
     Create a noisy n-qubit gateset using a low-weight and geometrically local
     error model with a common idle gate.  
@@ -302,7 +302,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
     if maxIdleWeight > 0:
         printer.log("Creating Idle:")
         gs.gates[_Lbl('Gi')] = build_nqn_global_idle(qubitGraph, maxIdleWeight, sparse,
-                                                     sim_type, parameterization, printer-1)
+                                                     sim_type, parameterization, errcomp_type, printer-1)
         idleOP = gs.gates['Gi']
     else:
         gs._dim = 4**nQubits # TODO: make a set_dim that does this (and is used in labeldicts.py)
@@ -330,14 +330,14 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
         printer.log("Creating 1Q X(pi/2) gate on qubit %d!!" % i)
         gs.gates[_Lbl("Gx",i)] = build_nqn_composed_gate(
             Gx, (i,), qubitGraph, weight_maxhops_tuples_1Q,
-            idle_noise=idleOP, loc_noise_type="manylittle",
+            idle_noise=idleOP, errcomp_type=errcomp_type,
             sparse=sparse, sim_type=sim_type, parameterization=parameterization,
             verbosity=printer-1)
 
         printer.log("Creating 1Q Y(pi/2) gate on qubit %d!!" % i)
         gs.gates[_Lbl("Gy",i)] = build_nqn_composed_gate(
             Gy, (i,), qubitGraph, weight_maxhops_tuples_1Q,
-            idle_noise=idleOP, loc_noise_type="manylittle",
+            idle_noise=idleOP, errcomp_type=errcomp_type,
             sparse=sparse, sim_type=sim_type, parameterization=parameterization,
             verbosity=printer-1)
 
@@ -355,7 +355,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
         printer.log("Creating CNOT gate between qubits %d and %d!!" % (i,j))
         gs.gates[_Lbl("Gcnot",(i,j))] = build_nqn_composed_gate(
             Gcnot, (i,j), qubitGraph, weight_maxhops_tuples_2Q,
-            idle_noise=idleOP, loc_noise_type="manylittle",
+            idle_noise=idleOP, errcomp_type=errcomp_type,
             sparse=sparse, sim_type=sim_type, parameterization=parameterization,
             verbosity=printer-1)
         cloud_inds = tuple(qubitGraph.radius((i,j), cloud_maxhops))
@@ -441,7 +441,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
     elif spamtype == "lindblad":
 
         prepPure = _objs.ComputationalSPAMVec([0]*nQubits,evotype)
-        prepNoiseMap = build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, printer-1)
+        prepNoiseMap = build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer-1)
         gs.preps[_Lbl('rho0')] = _objs.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep")
         if prepNoise is not None:
             # add noise to prepNoiseMap *after* assigning to GateSet just to be
@@ -457,7 +457,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
             gs._update_paramvec(gs.preps[_Lbl('rho0')]) # make sure params update
             
 
-        povmNoiseMap = build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, printer-1)
+        povmNoiseMap = build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer-1)
         gs.povms[_Lbl('Mdefault')] = _objs.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
         if povmNoise is not None:
             # add noise to povmNoiseMap *after* assigning to GateSet just to be
@@ -476,7 +476,7 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
         raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
 
     #Set auto-gator to one appropriate for the global idle gate used here
-    gs._autogator = _autogator.SharedIdleAutoGator(gs)
+    gs._autogator = _autogator.SharedIdleAutoGator(gs, errcomp_type)
 
     #FUTURE - just return cloud *keys*? (gate label values are never used
     # downstream, but may still be useful for debugging, so keep for now)
@@ -484,30 +484,49 @@ def build_nqnoise_gateset(nQubits, geometry="line", cnot_edges=None,
     return (gs, clouds) if return_clouds else gs
     
 
-def _get_Lindblad_factory(sim_type, parameterization):
+def _get_Lindblad_factory(sim_type, parameterization, errcomp_type):
     """ Returns a function that creates a Lindblad-type gate appropriate
         given the simulation type and parameterization """
     _,evotype = _gt.split_lindblad_paramtype(parameterization)
-    if evotype ==  "densitymx":
-        cls = _objs.LindbladParameterizedGate if sim_type == "matrix" \
-              else _objs.LindbladParameterizedGateMap
-    elif evotype in ("svterm","cterm"):
-        assert(sim_type.startswith("termorder"))        
-        cls = _objs.LindbladParameterizedGateMap
-    else:
-        raise ValueError("Cannot create Lindblad gate factory for ",sim_type, parameterization)
+    if errcomp_type == "gates":
+        if evotype ==  "densitymx":
+            cls = _objs.LindbladParameterizedGate if sim_type == "matrix" \
+                  else _objs.LindbladParameterizedGateMap
+        elif evotype in ("svterm","cterm"):
+            assert(sim_type.startswith("termorder"))        
+            cls = _objs.LindbladParameterizedGateMap
+        else:
+            raise ValueError("Cannot create Lindblad gate factory for ",sim_type, parameterization)
 
-    #Just call cls.from_gate_matrix with appropriate evotype
-    def _f(gateMatrix, unitaryPostfactor=None,
-           proj_basis="pp", mxBasis="pp", relative=False):
-        p = parameterization
-        if relative:
-            if parameterization == "CPTP": p = "GLND"
-            elif "S" in parameterization: p = parameterization.replace("S","s")
-            elif "D" in parameterization: p = parameterization.replace("D","d")
-        return cls.from_gate_obj(gateMatrix, p, unitaryPostfactor,
-                                 proj_basis, mxBasis, truncate=True)
-    return _f
+        #Just call cls.from_gate_matrix with appropriate evotype
+        def _f(gateMatrix, #unitaryPostfactor=None,
+               proj_basis="pp", mxBasis="pp", relative=False):
+            unitaryPostfactor=None #we never use this in gate construction
+            p = parameterization
+            if relative:
+                if parameterization == "CPTP": p = "GLND"
+                elif "S" in parameterization: p = parameterization.replace("S","s")
+                elif "D" in parameterization: p = parameterization.replace("D","d")
+            return cls.from_gate_obj(gateMatrix, p, unitaryPostfactor,
+                                     proj_basis, mxBasis, truncate=True)
+        return _f
+
+    elif errcomp_type == "errorgens":
+        def _f(errorGen,
+               proj_basis="pp", mxBasis="pp", relative=False):
+            p = parameterization
+            if relative:
+                if parameterization == "CPTP": p = "GLND"
+                elif "S" in parameterization: p = parameterization.replace("S","s")
+                elif "D" in parameterization: p = parameterization.replace("D","d")
+            _,evotype,nonham_mode,param_mode = _objs.LindbladParameterizedGateMap.decomp_paramtype(p)
+            return _objs.LindbladErrorgen.from_error_generator(errorGen, proj_basis, proj_basis, 
+                                                               param_mode, nonham_mode, mxBasis,
+                                                               truncate=True, evotype=evotype)
+        return _f
+
+    else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
+
                                     
 
 def _get_Static_factory(sim_type, parameterization):
@@ -531,7 +550,8 @@ def _get_Static_factory(sim_type, parameterization):
     raise ValueError("Cannot create Static gate factory for ",sim_type, parameterization)
 
 
-def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix", parameterization="H+S", verbosity=0):
+def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix",
+                          parameterization="H+S", errcomp_type="gates", verbosity=0):
     """
     Create a "global" idle gate, meaning one that acts on all the qubits in 
     `qubitGraph`.  The gate will have up to `maxWeight` errors on *connected*
@@ -559,6 +579,14 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
         The type of parameterizaton for the constructed gate. E.g. "H+S",
         "H+S terms", "H+S clifford terms", "CPTP", etc.
 
+    errcomp_type : {"onebig","manylittle"} TODO docstring update these to "gates" and "errorgens"
+        Whether the `loc_noise` portion of the constructed gate should be a
+        a single Lindblad gate containing all the allowed error terms (onebig)
+        or the composition of many Lindblad gates each containing just a single
+        error term (manylittle).  The resulting gate performs the same action
+        regardless of the value set here; this just affects how the gate is
+        structured internally.
+
     verbosity : int, optional
         An integer >= 0 dictating how must output to send to stdout.
 
@@ -568,18 +596,24 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
     """
     assert(maxWeight <= 2), "Only `maxWeight` equal to 0, 1, or 2 is supported"
 
-    if sim_type == "matrix": 
-        Composed = _objs.ComposedGate
-        Embedded = _objs.EmbeddedGate
-    else:
-        Composed = _objs.ComposedGateMap
-        Embedded = _objs.EmbeddedGateMap
-    Lindblad = _get_Lindblad_factory(sim_type, parameterization)
+    if errcomp_type == "gates":
+        if sim_type == "matrix": 
+            Composed = _objs.ComposedGate
+            Embedded = _objs.EmbeddedGate
+        else:
+            Composed = _objs.ComposedGateMap
+            Embedded = _objs.EmbeddedGateMap
+    elif errcomp_type == "errorgens":
+        Composed = _objs.ComposedErrorgen
+        Embedded = _objs.EmbeddedErrorgen
+    else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
+    Lindblad = _get_Lindblad_factory(sim_type, parameterization, errcomp_type)
+      #constructs a gate or errorgen based on value of errcomp_type
     
     printer = _VerbosityPrinter.build_printer(verbosity)
     printer.log("*** Creating global idle ***")
     
-    termgates = [] # gates to compose
+    termops = [] # gates or error generators to compose
     ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nqubits)])]
     #basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse) # TODO: remove - all we need is its 'dim' below
     basisAllQ_dim = _Dim(2**qubitGraph.nqubits)
@@ -590,7 +624,11 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
     for wt in range(1,maxWeight+1):
         printer.log("Weight %d: %d possible qubits" % (wt,nPossible),2)
         basisEl_Id = basisProductMatrix(_np.zeros(wt,_np.int64),sparse)
-        wtId = _sps.identity(4**wt,'d','csr') if sparse else  _np.identity(4**wt,'d')
+        if errcomp_type == "gates":
+            wtNoErr = _sps.identity(4**wt,'d','csr') if sparse else  _np.identity(4**wt,'d')
+        elif errcomp_type == "errorgens":
+            wtNoErr = _sps.csr_matrix((4**wt,4**wt)) if sparse else  _np.zeros((4**wt,4**wt),'d')
+        else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
         wtBasis = _Basis('pp', 2**wt, sparse=sparse)
         
         for err_qubit_inds in _itertools.combinations(possible_err_qubit_inds, wt):
@@ -605,7 +643,7 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
 
             printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_inds,len(errbasis)), 3)
             errbasis = _Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
-            termErr = Lindblad(wtId, proj_basis=errbasis,  mxBasis=wtBasis)
+            termErr = Lindblad(wtNoErr, proj_basis=errbasis, mxBasis=wtBasis)
         
             err_qubit_global_inds = err_qubit_inds
             fullTermErr = Embedded(ssAllQ, [('Q%d'%i) for i in err_qubit_global_inds],
@@ -614,9 +652,16 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
             printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                         (termErr.dim, termErr.num_params(), fullTermErr.dim))
                     
-            termgates.append( fullTermErr )
+            termops.append( fullTermErr )
                 
-    return Composed(termgates)         
+    if errcomp_type == "gates":
+        return Composed(termops)
+    elif errcomp_type == "errorgens":
+        errgen = Composed(termops)
+        LindbladGate = _objs.LindbladParameterizedGate if sim_type == "matrix" \
+            else _objs.LindbladParameterizedGateMap
+        return LindbladGate(None, errgen, sparse)
+    else: assert(False)
     
     
 
@@ -689,7 +734,7 @@ def build_nqn_global_idle(qubitGraph, maxWeight, sparse=False, sim_type="matrix"
 
         
 def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops_tuples,
-                            idle_noise=False, loc_noise_type="onebig",
+                            idle_noise=False, errcomp_type="onebig",
                             apply_idle_noise_to="all", sparse=False, sim_type="matrix",
                             parameterization="H+S", verbosity=0):
     """ 
@@ -701,7 +746,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
     given by the rest of the arguments.  `loc_noise` can be implemented either
     by a single (n-qubit) embedded Lindblad gate with all relevant error
     generators, or as a composition of embedded single-error-term Lindblad gates
-    (see param `loc_noise_type`).
+    (see param `errcomp_type`).
 
     The local noise consists terms up to a maximum weight acting on the qubits
     given reachable by a given maximum number of hops (along the neareset-
@@ -735,7 +780,7 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
         be extracted as needed.
 
 
-    loc_noise_type : {"onebig","manylittle"}
+    errcomp_type : {"onebig","manylittle"}
         Whether the `loc_noise` portion of the constructed gate should be a
         a single Lindblad gate containing all the allowed error terms (onebig)
         or the composition of many Lindblad gates each containing just a single
@@ -771,13 +816,23 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
     Gate
     """
     if sim_type == "matrix": 
-        Composed = _objs.ComposedGate
-        Embedded = _objs.EmbeddedGate
+        ComposedGate = _objs.ComposedGate
+        EmbeddedGate = _objs.EmbeddedGate
     else:
-        Composed = _objs.ComposedGateMap
-        Embedded = _objs.EmbeddedGateMap
-    Static = _get_Static_factory(sim_type, parameterization)
-    Lindblad = _get_Lindblad_factory(sim_type, parameterization)
+        ComposedGate = _objs.ComposedGateMap
+        EmbeddedGate = _objs.EmbeddedGateMap
+
+    if errcomp_type == "gates":
+        Composed = ComposedGate
+        Embedded = EmbeddedGate
+    elif errcomp_type == "errorgens":
+        Composed = _objs.ComposedErrorgen
+        Embedded = _objs.EmbeddedErrorgen
+    else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
+    StaticGate = _get_Static_factory(sim_type, parameterization) # always a *gate*
+    Lindblad = _get_Lindblad_factory(sim_type, parameterization, errcomp_type)
+      #constructs a gate or errorgen based on value of errcomp_type
+
 
     ##OLD
     #if sparse:
@@ -800,8 +855,8 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
     ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nqubits)])]
     #basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse)
     basisAllQ_dim = _Dim(2**qubitGraph.nqubits)
-    fullTargetOp = Embedded(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
-                            Static(targetOp,"pp"), basisAllQ_dim) 
+    fullTargetOp = EmbeddedGate(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
+                                StaticGate(targetOp,"pp"), basisAllQ_dim) 
 
     #Factor2: idle_noise operation
     printer.log("Creating idle error factor",2)
@@ -832,102 +887,118 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
 
         
     #Factor3: local_noise operation
-    printer.log("Creating local-noise error factor (%s)" % loc_noise_type,2)
-    if loc_noise_type == "onebig": 
-        # make a single embedded Lindblad-gate containing all specified error terms
-        loc_noise_errinds = [] # list of basis indices for all local-error terms
-        all_possible_err_qubit_inds = _np.array( qubitGraph.radius(
-            target_qubit_inds, max([hops for _,hops in weight_maxhops_tuples]) ), _np.int64) # node labels are ints
-        nLocal = len(all_possible_err_qubit_inds)
-        basisEl_Id = basisProductMatrix(_np.zeros(nPossible,_np.int64),sparse) #identity basis el
+    printer.log("Creating local-noise error factor (%s)" % errcomp_type,2)
+
+    #OLD TODO REMOVE
+    #if errcomp_type == "onebig": 
+    #    # make a single embedded Lindblad-gate containing all specified error terms
+    #    loc_noise_errinds = [] # list of basis indices for all local-error terms
+    #    all_possible_err_qubit_inds = _np.array( qubitGraph.radius(
+    #        target_qubit_inds, max([hops for _,hops in weight_maxhops_tuples]) ), _np.int64) # node labels are ints
+    #    nLocal = len(all_possible_err_qubit_inds)
+    #    basisEl_Id = basisProductMatrix(_np.zeros(nPossible,_np.int64),sparse) #identity basis el
+    #    
+    #    for wt, maxHops in weight_maxhops_tuples:
+    #        possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),_np.int64) # node labels are ints
+    #        nPossible = len(possible_err_qubit_inds)
+    #        possible_to_local = [ all_possible_err_qubit_inds.index(
+    #            possible_err_qubit_inds[i]) for i in range(nPossible)]
+    #        printer.log("Weight %d, max-hops %d: %d possible qubits of %d local" %
+    #                    (wt,maxHops,nPossible,nLocal),3)
+    #        
+    #        for err_qubit_inds in _itertools.combinations(list(range(nPossible)), wt):
+    #            # err_qubit_inds are in range [0,nPossible-1] qubit indices
+    #            #Future: check that err_qubit_inds marks qubits that are connected
+    #            err_qubit_local_inds = possible_to_local[err_qubit_inds]
+    #                                                    
+    #            for err_basis_inds in _iter_basis_inds(wt):  
+    #                error = _np.zeros(nLocal,_np.int64)
+    #                error[ err_qubit_local_inds ] = err_basis_inds
+    #                loc_noise_errinds.append( error )
+    #                
+    #            printer.log("Error on qubits %s -> error basis now at length %d" %
+    #                        (all_possible_err_qubit_inds[err_qubit_local_inds],1+len(loc_noise_errinds)), 4)
+    #            
+    #    errbasis = [basisEl_Id] + \
+    #               [ basisProductMatrix(err,sparse) for err in loc_noise_errinds]
+    #    errbasis = _Basis(matrices=errbasis, sparse=sparse)
+    #    
+    #    #Construct one embedded Lindblad-gate using all `errbasis` terms
+    #    #ssLocQ = [tuple(['Q%d'%i for i in range(nLocal)])]
+    #    basisLocQ = _Basis('pp', 2**nLocal, sparse=sparse)
+    #    locId = _sps.identity(4**nLocal,'d','csr') if sparse else _np.identity(4**nLocal,'d')
+    #    localErr = Lindblad(locId, proj_basis=errbasis, mxBasis=basisLocQ, relative=True)
+    #    fullLocalErr = Embedded(ssAllQ, ['Q%d'%i for i in all_possible_err_qubit_inds],
+    #                            localErr, basisAllQ_dim)
+    #    printer.log("Lindblad gate w/dim=%d and %d params (from error basis of len %d) -> embedded to gate w/dim=%d" %
+    #                (localErr.dim, localErr.num_params(), len(errbasis), fullLocalErr.dim),2)
+    #
+    #    
+    #elif errcomp_type == "manylittle": 
+
+
+    # make a composed-gate of embedded single-basis-element Lindblad-gates or -errorgens,
+    #  one for each specified error term  
         
-        for wt, maxHops in weight_maxhops_tuples:
-            possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),_np.int64) # node labels are ints
-            nPossible = len(possible_err_qubit_inds)
-            possible_to_local = [ all_possible_err_qubit_inds.index(
-                possible_err_qubit_inds[i]) for i in range(nPossible)]
-            printer.log("Weight %d, max-hops %d: %d possible qubits of %d local" %
-                        (wt,maxHops,nPossible,nLocal),3)
+    loc_noise_termops = [] #list of gates to compose
+    
+    for wt, maxHops in weight_maxhops_tuples:
             
-            for err_qubit_inds in _itertools.combinations(list(range(nPossible)), wt):
-                # err_qubit_inds are in range [0,nPossible-1] qubit indices
-                #Future: check that err_qubit_inds marks qubits that are connected
-                err_qubit_local_inds = possible_to_local[err_qubit_inds]
-                                                        
-                for err_basis_inds in _iter_basis_inds(wt):  
-                    error = _np.zeros(nLocal,_np.int64)
-                    error[ err_qubit_local_inds ] = err_basis_inds
-                    loc_noise_errinds.append( error )
-                    
-                printer.log("Error on qubits %s -> error basis now at length %d" %
-                            (all_possible_err_qubit_inds[err_qubit_local_inds],1+len(loc_noise_errinds)), 4)
-                
-        errbasis = [basisEl_Id] + \
-                   [ basisProductMatrix(err,sparse) for err in loc_noise_errinds]
-        errbasis = _Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
-        
-        #Construct one embedded Lindblad-gate using all `errbasis` terms
-        ssLocQ = [tuple(['Q%d'%i for i in range(nLocal)])]
-        basisLocQ = _Basis('pp', 2**nLocal, sparse=sparse)
-        locId = _sps.identity(4**nLocal,'d','csr') if sparse else _np.identity(4**nLocal,'d')
-        localErr = Lindblad(locId, proj_basis=errbasis, mxBasis=basisLocQ, relative=True)
-        fullLocalErr = Embedded(ssAllQ, ['Q%d'%i for i in all_possible_err_qubit_inds],
-                                localErr, basisAllQ_dim)
-        printer.log("Lindblad gate w/dim=%d and %d params (from error basis of len %d) -> embedded to gate w/dim=%d" %
-                    (localErr.dim, localErr.num_params(), len(errbasis), fullLocalErr.dim),2)
+        ## loc_noise_errinds = [] # list of basis indices for all local-error terms 
+        possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),_np.int64) # we know node labels are integers
+        nPossible = len(possible_err_qubit_inds) # also == "nLocal" in this case
+        basisEl_Id = basisProductMatrix(_np.zeros(wt,_np.int64),sparse) #identity basis el
 
+        if errcomp_type == "gates":
+            wtNoErr = _sps.identity(4**wt,'d','csr') if sparse else  _np.identity(4**wt,'d')
+        elif errcomp_type == "errorgens":
+            wtNoErr = _sps.csr_matrix((4**wt,4**wt)) if sparse else  _np.zeros((4**wt,4**wt),'d')
+        else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
+        wtBasis = _Basis('pp', 2**wt, sparse=sparse)
+
+        printer.log("Weight %d, max-hops %d: %d possible qubits" % (wt,maxHops,nPossible),3)
+        #print("DB: possible qubits = ",possible_err_qubit_inds, " (radius of %d around %s)" % (maxHops,str(target_qubit_inds)))
         
-    elif loc_noise_type == "manylittle": 
-        # make a composed-gate of embedded single-basis-element Lindblad-gates,
-        #  one for each specified error term  
+        for err_qubit_local_inds in _itertools.combinations(list(range(nPossible)), wt):
+            # err_qubit_inds are in range [0,nPossible-1] qubit indices
+            #Future: check that err_qubit_inds marks qubits that are connected
+
+            errbasis = [basisEl_Id]
+            for err_basis_inds in _iter_basis_inds(wt):  
+                error = _np.array(err_basis_inds,_np.int64) #length == wt
+                basisEl = basisProductMatrix(error, sparse)
+                errbasis.append(basisEl)
+
+            err_qubit_global_inds = possible_err_qubit_inds[list(err_qubit_local_inds)]
+            printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_global_inds,len(errbasis)), 4)
+            errbasis = _Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
+            termErr = Lindblad(wtNoErr, proj_basis=errbasis, mxBasis=wtBasis, relative=True)
+    
+            fullTermErr = Embedded(ssAllQ, ['Q%d'%i for i in err_qubit_global_inds],
+                                   termErr, basisAllQ_dim)
+            assert(fullTermErr.num_params() == termErr.num_params())
+            printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
+                        (termErr.dim, termErr.num_params(), fullTermErr.dim))
             
-        loc_noise_termgates = [] #list of gates to compose
-        
-        for wt, maxHops in weight_maxhops_tuples:
-                
-            ## loc_noise_errinds = [] # list of basis indices for all local-error terms 
-            possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops),_np.int64) # we know node labels are integers
-            nPossible = len(possible_err_qubit_inds) # also == "nLocal" in this case
-            basisEl_Id = basisProductMatrix(_np.zeros(wt,_np.int64),sparse) #identity basis el
+            loc_noise_termops.append( fullTermErr )
+          
+    fullLocalErr = Composed(loc_noise_termops)
 
-            wtId = _sps.identity(4**wt,'d','csr') if sparse else _np.identity(4**wt,'d')
-            wtBasis = _Basis('pp', 2**wt, sparse=sparse)
 
-            printer.log("Weight %d, max-hops %d: %d possible qubits" % (wt,maxHops,nPossible),3)
-            #print("DB: possible qubits = ",possible_err_qubit_inds, " (radius of %d around %s)" % (maxHops,str(target_qubit_inds)))
-            
-            for err_qubit_local_inds in _itertools.combinations(list(range(nPossible)), wt):
-                # err_qubit_inds are in range [0,nPossible-1] qubit indices
-                #Future: check that err_qubit_inds marks qubits that are connected
-
-                errbasis = [basisEl_Id]
-                for err_basis_inds in _iter_basis_inds(wt):  
-                    error = _np.array(err_basis_inds,_np.int64) #length == wt
-                    basisEl = basisProductMatrix(error, sparse)
-                    errbasis.append(basisEl)
-
-                err_qubit_global_inds = possible_err_qubit_inds[list(err_qubit_local_inds)]
-                printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_global_inds,len(errbasis)), 4)
-                errbasis = _Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
-                termErr = Lindblad(wtId, proj_basis=errbasis, mxBasis=wtBasis, relative=True)
-        
-                fullTermErr = Embedded(ssAllQ, ['Q%d'%i for i in err_qubit_global_inds],
-                                       termErr, basisAllQ_dim)
-                assert(fullTermErr.num_params() == termErr.num_params())
-                printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
-                            (termErr.dim, termErr.num_params(), fullTermErr.dim))
-                
-                loc_noise_termgates.append( fullTermErr )
-              
-        fullLocalErr = Composed(loc_noise_termgates)    
-        
-    else:
-        raise ValueError("Invalid `loc_noise_type` arguemnt: %s" % loc_noise_type)
-        
-    if fullIdleErr is not None:
-        return Composed([fullTargetOp,fullIdleErr,fullLocalErr])
-    else:
-        return Composed([fullTargetOp,fullLocalErr])
+    if errcomp_type == "gates": # fullTargetOp,fullIdleErr,fullLocalErr are all *gates*
+        compose = [fullTargetOp,fullIdleErr,fullLocalErr] if (fullIdleErr is not None) \
+            else [fullTargetOp,fullLocalErr]
+        return Composed(compose)
+    elif errcomp_type == "errorgens": # fullTargetOp is an embedded static gate
+        if fullIdleErr is None:       # fullIdleErr is a Lindblad gate w/"idle errorgen"
+            errgen = fullLocalErr     # fullLocalErr is an errorgen
+        else:
+            errgen = Composed([fullIdleErr.errorgen, fullLocalErr])
+            LindbladGate = _objs.LindbladParameterizedGate if sim_type == "matrix" \
+                else _objs.LindbladParameterizedGateMap
+        expErrgen = LindbladGate(None, errgen, sparse) # don't stick fullTargetOp as unitaryPostFactor here?
+        return ComposedGate([fullTargetOp, expErrgen])
+    else: assert(False)
 
 
 

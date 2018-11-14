@@ -1279,7 +1279,7 @@ def expm_multiply_prep(A, tol=EXPM_DEFAULT_TOL):
     #DB: CHECK: assert(_spsl.norm(A1 - A2) < 1e-6); A = A1
 
     #exact_1_norm specific for CSR
-    A_1_norm = max(_np.sum(A.data[_np.where(A.indices == iCol)]) for iCol in range(n))
+    A_1_norm = max(_np.sum(_np.abs(A.data[_np.where(A.indices == iCol)])) for iCol in range(n))
     #A_1_norm = _spsl._expm_multiply._exact_1_norm(A) # general case
 
     t = 1.0 # always
@@ -1308,7 +1308,8 @@ else:
 
 def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta): # t == 1.0 replaced below
     """
-    A helper function.
+    A helper function.  Note that this (python) version works when A is a LinearOperator 
+    as well as a SciPy CSR sparse matrix.
     """
     #if balance:
     #    raise NotImplementedError
@@ -1346,6 +1347,37 @@ def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta): # t == 1.0
 #        return max(abs(A).sum(axis=0).flat)
 #    else:
 #        return np.linalg.norm(A, 1)
+
+def expop_multiply_prep(op, tol=EXPM_DEFAULT_TOL):
+    """
+    Returns "prepared" meta-info about LinearOperator op,
+      which is assumed to be traceless (so no shift is needed).
+      Used as input for use with _custom_expm_multiply_simple_core
+      or fast C-reps.
+    """
+    assert(isinstance(op,_spsl.LinearOperator))
+    if len(op.shape) != 2 or op.shape[0] != op.shape[1]:
+        raise ValueError('expected op to have equal input and output dimensions')
+
+    n = op.shape[0]
+    n0=1 # always act exp(op) on *single* vectors
+    mu = 0 # _spsl._expm_multiply._trace(A) / float(n)
+      #ASSUME op is *traceless*
+
+    #FUTURE: get exact_1_norm specific for our ops - now just use approximate
+    A_1_norm = _spsl.onenormest(op)
+
+    #t = 1.0 # always, so t*<X> => just <X> below
+    if A_1_norm == 0:
+        m_star, s = 0, 1
+    else:
+        ell = 2
+        norm_info = _spsl._expm_multiply.LazyOperatorNormInfo(op, A_1_norm=A_1_norm, ell=ell)
+        m_star, s = _spsl._expm_multiply._fragment_3_1(norm_info, n0, tol, ell=ell)
+
+    eta = 1.0 #_np.exp(t*mu / float(s)) # b/c mu always == 0 (traceless assumption)
+    return mu, m_star, s, eta
+
 
 
 

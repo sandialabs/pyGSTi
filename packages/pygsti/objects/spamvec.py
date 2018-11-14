@@ -2378,7 +2378,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
         errgen = _LErrorgen.from_error_generator(errgen, ham_basis,
                                                  nonham_basis, param_mode, nonham_mode,
-                                                 truncate, mxBasis, evotype)
+                                                 mxBasis, truncate, evotype)
         errcls = _LPGate if (pureVec.dim <= 64 and evotype == "densitymx") else _LPGMap
         errmap = errcls(None,errgen)
 

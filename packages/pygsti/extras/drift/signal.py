@@ -132,7 +132,9 @@ def DCT(x, counts=1, null_hypothesis=None):
     if null_hypothesis is None:    
         null_hypothesis = x_mean/counts
         if null_hypothesis <= 0 or null_hypothesis >= 1:
-            return _np.zeros(N)
+            out = _np.ones(N)
+            out[0] = 0.
+            return out
     #else:
     #    assert(min(null_hypothesis)>0 and max(null_hypothesis)<1), "All element of null_hypothesis must be in (0,1)!"
     #    assert(len(null_hypothesis) == N), "The null hypothesis array must be the same length as the data array!"
@@ -329,8 +331,6 @@ def constrain_model_via_uniform_amplitude_compression(model, times, epsilon=0.00
         newparameters = model.parameters.copy()
         for i in model.parameters.keys():
             newparameters[i][1:] = [decrease_magnitude(p,stepsize) for p in newparameters[i][1:]]
-
-        print(newparameters)
         
         # Input the new parameters to the model
         newmodel.set_parameters(newparameters)

@@ -1426,6 +1426,9 @@ class GateCalc(object):
             `(outcome, p)` tuples, where `outcome` is a tuple of labels
             and `p` is the corresponding probability.
         """
+        #TODO: correct these docstrings - probs[gstr] is an ordered dictionary
+        #  of *outcome probabilities* whose keys are (tuples of) outcome labels.
+
         vp = _np.empty(evalTree.num_final_elements(),'d')
         if smartc:
             smartc.cached_compute(self.bulk_fill_probs, vp, evalTree,
