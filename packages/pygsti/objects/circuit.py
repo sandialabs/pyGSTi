@@ -1644,7 +1644,7 @@ class Circuit(_gstr.GateString):
         quil = ''
         depth = self.depth()
         
-        quil += 'DECLARE ro BIT[{0}]\n'.format(str(depth))
+        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
         
         quil += 'PRAGMA INITIAL_REWIRING "NAIVE"\n'
         
