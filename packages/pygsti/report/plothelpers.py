@@ -436,7 +436,9 @@ def _computeProbabilities(gss, gateset, dataset, probClipInterval=(-1e6,1e6),
     def smart(fn, *args, **kwargs):
         if smartc: 
             return smartc.cached_compute(fn, args, kwargs)[1]
-        else: return fn(*args, **kwargs)
+        else: 
+            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
+            return fn(*args, **kwargs)
 
     gatestringList = gss.allstrs
 

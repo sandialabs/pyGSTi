@@ -8,15 +8,19 @@ typedef long long INT;
 
 namespace CReps {
 
+  //Forward declarations (as necessary)
+  class DMGateCRep;
+
   //Helper functions
   void expm_multiply_simple_core(double* Adata, INT* Aindptr,
 				 INT* Aindices, double* B,
 				 INT N, double mu, INT m_star,
 				 INT s, double tol, double eta,
 				 double* F, double* scratch);
-
-  //Forward declarations (as necessary)
-  class DMGateCRep;
+  void expm_multiply_simple_core_rep(DMGateCRep* A_rep, double* B,
+				     INT N, double mu, INT m_star,
+				     INT s, double tol, double eta,
+				     double* F, double* scratch);
 
   // DENSE MATRIX (DM) propagation
 
@@ -136,20 +140,28 @@ namespace CReps {
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
   };
 
+  class DMGateCRep_Sum :public DMGateCRep{
+    public:
+    std::vector<DMGateCRep*> _factor_creps;
+    DMGateCRep_Sum(std::vector<DMGateCRep*> factor_creps, INT dim);
+    virtual ~DMGateCRep_Sum();
+    virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
+    virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
+  };
+
   class DMGateCRep_Lindblad :public DMGateCRep{
     public:
-    double* _U_data; //unitary postfactor 
-    INT* _U_indices; // as a CSR sparse
-    INT* _U_indptr;  // matrix
+    DMGateCRep* _errgen_rep;
+    double* _U_data;
+    INT* _U_indices;
+    INT* _U_indptr;
     INT _U_nnz;
-    double* _A_data;
-    INT* _A_indices;
-    INT* _A_indptr;
-    INT _A_nnz;
-    double _mu, _eta; // tol?
-    INT _m_star, _s;
+    double _mu;
+    double _eta;
+    INT _m_star;
+    INT _s;
 
-    DMGateCRep_Lindblad(double* A_data, INT* A_indices, INT* A_indptr, INT nnz,
+    DMGateCRep_Lindblad(DMGateCRep* errgen_rep,
 			double mu, double eta, INT m_star, INT s, INT dim,
 		        double* unitarypost_data, INT* unitarypost_indices,
 			INT* unitarypost_indptr, INT unitarypost_nnz);
@@ -158,6 +170,19 @@ namespace CReps {
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
   };
 
+  class DMGateCRep_Sparse :public DMGateCRep{
+    public:
+    double* _A_data;
+    INT* _A_indices;
+    INT* _A_indptr;
+    INT _A_nnz;
+
+    DMGateCRep_Sparse(double* A_data, INT* A_indices, INT* A_indptr,
+		      INT nnz, INT dim);
+    virtual ~DMGateCRep_Sparse();
+    virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
+    virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
+  };
 
 
   // STATE VECTOR (SV) propagation
@@ -269,6 +294,15 @@ namespace CReps {
     virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
   };
 
+  class SVGateCRep_Sum :public SVGateCRep{
+    public:
+    std::vector<SVGateCRep*> _factor_creps;
+    SVGateCRep_Sum(std::vector<SVGateCRep*> factor_creps, INT dim);
+    virtual ~SVGateCRep_Sum();
+    virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
+    virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
+  };
+
 
   // STABILIZER propagation
 
@@ -349,6 +383,15 @@ namespace CReps {
     public:
     SBGateCRep_Composed(std::vector<SBGateCRep*> factor_gate_creps, INT n);
     virtual ~SBGateCRep_Composed();
+    virtual SBStateCRep* acton(SBStateCRep* state, SBStateCRep* out_state);
+    virtual SBStateCRep* adjoint_acton(SBStateCRep* state, SBStateCRep* out_state);
+  };
+
+  class SBGateCRep_Sum :public SBGateCRep {
+    std::vector<SBGateCRep*> _factor_creps;
+    public:
+    SBGateCRep_Sum(std::vector<SBGateCRep*> factor_creps, INT n);
+    virtual ~SBGateCRep_Sum();
     virtual SBStateCRep* acton(SBStateCRep* state, SBStateCRep* out_state);
     virtual SBStateCRep* adjoint_acton(SBStateCRep* state, SBStateCRep* out_state);
   };
