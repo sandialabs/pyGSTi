@@ -792,7 +792,7 @@ class GateSet(object):
 
         if dirty:
             #re-update everything to ensure consistency
-            #print("DEBUG: non-trivailly CLEANED paramvec due to dirty elements")
+            #print("DEBUG: non-trivially CLEANED paramvec due to dirty elements")
             self.from_vector(self._paramvec,False)
 
         if GateSet._pcheck: self._check_paramvec()
