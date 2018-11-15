@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from . import signal as _sig
 from . import results as _dresults
+from . import model as _mdl
 from ...tools import hypothesis as _hyp
 from . import statistics as _stats
 from ... import objects as _obj
@@ -15,10 +16,11 @@ from ... import objects as _obj
 import numpy as _np
 import warnings as _warnings
 import itertools as _itertools
+import copy as _copy
 
-def do_basic_drift_characterization(ds, significance=0.05, transform='auto', setting='fastest'):
+# def do_basic_drift_characterization(ds, significance=0.05, transform='auto', setting='fastest'):
 
-    return 0
+#     return 0
 
 # def do_oneQubit_drift_characterization(ds, significance=0.05, marginalize='auto', transform='DCT',
 #                                      spectrafrequencies='auto', testfrequencies='all', 
@@ -162,7 +164,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
 
     if marginalize:
         num_entities = len(full_outcomes[0][0])
-        outcomeslist = ['0','1']
+        outcomes = ['0','1']
         timeseries = {}
         for e in range(num_entities):
             timeseries[e] = {}
@@ -170,19 +172,19 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
             for s in range(num_sequences):
                 timeseries[e][s] = {}
                 for o in range(2):
-                    junk, timeseries[e][s][o] = tempdata[gatestringlist[s]].timeseries(outcomeslist[o],timestamps[s])
+                    junk, timeseries[e][s][o] = tempdata[gatestringlist[s]].timeseries(outcomes[o],timestamps[s])
 
     else:
-        outcomeslist = list(ds.get_outcome_labels())
+        outcomes = list(ds.get_outcome_labels())
         num_outcomes = len(list(ds.get_outcome_labels()))
         timeseries = {}
         timeseries[0] = {}
         for s in range(num_sequences):
             timeseries[0][s] = {}
             for o in range(num_outcomes):
-                junk, timeseries[0][s][o] = ds[gatestringlist[s]].timeseries(outcomeslist[o],timestamps[s])
+                junk, timeseries[0][s][o] = ds[gatestringlist[s]].timeseries(outcomes[o],timestamps[s])
 
-    results.add_formatted_data(timeseries, timestamps, gatestringlist, outcomeslist, counts, constNumTimes, 
+    results.add_formatted_data(timeseries, timestamps, gatestringlist, outcomes, counts, constNumTimes, 
                                enforcedConstNumTimes=enforceConstNumTimes, marginalized=marginalize)
     return results
 
@@ -283,10 +285,9 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
     """
 
     # These assumptions are not crucial *but* the current code will probably break without them
-
     #
     #
-    # Todo : we are violation these! In the updated test schedule.
+    # Todo : we are violating these! In the updated test schedule.
     #
     #
     validWhichTests = []
@@ -357,9 +358,6 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
 
     #print(control)
 
-    #results.add_drift_detection_results(significance, control, whichTests, betweenClassCorrection, inClassCorrection)
-
-    # Checks that 
     if min(results.number_of_timesteps) <= 25: 
         _warnings.warn('At least some sequences have very few timesteps (less than 25). ' + \
             'This means that the statistical signficance thresholds and p-values, ' +\
@@ -368,18 +366,6 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
     # The baseline degrees of freedom for each type of power spectra
     #dofstuple = (results.number_of_entities,results.number_of_sequences,results.number_of_outcomes-1)
     numteststuple = (results.number_of_entities,results.number_of_sequences,results.number_of_outcomes)
-    # # The number of spectra tested in the class (so not including the contribution of testing a spectra
-    # # at multiple frequencies), and the baseline degrees-of-freedom per test.
-    # dofPerSpectrumInClass = {}
-    # numTestsInClass = {}
-    # for test in whichTestsUpdated:
-    #     dofPerSpectrumInClass[test] = 1
-    #     numTestsInClass[test] = 1
-    #     for ind, ttype in enumerate(test):
-    #         if ttype == 'avg':
-    #             dofPerSpectrumInClass[test] = dofPerSpectrumInClass[test]*dofstuple[ind]  
-    #         else:
-    #             numTestsInClass[test] = numTestsInClass[test]*numteststuple[ind]
 
     significancePerTestClass = {}
     if betweenClassCorrection:
@@ -408,7 +394,7 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
         usedTestFreqInds = _np.arange(results.number_of_frequencies)
 
     driftdetectedinClass = {}
-    driftdeteted = False
+    driftdetected = False
     power_significance_pseudothreshold = {}
     sigFreqInds = {}
 
@@ -577,8 +563,7 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
         betweenClassCorrection = 'bonferroni'
     inClassCorrections = {test:inClassCorrection for test in whichTestsUpdated}
 
-    # Todo : needs to pass on the pointers.
-    results.add_hypothesis_testing_results(significance=significance, testClasses=whichTestsUpdated, 
+    results.add_drift_detection_results(significance=significance, testClasses=whichTestsUpdated, 
                                         betweenClassCorrection=betweenClassCorrection, inClassCorrections=inClassCorrections,
                                         control=control, driftdetected=driftdetected, driftdetectedinClass=driftdetectedinClass,
                                         testFreqInds=testFreqInds, sigFreqIndsinClass=sigFreqInds,
@@ -587,65 +572,85 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
 
     return None
 
-def estimate_probability_trajectories(results, modelSelectionMethod=('per','per','avg'), estimator='FFLogistic', 
+def estimate_probability_trajectories(results, modelSelector=(('per','per','avg'),None), estimator='DCT-filter-UAR', 
                                       estimatorSettings=[], verbosity=1, overwrite=False, setasDefault=True):
     """
     Todo:
     """
-    # hyperparameters = {}
-    # parameters = {}
-    # reconstructions = {}
-    # uncertainties = {}
-    # auxDict = {}
+    testClass = modelSelector[0]
+    detectorkey = modelSelector[1]
 
-    # assert(modelSelectionMethod[2] == 'avg'), "The model selection must use outcome-averaged model selection!"
+    if detectorkey is None:
+        detectorkey = results.defaultdetectorkey
 
-    # for e in result.number_of_entities:
-    #     for s in results.number_of_sequences:
+    assert(testClass[2] == 'avg'), "The model selection must use outcome-averaged model selection!"
+
+    for e in range(results.number_of_entities):
+        for s in range(results.number_of_sequences):
             
-    #         # Get the time-series data for this entity and sequence, as a dict with keys from 0 to the
-    #         # number of possible measurement outcomes - 1.
-    #         timeseries = results.timeseries[e][s]
-    #         timestamps = results.timestamps[e][s]
+            # Get the time-series data for this entity and sequence, as a dict with keys from 0 to the
+            # number of possible measurement outcomes - 1.
+            timeseries = results.timeseries[e][s]
+            timestamps = results.timestamps[s] # Timestamps only indexed by sequence.
 
-    #         try:
-    #             modes = results.modes[e,s,:]
-    #         except:
-    #             modes = None
+            meandict = {o : _np.mean(results.timeseries[e][s][o]) for o in range(results.number_of_outcomes)}
+            outcomeIndlist = list(range(results.number_of_outcomes))
+            nullmodel = _mdl.ProbabilityTrajectoryModel(outcomeIndlist, modeltype='null', hyperparameters={'basisfunctionInds':[0.,]}, parameters=meandict)
+            results.add_reconstruction(e, s, nullmodel, modelSelector='null', estimator='null', auxDict={}, overwrite=overwrite)
 
-    #         if modelSelectionMethod[0] == 'per':
-    #             entkey = e
-    #         else: entkey = 'avg'
-    #         if modelSelectionMethod[1] == 'per':
-    #             seqkey = s
-    #         else: seqkey = 'avg'
+            if testClass[0] == 'per': entkey = e
+            else: entkey = 'avg'
+
+            if testClass[1] == 'per': seqkey = s
+            else: seqkey = 'avg'
                    
-    #         # The hyper-parameters for the DCT (or DFT) estimators are frequency indices
-    #         if results.transform != 'LSP':
-    #             hyperparams = results.get_drift_frequency_indices(entity=entkey, sequence=seqkey, 
-    #                                                               outcome='avg', sort=True)
-    #             # We need the 0 mode as a hyper-parameter
-    #             hyperparams.insert(0,0)
-    #         # The hyper-parameters for the LSP estimators are real-valued frequencies.
-    #         else:
-    #             hyperparams = results.get_drift_frequencies(entity=entkey, sequence=seqkey, 
-    #                                                         outcome='avg', sort=True)
-    #             # We need the 0. frequency as a hyper-parameter
-    #             hyperparams.insert(0,0.)
+            # The hyper-parameters for the DCT (or DFT) models are frequency indices,
+            # along with the start and end times.
+            if results.transform != 'LSP':
+                freqs = results.get_drift_frequency_indices(entity=entkey, sequence=seqkey, 
+                                                               outcome='avg', sort=True)
+                # We need the 0 mode as a hyper-parameter
+                freqs.insert(0,0)
+                null = True
+                if len(freqs) > 1:
+                    null = False
+                hyperparameters = {"basisfunctionInds":freqs, 'starttime':results.timestamps[s][0], 'endtime':results.timestamps[s][-1]}
+                parameters = _sig.amplitudes_at_frequencies(freqs, timeseries, transform='DCT')
+                ffmodel = _mdl.ProbabilityTrajectoryModel(outcomeIndlist, modeltype='DCT', hyperparameters=hyperparameters, parameters=parameters)
+                results.add_reconstruction(e, s, ffmodel, modelSelector=modelSelector, estimator='DCT-filter-unbounded', 
+                                        auxDict={'null':null}, overwrite=overwrite)
+                
+                if estimator == 'DCT-filter-unbounded':
+                    break
 
-    #         params, recon, uncert, aux = _est.estimate_probability_trace(timeseries, timestamps, results.transform, estimator,
-    #                                                                      hyperparameters, modes=modes, estimatorSettings)
-            
-    #         # Write the results into the dicts, to then be passed to the results DriftResults object.
-    #         hyperparameters[e,s] = hyperparameters
-    #         parameters[e,s] = params
-    #         reconstructions[e,s] = recon
-    #         uncertainties[e,s] = uncert
-    #         auxDict[e,s] = aux
+                ffmodel.get_probabilities(timeseries)
 
-    # results.add_reconstructions_set(estimator, modelSelection, hyperparameters, parameters, reconstructions, 
-    #                                 uncertainties, auxDict=auxDict, overwrite=overwrite, setasDefault=setasDefault)
+                ffmodelUniReduce = ffmodel.copy()
+                ffmodelUniReduce, flag = _sig.constrain_model_via_uniform_amplitude_compression(ffmodelUniReduce, timestamps)
+                results.add_reconstruction(e, s, ffmodelUniReduce, modelSelector=modelSelector, estimator='DCT-filter-UAR', 
+                                        auxDict={'null':null, "reduction":flag}, overwrite=overwrite)
+ 
+                if estimator == 'DCT-filter-UAR':
+                    break
 
+                # Todo : write the MLE of p(t) function
+                # ffmodelmle = ffmodelUniReduce.copy()
+                # ffmodelmle, optout = _est.do_mle_of_ptrajectory(ffmodelmle, timeseries, timestamps)
+                # optout = None
+                # results.add_reconstruction(e, s, ffmodelUniReduce, modelSelector=modelSelector, estimator='DCT-filter-MLE', 
+                #                            auxDict={'null':null, 'optout'=optout}, overwrite=overwrite)
+
+            # The hyper-parameters for the LSP models are real-valued frequencies.
+            elif results.transform == 'LSP':
+                freqs = results.get_drift_frequencies(entity=entkey, sequence=seqkey, 
+                                                            outcome='avg', sort=True)
+                # We need the 0. frequency as a hyper-parameter
+                freqs.insert(0,0.)
+                hyperparameters = {'freqs' : freqs}
+        
+            #params, recon, uncert, aux = _est.estimate_probability_trace(timeseries, timestamps, results.transform, estimator,
+            #                                                             hyperparameters, modes=modes, estimatorSettings)
+        
     return None
 
 def do_drift_characterization(ds, significance=0.05, marginalize='auto', transform='DCT',
@@ -653,7 +658,7 @@ def do_drift_characterization(ds, significance=0.05, marginalize='auto', transfo
                             groupoutcomes=None, enforceConstNumTimes='auto',
                             whichTests=(('avg','avg','avg'), ('per','avg','avg'), ('per','per','avg')), 
                             betweenClassCorrection=True, inClassCorrection=('FWER','FWER','FDR','FDR'), 
-                            modelSelectionMethod=('per','per','avg'), estimator='FFLogistic', verbosity=1, name=None):
+                            modelSelectionMethod=(('per','per','avg'),'detection'), estimator='FFLogistic', verbosity=1, name=None):
     """
     Implements a drift detection and characterization analysis on timeseries data.
 
@@ -741,7 +746,7 @@ def do_drift_characterization(ds, significance=0.05, marginalize='auto', transfo
         if verbosity > 1: print('')
     
     # Estimate the drifting probabilities.
-    estimate_probability_trajectories(results, modelSelectionMethod=modelSelectionMethod, estimator=estimator, verbosity=verbosity-1)
+    estimate_probability_trajectories(results, modelSelector=modelSelectionMethod, estimator=estimator, verbosity=verbosity-1)
     
     if verbosity == 1: print("complete.")
 

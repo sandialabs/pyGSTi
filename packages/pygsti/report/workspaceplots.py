@@ -1704,14 +1704,14 @@ class ColorBoxPlot(WorkspacePlot):
             elif ptyp == "driftpv":
                 assert(driftresults is not None), \
                     "Must specify `driftresults` argument to create `driftpv` plot!"
-                detectorname = driftresults[1]
+                detectorkey = driftresults[1]
                 driftresults = driftresults[0]
                 assert(driftresults.number_of_entities == 1), \
                     "Currently cannot create a box-plot for multi-entity DriftResults!"
                 precomp=False
                 colormapType = "manuallinlog"
                 linlog_color = "green"
-                linlog_trans = 1/driftresults.get_power_pvalue_significance_threshold(sequence='per',detectorname=detectorname)
+                linlog_trans = _np.log10(1/driftresults.get_power_pvalue_significance_threshold(sequence='per',detectorkey=detectorkey))
                 ytitle="1 / pvalue"
                     
                 def _mx_fn(plaq,x,y):
@@ -1720,14 +1720,14 @@ class ColorBoxPlot(WorkspacePlot):
             elif ptyp == "driftpwr":
                 assert(driftresults is not None), \
                     "Must specify `driftresults` argument to create `driftpv` plot!"
-                detectorname = driftresults[1]
+                detectorkey = driftresults[1]
                 driftresults = driftresults[0]
                 assert(driftresults.number_of_entities == 1), \
                     "Currently cannot create a box-plot for multi-entity DriftResults!"
                 precomp=False
                 colormapType = "manuallinlog"
                 linlog_color = "green"
-                linlog_trans = driftresults.get_power_significance_threshold(sequence='per', detectorname=detectorname)
+                linlog_trans = driftresults.get_power_significance_threshold(sequence='per', detectorkey=detectorkey)
                 ytitle="Maximum power in spectrum"
                 
                 def _mx_fn(plaq,x,y):

@@ -25,7 +25,7 @@ class DriftResults(object):
         self.name = name
         return None
 
-    def add_formatted_data(self, timeseries, timestamps, gatestringlist, outcomeslist, number_of_counts, 
+    def add_formatted_data(self, timeseries, timestamps, gatestringlist, outcomes, number_of_counts, 
                            constNumTimes, enforcedConstNumTimes=None, marginalized=None, overwrite=False):
         """
         Todo
@@ -35,7 +35,7 @@ class DriftResults(object):
         self.timeseries = timeseries
         self.timestamps = timestamps
         self.gatestringlist = gatestringlist
-        self.outcomeslist = outcomeslist
+        self.outcomes = outcomes
         self.number_of_counts = number_of_counts
         self.constNumTimes = constNumTimes
         self.enforcedConstNumTimes = enforcedConstNumTimes
@@ -43,7 +43,7 @@ class DriftResults(object):
 
         self.number_of_entities = len(timeseries)
         self.number_of_sequences = len(gatestringlist)
-        self.number_of_outcomes = len(outcomeslist)
+        self.number_of_outcomes = len(outcomes)
         self.indexforGatestring = {gatestringlist[i]:i for i in range(self.number_of_sequences)}
 
         self.number_of_timesteps = [len(timeseries[0][i][0]) for i in range(self.number_of_sequences)]
@@ -69,7 +69,7 @@ class DriftResults(object):
         else:
             timesteps = _np.array(self.timestamps[seqInd][1:]) - _np.array(self.timestamps[seqInd][:self.number_of_timesteps[seqInd]-1])
 
-        return _np.array(timesteps)
+        return _np.array(_copy.deepcopy(timesteps))
 
     # Todo
     #def has_equally_spaced_timestamps(self, stype='absolute', rtol=1e-2):
@@ -176,7 +176,7 @@ class DriftResults(object):
                 assert(freqInds is None), "Only allowed to store the full modes set!"
                 self.modes[tup] = modes
 
-            return modes
+            return _copy.deepcopy(modes)
 
     def get_spectra_set(self, tup, freqInds=None, store=False):
         """
@@ -209,7 +209,7 @@ class DriftResults(object):
             assert(freqInds is None), "Only allowed to store the full spectra set!"
             self.spectra[tup] = specta 
 
-        return spectra
+        return _copy.deepcopy(spectra)
 
     def get_spectrum(self, entity='avg', sequence='avg', outcome='avg'):
         """
@@ -219,7 +219,7 @@ class DriftResults(object):
         spectra = self.get_spectra_set(testclasstup, None)
         dicttup = self._create_dict_tup(entity, sequence, outcome, pad=False)
 
-        return spectra[dicttup]
+        return _copy.deepcopy(spectra[dicttup])
 
     def get_maxpower(self, entity='avg', sequence='avg', outcome='avg', onlyTestedFreqs=False):
         """
@@ -250,9 +250,10 @@ class DriftResults(object):
 
         return maxpower_pvalue
 
-    def add_hypothesis_testing_results(self, significance, testClasses, betweenClassCorrection, inClassCorrections,
+    def add_drift_detection_results(self, significance, testClasses, betweenClassCorrection, inClassCorrections,
                                     control, driftdetected, driftdetectedinClass, testFreqInds, sigFreqIndsinClass,
-                                    powerSignificancePseudothreshold, significanceForClass, name='detection', overwrite=False):
+                                    powerSignificancePseudothreshold, significanceForClass, name='detection', overwrite=False,
+                                    settodefault=False):
         """
         Todo
         """
@@ -268,11 +269,14 @@ class DriftResults(object):
             self._sigFreqIndsinClass = {}
             self._powerSignificancePseudothreshold = {}
             self._significanceForClass = {}
-            self.defaultdetectionresults = name
+            self.defaultdetectorkey = name
 
         if not overwrite:
             assert(name not in self.significance.keys()), "Already contains drift detection results with this name! To overwrite them you must set `overwrite` to True!"    
         
+        if settodefault:
+            self.defaultdetectorkey = name
+
         self.significance[name] = significance
         self._testClasses[name] = testClasses
         self._betweenClassCorrection[name] = betweenClassCorrection
@@ -284,13 +288,6 @@ class DriftResults(object):
         self._sigFreqIndsinClass[name] = sigFreqIndsinClass
         self._powerSignificancePseudothreshold[name] = powerSignificancePseudothreshold
         self._significanceForClass[name] = significanceForClass
-
-        # Todo : writing this in by adding it has part of the results is maybe a bit odd, as it's a property
-        # of the data not the hypothesis testing. So maybe this should be a method of the results object.
-        # for key in dofPerSpectrumInClass:
-        #     # This over-writes any cases where we already had this.
-        #     self._dofPerSpectrumInClass[key] = dofPerSpectrumInClass[key]       
-        #     self._numTestsinClass[key] = numTestsinClass[key]
 
         return None 
 
@@ -314,15 +311,37 @@ class DriftResults(object):
 
         return tuple(testclasstup)
 
+    def _get_equivalent_testclass_tuple(self, tup):
+        """
+        todo.
+        """
+        newtup = []
+        if self.number_of_entities == 1:    
+            newtup.append('avg')
+        else:
+            newtup.append(tup[0])
+        if self.number_of_sequences == 1:    
+            newtup.append('avg')
+        else:
+            newtup.append(tup[1])
+        if self.number_of_sequences == 2:    
+            newtup.append('avg')
+        else:
+            newtup.append(tup[2])
+
+        return tuple(newtup)
+
     def _create_dict_tup(self, entity, sequence, outcome, pad=True):
         """
         Todo
         """
         dicttup = []
-        if entity == 'avg':
+        if entity == 'avg' or self.number_of_entities == 1:
             if pad: dicttup.append('avg')
+        else:
+            dicttup.append(entity)
 
-        if sequence == 'avg':
+        if sequence == 'avg' or self.number_of_sequences == 1:
             if pad: dicttup.append('avg')
         else:
             if isinstance(sequence,int):
@@ -345,8 +364,14 @@ class DriftResults(object):
         Todo
         """
         if detectorkey is None:
-            detectorkey = self.defaultdetectionresults
+            detectorkey = self.defaultdetectorkey
         testclasstup = self._create_testclass_tuple(entity, sequence, outcome)
+
+        if testclasstup not in self._testClasses[detectorkey]:
+            
+            equivtestclasstup = self._get_equivalent_testclass_tuple(testclasstup)
+            assert(equivtestclasstup in self._testClasses[detectorkey]), "Drift dectection on this level was not performed! So drift indices cannot be returned."
+            testclasstup = equivtestclasstup
 
         # Todo : here it should for equivalent test pointers.
         assert(testclasstup in self._testClasses[detectorkey]), "Drift dectection on this level was not performed! So drift indices cannot be returned."
@@ -356,7 +381,7 @@ class DriftResults(object):
         if sort:
             driftfreqInds.sort()
 
-        return driftfreqInds
+        return _copy.deepcopy(driftfreqInds)
 
     def get_drift_frequencies(self, entity='avg', sequence='avg', outcome='avg', detectorkey=None):
         """
@@ -364,7 +389,7 @@ class DriftResults(object):
         """
         freqInd = self.get_drift_frequency_indices(entity=entity, sequence=sequence, outcome= outcome, sort=False, detectorkey=detectorkey)
 
-        return self.frequenciesInHz[freqInd]
+        return _copy.deepcopy(self.frequenciesInHz[freqInd])
 
     def get_power_significance_threshold(self, entity='avg', sequence='avg', outcome='avg', detectorkey=None):
         """
@@ -376,8 +401,8 @@ class DriftResults(object):
         assert(testtup in self._testClasses[detectorkey]), "Can only get a significance threshold if this test class was implemented! To create an ad-hoc post-fact threshold use the functions in drift.statistics"
 
         thresholdset = self._powerSignificancePseudothreshold[detectorkey][testtup]
-        # If it's a int, it's a "true" threshold, so we set the threshold to this.
-        if isinstance(thresholdset,int):
+        # If it's a float, it's a "true" threshold, so we set the threshold to this.
+        if isinstance(thresholdset,float):
             threshold = thresholdset 
         # If it's a dict it's either a single pseudo-threshold or a set of pseudo-threholds.
         else:
@@ -398,37 +423,24 @@ class DriftResults(object):
 
         return pvalue_threshold
 
-    def add_reconstructions_set(self, estimator, modelSelection, hyperparameters, parameters, reconstructions, 
-                                uncertainties=None, auxDict={}, overwrite=False, setasDefault=True):
+    def add_reconstruction(self, entity, sequence, model, modelSelector, estimator, auxDict={}, overwrite=False):
         """
-        Todo
+        todo
         """
-        if not hasattr(self,'reconstructions'):
-            self.hyperparameters = {}
-            self.parameters = {}
-            self.reconstructions = {}
-            self.uncertainties = {}
-            self._auxDict = {}
-            self._reconstruction_default = (estimator,modelSelection) 
+        if not hasattr(self,"models"):
+            self.models = {}
+            self.estimationAuxDict = {}
 
-        if not overwrite:
-            assert ((estimator,modelSelection) not in self.reconstructions.key()), "An reconstruction of this sort already saved! Set overwrite to True to replace it."
+        if (entity, sequence) not in self.models.keys():
+            self.models[entity,sequence] = {}
 
-        self.hyperparameters = _copy.deepcopy(hyperparameters)
-        self.parameters = _copy.deepcopy(parameters)
-        self.reconstructions[estimator,modelSelection] = _copy.deepcopy(reconstructions)
-        
-        if uncertainties is not None:
-            self.uncertainties[estimator,modelSelection] = _copy.deepcopy(reconstructions)
-        else:
-            self.uncertainties[estimator,modelSelection] = None
+        if (modelSelector, estimator) in self.models[entity,sequence].keys():
+            assert(overwrite), "Cannot add this model, as overwrite is False and a model with this key already exists!"
 
-        self._auxDict[estimator,modelSelection] = _copy.deepcopy(auxDict)
+        self.models[entity,sequence][modelSelector, estimator] =  _copy.deepcopy(model)
 
-        if setasDefault:
-             self._reconstruction_default = (estimator,modelSelection)
-        
         return None
+         # Todo : currently the AuxDict is not stored.
         
     # def is_drift_detected(self):
         
@@ -472,9 +484,12 @@ class DriftResults(object):
         _seaborn.set_style('white')
         _plt.figure(figsize=figsize)
 
-        if detectorkey is None:
-            detectorkey = self.defaultdetectorkey
-        
+        try:
+            if detectorkey is None:
+                detectorkey = self.defaultdetectorkey
+        except:
+            pass
+
         # if self.name is not None:
         #     name_in_title1 = ' and dataset '+self.name
         #     name_in_title2 = ' for dataset '+self.name
@@ -596,7 +611,7 @@ class DriftResults(object):
         noiselevel = 1
         _plt.axhline(noiselevel,color='c',label='Average shot-noise level')
         if plotthreshold:
-            _plt.axhline(threshold,color='r',label='{} global stat. significance threshold'.format(self.significance))
+            _plt.axhline(threshold,color='r',label='{} global stat. significance threshold'.format(self.significance[detectorkey]))
 
         
         # if threshold == '1test' or threshold == 'all':  
@@ -646,6 +661,7 @@ class DriftResults(object):
         # _plt.ylabel("Power",fontsize=15)
         # _plt.xlim(xlim)
         
+        _plt.tight_layout()
         if savepath is not None:
             _plt.savefig(savepath)
         else:
@@ -668,199 +684,208 @@ class DriftResults(object):
     #                                     errorbars=errorbars,
     #                                     plot_data=plot_data, target_value=None,parray=parray, figsize=figsize, 
     #                                     savepath=savepath, loc=loc, title=title)
-        
-   
-    def plot_estimated_probability(self, sequence, entity=0, outcome='0', errorbars=True,
-                                   plot_data=False, target_value=None, parray=None, figsize=(15,3), savepath=None, 
-                                   loc=None, title=True):
-        
-        sequence_index = sequence
-        
-        if self.sequences_to_indices is not None:
-            if type(sequence) != int:
-                if sequence in list(self.sequences_to_indices.keys()):
-                    sequence_index = self.sequences_to_indices[sequence]
-                        
-        if self.outcomes is not None:
-            if outcome in self.outcomes:
-                outcome_index = self.outcomes.index(outcome)
-            else:
-                outcome_index = outcome
-        else:
-            outcome_index = outcome
       
+    
+    # Todo:
+    #def add_target_probabilities(targetGateset):
+    #
+    #    return  None
+   
+    def plot_probability_trajectory_estimates(self, gatestringlist, entityInd=0, outcomeInd=0, uncertainties=False,
+                                              plotData=False, targetValue=None, figsize=(15,3), 
+                                              savepath=None, loc=None, title=True, 
+                                              estimatekey=((('per', 'per', 'avg'), 'detection'), 'DCT-filter-UAR')):
+        
+        # sequence_index = sequence
+        
+        # if self.sequences_to_indices is not None:
+        #     if type(sequence) != int:
+        #         if sequence in list(self.sequences_to_indices.keys()):
+        #             sequence_index = self.sequences_to_indices[sequence]
+                        
+        # if self.outcomes is not None:
+        #     if outcome in self.outcomes:
+        #         outcome_index = self.outcomes.index(outcome)
+        #     else:
+        #         outcome_index = outcome
+        # else:
+        #     outcome_index = outcome
         
         try:
             import matplotlib.pyplot as _plt
         except ImportError:
-            raise ValueError("plot_power_spectrum(...) requires you to install matplotlib")
+            raise ValueError("This method requires you to install matplotlib")
 
         _plt.figure(figsize=figsize)
+                
+        times = []
+        for gs in gatestringlist:
+            gsInd = self.indexforGatestring[gs]
+            times += list(self.timestamps[gsInd])
         
-        if self.timestep is not None:
-            times = self.timestep*_np.arange(0,self.number_of_timesteps)
-            xlabel = 'Time (seconds)'
-        else:
-            times = _np.arange(0,self.number_of_timesteps)
-            xlabel = 'Time (timesteps)'
-        
-        if self.indices_to_sequences is not None:
-            sequence_label = str(self.indices_to_sequences[sequence_index])
-        else:
-            sequence_label = str(sequence_index)
+        times.sort()       
 
-        if self.outcomes is not None:
-            outcome_label = str(self.outcomes[outcome_index])
-        else:
-            outcome_label = str(outcome_index)
+        # else:
+        #     times = _np.arange(0,self.number_of_timesteps)
+        #     xlabel = 'Time (timesteps)'
         
-        if plot_data:
-            label = 'Data'
-            _plt.plot(times,self.data[sequence_index,entity,outcome_index,:]/self.number_of_counts,'.',label=label)
+        # if self.indices_to_sequences is not None:
+        #     sequence_label = str(self.indices_to_sequences[sequence_index])
+        # else:
+        #     sequence_label = str(sequence_index)
+
+        # if self.outcomes is not None:
+        #     outcome_label = str(self.outcomes[outcome_index])
+        # else:
+        #     outcome_label = str(outcome_index)
         
-        p = self.pspepo_reconstruction[sequence_index,entity,outcome_index,:]
-        error = self.pspepo_reconstruction_uncertainty[sequence_index,entity,outcome_index]
-        upper = p+error
-        lower = p-error
-        upper[upper > 1.] = 1.
-        lower[lower < 0.] = 0.
-            
-        _plt.plot(times,p,'r-',label='Estimated $p(t)$')
+        # if plotData:
+        #     label = 'Data'
+        #     _plt.plot(times,self.timeseries[sequence][entity][outcome_index]/self.number_of_counts,'.',label=label)
+             
+        for gs in gatestringlist:
+            gsInd = self.indexforGatestring[gs]
+            p = self.models[entityInd,gsInd][estimatekey].get_probabilities(times)[outcomeInd]
+        # error = self.pspepo_reconstruction_uncertainty[sequence_index,entity,outcome_index]
+        # upper = p+error
+        # lower = p-error
+        # upper[upper > 1.] = 1.
+        # lower[lower < 0.] = 0.
         
-        if errorbars:
-            _plt.fill_between(times, upper, lower, alpha=0.2, color='r')
+            _plt.plot(times,p,'-',label='{}'.format(gs))
         
-        if parray is not None:
-            _plt.plot(times,parray[sequence_index,entity,outcome_index,:],'c--',label='True $p(t)$')
+        # if errorbars:
+        #     _plt.fill_between(times, upper, lower, alpha=0.2, color='r')
         
-        if target_value is not None:
-            _plt.plot(times,target_value*_np.ones(self.number_of_timesteps),'k--',label='Target value')
+        # if target_value is not None:
+        #     _plt.plot(times,target_value*_np.ones(self.number_of_timesteps),'k--',label='Ideal outcome probability')
         
         if loc is not None:
             _plt.legend(loc=loc)
         else:
             _plt.legend()
             
-        _plt.xlim(0,_np.max(times))
-        _plt.ylim(0,1)
+        #_plt.xlim(0,_np.max(times))
+        _plt.ylim(-0.05,1.05)
         
-        if title:
-            if self.number_of_entities > 1:
-                title = "Estimated probability for sequence " + sequence_label + ", entity "
-                title += str(entity) + " and outcome " + outcome_label
-            else:
-                title = "Estimated probability for sequence " + sequence_label + " and outcome " + outcome_label
+        # if title:
+        #     if self.number_of_entities > 1:
+        #         title = "Estimated probability for sequence " + sequence_label + ", entity "
+        #         title += str(entity) + " and outcome " + outcome_label
+        #     else:
+        #         title = "Estimated probability for sequence " + sequence_label + " and outcome " + outcome_label
          
-        _plt.title(title,fontsize=17)
-        _plt.xlabel(xlabel,fontsize=15)
+        _plt.title("Estimated probability trajectories",fontsize=17)
+        _plt.xlabel('Time (seconds)',fontsize=15)
         _plt.ylabel("Probability",fontsize=15)
         
+        _plt.tight_layout()
         if savepath is not None:
             _plt.savefig(savepath)
         else:
             _plt.show()
 
             
-    def plot_multi_estimated_probabilities(self, sequence_list, entity=0, outcome=0, errorbars=True,
-                                   target_value=None, figsize=(15,3), savepath=None, 
-                                   loc=None, usr_labels=None, usr_title=None, xlim=None):
+    # def plot_multi_estimated_probabilities(self, sequence_list, entity=0, outcome=0, errorbars=True,
+    #                                target_value=None, figsize=(15,3), savepath=None, 
+    #                                loc=None, usr_labels=None, usr_title=None, xlim=None):
         
-        sequence_index_list = sequence_list
+    #     sequence_index_list = sequence_list
         
-        # Override this if ....
-        if self.sequences_to_indices is not None:
-            if type(sequence_list[0]) != int: 
-                if sequence_list[0] in list(self.sequences_to_indices.keys()):
-                    sequence_index_list = []
-                    for seq in sequence_list:    
-                        sequence_index_list.append(self.sequences_to_indices[seq])
+    #     # Override this if ....
+    #     if self.sequences_to_indices is not None:
+    #         if type(sequence_list[0]) != int: 
+    #             if sequence_list[0] in list(self.sequences_to_indices.keys()):
+    #                 sequence_index_list = []
+    #                 for seq in sequence_list:    
+    #                     sequence_index_list.append(self.sequences_to_indices[seq])
             
-        if self.outcomes is not None:
-            if outcome in self.outcomes:
-                outcome_index = self.outcomes.index(outcome)
-            else:
-                outcome_index = outcome
-        else:
-            outcome_index = outcome
+    #     if self.outcomes is not None:
+    #         if outcome in self.outcomes:
+    #             outcome_index = self.outcomes.index(outcome)
+    #         else:
+    #             outcome_index = outcome
+    #     else:
+    #         outcome_index = outcome
         
-        try:
-            import matplotlib.pyplot as _plt
-        except ImportError:
-            raise ValueError("plot_power_spectrum(...) requires you to install matplotlib")
+    #     try:
+    #         import matplotlib.pyplot as _plt
+    #     except ImportError:
+    #         raise ValueError("plot_power_spectrum(...) requires you to install matplotlib")
 
-        _plt.figure(figsize=figsize)
+    #     _plt.figure(figsize=figsize)
         
-        if self.timestep is not None:
-            times = self.timestep*_np.arange(0,self.number_of_timesteps)
-            xlabel = 'Time (seconds)'
-        else:
-            times = _np.arange(0,self.number_of_timesteps)
-            xlabel = 'Time (timesteps)'
+    #     if self.timestep is not None:
+    #         times = self.timestep*_np.arange(0,self.number_of_timesteps)
+    #         xlabel = 'Time (seconds)'
+    #     else:
+    #         times = _np.arange(0,self.number_of_timesteps)
+    #         xlabel = 'Time (timesteps)'
         
-        sequence_label = {}
-        for sequence_index in sequence_index_list:
-            if self.indices_to_sequences is not None:
-                sequence_label[sequence_index] = str(self.indices_to_sequences[sequence_index])
-            else:
-                sequence_label[sequence_index] = str(sequence_index)
+    #     sequence_label = {}
+    #     for sequence_index in sequence_index_list:
+    #         if self.indices_to_sequences is not None:
+    #             sequence_label[sequence_index] = str(self.indices_to_sequences[sequence_index])
+    #         else:
+    #             sequence_label[sequence_index] = str(sequence_index)
 
-        if self.outcomes is not None:
-            outcome_label = str(self.outcomes[outcome_index])
-        else:
-            outcome_label = str(outcome_index)
+    #     if self.outcomes is not None:
+    #         outcome_label = str(self.outcomes[outcome_index])
+    #     else:
+    #         outcome_label = str(outcome_index)
         
-        num_curves = len(sequence_index_list)
-        c = _np.linspace(0,1,num_curves)
-        i = 0
+    #     num_curves = len(sequence_index_list)
+    #     c = _np.linspace(0,1,num_curves)
+    #     i = 0
         
-        for i in range(0,num_curves):
-            sequence_index = sequence_index_list[i]
-            p = self.pspepo_reconstruction[sequence_index,entity,outcome_index,:]
-            error = self.pspepo_reconstruction_uncertainty[sequence_index,entity,outcome_index]
-            upper = p+error
-            lower = p-error
-            upper[upper > 1.] = 1.
-            lower[lower < 0.] = 0.
+    #     for i in range(0,num_curves):
+    #         sequence_index = sequence_index_list[i]
+    #         p = self.pspepo_reconstruction[sequence_index,entity,outcome_index,:]
+    #         error = self.pspepo_reconstruction_uncertainty[sequence_index,entity,outcome_index]
+    #         upper = p+error
+    #         lower = p-error
+    #         upper[upper > 1.] = 1.
+    #         lower[lower < 0.] = 0.
             
-            if errorbars:
-                _plt.fill_between(times, upper, lower, alpha=0.2, color=_plt.cm.RdYlBu(c[i]))
+    #         if errorbars:
+    #             _plt.fill_between(times, upper, lower, alpha=0.2, color=_plt.cm.RdYlBu(c[i]))
                 
-            label = 'Estimated $p(t)$ for sequence '+sequence_label[sequence_index]
-            if usr_labels is not None:
-                label = usr_labels[i]
+    #         label = 'Estimated $p(t)$ for sequence '+sequence_label[sequence_index]
+    #         if usr_labels is not None:
+    #             label = usr_labels[i]
                 
-            _plt.plot(times,p,'-',lw=2,label=label, color=_plt.cm.RdYlBu(c[i]))
+    #         _plt.plot(times,p,'-',lw=2,label=label, color=_plt.cm.RdYlBu(c[i]))
             
         
-        if target_value is not None:
-            _plt.plot(times,target_value*_np.ones(self.number_of_timesteps),'k--',lw=2,label='Target value')
+    #     if target_value is not None:
+    #         _plt.plot(times,target_value*_np.ones(self.number_of_timesteps),'k--',lw=2,label='Target value')
         
-        if loc is not None:
-            _plt.legend(loc=loc)
-        else:
-            _plt.legend()
+    #     if loc is not None:
+    #         _plt.legend(loc=loc)
+    #     else:
+    #         _plt.legend()
         
-        if xlim == None:
-            _plt.xlim(0,_np.max(times))
-        else:
-            _plt.xlim(xlim)
-        _plt.ylim(0,1)
+    #     if xlim == None:
+    #         _plt.xlim(0,_np.max(times))
+    #     else:
+    #         _plt.xlim(xlim)
+    #     _plt.ylim(0,1)
         
-        if self.number_of_entities > 1:
-            title = "Estimated probability for entity "
-            title += str(entity) + " and outcome " + outcome_label
+    #     if self.number_of_entities > 1:
+    #         title = "Estimated probability for entity "
+    #         title += str(entity) + " and outcome " + outcome_label
 
-        else:
-            title = "Estimated probability outcome " + outcome_label
+    #     else:
+    #         title = "Estimated probability outcome " + outcome_label
             
-        if usr_title is not None:
-            title = usr_title
+    #     if usr_title is not None:
+    #         title = usr_title
             
-        _plt.title(title,fontsize=17)
-        _plt.xlabel(xlabel,fontsize=15)
-        _plt.ylabel("Probability",fontsize=15)
+    #     _plt.title(title,fontsize=17)
+    #     _plt.xlabel(xlabel,fontsize=15)
+    #     _plt.ylabel("Probability",fontsize=15)
         
-        if savepath is not None:
-            _plt.savefig(savepath)
-        else:
-            _plt.show()
+    #     if savepath is not None:
+    #         _plt.savefig(savepath)
+    #     else:
+    #         _plt.show()

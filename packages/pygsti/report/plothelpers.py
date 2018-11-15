@@ -436,7 +436,9 @@ def _computeProbabilities(gss, gateset, dataset, probClipInterval=(-1e6,1e6),
     def smart(fn, *args, **kwargs):
         if smartc: 
             return smartc.cached_compute(fn, args, kwargs)[1]
-        else: return fn(*args, **kwargs)
+        else: 
+            if '_filledarrays' in kwargs: del kwargs['_filledarrays']
+            return fn(*args, **kwargs)
 
     gatestringList = gss.allstrs
 
@@ -617,6 +619,7 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
         ret[i,j] = dscomparator.llrs[gstr]
     return ret
 
+
 @smart_cached
 def drift_oneoverpvalue_matrices(gsplaq, driftresults):
     """
@@ -645,26 +648,24 @@ def drift_oneoverpvalue_matrices(gsplaq, driftresults):
 
     """
     pvalues_and_strings_dict = {}
-    for gs in driftresults.gatestringlist:
-        pvalues_and_strings_dict[gs] = driftresults.get_maxpower_pvalue(sequence=gs)
+    #for gs in driftresults.gatestringlist:
+    #    pvalues_and_strings_dict[gs] = driftresults.get_maxpower_pvalue(sequence=gs)
 
     ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for i,j,gstr in gsplaq:
         try:
-            # If the pvalue is infinite (which, because of how the pvalues are calculated, can happen
-            # when the true pvalue is well within the range of a float), we map it to twice the maximum
-            # non-infinity pvalue. The true pvalue must be greater than this value, but might not be as
-            # large as twice this value. It is rounded, as this will help identify cases where this
-            # fairly arbitrary procedure has been implemented.
-            if 1./pvalues_and_strings_dict[gstr]  == _np.inf:
-                oneoverpvls = 1./driftresults.ps_pvalue.copy()
-                oneoverpvls = oneoverpvls[_np.isfinite(oneoverpvls)]
-                ret[i,j] = 2*_np.round(_np.max(oneoverpvls))
+            pval = driftresults.get_maxpower_pvalue(sequence=gstr)
+            if pval  <= 0.:
+                #oneoverpvls = 1./driftresults.ps_pvalue.copy()
+                #oneoverpvls = oneoverpvls[_np.isfinite(oneoverpvls)]
+                #ret[i,j] = 2*_np.round(_np.max(oneoverpvls))
+                ret[i,j] = 16
             else:
-                ret[i,j] = 1./pvalues_and_strings_dict[gstr]
+                ret[i,j] = _np.log10(1./pval) #pvalues_and_strings_dict[gstr])
         except:
             pass
     return ret
+
 
 @smart_cached
 def drift_maxpower_matrices(gsplaq, driftresults):
@@ -691,17 +692,17 @@ def drift_maxpower_matrices(gsplaq, driftresults):
 
     """
     maxpowers_and_strings_dict = {}
-    for gs in driftresults.gatestringlist:
-        maxpowers_and_strings_dict[gs] = driftresults.get_maxpower(sequence=gs)
+    #for gs in driftresults.gatestringlist:
+    #    maxpowers_and_strings_dict[gs] = driftresults.get_maxpower(sequence=gs)
 
     ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for i,j,gstr in gsplaq:
         try:
-            ret[i,j] = maxpowers_and_strings_dict[gstr]
+            ret[i,j] = driftresults.get_maxpower(sequence=gstr)
+            #maxpowers_and_strings_dict[gstr]
         except:
             pass
     return ret
-
 
 def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False,
                 comm=None, smartc=None):  #TODO: pipe down minprobclip, radius, probclipinterval?

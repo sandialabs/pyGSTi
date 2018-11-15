@@ -325,13 +325,13 @@ class DataSetRow(object):
 
             if timestamps is not None:
                 while tsIndx < len(timestamps) and t > timestamps[tsIndx] \
-                      and not _np.isclose(t,timestamps[tsIndx]):
+                      and not _np.isclose(t,timestamps[tsIndx], rtol=0., atol=1e-12):
                     times.append(timestamps[tsIndx])
                     counts.append(0)
                     tsIndx += 1
 
-            if oli in olis and (timestamps is None or _np.isclose(t,timestamps[tsIndx])):
-                if not _np.isclose(t,last_t):
+            if oli in olis and (timestamps is None or _np.isclose(t,timestamps[tsIndx], rtol=0., atol=1e-12)):
+                if not _np.isclose(t,last_t, rtol=0., atol=1e-12):
                     times.append(t); tsIndx += 1
                     counts.append(0)
                     last_t = t
@@ -1602,7 +1602,8 @@ class DataSet(object):
                      'repType': _np.dtype(self.repType).str,
                      'collisionAction': self.collisionAction,
                      'uuid' : self.uuid,
-                     'auxInfo': self.auxInfo }
+                     'auxInfo': self.auxInfo,
+                     'comment': self.comment}
         return toPickle
 
     def __setstate__(self, state_dict):
@@ -1621,6 +1622,7 @@ class DataSet(object):
             self.oliData = []
             self.timeData = []
             self.repData = []
+            self.comment = ''
 
             self.oliType  = Oindex_type
             self.timeType = Time_type
@@ -1644,6 +1646,7 @@ class DataSet(object):
             self.oliType  = _np.dtype(state_dict['oliType'])
             self.timeType = _np.dtype(state_dict['timeType'])
             self.repType  = _np.dtype(state_dict['repType'])
+            self.comment  = state_dict.get('comment','')
             if bStatic: #always empty - don't save this, just init
                 self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
             else: self.cnt_cache = None
@@ -1685,7 +1688,8 @@ class DataSet(object):
                      'useReps': bool(self.repData is not None),
                      'collisionAction': self.collisionAction,
                      'uuid' : self.uuid,
-                     'auxInfo': self.auxInfo } #Don't pickle counts numpy data b/c it's inefficient
+                     'auxInfo': self.auxInfo,
+                     'comment': self.comment } #Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.oliData)
 
         bOpen = _compat.isstr(fileOrFilename)
@@ -1756,6 +1760,7 @@ class DataSet(object):
         self.collisionAction = state_dict['collisionAction']
         self.uuid    = state_dict['uuid']
         self.auxInfo = state_dict.get('auxInfo', _DefaultDict(dict)) #backward compat
+        self.comment = state_dict.get('comment', '') # backward compat
 
         useReps = state_dict['useReps']
 
