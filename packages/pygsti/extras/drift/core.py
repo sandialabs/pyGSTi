@@ -394,7 +394,7 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
         usedTestFreqInds = _np.arange(results.number_of_frequencies)
 
     driftdetectedinClass = {}
-    driftdeteted = False
+    driftdetected = False
     power_significance_pseudothreshold = {}
     sigFreqInds = {}
 

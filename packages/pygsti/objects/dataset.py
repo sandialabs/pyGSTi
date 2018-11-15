@@ -325,13 +325,13 @@ class DataSetRow(object):
 
             if timestamps is not None:
                 while tsIndx < len(timestamps) and t > timestamps[tsIndx] \
-                      and not _np.isclose(t,timestamps[tsIndx]):
+                      and not _np.isclose(t,timestamps[tsIndx], rtol=0., atol=1e-12):
                     times.append(timestamps[tsIndx])
                     counts.append(0)
                     tsIndx += 1
 
-            if oli in olis and (timestamps is None or _np.isclose(t,timestamps[tsIndx])):
-                if not _np.isclose(t,last_t):
+            if oli in olis and (timestamps is None or _np.isclose(t,timestamps[tsIndx], rtol=0., atol=1e-12)):
+                if not _np.isclose(t,last_t, rtol=0., atol=1e-12):
                     times.append(t); tsIndx += 1
                     counts.append(0)
                     last_t = t

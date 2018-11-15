@@ -694,7 +694,7 @@ class DriftResults(object):
     def plot_probability_trajectory_estimates(self, gatestringlist, entityInd=0, outcomeInd=0, uncertainties=False,
                                               plotData=False, targetValue=None, figsize=(15,3), 
                                               savepath=None, loc=None, title=True, 
-                                              estimatekey=((('per', 'per', 'avg'), 'detection'), 'DCT-filter-unbounded')):
+                                              estimatekey=((('per', 'per', 'avg'), 'detection'), 'DCT-filter-UAR')):
         
         # sequence_index = sequence
         
