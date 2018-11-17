@@ -1623,7 +1623,9 @@ class Circuit(_gstr.GateString):
             to the bit labels for readot.  E.g. Suppose only qubit 2 (on Rigetti hardware)
             is in use.  Then the pyGSTi string will have only one qubit (labeled 0); it
             will get remapped to 2 via qubit_conversion={0:2}.  At the end of the quil
-            circuit, readout should go recorded in bit 0, so readout_conversion = {2:0}
+            circuit, readout should go recorded in bit 0, so readout_conversion = {0:0}.
+            (That is, qubit with pyGSTi label 0 gets read to Rigetti bit 0, even though
+            that qubit has Rigetti label 2.)
 
         Returns
         -------
