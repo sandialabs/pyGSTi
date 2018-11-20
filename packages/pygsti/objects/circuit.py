@@ -1595,7 +1595,7 @@ class Circuit(_gstr.GateString):
         f.write("\end{document}")
         f.close()    
 
-    def convert_to_quil(self, gatename_conversion=None, qubit_conversion=None):
+    def convert_to_quil(self, gatename_conversion=None, qubit_conversion=None, readout_conversion=None):
         """
         Converts a circuit to a quil string.
 
@@ -1616,7 +1616,16 @@ class Circuit(_gstr.GateString):
             desired qubit labels in the quil output. Can be left as None if the qubit
             labels are either (1) integers, or (2) of the form 'Qi' for integer i. In
             this case they are converted to integers (i.e., for (1) the mapping is trivial,
-            for (2) the mapping strips the 'Q'). 
+            for (2) the mapping strips the 'Q').
+            
+        readout_conversion : dict, optional
+            If not None, a dictionary converting the qubit labels mapped through qubit_conversion
+            to the bit labels for readot.  E.g. Suppose only qubit 2 (on Rigetti hardware)
+            is in use.  Then the pyGSTi string will have only one qubit (labeled 0); it
+            will get remapped to 2 via qubit_conversion={0:2}.  At the end of the quil
+            circuit, readout should go recorded in bit 0, so readout_conversion = {0:0}.
+            (That is, qubit with pyGSTi label 0 gets read to Rigetti bit 0, even though
+            that qubit has Rigetti label 2.)
 
         Returns
         -------
@@ -1644,7 +1653,7 @@ class Circuit(_gstr.GateString):
         quil = ''
         depth = self.depth()
         
-        quil += 'DECLARE ro BIT[{0}]\n'.format(str(depth))
+        quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
         
         quil += 'PRAGMA INITIAL_REWIRING "NAIVE"\n'
         
@@ -1701,9 +1710,14 @@ class Circuit(_gstr.GateString):
             quil += 'PRAGMA PRESERVE_BLOCK\nPRAGMA END_PRESERVE_BLOCK\n'
         
         # Add in a measurement at the end.
-        for q in self.line_labels:
-#            quil += "MEASURE {0} [{1}]\n".format(str(qubit_conversion[q]),str(qubit_conversion[q]))
-            quil += "MEASURE {0} ro[{1}]\n".format(str(qubit_conversion[q]),str(qubit_conversion[q]))
+        if readout_conversion==None:
+            for q in self.line_labels:
+    #            quil += "MEASURE {0} [{1}]\n".format(str(qubit_conversion[q]),str(qubit_conversion[q]))
+                quil += "MEASURE {0} ro[{1}]\n".format(str(qubit_conversion[q]),str(qubit_conversion[q]))
+        else:
+            for q in self.line_labels:
+                quil += "MEASURE {0} ro[{1}]\n".format(str(qubit_conversion[q]),str(readout_conversion[q]))
+            
             
         return quil  
 
