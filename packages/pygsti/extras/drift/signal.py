@@ -1,10 +1,10 @@
+"""Signal analysis functions for time-series data"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""Functions for Fourier analysis of time-series data"""
 
 import numpy as _np
 from scipy.fftpack import dct as _dct
@@ -50,7 +50,9 @@ except:
 #         return _np.abs(_fft(rescaled_x))**2/T
 
 def DFT(x, times=None, counts=1, null_hypothesis=None):
-
+    """
+    Todo
+    """
     x_mean = _np.mean(x)
     T = len(x)
 
@@ -67,6 +69,12 @@ def DFT(x, times=None, counts=1, null_hypothesis=None):
     return _np.abs(_fft(rescaled_x))**2/T
 
 def LSP(x, times=None, frequencies='auto', counts=1, null_hypothesis=None):
+    """
+
+    Except for various renormalization aspects, this function is just a wrap-around of
+    astropy.stats.LombScargle(). So to use this function it is necessary to install that
+    package (which is not a required dependency for pyGSTi).
+    """
 
     x_mean = _np.mean(x)
     T = len(x)
@@ -141,7 +149,7 @@ def DCT(x, counts=1, null_hypothesis=None):
     
     return _dct((x - counts*null_hypothesis)/_np.sqrt(counts*null_hypothesis * (1 - null_hypothesis)),norm='ortho')
 
-def IDCT(modes,null_hypothesis,counts=1):
+def IDCT(modes, null_hypothesis, counts=1):
     """
     Inverts the DCT function.
     
@@ -213,7 +221,9 @@ def bartlett_spectrum_averaging(spectrum, num_spectra):
     return bartlett_spectrum
 
 def frequencies_from_timestep(timestep,T):
-    
+    """
+    todo
+    """
     return _np.arange(0,T)/(2*timestep*T)
 
 # Todo : make a method of a transform object.
@@ -224,7 +234,10 @@ def amplitudes_at_frequencies(freqInds, timeseries, transform='DCT'):
     amplitudes = {}
     for o in timeseries.keys():
         if transform == 'DCT':
-            amplitudes[o] = list(_dct(timeseries[o],norm='ortho')[freqInds]/_np.sqrt(len(timeseries[o])))
+            temp = _dct(timeseries[o],norm='ortho')[freqInds]/_np.sqrt(len(timeseries[o])/2)
+            if 0. in freqInds:
+                temp[0] = temp[0]/_np.sqrt(2)
+            amplitudes[o] = list(temp)
         elif transform == 'DFT':
             # todo : check this normalization (this bit of function has never been used)
             amplitudes[o] = list(_fft(timeseries[o])[freqInds]/len(timeseries[o]))
@@ -238,6 +251,10 @@ def DCT_basis_function(omega, T, t):
     These are the *unnormalized* DCT amplitudes.
     """
     return _np.cos(omega*_np.pi*(t+0.5)/T)
+
+def DCT_basisfunction(omega, times, starttime, timedif):
+
+    return _np.array([_np.cos(omega*_np.pi*(t-starttime+0.5)/timedif) for t in times])
 
 #def create_DCT_basis_function(omega, T):
 #
@@ -255,16 +272,41 @@ def DCT_basis_function(omega, T, t):
 
 def sparsity(p):
     """
-    Returns the Hoyer index of the input vector.
-    TODO: docstring
+    Returns the Hoyer sparsity index of the input vector p.
+    This is defined to be:
+
+        (sqrt(l) - (|p|_1/|p|_2))/(sqrt(l) - 1)
+
+    where l is the length of the vector and |.|_1 and |.|_2
+    are the 1-norm and 2-norm of the vector, resp.
+    
+    Parameters
+    ----------
+    p : numpy.array
+        The vector to find return the sparsity of.
+
+    Returns
+    -------
+    float
+        The Hoyer index of the input.
     """
     n = len(p)
     return (_np.sqrt(n) - _np.linalg.norm(p,1)/_np.linalg.norm(p,2))/(_np.sqrt(n)-1)
 
 def renormalizer(p, method='logistic'):
     """
-    Takes an arbitrary input vector and maps it to a vector
-    bounded within [0,1].
+    Takes an arbitrary input vector `p` and maps it to a vector
+    bounded within [0,1]. If `method` is "sharp", then it maps
+    any value in `p` below zero to zero and any value in `p` above
+    one to one. If `method` is "logistic" then it 'squashes' the
+    vector around it's mean value using a logistic function. The
+    exact transform for each element x of p is:
+
+        x -> mean - nu + (2*nu) / (1 + exp(-2 * (x - mean) / nu))
+
+    where mean is the mean value of p, and nu is min(1-mean,mean).
+    This transformation is only sensible when the mean of p is
+    within [0,1].
 
     Parameters
     ----------
@@ -272,13 +314,12 @@ def renormalizer(p, method='logistic'):
         The vector with values to be mapped to [0,1]
 
     method : {'logistic', 'sharp'}
-
+        The method for "squashing" the input vector.
 
     Returns
     -------
     numpy.array
-        If method is 'sharp' then...
-        If method is 'logistic' then..
+        The input vector "squashed" using the specified method.
     """
     if method == 'logistic':
     
@@ -296,61 +337,24 @@ def renormalizer(p, method='logistic'):
         
     return out
 
-def logistic_transform(p, mean):
+def logistic_transform(x, mean):
     """
-    Todo
+    Transforms the input float `x` as:
+
+        x ->  mean - nu + (2*nu) / (1 + exp(-2 * (x - mean) / nu))
+
+    where nu is min(1-mean,mean). This is a form of logistic 
+    transform, and maps x to a value in [0,1].
     """
     nu = min([1-mean ,mean ]) 
-    out = mean - nu + (2*nu)/(1 + _np.exp(-2*(p - mean)/nu))
+    out = mean - nu + (2*nu)/(1 + _np.exp(-2*(x - mean)/nu))
     return out
-
-def constrain_model_via_uniform_amplitude_compression(model, times, epsilon=0.001, stepsize=0.005,
-                                                       verbosity=1):
-    """
-    Todo. This only works given that parameter 0 is the DC-mode and the probablities sum to
-    1 at each time.
-
-    Returns
-    -------
-
-    """
-    newmodel = model.copy()
-    if len(newmodel.basisfunctionInds) <= 1:
-        return model, False
-
-    pt = newmodel.get_probabilities(times)
-
-    maxpt = max([max(pt[o]) for o in model.parameters.keys()])
-    minpt = min([min(pt[o]) for o in model.parameters.keys()])
-
-    iteration = 1
-    modelchanged = False
-    while maxpt >= 1-epsilon or minpt <= epsilon:
-        
-        modelchanged = True
-        newparameters = model.parameters.copy()
-        for i in model.parameters.keys():
-            newparameters[i][1:] = [decrease_magnitude(p,stepsize) for p in newparameters[i][1:]]
-        
-        # Input the new parameters to the model
-        newmodel.set_parameters(newparameters)
-        # Get the new probabilities trajectory
-        pt = model.get_probabilities(times)
-        # Find out it's max and min value
-        maxpt = max([max(pt[o]) for o in model.parameters.keys()])
-        minpt = min([min(pt[o]) for o in model.parameters.keys()])
-
-        if iteration >= 10000:
-            _warnings.warning("10,000 iterations implemented trying to make model physical! Quiting and returning unphysical model.")
-            return model 
-
-        iteration += 1
-
-    return newmodel, modelchanged
 
 def decrease_magnitude(p, epsilon):
     """
-    todo.
+    When |`p`| > `epsilon` it returns the float that is
+    closer to 0. by an amount `epsilon`, and when |`p`| 
+    < `epsilon` it returns 0.
     """
     if p > 0:
         p = p - epsilon
@@ -366,6 +370,58 @@ def decrease_magnitude(p, epsilon):
             return 0
     else:
         return 0.
+
+def low_pass_filter(data, max_freq=None, transform='DCT'):
+    """
+    Implements a low-pass filter on the input array, by Fourier transforming
+    the input, mapping all but the lowest `max_freq` modes to zero, and then
+    inverting the transform.
+
+    Parameters
+    ----------
+    data : numpy.array,
+        The vector to low-pass filter
+
+    max_freq : None or int, optional
+        The highest frequency to keep. If None then it keeps the minimum
+        of 50 or l/10 frequencies, where l is the length of the data vector
+
+    transform : str in {'DCT','DFT'}
+        The type of transform to use: the type-II discrete cosine transform or
+        the discrete Fourier transform.  
+    
+    Returns
+    -------
+    numpy.array
+        The low-pass-filtered data.
+    """
+    n = len(data) 
+    
+    if max_freq is None:
+        max_freq = min(int(_np.ceil(n/10)),50)
+        
+    if transform == 'DCT':
+        modes = _dct(data)
+    if transform == 'DFT':
+        modes = _fft(data)
+
+    if max_freq < n - 1:
+        modes[max_freq + 1:] = _np.zeros(len(data)-max_freq-1)
+
+    if transform == 'DCT':
+        out = _idct(modes)
+    if transform == 'DFT':
+        out = _ifft(modes)
+    return out
+
+def moving_average(sequence, width=100):
+    """
+    TODO: docstring
+    """
+    seq_length = len(sequence)
+    base = _convolve(_np.ones(seq_length), _np.ones((int(width),))/float(width), mode='same')
+    signal = _convolve(sequence, _np.ones((int(width),))/float(width), mode='same')
+    return signal/base 
 
 # def reduce_DCT_amplitudes_until_probability_is_physical(alphas, omegas, T, epsilon=0.001, step_size=0.005,
 #                                                         verbosity=1):
@@ -403,28 +459,3 @@ def decrease_magnitude(p, epsilon):
 #     if verbosity > 0:
 #         print("Estimate within bounds.")
 #     return newalphas 
-
-def low_pass_filter(data, max_freq=None):
-    """
-    TODO: docstring
-    """
-    n = len(data) 
-    
-    if max_freq is None:
-        max_freq = min(int(np.ceil(n/10)),50)
-        
-    modes = _dct(data,norm='ortho')
-    
-    if max_freq < n - 1:
-        modes[max_freq + 1:] = _np.zeros(len(data)-max_freq-1)
-
-    return _idct(modes,norm='ortho')
-
-def moving_average(sequence, width=100):
-    """
-    TODO: docstring
-    """
-    seq_length = len(sequence)
-    base = _convolve(_np.ones(seq_length), _np.ones((int(width),))/float(width), mode='same')
-    signal = _convolve(sequence, _np.ones((int(width),))/float(width), mode='same')
-    return signal/base 

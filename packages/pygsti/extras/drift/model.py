@@ -18,16 +18,34 @@ class ProbabilityTrajectoryModel(object):
     """
     def __init__(self, outcomes, modeltype, hyperparameters, parameters):
         """
-        todo: 
+        todo:
+
+        Parameters
+        ----------
+
+        modetype : str
+            The type of basis function for the model.
+
+        hyperparameters : 
+
+        parameters :
+        
+        Returns
+        -------
+        None
         """
         self.outcomes = outcomes
+        self.independent_outcomes = outcomes[:-1]
+        self.constrained_outcome = outcomes[-1]
         self.numoutcomes = len(outcomes)
         self.set_basisfunctions(modeltype, hyperparameters, parameters)
 
         return None        
     
     def set_basisfunctions(self, modeltype, hyperparameters, parameters):
-
+        """
+        Todo:
+        """
         self.modeltype = modeltype
 
         if modeltype == 'null':
@@ -74,6 +92,7 @@ class ProbabilityTrajectoryModel(object):
         basisfunctionInds = list(hyperparameters['basisfunctionInds'])
         basisfunctionInds.sort()
         assert(max(basisfunctionInds) < self.fullmodelsize)
+        assert(0. in basisfunctionInds), "The constant function must be one of the basis functions!"
         self.basisfunctionInds = basisfunctionInds
         self.set_parameters(parameters)
         self.modelsize_unconstrained = (self.numoutcomes-1)*len(basisfunctionInds)
@@ -86,17 +105,52 @@ class ProbabilityTrajectoryModel(object):
         """
         self.parameters = parameters
         return None 
+
+    def set_parameters_from_list(self, parameterslist):
+        """
+        todo:
+        """
+        numbasisfuncs = len(self.basisfunctionInds)
+        parameters = {o : parameterslist[oind:(1+oind)*numbasisfuncs] for oind,o in enumerate(self.independent_outcomes)}
+        self.parameters = parameters
+        return None
+
+    def get_parameters_as_list(self):
+        """
+        todo:
+        """
+        parameterslist = []
+        for o in self.independent_outcomes:
+            parameterslist += self.parameters[o]
+        return parameterslist
+
+    def get_parameters(self):
+        """
+        todo:
+        """
+        return self.parameters
    
     def get_probabilities(self, times):
         """
         todo
         """ 
-        return {o : _np.sum(_np.array([self.parameters[o][ind]*self.basisfunction(i,times) for ind, i in enumerate(self.basisfunctionInds)]), axis=0) for o in self.outcomes}    
+        p_for_constrained_outcome = _np.ones(len(times))
+        for o in self.independent_outcomes:
+            p = _np.sum(_np.array([self.parameters[o][ind]*self.basisfunction(i,times) for ind, i in enumerate(self.basisfunctionInds)]), axis=0) 
+            p_for_constrained_outcome = p_for_constrained_outcome - p
+            probs = {o : p}    
+        probs[self.constrained_outcome] = p_for_constrained_outcome 
+        return probs
+
+    def get_independent_probabilities(self, times):
+        """
+        todo
+        """
+        return {o : _np.sum(_np.array([self.parameters[o][ind]*self.basisfunction(i,times) for ind, i in enumerate(self.basisfunctionInds)]), axis=0) for o in self.independent_outcomes}
 
     #def get_probabilities(times):
     #               
     #   return {o : [_np.sum(_np.array([self.parameters[o][0] + self.parameters[o][i]*_np.cos(freqIns[i]*_np.pi*(t-starttime+0.5)/timedif) for i in range(self.dof)])) for t in times]}    
 
     def copy(self):
-
         return _copy.deepcopy(self)

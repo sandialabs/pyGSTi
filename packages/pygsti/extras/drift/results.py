@@ -16,37 +16,61 @@ import copy as _copy
 
 class DriftResults(object):
     """
-    Todo
+    An object to contain the results of a drift detection and characterization analysis. 
+    See the various .get and .plot methods for how to access the results, after they have
+    been generated. For non-trivial use of this object it is first necessary to add time-series
+    data (see the .add_formated_data() method), and then to add the results of drift analyses, using
+    the other .add methods. This can be achieved using the core functions of the drift submodule.
     """
     def __init__(self, name=None):
         """
-        Todo
+        Initialize a DriftResults object
+
+        Parameters
+        ----------
+        name : str or None, optional
+            A name for the results object.
         """
         self.name = name
         return None
 
     def add_formatted_data(self, timeseries, timestamps, gatestringlist, outcomes, number_of_counts, 
-                           constNumTimes, enforcedConstNumTimes=None, marginalized=None, overwrite=False):
+                           constNumTimes, entitieslist=None, enforcedConstNumTimes=None, marginalized=None, 
+                           overwrite=False):
         """
-        Todo
+        Adds formatted time-series data. This is the first step in using a DriftResults object.
+
+        Todo: add details.
         """
         if not overwrite:
             assert(not hasattr(self,"timeseries")), "This results object already contains timeseries data! To overwrite it you must set `overwrite` to True!"     
+        
+        # The timeseries is a list of lists of dicts. The first index is entity index (corresponding
+        # to the entity at that index of the lsit self.entities). The second index is the 
+        # gatestring index, (corresponding to the gatestring at that index of the list 
+        # self.gatestringlist). The dictionary keys correspond to the outcomes in self.outcomeslist.
         self.timeseries = timeseries
         self.timestamps = timestamps
         self.gatestringlist = gatestringlist
+        self.number_of_sequences = len(gatestringlist)
+        self.indexforGatestring = {gatestringlist[i]:i for i in range(self.number_of_sequences)}
+
         self.outcomes = outcomes
-        self.number_of_counts = number_of_counts
+        self.number_of_outcomes = len(outcomes)
+        self.number_of_counts = number_of_counts    
         self.constNumTimes = constNumTimes
+
+        self.number_of_entities = len(timeseries)
+        if entitieslist is not None:
+            assert(len(entitieslist) == self.number_of_entities)
+        else:
+            entitieslist = [str(i) for i in range(self.number_of_entities)]
+        self.entitieslist = entitieslist
+
         self.enforcedConstNumTimes = enforcedConstNumTimes
         self.marginalized = marginalized
 
-        self.number_of_entities = len(timeseries)
-        self.number_of_sequences = len(gatestringlist)
-        self.number_of_outcomes = len(outcomes)
-        self.indexforGatestring = {gatestringlist[i]:i for i in range(self.number_of_sequences)}
-
-        self.number_of_timesteps = [len(timeseries[0][i][0]) for i in range(self.number_of_sequences)]
+        self.number_of_timesteps = [len(timeseries[0][i][self.outcomes[0]]) for i in range(self.number_of_sequences)]
         self.maxnumber_of_timesteps = max(self.number_of_timesteps)
         timesteps = self.get_timesteps()
         self.meantimestepGlobal = _np.mean(timesteps)
@@ -423,7 +447,8 @@ class DriftResults(object):
 
         return pvalue_threshold
 
-    def add_reconstruction(self, entity, sequence, model, modelSelector, estimator, auxDict={}, overwrite=False):
+    def add_reconstruction(self, entity, sequence, model, modelSelector, estimator, auxDict={}, overwrite=False,
+                           settodefault=True):
         """
         todo
         """
@@ -431,13 +456,25 @@ class DriftResults(object):
             self.models = {}
             self.estimationAuxDict = {}
 
-        if (entity, sequence) not in self.models.keys():
-            self.models[entity,sequence] = {}
+        eInd = self.entitieslist.index(entity)
+        sInd = self.indexforGatestring[sequence]
 
-        if (modelSelector, estimator) in self.models[entity,sequence].keys():
+        if (eInd, sInd) not in self.models.keys():
+            self.models[eInd,sInd] = {}
+
+        if (modelSelector, estimator) in self.models[eInd,sInd].keys():
             assert(overwrite), "Cannot add this model, as overwrite is False and a model with this key already exists!"
 
-        self.models[entity,sequence][modelSelector, estimator] =  _copy.deepcopy(model)
+        self.models[eInd,sInd][modelSelector, estimator] =  _copy.deepcopy(model)
+
+        if not hasattr(self,"defaultmodelkey"):
+            self.defaultmodelkey = {}
+        if settodefault:
+            self.defaultmodelkey[eInd,sInd] = (modelSelector, estimator)
+        else:
+            # If there isn't yet a default, we set it to this.
+            if (eInd,sInd) not in self.defaultmodelkey.keys():
+                self.defaultmodelkey[eInd,sInd] = (modelSelector, estimator)
 
         return None
          # Todo : currently the AuxDict is not stored.
@@ -691,10 +728,10 @@ class DriftResults(object):
     #
     #    return  None
    
-    def plot_probability_trajectory_estimates(self, gatestringlist, entityInd=0, outcomeInd=0, uncertainties=False,
+    def plot_probability_trajectory_estimates(self, gatestringlist, entity='0', outcome=('0',), uncertainties=False,
                                               plotData=False, targetValue=None, figsize=(15,3), 
                                               savepath=None, loc=None, title=True, 
-                                              estimatekey=((('per', 'per', 'avg'), 'detection'), 'DCT-filter-UAR')):
+                                              estimatekey=None):
         
         # sequence_index = sequence
         
@@ -743,9 +780,16 @@ class DriftResults(object):
         #     label = 'Data'
         #     _plt.plot(times,self.timeseries[sequence][entity][outcome_index]/self.number_of_counts,'.',label=label)
              
+        entityInd = self.entitieslist.index(entity)
+        outcomeInd = self.outcomes.index(outcome)
+
         for gs in gatestringlist:
             gsInd = self.indexforGatestring[gs]
-            p = self.models[entityInd,gsInd][estimatekey].get_probabilities(times)[outcomeInd]
+            if estimatekey is None:
+                gs_estimatekey = self.defaultmodelkey[entityInd,gsInd]
+            else:
+                 gs_estimatekey = estimatekey
+            p = self.models[entityInd,gsInd][gs_estimatekey].get_probabilities(times)[outcome]
         # error = self.pspepo_reconstruction_uncertainty[sequence_index,entity,outcome_index]
         # upper = p+error
         # lower = p-error
