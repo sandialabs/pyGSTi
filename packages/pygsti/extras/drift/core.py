@@ -157,7 +157,7 @@ def do_drift_characterization(ds, significance=0.05, marginalize='auto', transfo
         if verbosity > 1: print('')
     
     # Implement the drift detection with statistical hypothesis testing on the power spectra
-    implement_drift_detection(results, significance=0.05, testFreqInds=testFreqInds, whichTests=whichTests, 
+    implement_drift_detection(results, significance=significance, testFreqInds=testFreqInds, whichTests=whichTests, 
                               betweenClassCorrection=betweenClassCorrection, inClassCorrection=inClassCorrection,
                               verbosity=verbosity-1)
     
@@ -718,9 +718,11 @@ def estimate_probability_trajectories(results, modelSelector=(('per','per','avg'
             # Get the time-series data for this entity and sequence, as a dict with keys from 0 to the
             # number of possible measurement outcomes - 1.
             timeseries = results.timeseries[e][s]
+            # Normalize the timeseries 
+            timeseries = {key:value/results.number_of_counts for key,value in timeseries.items()}
             timestamps = results.timestamps[s] # Timestamps only indexed by sequence.
 
-            meandict = {o : _np.mean(results.timeseries[e][s][o]) for o in outcomes[:-1]}
+            meandict = {o : _np.mean(results.timeseries[e][s][o])/results.number_of_counts for o in outcomes[:-1]}
             #outcomeIndlist = list(range(results.number_of_outcomes))
             nullmodel = _mdl.ProbabilityTrajectoryModel(outcomes, modeltype='null', 
                                                         hyperparameters={'basisfunctionInds':[0.,]}, 
@@ -753,7 +755,9 @@ def estimate_probability_trajectories(results, modelSelector=(('per','per','avg'
 
                 # The hyper-parameters for the DCT model
                 hyperparameters = {"basisfunctionInds":freqs, 'starttime':results.timestamps[s][0], 
-                                   'endtime':results.timestamps[s][-1]}
+                                   'timestep':results.meantimestepPerSeq[s], 'numsteps':results.number_of_timesteps[s]}
+                                   #starttime = hyperparameters['starttime']
+
                 # The parameters for the DCT filter without amplitude reduction model (a "raw" DCT filter). This
                 # is the basis for *all* the models, so we construct it and save it no matter what 
                 # estimator has been requested

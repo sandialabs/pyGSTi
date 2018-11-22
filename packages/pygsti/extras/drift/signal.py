@@ -244,13 +244,13 @@ def amplitudes_at_frequencies(freqInds, timeseries, transform='DCT'):
     
     return  amplitudes
 
-def DCT_basis_function(omega, T, t):
-    """
-    Todo
+# def DCT_basis_function(omega, T, t):
+#     """
+#     Todo
 
-    These are the *unnormalized* DCT amplitudes.
-    """
-    return _np.cos(omega*_np.pi*(t+0.5)/T)
+#     These are the *unnormalized* DCT amplitudes.
+#     """
+#     return _np.cos(omega*_np.pi*(t+0.5)/T)
 
 def DCT_basisfunction(omega, times, starttime, timedif):
 

@@ -477,6 +477,15 @@ class DriftResults(object):
                 self.defaultmodelkey[eInd,sInd] = (modelSelector, estimator)
 
         return None
+
+
+    # Todo : write this function
+    def get_probability_trajectory(self,  entity, sequence, modelkey=None, times='sequence'):
+        """
+        This function hasn't been written yet!.
+        """
+        return p
+
          # Todo : currently the AuxDict is not stored.
         
     # def is_drift_detected(self):

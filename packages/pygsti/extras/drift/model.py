@@ -61,15 +61,16 @@ class ProbabilityTrajectoryModel(object):
 
             try:
                 starttime = hyperparameters['starttime']
-                endtime = hyperparameters['endtime']
-                timedif = endtime - starttime              
+                timestep = hyperparameters['timestep']
+                numsteps = hyperparameters['numsteps']
+                #timedif = endtime - starttime              
             except:
                 raise ValueError("The hyperparameters are invalid for the model type! Need the start time and end time to creat the basis functions!")
             
             self.fullmodelsize = _np.inf         
             def basisfunction(i, times):
-                return _np.array([_np.cos(i*_np.pi*(t-starttime+0.5)/timedif) for t in times])
-
+                #return _np.array([_np.cos(i*_np.pi*(t-starttime+0.5)/timedif) for t in times])
+                return _np.array([_np.cos(i*_np.pi*((t-starttime)/timestep+0.5)/numsteps) for t in times])
         else:
             raise ValueError("Invalid model type!")
 
@@ -79,7 +80,7 @@ class ProbabilityTrajectoryModel(object):
 
         return None
 
-    def get_basis_function(i, times):
+    def get_basis_function(self, i, times):
         """
         todo.
         """
