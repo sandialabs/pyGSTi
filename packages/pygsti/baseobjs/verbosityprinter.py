@@ -453,7 +453,7 @@ class VerbosityPrinter(object):
                                              numDecimals, fillChar, emptyChar,
                                              prefix, suffix, indent)
         elif self.verbosity >  self._progressStack[-1]:
-            progress = self._verbose_iteration(iteration, total+1, prefix, suffix, verboseMessages, indent, end)
+            progress = self._verbose_iteration(iteration, total, prefix, suffix, verboseMessages, indent, end)
             self._record("LOG", self._progressStack[-1], progress)
 
         self._put(progress) # send the progress logging to either file or stdout
