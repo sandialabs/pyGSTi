@@ -806,8 +806,12 @@ def create_standard_report(results, filename, title="auto",
 
     # Perform idle tomography on datasets if desired (need to do
     #  this before creating main switchboard)
-    idt_results_dict = _construct_idtresults(idtIdleGate, idtPauliDicts,
-                                             results_dict, printer)
+    try:
+        idt_results_dict = _construct_idtresults(idtIdleGate, idtPauliDicts,
+                                                 results_dict, printer)
+    except Exception as e:
+        _warnings.warn("Idle tomography failed:\n" + str(e))
+        idt_results_dict = {}        
     toggles['IdleTomography'] = bool(len(idt_results_dict) > 0)
 
     # Generate Switchboard
@@ -1388,8 +1392,12 @@ def create_nqnoise_report(results, filename, title="auto",
 
     # Perform idle tomography on datasets if desired (need to do
     #  this before creating main switchboard)
-    idt_results_dict = _construct_idtresults(idtIdleGate, idtPauliDicts,
-                                             results_dict, printer)
+    try:
+        idt_results_dict = _construct_idtresults(idtIdleGate, idtPauliDicts,
+                                                 results_dict, printer)
+    except Exception as e:
+        _warnings.warn("Idle tomography failed:\n" + str(e))
+        idt_results_dict = {}        
     toggles['IdleTomography'] = bool(len(idt_results_dict) > 0)
 
     # Generate Switchboard
