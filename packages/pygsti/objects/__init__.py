@@ -1,4 +1,4 @@
-""" Gate Set Tomography Objects Python Package """
+""" LinearOperator Set Tomography Objects Python Package """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -16,21 +16,21 @@ from .evaltree import EvalTree
 from .matrixevaltree import MatrixEvalTree
 from .mapevaltree import MapEvalTree
 from .termevaltree import TermEvalTree
-from .gate import Gate
-from .gate import GateMatrix
-from .gate import LinearlyParameterizedGate
-from .gate import FullyParameterizedGate
-from .gate import TPParameterizedGate
-from .gate import StaticGate
-from .gate import EigenvalueParameterizedGate
-from .gate import LindbladParameterizedGate
-from .gate import LindbladParameterizedGateMap
-from .gate import TPInstrumentGate
-from .gate import EmbeddedGateMap
-from .gate import EmbeddedGate
-from .gate import ComposedGateMap
-from .gate import ComposedGate
-from .gate import CliffordGate
+from .gate import LinearOperator
+from .gate import MatrixOperator
+from .gate import LinearlyParameterizedOp
+from .gate import FullyParameterizedOp
+from .gate import TPParameterizedOp
+from .gate import StaticOp
+from .gate import EigenvalueParameterizedOp
+from .gate import LindbladParameterizedOp
+from .gate import LindbladParameterizedOpMap
+from .gate import TPInstrumentOp
+from .gate import EmbeddedOpMap
+from .gate import EmbeddedOp
+from .gate import ComposedOpMap
+from .gate import ComposedOp
+from .gate import CliffordOp
 from .gate import LindbladErrorgen
 from .gate import ComposedErrorgen
 from .gate import EmbeddedErrorgen
@@ -54,10 +54,10 @@ from .povm import LindbladParameterizedPOVM
 from .instrument import Instrument
 from .instrument import TPInstrument
 
-from .gateset import GateSet
-from .gatestring import GateString
-from .gatestring import WeightedGateString
-from .gatestringstructure import GatestringStructure
+from .model import Model
+from .opstring import OpString
+from .opstring import WeightedOpString
+from .gatestringstructure import CircuitStructure
 from .gatestringstructure import LsGermsStructure
 from .gatestringstructure import LsGermsSerialStructure
 from .circuit import Circuit
@@ -82,7 +82,7 @@ from .labeldicts import StateSpaceLabels
 from .results import Results
 
 #Functions
-from .gate import compose, optimize_gate, finite_difference_deriv_wrt_params
+from .gate import compose, optimize_operation, finite_difference_deriv_wrt_params
 
 #Important Base Objects
 from ..baseobjs import VerbosityPrinter, Profiler, SmartCache, Basis, Label

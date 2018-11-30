@@ -28,9 +28,9 @@ class Results(object):
     Encapsulates a set of related GST estimates.
 
     A Results object is a container which associates a single `DataSet` and a
-    structured set of gate sequences (usually the experiments contained in the
+    structured set of operation sequences (usually the experiments contained in the
     data set) with a set of estimates.  Each estimate (`Estimate` object) contains
-    gate sets as well as parameters used to generate those inputs.  Associated
+    models as well as parameters used to generate those inputs.  Associated
     `ConfidenceRegion` objects, because they are associated with a set of gate
     sequences, are held in the `Results` object but are associated with estimates.
 
@@ -46,8 +46,8 @@ class Results(object):
 
         #Dictionaries of inputs & outputs
         self.dataset = None
-        self.gatestring_lists = _collections.OrderedDict()
-        self.gatestring_structs = _collections.OrderedDict()
+        self.circuit_lists = _collections.OrderedDict()
+        self.circuit_structs = _collections.OrderedDict()
         self.estimates = _collections.OrderedDict()
 
 
@@ -71,9 +71,9 @@ class Results(object):
         self.dataset = dataset
 
 
-    def init_gatestrings(self, structsByIter):
+    def init_circuits(self, structsByIter):
         """
-        Initialize the common set gate sequences used to form the
+        Initialize the common set operation sequences used to form the
         estimates of this Results object.
 
         There is one such set per GST iteration (if a non-iterative
@@ -82,60 +82,60 @@ class Results(object):
         Parameters
         ----------
         structsByIter : list
-            The gate strings used at each iteration. Ideally, elements are
+            The operation sequences used at each iteration. Ideally, elements are
             `LsGermsStruct` objects, which contain the structure needed to
             create color box plots in reports.  Elements may also be
-            unstructured lists of gate sequences (but this may limit
+            unstructured lists of operation sequences (but this may limit
             the amount of data visualization one can perform later).
 
         Returns
         -------
         None
         """
-        if len(self.gatestring_structs) > 0:
-            _warnings.warn(("Re-initializing the gate sequences of a Results"
+        if len(self.circuit_structs) > 0:
+            _warnings.warn(("Re-initializing the operation sequences of a Results"
                             " object!  Usually you don't want to do this."))
 
-        #Set gatestring structures
-        self.gatestring_structs['iteration'] = []
+        #Set circuit structures
+        self.circuit_structs['iteration'] = []
         for gss in structsByIter:
             if isinstance(gss, (_LsGermsStructure,_LsGermsSerialStructure)):
-                self.gatestring_structs['iteration'].append(gss)
+                self.circuit_structs['iteration'].append(gss)
             elif isinstance(gss, list):
                 unindexed_gss = _LsGermsStructure([],[],[],[],None)
                 unindexed_gss.add_unindexed(gss)
-                self.gatestring_structs['iteration'].append(unindexed_gss)
+                self.circuit_structs['iteration'].append(unindexed_gss)
             else:
-                raise ValueError("Unknown type of gate string specifier: %s"
+                raise ValueError("Unknown type of operation sequence specifier: %s"
                                  % str(type(gss)))
 
-        self.gatestring_structs['final'] = \
-                self.gatestring_structs['iteration'][-1]
+        self.circuit_structs['final'] = \
+                self.circuit_structs['iteration'][-1]
 
-        #Extract raw gatestring lists from structs
-        self.gatestring_lists['iteration'] = \
-                [ gss.allstrs for gss in self.gatestring_structs['iteration'] ]
-        self.gatestring_lists['final'] = self.gatestring_lists['iteration'][-1]
-        self.gatestring_lists['all'] = _tools.remove_duplicates(
-            list(_itertools.chain(*self.gatestring_lists['iteration'])) )
+        #Extract raw circuit lists from structs
+        self.circuit_lists['iteration'] = \
+                [ gss.allstrs for gss in self.circuit_structs['iteration'] ]
+        self.circuit_lists['final'] = self.circuit_lists['iteration'][-1]
+        self.circuit_lists['all'] = _tools.remove_duplicates(
+            list(_itertools.chain(*self.circuit_lists['iteration'])) )
 
         running_set = set(); delta_lsts = []
-        for lst in self.gatestring_lists['iteration']:
+        for lst in self.circuit_lists['iteration']:
             delta_lst = [ x for x in lst if (x not in running_set) ]
             delta_lsts.append(delta_lst); running_set.update(delta_lst)
-        self.gatestring_lists['iteration delta'] = delta_lsts # *added* at each iteration
+        self.circuit_lists['iteration delta'] = delta_lsts # *added* at each iteration
 
         #Set "Ls and germs" info: gives particular structure
-        # to the gateStringLists used to obtain estimates
-        finalStruct = self.gatestring_structs['final']
+        # to the circuitLists used to obtain estimates
+        finalStruct = self.circuit_structs['final']
         if isinstance(finalStruct, _LsGermsStructure): # FUTURE: do something sensible w/ LsGermsSerialStructure?
-            self.gatestring_lists['prep fiducials'] = finalStruct.prepStrs
-            self.gatestring_lists['effect fiducials'] = finalStruct.effectStrs
-            self.gatestring_lists['germs'] = finalStruct.germs
+            self.circuit_lists['prep fiducials'] = finalStruct.prepStrs
+            self.circuit_lists['effect fiducials'] = finalStruct.effectStrs
+            self.circuit_lists['germs'] = finalStruct.germs
         else:
-            self.gatestring_lists['prep fiducials'] = []
-            self.gatestring_lists['effect fiducials'] = []
-            self.gatestring_lists['germs'] = []
+            self.circuit_lists['prep fiducials'] = []
+            self.circuit_lists['effect fiducials'] = []
+            self.circuit_lists['germs'] = []
 
 
     def add_estimates(self, results, estimatesToAdd=None):
@@ -161,12 +161,12 @@ class Results(object):
             raise ValueError(("The data set must be initialized"
                               "*before* adding estimates"))
 
-        if 'iteration' not in self.gatestring_structs:
-            raise ValueError(("Gate sequences must be initialized"
+        if 'iteration' not in self.circuit_structs:
+            raise ValueError(("LinearOperator sequences must be initialized"
                               "*before* adding estimates"))
 
         assert(results.dataset is self.dataset), "DataSet inconsistency: cannot import estimates!"
-        assert(len(self.gatestring_structs['iteration']) == len(results.gatestring_structs['iteration'])), \
+        assert(len(self.circuit_structs['iteration']) == len(results.circuit_structs['iteration'])), \
             "Iteration count inconsistency: cannot import estimates!"
 
         for estimate_key in results.estimates:
@@ -233,24 +233,24 @@ class Results(object):
             dict.__setitem__(self.estimates, new_name, value)
 
 
-    def add_estimate(self, targetGateset, seedGateset, gatesetsByIter,
+    def add_estimate(self, targetModel, seedModel, modeslByIter,
                      parameters, estimate_key='default'):
         """
-        Add a set of `GateSet` estimates to this `Results` object.
+        Add a set of `Model` estimates to this `Results` object.
 
         Parameters
         ----------
-        targetGateset : GateSet
-            The target gateset used when optimizing the objective.
+        targetModel : Model
+            The target model used when optimizing the objective.
 
-        seedGateset : GateSet
-            The initial gateset used to seed the iterative part
+        seedModel : Model
+            The initial model used to seed the iterative part
             of the objective optimization.  Typically this is
             obtained via LGST.
 
-        gatesetsByIter : list of GateSets
-            The estimated gateset at each GST iteration. Typically these are the
-            estimated gate sets *before* any gauge optimization is performed.
+        modeslByIter : list of Models
+            The estimated model at each GST iteration. Typically these are the
+            estimated models *before* any gauge optimization is performed.
 
         parameters : dict
             A dictionary of parameters associated with how this estimate
@@ -267,12 +267,12 @@ class Results(object):
             raise ValueError(("The data set must be initialized"
                               "*before* adding estimates"))
 
-        if 'iteration' not in self.gatestring_structs:
-            raise ValueError(("Gate sequences must be initialized"
+        if 'iteration' not in self.circuit_structs:
+            raise ValueError(("LinearOperator sequences must be initialized"
                               "*before* adding estimates"))
 
 
-        la,lb = len(self.gatestring_structs['iteration']), len(gatesetsByIter)
+        la,lb = len(self.circuit_structs['iteration']), len(modeslByIter)
         assert(la==lb), "Number of iterations (%d) must equal %d!" % (lb,la)
 
         if estimate_key in self.estimates:
@@ -280,26 +280,26 @@ class Results(object):
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
 
-        self.estimates[estimate_key] = _Estimate(self, targetGateset, seedGateset,
-                                                gatesetsByIter, parameters)
+        self.estimates[estimate_key] = _Estimate(self, targetModel, seedModel,
+                                                modeslByIter, parameters)
 
         #Set gate sequence related parameters inherited from Results
         self.estimates[estimate_key].parameters['max length list'] = \
-                                        self.gatestring_structs['final'].Ls
+                                        self.circuit_structs['final'].Ls
 
-    def add_model_test(self, targetGateset, modelGateset,
+    def add_model_test(self, targetModel, themodel,
                        estimate_key='test', gauge_opt_keys="auto"):
         """
         Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
 
         Parameters
         ----------
-        targetGateset : GateSet
-            The target gateset used for comparison to the model.
+        targetModel : Model
+            The target model used for comparison to the model.
 
-        modelGateset : GateSet
-            The "model" gateset whose fit to the data and distance from
-            `targetGateset` are assessed.
+        themodel : Model
+            The "model" model whose fit to the data and distance from
+            `targetModel` are assessed.
 
         estimate_key : str, optional
             The key or label used to identify this estimate.
@@ -307,7 +307,7 @@ class Results(object):
         gauge_opt_keys : list, optional
             A list of gauge-optimization keys to add to the estimate.  All
             of these keys will correspond to trivial gauge optimizations,
-            as the model gate set is assumed to be fixed and to have no
+            as the model model is assumed to be fixed and to have no
             gauge degrees of freedom.  The special value "auto" creates
             gauge-optimized estimates for all the gauge optimization labels
             currently in this `Results` object.
@@ -316,11 +316,11 @@ class Results(object):
         -------
         None
         """
-        nIter = len(self.gatestring_structs['iteration'])
+        nIter = len(self.circuit_structs['iteration'])
 
         # base parameter values off of existing estimate parameters
         defaults = {'objective': 'logl', 'minProbClip': 1e-4, 'radius': 1e-4,
-                    'minProbClipForWeighting': 1e-4, 'gateLabelAliases': None,
+                    'minProbClipForWeighting': 1e-4, 'opLabelAliases': None,
                     'truncScheme': "whole germ powers"}
         for est in self.estimates.values():
             for ky in defaults:
@@ -337,17 +337,17 @@ class Results(object):
         else:
             raise ValueError("Invalid objective: %s" % parameters['objective'])
         parameters['profiler'] = None
-        parameters['gateLabelAliases'] = defaults['gateLabelAliases']
+        parameters['opLabelAliases'] = defaults['opLabelAliases']
         parameters['weights'] = None                     #Hardcoded
 
 
         #Set default gate group to trival group to mimic do_model_test (an to
-        # be consistent with this function creating "gauge-optimized" gate sets
+        # be consistent with this function creating "gauge-optimized" models
         # by just copying the initial one).
-        modelGateset = modelGateset.copy()
-        modelGateset.default_gauge_group = _TrivialGaugeGroup(modelGateset.dim)
+        themodel = themodel.copy()
+        themodel.default_gauge_group = _TrivialGaugeGroup(themodel.dim)
 
-        self.add_estimate(targetGateset, modelGateset, [modelGateset]*nIter,
+        self.add_estimate(targetModel, themodel, [themodel]*nIter,
                           parameters, estimate_key=estimate_key)
 
         #add gauge optimizations (always trivial)
@@ -360,11 +360,11 @@ class Results(object):
 
         est = self.estimates[estimate_key]
         for gokey in gauge_opt_keys:
-            trivialEl = _TrivialGaugeGroupElement(modelGateset.dim)
-            goparams = {'gateset': modelGateset,
-                        'targetGateset': targetGateset,
+            trivialEl = _TrivialGaugeGroupElement(themodel.dim)
+            goparams = {'model': themodel,
+                        'targetModel': targetModel,
                         '_gaugeGroupEl': trivialEl }
-            est.add_gaugeoptimized(goparams, modelGateset, gokey)
+            est.add_gaugeoptimized(goparams, themodel, gokey)
 
 
     def view(self, estimate_keys, gaugeopt_keys=None):
@@ -388,8 +388,8 @@ class Results(object):
         """
         view = Results()
         view.dataset = self.dataset
-        view.gatestring_lists = self.gatestring_lists
-        view.gatestring_structs = self.gatestring_structs
+        view.circuit_lists = self.circuit_lists
+        view.circuit_structs = self.circuit_structs
 
         if _compat.isstr(estimate_keys):
             estimate_keys = [estimate_keys]
@@ -405,8 +405,8 @@ class Results(object):
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
         cpy = Results()
         cpy.dataset = self.dataset.copy()
-        cpy.gatestring_lists = _copy.deepcopy(self.gatestring_lists)
-        cpy.gatestring_structs = _copy.deepcopy(self.gatestring_structs)
+        cpy.circuit_lists = _copy.deepcopy(self.circuit_lists)
+        cpy.circuit_structs = _copy.deepcopy(self.circuit_structs)
         for est_key,est in self.estimates.items():
             cpy.estimates[est_key] = est.copy()
         return cpy
@@ -435,24 +435,24 @@ class Results(object):
             if _SHORTCUT_OLD_RESULTS_LOAD == False:
                 from ..construction import make_lsgst_structs as _make_lsgst_structs
                 try:
-                    prepStrs = stateDict['gatestring_lists']['prep fiducials']
-                    effectStrs = stateDict['gatestring_lists']['effect fiducials']
-                    germs = stateDict['gatestring_lists']['germs']
-                    aliases = stateDict['parameters'].get('gateLabelAliases',None)
+                    prepStrs = stateDict['circuit_lists']['prep fiducials']
+                    effectStrs = stateDict['circuit_lists']['effect fiducials']
+                    germs = stateDict['circuit_lists']['germs']
+                    aliases = stateDict['parameters'].get('opLabelAliases',None)
                     fidPairs = stateDict['parameters'].get('fiducial pairs',None)
                     maxLengthList = stateDict['parameters']['max length list']
                     if maxLengthList[0] == 0:
                         maxLengthList = maxLengthList[1:] #Fine; includeLGST is always True below
 
-                    structs = _make_lsgst_structs(stateDict['gatesets']['target'].gates.keys(),
+                    structs = _make_lsgst_structs(stateDict['models']['target'].operations.keys(),
                                                         prepStrs, effectStrs, germs, maxLengthList,
                                                         fidPairs, truncScheme="whole germ powers",
                                                         nest=True, keepFraction=1, keepSeed=None,
-                                                        includeLGST=True, gateLabelAliases=aliases)
+                                                        includeLGST=True, opLabelAliases=aliases)
                 except:
                     print("Warning: Ls & germs structure not found.  Loading unstructured Results.")
                     structs = []
-                    for lst in stateDict['gatestring_lists']['iteration']:
+                    for lst in stateDict['circuit_lists']['iteration']:
                         unindexed_gss = _LsGermsStructure([],[],[],[],None)
                         unindexed_gss.add_unindexed(lst)
                         structs.append(unindexed_gss)
@@ -461,27 +461,27 @@ class Results(object):
                 gstrStructs['final'] = structs[-1]
 
             gstrLists = _collections.OrderedDict()
-            for k,v in stateDict['gatestring_lists'].items():
+            for k,v in stateDict['circuit_lists'].items():
                 gstrLists[k] = v
 
-            gatesets =  _collections.OrderedDict()
-            for k,v in stateDict['gatesets'].items():
+            models =  _collections.OrderedDict()
+            for k,v in stateDict['models'].items():
                 if k == 'final estimate':
-                    gatesets['go0'] = v
+                    models['go0'] = v
                 elif k == 'iteration estimates pre gauge opt':
-                    gatesets['iteration estimates'] = v
-                else: gatesets[k] = v
-            gatesets['final iteration estimate'] = gatesets['iteration estimates'][-1]
+                    models['iteration estimates'] = v
+                else: models[k] = v
+            models['final iteration estimate'] = models['iteration estimates'][-1]
 
-            estimate = _Estimate(self, gatesets['target'], gatesets['seed'],
-                                gatesets['iteration estimates'], params)
-            if 'go0' in gatesets:
-                estimate.add_gaugeoptimized(goparams.get('go0',{}), gatesets['go0'])
+            estimate = _Estimate(self, models['target'], models['seed'],
+                                models['iteration estimates'], params)
+            if 'go0' in models:
+                estimate.add_gaugeoptimized(goparams.get('go0',{}), models['go0'])
 
             filteredDict = {
                 'dataset': stateDict['dataset'],
-                'gatestring_lists': gstrLists,
-                'gatestring_structs': gstrStructs,
+                'circuit_lists': gstrLists,
+                'circuit_structs': gstrStructs,
                 'estimates': _collections.OrderedDict( [('default',estimate)] ),
             }
             self.__dict__.update(filteredDict)
@@ -499,13 +499,13 @@ class Results(object):
         s += "\n"
         s += "How to access my contents:\n\n"
         s += " .dataset    -- the DataSet used to generate these results\n\n"
-        s += " .gatestring_lists   -- a dict of GateString lists w/keys:\n"
+        s += " .circuit_lists   -- a dict of OpString lists w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(list(self.gatestring_lists.keys())) + "\n"
+        s += "  " + "\n  ".join(list(self.circuit_lists.keys())) + "\n"
         s += "\n"
-        s += " .gatestring_structs   -- a dict of GatestringStructures w/keys:\n"
+        s += " .circuit_structs   -- a dict of GatestringStructures w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(list(self.gatestring_structs.keys())) + "\n"
+        s += "  " + "\n  ".join(list(self.circuit_structs.keys())) + "\n"
         s += "\n"
         s += " .estimates   -- a dictionary of Estimate objects:\n"
         s += " ---------------------------------------------------------\n"

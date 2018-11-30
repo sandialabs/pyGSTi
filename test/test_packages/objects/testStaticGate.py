@@ -2,7 +2,7 @@ import unittest
 import pygsti
 import numpy as np
 
-from  pygsti.objects import StaticGate
+from  pygsti.objects import StaticOp
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -10,7 +10,7 @@ class StaticGateTestCase(BaseTestCase):
 
     def setUp(self):
         super(StaticGateTestCase, self).setUp()
-        self.gate = StaticGate([[0,0], [0,0]])
+        self.gate = StaticOp([[0,0], [0,0]])
 
     def test_bad(self):
         gate = self.gate.copy()

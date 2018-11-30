@@ -369,7 +369,7 @@ def unitary_superoperator_matrix_log(M, mxBasis):
         and `logM` can be written as the action `rho -> -i[H,rho]`.
     """
     from . import lindbladtools as _lt # (would create circular imports if at top)
-    from . import gatetools as _gt # (would create circular imports if at top)
+    from . import optools as _gt # (would create circular imports if at top)
 
     M_std = change_basis(M, mxBasis, "std")
     evals = _np.linalg.eigvals(M_std)

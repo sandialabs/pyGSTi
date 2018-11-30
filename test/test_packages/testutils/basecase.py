@@ -40,11 +40,11 @@ class BaseTestCase(unittest.TestCase):
 
         print('Running tests from %s' % os.getcwd())
 
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
+        #Set Model objects to "strict" mode for testing
+        pygsti.objects.Model._strict = True
 
         #enable extra paramter-vector integrity checking
-        pygsti.objects.GateSet._pcheck = True
+        pygsti.objects.Model._pcheck = True
 
         #Moved to setUpClass so derived class setUpClass methods can use it.
         #try:
@@ -105,8 +105,8 @@ class BaseTestCase(unittest.TestCase):
 
     def assertEqualDatasets(self, ds1, ds2):
         self.assertEqual(len(ds1),len(ds2))
-        for gatestring in ds1:
-            for ol,cnt in ds1[gatestring].counts.items():
-                self.assertTrue( abs(cnt - ds2[gatestring].counts[ol]) < 1.5 )
+        for circuit in ds1:
+            for ol,cnt in ds1[circuit].counts.items():
+                self.assertTrue( abs(cnt - ds2[circuit].counts[ol]) < 1.5 )
                 #Let counts be off by 1 b/c of rounding
-                #self.assertAlmostEqual( cnt, ds2[gatestring].counts[ol], places=3 )
+                #self.assertAlmostEqual( cnt, ds2[circuit].counts[ol], places=3 )

@@ -1,4 +1,4 @@
-""" Defines the GateSetFunction class """
+""" Defines the ModelFunction class """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -6,53 +6,53 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-class GateSetFunction(object):
+class ModelFunction(object):
     """ 
-    Encapsulates a "function of a GateSet" that one may want to compute
+    Encapsulates a "function of a Model" that one may want to compute
     confidence-interval error bars for based on a confidence region of
-    the functions gate set argument.  The "function" may have other parameters,
+    the functions model argument.  The "function" may have other parameters,
     and the reason for defining it as a class is so that it can hold 
 
-    1. relevant "meta" arguments in addition to the central GateSet, and 
-    2. information to speed up function evaluations at nearby GateSet "points",
+    1. relevant "meta" arguments in addition to the central Model, and 
+    2. information to speed up function evaluations at nearby Model "points",
        for computing finite-difference derivatives.
     """ 
     
-    def __init__(self, gateset, dependencies):
+    def __init__(self, model, dependencies):
         """
-        Creates a new GateSetFunction object.
+        Creates a new ModelFunction object.
 
         Parameters
         ----------
-        gateset : GateSet
-            A sample gate set giving the constructor a template for what 
-            type/parameterization of gate set to expect in calls to 
+        model : Model
+            A sample model giving the constructor a template for what 
+            type/parameterization of model to expect in calls to 
             :func:`evaluate`.
 
         dependencies : list
             A list of *type:label* strings, or the special strings `"all"` and
-            `"spam"`, indicating which GateSet parameters the function depends
+            `"spam"`, indicating which Model parameters the function depends
             upon. Here *type* can be `"gate"`, `"prep"`, `"povm"`, or 
             `"instrument"`, and  *label* can be any of the corresponding labels
-            found in the gate sets being evaluated.  The reason for specifying
+            found in the models being evaluated.  The reason for specifying
             this at all is to speed up computation of the finite difference
             derivative needed to find the error bars.
         """
-        self.base_gateset = gateset
+        self.base_model = model
         self.dependencies = dependencies
 
-    def evaluate(self, gateset):
-        """ Evaluate this gate-set-function at `gateset`."""
+    def evaluate(self, model):
+        """ Evaluate this gate-set-function at `model`."""
         return None
     
-    def evaluate_nearby(self, nearby_gateset):
+    def evaluate_nearby(self, nearby_model):
         """ 
-        Evaluate this gate-set-function at `nearby_gateset`, which can
-        be assumed is very close to the `gateset` provided to the last
+        Evaluate this gate-set-function at `nearby_model`, which can
+        be assumed is very close to the `model` provided to the last
         call to :func:`evaluate`.
         """
-        # do stuff assuming nearby_gateset is eps away from gateset
-        return self.evaluate(nearby_gateset)
+        # do stuff assuming nearby_model is eps away from model
+        return self.evaluate(nearby_model)
 
     def get_dependencies(self):
         """
@@ -62,19 +62,19 @@ class GateSetFunction(object):
         -------
         list
             A list of *type:label* strings, or the special strings `"all"` and
-            `"spam"`, indicating which GateSet parameters the function depends
+            `"spam"`, indicating which Model parameters the function depends
             upon. Here *type* can be `"gate"`, `"prep"`, `"povm"`, or 
             `"instrument"` and *label* can be any of the corresponding labels
-            found in the gate sets being evaluated.
+            found in the models being evaluated.
         """
         return self.dependencies
-          #determines which variations in gateset are used when computing confidence regions
+          #determines which variations in model are used when computing confidence regions
 
 def spamfn_factory(fn):
     """
     Ceates a class that evaluates 
     `fn(preps,povms,...)`, where `preps` and `povms` are lists of the
-    preparation SPAM vectors and POVMs of a GateSet, respectively,
+    preparation SPAM vectors and POVMs of a Model, respectively,
     and `...` are additional arguments (see below).
 
     Parameters
@@ -85,35 +85,35 @@ def spamfn_factory(fn):
     Returns
     -------
     cls : class
-        A :class:`GateSetFunction`-derived class initialized by
-        `cls(gateset, ...)` where `gateset` is a GateSet and `...` are optional
+        A :class:`ModelFunction`-derived class initialized by
+        `cls(model, ...)` where `model` is a Model and `...` are optional
         additional arguments that are passed to `fn`.
     """
-    class GSFTemp(GateSetFunction):
-        """ GateSetFunction class created by spamfn_factory """
-        def __init__(self, gateset, *args, **kwargs):
+    class GSFTemp(ModelFunction):
+        """ ModelFunction class created by spamfn_factory """
+        def __init__(self, model, *args, **kwargs):
             """ 
-            Creates a new GateSetFunction dependent only on its GateSet
+            Creates a new ModelFunction dependent only on its Model
             argument's SPAM vectors.
             """
             self.args = args
             self.kwargs = kwargs
-            GateSetFunction.__init__(self, gateset, ["spam"])
+            ModelFunction.__init__(self, model, ["spam"])
             
-        def evaluate(self, gateset):
-            """ Evaluate this gate-set-function at `gateset`."""
-            return fn(list(gateset.preps.values()),
-                      list(gateset.povms.values()),
+        def evaluate(self, model):
+            """ Evaluate this gate-set-function at `model`."""
+            return fn(list(model.preps.values()),
+                      list(model.povms.values()),
                       *self.args, **self.kwargs)
         
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
 #Note: the 'basis' argument is unnecesary here, as it could be passed as an additional arg
-def gatefn_factory(fn):
+def opfn_factory(fn):
     """
     Creates a class that evaluates `fn(gate,basis,...)`, where `gate` is a
-    single gate matrix, `basis` describes what basis it's in, and `...` are
+    single operation matrix, `basis` describes what basis it's in, and `...` are
     additional arguments (see below).
 
     Parameters
@@ -124,34 +124,34 @@ def gatefn_factory(fn):
     Returns
     -------
     cls : class
-        A :class:`GateSetFunction`-derived class initialized by
-        `cls(gateset, gl, ...)` where `gateset` is a GateSet, `gl` is a gate
+        A :class:`ModelFunction`-derived class initialized by
+        `cls(model, gl, ...)` where `model` is a Model, `gl` is a gate
         label, and `...` are optional additional arguments passed to `fn`.
     """
-    class GSFTemp(GateSetFunction):
-        """ GateSetFunction class created by gatefn_factory """
-        def __init__(self, gateset, gl, *args, **kwargs):
-            """ Creates a new GateSetFunction dependent on a single gate"""
+    class GSFTemp(ModelFunction):
+        """ ModelFunction class created by opfn_factory """
+        def __init__(self, model, gl, *args, **kwargs):
+            """ Creates a new ModelFunction dependent on a single gate"""
             self.gl = gl
             self.args = args
             self.kwargs = kwargs        
-            GateSetFunction.__init__(self, gateset, ["gate:"+str(gl)])
+            ModelFunction.__init__(self, model, ["gate:"+str(gl)])
             
-        def evaluate(self, gateset):
-            """ Evaluate this gate-set-function at `gateset`."""
-            return fn(gateset.gates[self.gl].todense(), gateset.basis,
+        def evaluate(self, model):
+            """ Evaluate this gate-set-function at `model`."""
+            return fn(model.operations[self.gl].todense(), model.basis,
                       *self.args, **self.kwargs)
         
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
 
-#Note: the 'gate2' and 'basis' arguments are unnecesary here, as they could be
+#Note: the 'op2' and 'basis' arguments are unnecesary here, as they could be
 # passed as additional args
-def gatesfn_factory(fn):
+def opsfn_factory(fn):
     """
-    Creates a class that evaluates `fn(gate1,gate2,basis,...)`, where `gate1`
-    and `gate2` are a single gate matrices, `basis` describes what basis they're
+    Creates a class that evaluates `fn(op1,op2,basis,...)`, where `op1`
+    and `op2` are a single operation matrices, `basis` describes what basis they're
     in, and `...` are additional arguments (see below).
 
     Parameters
@@ -162,26 +162,26 @@ def gatesfn_factory(fn):
     Returns
     -------
     cls : class
-        A :class:`GateSetFunction`-derived class initialized by
-        `cls(gateset1, gateset2, gl, ...)` where `gateset1` and `gateset2` are
-        GateSets (only `gateset1` and `gate1` are varied when computing a
-        confidence region), `gl` is a gate label, and `...` are optional
+        A :class:`ModelFunction`-derived class initialized by
+        `cls(model1, model2, gl, ...)` where `model1` and `model2` are
+        Models (only `model1` and `op1` are varied when computing a
+        confidence region), `gl` is a operation label, and `...` are optional
         additional arguments passed to `fn`.
     """
-    class GSFTemp(GateSetFunction):
-        """ GateSetFunction class created by gatesfn_factory """
-        def __init__(self, gateset1, gateset2, gl, *args, **kwargs):
-            """ Creates a new GateSetFunction dependent on a single gate"""
-            self.other_gateset = gateset2
+    class GSFTemp(ModelFunction):
+        """ ModelFunction class created by opsfn_factory """
+        def __init__(self, model1, model2, gl, *args, **kwargs):
+            """ Creates a new ModelFunction dependent on a single gate"""
+            self.other_model = model2
             self.gl = gl
             self.args = args
             self.kwargs = kwargs        
-            GateSetFunction.__init__(self, gateset1, ["gate:"+str(gl)])
+            ModelFunction.__init__(self, model1, ["gate:"+str(gl)])
             
-        def evaluate(self, gateset):
-            """ Evaluate this gate-set-function at `gateset`."""
-            return fn(gateset.gates[self.gl].todense(), self.other_gateset.gates[self.gl].todense(),
-                      gateset.basis, *self.args, **self.kwargs) # assume functions want *dense* gates
+        def evaluate(self, model):
+            """ Evaluate this gate-set-function at `model`."""
+            return fn(model.operations[self.gl].todense(), self.other_model.operations[self.gl].todense(),
+                      model.basis, *self.args, **self.kwargs) # assume functions want *dense* gates
         
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
@@ -201,16 +201,16 @@ def vecfn_factory(fn):
     Returns
     -------
     cls : class
-        A :class:`GateSetFunction`-derived class initialized by
-        `cls(gateset, lbl, typ, ...)` where `gateset` is a GateSet, `lbl` is
+        A :class:`ModelFunction`-derived class initialized by
+        `cls(model, lbl, typ, ...)` where `model` is a Model, `lbl` is
         SPAM vector label, `typ` is either `"prep"` or `"effect"` (the type of
         the SPAM vector), and `...` are optional additional arguments
         passed to `fn`.
     """
-    class GSFTemp(GateSetFunction):
-        """ GateSetFunction class created by vecfn_factory """
-        def __init__(self, gateset, lbl, typ, *args, **kwargs):
-            """ Creates a new GateSetFunction dependent on a single SPAM vector"""
+    class GSFTemp(ModelFunction):
+        """ ModelFunction class created by vecfn_factory """
+        def __init__(self, model, lbl, typ, *args, **kwargs):
+            """ Creates a new ModelFunction dependent on a single SPAM vector"""
             self.lbl = lbl
             self.typ = typ
             self.args = args
@@ -219,17 +219,17 @@ def vecfn_factory(fn):
             if typ == 'effect':
                 typ = "povm"
                 lbl,_ = lbl.split(":") #for "effect"-mode, lbl must == "povmLbl:ELbl"
-                                       # and GateSetFunction depends on entire POVM
-            GateSetFunction.__init__(self, gateset, [typ + ":" + str(lbl)]) 
+                                       # and ModelFunction depends on entire POVM
+            ModelFunction.__init__(self, model, [typ + ":" + str(lbl)]) 
             
-        def evaluate(self, gateset):
-            """ Evaluate this gate-set-function at `gateset`."""
+        def evaluate(self, model):
+            """ Evaluate this gate-set-function at `model`."""
             if self.typ == "prep":
-                return fn(gateset.preps[self.lbl].todense(), gateset.basis,
+                return fn(model.preps[self.lbl].todense(), model.basis,
                       *self.args, **self.kwargs)
             else:
                 povmlbl,Elbl = self.lbl.split(":") #for effect, lbl must == "povmLbl:ELbl"
-                return fn(gateset.povms[povmlbl][Elbl].todense(), gateset.basis,
+                return fn(model.povms[povmlbl][Elbl].todense(), model.basis,
                           *self.args, **self.kwargs)
 
     GSFTemp.__name__ = fn.__name__ + str("_class")
@@ -250,18 +250,18 @@ def vecsfn_factory(fn):
     Returns
     -------
     cls : class
-        A :class:`GateSetFunction`-derived class initialized by
-        `cls(gateset1, gateset2, lbl, typ, ...)` where `gateset1` and `gateset2`
-        are GateSets (only `gateset1` and `vec1` are varied when computing a
+        A :class:`ModelFunction`-derived class initialized by
+        `cls(model1, model2, lbl, typ, ...)` where `model1` and `model2`
+        are Models (only `model1` and `vec1` are varied when computing a
         confidence region), `lbl` is a SPAM vector label, `typ` is either
         `"prep"` or `"effect"` (the type of the SPAM vector), and `...` are
         optional additional arguments passed to `fn`.
     """
-    class GSFTemp(GateSetFunction):
-        """ GateSetFunction class created by vecsfn_factory """
-        def __init__(self, gateset1, gateset2, lbl, typ, *args, **kwargs):
-            """ Creates a new GateSetFunction dependent on a single SPAM vector"""
-            self.other_gateset = gateset2
+    class GSFTemp(ModelFunction):
+        """ ModelFunction class created by vecsfn_factory """
+        def __init__(self, model1, model2, lbl, typ, *args, **kwargs):
+            """ Creates a new ModelFunction dependent on a single SPAM vector"""
+            self.other_model = model2
             self.lbl = lbl
             self.typ = typ
             self.args = args
@@ -270,20 +270,20 @@ def vecsfn_factory(fn):
             if typ == 'effect':
                 typ = "povm"
                 lbl,_ = lbl.split(":") #for "effect"-mode, lbl must == "povmLbl:ELbl"
-                                       # and GateSetFunction depends on entire POVM
-            self.other_vecsrc = self.other_gateset.preps if self.typ == "prep" \
-                                else self.other_gateset.povms
-            GateSetFunction.__init__(self, gateset1, [typ + ":" + str(lbl)])
+                                       # and ModelFunction depends on entire POVM
+            self.other_vecsrc = self.other_model.preps if self.typ == "prep" \
+                                else self.other_model.povms
+            ModelFunction.__init__(self, model1, [typ + ":" + str(lbl)])
             
-        def evaluate(self, gateset):
-            """ Evaluate this gate-set-function at `gateset`."""
+        def evaluate(self, model):
+            """ Evaluate this gate-set-function at `model`."""
             if self.typ == "prep":
-                return fn(gateset.preps[self.lbl].todense(), self.other_vecsrc[self.lbl].todense(),
-                      gateset.basis,  *self.args, **self.kwargs)
+                return fn(model.preps[self.lbl].todense(), self.other_vecsrc[self.lbl].todense(),
+                      model.basis,  *self.args, **self.kwargs)
             else:
                 povmlbl,Elbl = self.lbl.split(":") #for effect, lbl must == "povmLbl:ELbl"
-                return fn(gateset.povms[povmlbl][Elbl].todense(), self.other_vecsrc[povmlbl][Elbl].todense(),
-                          gateset.basis,  *self.args, **self.kwargs)
+                return fn(model.povms[povmlbl][Elbl].todense(), self.other_vecsrc[povmlbl][Elbl].todense(),
+                          model.basis,  *self.args, **self.kwargs)
         
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
@@ -292,8 +292,8 @@ def vecsfn_factory(fn):
 def povmfn_factory(fn):
     """
     Ceates a class that evaluates 
-    `fn(gateset,...)` where `gateset` is the entire GateSet (and it is assumed
-    that `fn` is only a function of the POVM effect elements of the gate set),
+    `fn(model,...)` where `model` is the entire Model (and it is assumed
+    that `fn` is only a function of the POVM effect elements of the model),
     and `...` are additional arguments (see below).
     
     Parameters
@@ -304,62 +304,62 @@ def povmfn_factory(fn):
     Returns
     -------
     cls : class
-        A :class:`GateSetFunction`-derived class initialized by
-        `cls(gateset, ...)` where `gateset` is a GateSet and `...` are optional
+        A :class:`ModelFunction`-derived class initialized by
+        `cls(model, ...)` where `model` is a Model and `...` are optional
         additional arguments that are passed to `fn`.
     """
-    class GSFTemp(GateSetFunction):
-        """ GateSetFunction class created by povmfn_factory """
-        def __init__(self, gateset, *args, **kwargs):
+    class GSFTemp(ModelFunction):
+        """ ModelFunction class created by povmfn_factory """
+        def __init__(self, model, *args, **kwargs):
             """ 
-            Creates a new GateSetFunction dependent on all of its
-            GateSet argument's effects
+            Creates a new ModelFunction dependent on all of its
+            Model argument's effects
             """
             self.args = args
             self.kwargs = kwargs
-            dps = ["povm:%s"%l for l in gateset.povms]
-            GateSetFunction.__init__(self, gateset, dps)
+            dps = ["povm:%s"%l for l in model.povms]
+            ModelFunction.__init__(self, model, dps)
             
-        def evaluate(self, gateset):
-            """ Evaluate this gate-set-function at `gateset`."""
-            return fn(gateset, *self.args, **self.kwargs)
+        def evaluate(self, model):
+            """ Evaluate this gate-set-function at `model`."""
+            return fn(model, *self.args, **self.kwargs)
         
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
 
 
-def gatesetfn_factory(fn):
+def modelfn_factory(fn):
     """
-    Creates a class that evaluates `fn(gateset,...)`, where `gateset` is a
-    `GateSet` object and `...` are additional arguments (see below).
+    Creates a class that evaluates `fn(model,...)`, where `model` is a
+    `Model` object and `...` are additional arguments (see below).
 
     Parameters
     ----------
     fn : function
-        A function of at least the single `gateset` parameter discussed above.
+        A function of at least the single `model` parameter discussed above.
 
     Returns
     -------
     cls : class
-        A :class:`GateSetFunction`-derived class initialized by
-        `cls(gateset, ...)` where `gateset` is a GateSet, and `...` are
+        A :class:`ModelFunction`-derived class initialized by
+        `cls(model, ...)` where `model` is a Model, and `...` are
         optional additional arguments passed to `fn`.
     """
-    class GSFTemp(GateSetFunction):
-        """ GateSetFunction class created by gatesetfn_factory """
-        def __init__(self, gateset, *args, **kwargs):
+    class GSFTemp(ModelFunction):
+        """ ModelFunction class created by modelfn_factory """
+        def __init__(self, model, *args, **kwargs):
             """ 
-            Creates a new GateSetFunction dependent on all of its GateSet
+            Creates a new ModelFunction dependent on all of its Model
             argument's paramters
             """
             self.args = args
             self.kwargs = kwargs        
-            GateSetFunction.__init__(self, gateset, ["all"])
+            ModelFunction.__init__(self, model, ["all"])
             
-        def evaluate(self, gateset):
-            """ Evaluate this gate-set-function at `gateset`."""
-            return fn(gateset, *self.args, **self.kwargs)
+        def evaluate(self, model):
+            """ Evaluate this gate-set-function at `model`."""
+            return fn(model, *self.args, **self.kwargs)
         
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp

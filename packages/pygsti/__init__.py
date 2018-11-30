@@ -3,7 +3,7 @@
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" A Python implementation of Gate Set Tomography """
+""" A Python implementation of LinearOperator Set Tomography """
 
 #Import the most important/useful routines of each module/sub-package
 # into the package namespace

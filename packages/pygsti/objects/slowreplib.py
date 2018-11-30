@@ -178,9 +178,9 @@ class DMEffectRep_Computational(DMEffectRep):
         return _np.dot(Edense,state.data) # not vdot b/c data is *real*
 
 class DMEffectRep_Errgen(DMEffectRep):  #TODO!! Need to make SV version
-    def __init__(self, errgen_gaterep, effect_rep, errgen_id):
+    def __init__(self, errgen_oprep, effect_rep, errgen_id):
         dim = effect_rep.dim
-        self.errgen_rep = errgen_gaterep
+        self.errgen_rep = errgen_oprep
         self.effect_rep = effect_rep
         self.errgen_id = errgen_id
         super(DMEffectRep_Errgen,self).__init__(dim)
@@ -190,7 +190,7 @@ class DMEffectRep_Errgen(DMEffectRep):  #TODO!! Need to make SV version
         return self.effect_rep.probability(state)
 
 
-class DMGateRep(object):
+class DMOpRep(object):
     def __init__(self,dim):
         self.dim = dim
     def acton(self, state):
@@ -211,24 +211,24 @@ class DMGateRep(object):
 
 
 
-class DMGateRep_Dense(DMGateRep):
+class DMOpRep_Dense(DMOpRep):
     def __init__(self, data):
         self.data = data
-        super(DMGateRep_Dense,self).__init__(self.data.shape[0])
+        super(DMOpRep_Dense,self).__init__(self.data.shape[0])
     def acton(self, state):
         return DMStateRep( _np.dot(self.data, state.data) )
     def adjoint_acton(self, state):
         return DMStateRep( _np.dot(self.data.T, state.data) ) # no conjugate b/c *real* data
     def __str__(self):
-        return "DMGateRep_Dense:\n" + str(self.data)
+        return "DMOpRep_Dense:\n" + str(self.data)
 
 
-class DMGateRep_Embedded(DMGateRep):
-    def __init__(self, embedded_gate, numBasisEls, actionInds,
+class DMOpRep_Embedded(DMOpRep):
+    def __init__(self, embedded_op, numBasisEls, actionInds,
                  blocksizes, embedded_dim, nComponentsInActiveBlock,
                  iActiveBlock, nBlocks, dim):
 
-        self.embedded_gate = embedded_gate
+        self.embedded_op = embedded_op
         self.numBasisEls = numBasisEls
         self.actionInds = actionInds
         self.blocksizes = blocksizes
@@ -247,7 +247,7 @@ class DMGateRep_Embedded(DMGateRep):
         self.nComponents = nComponentsInActiveBlock
         self.iActiveBlock = iActiveBlock
         self.nBlocks = nBlocks
-        super(DMGateRep_Embedded,self).__init__(dim)
+        super(DMOpRep_Embedded,self).__init__(dim)
 
     def _acton_other_blocks_trivially(self, output_state,state):
         offset = 0
@@ -266,14 +266,14 @@ class DMGateRep_Embedded(DMGateRep):
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
             inds = []
-            for gate_b in _itertools.product(*self.basisInds_action):
+            for op_b in _itertools.product(*self.basisInds_action):
                 vec_index = vec_index_noop
-                for i,bInd in zip(self.actionInds,gate_b):
+                for i,bInd in zip(self.actionInds,op_b):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i]*bInd
                 inds.append(offset + vec_index)
             embedded_instate = DMStateRep( state.data[inds] )
-            embedded_outstate= self.embedded_gate.acton( embedded_instate )
+            embedded_outstate= self.embedded_op.acton( embedded_instate )
             output_state.data[ inds ] += embedded_outstate.data
 
         #act on other blocks trivially:
@@ -289,14 +289,14 @@ class DMGateRep_Embedded(DMGateRep):
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
             inds = []
-            for gate_b in _itertools.product(*self.basisInds_action):
+            for op_b in _itertools.product(*self.basisInds_action):
                 vec_index = vec_index_noop
-                for i,bInd in zip(self.actionInds,gate_b):
+                for i,bInd in zip(self.actionInds,op_b):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i]*bInd
                 inds.append(offset + vec_index)
             embedded_instate = DMStateRep( state[inds] )
-            emedded_outstate= self.embedded_gate.adjoint_acton( embedded_instate )
+            emedded_outstate= self.embedded_op.adjoint_acton( embedded_instate )
             output_state.data[ inds ] += embedded_outstate.data
 
         #act on other blocks trivially:
@@ -305,30 +305,30 @@ class DMGateRep_Embedded(DMGateRep):
 
 
 
-class DMGateRep_Composed(DMGateRep):
-    def __init__(self, factor_gate_reps, dim):
-        #assert(len(factor_gate_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factorgates = factor_gate_reps
-        super(DMGateRep_Composed,self).__init__(dim)
+class DMOpRep_Composed(DMOpRep):
+    def __init__(self, factor_op_reps, dim):
+        #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
+        self.factorops = factor_op_reps
+        super(DMOpRep_Composed,self).__init__(dim)
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        for gate in self.factorgates:
+        for gate in self.factorops:
             state = gate.acton(state)
         return state
 
     def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
-        for gate in reversed(self.factorgates):
+        """ Act the adjoint of this operation matrix on an input state """
+        for gate in reversed(self.factorops):
             state = gate.adjoint_acton(state)
         return state
 
 
-class DMGateRep_Sum(DMGateRep):
+class DMOpRep_Sum(DMOpRep):
     def __init__(self, factor_reps, dim):
         #assert(len(factor_reps) > 0), "Summed gates must contain at least one factor gate!"
         self.factors = factor_reps
-        super(DMGateRep_Sum,self).__init__(dim)
+        super(DMOpRep_Sum,self).__init__(dim)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -338,14 +338,14 @@ class DMGateRep_Sum(DMGateRep):
         return output_state
 
     def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
+        """ Act the adjoint of this operation matrix on an input state """
         output_state = DMStateRep( _np.zeros(state.data.shape, 'd') )
         for f in self.factors:
             output_state.data += f.adjoint_acton(state).data
         return output_state
 
 
-class DMGateRep_Lindblad(DMGateRep):
+class DMOpRep_Lindblad(DMOpRep):
     def __init__(self, errgen_rep,
                  mu, eta, m_star, s, unitarypost_data,
                  unitarypost_indices, unitarypost_indptr):
@@ -362,7 +362,7 @@ class DMGateRep_Lindblad(DMGateRep):
         self.eta = eta
         self.m_star = m_star
         self.s = s
-        super(DMGateRep_Lindblad,self).__init__(dim)
+        super(DMOpRep_Lindblad,self).__init__(dim)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -378,22 +378,22 @@ class DMGateRep_Lindblad(DMGateRep):
         return DMStateRep(statedata)
 
     def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
-        raise NotImplementedError("No adjoint action implemented for sparse Lindblad Gate Reps yet.")
+        """ Act the adjoint of this operation matrix on an input state """
+        raise NotImplementedError("No adjoint action implemented for sparse Lindblad LinearOperator Reps yet.")
 
 
-class DMGateRep_Sparse(DMGateRep):
+class DMOpRep_Sparse(DMOpRep):
     def __init__(self, A_data, A_indices, A_indptr):
         dim = len(A_indptr)-1
         self.A = _sps.csr_matrix( (A_data,A_indices,A_indptr), shape=(dim,dim) )
-        super(DMGateRep_Sparse,self).__init__(dim)
+        super(DMOpRep_Sparse,self).__init__(dim)
 
     def acton(self, state):
         """ Act this gate map on an input state """
         return DMStateRep( self.A.dot(state.data) )
 
     def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
+        """ Act the adjoint of this operation matrix on an input state """
         Aadj = A.conjugate(copy=True).transpose()
         return DMStateRep( self.Aadj.dot(state.data) )
 
@@ -518,7 +518,7 @@ class SVEffectRep_Computational(SVEffectRep):
         return _np.vdot(Edense,state.data)
 
 
-class SVGateRep(object):
+class SVOpRep(object):
     def __init__(self,dim):
         self.dim = dim
     def acton(self, state):
@@ -527,25 +527,25 @@ class SVGateRep(object):
         raise NotImplementedError()
 
 
-class SVGateRep_Dense(SVGateRep):
+class SVOpRep_Dense(SVOpRep):
     def __init__(self, data):
         self.data = data
-        super(SVGateRep_Dense,self).__init__(self.data.shape[0])
+        super(SVOpRep_Dense,self).__init__(self.data.shape[0])
     def acton(self, state):
         return SVStateRep( _np.dot(self.data, state.data) )
     def adjoint_acton(self, state):
         return SVStateRep( _np.dot(_np.conjugate(self.data.T), state.data) )
     def __str__(self):
-        return "SVGateRep_Dense:\n" + str(self.data)
+        return "SVOpRep_Dense:\n" + str(self.data)
 
 
-class SVGateRep_Embedded(SVGateRep):
+class SVOpRep_Embedded(SVOpRep):
     # exactly the same as DM case
-    def __init__(self, embedded_gate, numBasisEls, actionInds,
+    def __init__(self, embedded_op, numBasisEls, actionInds,
                  blocksizes, embedded_dim, nComponentsInActiveBlock,
                  iActiveBlock, nBlocks, dim):
 
-        self.embedded_gate = embedded_gate
+        self.embedded_op = embedded_op
         self.numBasisEls = numBasisEls
         self.actionInds = actionInds
         self.blocksizes = blocksizes
@@ -564,7 +564,7 @@ class SVGateRep_Embedded(SVGateRep):
         self.nComponents = nComponentsInActiveBlock
         self.iActiveBlock = iActiveBlock
         self.nBlocks = nBlocks
-        super(SVGateRep_Embedded,self).__init__(dim)
+        super(SVOpRep_Embedded,self).__init__(dim)
 
     def _acton_other_blocks_trivially(self, output_state,state):
         offset = 0
@@ -580,14 +580,14 @@ class SVGateRep_Embedded(SVGateRep):
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
             inds = []
-            for gate_b in _itertools.product(*self.basisInds_action):
+            for op_b in _itertools.product(*self.basisInds_action):
                 vec_index = vec_index_noop
-                for i,bInd in zip(self.actionInds,gate_b):
+                for i,bInd in zip(self.actionInds,op_b):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i]*bInd
                 inds.append(offset + vec_index)
             embedded_instate = SVStateRep( state.data[inds] )
-            embedded_outstate= self.embedded_gate.acton( embedded_instate )
+            embedded_outstate= self.embedded_op.acton( embedded_instate )
             output_state.data[ inds ] += embedded_outstate.data
 
         #act on other blocks trivially:
@@ -603,14 +603,14 @@ class SVGateRep_Embedded(SVGateRep):
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
             inds = []
-            for gate_b in _itertools.product(*self.basisInds_action):
+            for op_b in _itertools.product(*self.basisInds_action):
                 vec_index = vec_index_noop
-                for i,bInd in zip(self.actionInds,gate_b):
+                for i,bInd in zip(self.actionInds,op_b):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i]*bInd
                 inds.append(offset + vec_index)
             embedded_instate = SVStateRep( state.data[inds] )
-            embedded_outstate= self.embedded_gate.adjoint_acton( embedded_instate )
+            embedded_outstate= self.embedded_op.adjoint_acton( embedded_instate )
             output_state.data[ inds ] += embedded_outstate.data
 
         #act on other blocks trivially:
@@ -619,32 +619,32 @@ class SVGateRep_Embedded(SVGateRep):
 
 
 
-class SVGateRep_Composed(SVGateRep):
+class SVOpRep_Composed(SVOpRep):
     # exactly the same as DM case
-    def __init__(self, factor_gate_reps, dim):
-        #assert(len(factor_gate_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factorsgates = factor_gate_reps
-        super(SVGateRep_Composed,self).__init__(dim)
+    def __init__(self, factor_op_reps, dim):
+        #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
+        self.factorsgates = factor_op_reps
+        super(SVOpRep_Composed,self).__init__(dim)
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        for gate in self.factorgates:
+        for gate in self.factorops:
             state = gate.acton(state)
         return state
 
     def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
-        for gate in reversed(self.factorgates):
+        """ Act the adjoint of this operation matrix on an input state """
+        for gate in reversed(self.factorops):
             state = gate.adjoint_acton(state)
         return state
 
 
-class SVGateRep_Sum(SVGateRep):
+class SVOpRep_Sum(SVOpRep):
     # exactly the same as DM case
     def __init__(self, factor_reps, dim):
         #assert(len(factor_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factors = factor_reps
-        super(SVGateRep_Sum,self).__init__(dim)
+        super(SVOpRep_Sum,self).__init__(dim)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -654,7 +654,7 @@ class SVGateRep_Sum(SVGateRep):
         return output_state
 
     def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
+        """ Act the adjoint of this operation matrix on an input state """
         output_state = SVStateRep( _np.zeros(state.data.shape, complex) )
         for f in self.factors:
             output_state.data += f.adjoint_acton(state).data
@@ -698,7 +698,7 @@ class SBEffectRep(object):
 
 
 
-class SBGateRep(object):
+class SBOpRep(object):
     def __init__(self, n):
         self.n = n # number of qubits
     def acton(self, state):
@@ -711,16 +711,16 @@ class SBGateRep(object):
 
 
 
-class SBGateRep_Embedded(SBGateRep):
-    def __init__(self, embedded_gate, n, qubits):
-        self.embedded_gate = embedded_gate
+class SBOpRep_Embedded(SBOpRep):
+    def __init__(self, embedded_op, n, qubits):
+        self.embedded_op = embedded_op
         self.qubit_indices = qubits
-        super(SBGateRep_Embedded,self).__init__(n)
+        super(SBOpRep_Embedded,self).__init__(n)
 
     def acton(self, state):
         state = state.copy() # needed?
         state.sframe.push_view(self.qubit_indices)
-        outstate = self.embedded_gate.acton( state ) # works b/c sfame has "view filters"
+        outstate = self.embedded_op.acton( state ) # works b/c sfame has "view filters"
         state.sframe.pop_view() # return input state to original view
         outstate.sframe.pop_view()
         return outstate
@@ -728,38 +728,38 @@ class SBGateRep_Embedded(SBGateRep):
     def adjoint_acton(self, state):
         state = state.copy() # needed?
         state.sframe.push_view(self.qubit_indices)
-        outstate = self.embedded_gate.adjoint_acton( state ) # works b/c sfame has "view filters"
+        outstate = self.embedded_op.adjoint_acton( state ) # works b/c sfame has "view filters"
         state.sframe.pop_view() # return input state to original view
         outstate.sframe.pop_view()
         return outstate
 
 
-class SBGateRep_Composed(SBGateRep):
+class SBOpRep_Composed(SBOpRep):
     # exactly the same as DM case except .dim -> .n
-    def __init__(self, factor_gate_reps, n):
-        #assert(len(factor_gate_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factorgates = factor_gate_reps
-        super(SBGateRep_Composed,self).__init__(n)
+    def __init__(self, factor_op_reps, n):
+        #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
+        self.factorops = factor_op_reps
+        super(SBOpRep_Composed,self).__init__(n)
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        for gate in self.factorgates:
+        for gate in self.factorops:
             state = gate.acton(state)
         return state
 
     def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
-        for gate in reversed(self.factorgates):
+        """ Act the adjoint of this operation matrix on an input state """
+        for gate in reversed(self.factorops):
             state = gate.adjoint_acton(state)
         return state
 
 
-class SBGateRep_Sum(SBGateRep):
+class SBOpRep_Sum(SBOpRep):
     # exactly the same as DM case except .dim -> .n
     def __init__(self, factor_reps, n):
         #assert(len(factor_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factors = factor_reps
-        super(SBGateRep_Sum,self).__init__(n)
+        super(SBOpRep_Sum,self).__init__(n)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -767,19 +767,19 @@ class SBGateRep_Sum(SBGateRep):
         raise NotImplementedError() 
 
     def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
+        """ Act the adjoint of this operation matrix on an input state """
         # need further stabilizer frame support to represent the sum of stabilizer states
         raise NotImplementedError() 
 
 
-class SBGateRep_Clifford(SBGateRep):
+class SBOpRep_Clifford(SBOpRep):
     def __init__(self, smatrix, svector, smatrix_inv, svector_inv, unitary):
         self.smatrix = smatrix
         self.svector = svector
         self.smatrix_inv = smatrix_inv
         self.svector_inv = svector_inv
         self.unitary = unitary
-        super(SBGateRep_Clifford,self).__init__(smatrix.shape[0] // 2)
+        super(SBOpRep_Clifford,self).__init__(smatrix.shape[0] // 2)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -788,7 +788,7 @@ class SBGateRep_Clifford(SBGateRep):
         return state
 
     def adjoint_acton(self, state):
-        """ Act the adjoint of this gate matrix on an input state """
+        """ Act the adjoint of this operation matrix on an input state """
         # Note: cliffords are unitary, so adjoint == inverse
         state = state.copy() # (copies any qubit filters in .sframe too)
         state.sframe.clifford_update(self.smatrix_inv, self.svector_inv,
@@ -1155,10 +1155,10 @@ class SBTermRep(object):
 ## END CLASSES -- BEGIN CALC METHODS
 
 
-def propagate_staterep(staterep, gatereps):
+def propagate_staterep(staterep, operationreps):
     ret = staterep
-    for gaterep in gatereps:
-        ret = gaterep.acton(ret)
+    for oprep in operationreps:
+        ret = oprep.acton(ret)
     return ret
 
 
@@ -1172,8 +1172,8 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None): 
     rho = rhoVec.torep('prep')
     rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
 
-    #Get gatereps and ereps now so we don't make unnecessary .torep() calls
-    gatereps = { gl:calc._getgate(gl).torep() for gl in evalTree.gateLabels }
+    #Get operationreps and ereps now so we don't make unnecessary .torep() calls
+    operationreps = { gl:calc._getoperation(gl).torep() for gl in evalTree.opLabels }
     ereps = [ E.torep('effect') for E in EVecs ]
 
     #REMOVE?? - want some way to speed tensorprod effect actions...
@@ -1188,7 +1188,7 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None): 
         else:               init_state = rho_cache[iStart] #[:,None]
 
         #OLD final_state = self.propagate_state(init_state, remainder)
-        final_state = propagate_staterep(init_state, [gatereps[gl] for gl in remainder])
+        final_state = propagate_staterep(init_state, [operationreps[gl] for gl in remainder])
         if iCache is not None: rho_cache[iCache] = final_state # [:,0] #store this state in the cache
 
         #HERE - current_errgen_name check?
@@ -1215,8 +1215,8 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     #Get (extension-type) representation objects
     rhorep = calc.preps[rholabel].torep('prep')
     ereps = [ calc.effects[el].torep('effect') for el in elabels]
-    gate_lookup = { lbl:i for i,lbl in enumerate(evalTree.gateLabels) } # gate labels -> ints for faster lookup
-    gatereps = { i:calc._getgate(lbl).torep() for lbl,i in gate_lookup.items() }
+    operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
+    operationreps = { i:calc._getoperation(lbl).torep() for lbl,i in operation_lookup.items() }
     cacheSize = evalTree.cache_size()
 
     # create rho_cache (or use scratch)
@@ -1261,21 +1261,21 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     return dpr_cache
 
 
-def SV_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None, fastmode=True):
-    return _prs_as_polys(calc, rholabel, elabels, gatestring, comm, memLimit, fastmode)
+def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
+    return _prs_as_polys(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
 
-def SB_prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None, fastmode=True):
-    return _prs_as_polys(calc, rholabel, elabels, gatestring, comm, memLimit, fastmode)
+def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
+    return _prs_as_polys(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
 
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
-def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None, fastmode=True):
+def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
     """
-    Computes polynomials of the probabilities for multiple spam-tuples of `gatestring`
+    Computes polynomials of the probabilities for multiple spam-tuples of `circuit`
     
     Parameters
     ----------
-    calc : GateTermCalculator
+    calc : TermForwardSimulator
         The calculator object holding vital information for the computation.
 
     rholabel : Label
@@ -1286,7 +1286,7 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
         of `elabels` determines the ordering of the returned probability 
         polynomials.
 
-    gatestring : GateString
+    circuit : OpString
         The gate sequence to sandwich between the prep and effect labels.
 
     comm : mpi4py.MPI.Comm, optional
@@ -1305,15 +1305,15 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
     list
         A list of PolyRep objects, one per element of `elabels`.
     """
-    #print("PRS_AS_POLY gatestring = ",gatestring)
-    #print("DB: prs_as_polys(",spamTuple,gatestring,calc.max_order,")")
+    #print("PRS_AS_POLY circuit = ",circuit)
+    #print("DB: prs_as_polys(",spamTuple,circuit,calc.max_order,")")
 
     mpv = calc.Np # max_poly_vars
     mpo = calc.max_order*2 #max_poly_order
 
     # Construct dict of gate term reps
-    distinct_gateLabels = sorted(set(gatestring))
-    gate_term_reps = { glbl: [ [t.torep(mpo,mpv,"gate") for t in calc._getgate(glbl).get_order_terms(order)]
+    distinct_gateLabels = sorted(set(circuit))
+    op_term_reps = { glbl: [ [t.torep(mpo,mpv,"gate") for t in calc._getoperation(glbl).get_order_terms(order)]
                                       for order in range(calc.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
@@ -1335,8 +1335,8 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
 
 
     ##DEBUG!!!
-    #print("DB NEW gate terms = ")
-    #for glbl,order_terms in gate_term_reps.items():
+    #print("DB NEW operation terms = ")
+    #for glbl,order_terms in op_term_reps.items():
     #    print("GATE ",glbl)
     #    for i,termlist in enumerate(order_terms):
     #        print("ORDER %d" % i)
@@ -1349,16 +1349,16 @@ def _prs_as_polys(calc, rholabel, elabels, gatestring, comm=None, memLimit=None,
     global DEBUG_FCOUNT
     db_part_cnt = 0
     db_factor_cnt = 0
-    #print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",calc.max_order)
+    #print("DB: pr_as_poly for ",str(tuple(map(str,circuit))), " max_order=",calc.max_order)
 
     prps = [None]*len(elabels)  # an array in "bulk" mode? or Polynomial in "symbolic" mode?
     for order in range(calc.max_order+1):
         #print("DB: pr_as_poly order=",order)
         db_npartitions = 0
-        for p in _lt.partition_into(order, len(gatestring)+2): # +2 for SPAM bookends
-            #factor_lists = [ calc._getgate(glbl).get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
+        for p in _lt.partition_into(order, len(circuit)+2): # +2 for SPAM bookends
+            #factor_lists = [ calc._getoperation(glbl).get_order_terms(pi) for glbl,pi in zip(circuit,p) ]
             factor_lists = [ rho_term_reps[p[0]]] + \
-                           [ gate_term_reps[glbl][pi] for glbl,pi in zip(gatestring,p[1:-1]) ] + \
+                           [ op_term_reps[glbl][pi] for glbl,pi in zip(circuit,p[1:-1]) ] + \
                            [ E_term_reps[p[-1]] ]
             factor_list_lens = list(map(len,factor_lists))
             Einds = E_indices[p[-1]] # specifies which E-vec index each of E_term_reps[p[-1]] corresponds to

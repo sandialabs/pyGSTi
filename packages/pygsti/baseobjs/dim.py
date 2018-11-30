@@ -20,11 +20,11 @@ class Dim(object):
         individual block dimensions. (The overall density matrix
         is a dmDim x dmDim matrix, and is contained in a space
         of dimension dmDim**2).
-    gateDim : int
+    opDim : int
         The (matrix) dimension of the "gate-space" corresponding
         to the density matrix space, equal to the dimension
         of the density matrix space, sum( ith-block_dimension^2 ).
-        Gate matrices are thus gateDim x gateDim dimensions.
+        LinearOperator matrices are thus opDim x opDim dimensions.
     blockDims : list of ints
         Dimensions of the individual matrix-blocks.  The direct sum
         of the matrix spaces (of dim matrix-block-dim^2) forms the
@@ -56,26 +56,26 @@ class Dim(object):
         assert dimOrBlockDims is not None, 'Dim object requires non-None dim'
         if isinstance(dimOrBlockDims, Dim):
             self.dmDim     = dimOrBlockDims.dmDim
-            self.gateDim   = dimOrBlockDims.gateDim
+            self.opDim   = dimOrBlockDims.opDim
             self.blockDims = dimOrBlockDims.blockDims
         elif isinstance(dimOrBlockDims, _collections.Container):
             # *full* density matrix is dmDim x dmDim
             self.dmDim = sum([blockDim for blockDim in dimOrBlockDims])
 
-            # gate matrices will be vecDim x vecDim
-            self.gateDim = sum([blockDim**2 for blockDim in dimOrBlockDims])
+            # operation matrices will be vecDim x vecDim
+            self.opDim = sum([blockDim**2 for blockDim in dimOrBlockDims])
 
             self.blockDims = dimOrBlockDims
         elif isinstance(dimOrBlockDims, _numbers.Integral):
             self.dmDim = dimOrBlockDims
-            self.gateDim = dimOrBlockDims**2
+            self.opDim = dimOrBlockDims**2
             self.blockDims = [dimOrBlockDims]
         else:
             raise TypeError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
         self.embedDim = self.dmDim ** 2
 
     def __str__(self):
-        return 'Dim: dmDim {} gateDim {} blockDims {} embedDim {}'.format(self.dmDim, self.gateDim, self.blockDims, self.embedDim)
+        return 'Dim: dmDim {} opDim {} blockDims {} embedDim {}'.format(self.dmDim, self.opDim, self.blockDims, self.embedDim)
 
     def __repr__(self):
         return str(self)
@@ -84,7 +84,7 @@ class Dim(object):
         if index == 0:
             return self.dmDim
         elif index == 1:
-            return self.gateDim
+            return self.opDim
         elif index == 2:
             return self.blockDims
         else:
@@ -94,7 +94,7 @@ class Dim(object):
         return hash(tuple(self.blockDims))
 
     def __eq__(self, other):
-        return bool((self.dmDim == other.dmDim) and (self.gateDim == other.gateDim)
+        return bool((self.dmDim == other.dmDim) and (self.opDim == other.opDim)
                     and (self.blockDims == other.blockDims))
 
     def __ne__(self, other):

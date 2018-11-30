@@ -1,4 +1,4 @@
-""" Defines the GatestringStructure class and supporting functionality."""
+""" Defines the CircuitStructure class and supporting functionality."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -11,22 +11,22 @@ import uuid as _uuid
 import itertools as _itertools
 from ..tools import listtools as _lt
 
-class GatestringPlaquette(object):
+class CircuitPlaquette(object):
     """
     Encapsulates a single "plaquette" or "sub-matrix" within a
-    gatestring-structure.  Typically this corresponds to a matrix
+    circuit-structure.  Typically this corresponds to a matrix
     whose rows and columns correspdond to measurement and preparation
     fiducial sequences.
     """
 
     def __init__(self, base, rows, cols, elements, aliases, fidpairs=None):
         """
-        Create a new GatestringPlaquette.
+        Create a new CircuitPlaquette.
 
         Parameters
         ----------
-        base : GateString
-            The "base" gate string of this plaquette.  Typically the sequence
+        base : OpString
+            The "base" operation sequence of this plaquette.  Typically the sequence
             that is sandwiched between fiducial pairs.
 
         rows, cols : int
@@ -34,10 +34,10 @@ class GatestringPlaquette(object):
 
         elements : list
             A list of `(i,j,s)` tuples where `i` and `j` are row and column
-            indices and `s` is the corresponding `GateString`.
+            indices and `s` is the corresponding `OpString`.
 
         aliases : dict
-            A dictionary of gate label aliases that is carried along
+            A dictionary of operation label aliases that is carried along
             for calls to :func:`expand_aliases`.
             
         fidpairs : list, optional
@@ -57,10 +57,10 @@ class GatestringPlaquette(object):
         self._outcomesByStr = None
         self.num_compiled_elements = None
 
-    def expand_aliases(self, dsFilter=None, gatestring_compiler=None):
+    def expand_aliases(self, dsFilter=None, circuit_compiler=None):
         """
-        Returns a new GatestringPlaquette with any aliases
-        expanded (within the gate strings).  Optionally keeps only
+        Returns a new CircuitPlaquette with any aliases
+        expanded (within the operation sequences).  Optionally keeps only
         those strings which, after alias expansion, are in `dsFilter`.
 
         Parameters
@@ -68,15 +68,15 @@ class GatestringPlaquette(object):
         dsFilter : DataSet, optional
             If not None, keep only strings that are in this data set.
 
-        gatestring_compiler : GateSet, optional
-            Whether to call `compile_gatestrings(gatestring_compiler)`
-            on the new GatestringPlaquette.
+        circuit_compiler : Model, optional
+            Whether to call `compile_circuits(circuit_compiler)`
+            on the new CircuitPlaquette.
 
         Returns
         -------
-        GatestringPlaquette
+        CircuitPlaquette
         """
-        #find & replace aliased gate labels with their expanded form
+        #find & replace aliased operation labels with their expanded form
         new_elements = []
         new_fidpairs = [] if (self.fidpairs is not None) else None
         for k,(i,j,s) in enumerate(self.elements):
@@ -94,25 +94,25 @@ class GatestringPlaquette(object):
                 new_elements.append((i,j,s2))
                 if new_fidpairs: new_fidpairs.append((prep2, effect2))
 
-        ret = GatestringPlaquette(self.base, self.rows, self.cols,
+        ret = CircuitPlaquette(self.base, self.rows, self.cols,
                                    new_elements, None, new_fidpairs)
-        if gatestring_compiler is not None:
-            ret.compile_gatestrings(gatestring_compiler, dsFilter)
+        if circuit_compiler is not None:
+            ret.compile_circuits(circuit_compiler, dsFilter)
         return ret
 
     def get_all_strs(self):
-        """Return a list of all the gate strings contained in this plaquette"""
+        """Return a list of all the operation sequences contained in this plaquette"""
         return [s for i,j,s in self.elements]
 
-    def compile_gatestrings(self, gateset, dataset=None):
+    def compile_circuits(self, model, dataset=None):
         """
         Compiles this plaquette so that the `num_compiled_elements` property and
         the `iter_compiled()` method may be used.
 
         Parameters
         ----------
-        gateset : GateSet
-            The gate set used to perform the compiling.
+        model : Model
+            The model used to perform the compiling.
 
         dataset : DataSet, optional
             If not None, restrict what is compiled to only those
@@ -122,7 +122,7 @@ class GatestringPlaquette(object):
         all_strs = self.get_all_strs()
         if len(all_strs) > 0:
             rawmap, self._elementIndicesByStr, self._outcomesByStr, nEls = \
-              gateset.compile_gatestrings(all_strs, dataset)
+              model.compile_circuits(all_strs, dataset)
         else:
             nEls = 0 #nothing to compile
         self.num_compiled_elements = nEls
@@ -143,19 +143,19 @@ class GatestringPlaquette(object):
 
     def copy(self):
         """
-        Returns a copy of this `GatestringPlaquette`.
+        Returns a copy of this `CircuitPlaquette`.
         """
         aliases = _copy.deepcopy(self.aliases) if (self.aliases is not None) \
                   else None
-        return GatestringPlaquette(self.base, self.rows, self.cols,
+        return CircuitPlaquette(self.base, self.rows, self.cols,
                                    self.elements[:], aliases, self.fidpairs)
 
 
-class GatestringStructure(object):
+class CircuitStructure(object):
     """
-    Encapsulates a set of gate sequences, along with an associated structure.
+    Encapsulates a set of operation sequences, along with an associated structure.
 
-    By "structure", we mean the ability to index the gate sequences by a
+    By "structure", we mean the ability to index the operation sequences by a
     4-tuple (x, y, minor_x, minor_y) for displaying in nested color box plots,
     along with any aliases.
     """
@@ -202,7 +202,7 @@ class GatestringStructure(object):
 
         Returns
         -------
-        GatestringPlaquette
+        CircuitPlaquette
         """
         raise NotImplementedError("Derived class must implement this.")
 
@@ -212,11 +212,11 @@ class GatestringStructure(object):
 
         Parameters
         ----------
-        baseStr : GateString
+        baseStr : OpString
 
         Returns
         -------
-        GatestringPlaquette
+        CircuitPlaquette
         """
         raise NotImplementedError("Derived class must implement this.")
 
@@ -252,7 +252,7 @@ class GatestringStructure(object):
                     baseStrs.add(p.base)
         return list(baseStrs)
 
-    def compile_plaquettes(self, gateset, dataset=None):
+    def compile_plaquettes(self, model, dataset=None):
         """
         Compiles all the plaquettes in this structure so that their
         `num_compiled_elements` property and the `iter_compiled()` methods
@@ -260,8 +260,8 @@ class GatestringStructure(object):
 
         Parameters
         ----------
-        gateset : GateSet
-            The gate set used to perform the compiling.
+        model : Model
+            The model used to perform the compiling.
 
         dataset : DataSet, optional
             If not None, restrict what is compiled to only those
@@ -272,40 +272,40 @@ class GatestringStructure(object):
             for y in self.yvals():
                 p = self.get_plaquette(x,y)
                 if p is not None:
-                    p.compile_gatestrings(gateset, dataset)
+                    p.compile_circuits(model, dataset)
 
 
-class LsGermsStructure(GatestringStructure):
+class LsGermsStructure(CircuitStructure):
     """
-    A type of gate string structure whereby sequences can be
+    A type of operation sequence structure whereby sequences can be
     indexed by L, germ, preparation-fiducial, and measurement-fiducial.
     """
     def __init__(self, Ls, germs, prepStrs, effectStrs, aliases=None,
                  sequenceRules=None):
         """
-        Create an empty gate string structure.
+        Create an empty operation sequence structure.
 
         Parameters
         ----------
         Ls : list of ints
             List of maximum lengths (x values)
 
-        germs : list of GateStrings
+        germs : list of Circuits
             List of germ sequences (y values)
 
-        prepStrs : list of GateStrings
+        prepStrs : list of Circuits
             List of preparation fiducial sequences (minor x values)
 
-        effecStrs : list of GateStrings
+        effecStrs : list of Circuits
             List of measurement fiducial sequences (minor y values)
 
         aliases : dict
-            Gate label aliases to be propagated to all plaquettes.
+            LinearOperator label aliases to be propagated to all plaquettes.
 
         sequenceRules : list, optional
             A list of `(find,replace)` 2-tuples which specify string replacement
-            rules.  Both `find` and `replace` are tuples of gate labels
-            (or `GateString` objects).
+            rules.  Both `find` and `replace` are tuples of operation labels
+            (or `OpString` objects).
         """
         self.Ls = Ls[:]
         self.germs = germs[:]
@@ -346,12 +346,12 @@ class LsGermsStructure(GatestringStructure):
 
         Parameters
         ----------
-        basestr : GateString
-            The base gate string of the new plaquette.
+        basestr : OpString
+            The base operation sequence of the new plaquette.
 
         L : int
 
-        germ : GateString
+        germ : OpString
 
         fidpairs : list
             A list if `(i,j)` tuples of integers, where `i` is a prepation
@@ -360,7 +360,7 @@ class LsGermsStructure(GatestringStructure):
 
         dsfilter : DataSet, optional
             If not None, check that this data set contains all of the
-            gate strings being added.  If dscheck does not contain a gate
+            operation sequences being added.  If dscheck does not contain a gate
             sequence, it is *not* added.
 
         Returns
@@ -371,7 +371,7 @@ class LsGermsStructure(GatestringStructure):
         """
 
         missing_list = []
-        from ..construction import gatestringconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
+        from ..construction import circuitconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
 
         if fidpairs is None:
             fidpairs = list(_itertools.product(range(len(self.prepStrs)),
@@ -380,7 +380,7 @@ class LsGermsStructure(GatestringStructure):
             inds_to_remove = []
             for k,(i,j) in enumerate(fidpairs):
                 el = self.prepStrs[i] + basestr + self.effectStrs[j]
-                trans_el = _gstrc.translate_gatestring(el, self.aliases)
+                trans_el = _gstrc.translate_circuit(el, self.aliases)
                 if trans_el not in dsfilter:
                     missing_list.append( (self.prepStrs[i],germ,L,self.effectStrs[j],el) )
                     inds_to_remove.append(k)
@@ -391,8 +391,8 @@ class LsGermsStructure(GatestringStructure):
                     del fidpairs[i]
 
         plaq = self.create_plaquette(basestr, fidpairs)
-        self.allstrs.extend( [ _gstrc.manipulate_gatestring(gatestr,self.sequenceRules)
-                               for i,j,gatestr in plaq ] )
+        self.allstrs.extend( [ _gstrc.manipulate_circuit(opstr,self.sequenceRules)
+                               for i,j,opstr in plaq ] )
         _lt.remove_duplicates_in_place(self.allstrs)
 
         self._plaquettes[(L,germ)] = plaq
@@ -408,16 +408,16 @@ class LsGermsStructure(GatestringStructure):
 
     def add_unindexed(self, gsList, dsfilter=None):
         """
-        Adds unstructured gate strings (not in any plaquette).
+        Adds unstructured operation sequences (not in any plaquette).
 
         Parameters
         ----------
-        gsList : list of GateStrings
-            The gate strings to add.
+        gsList : list of Circuits
+            The operation sequences to add.
 
         dsfilter : DataSet, optional
             If not None, check that this data set contains all of the
-            gate strings being added.  If dscheck does not contain a gate
+            operation sequences being added.  If dscheck does not contain a gate
             sequence, it is *not* added.
 
         Returns
@@ -426,18 +426,18 @@ class LsGermsStructure(GatestringStructure):
             A list of elements in `gsList` which were not found in `dsfilter`
             and therefore not added.
         """
-        from ..construction import gatestringconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
+        from ..construction import circuitconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
 
         missing_list = []
-        for gatestr in gsList:
-            if gatestr not in self.allstrs:
+        for opstr in gsList:
+            if opstr not in self.allstrs:
                 if dsfilter:
-                    trans_gatestr = _gstrc.translate_gatestring(gatestr, self.aliases)
-                    if trans_gatestr not in dsfilter:
-                        missing_list.append( gatestr )
+                    trans_opstr = _gstrc.translate_circuit(opstr, self.aliases)
+                    if trans_opstr not in dsfilter:
+                        missing_list.append( opstr )
                         continue
-                self.allstrs.append(gatestr)
-                self.unindexed.append(gatestr)
+                self.allstrs.append(opstr)
+                self.unindexed.append(opstr)
         return missing_list
 
     def done_adding_strings(self):
@@ -457,7 +457,7 @@ class LsGermsStructure(GatestringStructure):
         L : int
             The maximum length.
 
-        germ : Gatestring
+        germ : Circuit
             The germ.
 
         onlyfirst : bool, optional
@@ -469,11 +469,11 @@ class LsGermsStructure(GatestringStructure):
 
         Returns
         -------
-        GatestringPlaquette
+        CircuitPlaquette
         """
         if (L,germ) not in self._plaquettes:
             p =  self.create_plaquette(None,[]) # no elements
-            p.compile_gatestrings(None) # just marks as "compiled"
+            p.compile_circuits(None) # just marks as "compiled"
             return p
 
         if not onlyfirst or (L,germ) in self._firsts:
@@ -481,12 +481,12 @@ class LsGermsStructure(GatestringStructure):
         else:
             basestr = self._plaquettes[(L,germ)].base
             p = self.create_plaquette(basestr,[]) # no elements
-            p.compile_gatestrings(None) # just marks as "compiled"
+            p.compile_circuits(None) # just marks as "compiled"
             return p
 
     def truncate(self, Ls=None, germs=None, prepStrs=None, effectStrs=None):
         """
-        Truncate this gate string structure to a subset of its current strings.
+        Truncate this operation sequence structure to a subset of its current strings.
 
         Parameters
         ----------
@@ -494,10 +494,10 @@ class LsGermsStructure(GatestringStructure):
             The integer L-values to keep.  If None, then all are kept.
             
         germs : list, optional
-            The (GateString) germs to keep.  If None, then all are kept.
+            The (OpString) germs to keep.  If None, then all are kept.
             
         prepStrs, effectStrs : list, optional
-            The (GateString) preparation and effect fiducial sequences to keep.
+            The (OpString) preparation and effect fiducial sequences to keep.
             If None, then all are kept.
 
         Returns
@@ -530,7 +530,7 @@ class LsGermsStructure(GatestringStructure):
 
         Parameters
         ----------
-        baseStr : GateString
+        baseStr : OpString
 
         fidpairs : list
             A list if `(i,j)` tuples of integers, where `i` is a prepation
@@ -539,7 +539,7 @@ class LsGermsStructure(GatestringStructure):
 
         Returns
         -------
-        GatestringPlaquette
+        CircuitPlaquette
         """
         if fidpairs is None:
             fidpairs = list(_itertools.product(range(len(self.prepStrs)),
@@ -549,7 +549,7 @@ class LsGermsStructure(GatestringStructure):
                      for i,j in fidpairs ] #note preps are *cols* not rows
 
         real_fidpairs = [(self.prepStrs[i],self.effectStrs[j]) for i,j in fidpairs] # strings, not just indices
-        return GatestringPlaquette(baseStr, len(self.effectStrs),
+        return CircuitPlaquette(baseStr, len(self.effectStrs),
                                    len(self.prepStrs), elements,
                                    self.aliases, real_fidpairs)
 
@@ -579,9 +579,9 @@ class LsGermsStructure(GatestringStructure):
 
 
 
-class LsGermsSerialStructure(GatestringStructure):
+class LsGermsSerialStructure(CircuitStructure):
     """
-    A type of gate string structure whereby sequences can be
+    A type of operation sequence structure whereby sequences can be
     indexed by L, germ, preparation-fiducial, and measurement-fiducial.
     """
     def __init__(self, Ls, germs, nMinorRows, nMinorCols, aliases=None,
@@ -589,8 +589,8 @@ class LsGermsSerialStructure(GatestringStructure):
         """
         Create an empty LsGermSerialStructure.
 
-        This type of gate string structure is useful for holding multi-qubit
-        gate strings which have a germ and max-length structure but which have
+        This type of operation sequence structure is useful for holding multi-qubit
+        operation sequences which have a germ and max-length structure but which have
         widely varying fiducial sequences so that is it not useful to use the
         minor axes (rows/columns) to represent the *same* fiducials for all
         (L,germ) plaquettes.
@@ -600,7 +600,7 @@ class LsGermsSerialStructure(GatestringStructure):
         Ls : list of ints
             List of maximum lengths (x values)
 
-        germs : list of GateStrings
+        germs : list of Circuits
             List of germ sequences (y values)
 
         nMinorRows, nMinorCols : int
@@ -608,12 +608,12 @@ class LsGermsSerialStructure(GatestringStructure):
             These should be the maximum values required for any plaquette.
 
         aliases : dict
-            Gate label aliases to be propagated to all plaquettes.
+            LinearOperator label aliases to be propagated to all plaquettes.
 
         sequenceRules : list, optional
             A list of `(find,replace)` 2-tuples which specify string replacement
-            rules.  Both `find` and `replace` are tuples of gate labels
-            (or `GateString` objects).
+            rules.  Both `find` and `replace` are tuples of operation labels
+            (or `OpString` objects).
         """
         self.Ls = Ls[:]
         self.germs = germs[:]
@@ -654,27 +654,27 @@ class LsGermsSerialStructure(GatestringStructure):
 
         Parameters
         ----------
-        basestr : GateString
-            The base gate string of the new plaquette, typically `germ^power` 
+        basestr : OpString
+            The base operation sequence of the new plaquette, typically `germ^power` 
             such that `len(germ^power) <= L`.
 
         L : int
             The maximum length value.
 
-        germ : GateString
+        germ : OpString
             The germ string.
 
         fidpairs : list
-            A list if `(prep,meas)` tuples of GateString objects, specifying
+            A list if `(prep,meas)` tuples of OpString objects, specifying
             the fiducial pairs for this plaquette.  Note that this argument
             is different from the corresponding one in 
             :method:`LsGermsStructure.add_plaquette` which takes pairs of 
             *integer* indices and can be None.  In the present case, this
-            argument is mandatory and contains tuples of gate strings.
+            argument is mandatory and contains tuples of operation sequences.
 
         dsfilter : DataSet, optional
             If not None, check that this data set contains all of the
-            gate strings being added.  If dscheck does not contain a gate
+            operation sequences being added.  If dscheck does not contain a gate
             sequence, it is *not* added.
 
         Returns
@@ -685,13 +685,13 @@ class LsGermsSerialStructure(GatestringStructure):
         """
 
         missing_list = []
-        from ..construction import gatestringconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
+        from ..construction import circuitconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
 
         if dsfilter:
             inds_to_remove = []
             for k,(prepStr,effectStr) in enumerate(fidpairs):
                 el = prepStr + basestr + effectStr
-                trans_el = _gstrc.translate_gatestring(el, self.aliases)
+                trans_el = _gstrc.translate_circuit(el, self.aliases)
                 if trans_el not in dsfilter:
                     missing_list.append( (prepStr,germ,L,effectStr,el) )
                     inds_to_remove.append(k)
@@ -702,8 +702,8 @@ class LsGermsSerialStructure(GatestringStructure):
                     del fidpairs[i]
 
         plaq = self.create_plaquette(basestr, fidpairs)
-        self.allstrs.extend( [ _gstrc.manipulate_gatestring(gatestr,self.sequenceRules)
-                               for i,j,gatestr in plaq ] )
+        self.allstrs.extend( [ _gstrc.manipulate_circuit(opstr,self.sequenceRules)
+                               for i,j,opstr in plaq ] )
         _lt.remove_duplicates_in_place(self.allstrs)
 
         self._plaquettes[(L,germ)] = plaq
@@ -719,16 +719,16 @@ class LsGermsSerialStructure(GatestringStructure):
 
     def add_unindexed(self, gsList, dsfilter=None):
         """
-        Adds unstructured gate strings (not in any plaquette).
+        Adds unstructured operation sequences (not in any plaquette).
 
         Parameters
         ----------
-        gsList : list of GateStrings
-            The gate strings to add.
+        gsList : list of Circuits
+            The operation sequences to add.
 
         dsfilter : DataSet, optional
             If not None, check that this data set contains all of the
-            gate strings being added.  If dscheck does not contain a gate
+            operation sequences being added.  If dscheck does not contain a gate
             sequence, it is *not* added.
 
         Returns
@@ -737,18 +737,18 @@ class LsGermsSerialStructure(GatestringStructure):
             A list of elements in `gsList` which were not found in `dsfilter`
             and therefore not added.
         """
-        from ..construction import gatestringconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
+        from ..construction import circuitconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
 
         missing_list = []
-        for gatestr in gsList:
-            if gatestr not in self.allstrs:
+        for opstr in gsList:
+            if opstr not in self.allstrs:
                 if dsfilter:
-                    trans_gatestr = _gstrc.translate_gatestring(gatestr, self.aliases)
-                    if trans_gatestr not in dsfilter:
-                        missing_list.append( gatestr )
+                    trans_opstr = _gstrc.translate_circuit(opstr, self.aliases)
+                    if trans_opstr not in dsfilter:
+                        missing_list.append( opstr )
                         continue
-                self.allstrs.append(gatestr)
-                self.unindexed.append(gatestr)
+                self.allstrs.append(opstr)
+                self.unindexed.append(opstr)
         return missing_list
 
     def done_adding_strings(self):
@@ -768,7 +768,7 @@ class LsGermsSerialStructure(GatestringStructure):
         L : int
             The maximum length.
 
-        germ : Gatestring
+        germ : Circuit
             The germ.
 
         onlyfirst : bool, optional
@@ -780,11 +780,11 @@ class LsGermsSerialStructure(GatestringStructure):
 
         Returns
         -------
-        GatestringPlaquette
+        CircuitPlaquette
         """
         if (L,germ) not in self._plaquettes:
             p =  self.create_plaquette(None,[]) # no elements
-            p.compile_gatestrings(None) # just marks as "compiled"
+            p.compile_circuits(None) # just marks as "compiled"
             return p
 
         if not onlyfirst or (L,germ) in self._firsts:
@@ -792,12 +792,12 @@ class LsGermsSerialStructure(GatestringStructure):
         else:
             basestr = self._plaquettes[(L,germ)].base
             p = self.create_plaquette(basestr,[]) # no elements
-            p.compile_gatestrings(None) # just marks as "compiled"
+            p.compile_circuits(None) # just marks as "compiled"
             return p
 
     def truncate(self, Ls=None, germs=None, nMinorRows=None, nMinorCols=None):
         """
-        Truncate this gate string structure to a subset of its current strings.
+        Truncate this operation sequence structure to a subset of its current strings.
 
         Parameters
         ----------
@@ -805,13 +805,13 @@ class LsGermsSerialStructure(GatestringStructure):
             The integer L-values to keep.  If None, then all are kept.
             
         germs : list, optional
-            The (GateString) germs to keep.  If None, then all are kept.
+            The (OpString) germs to keep.  If None, then all are kept.
             
         nMinorRows, nMinorCols : int or "auto", optional
             The number of minor rows and columns in the new structure.  If the
             special "auto" value is used, the number or rows/cols is chosen
             automatically (to be as small as possible). If None, then the values
-            of the original (this) gatestring structure are kept.
+            of the original (this) circuit structure are kept.
 
         Returns
         -------
@@ -861,16 +861,16 @@ class LsGermsSerialStructure(GatestringStructure):
 
         Parameters
         ----------
-        baseStr : GateString
+        baseStr : OpString
 
         fidpairs : list
-            A list if `(prep,meas)` tuples of GateString objects, specifying
+            A list if `(prep,meas)` tuples of OpString objects, specifying
             the fiducial pairs for this plaquette.  Note that this argument
             is mandatory and cannot be None as for :class:`LsGermsStructure`.
 
         Returns
         -------
-        GatestringPlaquette
+        CircuitPlaquette
         """
         ji_list = list(_itertools.product(list(range(self.nMinorRows)),
                                     list(range(self.nMinorCols))))
@@ -880,7 +880,7 @@ class LsGermsSerialStructure(GatestringStructure):
                      for (j,i),(prepStr,effectStr) in 
                      zip(ji_list[0:len(fidpairs)], fidpairs) ] #note preps are *cols* not rows
 
-        return GatestringPlaquette(baseStr, self.nMinorRows,
+        return CircuitPlaquette(baseStr, self.nMinorRows,
                                    self.nMinorCols, elements,
                                    self.aliases, fidpairs[:])
 

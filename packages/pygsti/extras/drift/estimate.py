@@ -267,9 +267,9 @@ def likelihood_of_general_model(probTrajectoriesFunction, parameters, times, dat
     Todo.
     """      
     negll = 0.
-    for gstr in data.keys():
-        p = probTrajectoriesFunction(parameters, gstr, times[gs])
-        negll += trajectoryNegLogLikelihood(p, data[gstr], min_p, max_p)
+    for opstr in data.keys():
+        p = probTrajectoriesFunction(parameters, opstr, times[mdl])
+        negll += trajectoryNegLogLikelihood(p, data[opstr], min_p, max_p)
     
     return negll
 
@@ -282,9 +282,9 @@ def maximum_likelihood_over_general_model(probTrajectoriesFunction, times, data,
     def objfunc(parameters):
         
         negll = 0.
-        for gs in data.keys():
-            p = probTrajectoriesFunction(parameters, gs, times[gs])
-            negll += trajectoryNegLogLikelihood(p, data[gs], min_p, max_p)
+        for mdl in data.keys():
+            p = probTrajectoriesFunction(parameters, mdl, times[mdl])
+            negll += trajectoryNegLogLikelihood(p, data[mdl], min_p, max_p)
         
         return negll
 

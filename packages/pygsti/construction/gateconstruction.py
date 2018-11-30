@@ -9,7 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import scipy.linalg as _spl
 
-from ..tools.gatetools import unitary_to_pauligate
+from ..tools.optools import unitary_to_pauligate
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
@@ -37,9 +37,9 @@ sigmazz = _np.kron(sigmaz,sigmaz)
 
 def single_qubit_gate(hx, hy, hz, noise=0):
     """
-    Construct the single-qubit gate matrix.
+    Construct the single-qubit operation matrix.
 
-    Build the gate matrix given by exponentiating -i * (hx*X + hy*Y + hz*Z),
+    Build the operation matrix given by exponentiating -i * (hx*X + hy*Y + hz*Z),
     where X, Y, and Z are the sigma matrices.  Thus, hx, hy, and hz
     correspond to rotation angles divided by 2.  Additionally, a uniform
     depolarization noise can be applied to the gate.
@@ -61,7 +61,7 @@ def single_qubit_gate(hx, hy, hz, noise=0):
     Returns
     -------
     numpy array
-        4x4 gate matrix which operates on a 1-qubit
+        4x4 operation matrix which operates on a 1-qubit
         density matrix expressed as a vector in the
         Pauli basis ( {I,X,Y,Z}/sqrt(2) ).
     """
@@ -73,9 +73,9 @@ def single_qubit_gate(hx, hy, hz, noise=0):
 
 def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, yz=0, zi=0, zx=0, zy=0, zz=0, ii=0):
     """
-    Construct the single-qubit gate matrix.
+    Construct the single-qubit operation matrix.
 
-    Build the gate matrix given by exponentiating -i * (xx*XX + xy*XY + ...)
+    Build the operation matrix given by exponentiating -i * (xx*XX + xy*XY + ...)
     where terms in the exponent are tensor products of two Pauli matrices.
 
     Parameters
@@ -117,7 +117,7 @@ def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, y
     Returns
     -------
     numpy array
-        16x16 gate matrix which operates on a 2-qubit
+        16x16 operation matrix which operates on a 2-qubit
         density matrix expressed as a vector in the
         Pauli-Product basis.
     """

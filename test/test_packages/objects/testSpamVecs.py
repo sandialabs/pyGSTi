@@ -61,7 +61,7 @@ class SPAMVecTestCase(BaseTestCase):
         compSV = tppovm['1'] #complement POVM
         self.assertTrue(isinstance(compSV,pygsti.obj.ComplementSPAMVec))
 
-        dummyGS = pygsti.objects.GateSet()
+        dummyGS = pygsti.objects.Model()
         dummyGS.povms['Mtest'] = povm # so to/from vector work w/tensor prod of povm in tests below
         assert(povm.gpindices is not None)
         
@@ -228,24 +228,24 @@ class SPAMVecTestCase(BaseTestCase):
 
     #TODO
     def test_complement_spamvec(self):
-        gateset = pygsti.construction.build_gateset(
+        model = pygsti.construction.build_model(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
 
-        E0 = gateset.povms['Mdefault']['0']
-        E1 = gateset.povms['Mdefault']['1']
+        E0 = model.povms['Mdefault']['0']
+        E1 = model.povms['Mdefault']['1']
         Ec = pygsti.obj.ComplementSPAMVec(
             pygsti.construction.build_identity_vec([2],"pp"),
             [E0])
         print(Ec.gpindices)
 
         #Test TPPOVM which uses a complement evec
-        gateset.povms['Mtest'] = pygsti.obj.TPPOVM( [('+',E0),('-',E1)] )
-        E0 = gateset.povms['Mtest']['+']
-        Ec = gateset.povms['Mtest']['-']
+        model.povms['Mtest'] = pygsti.obj.TPPOVM( [('+',E0),('-',E1)] )
+        E0 = model.povms['Mtest']['+']
+        Ec = model.povms['Mtest']['-']
         
-        v = gateset.to_vector()
-        gateset.from_vector(v)
+        v = model.to_vector()
+        model.from_vector(v)
 
         #print(Ec.num_params()) #not implemented for complement vecs - only for POVM
         identity = np.array([[np.sqrt(2)], [0], [0], [0]],'d')
@@ -257,43 +257,43 @@ class SPAMVecTestCase(BaseTestCase):
 
         #TODO: add back if/when we can set parts of a POVM directly...
         #print("TEST2")
-        #gateset.effects['E0'] = [1/np.sqrt(2), 0, 0.4, 0.6]
-        #print(gateset.effects['E0'])
-        #print(gateset.effects['E1'])
-        #print(gateset.effects['E0'] + gateset.effects['E1'])
-        #self.assertArraysAlmostEqual(gateset.effects['E0'] + gateset.effects['E1'], identity)
+        #model.effects['E0'] = [1/np.sqrt(2), 0, 0.4, 0.6]
+        #print(model.effects['E0'])
+        #print(model.effects['E1'])
+        #print(model.effects['E0'] + model.effects['E1'])
+        #self.assertArraysAlmostEqual(model.effects['E0'] + model.effects['E1'], identity)
         #
         #print("TEST3")
-        #gateset.effects['E0'][0,0] = 1.0 #uses dirty processing
-        #gateset._update_paramvec(gateset.effects['E0'])
-        #print(gateset.effects['E0'])
-        #print(gateset.effects['E1'])
-        #print(gateset.effects['E0'] + gateset.effects['E1'])
-        #self.assertArraysAlmostEqual(gateset.effects['E0'] + gateset.effects['E1'], identity)
+        #model.effects['E0'][0,0] = 1.0 #uses dirty processing
+        #model._update_paramvec(model.effects['E0'])
+        #print(model.effects['E0'])
+        #print(model.effects['E1'])
+        #print(model.effects['E0'] + model.effects['E1'])
+        #self.assertArraysAlmostEqual(model.effects['E0'] + model.effects['E1'], identity)
 
 
     def test_povms(self):
-        gateset = pygsti.construction.build_gateset(
+        model = pygsti.construction.build_model(
             [2], [('Q0',)],['Gi'], ["I(Q0)"])
-        gateset2Q = pygsti.construction.build_gateset(
+        gateset2Q = pygsti.construction.build_model(
             [4], [('Q0','Q1')],['Gi'], ["I(Q0)"])
 
-        povm = gateset.povms['Mdefault'].copy()
+        povm = model.povms['Mdefault'].copy()
         E0 = povm['0']
         E1 = povm['1']
-        gateset.povms['Munconstrained'] = povm # so gpindices get setup
+        model.povms['Munconstrained'] = povm # so gpindices get setup
 
         with self.assertRaises(ValueError):
-            pygsti.obj.povm.convert(povm, "foobar", gateset.basis)
+            pygsti.obj.povm.convert(povm, "foobar", model.basis)
         with self.assertRaises(ValueError):
             pygsti.obj.UnconstrainedPOVM( "NotAListOrDict" )
 
         povm['0'] = E0 # assignment
-        tp_povm = pygsti.obj.povm.convert(povm, "TP", gateset.basis)
+        tp_povm = pygsti.obj.povm.convert(povm, "TP", model.basis)
         tp_povm['0'] = E0 # ok
         with self.assertRaises(KeyError):
             tp_povm['1'] = E0 # can't assign complement vector
-        gateset.povms['Mtp'] = tp_povm # so gpindices get setup
+        model.povms['Mtp'] = tp_povm # so gpindices get setup
 
         factorPOVMs = [povm, povm.copy()]
         tensor_povm = pygsti.obj.TensorProdPOVM( factorPOVMs )
@@ -315,11 +315,11 @@ class SPAMVecTestCase(BaseTestCase):
             v = p.to_vector()
             p.from_vector(v)
 
-            v = gateset.to_vector() if i < 2 else gateset2Q.to_vector()
+            v = model.to_vector() if i < 2 else gateset2Q.to_vector()
             effects = p.compile_effects(prefix="ABC")
             for Evec in effects.values():
                 print("inds = ",Evec.gpindices, len(v))
-                Evec.from_vector(v[Evec.gpindices]) # gpindices should be setup relative to GateSet's param vec
+                Evec.from_vector(v[Evec.gpindices]) # gpindices should be setup relative to Model's param vec
 
 
             try:
@@ -366,13 +366,13 @@ class SPAMVecTestCase(BaseTestCase):
         povm = pygsti.obj.UnconstrainedPOVM(items)
         self.assertEqual(povm.num_params(),0)
 
-        gs = std1Q_XYI.gs_target.copy()
-        gs.preps['rho0'] = pygsti.obj.ComputationalSPAMVec([0],'densitymx')
-        gs.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': pygsti.obj.ComputationalSPAMVec([0],'densitymx'),
+        mdl = std1Q_XYI.target_model.copy()
+        mdl.preps['rho0'] = pygsti.obj.ComputationalSPAMVec([0],'densitymx')
+        mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': pygsti.obj.ComputationalSPAMVec([0],'densitymx'),
                                                              '1': pygsti.obj.ComputationalSPAMVec([1],'densitymx')})
 
-        ps0 = gs.probs(())
-        ps1 = gs.probs(('Gx',))
+        ps0 = mdl.probs(())
+        ps1 = mdl.probs(('Gx',))
         self.assertAlmostEqual(ps0['0'], 1.0)
         self.assertAlmostEqual(ps0['1'], 0.0)
         self.assertAlmostEqual(ps1['0'], 0.5)

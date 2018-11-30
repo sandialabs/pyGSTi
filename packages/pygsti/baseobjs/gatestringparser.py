@@ -17,11 +17,11 @@ real    :: ['+'|'-'] integer [ '.' integer [ 'e' ['+'|'-'] integer ] ]
 reflbl  :: (alpha | digit | '_')+
 
 nop       :: '{}'
-gatenm    :: 'G' [ lowercase | digit | '_' ]+ 
+opname    :: 'G' [ lowercase | digit | '_' ]+ 
 instrmtnm :: 'I' [ lowercase | digit | '_' ]+ 
 povmnm    :: 'M' [ lowercase | digit | '_' ]+
 prepnm    :: 'rho' [ lowercase | digit | '_' ]+
-gate      :: gatenm [':' integer ]*
+gate      :: opname [':' integer ]*
 instrmt   :: instrmt [':' integer ]*
 povm      :: povm [':' integer ]*
 prep      :: prep [':' integer ]*
@@ -39,8 +39,8 @@ ppstring  :: pstring [ povm ]
 from ply import lex, yacc
 from .label import Label as _Label
 
-class GateStringLexer:
-    """ Lexer for matching and interpreting text-format gate sequences """
+class CircuitLexer:
+    """ Lexer for matching and interpreting text-format operation sequences """
     
     # List of token names.   This is always required
     tokens = (
@@ -141,13 +141,13 @@ class GateStringLexer:
         raise ValueError("Lexer error") # pragma: no cover
 
 
-class GateStringParser(object):
-    """ Parser for text-format gate sequences """
-    tokens = GateStringLexer.tokens
+class CircuitParser(object):
+    """ Parser for text-format operation sequences """
+    tokens = CircuitLexer.tokens
 
     def __init__(self, lexer_object=None, lookup={}):
         self._lookup = lookup
-        self._lexer = lex.lex(object=lexer_object if lexer_object else GateStringLexer())
+        self._lexer = lex.lex(object=lexer_object if lexer_object else CircuitLexer())
         self._parser = yacc.yacc(module=self, start="ppstring", debug=False,
                                  tabmodule='pygsti.baseobjs.parsetab_string')
 

@@ -1,4 +1,4 @@
-""" Defines the GateString class and derived classes which represent gate strings."""
+""" Defines the OpString class and derived classes which represent operation sequences."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -10,50 +10,50 @@ import numpy as _np
 import itertools as _itertools
 #import uuid  as _uuid
 from ..tools import compattools as _compat
-from ..baseobjs import GateStringParser as _GateStringParser
+from ..baseobjs import CircuitParser as _CircuitParser
 from ..baseobjs import Label as _Label
 
 import os,inspect
 debug_record = {}
 
-def _gateSeqToStr(seq):
-    if len(seq) == 0: return "{}" #special case of empty gate string
+def _opSeqToStr(seq):
+    if len(seq) == 0: return "{}" #special case of empty operation sequence
     return ''.join(map(str,seq))
 
-class GateString(object):
+class OpString(object):
     """
-    Encapsulates a gate string as a tuple of gate labels associated
+    Encapsulates a operation sequence as a tuple of operation labels associated
     with a string representation for that tuple.
 
     Typically there are multiple string representations for the same tuple (for
     example "GxGx" and "Gx^2" both correspond to the tuple ("Gx","Gx") ) and it
     is convenient to store a specific string represntation along with the tuple.
 
-    A GateString objects behaves very similarly to a tuple and most operations
-    supported by a tuple are supported by a GateString (e.g. adding, hashing,
+    A OpString objects behaves very similarly to a tuple and most operations
+    supported by a tuple are supported by a OpString (e.g. adding, hashing,
     testing for equality, indexing,  slicing, multiplying).
     """
 
-    def __init__(self, tupleOfGateLabels, stringRepresentation=None, bCheck=True, lookup=None):
+    def __init__(self, tupleOfOpLabels, stringRepresentation=None, bCheck=True, lookup=None):
         """
-        Create a new GateString object
+        Create a new OpString object
 
         Parameters
         ----------
-        tupleOfGateLabels : tuple or GateString (or None)
-            A tuple of gate labels specifying the gate sequence, or None if the
+        tupleOfOpLabels : tuple or OpString (or None)
+            A tuple of operation labels specifying the gate sequence, or None if the
             sequence should be obtained by evaluating stringRepresentation as
-            a standard-text-format gate string (e.g. "GxGy", "Gx(Gy)^2, or "{}").
+            a standard-text-format operation sequence (e.g. "GxGy", "Gx(Gy)^2, or "{}").
 
         stringRepresentation : string, optional
-            A string representation of this GateString.
+            A string representation of this OpString.
 
         bCheck : bool, optional
             If true, raise ValueEror if stringRepresentation does not evaluate
-            to tupleOfGateLabels.
+            to tupleOfOpLabels.
 
         lookup : dict, optional
-            A dictionary with keys == labels and values == tuples of gate labels
+            A dictionary with keys == labels and values == tuples of operation labels
             which can be used for substitutions using the S<label> syntax.
         """
         #self.uuid = _uuid.uuid4()
@@ -66,66 +66,66 @@ class GateString(object):
             if isinstance(l, _Label): return l
             else: return _Label(l) # takes care of all other cases
 
-        if tupleOfGateLabels is None and stringRepresentation is None:
-            raise ValueError("tupleOfGateLabels and stringRepresentation cannot both be None");
+        if tupleOfOpLabels is None and stringRepresentation is None:
+            raise ValueError("tupleOfOpLabels and stringRepresentation cannot both be None");
 
-        if tupleOfGateLabels is None or (bCheck and stringRepresentation is not None):
-            gsparser = _GateStringParser()
+        if tupleOfOpLabels is None or (bCheck and stringRepresentation is not None):
+            gsparser = _CircuitParser()
             gsparser.lookup = lookup
             chk = gsparser.parse(stringRepresentation) # tuple of Labels
-            if tupleOfGateLabels is None: tupleOfGateLabels = chk
-            elif tuple(map(convert_to_label,tupleOfGateLabels)) != chk:
-                raise ValueError("Error intializing GateString: " +
+            if tupleOfOpLabels is None: tupleOfOpLabels = chk
+            elif tuple(map(convert_to_label,tupleOfOpLabels)) != chk:
+                raise ValueError("Error intializing OpString: " +
                             " tuple and string do not match: %s != %s"
-                             % (tuple(tupleOfGateLabels),stringRepresentation))
+                             % (tuple(tupleOfOpLabels),stringRepresentation))
 
-        # if tupleOfGateLabels is a GateString, then copy it
-        if isinstance(tupleOfGateLabels, GateString):
-            self._tup = tupleOfGateLabels.tup
+        # if tupleOfOpLabels is a OpString, then copy it
+        if isinstance(tupleOfOpLabels, OpString):
+            self._tup = tupleOfOpLabels.tup
             if stringRepresentation is None:
-                self._str = tupleOfGateLabels.str
+                self._str = tupleOfOpLabels.str
             else:
                 self._str = stringRepresentation
 
         else:
-            #If we weren't given a GateString, convert all the elements of the tuple
+            #If we weren't given a OpString, convert all the elements of the tuple
             # to Labels.  Note that this post-processer parser output too, since the
-            # parser returns a *tuple* not a GateString
-            tupleOfGateLabels = tuple(map(convert_to_label,tupleOfGateLabels))
+            # parser returns a *tuple* not a OpString
+            tupleOfOpLabels = tuple(map(convert_to_label,tupleOfOpLabels))
 
             #Note: now it's OK to have _str == None, as str is build on demand
             # In the past we did: if stringRepresentation is None:
-            #    stringRepresentation = _gateSeqToStr( tupleOfGateLabels )
+            #    stringRepresentation = _opSeqToStr( tupleOfOpLabels )
 
-            self._tup = tuple(tupleOfGateLabels)
+            self._tup = tuple(tupleOfOpLabels)
             self._str = str(stringRepresentation) \
                         if (stringRepresentation is not None) else None
 
     @property
     def tup(self):
-        """ This GateString as a standard Python tuple of Labels."""
+        """ This OpString as a standard Python tuple of Labels."""
         return self._tup
 
     @tup.setter
     def tup(self, value):
-        """ This GateString as a standard Python tuple of Labels."""
+        """ This OpString as a standard Python tuple of Labels."""
         self._tup = value
 
     @property
     def str(self):
-        """ The Python string representation of this GateString."""
+        """ The Python string representation of this OpString."""
         if self._str is None:
-            self._str = _gateSeqToStr(self.tup)
+            self._str = _opSeqToStr(self.tup)
         return self._str
 
     @str.setter
     def str(self, value):
-        """ The Python string representation of this GateString."""
+        """ The Python string representation of this OpString."""
         self._str = value
 
     def map_state_space_labels(self, mapper):
         """
-        Return a copy of this gate string with all of the state-space-labels
+        Return a copy of this operation sequence with all of the state-space-labels
         (often just qubit labels) updated according to a mapping function.
 
         For example, calling this function with `mapper = {0: 1, 1: 3}`
@@ -140,30 +140,30 @@ class GateString(object):
 
         Returns
         -------
-        GateString
+        OpString
         """
-        return GateString( [l.map_state_space_labels(mapper) for l in self.tup] )
+        return OpString( [l.map_state_space_labels(mapper) for l in self.tup] )
 
     def serialize(self):
         """
-        Construct a gate string whereby all compound labels (containing multiple
+        Construct a operation sequence whereby all compound labels (containing multiple
         gates in parallel) in this string are converted to separate labels,
         effectively putting each elementary gate operation into its own "layer".
         Ordering is dictated by the ordering of the compound label.
 
         Returns
         -------
-        GateString
+        OpString
         """
         serial_lbls = []
         for lbl in self:
             for c in lbl.components:
                 serial_lbls.append(c)
-        return GateString(serial_lbls)
+        return OpString(serial_lbls)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
         """
-        Construct a gatestring with the same underlying labels as this one,
+        Construct a circuit with the same underlying labels as this one,
         but with as many gates performed in parallel as possible (with
         some restrictions - see the Parameters sectin below).  Generally,
         gates are moved as far left (toward the start) in the sequence as
@@ -172,16 +172,16 @@ class GateString(object):
         Parameters
         ----------
         can_break_labels : bool, optional
-            Whether compound (parallel-gate) labels in this GateString can be
+            Whether compound (parallel-gate) labels in this OpString can be
             separated during the parallelization process.  For example, if
             `can_break_labels=True` then `"Gx:0[Gy:0Gy:1]" => "[Gx:0Gy:1]Gy:0"`
             whereas if `can_break_labels=False` the result would remain 
             `"Gx:0[Gy:0Gy:1]"` because `[Gy:0Gy:1]` cannot be separated.
 
         adjacent_only : bool, optional
-            It `True`, then gate labels are only allowed to move into an
+            It `True`, then operation labels are only allowed to move into an
             adjacent label, that is, they cannot move "through" other 
-            gate labels.  For example, if `adjacent_only=True` then
+            operation labels.  For example, if `adjacent_only=True` then
             `"Gx:0Gy:0Gy:1" => "Gx:0[Gy:0Gy:1]"` whereas if 
             `adjacent_only=False` the result would be `"[Gx:0Gy:1]Gy:0`.
             Setting this to `True` is sometimes useful if you want to 
@@ -190,7 +190,7 @@ class GateString(object):
             
         Returns
         -------
-        GateString
+        OpString
         """
         parallel_lbls = []
         cur_components = []
@@ -242,68 +242,68 @@ class GateString(object):
                 else:
                     for k in lbl.sslbls: first_free[k] = pos+1
                     
-        return GateString(parallel_lbls)
+        return OpString(parallel_lbls)
                     
             
     #Conversion routines for evalTree usage -- TODO: make these member functions
-    def to_pythonstr(self,gateLabels):
+    def to_pythonstr(self,opLabels):
         """
-        Convert this gate string into a python string, where each gate label is
+        Convert this operation sequence into a python string, where each operation label is
         represented as a **single** character, starting with 'A' and contining
-        down the alphabet.  This can be useful for processing gate strings
+        down the alphabet.  This can be useful for processing operation sequences
         using python's string tools (regex in particular).
 
         Parameters
         ----------
-        gateLabels : tuple
-           tuple containing all the gate labels that will be mapped to alphabet
+        opLabels : tuple
+           tuple containing all the operation labels that will be mapped to alphabet
            characters, beginning with 'A'.
 
         Returns
         -------
         string
-            The converted gate string.
+            The converted operation sequence.
 
         Examples
         --------
             ('Gx','Gx','Gy','Gx') => "AABA"
         """
-        assert(len(gateLabels) < 26) #Complain if we go beyond 'Z'
+        assert(len(opLabels) < 26) #Complain if we go beyond 'Z'
         translateDict = {}; c = 'A'
-        for gateLabel in gateLabels:
-            translateDict[gateLabel] = c
+        for opLabel in opLabels:
+            translateDict[opLabel] = c
             c = chr(ord(c) + 1)
-        return "".join([ translateDict[gateLabel] for gateLabel in self.tup ])
+        return "".join([ translateDict[opLabel] for opLabel in self.tup ])
 
     @classmethod
-    def from_pythonstr(cls,pythonString,gateLabels):
+    def from_pythonstr(cls,pythonString,opLabels):
         """
-        Create a GateString from a python string where each gate label is
+        Create a OpString from a python string where each operation label is
         represented as a **single** character, starting with 'A' and contining
         down the alphabet.  This performs the inverse of to_pythonstr(...).
 
         Parameters
         ----------
         pythonString : string
-            string whose individual characters correspond to the gate labels of a
-            gate string.
+            string whose individual characters correspond to the operation labels of a
+            operation sequence.
 
-        gateLabels : tuple
-           tuple containing all the gate labels that will be mapped to alphabet
+        opLabels : tuple
+           tuple containing all the operation labels that will be mapped to alphabet
            characters, beginning with 'A'.
 
         Returns
         -------
-        GateString
+        OpString
 
         Examples
         --------
             "AABA" => ('Gx','Gx','Gy','Gx')
         """
-        assert(len(gateLabels) < 26) #Complain if we go beyond 'Z'
+        assert(len(opLabels) < 26) #Complain if we go beyond 'Z'
         translateDict = {}; c = 'A'
-        for gateLabel in gateLabels:
-            translateDict[c] = gateLabel
+        for opLabel in opLabels:
+            translateDict[c] = opLabel
             c = chr(ord(c) + 1)
         return cls( tuple([ translateDict[c] for c in pythonString ]) )
 
@@ -314,25 +314,25 @@ class GateString(object):
         return len(self.tup)
 
     def __repr__(self):
-        return "GateString(%s)" % self.str
+        return "OpString(%s)" % self.str
 
     def __iter__(self):
         return self.tup.__iter__()
 
     def __add__(self,x):
-        if not isinstance(x, GateString):
-            raise ValueError("Can only add GateStrings objects to other GateString objects")
+        if not isinstance(x, OpString):
+            raise ValueError("Can only add Circuits objects to other OpString objects")
         if self.str != "{}":
             s = (self.str + x._str) if x.str != "{}" else self.str
         else: s = x.str
-        return GateString(self.tup + x.tup, s, bCheck=False)
+        return OpString(self.tup + x.tup, s, bCheck=False)
 
     def __mul__(self,x):
         assert( (_compat.isint(x) or _np.issubdtype(x,int)) and x >= 0)
         if x > 1: s = "(%s)^%d" % (self.str,x)
         elif x == 1: s = "(%s)" % self.str
         else: s = "{}"
-        return GateString(self.tup * x, s, bCheck=False)
+        return OpString(self.tup * x, s, bCheck=False)
 
     def __pow__(self,x): #same as __mul__()
         return self.__mul__(x)
@@ -352,18 +352,18 @@ class GateString(object):
         #return hash(self.uuid)
 
     def __copy__(self):
-        return GateString( self.tup, self.str, bCheck=False)
+        return OpString( self.tup, self.str, bCheck=False)
 
     #def __deepcopy__(self, memo):
-    #    return GateString( self._tup, self._str, bCheck=False)
+    #    return OpString( self._tup, self._str, bCheck=False)
 
     def __getitem__(self, key):
         if isinstance( key, slice ):
-            return GateString( self.tup.__getitem__(key) )
+            return OpString( self.tup.__getitem__(key) )
         return self.tup.__getitem__(key)
 
     def __setitem__(self, key, value):
-        raise ValueError("Cannot set elements of GateString tuple (they're read-only)")
+        raise ValueError("Cannot set elements of OpString tuple (they're read-only)")
 
     def __getstate__(self):
         return self.__dict__
@@ -377,109 +377,109 @@ class GateString(object):
                 self.__dict__[k] = v
     
 
-class WeightedGateString(GateString):
+class WeightedOpString(OpString):
     """
-    A GateString that contains an additional "weight" member used for
-    building up weighted lists of gate strings.
+    A OpString that contains an additional "weight" member used for
+    building up weighted lists of operation sequences.
 
-    When two WeightedGateString objects are added together their weights
-    add, and when a WeightedGateString object is multiplied by an integer
+    When two WeightedOpString objects are added together their weights
+    add, and when a WeightedOpString object is multiplied by an integer
     (equivalent to being raised to a power) the weight is unchanged. When
-    added to plain GateString objects, the plain GateString object is
-    treated as having zero weight and the result is another WeightedGateString.
+    added to plain OpString objects, the plain OpString object is
+    treated as having zero weight and the result is another WeightedOpString.
     """
 
-    def __init__(self, tupleOfGateLabels, stringRepresentation=None, weight=1.0, bCheck=True):
+    def __init__(self, tupleOfOpLabels, stringRepresentation=None, weight=1.0, bCheck=True):
         """
-        Create a new WeightedGateString object
+        Create a new WeightedOpString object
 
         Parameters
         ----------
-        tupleOfGateLabels : tuple (or None)
-            A tuple of gate labels specifying the gate sequence, or None if the
+        tupleOfOpLabels : tuple (or None)
+            A tuple of operation labels specifying the gate sequence, or None if the
             sequence should be obtained by evaluating stringRepresentation as
-            a standard-text-format gate string (e.g. "GxGy", "Gx(Gy)^2, or "{}").
+            a standard-text-format operation sequence (e.g. "GxGy", "Gx(Gy)^2, or "{}").
 
         stringRepresentation : string, optional
-            A string representation of this WeightedGateString.
+            A string representation of this WeightedOpString.
 
         weight : float, optional
-            the weight to assign this gate string.
+            the weight to assign this operation sequence.
 
         bCheck : bool, optional
             If true, raise ValueEror if stringRepresentation does not evaluate
-            to tupleOfGateLabels.
+            to tupleOfOpLabels.
         """
         self.weight = weight
-        super(WeightedGateString,self).__init__(tupleOfGateLabels, stringRepresentation, bCheck)
+        super(WeightedOpString,self).__init__(tupleOfOpLabels, stringRepresentation, bCheck)
 
     def __repr__(self):
-        return "WeightedGateString(%s,%g)" % (self._str,self.weight)
+        return "WeightedOpString(%s,%g)" % (self._str,self.weight)
 
     def __add__(self,x):
-        tmp = super(WeightedGateString,self).__add__(x)
-        x_weight = x.weight if type(x) == WeightedGateString else 0.0
-        return WeightedGateString( tmp._tup, tmp._str, self.weight + x_weight, bCheck=False ) #add weights
+        tmp = super(WeightedOpString,self).__add__(x)
+        x_weight = x.weight if type(x) == WeightedOpString else 0.0
+        return WeightedOpString( tmp._tup, tmp._str, self.weight + x_weight, bCheck=False ) #add weights
 
     def __radd__(self,x):
-        if isinstance(x, GateString):
+        if isinstance(x, OpString):
             tmp = x.__add__(self)
-            x_weight = x.weight if type(x) == WeightedGateString else 0.0
-            return WeightedGateString( tmp._tup, tmp._str, x_weight + self.weight, bCheck=False )
-        raise ValueError("Can only add GateStrings objects to other GateString objects")
+            x_weight = x.weight if type(x) == WeightedOpString else 0.0
+            return WeightedOpString( tmp._tup, tmp._str, x_weight + self.weight, bCheck=False )
+        raise ValueError("Can only add Circuits objects to other OpString objects")
 
     def __mul__(self,x):
-        tmp = super(WeightedGateString,self).__mul__(x)
-        return WeightedGateString(tmp._tup, tmp._str, self.weight, bCheck=False) #keep weight
+        tmp = super(WeightedOpString,self).__mul__(x)
+        return WeightedOpString(tmp._tup, tmp._str, self.weight, bCheck=False) #keep weight
 
     def __copy__(self):
-        return WeightedGateString( self._tup, self._str, self.weight, bCheck=False )
+        return WeightedOpString( self._tup, self._str, self.weight, bCheck=False )
 
 #    def __deepcopy__(self, memo):
-#        return WeightedGateString( self._tup, self._str, self.weight, bCheck=False )
+#        return WeightedOpString( self._tup, self._str, self.weight, bCheck=False )
 
     def __getitem__(self, key):
         if isinstance( key, slice ):
-            return WeightedGateString( self._tup.__getitem__(key), None, self.weight, bCheck=False )
+            return WeightedOpString( self._tup.__getitem__(key), None, self.weight, bCheck=False )
         return self._tup.__getitem__(key)
 
 
-class CompressedGateString(object):
+class CompressedOpString(object):
     """
-    A "compressed" GateString class which reduces the memory or disk space
-    required to hold the tuple part of a GateString by compressing it.
+    A "compressed" OpString class which reduces the memory or disk space
+    required to hold the tuple part of a OpString by compressing it.
 
-    One place where CompressedGateString objects can be useful is when saving
-    large lists of long gate sequences in some non-human-readable format (e.g.
-    pickle).  CompressedGateString objects *cannot* be used in place of
-    GateString objects within pyGSTi, and so are *not* useful when manipulating
-    and running algorithms which use gate sequences.
+    One place where CompressedOpString objects can be useful is when saving
+    large lists of long operation sequences in some non-human-readable format (e.g.
+    pickle).  CompressedOpString objects *cannot* be used in place of
+    OpString objects within pyGSTi, and so are *not* useful when manipulating
+    and running algorithms which use operation sequences.
     """
 
-    def __init__(self, gatestring, minLenToCompress=20, maxPeriodToLookFor=20):
+    def __init__(self, circuit, minLenToCompress=20, maxPeriodToLookFor=20):
         """
-        Create a new CompressedGateString object
+        Create a new CompressedOpString object
 
         Parameters
         ----------
-        gatestring : GateString
-            The gate string object which is compressed to create
-            a new CompressedGateString object.
+        circuit : OpString
+            The operation sequence object which is compressed to create
+            a new CompressedOpString object.
 
         minLenToCompress : int, optional
-            The minimum length string to compress.  If len(gatestring)
+            The minimum length string to compress.  If len(circuit)
             is less than this amount its tuple is returned.
 
         maxPeriodToLookFor : int, optional
             The maximum period length to use when searching for periodic
-            structure within gatestring.  Larger values mean the method
+            structure within circuit.  Larger values mean the method
             takes more time but could result in better compressing.
         """
-        if not isinstance(gatestring, GateString):
-            raise ValueError("CompressedGateStrings can only be created from existing GateString objects")
-        self._tup = CompressedGateString.compress_gate_label_tuple(
-            gatestring._tup, minLenToCompress, maxPeriodToLookFor)
-        self.str = gatestring._str
+        if not isinstance(circuit, OpString):
+            raise ValueError("CompressedGateStrings can only be created from existing OpString objects")
+        self._tup = CompressedOpString.compress_op_label_tuple(
+            circuit._tup, minLenToCompress, maxPeriodToLookFor)
+        self.str = circuit._str
 
     def __getstate__(self):
         return self.__dict__
@@ -493,54 +493,54 @@ class CompressedGateString(object):
 
     def expand(self):
         """
-        Expands this compressed gate string into a GateString object.
+        Expands this compressed operation sequence into a OpString object.
 
         Returns
         -------
-        GateString
+        OpString
         """
-        tup = CompressedGateString.expand_gate_label_tuple(self._tup)
-        return GateString(tup, self.str, bCheck=False)
+        tup = CompressedOpString.expand_op_label_tuple(self._tup)
+        return OpString(tup, self.str, bCheck=False)
 
     @staticmethod
-    def _getNumPeriods(gateString, periodLen):
+    def _getNumPeriods(circuit, periodLen):
         n = 0
-        if len(gateString) < periodLen: return 0
-        while gateString[0:periodLen] == gateString[n*periodLen:(n+1)*periodLen]:
+        if len(circuit) < periodLen: return 0
+        while circuit[0:periodLen] == circuit[n*periodLen:(n+1)*periodLen]:
             n += 1
         return n
 
 
     @staticmethod
-    def compress_gate_label_tuple(gateString, minLenToCompress=20, maxPeriodToLookFor=20):
+    def compress_op_label_tuple(circuit, minLenToCompress=20, maxPeriodToLookFor=20):
         """
-        Compress a gate string.  The result is tuple with a special compressed-
+        Compress a operation sequence.  The result is tuple with a special compressed-
         gate-string form form that is not useable by other GST methods but is
-        typically shorter (especially for long gate strings with a repetative
-        structure) than the original gate string tuple.
+        typically shorter (especially for long operation sequences with a repetative
+        structure) than the original operation sequence tuple.
 
         Parameters
         ----------
-        gateString : tuple of gate labels or GateString
-            The gate string to compress.
+        circuit : tuple of operation labels or OpString
+            The operation sequence to compress.
 
         minLenToCompress : int, optional
-            The minimum length string to compress.  If len(gateString)
+            The minimum length string to compress.  If len(circuit)
             is less than this amount its tuple is returned.
 
         maxPeriodToLookFor : int, optional
             The maximum period length to use when searching for periodic
-            structure within gateString.  Larger values mean the method
+            structure within circuit.  Larger values mean the method
             takes more time but could result in better compressing.
 
         Returns
         -------
         tuple
-            The compressed (or raw) gate string tuple.
+            The compressed (or raw) operation sequence tuple.
         """
-        gateString = tuple(gateString) # converts from GateString or list to tuple if needed
-        L = len(gateString)
-        if L < minLenToCompress: return tuple(gateString)
+        circuit = tuple(circuit) # converts from OpString or list to tuple if needed
+        L = len(circuit)
+        if L < minLenToCompress: return tuple(circuit)
         compressed = ["CCC"] #list for appending, then make into tuple at the end
         start = 0
         while start < L:
@@ -548,14 +548,14 @@ class CompressedGateString(object):
             score = _np.zeros( maxPeriodToLookFor+1, 'd' )
             numperiods = _np.zeros( maxPeriodToLookFor+1, _np.int64 )
             for periodLen in range(1,maxPeriodToLookFor+1):
-                n = CompressedGateString._getNumPeriods( gateString[start:], periodLen )
+                n = CompressedOpString._getNumPeriods( circuit[start:], periodLen )
                 if n == 0: score[periodLen] = 0
                 elif n == 1: score[periodLen] = 4.1/periodLen
                 else: score[periodLen] = _np.sqrt(periodLen)*n
                 numperiods[periodLen] = n
             bestPeriodLen = _np.argmax(score)
             n = numperiods[bestPeriodLen]
-            bestPeriod = gateString[start:start+bestPeriodLen]
+            bestPeriod = circuit[start:start+bestPeriodLen]
             #print "Scores = ",score
             #print "num per = ",numperiods
             #print "best = %s ^ %d" % (str(bestPeriod), n)
@@ -569,27 +569,27 @@ class CompressedGateString(object):
         return tuple(compressed)
 
     @staticmethod
-    def expand_gate_label_tuple(compressedGateString):
+    def expand_op_label_tuple(compressedCircuit):
         """
-        Expand a compressed tuple created with compress_gate_label_tuple(...)
-        into a tuple of gate labels.
+        Expand a compressed tuple created with compress_op_label_tuple(...)
+        into a tuple of operation labels.
 
         Parameters
         ----------
-        compressedGateString : tuple
+        compressedCircuit : tuple
             a tuple in the compressed form created by
-            compress_gate_label_tuple(...).
+            compress_op_label_tuple(...).
 
         Returns
         -------
         tuple
-            A tuple of gate labels specifying the uncompressed gate string.
+            A tuple of operation labels specifying the uncompressed operation sequence.
         """
 
-        if len(compressedGateString) == 0: return ()
-        if compressedGateString[0] != "CCC": return compressedGateString
+        if len(compressedCircuit) == 0: return ()
+        if compressedCircuit[0] != "CCC": return compressedCircuit
         expandedString = []
-        for (period,n) in compressedGateString[1:]:
+        for (period,n) in compressedCircuit[1:]:
             expandedString += period*n
         return tuple(expandedString)
 
@@ -597,8 +597,8 @@ class CompressedGateString(object):
 
 #Now tested in unit tests
 #if __name__ == "__main__":
-#    wgstr = WeightedGateString(('Gx',), weight=0.5)
-#    gstr = GateString(('Gx',) )
-#    print ((gstr + wgstr)*2).weight
-#    print (wgstr + gstr).weight
+#    wgstr = WeightedOpString(('Gx',), weight=0.5)
+#    opstr = OpString(('Gx',) )
+#    print ((opstr + wgstr)*2).weight
+#    print (wgstr + opstr).weight
 

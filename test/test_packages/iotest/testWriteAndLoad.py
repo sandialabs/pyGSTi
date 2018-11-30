@@ -9,16 +9,16 @@ class TestWriteAndLoad(BaseTestCase):
 
     def test_dataset_file(self):
 
-        strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
-        weighted_strList = [ pygsti.obj.WeightedGateString((), weight=0.1),
-                             pygsti.obj.WeightedGateString(('Gx',), weight=2.0),
-                             pygsti.obj.WeightedGateString(('Gx','Gy'), weight=1.5) ]
+        strList = pygsti.construction.circuit_list( [(), ('Gx',), ('Gx','Gy') ] )
+        weighted_strList = [ pygsti.obj.WeightedOpString((), weight=0.1),
+                             pygsti.obj.WeightedOpString(('Gx',), weight=2.0),
+                             pygsti.obj.WeightedOpString(('Gx','Gy'), weight=1.5) ]
         pygsti.io.write_empty_dataset(temp_files + "/emptyDataset.txt", strList, numZeroCols=2, appendWeightsColumn=False)
         pygsti.io.write_empty_dataset(temp_files + "/emptyDataset2.txt", weighted_strList,
                                   headerString='## Columns = myplus count, myminus count', appendWeightsColumn=True)
 
         with self.assertRaises(ValueError):
-            pygsti.io.write_empty_dataset(temp_files + "/emptyDataset.txt", [ ('Gx',) ], numZeroCols=2) #must be GateStrings
+            pygsti.io.write_empty_dataset(temp_files + "/emptyDataset.txt", [ ('Gx',) ], numZeroCols=2) #must be Circuits
         with self.assertRaises(ValueError):
             pygsti.io.write_empty_dataset(temp_files + "/emptyDataset.txt", strList, headerString="# Nothing ")
               #must give numZeroCols or meaningful header string (default => 2 cols)
@@ -30,7 +30,7 @@ class TestWriteAndLoad(BaseTestCase):
         ds.done_adding_data()
 
         pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt",
-                                ds, pygsti.construction.gatestring_list(list(ds.keys()))[0:10]) #write only first 10 strings
+                                ds, pygsti.construction.circuit_list(list(ds.keys()))[0:10]) #write only first 10 strings
         ds2 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt")
         ds3 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt", cache=True) #creates cache file
         ds4 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt", cache=True) #loads from cache file
@@ -45,7 +45,7 @@ class TestWriteAndLoad(BaseTestCase):
             self.assertEqual(ds[s]['1'],ds5[s][('1',)])
 
         with self.assertRaises(ValueError):
-            pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt",ds, [('Gx',)] ) #must be GateStrings
+            pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt",ds, [('Gx',)] ) #must be Circuits
 
     def test_sparse_dataset_files(self):
         ds = pygsti.objects.DataSet()
@@ -75,7 +75,7 @@ class TestWriteAndLoad(BaseTestCase):
 
             
     def test_multidataset_file(self):
-        strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
+        strList = pygsti.construction.circuit_list( [(), ('Gx',), ('Gx','Gy') ] )
         pygsti.io.write_empty_dataset(temp_files + "/emptyMultiDataset.txt", strList,
                                            headerString='## Columns = ds1 0 count, ds1 1 count, ds2 0 count, ds2 1 count')
 
@@ -110,50 +110,50 @@ Gx^4 20 80 0.2 100
         with self.assertRaises(ValueError):
             pygsti.io.write_multidataset(
                 temp_files + "/TestMultiDatasetErr.txt",ds, [('Gx',)])
-              # gate string list must be GateString objects
+              # operation sequence list must be OpString objects
 
 
 
 
     def test_gatestring_list_file(self):
-        strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
-        pygsti.io.write_gatestring_list(temp_files + "/gatestringlist_loadwrite.txt", strList, "My Header")
-        strList2 = pygsti.io.load_gatestring_list(temp_files + "/gatestringlist_loadwrite.txt")
+        strList = pygsti.construction.circuit_list( [(), ('Gx',), ('Gx','Gy') ] )
+        pygsti.io.write_circuit_list(temp_files + "/gatestringlist_loadwrite.txt", strList, "My Header")
+        strList2 = pygsti.io.load_circuit_list(temp_files + "/gatestringlist_loadwrite.txt")
 
-        pythonStrList = pygsti.io.load_gatestring_list(temp_files + "/gatestringlist_loadwrite.txt",
+        pythonStrList = pygsti.io.load_circuit_list(temp_files + "/gatestringlist_loadwrite.txt",
                                                        readRawStrings=True)
         self.assertEqual(strList, strList2)
         self.assertEqual(pythonStrList[2], 'GxGy')
 
         with self.assertRaises(ValueError):
-            pygsti.io.write_gatestring_list(
+            pygsti.io.write_circuit_list(
                 temp_files + "/gatestringlist_bad.txt",
-                [ ('Gx',)], "My Header") #Must be GateStrings
+                [ ('Gx',)], "My Header") #Must be Circuits
 
 
     def test_gateset_file(self):
-        pygsti.io.write_gateset(std.gs_target, temp_files + "/gateset_loadwrite.txt", "My title")
+        pygsti.io.write_model(std.target_model, temp_files + "/gateset_loadwrite.txt", "My title")
 
-        gs_no_identity = std.gs_target.copy()
-        gs_no_identity.povm_identity = None
-        pygsti.io.write_gateset(gs_no_identity,
+        mdl_no_identity = std.target_model.copy()
+        mdl_no_identity.povm_identity = None
+        pygsti.io.write_model(mdl_no_identity,
                                 temp_files + "/gateset_noidentity.txt")
 
-        gs = pygsti.io.load_gateset(temp_files + "/gateset_loadwrite.txt")
-        self.assertAlmostEqual(gs.frobeniusdist(std.gs_target), 0)
+        mdl = pygsti.io.load_model(temp_files + "/gateset_loadwrite.txt")
+        self.assertAlmostEqual(mdl.frobeniusdist(std.target_model), 0)
 
-        #OLD (remainder gateset type)
-        #gateset_m1m1 = pygsti.construction.build_gateset([2], [('Q0',)],['Gi','Gx','Gy'],
+        #OLD (remainder model type)
+        #gateset_m1m1 = pygsti.construction.build_model([2], [('Q0',)],['Gi','Gx','Gy'],
         #                                                 [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
         #                                                 prepLabels=['rho0'], prepExpressions=["0"],
         #                                                 effectLabels=['E0'], effectExpressions=["0"],
         #                                                 spamdefs={'0': ('rho0','E0'),
         #                                                           '1': ('remainder','remainder') })
-        #pygsti.io.write_gateset(gateset_m1m1, temp_files + "/gateset_m1m1_loadwrite.txt", "My title m1m1")
-        #gs_m1m1 = pygsti.io.load_gateset(temp_files + "/gateset_m1m1_loadwrite.txt")
-        #self.assertAlmostEqual(gs_m1m1.frobeniusdist(gateset_m1m1), 0)
+        #pygsti.io.write_model(gateset_m1m1, temp_files + "/gateset_m1m1_loadwrite.txt", "My title m1m1")
+        #mdl_m1m1 = pygsti.io.load_model(temp_files + "/gateset_m1m1_loadwrite.txt")
+        #self.assertAlmostEqual(mdl_m1m1.frobeniusdist(gateset_m1m1), 0)
 
-        gateset_txt = """# Gateset file using other allowed formats
+        gateset_txt = """# Model file using other allowed formats
 PREP: rho0
 StateVec
 1 0
@@ -199,25 +199,25 @@ UnitaryMx
 BASIS: pp 2
 GAUGEGROUP: Full
 """
-        with open(temp_files + "/formatExample.gateset","w") as output:
+        with open(temp_files + "/formatExample.model","w") as output:
             output.write(gateset_txt)
-        gs_formats = pygsti.io.load_gateset(temp_files + "/formatExample.gateset")
-        #print gs_formats
+        mdl_formats = pygsti.io.load_model(temp_files + "/formatExample.model")
+        #print mdl_formats
 
-        rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)")
-        rotYPi   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi,Q0)")
-        rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)")
+        rotXPi   = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi,Q0)")
+        rotYPi   = pygsti.construction.build_operation( [2],[('Q0',)], "Y(pi,Q0)")
+        rotXPiOv2   = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2   = pygsti.construction.build_operation( [2],[('Q0',)], "Y(pi/2,Q0)")
 
-        self.assertArraysAlmostEqual(gs_formats.gates['Gi'], np.identity(4,'d'))
-        self.assertArraysAlmostEqual(gs_formats.gates['Gx'], rotXPiOv2)
-        self.assertArraysAlmostEqual(gs_formats.gates['Gy'], rotYPiOv2)
-        self.assertArraysAlmostEqual(gs_formats.gates['Gx2'], rotXPi)
-        self.assertArraysAlmostEqual(gs_formats.gates['Gy2'], rotYPi)
+        self.assertArraysAlmostEqual(mdl_formats.operations['Gi'], np.identity(4,'d'))
+        self.assertArraysAlmostEqual(mdl_formats.operations['Gx'], rotXPiOv2)
+        self.assertArraysAlmostEqual(mdl_formats.operations['Gy'], rotYPiOv2)
+        self.assertArraysAlmostEqual(mdl_formats.operations['Gx2'], rotXPi)
+        self.assertArraysAlmostEqual(mdl_formats.operations['Gy2'], rotYPi)
 
-        self.assertArraysAlmostEqual(gs_formats.preps['rho0'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
-        self.assertArraysAlmostEqual(gs_formats.preps['rho1'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
-        self.assertArraysAlmostEqual(gs_formats.povms['Mdefault']['00'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
+        self.assertArraysAlmostEqual(mdl_formats.preps['rho0'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
+        self.assertArraysAlmostEqual(mdl_formats.preps['rho1'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
+        self.assertArraysAlmostEqual(mdl_formats.povms['Mdefault']['00'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
 
         #pygsti.print_mx( rotXPi )
         #pygsti.print_mx( rotYPi )
@@ -228,7 +228,7 @@ GAUGEGROUP: Full
 
 
     def test_gatestring_dict_file(self):
-        file_txt = "# Gate string dictionary\nF1 GxGx\nF2 GxGy"  #TODO: make a Writers function for gate string dicts
+        file_txt = "# LinearOperator string dictionary\nF1 GxGx\nF2 GxGy"  #TODO: make a Writers function for operation sequence dicts
         with open(temp_files + "/gatestringdict_loadwrite.txt","w") as output:
             output.write(file_txt)
 
@@ -237,25 +237,25 @@ GAUGEGROUP: Full
 
 
     def test_gateset_writeload(self):
-        gs = std.gs_target.copy()
+        mdl = std.target_model.copy()
 
         for param in ('full','TP','CPTP','static'):
             print("Param: ",param)
-            gs.set_all_parameterizations(param)
+            mdl.set_all_parameterizations(param)
             filename = temp_files + "/gateset_%s.txt" % param
-            pygsti.io.write_gateset(gs, filename)
-            gs2 = pygsti.io.read_gateset(filename)
-            self.assertAlmostEqual( gs.frobeniusdist(gs2), 0.0 )
-            for lbl in gs.gates:
-                self.assertEqual( type(gs.gates[lbl]), type(gs2.gates[lbl]))
-            for lbl in gs.preps:
-                self.assertEqual( type(gs.preps[lbl]), type(gs2.preps[lbl]))
-            for lbl in gs.povms:
-                self.assertEqual( type(gs.povms[lbl]), type(gs2.povms[lbl]))
-            for lbl in gs.instruments:
-                self.assertEqual( type(gs.instruments[lbl]), type(gs2.instruments[lbl]))
+            pygsti.io.write_model(mdl, filename)
+            gs2 = pygsti.io.read_model(filename)
+            self.assertAlmostEqual( mdl.frobeniusdist(gs2), 0.0 )
+            for lbl in mdl.operations:
+                self.assertEqual( type(mdl.operations[lbl]), type(gs2.operations[lbl]))
+            for lbl in mdl.preps:
+                self.assertEqual( type(mdl.preps[lbl]), type(gs2.preps[lbl]))
+            for lbl in mdl.povms:
+                self.assertEqual( type(mdl.povms[lbl]), type(gs2.povms[lbl]))
+            for lbl in mdl.instruments:
+                self.assertEqual( type(mdl.instruments[lbl]), type(gs2.instruments[lbl]))
 
-        #TODO: create unknown derived classes and write this gateset.
+        #TODO: create unknown derived classes and write this model.
         
 
 if __name__ == "__main__":

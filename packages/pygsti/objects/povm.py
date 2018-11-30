@@ -12,50 +12,50 @@ import warnings as _warnings
 import functools as _functools
 
 #from . import labeldicts as _ld
-from . import gatesetmember as _gm
+from . import modelmember as _gm
 from . import spamvec as _sv
-from . import gate as _gate
+from . import gate as _op
 from ..tools import matrixtools as _mt
 from ..tools import basistools as _bt
-from ..tools import gatetools as _gt
+from ..tools import optools as _gt
 
 
 #Thoughts:
 # what are POVM objs needed for?
 # - construction of Effect vectors: allocating a pool of
 #    shared parameters that multiple SPAMVecs use
-#    - how should GateSet add items?
+#    - how should Model add items?
 #      "default allocator" inserts new params into _paramvec when gpindices is None
 #       (or is made None b/c parent is different) and sets gpindices accordingly
 #      Could an alternate allocator allocate a POVM, which asks for/presensts a
-#      block of indices, and after receiving this block adds effect vec to GateSet
-#      which use the indices in this block? - maybe when GateSet inserts a POVM
-#      it rebuilds paramvec as usual but doesn't insert it's effects into GateSet
+#      block of indices, and after receiving this block adds effect vec to Model
+#      which use the indices in this block? - maybe when Model inserts a POVM
+#      it rebuilds paramvec as usual but doesn't insert it's effects into Model
 #      (maybe not really inserting but "allocating/integrating" it - meaning it's
 #       gpindices is set) until after the POVM's block of indices is allocated?
 #    - maybe concept of "allocation" is a good one - meaning when an objects
-#       gpindices and parent are set, and there's room in the GateSet's _paramvec
+#       gpindices and parent are set, and there's room in the Model's _paramvec
 #       for the parameters.
 #    - currently, a gates are "allocated" by _rebuild_paramvec when their
 #       gpindices is None (if gpindices is not None, the indices can get
 #       "shifted" but not "allocated" (check this!)
-#    - maybe good to alert an object when it has be "allocated" to a GateSet;
-#       a Gate may do nothing, but a POVM might then allocate its member effects.
+#    - maybe good to alert an object when it has be "allocated" to a Model;
+#       a LinearOperator may do nothing, but a POVM might then allocate its member effects.
 #       E.G:  POVM created = creates objects all with None gpindices
-#             POVM assigned to a GateSet => GateSet allocates POVM & calls POVM.allocated_callback()
-#             POVM.allocated_callback() allocates (on behalf of GateSet b/c POVM owns those indices?) its member effects - maybe needs to
-#               add them to GateSet.effects so they're accounted for later & calls SPAMVec.allocated_callback()
+#             POVM assigned to a Model => Model allocates POVM & calls POVM.allocated_callback()
+#             POVM.allocated_callback() allocates (on behalf of Model b/c POVM owns those indices?) its member effects - maybe needs to
+#               add them to Model.effects so they're accounted for later & calls SPAMVec.allocated_callback()
 #             SPAMVec.allocated_callback() does nothing.
-#    - it seems good for GateSet to keep track directly of allocated preps, gates, & effects OR else
+#    - it seems good for Model to keep track directly of allocated preps, gates, & effects OR else
 #      it will need to alert objects when they're allocated indices shift so they can shift their member's indices... (POVM.shifted_callback())
-#    - at this point, could just add set_gpindices and shift_gpindices members to GateSetMember, though not all indices necessarily shift by same amt...
+#    - at this point, could just add set_gpindices and shift_gpindices members to ModelMember, though not all indices necessarily shift by same amt...
 # - grouping a set of effect vectors together for iterating
 #    over (just holding the names seems sufficient)
 
 # Conclusions/philosphy: 12/8/2017
-# - povms and instruments will hold their members, but member SPAMVec or Gate objects
-#   will have the GateSet as their parent, and have gpindices which reference the GateSet.
-# - it is the parent object's (e.g. a GateSet, POVM, or Instrument) which is responsible
+# - povms and instruments will hold their members, but member SPAMVec or LinearOperator objects
+#   will have the Model as their parent, and have gpindices which reference the Model.
+# - it is the parent object's (e.g. a Model, POVM, or Instrument) which is responsible
 #   for setting the gpindices of its members.  The gpindices is set via a property or method
 #   call, and parent objects will thereby set the gpindices of their contained elements.
 
@@ -75,7 +75,7 @@ def convert(povm, toType, basis, extra=None):
     toType : {"full","TP","static","static unitary","H+S terms",
               "H+S clifford terms","clifford"}
         The type of parameterizaton to convert to.  See 
-        :method:`GateSet.set_all_parameterizations` for more details.
+        :method:`Model.set_all_parameterizations` for more details.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `povm`.  Allowed values are Matrix-unit (std),
@@ -122,9 +122,9 @@ def convert(povm, toType, basis, extra=None):
             base_povm = UnconstrainedPOVM(base_items)
 
         # purevecs = extra if (extra is not None) else None # UNUSED
-        cls = _gate.LindbladParameterizedGate if (povm.dim <= 64 and evotype == "densitymx") \
-              else _gate.LindbladParameterizedGateMap
-        povmNoiseMap = cls.from_gate_obj(_np.identity(povm.dim,'d'), toType,
+        cls = _op.LindbladParameterizedOp if (povm.dim <= 64 and evotype == "densitymx") \
+              else _op.LindbladParameterizedOpMap
+        povmNoiseMap = cls.from_operation_obj(_np.identity(povm.dim,'d'), toType,
                                          None, proj_basis, basis, truncate=True)
         return LindbladParameterizedPOVM(povmNoiseMap, base_povm, basis)
 
@@ -159,7 +159,7 @@ def convert(povm, toType, basis, extra=None):
         raise ValueError("Invalid toType argument: %s" % toType)
 
 
-class POVM(_gm.GateSetMember, _collections.OrderedDict):
+class POVM(_gm.ModelMember, _collections.OrderedDict):
     """ 
     Meant to correspond to a  positive operator-valued measure,
     in theory, this class generalizes that notion slightly to
@@ -169,7 +169,7 @@ class POVM(_gm.GateSetMember, _collections.OrderedDict):
     def __init__(self, dim, evotype, items=[]):
         self._readonly = False #until init is done
         _collections.OrderedDict.__init__(self, items)
-        _gm.GateSetMember.__init__(self, dim, evotype)
+        _gm.ModelMember.__init__(self, dim, evotype)
         self._readonly = True
         assert(self.dim == dim)
 
@@ -402,9 +402,9 @@ class _BasePOVM(POVM):
     def compile_effects(self, prefix=""):
         """
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
-        `GateSet` - that is, whose `gpindices` are set to all or a subset of
+        `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within
-        computations involving the parent `GateSet`.
+        computations involving the parent `Model`.
 
         Parameters
         ----------
@@ -708,9 +708,9 @@ class TensorProdPOVM(POVM):
     def compile_effects(self, prefix=""):
         """
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
-        `GateSet` - that is, whose `gpindices` are set to all or a subset of
+        `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within
-        computations involving the parent `GateSet`.
+        computations involving the parent `Model`.
 
         Parameters
         ----------
@@ -723,11 +723,11 @@ class TensorProdPOVM(POVM):
         OrderedDict of SPAMVecs
         """
         #Note: calling from_vector(...) on the compiled effect vectors (in
-        # order) - e.g. within the finite differencing in GateMapCalc -  must
+        # order) - e.g. within the finite differencing in MapForwardSimulator -  must
         # be able to properly initialize them, so need to set gpindices
         # appropriately.
 
-        #Create a "compiled" (GateSet-referencing) set of factor POVMs
+        #Create a "compiled" (Model-referencing) set of factor POVMs
         factorPOVMs_compiled = []
         for p in self.factorPOVMs:
             povm = p.copy()
@@ -913,9 +913,9 @@ class ComputationalBasisPOVM(POVM):
     def compile_effects(self, prefix=""):
         """
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
-        `GateSet` - that is, whose `gpindices` are set to all or a subset of
+        `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within
-        computations involving the parent `GateSet`.
+        computations involving the parent `Model`.
 
         Parameters
         ----------
@@ -953,10 +953,10 @@ class LindbladParameterizedPOVM(POVM):
 
         Parameters
         ----------
-        errormap : GateMap
+        errormap : MapOp
             The error generator action and parameterization, encapsulated in
-            a gate object.  Usually a :class:`LindbladParameterizedGateMap`
-            or :class:`ComposedGateMap` object.  (This argument is *not* copied,
+            a gate object.  Usually a :class:`LindbladParameterizedOpMap`
+            or :class:`ComposedOpMap` object.  (This argument is *not* copied,
             to allow LindbladParameterizedSPAMVecs to share error generator
             parameters with other gates and spam vectors.)
 
@@ -978,7 +978,7 @@ class LindbladParameterizedPOVM(POVM):
         dim = self.error_map.dim
         
         if mxBasis is None:
-            if isinstance(errormap, _gate.LindbladParameterizedGateMap):
+            if isinstance(errormap, _op.LindbladParameterizedOpMap):
                 mxBasis = errormap.errorgen.matrix_basis
             else:
                 raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"
@@ -1060,7 +1060,7 @@ class LindbladParameterizedPOVM(POVM):
         startingIndex : int
             The starting index for un-allocated parameters.
 
-        parent : GateSet or GateSetMember
+        parent : Model or ModelMember
             The parent whose parameter array gpindices references.
 
         Returns
@@ -1072,7 +1072,7 @@ class LindbladParameterizedPOVM(POVM):
         """
         assert(self.base_povm.num_params() == 0) # so no need to do anything w/base_povm
         num_new_params = self.error_map.allocate_gpindices( startingIndex, parent ) # *same* parent as this SPAMVec
-        _gm.GateSetMember.set_gpindices(
+        _gm.ModelMember.set_gpindices(
             self, self.error_map.gpindices, parent)
         return num_new_params
 
@@ -1088,20 +1088,20 @@ class LindbladParameterizedPOVM(POVM):
         prior to this call.
         """
         self.error_map.relink_parent(parent)
-        _gm.GateSetMember.relink_parent(self, parent)
+        _gm.ModelMember.relink_parent(self, parent)
 
     
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
-        are used by this GateSetMember object.
+        are used by this ModelMember object.
 
         Parameters
         ----------
         gpindices : slice or integer ndarray
             The indices of this objects parameters in its parent's array.
 
-        parent : GateSet or GateSetMember
+        parent : Model or ModelMember
             The parent whose parameter array gpindices references.
 
         Returns
@@ -1115,15 +1115,15 @@ class LindbladParameterizedPOVM(POVM):
         assert(self.base_povm.num_params() == 0) # so no need to do anything w/base_povm
         self.error_map.set_gpindices(gpindices, parent, memo)
         self.terms = {} # clear terms cache since param indices have changed now
-        _gm.GateSetMember.set_gpindices(self, gpindices, parent)
+        _gm.ModelMember.set_gpindices(self, gpindices, parent)
 
 
     def compile_effects(self, prefix=""):
         """
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
-        `GateSet` - that is, whose `gpindices` are set to all or a subset of
+        `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within
-        computations involving the parent `GateSet`.
+        computations involving the parent `Model`.
 
         Parameters
         ----------

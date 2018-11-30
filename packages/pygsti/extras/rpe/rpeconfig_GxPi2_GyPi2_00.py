@@ -74,28 +74,28 @@ rpeconfig_GxPi2_GyPi2_00 = _rpeconfig(rpeconfig_GxPi2_GyPi2_00_dict)
 
 #rpeconfig_GxPi2_GyPi2_UpDn_dict['make_rpe_gs_func'] = lambda alphaTrue, epsilonTrue, Zrot, withId=True :\    
 #    if withId:
-#        outputGateset = _setc.build_gateset( 
+#        outputModel = _setc.build_model( 
 #            [2], [('Q0',)],['Gi','Gy','Gx'], 
 #            [ "I(Q0)", "Y(%s,Q0)" % epsilonTrue, "X(%s,Q0)" % alphaTrue],
 #            rhoExpressions=["0"], EExpressions=["1"], 
 #            spamLabelDict={'plus': (0,0), 'minus': (0,-1) } )
 #    else:
-#        outputGateset = _setc.build_gateset( 
+#        outputModel = _setc.build_model( 
 #            [2], [('Q0',)],['Gy','Gx'], 
 #            [ "Y(%s,Q0)" % epsilonTrue, "X(%s,Q0)" % alphaTrue],
 #            rhoExpressions=["0"], EExpressions=["1"], 
 #            spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
 #
 #    if Zrot != 0:
-#        gatesetAux1 = _setc.build_gateset( 
+#        modelAux1 = _setc.build_model( 
 #            [2], [('Q0',)],['Gi','Gz','Gx'], 
 #            [ "I(Q0)", "Z(%s,Q0)" % Zrot, "X(pi/2,Q0)"],
 #            rhoExpressions=["0"], EExpressions=["1"], 
 #            spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
 #
-#        outputGateset.set_gate('Gy',_objs.FullyParameterizedGate(
-#                _np.dot( _np.dot(_np.linalg.inv(gatesetAux1['Gz']),
-#                               outputGateset['Gy']),gatesetAux1['Gz'])) )
+#        outputModel.set_gate('Gy',_objs.FullyParameterizedOp(
+#                _np.dot( _np.dot(_np.linalg.inv(modelAux1['Gz']),
+#                               outputModel['Gy']),modelAux1['Gz'])) )
 #    
 #    
 #    

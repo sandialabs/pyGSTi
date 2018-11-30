@@ -14,7 +14,7 @@ class GateStringTestCase(BaseTestCase):
         super(GateStringTestCase, self).setUp()
 
     def test_structure(self):
-        raw_gss = pygsti.objects.GatestringStructure() #base class that doens't implmenet much
+        raw_gss = pygsti.objects.CircuitStructure() #base class that doens't implmenet much
 
         with self.assertRaises(NotImplementedError):
             raw_gss.xvals()

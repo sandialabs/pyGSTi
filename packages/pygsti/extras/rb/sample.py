@@ -21,7 +21,7 @@ import copy as _copy
 import itertools as _itertools
 
 def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgatenames='all', 
-                                    twoQgatenames='all', gatesetname='clifford'):   
+                                    twoQgatenames='all', modelname='clifford'):   
     """
     Samples a random circuit layer by pairing up qubits and picking a two-qubit gate for a pair
     with the specificed probability. This sampler *assumes* all-to-all connectivity, and does
@@ -62,7 +62,7 @@ def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgate
         a 2-qubit gate to a pair of qubits. If this is 'all', the full set of 2-qubit gate names is 
         extracted from the ProcessorSpec.
         
-    gatesetname : str, optional
+    modelname : str, optional
         Only used if oneQgatenames or twoQgatenames is None. Specifies which of the
         `pspec.models` to use to extract the gate-set. The `clifford` default is suitable 
         for Clifford or direct RB, but will not use any non-Clifford gates in the gate-set.
@@ -91,8 +91,8 @@ def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgate
         else:
             twoQpopulate = False
         
-        gatelist = list(pspec.models[gatesetname].gates.keys())
-        for gate in gatelist:
+        operationlist = list(pspec.models[modelname].operations.keys())
+        for gate in operationlist:
             if oneQpopulate:
                 if (gate.number_of_qubits == 1) and (gate.name not in oneQgatenames):
                     oneQgatenames.append(gate.name)
@@ -142,7 +142,7 @@ def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgate
     return sampled_layer
 
 def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates='all',
-                                 twoQgates='all', gatesetname='clifford'):
+                                 twoQgates='all', modelname='clifford'):
     """
     Samples a random circuit layer by eliminating qubits one by one. This sampler works
     with any connectivity, but the expected number of 2-qubit gates in a layer depends
@@ -180,7 +180,7 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
         If not 'all', a list of the 1-qubit gates to sample from, in the form of Label 
         objects. This is *not* just gate names (e.g. "Gh"), but Labels each containing 
         the gate name and the qubit it acts on. So it is possible to specify different 
-        1-qubit gatesets on different qubits. If this is 'all', the full set of possible
+        1-qubit models on different qubits. If this is 'all', the full set of possible
         1-qubit gates is extracted from the ProcessorSpec.
         
     twoQgates : 'all' or list, optional
@@ -189,10 +189,10 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
         the gate name and the qubits it acts on. If this is 'all', the full set of possible
         2-qubit gates is extracted from the ProcessorSpec.
         
-    gatesetname : str, optional
+    modelname : str, optional
         Only used if oneQgatenames or twoQgatenames is None. Specifies the which of the
-        `pspec.models` to use to extract the gateset. The `clifford` default is suitable 
-        for Clifford or direct RB, but will not use any non-Clifford gates in the gateset.
+        `pspec.models` to use to extract the model. The `clifford` default is suitable 
+        for Clifford or direct RB, but will not use any non-Clifford gates in the model.
                
     Returns
     -------
@@ -213,7 +213,7 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
         oneQgates_available = _copy.copy(oneQgates)    
     # If oneQgates is not specified, extract this list from the ProcessorSpec
     else:
-        oneQgates_available = list(pspec.models[gatesetname].gates.keys())
+        oneQgates_available = list(pspec.models[modelname].operations.keys())
         d = len(oneQgates_available)    
         for i in range(0,d):
             # If it's not a 1-qubit gate, we delete it.
@@ -228,7 +228,7 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
         twoQgates_available = _copy.copy(twoQgates)    
     # If twoQgates is not specified, extract this list from the ProcessorSpec
     else:
-        twoQgates_available = list(pspec.models[gatesetname].gates.keys())
+        twoQgates_available = list(pspec.models[modelname].operations.keys())
         d = len(twoQgates_available)                                      
         for i in range(0,d):
             # If it's not a 2-qubit gate, we delete it.
@@ -322,7 +322,7 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
     return sampled_layer
 
 def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='uniform', twoQprob=1.0, 
-                            oneQgatenames='all', gatesetname='clifford'):
+                            oneQgatenames='all', modelname='clifford'):
     """
     Samples a random circuit layer using the specified list of "compatible two-qubit gates"
     (co2Qgates). That is, the user inputs a list (`co2Qgates`) specifying 2-qubit gates that are
@@ -403,10 +403,10 @@ def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='unifor
         a 1-qubit gate to a qubit. If this is 'all', the full set of 1-qubit gate names is 
         extracted from the ProcessorSpec.
         
-    gatesetname : str, optional
+    modelname : str, optional
         Only used if oneQgatenames is 'all'. Specifies which of the `pspec.models` to use to 
-        extract the gateset. The `clifford` default is suitable for Clifford or direct RB,
-        but will not use any non-Clifford gates in the gateset.
+        extract the model. The `clifford` default is suitable for Clifford or direct RB,
+        but will not use any non-Clifford gates in the model.
                
     Returns
     -------
@@ -414,7 +414,7 @@ def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='unifor
         A list of gate Labels that defines a "complete" circuit layer (there is one and 
         only one gate acting on each qubit).       
     """
-    assert(gatesetname == 'clifford'), "This function currently assumes sampling from a Clifford gateset!"
+    assert(modelname == 'clifford'), "This function currently assumes sampling from a Clifford model!"
     # Pick the sector.
     if _compat.isstr(co2Qgatesprob):
         assert(co2Qgatesprob == 'uniform'), "If `co2Qgatesprob` is a string it must be 'uniform!'"
@@ -459,29 +459,29 @@ def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='unifor
         
         # If the 1-qubit gate names are specified, use these.
         if oneQgatenames != 'all':
-            possiblegates = [_lbl.Label(name,(qubit,)) for name in oneQgatenames]
+            possibleops = [_lbl.Label(name,(qubit,)) for name in oneQgatenames]
         
         # If the 1-qubit gate names are not specified, find the available 1-qubit gates
         else:
-            if gatesetname == 'clifford':
-                possiblegates = pspec.clifford_gates_on_qubits[(qubit,)]
+            if modelname == 'clifford':
+                possibleops = pspec.clifford_ops_on_qubits[(qubit,)]
             else:
-                possiblegates = pspec.models[gatesetname].gates()
-                l = len(possiblegates)
+                possibleops = pspec.models[modelname].operations()
+                l = len(possibleops)
                 for j in range(0,l):
-                    if possiblegates[l-j].number_of_qubits != 1:
-                        del possiblegates[l-j]
+                    if possibleops[l-j].number_of_qubits != 1:
+                        del possibleops[l-j]
                     else:
-                        if possiblegates[l-j].qubits[0] != qubit:
-                            del possiblegates[l-j]
+                        if possibleops[l-j].qubits[0] != qubit:
+                            del possibleops[l-j]
        
-        gate = possiblegates[_np.random.randint(0,len(possiblegates))]
+        gate = possibleops[_np.random.randint(0,len(possibleops))]
         sampled_layer.append(gate)
 
     return sampled_layer
 
 def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist='uniform', 
-                              gatesetname='clifford'):
+                              modelname='clifford'):
     """
     Samples a random circuit layer containing only 1-qubit gates. The allowed
     1-qubit gates are specified by `oneQgatenames`, and the 1-qubit gates are
@@ -511,10 +511,10 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
         same length as `oneQgatenames`. If 'uniform', then the uniform distribution over 
         the gates is used.
         
-    gatesetname : str, optional
+    modelname : str, optional
         Only used if oneQgatenames is 'all'. Specifies which of the `pspec.models` to use to 
-        extract the gateset. The `clifford` default is suitable for Clifford or direct RB,
-        but will not use any non-Clifford gates in the gateset.
+        extract the model. The `clifford` default is suitable for Clifford or direct RB,
+        but will not use any non-Clifford gates in the model.
                
     Returns
     -------
@@ -534,14 +534,14 @@ def circuit_layer_of_oneQgates(pspec, subsetQs=None, oneQgatenames='all', pdist=
     
     if oneQgatenames == 'all':
         assert(pdist == 'uniform'), "If `oneQgatenames` = 'all', pdist must be 'uniform'"
-        if gatesetname == 'clifford':
+        if modelname == 'clifford':
             for i in qubits:
                 try:
-                    gate = pspec.clifford_gates_on_qubits[(i,)][_np.random.randint(0,len(pspec.clifford_gates_on_qubits[(i,)]))]
+                    gate = pspec.clifford_ops_on_qubits[(i,)][_np.random.randint(0,len(pspec.clifford_ops_on_qubits[(i,)]))]
                     sampled_layer.append(gate)
                 except:
                     raise ValueError ("There are no 1Q Clifford gates on qubit {}!".format(i))
-        else: raise ValueError("Currently, 'gatesetname' must be 'clifford'")
+        else: raise ValueError("Currently, 'modelname' must be 'clifford'")
     
     else:
         # A basic check for the validity of pdist.
@@ -653,7 +653,7 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
     else:
         identity = 'I'
     # Initialize an empty circuit, to populate with sampled layers.
-    circuit = _cir.Circuit(gatestring=[], line_labels=qubits, identity=identity)
+    circuit = _cir.Circuit(circuit=[], line_labels=qubits, identity=identity)
     
     # If we are not add layers of random local gates between the layers, sample 'length' layers
     # according to the sampler `sampler`.
@@ -2000,7 +2000,7 @@ def clifford_rb_circuit(pspec, length, subsetQs=None, randomizeout=False, citera
     s_composite = _np.identity(2*n,int)
     p_composite = _np.zeros((2*n),int)
     # Initialize an empty circuit
-    full_circuit = _cir.Circuit(gatestring=[],line_labels=qubits)
+    full_circuit = _cir.Circuit(circuit=[],line_labels=qubits)
     
     # Sample length+1 uniformly random Cliffords (we want a circuit of length+2 Cliffords, in total), compile 
     # them, and append them to the current circuit.
@@ -2208,8 +2208,8 @@ def pauli_layer_as_compiled_circuit(pspec, subsetQs=None, keepidle=False):
     # Samples a random Pauli layer   
     r = _np.random.randint(0,4,size=n)           
     pauli_layer_std_lbls = [_lbl.Label(paulis[r[q]],(qubits[q],)) for q in range(n)]
-    # Converts the layer to a circuit, and changes to the native gateset.
-    pauli_circuit = _cir.Circuit(gatestring=pauli_layer_std_lbls, parallelize=True, line_labels=qubits, identity='I')
+    # Converts the layer to a circuit, and changes to the native model.
+    pauli_circuit = _cir.Circuit(circuit=pauli_layer_std_lbls, parallelize=True, line_labels=qubits, identity='I')
     pauli_circuit.change_gate_library(pspec.compilations['absolute'], identity=identity)
     if keepidle:
         if pauli_circuit.depth() == 0:
@@ -2256,7 +2256,7 @@ def oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=None):
     r = _np.random.randint(0,24,size=n)
             
     oneQclifford_layer_std_lbls = [_lbl.Label(oneQcliffords[r[q]],(qubits[q],)) for q in range(n)]
-    oneQclifford_circuit = _cir.Circuit(gatestring=oneQclifford_layer_std_lbls, parallelize=True, line_labels=qubits, identity=identity)
+    oneQclifford_circuit = _cir.Circuit(circuit=oneQclifford_layer_std_lbls, parallelize=True, line_labels=qubits, identity=identity)
     oneQclifford_circuit.change_gate_library(pspec.compilations['absolute'])
     
     return oneQclifford_circuit
@@ -2371,7 +2371,7 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         n = pspec.number_of_qubits
         allqubits = pspec.qubit_labels[:] # copy this list
 
-    # Check that the inverse of every gate is in the gateset:
+    # Check that the inverse of every gate is in the model:
     for gname in pspec.root_gate_names:
         assert(gname in list(pspec.gate_inverse.keys())), "Not every gate has its inverse in the gate-set! MRB is not possible!"
  
@@ -2571,9 +2571,9 @@ def mirror_rb_experiment(pspec, lengths, circuits_per_length, subsetQs=None, sam
 
     return experiment_dict
 
-def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli=False, interleaved=None, 
+def oneQ_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=False, interleaved=None, 
                      group_inverse_only=False, group_prep=False, compilation=None,
-                     generated_group=None, gateset_to_group_labels=None, seed=None, randState=None):
+                     generated_group=None, model_to_group_labels=None, seed=None, randState=None):
     """
     Makes a random 1-qubit RB sequence, with RB over an arbitrary group and with a range of other
     options that allow circuits for many types of RB to be generated, including:
@@ -2594,21 +2594,21 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
     m : int
         The number of random gates in the sequence.
 
-    group_or_gateset : GateSet or MatrixGroup
-        Which GateSet of MatrixGroup to create the random sequence for. If
-        inverse is true and this is a GateSet, the GateSet gates must form
-        a group (so in this case it requires the *target gateset* rather than 
-        a noisy gateset). When inverse is true, the MatrixGroup for the gateset 
+    group_or_model : Model or MatrixGroup
+        Which Model of MatrixGroup to create the random sequence for. If
+        inverse is true and this is a Model, the Model gates must form
+        a group (so in this case it requires the *target model* rather than 
+        a noisy model). When inverse is true, the MatrixGroup for the model 
         is generated. Therefore, if inverse is true and the function is called 
         multiple times, it will be much faster if the MatrixGroup is provided.
         
     inverse: Bool, optional
-        If true, the random sequence is followed by its inverse gate. The gateset
+        If true, the random sequence is followed by its inverse gate. The model
         must form a group if this is true. If it is true then the sequence
         returned is length m+1 (2m+1) if interleaved is False (True).
         
     interleaved: Str, optional
-        If not None, then a gatelabel string. When a gatelabel string is provided,
+        If not None, then a oplabel string. When a oplabel string is provided,
         every random gate is followed by this gate. So the returned sequence is of
         length 2m+1 (2m) if inverse is True (False).
         
@@ -2628,21 +2628,21 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
     
     Returns
     -------
-    Gatestring
-        The random gate string of length:
+    Circuit
+        The random operation sequence of length:
         m if inverse = False, interleaved = None
         m + 1 if inverse = True, interleaved = None
         2m if inverse = False, interleaved not None
         2m + 1 if inverse = True, interleaved not None
     """   
-    assert hasattr(group_or_gateset, 'gates') or hasattr(group_or_gateset, 
-                   'product'), 'group_or_gateset must be a MatrixGroup of Gateset'    
+    assert hasattr(group_or_model, 'gates') or hasattr(group_or_model, 
+                   'product'), 'group_or_model must be a MatrixGroup of Model'    
     group = None
-    gateset = None
-    if hasattr(group_or_gateset, 'gates'):
-        gateset = group_or_gateset
-    if hasattr(group_or_gateset, 'product'):
-        group = group_or_gateset
+    model = None
+    if hasattr(group_or_model, 'gates'):
+        model = group_or_model
+    if hasattr(group_or_model, 'product'):
+        group = group_or_model
         
     if randState is None:
         rndm = _np.random.RandomState(seed) # ok if seed is None
@@ -2650,9 +2650,9 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
         rndm = randState
         
     if (inverse) and (not group_inverse_only):
-        if gateset:
-            group = _rbobjs.MatrixGroup(group_or_gateset.gates.values(),
-                                  group_or_gateset.gates.keys() )
+        if model:
+            group = _rbobjs.MatrixGroup(group_or_model.operations.values(),
+                                  group_or_model.operations.keys() )
                       
         rndm_indices = rndm.randint(0,len(group),m)
         if interleaved:
@@ -2662,30 +2662,30 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
             rndm_indices = interleaved_indices.flatten()
         
         random_string = [ group.labels[i] for i in rndm_indices ]    
-        effective_gate = group.product(random_string)
-        inv = group.get_inv(effective_gate)
+        effective_op = group.product(random_string)
+        inv = group.get_inv(effective_op)
         random_string.append( inv )
         
     if (inverse) and (group_inverse_only):
-        assert (gateset is not None), "gateset_or_group should be a GateSet!"
-        assert (compilation is not None), "Compilation of group elements to gateset needs to be specified!"
+        assert (model is not None), "gateset_or_group should be a Model!"
+        assert (compilation is not None), "Compilation of group elements to model needs to be specified!"
         assert (generated_group is not None), "Generated group needs to be specified!"        
-        if gateset_to_group_labels is None:
-            gateset_to_group_labels = {}
-            for gate in gateset.gates.keys():
-                assert(gate in generated_group.labels), "gateset labels are not in \
-                the generated group! Specify a gateset_to_group_labels dictionary." 
-                gateset_to_group_labels = {'gate':'gate'}
+        if model_to_group_labels is None:
+            model_to_group_labels = {}
+            for gate in model.operations.keys():
+                assert(gate in generated_group.labels), "model labels are not in \
+                the generated group! Specify a model_to_group_labels dictionary." 
+                model_to_group_labels = {'gate':'gate'}
         else:
-            for gate in gateset.gates.keys():
-                assert(gate in gateset_to_group_labels.keys()), "gateset to group labels \
+            for gate in model.operations.keys():
+                assert(gate in model_to_group_labels.keys()), "model to group labels \
                 are invalid!"              
-                assert(gateset_to_group_labels[gate] in generated_group.labels), "gateset to group labels \
+                assert(model_to_group_labels[gate] in generated_group.labels), "model to group labels \
                 are invalid!"              
                 
-        rndm_indices = rndm.randint(0,len(gateset.gates.keys()),m)
+        rndm_indices = rndm.randint(0,len(model.operations.keys()),m)
         if interleaved:
-                interleaved_index = gateset.gates.keys().index(interleaved)
+                interleaved_index = model.operations.keys().index(interleaved)
                 interleaved_indices = interleaved_index*_np.ones((m,2),int)
                 interleaved_indices[:,0] = rndm_indices
                 rndm_indices = interleaved_indices.flatten()
@@ -2696,8 +2696,8 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
             prep_random_string = compilation[generated_group.labels[rndm_group_index]]
             prep_random_string_group = [generated_group.labels[rndm_group_index],]
 
-        random_string = [ gateset.gates.keys()[i] for i in rndm_indices ]   
-        random_string_group = [ gateset_to_group_labels[gateset.gates.keys()[i]] for i in rndm_indices ] 
+        random_string = [ model.operations.keys()[i] for i in rndm_indices ]   
+        random_string_group = [ model_to_group_labels[model.operations.keys()[i]] for i in rndm_indices ] 
         # This bit of code is a quick hashed job. Needs to be checked at somepoint
         if group_prep:
             random_string = prep_random_string + random_string
@@ -2720,15 +2720,15 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
         random_string.extend(inversion_sequence)
         
     if not inverse:
-        if gateset:
-            rndm_indices = rndm.randint(0,len(gateset.gates.keys()),m)
-            gateLabels = list(gateset.gates.keys())
+        if model:
+            rndm_indices = rndm.randint(0,len(model.operations.keys()),m)
+            opLabels = list(model.operations.keys())
             if interleaved:
-                interleaved_index = gateLabels.index(interleaved)
+                interleaved_index = opLabels.index(interleaved)
                 interleaved_indices = interleaved_index*_np.ones((m,2),int)
                 interleaved_indices[:,0] = rndm_indices
                 rndm_indices = interleaved_indices.flatten()           
-            random_string = [gateLabels[i] for i in rndm_indices ]
+            random_string = [opLabels[i] for i in rndm_indices ]
             
         else:
             rndm_indices = rndm.randint(0,len(group),m)
@@ -2740,13 +2740,13 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
             random_string = [ group.labels[i] for i in rndm_indices ] 
     
     if not random_pauli:
-        return _objs.GateString(random_string)
+        return _objs.OpString(random_string)
     if random_pauli:
-        return _objs.GateString(random_string), bitflip
+        return _objs.OpString(random_string), bitflip
 
 # Future : possibly add this back in, but only if the other function it is a wrap-around
 # for has been tested.
-# def oneQ_generalized_rb_experiment(m_list, K_m, group_or_gateset, inverse=True, 
+# def oneQ_generalized_rb_experiment(m_list, K_m, group_or_model, inverse=True, 
 #                               interleaved = None, alias_maps=None, seed=None, 
 #                               randState=None):
 #     """
@@ -2788,11 +2788,11 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
 #     Returns
 #     -------
 #     dict or list
-#         If `alias_maps` is not None, a dictionary of lists-of-gatestring-lists
+#         If `alias_maps` is not None, a dictionary of lists-of-circuit-lists
 #         whose keys are 'clifford' and all of the keys of `alias_maps` (if any).
-#         Values are lists of `GateString` lists, one for each K_m value.  If
+#         Values are lists of `OpString` lists, one for each K_m value.  If
 #         `alias_maps` is None, then just the list-of-lists corresponding to the 
-#         clifford gate labels is returned.
+#         clifford operation labels is returned.
 #     """
 
 #     if randState is None:
@@ -2800,32 +2800,32 @@ def oneQ_generalized_rb_sequence(m, group_or_gateset, inverse=True, random_pauli
 #     else:
 #         rndm = randState
         
-#     assert hasattr(group_or_gateset, 'gates') or hasattr(group_or_gateset, 
-#            'product'), 'group_or_gateset must be a MatrixGroup or Gateset'
+#     assert hasattr(group_or_model, 'gates') or hasattr(group_or_model, 
+#            'product'), 'group_or_model must be a MatrixGroup or Model'
     
     
 #     if inverse:
-#         if hasattr(group_or_gateset, 'gates'):
-#             group_or_gateset = _rbobjs.MatrixGroup(group_or_gateset.gates.values(),
-#                                   group_or_gateset.gates.keys())
+#         if hasattr(group_or_model, 'gates'):
+#             group_or_model = _rbobjs.MatrixGroup(group_or_model.operations.values(),
+#                                   group_or_model.operations.keys())
 #     if isinstance(K_m,int):
 #         K_m_dict = {m : K_m for m in m_list }
 #     else: K_m_dict = K_m
 #     assert hasattr(K_m_dict, 'keys'),'K_m must be a dict or int!'
 
-#     string_lists = {'uncompiled': []} # GateStrings with uncompiled labels
+#     string_lists = {'uncompiled': []} # Circuits with uncompiled labels
 #     if alias_maps is not None:
 #         for gstyp in alias_maps.keys(): string_lists[gstyp] = []
 
 #     for m in m_list:
 #         K = K_m_dict[m]
-#         strs_for_this_m = [ create_random_gatestring(m, group_or_gateset,
+#         strs_for_this_m = [ create_random_circuit(m, group_or_model,
 #             inverse=inverse,interleaved=interleaved,randState=rndm) for i in range(K) ]
 #         string_lists['uncompiled'].append(strs_for_this_m)
 #         if alias_maps is not None:
 #             for gstyp,alias_map in alias_maps.items(): 
 #                 string_lists[gstyp].append(
-#                     _cnst.translate_gatestring_list(strs_for_this_m,alias_map))
+#                     _cnst.translate_circuit_list(strs_for_this_m,alias_map))
 
 #     if alias_maps is None:
 #         return string_lists['uncompiled'] #only list of lists is uncompiled one

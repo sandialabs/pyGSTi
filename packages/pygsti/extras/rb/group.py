@@ -19,8 +19,8 @@ def construct_1Q_Clifford_group():
     """
     Returns the 1 qubit Clifford group as a MatrixGroup object   
     """
-    gs = std1Q_Cliffords.gs_target
-    return  MatrixGroup(gs.gates.values(),gs.gates.keys())
+    mdl = std1Q_Cliffords.target_model
+    return  MatrixGroup(mdl.operations.values(),mdl.operations.keys())
 
 class MatrixGroup(object):
     """
@@ -34,7 +34,7 @@ class MatrixGroup(object):
         ----------
         listOfMatrices : list
             A list of the group elements (should be 2d numpy arrays), and
-            can be gs.gate.values() for some GateSet `gs` that forms a group.
+            can be mdl.gate.values() for some Model `mdl` that forms a group.
 
         labels : list, optional
             A label corresponding to each group element.            

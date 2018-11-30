@@ -11,7 +11,7 @@ import numpy      as _np
 import itertools  as _itertools
 import random     as _random
 import scipy.misc as _spmisc
-from ..construction import gatestringconstruction as _gsc
+from ..construction import circuitconstruction as _gsc
 from ..tools        import remove_duplicates      as _remove_duplicates
 from ..tools        import slicetools             as _slct
 
@@ -31,7 +31,7 @@ def _random_combination(indices_tuple, r):
     iis = sorted(_random.sample(range(n), r))
     return tuple(indices_tuple[i] for i in iis)
 
-def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList,
+def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
                                    testLs=(256,2048), prepovmTuples="first", tol=0.75,
                                    searchMode="sequential", nRandom=100, seed=None,
                                    verbosity=0, testPairList=None, memLimit=None,
@@ -39,7 +39,7 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
     """
     Finds a (global) set of fiducial pairs that are amplificationally complete.
 
-    A "standard" set of GST gate sequences consists of all sequences of the form:
+    A "standard" set of GST operation sequences consists of all sequences of the form:
 
     statePrep + prepFiducial + germPower + measureFiducial + measurement
     
@@ -47,7 +47,7 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
     (prepFiducial, measureFiducial) pairs to a subset of all the possible 
     pairs given the separate `prepStrs` and `effectStrs` lists.  This function
     attempts to find a set of fiducial pairs that still amplify all of the
-    gate set's parameters (i.e. is "amplificationally complete").  The test
+    model's parameters (i.e. is "amplificationally complete").  The test
     for amplification is performed using the two germ-power lengths given by
     `testLs`, and tests whether the magnitudes of the Jacobian's singular
     values scale linearly with the germ-power length.
@@ -58,11 +58,11 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
 
     Parameters
     ----------
-    targetGateset : GateSet
-        The target gateset used to determine amplificational completeness.
+    targetModel : Model
+        The target model used to determine amplificational completeness.
 
-    prepStrs, effectStrs, germList : list of GateStrings
-        The (full) fiducial and germ gate sequences.
+    prepStrs, effectStrs, germList : list of Circuits
+        The (full) fiducial and germ operation sequences.
 
     testLs : (L1,L2) tuple of ints, optional
         A tuple of integers specifying the germ-power lengths to use when
@@ -72,7 +72,7 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
         A list of `(prepLabel, povmLabel)` tuples to consider when
         checking for completeness.  Usually this should be left as the special
         (and default) value "first", which considers the first prep and POVM
-        contained in `targetGateset`.
+        contained in `targetModel`.
 
     tol : float, optional
         The tolerance for the fraction of the expected amplification that must
@@ -120,13 +120,13 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
 
     #tol = 0.5 #fraction of expected amplification that must be observed to call a parameter "amplified"
     if prepovmTuples == "first":
-        firstRho = list(targetGateset.preps.keys())[0]
-        firstPOVM = list(targetGateset.povms.keys())[0]
+        firstRho = list(targetModel.preps.keys())[0]
+        firstPOVM = list(targetModel.povms.keys())[0]
         prepovmTuples = [ (firstRho, firstPOVM) ]
-    prepovmTuples = [ (_objs.GateString((prepLbl,)), _objs.GateString((povmLbl,)))
+    prepovmTuples = [ (_objs.OpString((prepLbl,)), _objs.OpString((povmLbl,)))
                       for prepLbl,povmLbl in prepovmTuples ]
 
-    nGatesetParams = targetGateset.num_params()
+    nModelParams = targetModel.num_params()
 
     def get_derivs(L):
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
@@ -140,20 +140,20 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
 
         for iGerm,germ in enumerate(germList):
             expGerm = _gsc.repeat_with_max_length(germ,L) # could pass exponent and set to germ**exp here
-            lst = _gsc.create_gatestring_list(
+            lst = _gsc.create_circuit_list(
                 "pp[0]+f0+expGerm+f1+pp[1]", f0=prepStrs, f1=effectStrs,
                 expGerm=expGerm, pp=prepovmTuples, order=('f0','f1','pp'))
 
-            evTree,blkSz,_,lookup,_ = targetGateset.bulk_evaltree_from_resources(
+            evTree,blkSz,_,lookup,_ = targetModel.bulk_evaltree_from_resources(
                 lst, memLimit=memLimit, distributeMethod="deriv",
                 subcalls=['bulk_fill_dprobs'], verbosity=0)
             #FUTURE: assert that no instruments are allowed?
 
-            dP = _np.empty( (evTree.num_final_elements(),targetGateset.num_params()), 'd' )
-            targetGateset.bulk_fill_dprobs(dP, evTree, wrtBlockSize=blkSz) # num_els x num_params
+            dP = _np.empty( (evTree.num_final_elements(),targetModel.num_params()), 'd' )
+            targetModel.bulk_fill_dprobs(dP, evTree, wrtBlockSize=blkSz) # num_els x num_params
             dPall.append(dP)
 
-            #Add this germ's element indices for each fiducial pair (final gate string of evTree)
+            #Add this germ's element indices for each fiducial pair (final operation sequence of evTree)
             nPrepPOVM = len(prepovmTuples)
             for k in range(len(prepStrs)*len(effectStrs)):
                 for o in range(k*nPrepPOVM,(k+1)*nPrepPOVM): # "original" indices into lst for k-th fiducial pair
@@ -202,8 +202,8 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
         maxAmplified = get_number_amplified(fullTestMx0, fullTestMx1, L0, L1, verbosity+1)
         printer.log("maximum number of amplified parameters = %s" % maxAmplified)
 
-    #Loop through fiducial pairs and add all derivative rows (1 x nGatesetParams) to test matrix
-    # then check if testMatrix has full rank ( == nGatesetParams)
+    #Loop through fiducial pairs and add all derivative rows (1 x nModelParams) to test matrix
+    # then check if testMatrix has full rank ( == nModelParams)
 
     nPossiblePairs = len(prepStrs)*len(effectStrs)
     allPairIndices = list(range(nPossiblePairs))
@@ -270,7 +270,7 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
 
 
 
-def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
+def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
                                             germList, prepovmTuples="first",
                                             searchMode="sequential", constrainToTP=True,
                                             nRandom=100, seed=None, verbosity=0,
@@ -278,7 +278,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
     """
     Finds a per-germ set of fiducial pairs that are amplificationally complete.
 
-    A "standard" set of GST gate sequences consists of all sequences of the form:
+    A "standard" set of GST operation sequences consists of all sequences of the form:
 
     statePrep + prepFiducial + germPower + measureFiducial + measurement
     
@@ -286,7 +286,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
     (prepFiducial, measureFiducial) pairs to a subset of all the possible 
     pairs given the separate `prepStrs` and `effectStrs` lists.  This function
     attempts to find sets of fiducial pairs, one set per germ, that still
-    amplify all of the gate set's parameters (i.e. is "amplificationally
+    amplify all of the model's parameters (i.e. is "amplificationally
     complete").  For each germ, a fiducial pair set is found that amplifies
     all of the "parameters" (really linear combinations of them) that the
     particular germ amplifies.  
@@ -301,17 +301,17 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
 
     Parameters
     ----------
-    targetGateset : GateSet
-        The target gateset used to determine amplificational completeness.
+    targetModel : Model
+        The target model used to determine amplificational completeness.
 
-    prepStrs, effectStrs, germList : list of GateStrings
-        The (full) fiducial and germ gate sequences.
+    prepStrs, effectStrs, germList : list of Circuits
+        The (full) fiducial and germ operation sequences.
 
     prepovmTuples : list or "first", optional
         A list of `(prepLabel, povmLabel)` tuples to consider when
         checking for completeness.  Usually this should be left as the special
         (and default) value "first", which considers the first prep and POVM
-        contained in `targetGateset`.
+        contained in `targetModel`.
 
     searchMode : {"sequential","random"}, optional
         If "sequential", then all potential fiducial pair sets of a given length
@@ -322,7 +322,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
 
     constrainToTP : bool, optional
         Whether or not to consider non-TP parameters the the germs amplify.  If
-        the fiducal pairs will be used in a GST estimation where the gate set is
+        the fiducal pairs will be used in a GST estimation where the model is
         constrained to being trace-preserving (TP), this should be set to True.
 
     nRandom : int, optional
@@ -340,7 +340,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
     Returns
     -------
     dict
-        A dictionary whose keys are the germ gate strings and whose values are
+        A dictionary whose keys are the germ operation sequences and whose values are
         lists of (iRhoStr,iEffectStr) tuples of integers, each specifying the
         list of fiducial pairs for a particular germ (indices are into
         `prepStrs` and `effectStrs`).
@@ -349,10 +349,10 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     if prepovmTuples == "first":
-        firstRho = list(targetGateset.preps.keys())[0]
-        firstPOVM = list(targetGateset.povms.keys())[0]
+        firstRho = list(targetModel.preps.keys())[0]
+        firstPOVM = list(targetModel.povms.keys())[0]
         prepovmTuples = [ (firstRho, firstPOVM) ]
-    prepovmTuples = [ (_objs.GateString((prepLbl,)), _objs.GateString((povmLbl,)))
+    prepovmTuples = [ (_objs.OpString((prepLbl,)), _objs.OpString((povmLbl,)))
                       for prepLbl,povmLbl in prepovmTuples ]
     
 
@@ -362,29 +362,29 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
     with printer.progress_logging(1):
         for i,germ in enumerate(germList):
 
-            #Create a new gateset containing static target gates and a
+            #Create a new model containing static target gates and a
             # special "germ" gate that is parameterized only by it's 
             # eigenvalues (and relevant off-diagonal elements)
-            gsGerm = targetGateset.copy()
+            gsGerm = targetModel.copy()
             gsGerm.set_all_parameterizations("static")
             germMx = gsGerm.product(germ)
-            gsGerm.gates["Ggerm"] = _objs.EigenvalueParameterizedGate(
+            gsGerm.operations["Ggerm"] = _objs.EigenvalueParameterizedOp(
                                                    germMx, True, constrainToTP)
 
             printer.show_progress(i, len(germList), 
                                   suffix='-- %s germ (%d params)' % 
                                   (germ, gsGerm.num_params()))
             #Debugging
-            #print(gsGerm.gates["Ggerm"].evals)
-            #print(gsGerm.gates["Ggerm"].params)
+            #print(gsGerm.operations["Ggerm"].evals)
+            #print(gsGerm.operations["Ggerm"].params)
 
             #Get dP-matrix for full set of fiducials, where
             # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
             #   j is similar, and derivs are wrt the "eigenvalues" of the germ
-            #  (i.e. the parameters of the gsGerm gate set).
-            lst = _gsc.create_gatestring_list(
+            #  (i.e. the parameters of the gsGerm model).
+            lst = _gsc.create_circuit_list(
                 "pp[0]+f0+germ+f1+pp[1]", f0=prepStrs, f1=effectStrs,
-                germ=_objs.GateString(("Ggerm",)), pp=prepovmTuples,
+                germ=_objs.OpString(("Ggerm",)), pp=prepovmTuples,
                 order=('f0','f1','pp'))
 
             evTree,blkSz,_,lookup,_ = gsGerm.bulk_evaltree_from_resources(
@@ -482,13 +482,13 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
     return pairListDict
 
 
-def test_fiducial_pairs(fidPairs, targetGateset, prepStrs, effectStrs, germList,
+def test_fiducial_pairs(fidPairs, targetModel, prepStrs, effectStrs, germList,
                         testLs=(256,2048), prepovmTuples="first", tol=0.75,
                         verbosity=0, memLimit=None):
     """
     Tests a set of global or per-germ fiducial pairs.
 
-    Determines how many gate set parameters (of `targetGateset`) are
+    Determines how many model parameters (of `targetModel`) are
     amplified by the fiducial pairs given by `fidPairs`, which can be
     either a list of 2-tuples (for global-FPR) or a dictionary (for
     per-germ FPR).
@@ -501,11 +501,11 @@ def test_fiducial_pairs(fidPairs, targetGateset, prepStrs, effectStrs, germList,
         containing the fiducial-index pairs (2-tuples) for that germ (for
         per-germ FPR).
 
-    targetGateset : GateSet
-        The target gateset used to determine amplificational completeness.
+    targetModel : Model
+        The target model used to determine amplificational completeness.
 
-    prepStrs, effectStrs, germList : list of GateStrings
-        The (full) fiducial and germ gate sequences.
+    prepStrs, effectStrs, germList : list of Circuits
+        The (full) fiducial and germ operation sequences.
 
     testLs : (L1,L2) tuple of ints, optional
         A tuple of integers specifying the germ-power lengths to use when
@@ -515,7 +515,7 @@ def test_fiducial_pairs(fidPairs, targetGateset, prepStrs, effectStrs, germList,
         A list of `(prepLabel, povmLabel)` tuples to consider when
         checking for completeness.  Usually this should be left as the special
         (and default) value "first", which considers the first prep and POVM
-        contained in `targetGateset`.
+        contained in `targetModel`.
 
     tol : float, optional
         The tolerance for the fraction of the expected amplification that must
@@ -534,36 +534,36 @@ def test_fiducial_pairs(fidPairs, targetGateset, prepStrs, effectStrs, germList,
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     if prepovmTuples == "first":
-        firstRho = list(targetGateset.preps.keys())[0]
-        firstPOVM = list(targetGateset.povms.keys())[0]
+        firstRho = list(targetModel.preps.keys())[0]
+        firstPOVM = list(targetModel.povms.keys())[0]
         prepovmTuples = [ (firstRho, firstPOVM) ]
-    prepovmTuples = [ (_objs.GateString((prepLbl,)), _objs.GateString((povmLbl,)))
+    prepovmTuples = [ (_objs.OpString((prepLbl,)), _objs.OpString((povmLbl,)))
                       for prepLbl,povmLbl in prepovmTuples ]
 
 
-    nGatesetParams = targetGateset.num_params()
+    nModelParams = targetModel.num_params()
 
     def get_derivs(L):
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j> 
             where i = composite EVec & fiducial index and j similar """
 
-        gatestrings = []
+        circuits = []
         for germ in germList:
             expGerm = _gsc.repeat_with_max_length(germ,L) # could pass exponent and set to germ**exp here
             pairList = fidPairs[germ] if isinstance(fidPairs,dict) else fidPairs
-            gatestrings += _gsc.create_gatestring_list("pp[0]+p[0]+expGerm+p[1]+pp[1]",
+            circuits += _gsc.create_circuit_list("pp[0]+p[0]+expGerm+p[1]+pp[1]",
                                                        p=[ (prepStrs[i],effectStrs[j]) for i,j in pairList ],
                                                        pp=prepovmTuples, expGerm=expGerm, order=['p','pp'])
-        gatestrings = _remove_duplicates(gatestrings)
+        circuits = _remove_duplicates(circuits)
 
-        evTree,wrtSize,_,_,_ = targetGateset.bulk_evaltree_from_resources(
-            gatestrings, memLimit=memLimit, distributeMethod="deriv",
+        evTree,wrtSize,_,_,_ = targetModel.bulk_evaltree_from_resources(
+            circuits, memLimit=memLimit, distributeMethod="deriv",
             subcalls=['bulk_fill_dprobs'], verbosity=0)
 
-        dP = _np.empty( (evTree.num_final_elements(), nGatesetParams) )
-           #indexed by [iSpamLabel,iGateString,iGatesetParam] : gives d(<SP|GateString|AM>)/d(iGatesetParam)
+        dP = _np.empty( (evTree.num_final_elements(), nModelParams) )
+           #indexed by [iSpamLabel,iCircuit,iGatesetParam] : gives d(<SP|OpString|AM>)/d(iGatesetParam)
         
-        targetGateset.bulk_fill_dprobs(dP, evTree, wrtBlockSize=wrtSize)
+        targetModel.bulk_fill_dprobs(dP, evTree, wrtBlockSize=wrtSize)
         return dP
 
     def get_number_amplified(M0,M1,L0,L1):
@@ -602,21 +602,21 @@ def test_fiducial_pairs(fidPairs, targetGateset, prepStrs, effectStrs, germList,
 
 
 
-#def _old_TestPair(targetGateset, fiducialList, germList, L, testPairList, spamLabels="all"):
+#def _old_TestPair(targetModel, fiducialList, germList, L, testPairList, spamLabels="all"):
 #
 #    if spamLabels == "all":
-#        spamLabels = targetGateset.get_spam_labels()
+#        spamLabels = targetModel.get_spam_labels()
 #
 #    dprobs = []
 #    for iGerm,germ in enumerate(germList):
 #        expGerm = _gsc.repeat_with_max_length(germ,L)
-#        lst = _gsc.create_gatestring_list("f0+expGerm+f1", f0=fiducialList, f1=fiducialList,
+#        lst = _gsc.create_circuit_list("f0+expGerm+f1", f0=fiducialList, f1=fiducialList,
 #                                        expGerm=expGerm, order=('f0','f1'))
-#        evTree = targetGateset.bulk_evaltree(lst)
-#        dprobs.append( targetGateset.bulk_dprobs(evTree) )
+#        evTree = targetModel.bulk_evaltree(lst)
+#        dprobs.append( targetModel.bulk_dprobs(evTree) )
 #
-#    nGatesetParams = targetGateset.num_params()
-#    testMatrix = _np.empty( (0,nGatesetParams) )
+#    nModelParams = targetModel.num_params()
+#    testMatrix = _np.empty( (0,nModelParams) )
 #    for (i0,i1) in testPairList: #[(0,0),(1,0),(2,3),(4,5)]:
 #        iCmp = i0*len(fiducialList) + i1 #composite index of (f0,f1) in dprobs[iGerm][spamLabel]
 #

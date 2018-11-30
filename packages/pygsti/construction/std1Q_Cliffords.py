@@ -5,11 +5,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """
-Variables for working with the a gate set containing all 24 1-qubit Clifford gates
+Variables for working with the a model containing all 24 1-qubit Clifford gates
 """
 
-from . import gatestringconstruction as _strc
-from . import gatesetconstruction as _setc
+from . import circuitconstruction as _strc
+from . import modelconstruction as _setc
 from collections import OrderedDict as _OrderedDict
 
 description = "The 1-qubit Clifford group"
@@ -36,7 +36,7 @@ expressions = ["I(Q0)","X(pi/2,Q0):Y(pi/2,Q0)","Y(-pi/2,Q0):X(-pi/2,Q0)",
                    "X(pi,Q0):Y(-pi/2,Q0)","Y(pi,Q0):X(pi/2,Q0)","X(pi/2,Q0):Y(-pi/2,Q0):X(pi/2,Q0)",
                    "Y(pi/2,Q0)","Y(pi,Q0):X(-pi/2,Q0)","X(-pi/2,Q0):Y(pi/2,Q0):X(pi/2,Q0)"]
 
-gs_target = _setc.build_gateset([2],[('Q0',)], gates, expressions)
+target_model = _setc.build_model([2],[('Q0',)], gates, expressions)
 
 clifford_compilation = _OrderedDict()
 clifford_compilation["Gc0"] = ["Gc0",]

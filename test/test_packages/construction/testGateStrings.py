@@ -9,7 +9,7 @@ from pygsti.objects import Label as L
 
 class TestGateStringMethods(BaseTestCase):
     def test_simple(self):
-        #The workhorse function is pygsti.construction.create_gatestring_list, which executes its positional arguments within a nested
+        #The workhorse function is pygsti.construction.create_circuit_list, which executes its positional arguments within a nested
         # loop given by iterable keyword arguments.  That's a mouthful, so let's look at a few examples:
         As = [('a1',),('a2',)]
         Bs = [('b1',), ('b2',)]
@@ -27,26 +27,26 @@ class TestGateStringMethods(BaseTestCase):
             return "Gx" #to test string processing
 
 
-        list0 = pygsti.construction.create_gatestring_list("")
-        list1 = pygsti.construction.create_gatestring_list("a", a=As)
-        list2 = pygsti.construction.create_gatestring_list("a+b", a=As, b=Bs, order=['a','b'])
-        list3 = pygsti.construction.create_gatestring_list("a+b", a=As, b=Bs, order=['b','a'])
-        list4 = pygsti.construction.create_gatestring_list("R(a)+c", a=As, c=[('c',)], R=rep2, order=['a','c'])
-        list5 = pygsti.construction.create_gatestring_list("Ast(a)", a=As, Ast=asserter)
-        list6 = pygsti.construction.create_gatestring_list("SS(a)", a=As, SS=samestr)
-        list7 = pygsti.construction.gatestring_list(list1)
+        list0 = pygsti.construction.create_circuit_list("")
+        list1 = pygsti.construction.create_circuit_list("a", a=As)
+        list2 = pygsti.construction.create_circuit_list("a+b", a=As, b=Bs, order=['a','b'])
+        list3 = pygsti.construction.create_circuit_list("a+b", a=As, b=Bs, order=['b','a'])
+        list4 = pygsti.construction.create_circuit_list("R(a)+c", a=As, c=[('c',)], R=rep2, order=['a','c'])
+        list5 = pygsti.construction.create_circuit_list("Ast(a)", a=As, Ast=asserter)
+        list6 = pygsti.construction.create_circuit_list("SS(a)", a=As, SS=samestr)
+        list7 = pygsti.construction.circuit_list(list1)
 
-        self.assertEqual(list0, pygsti.construction.gatestring_list([ () ] )) #special case: get the empty gate string
-        self.assertEqual(list1, pygsti.construction.gatestring_list(As))
-        self.assertEqual(list2, pygsti.construction.gatestring_list([('a1','b1'),('a1','b2'),('a2','b1'),('a2','b2')]))
-        self.assertEqual(list3, pygsti.construction.gatestring_list([('a1','b1'),('a2','b1'),('a1','b2'),('a2','b2')]))
-        self.assertEqual(list4, pygsti.construction.gatestring_list([('a1','a1','c'),('a2','a2','c')]))
+        self.assertEqual(list0, pygsti.construction.circuit_list([ () ] )) #special case: get the empty operation sequence
+        self.assertEqual(list1, pygsti.construction.circuit_list(As))
+        self.assertEqual(list2, pygsti.construction.circuit_list([('a1','b1'),('a1','b2'),('a2','b1'),('a2','b2')]))
+        self.assertEqual(list3, pygsti.construction.circuit_list([('a1','b1'),('a2','b1'),('a1','b2'),('a2','b2')]))
+        self.assertEqual(list4, pygsti.construction.circuit_list([('a1','a1','c'),('a2','a2','c')]))
         self.assertEqual(list5, []) # failed assertions cause item to be skipped
-        self.assertEqual(list6, pygsti.construction.gatestring_list([('Gx',), ('Gx',)])) #strs => parser => GateStrings
+        self.assertEqual(list6, pygsti.construction.circuit_list([('Gx',), ('Gx',)])) #strs => parser => Circuits
         self.assertEqual(list7, list1)
 
         with self.assertRaises(ValueError):
-            pygsti.construction.gatestring_list( [ {'foo': "Bar"} ] ) #cannot convert dicts to GateStrings...
+            pygsti.construction.circuit_list( [ {'foo': "Bar"} ] ) #cannot convert dicts to Circuits...
 
 
     def test_truncate_methods(self):
@@ -55,10 +55,10 @@ class TestGateStringMethods(BaseTestCase):
         self.assertEqual( pygsti.construction.repeat_count_with_max_length(('A','B','C'),5), 1)
 
     def test_fiducials_germs(self):
-        fids  = pygsti.construction.gatestring_list( [ ('Gf0',), ('Gf1',)    ] )
-        germs = pygsti.construction.gatestring_list( [ ('G0',), ('G1a','G1b')] )
+        fids  = pygsti.construction.circuit_list( [ ('Gf0',), ('Gf1',)    ] )
+        germs = pygsti.construction.circuit_list( [ ('G0',), ('G1a','G1b')] )
 
-        gateStrings1 = pygsti.construction.create_gatestring_list("f0+germ*e+f1", f0=fids, f1=fids,
+        gateStrings1 = pygsti.construction.create_circuit_list("f0+germ*e+f1", f0=fids, f1=fids,
                                                                   germ=germs, e=2, order=["germ","f0","f1"])
         expected1 = ["Gf0(G0)^2Gf0",
                      "Gf0(G0)^2Gf1",
@@ -71,7 +71,7 @@ class TestGateStringMethods(BaseTestCase):
         self.assertEqual( list(map(str,gateStrings1)), expected1 )
 
 
-        gateStrings2 = pygsti.construction.create_gatestring_list("f0+T(germ,N)+f1", f0=fids, f1=fids,
+        gateStrings2 = pygsti.construction.create_circuit_list("f0+T(germ,N)+f1", f0=fids, f1=fids,
                                                                   germ=germs, N=3, T=pygsti.construction.repeat_and_truncate,
                                                                   order=["germ","f0","f1"])
         expected2 = ["Gf0G0G0G0Gf0",
@@ -85,7 +85,7 @@ class TestGateStringMethods(BaseTestCase):
         self.assertEqual( list(map(str,gateStrings2)), expected2 )
 
 
-        gateStrings3 = pygsti.construction.create_gatestring_list("f0+T(germ,N)+f1", f0=fids, f1=fids,
+        gateStrings3 = pygsti.construction.create_circuit_list("f0+T(germ,N)+f1", f0=fids, f1=fids,
                                                                   germ=germs, N=3,
                                                                   T=pygsti.construction.repeat_with_max_length,
                                                                   order=["germ","f0","f1"])
@@ -100,25 +100,25 @@ class TestGateStringMethods(BaseTestCase):
         self.assertEqual( list(map(str,gateStrings3)), expected3 )
 
     def test_string_compression(self):
-        gs = pygsti.objects.GateString(None, stringRepresentation="Gx^100")
-        comp_gs = pygsti.objects.gatestring.CompressedGateString.compress_gate_label_tuple(tuple(gs))
-        exp_gs = pygsti.objects.gatestring.CompressedGateString.expand_gate_label_tuple(comp_gs)
-        self.assertEqual(tuple(gs), exp_gs)
+        mdl = pygsti.objects.OpString(None, stringRepresentation="Gx^100")
+        comp_gs = pygsti.objects.opstring.CompressedOpString.compress_op_label_tuple(tuple(mdl))
+        exp_gs = pygsti.objects.opstring.CompressedOpString.expand_op_label_tuple(comp_gs)
+        self.assertEqual(tuple(mdl), exp_gs)
 
     def test_repeat(self):
-        gs = pygsti.objects.GateString( ('Gx','Gx','Gy') )
+        mdl = pygsti.objects.OpString( ('Gx','Gx','Gy') )
 
-        gs2 = pygsti.construction.repeat(gs, 2)
-        self.assertEqual( gs2, pygsti.obj.GateString( ('Gx','Gx','Gy','Gx','Gx','Gy') ))
+        gs2 = pygsti.construction.repeat(mdl, 2)
+        self.assertEqual( gs2, pygsti.obj.OpString( ('Gx','Gx','Gy','Gx','Gx','Gy') ))
 
-        gs3 = pygsti.construction.repeat_with_max_length(gs, 7)
-        self.assertEqual( gs3, pygsti.obj.GateString( ('Gx','Gx','Gy','Gx','Gx','Gy') ))
+        gs3 = pygsti.construction.repeat_with_max_length(mdl, 7)
+        self.assertEqual( gs3, pygsti.obj.OpString( ('Gx','Gx','Gy','Gx','Gx','Gy') ))
 
-        gs4 = pygsti.construction.repeat_and_truncate(gs, 4)
-        self.assertEqual( gs4, pygsti.obj.GateString( ('Gx','Gx','Gy','Gx') ))
+        gs4 = pygsti.construction.repeat_and_truncate(mdl, 4)
+        self.assertEqual( gs4, pygsti.obj.OpString( ('Gx','Gx','Gy','Gx') ))
 
-        gs5 = pygsti.construction.repeat_remainder_for_truncation(gs, 4)
-        self.assertEqual( gs5, pygsti.obj.GateString( ('Gx',) ))
+        gs5 = pygsti.construction.repeat_remainder_for_truncation(mdl, 4)
+        self.assertEqual( gs5, pygsti.obj.OpString( ('Gx',) ))
 
     def test_simplify(self):
         s = "{}Gx^1Gy{}Gz^1"
@@ -132,21 +132,21 @@ class TestGateStringMethods(BaseTestCase):
 
 
     def test_lists(self):
-        expected_allStrs = set( pygsti.construction.gatestring_list(
+        expected_allStrs = set( pygsti.construction.circuit_list(
                 [(),('Gx',),('Gy',),('Gx','Gx'),('Gx','Gy'),('Gy','Gx'),('Gy','Gy')] ))
-        allStrs = pygsti.construction.list_all_gatestrings( ('Gx','Gy'), 0,2 )
+        allStrs = pygsti.construction.list_all_circuits( ('Gx','Gy'), 0,2 )
         self.assertEqual( set(allStrs), expected_allStrs)
 
-        expected_onelenStrs = set( pygsti.construction.gatestring_list(
+        expected_onelenStrs = set( pygsti.construction.circuit_list(
             [('Gx','Gx'),('Gx','Gy'),('Gy','Gx'),('Gy','Gy')] ))
-        onelenStrs = pygsti.construction.list_all_gatestrings_onelen(('Gx','Gy'), 2)
+        onelenStrs = pygsti.construction.list_all_circuits_onelen(('Gx','Gy'), 2)
         self.assertEqual( set(onelenStrs), expected_onelenStrs )
 
-        allStrs = list(pygsti.construction.gen_all_gatestrings( ('Gx','Gy'), 0,2 ))
+        allStrs = list(pygsti.construction.gen_all_circuits( ('Gx','Gy'), 0,2 ))
         #self.assertEqual( set(allStrs), set([(),('Gx',),('Gy',),('Gx','Gx'),('Gx','Gy'),('Gy','Gx'),('Gy','Gy')]))
         #self.assertEqual( set(allStrs), set([(),('Gx',),('Gy',),('Gx','Gy'),('Gy','Gx')]))
 
-        randStrs = pygsti.construction.list_random_gatestrings_onelen( ('Gx','Gy','Gz'), 2, 3)
+        randStrs = pygsti.construction.list_random_circuits_onelen( ('Gx','Gy','Gz'), 2, 3)
         self.assertEqual( len(randStrs), 3 )
         self.assertTrue( all( [len(s)==2 for s in randStrs] ) )
 
@@ -155,149 +155,149 @@ class TestGateStringMethods(BaseTestCase):
 
 
     def test_python_string_conversion(self):
-        gs = pygsti.obj.GateString(None, stringRepresentation="Gx^3Gy^2GxGz")
+        mdl = pygsti.obj.OpString(None, stringRepresentation="Gx^3Gy^2GxGz")
 
-        gate_labels = (L('Gx'),L('Gy'),L('Gz'))
-        pystr = gs.to_pythonstr( gate_labels )
+        op_labels = (L('Gx'),L('Gy'),L('Gz'))
+        pystr = mdl.to_pythonstr( op_labels )
         self.assertEqual( pystr, "AAABBAC" )
 
-        gs2_tup = pygsti.obj.GateString.from_pythonstr( pystr, gate_labels )
-        self.assertEqual( gs2_tup, tuple(gs) )
+        gs2_tup = pygsti.obj.OpString.from_pythonstr( pystr, op_labels )
+        self.assertEqual( gs2_tup, tuple(mdl) )
 
     def test_std_lists_and_structs(self):
-        gateLabels = [L('Gx'),L('Gy')]
-        strs = pygsti.construction.gatestring_list( [('Gx',),('Gy',),('Gx','Gx')] )
-        germs = pygsti.construction.gatestring_list( [('Gx','Gy'),('Gy','Gy')] )
+        opLabels = [L('Gx'),L('Gy')]
+        strs = pygsti.construction.circuit_list( [('Gx',),('Gy',),('Gx','Gx')] )
+        germs = pygsti.construction.circuit_list( [('Gx','Gy'),('Gy','Gy')] )
         testFidPairs = [(0,1)]
         testFidPairsDict = { (L('Gx'),L('Gy')): [(0,0),(0,1)], (L('Gy'),L('Gy')): [(0,0)] }
 
         # LSGST
         maxLens = [1,2]
         lsgstLists = pygsti.construction.make_lsgst_lists(
-            std1Q_XY.gs_target, strs, strs, germs, maxLens, fidPairs=None,
-            truncScheme="whole germ powers") #also try a GateSet as first arg
+            std1Q_XY.target_model, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers") #also try a Model as first arg
         lsgstStructs = pygsti.construction.make_lsgst_structs(
-            std1Q_XY.gs_target, strs, strs, germs, maxLens, fidPairs=None,
-            truncScheme="whole germ powers") #also try a GateSet as first arg
+            std1Q_XY.target_model, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers") #also try a Model as first arg
         self.assertEqual(set(lsgstLists[-1]), set(lsgstStructs[-1].allstrs))
 
         lsgstLists2 = pygsti.construction.make_lsgst_lists(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            opLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="truncated germ powers")
         lsgstStructs2 = pygsti.construction.make_lsgst_structs(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            opLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="truncated germ powers")
         self.assertEqual(set(lsgstLists2[-1]), set(lsgstStructs2[-1].allstrs))
 
         lsgstLists3 = pygsti.construction.make_lsgst_lists(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            opLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="length as exponent")
         lsgstStructs3 = pygsti.construction.make_lsgst_structs(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            opLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="length as exponent")
         self.assertEqual(set(lsgstLists3[-1]), set(lsgstStructs3[-1].allstrs))
 
 
         maxLens = [1,2]
         lsgstLists4 = pygsti.construction.make_lsgst_lists(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            opLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers", nest=False)
         lsgstStructs4 = pygsti.construction.make_lsgst_structs(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            opLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers", nest=False)
         self.assertEqual(set(lsgstLists4[-1]), set(lsgstStructs4[-1].allstrs))
 
         lsgstLists5 = pygsti.construction.make_lsgst_lists(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
+            opLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
             truncScheme="whole germ powers")
         lsgstStructs5 = pygsti.construction.make_lsgst_structs(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
+            opLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
             truncScheme="whole germ powers")
         self.assertEqual(set(lsgstLists5[-1]), set(lsgstStructs5[-1].allstrs))
 
         lsgstLists6 = pygsti.construction.make_lsgst_lists(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairsDict,
+            opLabels, strs, strs, germs, maxLens, fidPairs=testFidPairsDict,
             truncScheme="whole germ powers")
         lsgstStructs6 = pygsti.construction.make_lsgst_structs(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairsDict,
+            opLabels, strs, strs, germs, maxLens, fidPairs=testFidPairsDict,
             truncScheme="whole germ powers")
         self.assertEqual(set(lsgstLists6[-1]), set(lsgstStructs6[-1].allstrs))
 
         lsgstExpList = pygsti.construction.make_lsgst_experiment_list(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            opLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers")
         lsgstExpListb = pygsti.construction.make_lsgst_experiment_list(
-            std1Q_XY.gs_target, strs, strs, germs, maxLens, fidPairs=None,
-            truncScheme="whole germ powers") # with GateSet as first arg
+            std1Q_XY.target_model, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers") # with Model as first arg
 
         with self.assertRaises(ValueError):
             pygsti.construction.make_lsgst_lists(
-                gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+                opLabels, strs, strs, germs, maxLens, fidPairs=None,
                 truncScheme="foobar")
         with self.assertRaises(ValueError):
             pygsti.construction.make_lsgst_structs(
-                gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+                opLabels, strs, strs, germs, maxLens, fidPairs=None,
                 truncScheme="foobar")
 
         lsgstLists7 = pygsti.construction.make_lsgst_lists(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            opLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers", keepFraction=0.5, keepSeed=1234)
         lsgstStructs7 = pygsti.construction.make_lsgst_structs(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            opLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers", keepFraction=0.5, keepSeed=1234)
         self.assertEqual(set(lsgstLists7[-1]), set(lsgstStructs7[-1].allstrs))
 
         lsgstLists8 = pygsti.construction.make_lsgst_lists(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
+            opLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
             truncScheme="whole germ powers", keepFraction=0.7, keepSeed=1234)
         lsgstStructs8 = pygsti.construction.make_lsgst_structs(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
+            opLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
             truncScheme="whole germ powers", keepFraction=0.7, keepSeed=1234)
         self.assertEqual(set(lsgstLists8[-1]), set(lsgstStructs8[-1].allstrs))
 
         # empty max-lengths ==> no output
         lsgstStructs9 = pygsti.construction.make_lsgst_structs(
-            gateLabels, strs, strs, germs, [] )
+            opLabels, strs, strs, germs, [] )
         self.assertEqual(len(lsgstStructs9), 0)
 
         # checks against datasets
         ds = pygsti.objects.DataSet(outcomeLabels=['0','1']) # a dataset that is missing
         ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )     # almost all our strings...
         ds.done_adding_data()
-        lgst_strings = pygsti.construction.list_lgst_gatestrings(strs,strs,gateLabels)
+        lgst_strings = pygsti.construction.list_lgst_circuits(strs,strs,opLabels)
         lsgstStructs10 = pygsti.construction.make_lsgst_structs(
-            gateLabels, strs, strs, germs, maxLens, dscheck=ds, actionIfMissing="drop", verbosity=4 )
-        self.assertEqual([pygsti.obj.GateString(('Gx',))], lsgstStructs10[-1].allstrs)
+            opLabels, strs, strs, germs, maxLens, dscheck=ds, actionIfMissing="drop", verbosity=4 )
+        self.assertEqual([pygsti.obj.OpString(('Gx',))], lsgstStructs10[-1].allstrs)
         
         with self.assertRaises(ValueError):
             pygsti.construction.make_lsgst_structs(
-                gateLabels, strs, strs, germs, maxLens, dscheck=ds ) #missing sequences
+                opLabels, strs, strs, germs, maxLens, dscheck=ds ) #missing sequences
         with self.assertRaises(ValueError):
             pygsti.construction.make_lsgst_structs(
-                gateLabels, strs, strs, germs, maxLens, dscheck=ds, actionIfMissing="foobar" ) #invalid action
+                opLabels, strs, strs, germs, maxLens, dscheck=ds, actionIfMissing="foobar" ) #invalid action
         
 
 
         # ELGST
         maxLens = [1,2]
         elgstLists = pygsti.construction.make_elgst_lists(
-            gateLabels, germs, maxLens, truncScheme="whole germ powers")
+            opLabels, germs, maxLens, truncScheme="whole germ powers")
 
         maxLens = [1,2]
         elgstLists2 = pygsti.construction.make_elgst_lists(
-            gateLabels, germs, maxLens, truncScheme="whole germ powers",
+            opLabels, germs, maxLens, truncScheme="whole germ powers",
             nest=False, includeLGST=False)
         elgstLists2b = pygsti.construction.make_elgst_lists(
-            std1Q_XY.gs_target, germs, maxLens, truncScheme="whole germ powers",
-            nest=False, includeLGST=False) #with a GateSet as first arg
+            std1Q_XY.target_model, germs, maxLens, truncScheme="whole germ powers",
+            nest=False, includeLGST=False) #with a Model as first arg
                 
 
         elgstExpLists = pygsti.construction.make_elgst_experiment_list(
-            gateLabels, germs, maxLens, truncScheme="whole germ powers")
+            opLabels, germs, maxLens, truncScheme="whole germ powers")
 
         with self.assertRaises(ValueError):
             pygsti.construction.make_elgst_lists(
-                gateLabels, germs, maxLens, truncScheme="foobar")
+                opLabels, germs, maxLens, truncScheme="foobar")
 
             
 
@@ -308,8 +308,8 @@ class TestGateStringMethods(BaseTestCase):
 
         
     def test_gatestring_object(self):
-        s1 = pygsti.obj.GateString( ('Gx','Gx'), "Gx^2" )
-        s2 = pygsti.obj.GateString( s1, "Gx^2" )
+        s1 = pygsti.obj.OpString( ('Gx','Gx'), "Gx^2" )
+        s2 = pygsti.obj.OpString( s1, "Gx^2" )
         s3 = s1 + s2
         s4 = s1**3
         s5 = s4
@@ -333,16 +333,16 @@ class TestGateStringMethods(BaseTestCase):
         with self.assertRaises(ValueError):
             s1[0] = 'Gx' #cannot set items - like a tuple they're read-only
         with self.assertRaises(ValueError):
-            bad = s1 + ("Gx",) #can't add non-GateString to gatestring
+            bad = s1 + ("Gx",) #can't add non-OpString to circuit
         with self.assertRaises(ValueError):
-            pygsti.obj.GateString( ('Gx','Gx'), "GxGy" ) #mismatch
+            pygsti.obj.OpString( ('Gx','Gx'), "GxGy" ) #mismatch
         with self.assertRaises(ValueError):
-            pygsti.obj.GateString( None )
+            pygsti.obj.OpString( None )
         with self.assertRaises(ValueError): 
-            pygsti.obj.GateString( ('foobar',), "foobar" ) # lexer illegal character
+            pygsti.obj.OpString( ('foobar',), "foobar" ) # lexer illegal character
 
-        w1 = pygsti.obj.WeightedGateString( ('Gx','Gy'), "GxGy", weight=0.5)
-        w2 = pygsti.obj.WeightedGateString( ('Gy',), "Gy", weight=0.5)
+        w1 = pygsti.obj.WeightedOpString( ('Gx','Gy'), "GxGy", weight=0.5)
+        w2 = pygsti.obj.WeightedOpString( ('Gy',), "Gy", weight=0.5)
         w3 = w1 + w2
         w4 = w2**2
         w5 = s1 + w2
@@ -350,9 +350,9 @@ class TestGateStringMethods(BaseTestCase):
         w7 = copy.copy(w1)
 
         with self.assertRaises(ValueError):
-            w1 + ('Gx',) #can only add to other GateStrings
+            w1 + ('Gx',) #can only add to other Circuits
         with self.assertRaises(ValueError):
-            ('Gx',) + w1 #can only add to other GateStrings
+            ('Gx',) + w1 #can only add to other Circuits
 
         w1_str = str(w1)
         w1_repr = repr(w1)
@@ -369,28 +369,28 @@ class TestGateStringMethods(BaseTestCase):
         self.assertEqual( x2, ('Gx','Gy') )
         self.assertEqual( w1, w7)
 
-        c1 = pygsti.objects.gatestring.CompressedGateString(s1)
+        c1 = pygsti.objects.opstring.CompressedOpString(s1)
         s1_expanded = c1.expand()
         self.assertEqual(s1,s1_expanded)
 
         with self.assertRaises(ValueError):
-            pygsti.objects.gatestring.CompressedGateString( ('Gx',) ) #can only create from GateStrings
+            pygsti.objects.opstring.CompressedOpString( ('Gx',) ) #can only create from Circuits
 
 
     def test_alias_manips(self):
-        orig_list = pygsti.construction.gatestring_list(
+        orig_list = pygsti.construction.circuit_list(
             [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx','Gx'), ('Gy','Gy'), ('Gi',) ] )
 
-        list0 = pygsti.construction.translate_gatestring_list(orig_list, None)
+        list0 = pygsti.construction.translate_circuit_list(orig_list, None)
         self.assertEqual(list0, orig_list)
         
-        list1 = pygsti.construction.translate_gatestring_list(orig_list, {L('Gx'): (L('Gx2'),), L('Gy'): (L('Gy'),)} )
-        list2 = pygsti.construction.translate_gatestring_list(orig_list, {L('Gi'): (L('Gx'),L('Gx'),L('Gx'),L('Gx'))} )
+        list1 = pygsti.construction.translate_circuit_list(orig_list, {L('Gx'): (L('Gx2'),), L('Gy'): (L('Gy'),)} )
+        list2 = pygsti.construction.translate_circuit_list(orig_list, {L('Gi'): (L('Gx'),L('Gx'),L('Gx'),L('Gx'))} )
         print(list1)
         
-        expected_list1 = pygsti.construction.gatestring_list(
+        expected_list1 = pygsti.construction.circuit_list(
                     [ ('Gx2','Gx2'), ('Gx2','Gy'), ('Gx2','Gx2','Gx2'), ('Gy','Gy'), ('Gi',) ] )
-        expected_list2 = pygsti.construction.gatestring_list(
+        expected_list2 = pygsti.construction.circuit_list(
                     [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx','Gx'), ('Gy','Gy'), ('Gx','Gx','Gx','Gx') ] )
 
         self.assertEqual(list1, expected_list1)
@@ -410,29 +410,29 @@ class TestGateStringMethods(BaseTestCase):
             (('D',), ('E',)),
             (('A','A'), ('A','B','C',))]
 
-        result = pygsti.construction.manipulate_gatestring(tuple('BAB'), sequenceRules)
+        result = pygsti.construction.manipulate_circuit(tuple('BAB'), sequenceRules)
         self.assertEqual(result, ("B''","A","B'"))
 
-        result = pygsti.construction.manipulate_gatestring(tuple('ABA'), sequenceRules)
+        result = pygsti.construction.manipulate_circuit(tuple('ABA'), sequenceRules)
         self.assertEqual(result, ("A","B'","A"))
 
-        result = pygsti.construction.manipulate_gatestring(tuple('CAB'), sequenceRules)
+        result = pygsti.construction.manipulate_circuit(tuple('CAB'), sequenceRules)
         self.assertEqual(result, ("C","A'","B'"))
 
-        result = pygsti.construction.manipulate_gatestring(tuple('ABC'), sequenceRules)
+        result = pygsti.construction.manipulate_circuit(tuple('ABC'), sequenceRules)
         self.assertEqual(result, ("A","B'","C'"))
 
-        result = pygsti.construction.manipulate_gatestring(tuple('DD'), sequenceRules)
+        result = pygsti.construction.manipulate_circuit(tuple('DD'), sequenceRules)
         self.assertEqual(result, ("E","E"))
 
-        result = pygsti.construction.manipulate_gatestring(tuple('AA'), sequenceRules)
+        result = pygsti.construction.manipulate_circuit(tuple('AA'), sequenceRules)
         self.assertEqual(result, ("A","B","C"))
 
-        result = pygsti.construction.manipulate_gatestring(tuple('AAAA'), sequenceRules)
+        result = pygsti.construction.manipulate_circuit(tuple('AAAA'), sequenceRules)
         self.assertEqual(result, ("A","B","C","B","C","B","C"))
 
-        results = pygsti.construction.manipulate_gatestring_list([tuple('ABC'),tuple('GHI')], sequenceRules)
-        results_trivial = pygsti.construction.manipulate_gatestring_list([tuple('ABC'),tuple('GHI')], None) #special case
+        results = pygsti.construction.manipulate_circuit_list([tuple('ABC'),tuple('GHI')], sequenceRules)
+        results_trivial = pygsti.construction.manipulate_circuit_list([tuple('ABC'),tuple('GHI')], None) #special case
 
 
 if __name__ == "__main__":

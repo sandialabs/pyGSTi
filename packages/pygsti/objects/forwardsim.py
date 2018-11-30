@@ -1,4 +1,4 @@
-""" Defines the GateCalc calculator class"""
+""" Defines the ForwardSimulator calculator class"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -17,7 +17,7 @@ from ..tools import basistools as _bt
 from ..tools import matrixtools as _mt
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from . import spamvec as _sv
-from . import gate as _gate
+from . import gate as _op
 from . import labeldicts as _ld
 
 _dummy_profiler = _DummyProfiler()
@@ -29,51 +29,51 @@ _dummy_profiler = _DummyProfiler()
 P_RANK_TOL = 1e-7
 
 
-class GateCalc(object):
+class ForwardSimulator(object):
     """
-    Encapsulates a calculation tool used by gate set objects to perform product
+    Encapsulates a calculation tool used by model objects to perform product
     and derivatives-of-product calculations.
 
-    This is contained in a class separate from GateSet to allow for additional
-    gate set classes (e.g. ones which use entirely different -- non-gate-local
-    -- parameterizations of gate matrices and SPAM vectors) access to these
+    This is contained in a class separate from Model to allow for additional
+    model classes (e.g. ones which use entirely different -- non-gate-local
+    -- parameterizations of operation matrices and SPAM vectors) access to these
     fundamental operations.
     """
 
     def __init__(self, dim, gates, preps, effects, paramvec, autogator):
         """
-        Construct a new GateCalc object.
+        Construct a new ForwardSimulator object.
 
         Parameters
         ----------
         dim : int
-            The gate-dimension.  All gate matrices should be dim x dim, and all
+            The gate-dimension.  All operation matrices should be dim x dim, and all
             SPAM vectors should be dim x 1.
 
         gates, preps, effects : OrderedDict
-            Ordered dictionaries of Gate, SPAMVec, and SPAMVec objects,
+            Ordered dictionaries of LinearOperator, SPAMVec, and SPAMVec objects,
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
         paramvec : ndarray
-            The parameter vector of the GateSet.
+            The parameter vector of the Model.
 
         autogator : AutoGator
             An auto-gator object that may be used to construct virtual gates
             for use in computations.
         """
         self.dim = dim
-        self.gates = gates
+        self.operations = gates
         self.preps = preps
         self.effects = effects
         self.autogator = autogator
 
         #Conversion of labels -> integers for speed & C-compatibility
-        #self.gate_lookup = { lbl:i for i,lbl in enumerate(gates.keys()) }
+        #self.operation_lookup = { lbl:i for i,lbl in enumerate(gates.keys()) }
         #self.prep_lookup = { lbl:i for i,lbl in enumerate(preps.keys()) }
         #self.effect_lookup = { lbl:i for i,lbl in enumerate(effects.keys()) }
         #
-        #self.gatereps = { i:self.gates[lbl].torep() for lbl,i in self.gate_lookup.items() }
+        #self.operationreps = { i:self.operations[lbl].torep() for lbl,i in self.operation_lookup.items() }
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
         
@@ -87,32 +87,32 @@ class GateCalc(object):
         if len(preps)>0: self.evotype = next(iter(preps.values()))._evotype
         if len(effects)>0: self.evotype = next(iter(effects.values()))._evotype
 
-    def _getgate(self, lbl):
-        """ Don't just access self.gates anymore - if `lbl` isn't found use
+    def _getoperation(self, lbl):
+        """ Don't just access self.operations anymore - if `lbl` isn't found use
             the "auto-gator" """
-        if lbl in self.gates: return self.gates[lbl]
-        if self.autogator: return self.autogator(self.gates, lbl)
-        raise KeyError("%s is not a recognized gate label!" % repr(lbl))
+        if lbl in self.operations: return self.operations[lbl]
+        if self.autogator: return self.autogator(self.operations, lbl)
+        raise KeyError("%s is not a recognized operation label!" % repr(lbl))
 
     def to_vector(self):
         """
-        Returns the elements of the parent GateSet vectorized as a 1D array.
+        Returns the elements of the parent Model vectorized as a 1D array.
         Used for computing finite-difference derivatives.
 
         Returns
         -------
         numpy array
-            The vectorized gateset parameters.
+            The vectorized model parameters.
         """
         return self.paramvec
 
 
     def from_vector(self, v):
         """
-        The inverse of to_vector.  Initializes the GateSet-like members of this
+        The inverse of to_vector.  Initializes the Model-like members of this
         calculator based on `v`. Used for computing finite-difference derivatives.
         """
-        #Note: this *will* initialize the parent GateSet's objects too,
+        #Note: this *will* initialize the parent Model's objects too,
         # since only references to preps, effects, and gates are held
         # by the calculator class.  ORDER is important, as elements of
         # POVMs and Instruments rely on a fixed from_vector ordering
@@ -122,8 +122,8 @@ class GateCalc(object):
             obj.from_vector( v[obj.gpindices] )
 
         #Re-init reps for computation
-        #self.gatereps = { i:self.gates[lbl].torep() for lbl,i in self.gate_lookup.items() }
-        #self.gatereps = { lbl:g.torep() for lbl,g in gates.items() }
+        #self.operationreps = { i:self.operations[lbl].torep() for lbl,i in self.operation_lookup.items() }
+        #self.operationreps = { lbl:g.torep() for lbl,g in gates.items() }
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
@@ -132,15 +132,15 @@ class GateCalc(object):
     def iter_objs(self):
         for lbl,obj in _itertools.chain(self.preps.items(),
                                         self.effects.items(),
-                                        self.gates.items()):
+                                        self.operations.items()):
             yield (lbl,obj)
 
 
     def deriv_wrt_params(self):
         """
         Construct a matrix whose columns are the vectorized derivatives of all
-        the gateset's raw matrix and vector *elements* (placed in a vector)
-        with respect to each single gateset parameter.
+        the model's raw matrix and vector *elements* (placed in a vector)
+        with respect to each single model parameter.
         
         Returns
         -------
@@ -171,31 +171,31 @@ class GateCalc(object):
         # ** See comments at the beginning of get_nongauge_projector for explanation **
 
         try:
-            self_gates = _collections.OrderedDict([ (lbl,gate.todense()) for lbl,gate in self.gates.items() ])
+            self_operations = _collections.OrderedDict([ (lbl,gate.todense()) for lbl,gate in self.operations.items() ])
             self_preps = _collections.OrderedDict([ (lbl,vec.todense()[:,None]) for lbl,vec in self.preps.items() ])
             self_effects = _collections.OrderedDict([ (lbl,vec.todense()[:,None]) for lbl,vec in self.effects.items() ])
         except:
             raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
-                                       "parameters for GateSets with non-dense "
+                                       "parameters for Models with non-dense "
                                        "member representations"))
         
-        #if any([not isinstance(gate,_gate.GateMatrix) for gate in self.gates.values()]) or \
+        #if any([not isinstance(gate,_op.MatrixOperator) for gate in self.operations.values()]) or \
         #   any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.preps.values()]) or \
         #   any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.effects.values()]):
         #    raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
-        #                               "parameters for GateSets with non-dense "
+        #                               "parameters for Models with non-dense "
         #                               "member representations"))
 
         bSkipEcs = True #Whether we should artificially skip complement-type
          # effect vecs, which is historically what we've done, even though
          # this seems somewhat wrong.  Not skipping them will alter the
          # number of "gauge params" since a complement Evec has a *fixed*
-         # identity from the perspective of the GateSet params (which 
+         # identity from the perspective of the Model params (which 
          # *varied* in gauge optimization, even though it's not a SPAMVec
          # param, creating a weird inconsistency...) SKIP
         if bSkipEcs:
             newSelf = self.copy()
-            newSelf.effects = self.effects.copy() # b/c GateCalc.__init__ doesn't copy members (for efficiency)
+            newSelf.effects = self.effects.copy() # b/c ForwardSimulator.__init__ doesn't copy members (for efficiency)
             for effectlbl,EVec in self.effects.items():
                 if isinstance(EVec, _sv.ComplementSPAMVec):
                     del newSelf.effects[effectlbl]
@@ -206,28 +206,28 @@ class GateCalc(object):
                                                       for lbl,vec in self.effects.items() ])
             
         
-        #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
+        #Use a Model object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
         dim = self.dim 
         nParams = self.Np
 
         nElements = sum([obj.size for _,obj in self.iter_objs()])
-        #nElements = sum([o.size for o in self_gates.values()]) + \
+        #nElements = sum([o.size for o in self_operations.values()]) + \
         #            sum([o.size for o in self_preps.values()]) + \
         #            sum([o.size for o in self_effects.values()])
 
-        #This was considered as optional behavior, but better to just delete qtys from GateSet
-        ##whether elements of the raw gateset matrices/SPAM vectors that are not
+        #This was considered as optional behavior, but better to just delete qtys from Model
+        ##whether elements of the raw model matrices/SPAM vectors that are not
         ## parameterized at all should be ignored.   By ignoring changes to such
-        ## elements, they are treated as not being a part of the "gateset"
+        ## elements, they are treated as not being a part of the "model"
         #bIgnoreUnparameterizedEls = True
 
-        #Note: gateset object (gsDeriv) must have all elements of gate
+        #Note: model object (gsDeriv) must have all elements of gate
         # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
         # order to match deriv_wrt_params call, which gives derivatives wrt
-        # *all* elements of a gate set.
+        # *all* elements of a model.
 
-        gsDeriv_gates = _collections.OrderedDict(
-            [(label,_np.zeros((dim,dim),'d')) for label in self_gates])
+        mdlDeriv_ops = _collections.OrderedDict(
+            [(label,_np.zeros((dim,dim),'d')) for label in self_operations])
         gsDeriv_preps = _collections.OrderedDict(
             [(label,_np.zeros((dim,1),'d')) for label in self_preps])
         gsDeriv_effects = _collections.OrderedDict(
@@ -242,30 +242,30 @@ class GateCalc(object):
                 for lbl,EVec in self_effects.items():
                     gsDeriv_effects[lbl] = -_np.dot(EVec.T, unitMx).T
 
-                for lbl,gate in self_gates.items():
-                    #if isinstance(gate,_gate.GateMatrix):
-                    gsDeriv_gates[lbl] = _np.dot(unitMx,gate) - \
+                for lbl,gate in self_operations.items():
+                    #if isinstance(gate,_op.MatrixOperator):
+                    mdlDeriv_ops[lbl] = _np.dot(unitMx,gate) - \
                                          _np.dot(gate,unitMx)
                     #else:
                     #    #use acton... maybe throw error if dim is too large (maybe above?)
                     #    deriv = _np.zeros((dim,dim),'d')
                     #    uv = _np.zeros((dim,1),'d') # unit vec
                     #    for k in range(dim): #FUTURE: could optimize this by bookeeping and pulling this loop outward
-                    #        uv[k] = 1.0; Guv = gate.acton(uv); uv[k] = 0.0 #get k-th col of gate matrix
+                    #        uv[k] = 1.0; Guv = gate.acton(uv); uv[k] = 0.0 #get k-th col of operation matrix
                     #        # termA_mn = sum( U_mk*Gkn ) so U locks m=i,k=j => termA_in = 1.0*Gjn
                     #        # termB_mn = sum( Gmk*U_kn ) so U locks k=i,n=j => termB_mj = 1.0*Gmi
                     #        deriv[i,k] += Guv[j,0] # termA contrib
-                    #        if k == i: # i-th col of gate matrix goes in deriv's j-th col
+                    #        if k == i: # i-th col of operation matrix goes in deriv's j-th col
                     #            deriv[:,j] -= Guv[:,0] # termB contrib
-                    #    gsDeriv_gates[lbl] = deriv
+                    #    mdlDeriv_ops[lbl] = deriv
 
                 #Note: vectorize all the parameters in this full-
                 # parameterization object, which gives a vector of length
-                # equal to the number of gateset *elements*.
+                # equal to the number of model *elements*.
                 to_vector = _np.concatenate(
                     [obj.flatten() for obj in _itertools.chain(
                         gsDeriv_preps.values(), gsDeriv_effects.values(),
-                        gsDeriv_gates.values())], axis=0 )
+                        mdlDeriv_ops.values())], axis=0 )
                 dPG[:,nParams + i*dim+j] = to_vector
 
         dPG[:, 0:nParams] = self.deriv_wrt_params()
@@ -305,21 +305,21 @@ class GateCalc(object):
            degrees of freedom.
         """
 
-        # We want to divide the GateSet-space H (a Hilbert space, 56-dimensional in the 1Q, 3-gate, 2-vec case)
+        # We want to divide the Model-space H (a Hilbert space, 56-dimensional in the 1Q, 3-gate, 2-vec case)
         # into the direct sum of gauge and non-gauge spaces, and find projectors onto each
         # sub-space (the non-gauge space in particular).
         #
-        # Within the GateSet H-space lies a gauge-manifold of maximum chi2 (16-dimensional in 1Q case),
-        #  where the gauge-invariant chi2 function is constant.  At a single point (GateSet) P on this manifold,
+        # Within the Model H-space lies a gauge-manifold of maximum chi2 (16-dimensional in 1Q case),
+        #  where the gauge-invariant chi2 function is constant.  At a single point (Model) P on this manifold,
         #  chosen by (somewhat arbitrarily) fixing the gauge, we can talk about the tangent space
         #  at that point.  This tangent space is spanned by some basis (~16 elements for the 1Q case),
         #  which associate with the infinitesimal gauge transform ?generators? on the full space.
-        #  The subspace of H spanned by the derivatives w.r.t gauge transformations at P (a GateSet) spans
+        #  The subspace of H spanned by the derivatives w.r.t gauge transformations at P (a Model) spans
         #  the gauge space, and the complement of this (in H) is the non-gauge space.
         #
         #  An element of the gauge group can be written gg = exp(-K), where K is a n x n matrix.  If K is
         #   hermitian then gg is unitary, but this need not be the case.  A gauge transform acts on a
-        #   gatset via Gateset => gg^-1 G gg, i.e. G => exp(K) G exp(-K).  We care about the action of
+        #   gatset via Model => gg^-1 G gg, i.e. G => exp(K) G exp(-K).  We care about the action of
         #   infinitesimal gauge tranformations (b/c the *derivative* vectors span the tangent space),
         #   which act as:
         #    G => (I+K) G (I-K) = G + [K,G] + ignored(K^2), where [K,G] := KG-GK
@@ -329,7 +329,7 @@ class GateCalc(object):
         #  and then form a projector in the standard way.
         #  (to project onto |v1>, |v2>, etc., form P = sum_i |v_i><v_i|)
         #
-        #Typically nGateParams < len(dG_ij) and linear system is overconstrained
+        #Typically nOpParams < len(dG_ij) and linear system is overconstrained
         #   and no solution is expected.  If no solution exists, simply ignore
         #
         # So we form P = sum_ij dG_ij * transpose(dG_ij) (56x56 in 1Q case)
@@ -348,12 +348,12 @@ class GateCalc(object):
 
         # Note: In the general case of parameterized gates (i.e. non-fully parameterized gates), there are fewer
         #   gate parameters than the size of dG_ij ( < 56 in 1Q case).  In this general case, we want to know
-        #   what (if any) change in gate parameters produces the change dG_ij of the gate matrix elements.
+        #   what (if any) change in gate parameters produces the change dG_ij of the operation matrix elements.
         #   That is, we solve dG_ij = derivWRTParams * dParams_ij for dParams_ij, where derivWRTParams is
-        #   the derivative of the gate matrix elements with respect to the gate parameters (derivWRTParams
-        #   is 56x(nGateParams) and dParams_ij is (nGateParams)x1 in the 1Q case) -- then substitute dG_ij
-        #   with dParams_ij above to arrive at a (nGateParams)x(nGateParams) projector (compatible with
-        #   hessian computed by gateset).
+        #   the derivative of the operation matrix elements with respect to the gate parameters (derivWRTParams
+        #   is 56x(nOpParams) and dParams_ij is (nOpParams)x1 in the 1Q case) -- then substitute dG_ij
+        #   with dParams_ij above to arrive at a (nOpParams)x(nOpParams) projector (compatible with
+        #   hessian computed by model).
         #
         #   Actually, we want to know if what changes gate parameters
         #   produce changes in the span of all the dG_ij, so really we want the intersection of the space
@@ -361,7 +361,7 @@ class GateCalc(object):
         #
         #   This intersection is determined by nullspace( derivWRTParams | dG ), where the pipe denotes
         #     concatenating the matrices together.  Then, if x is a basis vector of the nullspace
-        #     x[0:nGateParams] is the basis vector for the intersection space within the gate parameter space,
+        #     x[0:nOpParams] is the basis vector for the intersection space within the gate parameter space,
         #     that is, the analogue of dParams_ij in the single-dG_ij introduction above.
         #
         #   Still, we just substitue these dParams_ij vectors (as many as the nullspace dimension) for dG_ij
@@ -407,7 +407,7 @@ class GateCalc(object):
             #OLD: nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions *orthogonal* to the gauge directions
             nonGaugeDirections = _mt.nullspace_qr(gen_dG.T) #columns are the non-gauge directions *orthogonal* to the gauge directions
 
-            #for each column of gen_dG, which is a gauge direction in gateset parameter space,
+            #for each column of gen_dG, which is a gauge direction in model parameter space,
             # we add some amount of non-gauge direction, given by coefficients of the
             # numNonGaugeParams non-gauge directions.
             gen_dG = gen_dG + _np.dot( nonGaugeDirections, nonGaugeMixMx) #add non-gauge direction components in
@@ -431,10 +431,10 @@ class GateCalc(object):
 
         if itemWeights is not None:
             metric_diag = _np.ones(self.Np, 'd')
-            gateWeight = itemWeights.get('gates', 1.0)
+            opWeight = itemWeights.get('gates', 1.0)
             spamWeight = itemWeights.get('spam', 1.0)
-            for lbl,gate in self.gates.items():
-                metric_diag[gate.gpindices] = itemWeights.get(lbl, gateWeight)
+            for lbl,gate in self.operations.items():
+                metric_diag[gate.gpindices] = itemWeights.get(lbl, opWeight)
             for lbl,vec in _itertools.chain(iter(self.preps.items()),
                                             iter(self.effects.items())):
                 metric_diag[vec.gpindices] = itemWeights.get(lbl, spamWeight)
@@ -482,23 +482,23 @@ class GateCalc(object):
         except(_np.linalg.LinAlgError):
             _warnings.warn("Linear algebra error (probably a non-convergent" +
                            "SVD) ignored during matric rank checks in " +
-                           "GateSet.get_nongauge_projector(...) ")
+                           "Model.get_nongauge_projector(...) ")
             
         return Pp 
 
         
-    def product(self, gatestring, bScale=False):
+    def product(self, circuit, bScale=False):
         """
-        Compute the product of a specified sequence of gate labels.
+        Compute the product of a specified sequence of operation labels.
 
-        Note: Gate matrices are multiplied in the reversed order of the tuple. That is,
-        the first element of gatestring can be thought of as the first gate operation
+        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
+        the first element of circuit can be thought of as the first gate operation
         performed, which is on the far right of the product of matrices.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-            The sequence of gate labels.
+        circuit : OpString or tuple of operation labels
+            The sequence of operation labels.
 
         bScale : bool, optional
             When True, return a scaling factor (see below).
@@ -506,7 +506,7 @@ class GateCalc(object):
         Returns
         -------
         product : numpy array
-            The product or scaled product of the gate matrices.
+            The product or scaled product of the operation matrices.
 
         scale : float
             Only returned when bScale == True, in which case the
@@ -517,14 +517,14 @@ class GateCalc(object):
         raise NotImplementedError("product(...) is not implemented!")
 
 
-    def dproduct(self, gatestring, flat=False, wrtFilter=None):
+    def dproduct(self, circuit, flat=False, wrtFilter=None):
         """
-        Compute the derivative of a specified sequence of gate labels.
+        Compute the derivative of a specified sequence of operation labels.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels.
+        circuit : OpString or tuple of operation labels
+          The sequence of operation labels.
 
         flat : bool, optional
           Affects the shape of the returned derivative array (see below).
@@ -533,7 +533,7 @@ class GateCalc(object):
           If not None, a list of integers specifying which gate parameters
           to include in the derivative.  Each element is an index into an
           array of gate parameters ordered by concatenating each gate's
-          parameters (in the order specified by the gate set).  This argument
+          parameters (in the order specified by the model).  This argument
           is used internally for distributing derivative calculations across
           multiple processors.
 
@@ -542,31 +542,31 @@ class GateCalc(object):
         deriv : numpy array
             * if flat == False, a M x G x G array, where:
 
-              - M == length of the vectorized gateset (number of gateset parameters)
-              - G == the linear dimension of a gate matrix (G x G gate matrices).
+              - M == length of the vectorized model (number of model parameters)
+              - G == the linear dimension of a operation matrix (G x G operation matrices).
 
               and deriv[i,j,k] holds the derivative of the (j,k)-th entry of the product
-              with respect to the i-th gateset parameter.
+              with respect to the i-th model parameter.
 
             * if flat == True, a N x M array, where:
 
               - N == the number of entries in a single flattened gate (ordering as numpy.flatten)
-              - M == length of the vectorized gateset (number of gateset parameters)
+              - M == length of the vectorized model (number of model parameters)
 
               and deriv[i,j] holds the derivative of the i-th entry of the flattened
-              product with respect to the j-th gateset parameter.
+              product with respect to the j-th model parameter.
         """
         raise NotImplementedError("dproduct(...) is not implemented!")
 
 
-    def hproduct(self, gatestring, flat=False, wrtFilter1=None, wrtFilter2=None):
+    def hproduct(self, circuit, flat=False, wrtFilter1=None, wrtFilter2=None):
         """
-        Compute the hessian of a specified sequence of gate labels.
+        Compute the hessian of a specified sequence of operation labels.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels.
+        circuit : OpString or tuple of operation labels
+          The sequence of operation labels.
 
         flat : bool, optional
           Affects the shape of the returned derivative array (see below).
@@ -576,7 +576,7 @@ class GateCalc(object):
           to differentiate with respect to in the first (row) and second (col)
           derivative operations, respectively.  Each element is an index into an
           array of gate parameters ordered by concatenating each gate's
-          parameters (in the order specified by the gate set).  This argument
+          parameters (in the order specified by the model).  This argument
           is used internally for distributing derivative calculations across
           multiple processors.
 
@@ -585,24 +585,24 @@ class GateCalc(object):
         hessian : numpy array
             * if flat == False, a  M x M x G x G numpy array, where:
 
-              - M == length of the vectorized gateset (number of gateset parameters)
-              - G == the linear dimension of a gate matrix (G x G gate matrices).
+              - M == length of the vectorized model (number of model parameters)
+              - G == the linear dimension of a operation matrix (G x G operation matrices).
 
               and hessian[i,j,k,l] holds the derivative of the (k,l)-th entry of the product
-              with respect to the j-th then i-th gateset parameters.
+              with respect to the j-th then i-th model parameters.
 
             * if flat == True, a  N x M x M numpy array, where:
 
               - N == the number of entries in a single flattened gate (ordered as numpy.flatten)
-              - M == length of the vectorized gateset (number of gateset parameters)
+              - M == length of the vectorized model (number of model parameters)
 
               and hessian[i,j,k] holds the derivative of the i-th entry of the flattened
-              product with respect to the k-th then k-th gateset parameters.
+              product with respect to the k-th then k-th model parameters.
         """
         raise NotImplementedError("hproduct(...) is not implemented!")
 
 
-#    def pr(self, spamLabel, gatestring, clipTo=None, bUseScaling=True):
+#    def pr(self, spamLabel, circuit, clipTo=None, bUseScaling=True):
 #        """
 #        Compute the probability of the given gate sequence, where initialization
 #        & measurement operations are together specified by spamLabel.
@@ -612,8 +612,8 @@ class GateCalc(object):
 #        spamLabel : string
 #           the label specifying the state prep and measure operations
 #
-#        gatestring : GateString or tuple of gate labels
-#          The sequence of gate labels specifying the gate string.
+#        circuit : OpString or tuple of operation labels
+#          The sequence of operation labels specifying the operation sequence.
 #
 #        clipTo : 2-tuple, optional
 #          (min,max) to clip return value if not None.
@@ -632,19 +632,19 @@ class GateCalc(object):
 #            #then compute 1.0 - (all other spam label probabilities)
 #            otherSpamdefs = list(self.spamdefs.keys())[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
 #            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
-#            return 1.0 - sum( [self._pr_nr(sl, gatestring, clipTo, bUseScaling) for sl in otherSpamdefs] )
+#            return 1.0 - sum( [self._pr_nr(sl, circuit, clipTo, bUseScaling) for sl in otherSpamdefs] )
 #        else:
-#            return self._pr_nr(spamLabel, gatestring, clipTo, bUseScaling)
+#            return self._pr_nr(spamLabel, circuit, clipTo, bUseScaling)
 #
-#    def _pr_nr(self, spamLabel, gatestring, clipTo, bUseScaling):
+#    def _pr_nr(self, spamLabel, circuit, clipTo, bUseScaling):
 #        """ non-remainder version of pr(...) overridden by derived clases """
 #        raise NotImplementedError("_pr_nr must be implemented by the derived class") 
 #
 #
-#    def dpr(self, spamLabel, gatestring, returnPr=False,clipTo=None):
+#    def dpr(self, spamLabel, circuit, returnPr=False,clipTo=None):
 #        """
-#        Compute the derivative of a probability generated by a gate string and
-#        spam label as a 1 x M numpy array, where M is the number of gateset
+#        Compute the derivative of a probability generated by a operation sequence and
+#        spam label as a 1 x M numpy array, where M is the number of model
 #        parameters.
 #
 #        Parameters
@@ -652,8 +652,8 @@ class GateCalc(object):
 #        spamLabel : string
 #           the label specifying the state prep and measure operations
 #
-#        gatestring : GateString or tuple of gate labels
-#          The sequence of gate labels specifying the gate string.
+#        circuit : OpString or tuple of operation labels
+#          The sequence of operation labels specifying the operation sequence.
 #
 #        returnPr : bool, optional
 #          when set to True, additionally return the probability itself.
@@ -666,7 +666,7 @@ class GateCalc(object):
 #        -------
 #        derivative : numpy array
 #            a 1 x M numpy array of derivatives of the probability w.r.t.
-#            each gateset parameter (M is the length of the vectorized gateset).
+#            each model parameter (M is the length of the vectorized model).
 #
 #        probability : float
 #            only returned if returnPr == True.
@@ -676,24 +676,24 @@ class GateCalc(object):
 #            #then compute Deriv[ 1.0 - (all other spam label probabilities) ]
 #            otherSpamdefs = list(self.spamdefs.keys())[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
 #            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
-#            otherResults = [self._dpr_nr(sl, gatestring, returnPr, clipTo) for sl in otherSpamdefs]
+#            otherResults = [self._dpr_nr(sl, circuit, returnPr, clipTo) for sl in otherSpamdefs]
 #            if returnPr:
 #                return -1.0 * sum([dpr for dpr,p in otherResults]), 1.0 - sum([p for dpr,p in otherResults])
 #            else:
 #                return -1.0 * sum(otherResults)
 #        else:
-#            return self._dpr_nr(spamLabel, gatestring, returnPr, clipTo)
+#            return self._dpr_nr(spamLabel, circuit, returnPr, clipTo)
 #
 #        
-#    def _dpr_nr(self, spamLabel, gatestring, returnPr, clipTo):
+#    def _dpr_nr(self, spamLabel, circuit, returnPr, clipTo):
 #        """ non-remainder version of dpr(...) overridden by derived clases """
 #        raise NotImplementedError("_dpr_nr must be implemented by the derived class") 
 #
 #
-#    def hpr(self, spamLabel, gatestring, returnPr=False, returnDeriv=False,clipTo=None):
+#    def hpr(self, spamLabel, circuit, returnPr=False, returnDeriv=False,clipTo=None):
 #        """
-#        Compute the Hessian of a probability generated by a gate string and
-#        spam label as a 1 x M x M array, where M is the number of gateset
+#        Compute the Hessian of a probability generated by a operation sequence and
+#        spam label as a 1 x M x M array, where M is the number of model
 #        parameters.
 #
 #        Parameters
@@ -701,8 +701,8 @@ class GateCalc(object):
 #        spamLabel : string
 #           the label specifying the state prep and measure operations
 #
-#        gatestring : GateString or tuple of gate labels
-#          The sequence of gate labels specifying the gate string.
+#        circuit : OpString or tuple of operation labels
+#          The sequence of operation labels specifying the operation sequence.
 #
 #        returnPr : bool, optional
 #          when set to True, additionally return the probability itself.
@@ -718,13 +718,13 @@ class GateCalc(object):
 #        Returns
 #        -------
 #        hessian : numpy array
-#            a 1 x M x M array, where M is the number of gateset parameters.
+#            a 1 x M x M array, where M is the number of model parameters.
 #            hessian[0,j,k] is the derivative of the probability w.r.t. the
-#            k-th then the j-th gateset parameter.
+#            k-th then the j-th model parameter.
 #
 #        derivative : numpy array
 #            only returned if returnDeriv == True. A 1 x M numpy array of
-#            derivatives of the probability w.r.t. each gateset parameter.
+#            derivatives of the probability w.r.t. each model parameter.
 #
 #        probability : float
 #            only returned if returnPr == True.
@@ -734,7 +734,7 @@ class GateCalc(object):
 #            #then compute Hessian[ 1.0 - (all other spam label probabilities) ]
 #            otherSpamdefs = list(self.spamdefs.keys())[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
 #            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
-#            otherResults = [self._hpr_nr(sl, gatestring, returnPr, returnDeriv, clipTo) for sl in otherSpamdefs]
+#            otherResults = [self._hpr_nr(sl, circuit, returnPr, returnDeriv, clipTo) for sl in otherSpamdefs]
 #            if returnDeriv:
 #                if returnPr: return ( -1.0 * sum([hpr for hpr,dpr,p in otherResults]),
 #                                      -1.0 * sum([dpr for hpr,dpr,p in otherResults]),
@@ -746,23 +746,23 @@ class GateCalc(object):
 #                                       1.0 - sum([p   for hpr,p in otherResults])   )
 #                else:        return   -1.0 * sum(otherResults)
 #        else:
-#            return self._hpr_nr(spamLabel, gatestring, returnPr, returnDeriv, clipTo)
+#            return self._hpr_nr(spamLabel, circuit, returnPr, returnDeriv, clipTo)
 #
 #            
-#    def _hpr_nr(self, spamLabel, gatestring, returnPr, returnDeriv, clipTo):
+#    def _hpr_nr(self, spamLabel, circuit, returnPr, returnDeriv, clipTo):
 #        """ non-remainder version of hpr(...) overridden by derived clases """
 #        raise NotImplementedError("_hpr_nr must be implemented by the derived class")
 
 
-    def probs(self, compiled_gatestring, clipTo=None):
+    def probs(self, compiled_circuit, clipTo=None):
         """
         Construct a dictionary containing the probabilities of every spam label
-        given a gate string.
+        given a operation sequence.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels specifying the gate string.
+        circuit : OpString or tuple of operation labels
+          The sequence of operation labels specifying the operation sequence.
 
         clipTo : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
@@ -771,14 +771,14 @@ class GateCalc(object):
         -------
         probs : dictionary
             A dictionary such that
-            probs[SL] = pr(SL,gatestring,clipTo)
+            probs[SL] = pr(SL,circuit,clipTo)
             for each spam label (string) SL.
         """
         probs = _ld.OutcomeLabelDict()
-        raw_dict, outcomeLbls = compiled_gatestring
+        raw_dict, outcomeLbls = compiled_circuit
         iOut = 0 #outcome index
 
-        for raw_gatestring, spamTuples in raw_dict.items():
+        for raw_circuit, spamTuples in raw_dict.items():
             rholabel = None # current prep label
             elabels = [] # a list of effect labels to evaluate cur_rholabel with
             for spamTuple in spamTuples:
@@ -786,30 +786,30 @@ class GateCalc(object):
                 else:
                     if len(elabels) > 0:
                         # evaluate spamTuples w/same rholabel together
-                        for pval in self.prs(rholabel,elabels,raw_gatestring,clipTo,False):
+                        for pval in self.prs(rholabel,elabels,raw_circuit,clipTo,False):
                             probs[outcomeLbls[iOut]] = pval; iOut += 1
-                    rholabel, raw_gstr = spamTuple[0], raw_gatestring # make "current"
+                    rholabel, raw_gstr = spamTuple[0], raw_circuit # make "current"
                     elabels = [ spamTuple[1] ]
             if len(elabels) > 0:
-                for pval in self.prs(rholabel,elabels,raw_gatestring,clipTo,False):
+                for pval in self.prs(rholabel,elabels,raw_circuit,clipTo,False):
                     probs[outcomeLbls[iOut]] = pval; iOut += 1
             #OLD
             #for spamTuple in spamTuples:
             #    probs[outcomeLbls[iOut]] = self.pr(
-            #        spamTuple, raw_gatestring, clipTo, False)
+            #        spamTuple, raw_circuit, clipTo, False)
             #    iOut += 1
         return probs
 
 
-    def dprobs(self, compiled_gatestring, returnPr=False,clipTo=None):
+    def dprobs(self, compiled_circuit, returnPr=False,clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
-        spam label for a given gate string.
+        spam label for a given operation sequence.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels specifying the gate string.
+        circuit : OpString or tuple of operation labels
+          The sequence of operation labels specifying the operation sequence.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -822,30 +822,30 @@ class GateCalc(object):
         -------
         dprobs : dictionary
             A dictionary such that
-            dprobs[SL] = dpr(SL,gatestring,gates,G0,SPAM,SP0,returnPr,clipTo)
+            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,clipTo)
             for each spam label (string) SL.
         """
         dprobs = { }
-        raw_dict, outcomeLbls = compiled_gatestring
+        raw_dict, outcomeLbls = compiled_circuit
         iOut = 0 #outcome index
-        for raw_gatestring, spamTuples in raw_dict.items():
+        for raw_circuit, spamTuples in raw_dict.items():
             for spamTuple in spamTuples:
                 dprobs[outcomeLbls[iOut]] = self.dpr(
-                    spamTuple, raw_gatestring, returnPr, clipTo)
+                    spamTuple, raw_circuit, returnPr, clipTo)
                 iOut += 1
         return dprobs
 
 
 
-    def hprobs(self, compiled_gatestring, returnPr=False, returnDeriv=False, clipTo=None):
+    def hprobs(self, compiled_circuit, returnPr=False, returnDeriv=False, clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
-        spam label for a given gate string.
+        spam label for a given operation sequence.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels specifying the gate string.
+        circuit : OpString or tuple of operation labels
+          The sequence of operation labels specifying the operation sequence.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -862,16 +862,16 @@ class GateCalc(object):
         -------
         hprobs : dictionary
             A dictionary such that
-            hprobs[SL] = hpr(SL,gatestring,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo)
+            hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo)
             for each spam label (string) SL.
         """
         hprobs = { }
-        raw_dict, outcomeLbls = compiled_gatestring
+        raw_dict, outcomeLbls = compiled_circuit
         iOut = 0 #outcome index
-        for raw_gatestring, spamTuples in raw_dict.items():
+        for raw_circuit, spamTuples in raw_dict.items():
             for spamTuple in spamTuples:
                 hprobs[outcomeLbls[iOut]] = self.hpr(
-                    spamTuple, raw_gatestring, returnPr,returnDeriv,clipTo)
+                    spamTuple, raw_circuit, returnPr,returnDeriv,clipTo)
                 iOut += 1
         return hprobs
 
@@ -884,12 +884,12 @@ class GateCalc(object):
     
     def bulk_product(self, evalTree, bScale=False, comm=None):
         """
-        Compute the products of many gate strings at once.
+        Compute the products of many operation sequences at once.
 
         Parameters
         ----------
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.
 
         bScale : bool, optional
@@ -897,7 +897,7 @@ class GateCalc(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.  This is done over gate strings when a
+           across multiple processors.  This is done over operation sequences when a
            *split* evalTree is given, otherwise no parallelization is performed.
 
         Returns
@@ -905,8 +905,8 @@ class GateCalc(object):
         prods : numpy array
             Array of shape S x G x G, where:
 
-            - S == the number of gate strings
-            - G == the linear dimension of a gate matrix (G x G gate matrices).
+            - S == the number of operation sequences
+            - G == the linear dimension of a operation matrix (G x G operation matrices).
 
         scaleValues : numpy array
             Only returned when bScale == True. A length-S array specifying
@@ -919,12 +919,12 @@ class GateCalc(object):
     def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False,
                       bScale=False, comm=None, wrtFilter=None):
         """
-        Compute the derivative of a many gate strings at once.
+        Compute the derivative of a many operation sequences at once.
 
         Parameters
         ----------
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.
 
         flat : bool, optional
@@ -940,14 +940,14 @@ class GateCalc(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first done over the
            set of parameters being differentiated with respect to.  If there are
-           more processors than gateset parameters, distribution over a split
+           more processors than model parameters, distribution over a split
            evalTree (if given) is possible.
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which gate parameters
           to include in the derivative.  Each element is an index into an
           array of gate parameters ordered by concatenating each gate's
-          parameters (in the order specified by the gate set).  This argument
+          parameters (in the order specified by the model).  This argument
           is used internally for distributing derivative calculations across
           multiple processors.
 
@@ -958,12 +958,12 @@ class GateCalc(object):
 
           * if flat == False, an array of shape S x M x G x G, where:
 
-            - S == len(gatestring_list)
-            - M == the length of the vectorized gateset
-            - G == the linear dimension of a gate matrix (G x G gate matrices)
+            - S == len(circuit_list)
+            - M == the length of the vectorized model
+            - G == the linear dimension of a operation matrix (G x G operation matrices)
 
             and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
-            of the i-th gate string product with respect to the j-th gateset
+            of the i-th operation sequence product with respect to the j-th model
             parameter.
 
           * if flat == True, an array of shape S*N x M where:
@@ -972,17 +972,17 @@ class GateCalc(object):
             - S,M == as above,
 
             and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
-            the (i / G^2)-th flattened gate string product  with respect to
-            the j-th gateset parameter.
+            the (i / G^2)-th flattened operation sequence product  with respect to
+            the j-th model parameter.
 
         products : numpy array
           Only returned when bReturnProds == True.  An array of shape
-          S x G x G; products[i] is the i-th gate string product.
+          S x G x G; products[i] is the i-th operation sequence product.
 
         scaleVals : numpy array
           Only returned when bScale == True.  An array of shape S such that
           scaleVals[i] contains the multiplicative scaling needed for
-          the derivatives and/or products for the i-th gate string.
+          the derivatives and/or products for the i-th operation sequence.
         """
         raise NotImplementedError("bulk_dproduct(...) is not implemented!")
 
@@ -991,12 +991,12 @@ class GateCalc(object):
                       bScale=False, comm=None, wrtFilter1=None, wrtFilter2=None):
 
         """
-        Return the Hessian of many gate string products at once.
+        Return the Hessian of many operation sequence products at once.
 
         Parameters
         ----------
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.
 
         flat : bool, optional
@@ -1014,7 +1014,7 @@ class GateCalc(object):
            across multiple processors.  Distribution is first done over the
            set of parameters being differentiated with respect to when the
            *second* derivative is taken.  If there are more processors than
-           gateset parameters, distribution over a split evalTree (if given)
+           model parameters, distribution over a split evalTree (if given)
            is possible.
 
         wrtFilter1, wrtFilter2 : list of ints, optional
@@ -1022,7 +1022,7 @@ class GateCalc(object):
           to differentiate with respect to in the first (row) and second (col)
           derivative operations, respectively.  Each element is an index into an
           array of gate parameters ordered by concatenating each gate's
-          parameters (in the order specified by the gate set).  This argument
+          parameters (in the order specified by the model).  This argument
           is used internally for distributing derivative calculations across
           multiple processors.
 
@@ -1031,13 +1031,13 @@ class GateCalc(object):
         hessians : numpy array
             * if flat == False, an  array of shape S x M x M x G x G, where
 
-              - S == len(gatestring_list)
-              - M == the length of the vectorized gateset
-              - G == the linear dimension of a gate matrix (G x G gate matrices)
+              - S == len(circuit_list)
+              - M == the length of the vectorized model
+              - G == the linear dimension of a operation matrix (G x G operation matrices)
 
               and hessians[i,j,k,l,m] holds the derivative of the (l,m)-th entry
-              of the i-th gate string product with respect to the k-th then j-th
-              gateset parameters.
+              of the i-th operation sequence product with respect to the k-th then j-th
+              model parameters.
 
             * if flat == True, an array of shape S*N x M x M where
 
@@ -1045,20 +1045,20 @@ class GateCalc(object):
               - S,M == as above,
 
               and hessians[i,j,k] holds the derivative of the (i % G^2)-th entry
-              of the (i / G^2)-th flattened gate string product with respect to
-              the k-th then j-th gateset parameters.
+              of the (i / G^2)-th flattened operation sequence product with respect to
+              the k-th then j-th model parameters.
 
         derivs1, derivs2 : numpy array
           Only returned if bReturnDProdsAndProds == True.
 
           * if flat == False, two arrays of shape S x M x G x G, where
 
-            - S == len(gatestring_list)
-            - M == the number of gateset params or wrtFilter1 or 2, respectively
-            - G == the linear dimension of a gate matrix (G x G gate matrices)
+            - S == len(circuit_list)
+            - M == the number of model params or wrtFilter1 or 2, respectively
+            - G == the linear dimension of a operation matrix (G x G operation matrices)
 
             and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
-            of the i-th gate string product with respect to the j-th gateset
+            of the i-th operation sequence product with respect to the j-th model
             parameter.
 
           * if flat == True, an array of shape S*N x M where
@@ -1068,17 +1068,17 @@ class GateCalc(object):
             - S,M == as above,
 
             and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
-            the (i / G^2)-th flattened gate string product  with respect to
-            the j-th gateset parameter.
+            the (i / G^2)-th flattened operation sequence product  with respect to
+            the j-th model parameter.
 
         products : numpy array
           Only returned when bReturnDProdsAndProds == True.  An array of shape
-          S x G x G; products[i] is the i-th gate string product.
+          S x G x G; products[i] is the i-th operation sequence product.
 
         scaleVals : numpy array
           Only returned when bScale == True.  An array of shape S such that
           scaleVals[i] contains the multiplicative scaling needed for
-          the hessians, derivatives, and/or products for the i-th gate string.
+          the hessians, derivatives, and/or products for the i-th operation sequence.
 
         """
         raise NotImplementedError("bulk_hproduct(...) is not implemented!")
@@ -1106,7 +1106,7 @@ class GateCalc(object):
             # fInds = "final indices" = the "element" indices in the final
             #          filled quantity combining both spam and gate-sequence indices
             # gInds  = "gate sequence indices" = indices into the (tree-) list of
-            #          all of the raw gate sequences which need to be computed
+            #          all of the raw operation sequences which need to be computed
             #          for the current spamTuple (this list has the SAME length as fInds).            
             calc_and_fill_fn(spamTuple,fInds,gInds,pslc1,pslc2,False) #TODO: remove SumInto == True cases
                     
@@ -1129,7 +1129,7 @@ class GateCalc(object):
             # fInds = "final indices" = the "element" indices in the final
             #          filled quantity combining both spam and gate-sequence indices
             # gInds  = "gate sequence indices" = indices into the (tree-) list of
-            #          all of the raw gate sequences which need to be computed
+            #          all of the raw operation sequences which need to be computed
             #          for the current spamTuple (this list has the SAME length as fInds).
             rholabel,elabel = spamTuple #this should always be the case... (no "custom" / "raw" labels)
             if rholabel not in collected: collected[rholabel] = [list(),list(),list()]
@@ -1148,11 +1148,11 @@ class GateCalc(object):
                         clipTo=None, check=False, comm=None):
 
         """
-        Compute the outcome probabilities for an entire tree of gate strings.
+        Compute the outcome probabilities for an entire tree of operation sequences.
 
         This routine fills a 1D array, `mxToFill` with the probabilities
-        corresponding to the *compiled* gate strings found in an evaluation
-        tree, `evalTree`.  An initial list of (general) :class:`GateString`
+        corresponding to the *compiled* operation sequences found in an evaluation
+        tree, `evalTree`.  An initial list of (general) :class:`OpString`
         objects is *compiled* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently
@@ -1160,7 +1160,7 @@ class GateCalc(object):
         must have length equal to the number of final elements (this can be 
         obtained by `evalTree.num_final_elements()`.  To interpret which elements
         correspond to which strings and outcomes, you'll need the mappings 
-        generated when the original list of `GateStrings` was compiled.
+        generated when the original list of `Circuits` was compiled.
 
         Parameters
         ----------
@@ -1210,7 +1210,7 @@ class GateCalc(object):
         mxToFill : numpy ndarray
           an already-allocated ExM numpy array where E is the total number of
           computed elements (i.e. evalTree.num_final_elements()) and M is the 
-          number of gate set parameters.
+          number of model parameters.
 
         evalTree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
@@ -1293,7 +1293,7 @@ class GateCalc(object):
         derivMxToFill1, derivMxToFill2 : numpy array, optional
           when not None, an already-allocated ExM numpy array that is filled
           with probability derivatives, similar to bulk_fill_dprobs(...), but
-          where M is the number of gateset parameters selected for the 1st and 2nd
+          where M is the number of model parameters selected for the 1st and 2nd
           differentiation, respectively (i.e. by wrtFilter1 and wrtFilter2).
 
         clipTo : 2-tuple, optional
@@ -1312,7 +1312,7 @@ class GateCalc(object):
            wrtBlockSize).
 
         wrtFilter1, wrtFilter2 : list of ints, optional
-          If not None, a list of integers specifying which gate set parameters
+          If not None, a list of integers specifying which model parameters
           to differentiate with respect to in the first (row) and second (col)
           derivative operations, respectively.
 
@@ -1342,7 +1342,7 @@ class GateCalc(object):
     #def bulk_pr(self, spamLabel, evalTree, clipTo=None,
     #            check=False, comm=None):
     #    """
-    #    Compute the probabilities of the gate sequences given by evalTree,
+    #    Compute the probabilities of the operation sequences given by evalTree,
     #    where initialization & measurement operations are always the same
     #    and are together specified by spamLabel.
     #
@@ -1352,7 +1352,7 @@ class GateCalc(object):
     #       the label specifying the state prep and measure operations
     #
     #    evalTree : EvalTree
-    #       given by a prior call to bulk_evaltree.  Specifies the gate strings
+    #       given by a prior call to bulk_evaltree.  Specifies the operation sequences
     #       to compute the bulk operation on.
     #
     #    clipTo : 2-tuple, optional
@@ -1372,7 +1372,7 @@ class GateCalc(object):
     #    Returns
     #    -------
     #    numpy array
-    #      An array of length equal to the number of gate strings containing
+    #      An array of length equal to the number of operation sequences containing
     #      the (float) probabilities.
     #    """
     #    vp = _np.empty( (1,evalTree.num_final_strings()), 'd' )
@@ -1381,26 +1381,26 @@ class GateCalc(object):
     #    return vp[0]
 
 
-    def bulk_probs(self, gatestrings, evalTree, elIndices, outcomes,
+    def bulk_probs(self, circuits, evalTree, elIndices, outcomes,
                    clipTo=None, check=False, comm=None, smartc=None):
         """
         Construct a dictionary containing the probabilities
-        for an entire list of gate sequences.
+        for an entire list of operation sequences.
 
         Parameters
         ----------
-        gatestrings : list of GateStrings
-            The list of (uncompiled) original gate strings.
+        circuits : list of Circuits
+            The list of (uncompiled) original operation sequences.
 
         evalTree : EvalTree
-            An evalution tree corresponding to `gatestrings`.
+            An evalution tree corresponding to `circuits`.
 
         elIndices : dict
-            A dictionary of indices for each original gate string.
+            A dictionary of indices for each original operation sequence.
 
         outcomes : dict
             A dictionary of outcome labels (string or tuple) for each original
-            gate string.
+            operation sequence.
 
         clipTo : 2-tuple, optional
             (min,max) to clip return value if not None.
@@ -1422,11 +1422,11 @@ class GateCalc(object):
         Returns
         -------
         probs : dictionary
-            A dictionary such that `probs[gstr]` is an ordered dictionary of
+            A dictionary such that `probs[opstr]` is an ordered dictionary of
             `(outcome, p)` tuples, where `outcome` is a tuple of labels
             and `p` is the corresponding probability.
         """
-        #TODO: correct these docstrings - probs[gstr] is an ordered dictionary
+        #TODO: correct these docstrings - probs[opstr] is an ordered dictionary
         #  of *outcome probabilities* whose keys are (tuples of) outcome labels.
 
         vp = _np.empty(evalTree.num_final_elements(),'d')
@@ -1437,10 +1437,10 @@ class GateCalc(object):
             self.bulk_fill_probs(vp, evalTree, clipTo, check, comm)
 
         ret = _collections.OrderedDict()
-        for i, gstr in enumerate(gatestrings):
+        for i, opstr in enumerate(circuits):
             elInds = _slct.indices(elIndices[i]) \
                      if isinstance(elIndices[i],slice) else elIndices[i]
-            ret[gstr] = _ld.OutcomeLabelDict(
+            ret[opstr] = _ld.OutcomeLabelDict(
                 [(outLbl,vp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
@@ -1460,7 +1460,7 @@ class GateCalc(object):
 #           the label specifying the state prep and measure operations
 #
 #        evalTree : EvalTree
-#           given by a prior call to bulk_evaltree.  Specifies the gate strings
+#           given by a prior call to bulk_evaltree.  Specifies the operation sequences
 #           to compute the bulk operation on.
 #
 #        returnPr : bool, optional
@@ -1502,21 +1502,21 @@ class GateCalc(object):
 #        dprobs : numpy array
 #            An array of shape S x M, where
 #
-#            - S == the number of gate strings
-#            - M == the length of the vectorized gateset
+#            - S == the number of operation sequences
+#            - M == the length of the vectorized model
 #
 #            and dprobs[i,j] holds the derivative of the i-th probability w.r.t.
-#            the j-th gateset parameter.
+#            the j-th model parameter.
 #
 #        probs : numpy array
 #            Only returned when returnPr == True. An array of shape S containing
-#            the probabilities of each gate string.
+#            the probabilities of each operation sequence.
 #        """
-#        nGateStrings = evalTree.num_final_strings()
+#        nCircuits = evalTree.num_final_strings()
 #        nDerivCols = self.Np
 #
-#        vdp = _np.empty( (1,nGateStrings,nDerivCols), 'd' )
-#        vp = _np.empty( (1,nGateStrings), 'd' ) if returnPr else None
+#        vdp = _np.empty( (1,nCircuits,nDerivCols), 'd' )
+#        vp = _np.empty( (1,nCircuits), 'd' ) if returnPr else None
 #
 #        self.bulk_fill_dprobs(vdp, {spamLabel: 0}, evalTree,
 #                              vp, clipTo, check, comm,
@@ -1524,29 +1524,29 @@ class GateCalc(object):
 #        return (vdp[0], vp[0]) if returnPr else vdp[0]
 
 
-    def bulk_dprobs(self, gatestrings, evalTree, elIndices, outcomes,
+    def bulk_dprobs(self, circuits, evalTree, elIndices, outcomes,
                     returnPr=False,clipTo=None,
                     check=False,comm=None,
                     wrtFilter=None, wrtBlockSize=None):
 
         """
         Construct a dictionary containing the probability-derivatives
-        for an entire list of gate sequences.
+        for an entire list of operation sequences.
 
         Parameters
         ----------
-        gatestrings : list of GateStrings
-            The list of (uncompiled) original gate strings.
+        circuits : list of Circuits
+            The list of (uncompiled) original operation sequences.
 
         evalTree : EvalTree
-            An evalution tree corresponding to `gatestrings`.
+            An evalution tree corresponding to `circuits`.
 
         elIndices : dict
-            A dictionary of indices for each original gate string.
+            A dictionary of indices for each original operation sequence.
 
         outcomes : dict
             A dictionary of outcome labels (string or tuple) for each original
-            gate string.
+            operation sequence.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -1586,7 +1586,7 @@ class GateCalc(object):
         Returns
         -------
         dprobs : dictionary
-            A dictionary such that `probs[gstr]` is an ordered dictionary of
+            A dictionary such that `probs[opstr]` is an ordered dictionary of
             `(outcome, dp, p)` tuples, where `outcome` is a tuple of labels,
             `p` is the corresponding probability, and `dp` is an array containing
             the derivative of `p` with respect to each parameter.  If `returnPr`
@@ -1604,14 +1604,14 @@ class GateCalc(object):
                               wrtFilter, wrtBlockSize)
 
         ret = _collections.OrderedDict()
-        for i, gstr in enumerate(gatestrings):
+        for i, opstr in enumerate(circuits):
             elInds = _slct.indices(elIndices[i]) \
                      if isinstance(elIndices[i],slice) else elIndices[i]
             if returnPr:
-                ret[gstr] = _ld.OutcomeLabelDict(
+                ret[opstr] = _ld.OutcomeLabelDict(
                     [(outLbl,(vdp[ei],vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
             else:
-                ret[gstr] = _ld.OutcomeLabelDict(
+                ret[opstr] = _ld.OutcomeLabelDict(
                     [(outLbl,vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
@@ -1633,7 +1633,7 @@ class GateCalc(object):
 #          the label specifying the state prep and measure operations
 #    
 #        evalTree : EvalTree
-#          given by a prior call to bulk_evaltree.  Specifies the gate strings
+#          given by a prior call to bulk_evaltree.  Specifies the operation sequences
 #          to compute the bulk operation on.
 #    
 #        returnPr : bool, optional
@@ -1659,7 +1659,7 @@ class GateCalc(object):
 #           wrtBlockSize).
 #    
 #        wrtFilter1, wrtFilter2 : list of ints, optional
-#          If not None, a list of integers specifying which gate set parameters
+#          If not None, a list of integers specifying which model parameters
 #          to differentiate with respect to in the first (row) and second (col)
 #          derivative operations, respectively.
 #    
@@ -1678,16 +1678,16 @@ class GateCalc(object):
 #        hessians : numpy array
 #            a S x M x M array, where
 #    
-#            - S == the number of gate strings
-#            - M == the length of the vectorized gateset
+#            - S == the number of operation sequences
+#            - M == the length of the vectorized model
 #    
 #            and hessians[i,j,k] is the derivative of the i-th probability
-#            w.r.t. the k-th then the j-th gateset parameter.
+#            w.r.t. the k-th then the j-th model parameter.
 #    
 #        derivs1, derivs2 : numpy array
 #            only returned if returnDeriv == True. Two S x M arrays where
 #            derivsX[i,j] holds the derivative of the i-th probability
-#            w.r.t. the j-th gateset parameter, where j is taken from the
+#            w.r.t. the j-th model parameter, where j is taken from the
 #            first and second sets of filtered parameters (i.e. by
 #            wrtFilter1 and wrtFilter2).  If `wrtFilter1 == wrtFilter2`,
 #            then derivs2 is not returned (to save memory, since it's the
@@ -1695,19 +1695,19 @@ class GateCalc(object):
 #    
 #        probabilities : numpy array
 #            only returned if returnPr == True.  A length-S array
-#            containing the probabilities for each gate string.
+#            containing the probabilities for each operation sequence.
 #        """
-#        nGateStrings = evalTree.num_final_strings()
+#        nCircuits = evalTree.num_final_strings()
 #        nDerivCols1 = self.Np if (wrtFilter1 is None) \
 #                           else len(wrtFilter1)
 #        nDerivCols2 = self.Np if (wrtFilter2 is None) \
 #                           else len(wrtFilter2)
 #    
-#        vhp = _np.empty( (1,nGateStrings,nDerivCols1,nDerivCols2), 'd' )
-#        vdp1 = _np.empty( (1,nGateStrings,self.Np), 'd' ) \
+#        vhp = _np.empty( (1,nCircuits,nDerivCols1,nDerivCols2), 'd' )
+#        vdp1 = _np.empty( (1,nCircuits,self.Np), 'd' ) \
 #            if returnDeriv else None
 #        vdp2 = vdp1.copy() if (returnDeriv and wrtFilter1!=wrtFilter2) else None
-#        vp = _np.empty( (1,nGateStrings), 'd' ) if returnPr else None
+#        vp = _np.empty( (1,nCircuits), 'd' ) if returnPr else None
 #    
 #        self.bulk_fill_hprobs(vhp, {spamLabel: 0}, evalTree,
 #                              vp, vdp1, vdp2, clipTo, check, comm,
@@ -1721,7 +1721,7 @@ class GateCalc(object):
 #            return (vhp[0], vp[0]) if returnPr else vhp[0]
 
 
-    def bulk_hprobs(self, gatestrings, evalTree, elIndices, outcomes,
+    def bulk_hprobs(self, circuits, evalTree, elIndices, outcomes,
                     returnPr=False,returnDeriv=False,clipTo=None,
                     check=False,comm=None,
                     wrtFilter1=None, wrtFilter2=None,
@@ -1729,22 +1729,22 @@ class GateCalc(object):
 
         """
         Construct a dictionary containing the probability-Hessians
-        for an entire list of gate sequences.
+        for an entire list of operation sequences.
 
         Parameters
         ----------
-        gatestrings : list of GateStrings
-            The list of (uncompiled) original gate strings.
+        circuits : list of Circuits
+            The list of (uncompiled) original operation sequences.
 
         evalTree : EvalTree
-            An evalution tree corresponding to `gatestrings`.
+            An evalution tree corresponding to `circuits`.
 
         elIndices : dict
-            A dictionary of indices for each original gate string.
+            A dictionary of indices for each original operation sequence.
 
         outcomes : dict
             A dictionary of outcome labels (string or tuple) for each original
-            gate string.
+            operation sequence.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -1769,7 +1769,7 @@ class GateCalc(object):
            wrtBlockSize).
 
         wrtFilter1, wrtFilter2 : list of ints, optional
-          If not None, a list of integers specifying which gate set parameters
+          If not None, a list of integers specifying which model parameters
           to differentiate with respect to in the first (row) and second (col)
           derivative operations, respectively.
 
@@ -1786,7 +1786,7 @@ class GateCalc(object):
         Returns
         -------
         hprobs : dictionary
-            A dictionary such that `probs[gstr]` is an ordered dictionary of
+            A dictionary such that `probs[opstr]` is an ordered dictionary of
             `(outcome, hp, dp, p)` tuples, where `outcome` is a tuple of labels,
             `p` is the corresponding probability, `dp` is a 1D array containing
             the derivative of `p` with respect to each parameter, and `hp` is a
@@ -1811,7 +1811,7 @@ class GateCalc(object):
                               wrtFilter1,wrtFilter1,wrtBlockSize1,wrtBlockSize2)
 
         ret = _collections.OrderedDict()
-        for i, gstr in enumerate(gatestrings):
+        for i, opstr in enumerate(circuits):
             elInds = _slct.indices(elIndices[i]) \
                      if isinstance(elIndices[i],slice) else elIndices[i]
             outcomeQtys = _ld.OutcomeLabelDict()
@@ -1827,7 +1827,7 @@ class GateCalc(object):
                     if returnPr: t = (vhp[ei],vp[ei])
                     else:        t = vhp[ei]
                 outcomeQtys[outLbl] = t
-            ret[gstr] = outcomeQtys
+            ret[opstr] = outcomeQtys
             
         return ret
 
@@ -1845,7 +1845,7 @@ class GateCalc(object):
         reduce results from a single column of the Hessian at a time.  For
         example, the Hessian of a function of many gate sequence probabilities
         can often be computed column-by-column from the using the columns of
-        the gate sequences.
+        the operation sequences.
 
 
         Parameters
@@ -1856,7 +1856,7 @@ class GateCalc(object):
             correspondence between rows of mxToFill and spam labels.
 
         evalTree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the gate strings
+            given by a prior call to bulk_evaltree.  Specifies the operation sequences
             to compute the bulk operation on.  This tree *cannot* be split.
 
         wrtSlicesList : list
@@ -1869,9 +1869,9 @@ class GateCalc(object):
         bReturnDProbs12 : boolean, optional
            If true, the generator computes a 2-tuple: (hessian_col, d12_col),
            where d12_col is a column of the matrix d12 defined by:
-           d12[iSpamLabel,iGateStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
+           d12[iSpamLabel,iOpStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
            the probability generated by the sequence and spam label indexed
-           by iGateStr and iSpamLabel.  d12 has the same dimensions as the
+           by iOpStr and iSpamLabel.  d12 has the same dimensions as the
            Hessian, and turns out to be useful when computing the Hessian
            of functions of the probabilities.
 
@@ -1891,7 +1891,7 @@ class GateCalc(object):
           arrays of shape K x S x B x B', where:
 
           - K is the length of spam_label_rows,
-          - S is the number of gate strings (i.e. evalTree.num_final_strings()),
+          - S is the number of operation sequences (i.e. evalTree.num_final_strings()),
           - B is the number of parameter rows (the length of rowSlice)
           - B' is the number of parameter columns (the length of colSlice)
 
@@ -1908,7 +1908,7 @@ class GateCalc(object):
                       itemWeights=None, normalize=True):
         """
         Compute the weighted frobenius norm of the difference between this
-        gateset and otherGateSet.  Differences in each corresponding gate
+        model and otherModel.  Differences in each corresponding gate
         matrix and spam vector element are squared, weighted (using 
         `itemWeights` as applicable), then summed.  The value returned is the
         square root of this sum, or the square root of this sum divided by the
@@ -1916,15 +1916,15 @@ class GateCalc(object):
 
         Parameters
         ----------
-        otherCalc : GateCalc
+        otherCalc : ForwardSimulator
             the other gate calculator to difference against.
 
         transformMx : numpy array, optional
-            if not None, transform this gateset by
-            G => inv(transformMx) * G * transformMx, for each gate matrix G
+            if not None, transform this model by
+            G => inv(transformMx) * G * transformMx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
-            not alter the values stored in this gateset.
+            not alter the values stored in this model.
 
         itemWeights : dict, optional
            Dictionary of weighting factors for individual gates and spam
@@ -1948,15 +1948,15 @@ class GateCalc(object):
         d = 0; T = transformMx
         nSummands = 0.0
         if itemWeights is None: itemWeights = {}
-        gateWeight = itemWeights.get('gates',1.0)
+        opWeight = itemWeights.get('gates',1.0)
         spamWeight = itemWeights.get('spam',1.0)
 
         if T is not None:
             Ti = _nla.inv(T) #TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
-            for gateLabel, gate in self.gates.items():
-                wt = itemWeights.get(gateLabel, gateWeight)
+            for opLabel, gate in self.operations.items():
+                wt = itemWeights.get(opLabel, opWeight)
                 d += wt * gate.frobeniusdist2(
-                    otherCalc.gates[gateLabel], T, Ti)                
+                    otherCalc.operations[opLabel], T, Ti)                
                 nSummands += wt * (gate.dim)**2
 
             for lbl,rhoV in self.preps.items():
@@ -1972,9 +1972,9 @@ class GateCalc(object):
                 nSummands += wt * Evec.dim
 
         else:
-            for gateLabel,gate in self.gates.items():
-                wt = itemWeights.get(gateLabel, gateWeight)
-                d += wt * gate.frobeniusdist2(otherCalc.gates[gateLabel])
+            for opLabel,gate in self.operations.items():
+                wt = itemWeights.get(opLabel, opWeight)
+                d += wt * gate.frobeniusdist2(otherCalc.operations[opLabel])
                 nSummands += wt * (gate.dim)**2
 
             for lbl,rhoV in self.preps.items():
@@ -2001,20 +2001,20 @@ class GateCalc(object):
         
     def residuals(self, otherCalc, transformMx=None, itemWeights=None):
         """
-        Compute the weighted residuals between two gate sets (the differences
-        in corresponding gate matrix and spam vector elements).
+        Compute the weighted residuals between two models (the differences
+        in corresponding operation matrix and spam vector elements).
 
         Parameters
         ----------
-        otherCalc : GateCalc
+        otherCalc : ForwardSimulator
             the other gate calculator to difference against.
 
         transformMx : numpy array, optional
-            if not None, transform this gateset by
-            G => inv(transformMx) * G * transformMx, for each gate matrix G
+            if not None, transform this model by
+            G => inv(transformMx) * G * transformMx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
-            not alter the values stored in this gateset.
+            not alter the values stored in this model.
 
         itemWeights : dict, optional
            Dictionary of weighting factors for individual gates and spam
@@ -2039,16 +2039,16 @@ class GateCalc(object):
         nSummands = 0.0
         if itemWeights is None: itemWeights = {}
         sqrt_itemWeights = { k:_np.sqrt(v) for k,v in itemWeights.items() }
-        gateWeight = sqrt_itemWeights.get('gates',1.0)
+        opWeight = sqrt_itemWeights.get('gates',1.0)
         spamWeight = sqrt_itemWeights.get('spam',1.0)
 
         if T is not None:
             Ti = _nla.inv(T) #TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
-            for gateLabel, gate in self.gates.items():
-                wt = sqrt_itemWeights.get(gateLabel, gateWeight)
+            for opLabel, gate in self.operations.items():
+                wt = sqrt_itemWeights.get(opLabel, opWeight)
                 resids.append(
                         wt * gate.residuals(
-                    otherCalc.gates[gateLabel], T, Ti))
+                    otherCalc.operations[opLabel], T, Ti))
                 nSummands += wt**2 * (gate.dim)**2
 
             for lbl,rhoV in self.preps.items():
@@ -2067,10 +2067,10 @@ class GateCalc(object):
                 nSummands += wt**2 * Evec.dim
 
         else:
-            for gateLabel,gate in self.gates.items():
-                wt = sqrt_itemWeights.get(gateLabel, gateWeight)
+            for opLabel,gate in self.operations.items():
+                wt = sqrt_itemWeights.get(opLabel, opWeight)
                 resids.append(
-                    wt * gate.residuals(otherCalc.gates[gateLabel]))
+                    wt * gate.residuals(otherCalc.operations[opLabel]))
                 nSummands += wt**2 * (gate.dim)**2
 
             for lbl,rhoV in self.preps.items():
@@ -2092,20 +2092,20 @@ class GateCalc(object):
     def jtracedist(self, otherCalc, transformMx=None):
         """
         Compute the Jamiolkowski trace distance between two
-        gatesets, defined as the maximum of the trace distances
+        models, defined as the maximum of the trace distances
         between each corresponding gate, including spam gates.
 
         Parameters
         ----------
-        otherCalc : GateCalc
-            the other gate set to difference against.
+        otherCalc : ForwardSimulator
+            the other model to difference against.
 
         transformMx : numpy array, optional
-            if not None, transform this gateset by
-            G => inv(transformMx) * G * transformMx, for each gate matrix G
+            if not None, transform this model by
+            G => inv(transformMx) * G * transformMx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
-            not alter the values stored in this gateset.
+            not alter the values stored in this model.
 
         Returns
         -------
@@ -2117,8 +2117,8 @@ class GateCalc(object):
         
         if T is not None:
             Ti = _nla.inv(T)
-            dists = [ gate.jtracedist(otherCalc.gates[lbl], T, Ti)
-                      for lbl,gate in self.gates.items() ]
+            dists = [ gate.jtracedist(otherCalc.operations[lbl], T, Ti)
+                      for lbl,gate in self.operations.items() ]
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
@@ -2133,8 +2133,8 @@ class GateCalc(object):
                 nSummands += Evec.dim
                 
         else:
-            dists = [ gate.jtracedist(otherCalc.gates[lbl])
-                      for lbl,gate in self.gates.items() ]
+            dists = [ gate.jtracedist(otherCalc.operations[lbl])
+                      for lbl,gate in self.operations.items() ]
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
@@ -2155,21 +2155,21 @@ class GateCalc(object):
     def diamonddist(self, otherCalc, transformMx=None):
         """
         Compute the diamond-norm distance between two
-        gatesets, defined as the maximum
+        models, defined as the maximum
         of the diamond-norm distances between each
         corresponding gate, including spam gates.
 
         Parameters
         ----------
-        otherCalc : GateCalc
+        otherCalc : ForwardSimulator
             the other gate calculator to difference against.
 
         transformMx : numpy array, optional
-            if not None, transform this gateset by
-            G => inv(transformMx) * G * transformMx, for each gate matrix G
+            if not None, transform this model by
+            G => inv(transformMx) * G * transformMx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
-            not alter the values stored in this gateset.
+            not alter the values stored in this model.
 
         Returns
         -------
@@ -2181,8 +2181,8 @@ class GateCalc(object):
         
         if T is not None:
             Ti = _nla.inv(T)
-            dists = [ gate.diamonddist(otherCalc.gates[lbl], T, Ti)
-                      for lbl,gate in self.gates.items() ]
+            dists = [ gate.diamonddist(otherCalc.operations[lbl], T, Ti)
+                      for lbl,gate in self.operations.items() ]
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
@@ -2197,8 +2197,8 @@ class GateCalc(object):
                 nSummands += Evec.dim
                 
         else:
-            dists = [ gate.diamonddist(otherCalc.gates[lbl])
-                      for lbl,gate in self.gates.items() ]
+            dists = [ gate.diamonddist(otherCalc.operations[lbl])
+                      for lbl,gate in self.operations.items() ]
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense

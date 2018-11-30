@@ -1,7 +1,7 @@
 import unittest
 import pygsti
 from pygsti.objects import Circuit
-from pygsti.objects import GateString
+from pygsti.objects import OpString
 from pygsti.baseobjs import Label
 from pygsti.objects import ProcessorSpec
 import numpy as np
@@ -12,24 +12,24 @@ class CircuitTestCase(BaseTestCase):
 
     def test_circuit(self):
     
-        # Test initializing a circuit from an empty gatestring.
+        # Test initializing a circuit from an empty circuit.
         c = pygsti.obj.Circuit(num_lines=5)
         self.assertEqual(c.depth(), 0)
         self.assertEqual(c.size(), 0)
         self.assertEqual(c.number_of_lines(), 5)
         self.assertEqual(c.line_labels, list(range(5)))
     
-        c = pygsti.obj.Circuit(gatestring=[],num_lines=5)
+        c = pygsti.obj.Circuit(circuit=[],num_lines=5)
         self.assertEqual(c.depth(), 0)
         self.assertEqual(c.size(), 0)
         self.assertEqual(c.number_of_lines(), 5)
         self.assertEqual(c.line_labels, list(range(5)))
     
-        # Test initializing a circuit from a non-empty gatestring that is a list
+        # Test initializing a circuit from a non-empty circuit that is a list
         # containing Label objects. Also test that it can have non-integer line_labels
         # and a different identity identifier.
-        gatestring=[Label('Gi','Q0'),Label('Gp','Q8')]
-        c = pygsti.obj.Circuit(gatestring=gatestring,line_labels=['Q0','Q1','Q8','Q12'],identity='idle')
+        circuit=[Label('Gi','Q0'),Label('Gp','Q8')]
+        c = pygsti.obj.Circuit(circuit=circuit,line_labels=['Q0','Q1','Q8','Q12'],identity='idle')
         # Not parallelized by default, so will be depth 2.
         self.assertEqual(c.depth(), 2)
         self.assertEqual(c.size(), 2)
@@ -37,25 +37,25 @@ class CircuitTestCase(BaseTestCase):
         self.assertEqual(c.line_labels, ['Q0','Q1','Q8','Q12'])
     
         # Do again with parallelization
-        c = pygsti.obj.Circuit(gatestring=gatestring,line_labels=['Q0','Q1','Q8'],parallelize=True)
+        c = pygsti.obj.Circuit(circuit=circuit,line_labels=['Q0','Q1','Q8'],parallelize=True)
         self.assertEqual(c.depth(), 1)
         self.assertEqual(c.size(), 2)
     
-        # Now repeat the read-in with no parallelize, but a list of lists of gatelabels
-        gatestring=[[Label('Gi','Q0'),Label('Gp','Q8')],[Label('Gh','Q1'),Label('Gp','Q12')]]
-        c = pygsti.obj.Circuit(gatestring=gatestring,line_labels=['Q0','Q1','Q8','Q12'],identity='id')
+        # Now repeat the read-in with no parallelize, but a list of lists of oplabels
+        circuit=[[Label('Gi','Q0'),Label('Gp','Q8')],[Label('Gh','Q1'),Label('Gp','Q12')]]
+        c = pygsti.obj.Circuit(circuit=circuit,line_labels=['Q0','Q1','Q8','Q12'],identity='id')
         self.assertLess(0, c.depth())
     
-        # Check we can read-in a gatestring that has no qubit labels: enforces them to be on
+        # Check we can read-in a circuit that has no qubit labels: enforces them to be on
         # all of the lines.
-        gatestring = GateString( None, "Gx^2GyGxGi" )
-        c = pygsti.obj.Circuit(gatestring=gatestring,num_lines=1)
+        circuit = OpString( None, "Gx^2GyGxGi" )
+        c = pygsti.obj.Circuit(circuit=circuit,num_lines=1)
         self.assertEqual(c.depth(), 5)
     
-        # Check that we can create a gatestring from a string and that we end up with
+        # Check that we can create a circuit from a string and that we end up with
         # the correctly structured circuit.
-        gatestring = GateString( None, "[Gx:Q0Gy:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1" )
-        c = pygsti.obj.Circuit(gatestring=gatestring,parallelize=False,line_labels=['Q0','Q1'])
+        circuit = OpString( None, "[Gx:Q0Gy:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1" )
+        c = pygsti.obj.Circuit(circuit=circuit,parallelize=False,line_labels=['Q0','Q1'])
         self.assertEqual(c.depth(), 5)
         self.assertEqual(c.size(), 8)
     
@@ -64,8 +64,8 @@ class CircuitTestCase(BaseTestCase):
         self.assertEqual(cnew, c)
             
         with self.assertRaises(AssertionError):
-            # Check can't give line_items and gatestring.
-            c = pygsti.obj.Circuit(line_items=c.line_items,gatestring=gatestring)
+            # Check can't give line_items and circuit.
+            c = pygsti.obj.Circuit(line_items=c.line_items,circuit=circuit)
     
         # Test copy() and clear()
         ccopy = c.copy()
@@ -104,7 +104,7 @@ class CircuitTestCase(BaseTestCase):
         self.assertTrue(c.is_idling_qubit('Q3'))
     
         # Test replacing a layer with a layer.
-        c = pygsti.obj.Circuit(gatestring=gatestring, line_labels=['Q0','Q1'], identity='id')
+        c = pygsti.obj.Circuit(circuit=circuit, line_labels=['Q0','Q1'], identity='id')
         newlayer = [Label('Gx','Q0')]
         c.replace_layer_with_layer(newlayer,1)
         self.assertEqual(c.depth(), 5)
@@ -120,80 +120,80 @@ class CircuitTestCase(BaseTestCase):
         self.assertEqual(c, ccopy)
     
         # Test inserting a circuit when they are over the same labels.
-        gatestring = GateString( None, "[Gx:Q0Gy:Q1][Gy:Q0Gx:Q1]Gx:Q0Giz:Q1" )
-        c = pygsti.obj.Circuit(gatestring=gatestring,parallelize=False,line_labels=['Q0','Q1'])
+        circuit = OpString( None, "[Gx:Q0Gy:Q1][Gy:Q0Gx:Q1]Gx:Q0Giz:Q1" )
+        c = pygsti.obj.Circuit(circuit=circuit,parallelize=False,line_labels=['Q0','Q1'])
         ccopy = c.copy()
         c.insert_circuit(ccopy,2)
         self.assertTrue(Label('Gx','Q0') in c.get_layer(2))
     
         # Test insert a circuit that is over *more* qubits but which has the additional
         # lines idling.
-        c1 = pygsti.obj.Circuit(gatestring=gatestring,line_labels=['Q0','Q1'])
-        c2 = pygsti.obj.Circuit(gatestring=gatestring,line_labels=['Q0','Q1','Q2','Q3'])
+        c1 = pygsti.obj.Circuit(circuit=circuit,line_labels=['Q0','Q1'])
+        c2 = pygsti.obj.Circuit(circuit=circuit,line_labels=['Q0','Q1','Q2','Q3'])
         c1.insert_circuit(c2,0)
         self.assertEqual(c1.line_labels, ['Q0','Q1'])
         self.assertEqual(c1.number_of_lines(), 2)
     
         # Test inserting a circuit that is on *less* qubits.
-        c1 = pygsti.obj.Circuit(gatestring=gatestring, line_labels=['Q0','Q1'], identity='id')
-        c2 = pygsti.obj.Circuit(gatestring=[Label('Gx','Q0')], line_labels=['Q0',])
+        c1 = pygsti.obj.Circuit(circuit=circuit, line_labels=['Q0','Q1'], identity='id')
+        c2 = pygsti.obj.Circuit(circuit=[Label('Gx','Q0')], line_labels=['Q0',])
         c1.insert_circuit(c2,1)
         self.assertEqual(c1.line_labels, ['Q0','Q1'])
         self.assertEqual(c1.number_of_lines(), 2)
     
         # Test appending and prefixing a circuit
-        c1 = pygsti.obj.Circuit(gatestring=gatestring, line_labels=['Q0','Q1'], identity='id')
-        c2 = pygsti.obj.Circuit(gatestring=[Label('Gx','Q0')], line_labels=['Q0',])
+        c1 = pygsti.obj.Circuit(circuit=circuit, line_labels=['Q0','Q1'], identity='id')
+        c2 = pygsti.obj.Circuit(circuit=[Label('Gx','Q0')], line_labels=['Q0',])
         c1.append_circuit(c2)
         c1.prefix_circuit(c2)
         
         # Test tensoring circuits of same length
-        gatestring1 = GateString( None, "[Gx:Q0Gy:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1" )
-        gatestring2 = GateString( None, "[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3" )
-        c1 = pygsti.obj.Circuit(gatestring=gatestring1,line_labels=['Q0','Q1'])
-        c2 = pygsti.obj.Circuit(gatestring=gatestring2,line_labels=['Q2','Q3'])
+        gatestring1 = OpString( None, "[Gx:Q0Gy:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1" )
+        gatestring2 = OpString( None, "[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3" )
+        c1 = pygsti.obj.Circuit(circuit=gatestring1,line_labels=['Q0','Q1'])
+        c2 = pygsti.obj.Circuit(circuit=gatestring2,line_labels=['Q2','Q3'])
         c1.tensor_circuit(c2)
         self.assertEqual(c1.depth(), max(c1.depth(),c2.depth()))
         self.assertEqual(c1.line_items[2], c2.line_items[0])
     
         # Test tensoring circuits where the inserted circuit is shorter
-        gatestring1 = GateString( None, "[Gx:Q0Gy:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1Gy:Q0" )
-        gatestring2 = GateString( None, "[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3" )
-        c1 = pygsti.obj.Circuit(gatestring=gatestring1,line_labels=['Q0','Q1'])
-        c2 = pygsti.obj.Circuit(gatestring=gatestring2,line_labels=['Q2','Q3'])
+        gatestring1 = OpString( None, "[Gx:Q0Gy:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1Gy:Q0" )
+        gatestring2 = OpString( None, "[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3" )
+        c1 = pygsti.obj.Circuit(circuit=gatestring1,line_labels=['Q0','Q1'])
+        c2 = pygsti.obj.Circuit(circuit=gatestring2,line_labels=['Q2','Q3'])
         c1.tensor_circuit(c2,line_order=['Q1','Q3','Q0','Q2'])
         self.assertEqual(c1.depth(), max(c1.depth(),c2.depth()))
     
         # Test tensoring circuits where the inserted circuit is longer
-        gatestring1 = GateString( None, "[Gx:Q0Gy:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1" )
-        gatestring2 = GateString( None, "[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3Gy:Q2" )
-        c1 = pygsti.obj.Circuit(gatestring=gatestring1,line_labels=['Q0','Q1'])
-        c2 = pygsti.obj.Circuit(gatestring=gatestring2,line_labels=['Q2','Q3'])
+        gatestring1 = OpString( None, "[Gx:Q0Gy:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1" )
+        gatestring2 = OpString( None, "[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3Gy:Q2" )
+        c1 = pygsti.obj.Circuit(circuit=gatestring1,line_labels=['Q0','Q1'])
+        c2 = pygsti.obj.Circuit(circuit=gatestring2,line_labels=['Q2','Q3'])
         c1.tensor_circuit(c2)
         self.assertEqual(c1.depth(), max(c1.depth(),c2.depth()))
     
         # Test changing a gate name
-        gatestring = GateString( None, "[Gx:Q0Gy:Q1][Gy:Q0Gx:Q1]Gx:Q0Gi:Q1")
-        c = pygsti.obj.Circuit(gatestring=gatestring,line_labels=['Q0','Q1'],identity='Gi')
+        circuit = OpString( None, "[Gx:Q0Gy:Q1][Gy:Q0Gx:Q1]Gx:Q0Gi:Q1")
+        c = pygsti.obj.Circuit(circuit=circuit,line_labels=['Q0','Q1'],identity='Gi')
         c.replace_gatename('Gx','Gz')
-        gatestring = GateString( None, "[Gz:Q0Gy:Q1][Gy:Q0Gz:Q1]Gz:Q0Gi:Q1" )
-        c2 = pygsti.obj.Circuit(gatestring=gatestring,parallelize=False,line_labels=['Q0','Q1'],identity='Gi')
+        circuit = OpString( None, "[Gz:Q0Gy:Q1][Gy:Q0Gz:Q1]Gz:Q0Gi:Q1" )
+        c2 = pygsti.obj.Circuit(circuit=circuit,parallelize=False,line_labels=['Q0','Q1'],identity='Gi')
         self.assertEqual(c, c2)
     
         # Change gate library using an ordinary dict with every gate as a key. (we test
         # changing gate library using a CompilationLibrary elsewhere in the tests).
         comp = {}
-        comp[Label('Gz','Q0')] = pygsti.obj.Circuit(gatestring=[Label('Gx','Q0')],line_labels=['Q0'])
-        comp[Label('Gy','Q0')] = pygsti.obj.Circuit(gatestring=[Label('Gx','Q0')],line_labels=['Q0'])
-        comp[Label('Gz','Q1')] = pygsti.obj.Circuit(gatestring=[Label('Gx','Q1')],line_labels=['Q1'])
-        comp[Label('Gy','Q1')] = pygsti.obj.Circuit(gatestring=[Label('Gx','Q1')],line_labels=['Q1'])
+        comp[Label('Gz','Q0')] = pygsti.obj.Circuit(circuit=[Label('Gx','Q0')],line_labels=['Q0'])
+        comp[Label('Gy','Q0')] = pygsti.obj.Circuit(circuit=[Label('Gx','Q0')],line_labels=['Q0'])
+        comp[Label('Gz','Q1')] = pygsti.obj.Circuit(circuit=[Label('Gx','Q1')],line_labels=['Q1'])
+        comp[Label('Gy','Q1')] = pygsti.obj.Circuit(circuit=[Label('Gx','Q1')],line_labels=['Q1'])
         c.change_gate_library(comp)
         self.assertTrue(Label('Gx','Q0') in c.get_layer(0))
     
         # Change gate library using a dict with some gates missing
         comp = {}
-        comp[Label('Gz','Q0')] = pygsti.obj.Circuit(gatestring=[Label('Gx','Q0')],line_labels=['Q0'])
-        c = pygsti.obj.Circuit(gatestring=gatestring,line_labels=['Q0','Q1'],identity='Gi')
+        comp[Label('Gz','Q0')] = pygsti.obj.Circuit(circuit=[Label('Gx','Q0')],line_labels=['Q0'])
+        c = pygsti.obj.Circuit(circuit=circuit,line_labels=['Q0','Q1'],identity='Gi')
         c.change_gate_library(comp,allow_unchanged_gates=True)
         self.assertTrue(Label('Gx','Q0') in c.get_layer(0))
         self.assertTrue(Label('Gy','Q1') in c.get_layer(0))
@@ -210,7 +210,7 @@ class CircuitTestCase(BaseTestCase):
         self.assertEqual(c.line_items[0][0].qubits[0], 1)
     
         # Test deleting and inserting idling wires.
-        c = pygsti.obj.Circuit(gatestring=gatestring,line_labels=['Q0','Q1'],identity='Gi')
+        c = pygsti.obj.Circuit(circuit=circuit,line_labels=['Q0','Q1'],identity='Gi')
         c.insert_idling_wires(['Q0','Q1','Q2'])
         self.assertEqual(c.line_labels, ['Q0','Q1','Q2'])
         self.assertEqual(c.number_of_lines(), 3)
@@ -219,25 +219,25 @@ class CircuitTestCase(BaseTestCase):
         self.assertEqual(c.number_of_lines(), 2)
     
         # Test circuit reverse.
-        gate1 = c.get_line('Q0')[0]
+        op1 = c.get_line('Q0')[0]
         c.reverse()
-        gate2 = c.get_line('Q0')[-1]
-        self.assertEqual(gate1, gate2)
+        op2 = c.get_line('Q0')[-1]
+        self.assertEqual(op1, op2)
     
         # Test 2-qubit and multi-qubit gate count
         self.assertEqual(c.twoQgate_count(), 0)
-        gatestring = GateString( None, "[Gcnot:Q0:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1" )
-        c = pygsti.obj.Circuit(gatestring=gatestring,parallelize=False,line_labels=['Q0','Q1'])
+        circuit = OpString( None, "[Gcnot:Q0:Q1]^2[Gy:Q0Gx:Q1]Gi:Q0Gi:Q1" )
+        c = pygsti.obj.Circuit(circuit=circuit,parallelize=False,line_labels=['Q0','Q1'])
         self.assertEqual(c.twoQgate_count(), 2)
         self.assertEqual(c.multiQgate_count(), 2)
-        gatestring = GateString( None, "[Gccnot:Q0:Q1:Q2]^2[Gccnot:Q0:Q1]Gi:Q0Gi:Q1" )
-        c = pygsti.obj.Circuit(gatestring=gatestring,parallelize=False,line_labels=['Q0','Q1','Q2'])
+        circuit = OpString( None, "[Gccnot:Q0:Q1:Q2]^2[Gccnot:Q0:Q1]Gi:Q0Gi:Q1" )
+        c = pygsti.obj.Circuit(circuit=circuit,parallelize=False,line_labels=['Q0','Q1','Q2'])
         self.assertEqual(c.twoQgate_count(), 1)
         self.assertEqual(c.multiQgate_count(), 3)
     
         # Test the error-probability prediction method
-        gatestring = GateString( None, "[Gx:Q0][Gi:Q0Gi:Q1]")
-        c = pygsti.obj.Circuit(gatestring=gatestring,parallelize=False,line_labels=['Q0','Q1'],identity='Gi')
+        circuit = OpString( None, "[Gx:Q0][Gi:Q0Gi:Q1]")
+        c = pygsti.obj.Circuit(circuit=circuit,parallelize=False,line_labels=['Q0','Q1'],identity='Gi')
         infidelity_dict = {}
         infidelity_dict[Label('Gi','Q0')] = 0.7
         infidelity_dict[Label('Gi','Q1')] = 0.9
@@ -256,11 +256,11 @@ class CircuitTestCase(BaseTestCase):
         ls = [Label('H',1),Label('P',1),Label('P',1),Label('I',1),Label('CNOT',(2,3))]
         ls += [Label('HP',1),Label('PH',1),Label('CNOT',(1,2))]
         ls += [Label('I',1),Label('I',2),Label('CNOT',(1,2))]
-        gatestring = GateString(ls)
-        c = pygsti.obj.Circuit(gatestring=gatestring, num_lines=4)
+        circuit = OpString(ls)
+        c = pygsti.obj.Circuit(circuit=circuit, num_lines=4)
         c.compress_depth(verbosity=0)
         self.assertEqual(c.depth(), 7)
-        # Gate a dictionary that relates H, P gates etc.
+        # LinearOperator a dictionary that relates H, P gates etc.
         oneQrelations = pygsti.symplectic.oneQclifford_symplectic_group_relations()
         c.compress_depth(oneQgate_relations = oneQrelations)
         self.assertEqual(c.depth(), 3)
@@ -273,8 +273,8 @@ class CircuitTestCase(BaseTestCase):
             fail = False
         
         # Check that convert_to_quil runs, doesn't check the output makes sense.
-        gatestring = [Label(('Gi','Q1')),Label(('Gxpi','Q1')),Label('Gcnot',('Q1','Q2'))]
-        c = Circuit(gatestring=gatestring,line_labels=['Q1','Q2'],identity='Gi')
+        circuit = [Label(('Gi','Q1')),Label(('Gxpi','Q1')),Label('Gcnot',('Q1','Q2'))]
+        c = Circuit(circuit=circuit,line_labels=['Q1','Q2'],identity='Gi')
         s = c.convert_to_quil()
     
         # Check done_editing makes the circuit static.
@@ -290,7 +290,7 @@ class CircuitTestCase(BaseTestCase):
         ps = ProcessorSpec(n,gate_names=gate_names,qubit_labels=qubit_labels)
     
         # Tests the circuit simulator
-        c = Circuit(gatestring=[Label('Gh','Q0'),Label('Gcnot',('Q0','Q1'))],line_labels=['Q0','Q1'],identity='Gi')
+        c = Circuit(circuit=[Label('Gh','Q0'),Label('Gcnot',('Q0','Q1'))],line_labels=['Q0','Q1'],identity='Gi')
         out = c.simulate(ps.models['target'])
         self.assertLess(abs(out['00'] - 0.5), 10**-10)
         self.assertLess(abs(out['11'] - 0.5), 10**-10)

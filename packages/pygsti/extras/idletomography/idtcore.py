@@ -315,7 +315,7 @@ def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
         A 3-tuple of "+" or "-" strings indicating which sign for preparing
         or measuring in the X, Y, and Z bases is preferable.  Usually one
         orientation if preferred because it's easier to achieve using the
-        native gate set.
+        native model.
     
     Returns
     -------
@@ -453,7 +453,7 @@ def fidpairs_to_pauli_fidpairs(fidpairsList, pauliBasisDicts, nQubits):
     Parameters
     ----------
     fidpairsList : list
-        A list whose elements are 2-tuples of :class:`GateString` objects.
+        A list whose elements are 2-tuples of :class:`OpString` objects.
 
     pauliBasisDicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries 
@@ -462,7 +462,7 @@ def fidpairs_to_pauli_fidpairs(fidpairsList, pauliBasisDicts, nQubits):
         dictionary's format.
         
     nQubits : int
-        The number of qubits.  Needed because :class:`GateString`
+        The number of qubits.  Needed because :class:`OpString`
         objects don't contain this information.
         
     Returns
@@ -488,11 +488,11 @@ def fidpairs_to_pauli_fidpairs(fidpairsList, pauliBasisDicts, nQubits):
     rev_prepDict = { v:k for k,v in prepDict.items() }
     rev_measDict = { v:k for k,v in measDict.items() }
 
-    def convert(gstr, rev_pauliDict):
+    def convert(opstr, rev_pauliDict):
         #Get gatenames_per_qubit (keys = sslbls, vals = lists of gatenames)
-        #print("DB: Converting ",gstr)
+        #print("DB: Converting ",opstr)
         gatenames_per_qubit = _collections.defaultdict(list)
-        for glbl in gstr:
+        for glbl in opstr:
             for c in glbl.components: # in case of parallel labels
                 assert(len(c.sslbls) == 1)
                 assert(isinstance(c.sslbls[0],int))
@@ -523,20 +523,20 @@ def fidpairs_to_pauli_fidpairs(fidpairsList, pauliBasisDicts, nQubits):
 
     return ret
 
-def determine_paulidicts(gateset):
+def determine_paulidicts(model):
     """
     Intelligently determine preparation and measurement Pauli basis 
-    dictionaries from a :class:`GateSet`.
+    dictionaries from a :class:`Model`.
 
     The returned dictionaries are required for various parts of idle tomography,
-    as they bridge the native gate set's gates to the "Pauli basis language"
+    as they bridge the native model's gates to the "Pauli basis language"
     used in idle tomography.
 
     Parameters
     ----------
-    gateset : GateSet
-        The gate set which defines the available preparation, measurement, and
-        gate operations.  It is assumed that `gateset`'s operation are expressed
+    model : Model
+        The model which defines the available preparation, measurement, and
+        operations.  It is assumed that `model`'s operation are expressed
         in a Pauli-product basis.
 
     Returns
@@ -546,11 +546,11 @@ def determine_paulidicts(gateset):
         dictionaries.  If unsuccessful, None.
     """
     #TODO: check that basis == "pp" or something similar?
-    #Note: this routine just punts if gateset's gate labels are just strings.
+    #Note: this routine just punts if model's operation labels are just strings.
 
     #First, check that spam is prep/meas in Z basis (just check prep for now):
-    prepLbls = list(gateset.preps.keys())
-    prep = gateset.preps[prepLbls[0]] # just take the first one (usually there's only one anyway)
+    prepLbls = list(model.preps.keys())
+    prep = model.preps[prepLbls[0]] # just take the first one (usually there's only one anyway)
     if isinstance(prep, _objs.ComputationalSPAMVec):
         if any([b!=0 for b in prep._zvals]): return None
     elif isinstance(prep, _objs.LindbladParameterizedSPAMVec):
@@ -558,27 +558,27 @@ def determine_paulidicts(gateset):
             if any([b!=0 for b in prep.state_vec._zvals]): return None
         if any([abs(v)>1e-6 for v in prep.to_vector()]): return None
     else:
-        nQubits = int(round(_np.log2(gateset.dim)/2))
-        cmp = _objs.ComputationalSPAMVec([0]*nQubits, gateset._evotype).todense()
+        nQubits = int(round(_np.log2(model.dim)/2))
+        cmp = _objs.ComputationalSPAMVec([0]*nQubits, model._evotype).todense()
         if _np.linalg.norm(prep.todense() - cmp) > 1e-6: return None
         
 
     def extract_action(g, cur_sslbls, ql):
         """ Note: assumes cur_sslbs is just a list of labels (of first "sector"
             of a real StateSpaceLabels struct) """
-        if isinstance(g,_objs.ComposedGateMap):
+        if isinstance(g,_objs.ComposedOpMap):
             action = _np.identity(4,'d')
-            for fg in g.factorgates:
+            for fg in g.factorops:
                 action = _np.dot(extract_action(fg,cur_sslbls,ql), action)
             return action
 
-        if isinstance(g,_objs.EmbeddedGateMap):
-            #Note: an embedded gate need not use the *same* state space labels as the gateset
+        if isinstance(g,_objs.EmbeddedOpMap):
+            #Note: an embedded gate need not use the *same* state space labels as the model
             lbls = [ cur_sslbls[g.stateSpaceLabels.labels[0].index(locLbl)] for locLbl in g.targetLabels] 
               # TODO: add to StateSpaceLabels functionality to make sure two are compatible, and to translate between them, & make sub-labels?
-            return extract_action(g.embedded_gate, lbls, ql)
+            return extract_action(g.embedded_op, lbls, ql)
 
-        # StaticGate, LindbladParameterizedGate, other gates...
+        # StaticOp, LindbladParameterizedOp, other gates...
         if len(cur_sslbls) == 1 and cur_sslbls[0] == ql:
             mx = g.todense()
             assert(mx.shape == (4,4))
@@ -589,23 +589,23 @@ def determine_paulidicts(gateset):
                 # acts as identity on some other space - this is ok
                 return _np.identity(4,'d')
             else:
-                raise ValueError("Gate acts nontrivially on a space other than that in its label!")
+                raise ValueError("LinearOperator acts nontrivially on a space other than that in its label!")
     
     #Get several standard 1-qubit pi/2 rotations in Pauli basis:
     pp = _objs.Basis('pp',2)
-    Gx = _cnst.basis_build_gate([('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static").todense()
-    Gy = _cnst.basis_build_gate([('Q0',)], "Y(pi/2,Q0)", basis=pp, parameterization="static").todense()
+    Gx = _cnst.basis_build_operation([('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static").todense()
+    Gy = _cnst.basis_build_operation([('Q0',)], "Y(pi/2,Q0)", basis=pp, parameterization="static").todense()
 
     #try to find 1-qubit pi/2 rotations
     found = {}
-    for gl,gate in gateset.gates.items():
+    for gl,gate in model.operations.items():
         if gl.sslbls is None or len(gl.sslbls) != 1:
             continue # skip gates that don't have 1Q-like labels
         qubit_label = gl.sslbls[0] # the qubit this gate is supposed to act on
         try:
-            assert(len(gateset.stateSpaceLabels.labels) == 1), "Assumes a single state space sector"
+            assert(len(model.stateSpaceLabels.labels) == 1), "Assumes a single state space sector"
             action_on_qubit = extract_action(gate, 
-                                             gateset.stateSpaceLabels.labels[0],
+                                             model.stateSpaceLabels.labels[0],
                                              qubit_label)
         except ValueError:
             continue #skip gates that we can't extract action from
@@ -658,8 +658,8 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
     maxweight : int, optional
         The maximum weight of errors to consider.
 
-    idle_string : GateString-like, optional
-        A GateString or tuple of gate labels that represents the idle
+    idle_string : OpString-like, optional
+        A OpString or tuple of operation labels that represents the idle
         gate being characterized by idle tomography.
 
     include_hamiltonian, include_stochastic, include_affine : bool, optional
@@ -678,14 +678,14 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
         A 3-tuple of "+" or "-" strings indicating which sign for preparing
         or measuring in the X, Y, and Z bases is preferable.  Usually one
         orientation if preferred because it's easier to achieve using the
-        native gate set.  Additionally, the special (and default) value "auto"
+        native model.  Additionally, the special (and default) value "auto"
         may be used, in which case :function:`preferred_signs_from_paulidict`
         is used to choose preferred signs based on `pauliBasisDicts`.
 
     Returns
     -------
     list
-        A list of :class:`GateString` objects.
+        A list of :class:`OpString` objects.
     """
 
     prepDict,measDict = pauliBasisDicts
@@ -694,15 +694,15 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
     if preferred_meas_basis_signs == "auto":
         preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
         
-    GiStr = _objs.GateString( idle_string )
+    GiStr = _objs.OpString( idle_string )
 
     pauli_fidpairs = idle_tomography_fidpairs(
         nQubits, maxweight, include_hamiltonian, include_stochastic,
         include_affine, ham_tmpl, preferred_prep_basis_signs,
         preferred_meas_basis_signs)
 
-    fidpairs = [ (x.to_gatestring(prepDict),y.to_gatestring(measDict))
-                 for x,y in pauli_fidpairs ] # e.g. convert ("XY","ZX") to tuple of GateStrings
+    fidpairs = [ (x.to_circuit(prepDict),y.to_circuit(measDict))
+                 for x,y in pauli_fidpairs ] # e.g. convert ("XY","ZX") to tuple of Circuits
 
     listOfExperiments = []
     for prepFid,measFid in fidpairs: #list of fidpairs / configs (a prep/meas that gets I^L placed btwn it)
@@ -737,8 +737,8 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, idle_str
         :function:`preferred_signs_from_paulidict` for details on each
         dictionary's format.
 
-    idle_string : GateString
-        The GateString representing the idle operation being characterized.
+    idle_string : OpString
+        The OpString representing the idle operation being characterized.
 
     outcome : NQOutcome
         The outcome being tracked.
@@ -761,15 +761,15 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, idle_str
     pauli_prep, pauli_meas = pauli_fidpair
 
     prepDict,measDict = pauliBasisDicts
-    prepFid = pauli_prep.to_gatestring(prepDict)
-    measFid = pauli_meas.to_gatestring(measDict)
+    prepFid = pauli_prep.to_circuit(prepDict)
+    measFid = pauli_meas.to_circuit(measDict)
     
     #Note on weights: 
     # data point with frequency f and N samples should be weighted w/ sqrt(N)/sqrt(f*(1-f))
     # but in case f is 0 or 1 we use proxy f' by adding a dummy 0 and 1 count.
-    def freq_and_weight(gatestring,outcome):
-        """Get the frequency, weight, and errobar for a ptic gatestring"""
-        cnts = dataset[gatestring].counts # a normal dict
+    def freq_and_weight(circuit,outcome):
+        """Get the frequency, weight, and errobar for a ptic circuit"""
+        cnts = dataset[circuit].counts # a normal dict
         total = sum(cnts.values())
         f = cnts.get((outcome.rep,),0) / total # (py3 division) NOTE: outcomes are actually 1-tuples 
         fp = (cnts.get((outcome.rep,),0)+1)/ (total+2) # Note: can't == 1
@@ -780,8 +780,8 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, idle_str
     #Get data to fit and weights to use in fitting
     data_to_fit = []; wts = []; errbars = []
     for L in maxLengths:
-        gstr = prepFid + idle_string*L + measFid
-        f,wt,err = freq_and_weight(gstr, outcome)
+        opstr = prepFid + idle_string*L + measFid
+        f,wt,err = freq_and_weight(opstr, outcome)
         data_to_fit.append( f )
         wts.append( wt )
         errbars.append( err )
@@ -821,8 +821,8 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
         :function:`preferred_signs_from_paulidict` for details on each
         dictionary's format.
 
-    idle_string : GateString
-        The GateString representing the idle operation being characterized.
+    idle_string : OpString
+        The OpString representing the idle operation being characterized.
 
     observable : NQPauliOp
         The observable whose expectation value is being tracked.
@@ -845,8 +845,8 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
     pauli_prep, pauli_meas = pauli_fidpair
 
     prepDict,measDict = pauliBasisDicts
-    prepFid = pauli_prep.to_gatestring(prepDict)
-    measFid = pauli_meas.to_gatestring(measDict)
+    prepFid = pauli_prep.to_circuit(prepDict)
+    measFid = pauli_meas.to_circuit(measDict)
     
     #observable is always equal to pauli_meas (up to signs) with all but 1 or 2
     # (maxErrWt in general) of it's elements replaced with 'I', essentially just
@@ -856,9 +856,9 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
     N = len(observable) # number of qubits
     minus_sign = _np.prod([pauli_meas.signs[i] for i in obs_indices])
     
-    def unsigned_exptn_and_weight(gatestring, observed_indices):
+    def unsigned_exptn_and_weight(circuit, observed_indices):
         #compute expectation value of observable
-        drow = dataset[gatestring] # dataset row
+        drow = dataset[circuit] # dataset row
         total = drow.total
 
         # <Z> = 0 count - 1 count (if measFid sign is +1, otherwise reversed via minus_sign)
@@ -892,8 +892,8 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
     #Get data to fit and weights to use in fitting
     data_to_fit = []; wts = []; errbars = []
     for L in maxLengths:
-        gstr = prepFid + idle_string*L + measFid
-        exptn,wt,err = unsigned_exptn_and_weight(gstr, obs_indices)
+        opstr = prepFid + idle_string*L + measFid
+        exptn,wt,err = unsigned_exptn_and_weight(opstr, obs_indices)
         data_to_fit.append( minus_sign * exptn )
         wts.append( wt )
         errbars.append( err )
@@ -946,8 +946,8 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
     maxweight : int, optional
         The maximum weight of errors to consider.
 
-    idle_string : GateString-like, optional
-        A GateString or tuple of gate labels that represents the idle
+    idle_string : OpString-like, optional
+        A OpString or tuple of operation labels that represents the idle
         gate being characterized by idle tomography.
 
     include_hamiltonian, include_stochastic, include_affine : {True,False,"auto"}
@@ -986,7 +986,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
         advancedOptions = {}
 
     prepDict,measDict = pauliBasisDicts
-    GiStr = _objs.GateString( idle_string )
+    GiStr = _objs.OpString( idle_string )
 
     jacmode = advancedOptions.get("jacobian mode", "separate")
     sto_aff_jac = None; sto_aff_obs_err_rates = None

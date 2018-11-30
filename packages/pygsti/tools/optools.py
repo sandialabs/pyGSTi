@@ -1,4 +1,4 @@
-""" Utility functions operating on gate matrices """
+""" Utility functions operating on operation matrices """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -46,7 +46,7 @@ def fidelity(A, B):
 
     To compute process fidelity, pass this function the
     Choi matrices of the two processes, or just call
-    :function:`entanglement_fidelity` with the gate matrices.
+    :function:`entanglement_fidelity` with the operation matrices.
 
     Parameters
     ----------
@@ -351,12 +351,12 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
 
 def jtracedist(A, B, mxBasis=None): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
     """
-    Compute the Jamiolkowski trace distance between gate matrices A and B,
+    Compute the Jamiolkowski trace distance between operation matrices A and B,
     given by:
 
       D = 0.5 * Tr( sqrt{ (J(A)-J(B))^2 } )
 
-    where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
+    where J(.) is the Jamiolkowski isomorphism map that maps a operation matrix
     to it's corresponding Choi Matrix.
 
     Parameters
@@ -383,7 +383,7 @@ def entanglement_fidelity(A, B, mxBasis=None):
 
       F = Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
 
-    where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
+    where J(.) is the Jamiolkowski isomorphism map that maps a operation matrix
     to it's corresponding Choi Matrix.
 
     Parameters
@@ -484,7 +484,7 @@ def entanglement_infidelity(A, B, mxBasis=None):
 
       EI = 1 - Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
 
-    where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
+    where J(.) is the Jamiolkowski isomorphism map that maps a operation matrix
     to it's corresponding Choi Matrix.
 
     Parameters
@@ -548,25 +548,25 @@ def unitarity(A, mxBasis="gm"):
     u = _np.trace(_np.dot(_np.conj(_np.transpose(unital)),unital)) / (d**2-1)
     return u
 
-def fidelity_upper_bound(gateMx):
+def fidelity_upper_bound(operationMx):
     """
     Get an upper bound on the fidelity of the given
-      gate matrix with any unitary gate matrix.
+      operation matrix with any unitary operation matrix.
 
     The closeness of the result to one tells
-     how "unitary" the action of gateMx is.
+     how "unitary" the action of operationMx is.
 
     Parameters
     ----------
-    gateMx : numpy array
-        The gate matrix to act on.
+    operationMx : numpy array
+        The operation matrix to act on.
 
     Returns
     -------
     float
-        The resulting upper bound on fidelity(gateMx, anyUnitaryGateMx)
+        The resulting upper bound on fidelity(operationMx, anyUnitaryGateMx)
     """
-    choi = _jam.jamiolkowski_iso(gateMx, choiMxBasis="std")
+    choi = _jam.jamiolkowski_iso(operationMx, choiMxBasis="std")
     choi_evals,choi_evecs = _np.linalg.eig(choi)
     maxF_direct = max([_np.sqrt(max(ev.real,0.0)) for ev in choi_evals]) ** 2
 
@@ -586,7 +586,7 @@ def fidelity_upper_bound(gateMx):
 
         #Uncomment for debugging
         #if abs(maxF - maxF_direct) >= 1e-6:
-        #    print "DEBUG: gateMx:\n",gateMx
+        #    print "DEBUG: operationMx:\n",operationMx
         #    print "DEBUG: choiMx:\n",choi
         #    print "DEBUG choi_evals = ",choi_evals, " iMax = ",iMax
         #    #print "DEBUG: J = \n", closestUnitaryJmx
@@ -598,8 +598,8 @@ def fidelity_upper_bound(gateMx):
     else:
         maxF = maxF_direct # case when maxF is nan, due to scipy sqrtm function being buggy - just use direct F
 
-    closestGateMx = _jam.jamiolkowski_iso_inv( closestJmx, choiMxBasis="std" )
-    return maxF, closestGateMx
+    closestOpMx = _jam.jamiolkowski_iso_inv( closestJmx, choiMxBasis="std" )
+    return maxF, closestOpMx
 
     #closestU_evals, closestU_evecs = _np.linalg.eig(closestUnitaryGateMx)
     #print "DEBUG: U = \n", closestUnitaryGateMx
@@ -607,9 +607,9 @@ def fidelity_upper_bound(gateMx):
     #print "DEBUG:  evecs = \n",closestU_evecs
 
 
-def get_povm_map(gateset, povmlbl):
+def get_povm_map(model, povmlbl):
     """
-    Constructs a gate-like quantity for the POVM within `gateset`.
+    Constructs a gate-like quantity for the POVM within `model`.
 
     This is done by embedding the `k`-outcome classical output space of the POVM
     in the Hilbert-Schmidt space of `k` by `k` density matrices by placing the 
@@ -619,8 +619,8 @@ def get_povm_map(gateset, povmlbl):
 
     Parameters
     ----------
-    gateset : GateSet
-        The gateset supplying the POVM effect vectors and the basis those
+    model : Model
+        The model supplying the POVM effect vectors and the basis those
         vectors are in.
 
     povmlbl : str
@@ -629,12 +629,12 @@ def get_povm_map(gateset, povmlbl):
     Returns
     -------
     numpy.ndarray
-        The matrix of the "POVM map" in the `gateset.basis` basis.
+        The matrix of the "POVM map" in the `model.basis` basis.
     """
-    povmVectors = [v.todense()[:,None] for v in gateset.povms[povmlbl].values()]
-    d = int(round(_np.sqrt(gateset.dim))) # density matrix is dxd
+    povmVectors = [v.todense()[:,None] for v in model.povms[povmlbl].values()]
+    d = int(round(_np.sqrt(model.dim))) # density matrix is dxd
     nV = len(povmVectors)
-    assert(d**2 == gateset.dim), "GateSet dimension (%d) is not a perfect square!" % gateset.dim
+    assert(d**2 == model.dim), "Model dimension (%d) is not a perfect square!" % model.dim
     #assert( nV**2 == d ), "Can only compute POVM metrics when num of effects == H space dimension"
     #   I don't think above assert is needed - should work in general (Robin?)
     povm_mx = _np.concatenate( povmVectors, axis=1 ).T # "povm map" ( B(H) -> S_k )
@@ -643,20 +643,20 @@ def get_povm_map(gateset, povmlbl):
     for i in range(nV):
         Sk_embedding_in_std[:,i] = _mut(i,i,d).flatten()
 
-    std_to_basis = _bt.transform_matrix("std", gateset.basis, d)
+    std_to_basis = _bt.transform_matrix("std", model.basis, d)
     assert(std_to_basis.shape == (d**2,d**2))
 
     return _np.dot(std_to_basis, _np.dot(Sk_embedding_in_std, povm_mx))
 
 
-def povm_fidelity(gateset, targetGateset, povmlbl):
+def povm_fidelity(model, targetModel, povmlbl):
     """
     Computes the process (entanglement) fidelity between POVM maps.
 
     Parameters
     ----------
-    gateset, targetGateset : GateSet
-        Gate sets containing the two POVMs to compare.
+    model, targetModel : Model
+        LinearOperator sets containing the two POVMs to compare.
 
     povmlbl : str
         The POVM label
@@ -665,19 +665,19 @@ def povm_fidelity(gateset, targetGateset, povmlbl):
     -------
     float
     """
-    povm_mx = get_povm_map(gateset, povmlbl)
-    target_povm_mx = get_povm_map(targetGateset, povmlbl)
-    return entanglement_fidelity(povm_mx, target_povm_mx, targetGateset.basis)
+    povm_mx = get_povm_map(model, povmlbl)
+    target_povm_mx = get_povm_map(targetModel, povmlbl)
+    return entanglement_fidelity(povm_mx, target_povm_mx, targetModel.basis)
 
 
-def povm_jtracedist(gateset, targetGateset, povmlbl):
+def povm_jtracedist(model, targetModel, povmlbl):
     """
     Computes the Jamiolkowski trace distance between POVM maps using :func:`jtracedist`.
 
     Parameters
     ----------
-    gateset, targetGateset : GateSet
-        Gate sets containing the two POVMs to compare.
+    model, targetModel : Model
+        LinearOperator sets containing the two POVMs to compare.
 
     povmlbl : str
         The POVM label
@@ -686,19 +686,19 @@ def povm_jtracedist(gateset, targetGateset, povmlbl):
     -------
     float
     """
-    povm_mx = get_povm_map(gateset, povmlbl)
-    target_povm_mx = get_povm_map(targetGateset, povmlbl)
-    return jtracedist(povm_mx, target_povm_mx, targetGateset.basis)
+    povm_mx = get_povm_map(model, povmlbl)
+    target_povm_mx = get_povm_map(targetModel, povmlbl)
+    return jtracedist(povm_mx, target_povm_mx, targetModel.basis)
 
 
-def povm_diamonddist(gateset, targetGateset, povmlbl):
+def povm_diamonddist(model, targetModel, povmlbl):
     """
     Computes the diamond distance between POVM maps using :func:`diamonddist`.
 
     Parameters
     ----------
-    gateset, targetGateset : GateSet
-        Gate sets containing the two POVMs to compare.
+    model, targetModel : Model
+        LinearOperator sets containing the two POVMs to compare.
 
     povmlbl : str
         The POVM label
@@ -707,23 +707,23 @@ def povm_diamonddist(gateset, targetGateset, povmlbl):
     -------
     float
     """
-    povm_mx = get_povm_map(gateset, povmlbl)
-    target_povm_mx = get_povm_map(targetGateset, povmlbl)
-    return diamonddist(povm_mx, target_povm_mx, targetGateset.basis)
+    povm_mx = get_povm_map(model, povmlbl)
+    target_povm_mx = get_povm_map(targetModel, povmlbl)
+    return diamonddist(povm_mx, target_povm_mx, targetModel.basis)
 
 
-#decompose gate matrix into axis of rotation, etc
-def decompose_gate_matrix(gateMx):
+#decompose operation matrix into axis of rotation, etc
+def decompose_gate_matrix(operationMx):
     """
-    Compute how the action of a gate matrix can be
+    Compute how the action of a operation matrix can be
     is decomposed into fixed points, axes of rotation,
     angles of rotation, and decays.  Also determines
     whether a gate appears to be valid and/or unitary.
 
     Parameters
     ----------
-    gateMx : numpy array
-        The gate matrix to act on.
+    operationMx : numpy array
+        The operation matrix to act on.
 
     Returns
     -------
@@ -733,7 +733,7 @@ def decompose_gate_matrix(gateMx):
          'isValid' : bool
              whether decomposition succeeded
          'isUnitary' : bool
-             whether gateMx describes unitary action
+             whether operationMx describes unitary action
          'fixed point' : numpy array
              the fixed point of the action
          'axis of rotation' : numpy array or nan
@@ -750,50 +750,50 @@ def decompose_gate_matrix(gateMx):
              angle of rotation in units of pi radians
     """
 
-    gate_evals,gate_evecs = _np.linalg.eig(_np.asarray(gateMx))
+    op_evals,op_evecs = _np.linalg.eig(_np.asarray(operationMx))
     # fp_eigenvec = None
     # aor_eval = None; aor_eigenvec = None
     # ra_eval  = None; ra1_eigenvec = None; ra2_eigenvec = None
 
     TOL = 1e-4 #1e-7
 
-    unit_eval_indices = [ i for (i,ev) in enumerate(gate_evals) if abs(ev - 1.0) < TOL ]
-    #unit_eval_indices = [ i for (i,ev) in enumerate(gate_evals) if ev > (1.0-TOL) ]
+    unit_eval_indices = [ i for (i,ev) in enumerate(op_evals) if abs(ev - 1.0) < TOL ]
+    #unit_eval_indices = [ i for (i,ev) in enumerate(op_evals) if ev > (1.0-TOL) ]
 
     conjpair_eval_indices = [ ]
-    for (i,ev) in enumerate(gate_evals):
+    for (i,ev) in enumerate(op_evals):
         if i in unit_eval_indices: continue #don't include the unit eigenvalues in the conjugate pair count
         if any( [ (i in conjpair) for conjpair in conjpair_eval_indices] ): continue #don't include existing conjugate pairs
-        for (j,ev2) in enumerate(gate_evals[i+1:]):
+        for (j,ev2) in enumerate(op_evals[i+1:]):
             if abs(ev - _np.conjugate(ev2)) < TOL:
                 conjpair_eval_indices.append( (i,j+(i+1)) )
                 break #don't pair i-th eigenvalue with any other (pairs should be disjoint)
 
     real_eval_indices = []     #indices of real eigenvalues that are not units or a part of any conjugate pair
     complex_eval_indices = []  #indices of complex eigenvalues that are not units or a part of any conjugate pair
-    for (i,ev) in enumerate(gate_evals):
+    for (i,ev) in enumerate(op_evals):
         if i in unit_eval_indices: continue #don't include the unit eigenvalues
         if any( [ (i in conjpair) for conjpair in conjpair_eval_indices] ): continue #don't include the conjugate pairs
         if abs(ev.imag) < TOL: real_eval_indices.append(i)
         else: complex_eval_indices.append(i)
 
     #if len(real_eval_indices + unit_eval_indices) > 0:
-    #    max_real_eval = max([ gate_evals[i] for i in real_eval_indices + unit_eval_indices])
-    #    min_real_eval = min([ gate_evals[i] for i in real_eval_indices + unit_eval_indices])
+    #    max_real_eval = max([ op_evals[i] for i in real_eval_indices + unit_eval_indices])
+    #    min_real_eval = min([ op_evals[i] for i in real_eval_indices + unit_eval_indices])
     #else:
     #    max_real_eval = _np.nan
     #    min_real_eval = _np.nan
     #
-    #fixed_points = [ gate_evecs[:,i] for i in unit_eval_indices ]
-    #real_eval_axes = [ gate_evecs[:,i] for i in real_eval_indices ]
-    #conjpair_eval_axes = [ (gate_evecs[:,i],gate_evecs[:,j]) for (i,j) in conjpair_eval_indices ]
+    #fixed_points = [ op_evecs[:,i] for i in unit_eval_indices ]
+    #real_eval_axes = [ op_evecs[:,i] for i in real_eval_indices ]
+    #conjpair_eval_axes = [ (op_evecs[:,i],op_evecs[:,j]) for (i,j) in conjpair_eval_indices ]
     #
     #ret = { }
 
-    nQubits = _np.log2(gateMx.shape[0]) / 2
+    nQubits = _np.log2(operationMx.shape[0]) / 2
     if nQubits == 1:
         #print "DEBUG: 1 qubit decomp --------------------------"
-        #print "   --> evals = ", gate_evals
+        #print "   --> evals = ", op_evals
         #print "   --> unit eval indices = ", unit_eval_indices
         #print "   --> conj eval indices = ", conjpair_eval_indices
         #print "   --> unpaired real eval indices = ", real_eval_indices
@@ -802,11 +802,11 @@ def decompose_gate_matrix(gateMx):
         #  and break the one with the largest (real) value into two unpaired real evals.
         if len(conjpair_eval_indices) == 2:
             iToBreak = None
-            if abs(_np.imag( gate_evals[ conjpair_eval_indices[0][0] ] )) < TOL and \
-               abs(_np.imag( gate_evals[ conjpair_eval_indices[1][0] ] )) < TOL:
+            if abs(_np.imag( op_evals[ conjpair_eval_indices[0][0] ] )) < TOL and \
+               abs(_np.imag( op_evals[ conjpair_eval_indices[1][0] ] )) < TOL:
                 iToBreak = _np.argmax( [_np.real(conjpair_eval_indices[0][0]), _np.real(conjpair_eval_indices[1][0])] )
-            elif abs(_np.imag( gate_evals[ conjpair_eval_indices[0][0] ] )) < TOL: iToBreak = 0
-            elif abs(_np.imag( gate_evals[ conjpair_eval_indices[1][0] ] )) < TOL: iToBreak = 1
+            elif abs(_np.imag( op_evals[ conjpair_eval_indices[0][0] ] )) < TOL: iToBreak = 0
+            elif abs(_np.imag( op_evals[ conjpair_eval_indices[1][0] ] )) < TOL: iToBreak = 1
 
             if iToBreak is not None:
                 real_eval_indices.append( conjpair_eval_indices[iToBreak][0])
@@ -820,7 +820,7 @@ def decompose_gate_matrix(gateMx):
             #Find linear least squares solution within possibly degenerate unit-eigenvalue eigenspace
             # of eigenvector closest to identity density mx (the desired fixed point), then orthogonalize
             # the remaining eigenvectors w.r.t this one.
-            A = _np.take(gate_evecs, unit_eval_indices, axis=1)
+            A = _np.take(op_evecs, unit_eval_indices, axis=1)
             b = _np.array( [[1],[0],[0],[0]], 'd') #identity density mx
             x = _np.dot( _np.linalg.pinv( _np.dot(A.T,A) ), _np.dot(A.T, b))
             fixedPtVec = _np.dot(A,x); #fixedPtVec / _np.linalg.norm(fixedPtVec)
@@ -829,22 +829,22 @@ def decompose_gate_matrix(gateMx):
             iLargestContrib = _np.argmax(_np.abs(x)) #index of gate eigenvector which contributed the most
             for ii,i in enumerate(unit_eval_indices):
                 if ii == iLargestContrib:
-                    gate_evecs[:,i] = fixedPtVec
+                    op_evecs[:,i] = fixedPtVec
                     iFixedPt = i
                 else:
-                    gate_evecs[:,i] = gate_evecs[:,i] - _np.vdot(fixedPtVec,gate_evecs[:,i])*fixedPtVec
+                    op_evecs[:,i] = op_evecs[:,i] - _np.vdot(fixedPtVec,op_evecs[:,i])*fixedPtVec
                     for jj,j in enumerate(unit_eval_indices[:ii]):
                         if jj == iLargestContrib: continue
-                        gate_evecs[:,i] = gate_evecs[:,i] - _np.vdot(gate_evecs[:,j],gate_evecs[:,i])*gate_evecs[:,j]
-                    gate_evecs[:,i] /= _np.linalg.norm(gate_evecs[:,i])
+                        op_evecs[:,i] = op_evecs[:,i] - _np.vdot(op_evecs[:,j],op_evecs[:,i])*op_evecs[:,j]
+                    op_evecs[:,i] /= _np.linalg.norm(op_evecs[:,i])
 
         elif len(real_eval_indices) > 0:
             # just take eigenvector corresponding to the largest real eigenvalue?
-            #iFixedPt = real_eval_indices[ _np.argmax( [ gate_evals[i] for i in real_eval_indices ] ) ]
+            #iFixedPt = real_eval_indices[ _np.argmax( [ op_evals[i] for i in real_eval_indices ] ) ]
 
             # ...OR take eigenvector corresponding to a real unpaired eigenvalue closest to identity:
             idmx = _np.array( [[1],[0],[0],[0]], 'd') #identity density mx
-            iFixedPt = real_eval_indices[ _np.argmin( [ _np.linalg.norm(gate_evecs[i]-idmx) for i in real_eval_indices ] ) ]
+            iFixedPt = real_eval_indices[ _np.argmin( [ _np.linalg.norm(op_evecs[i]-idmx) for i in real_eval_indices ] ) ]
 
         else:
             #No unit or real eigenvalues => two complex conjugate pairs or unpaired complex evals --> bail out
@@ -856,7 +856,7 @@ def decompose_gate_matrix(gateMx):
         del indsToConsider[ indsToConsider.index(iFixedPt) ] #don't consider fixed pt evec
 
         if len(indsToConsider) > 0:
-            iRotAxis = indsToConsider[ _np.argmax( [ gate_evals[i] for i in indsToConsider ] ) ]
+            iRotAxis = indsToConsider[ _np.argmax( [ op_evals[i] for i in indsToConsider ] ) ]
         else:
             #No unit or real eigenvalues => an unpaired complex eval --> bail out
             return { 'isValid': False, 'isUnitary': False, 'msg': "Unpaired complex eval." }
@@ -865,20 +865,20 @@ def decompose_gate_matrix(gateMx):
         inds = list(range(4))
         del inds[ inds.index( iFixedPt ) ]
         del inds[ inds.index( iRotAxis ) ]
-        if abs( gate_evals[inds[0]] - _np.conjugate(gate_evals[inds[1]])) < TOL:
+        if abs( op_evals[inds[0]] - _np.conjugate(op_evals[inds[1]])) < TOL:
             iConjPair1,iConjPair2 = inds
         else:
             return { 'isValid': False, 'isUnitary': False, 'msg': "No conjugate pair for rotn." }
 
         return { 'isValid': True,
                  'isUnitary': bool(len(unit_eval_indices) >= 2),
-                 'fixed point': gate_evecs[:,iFixedPt],
-                 'axis of rotation': gate_evecs[:,iRotAxis],
-                 'rotating axis 1': gate_evecs[:,iConjPair1],
-                 'rotating axis 2': gate_evecs[:,iConjPair2],
-                 'decay of diagonal rotation terms': 1.0 - abs(gate_evals[iRotAxis]),
-                 'decay of off diagonal rotation terms': 1.0 - abs(gate_evals[iConjPair1]),
-                 'pi rotations': _np.angle(gate_evals[iConjPair1])/_np.pi,
+                 'fixed point': op_evecs[:,iFixedPt],
+                 'axis of rotation': op_evecs[:,iRotAxis],
+                 'rotating axis 1': op_evecs[:,iConjPair1],
+                 'rotating axis 2': op_evecs[:,iConjPair2],
+                 'decay of diagonal rotation terms': 1.0 - abs(op_evals[iRotAxis]),
+                 'decay of off diagonal rotation terms': 1.0 - abs(op_evals[iConjPair1]),
+                 'pi rotations': _np.angle(op_evals[iConjPair1])/_np.pi,
                  'msg': "Success" }
 
     else:
@@ -1068,21 +1068,21 @@ def spam_error_generator(spamvec, target_spamvec, mxBasis, typ="logGTi"):
 
 
 
-def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
+def error_generator(gate, target_op, mxBasis, typ="logG-logT"):
     """
     Construct the error generator from a gate and its target.
 
     Computes the value of the error generator given by
-    errgen = log( inv(target_gate) * gate ), so that
-    gate = target_gate * exp(errgen).
+    errgen = log( inv(target_op) * gate ), so that
+    gate = target_op * exp(errgen).
 
     Parameters
     ----------
     gate : ndarray
-      The gate matrix
+      The operation matrix
 
-    target_gate : ndarray
-      The target gate matrix
+    target_op : ndarray
+      The target operation matrix
 
     mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The source and destination basis, respectively.  Allowed
@@ -1092,9 +1092,9 @@ def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
     typ : {"logG-logT", "logTiG", "logGTi"}
       The type of error generator to compute.  Allowed values are:
       
-      - "logG-logT" : errgen = log(gate) - log(target_gate)
-      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
-      - "logGTi" : errgen = log( dot(gate,inv(target_gate)) )
+      - "logG-logT" : errgen = log(gate) - log(target_op)
+      - "logTiG" : errgen = log( dot(inv(target_op), gate) )
+      - "logGTi" : errgen = log( dot(gate,inv(target_op)) )
 
     Returns
     -------
@@ -1105,9 +1105,9 @@ def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
     
     if typ == "logG-logT":
         try:
-            logT = _mt.unitary_superoperator_matrix_log(target_gate, mxBasis)
+            logT = _mt.unitary_superoperator_matrix_log(target_op, mxBasis)
         except AssertionError: #if not unitary, fall back to just taking the real log
-            logT = _mt.real_matrix_log(target_gate, "raise", TOL) #make a fuss if this can't be done
+            logT = _mt.real_matrix_log(target_op, "raise", TOL) #make a fuss if this can't be done
         logG = _mt.approximate_matrix_log(gate, logT)
 
         # Both logG and logT *should* be real, so we just take the difference.
@@ -1122,31 +1122,31 @@ def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
                          "the 'logTiG' or 'logGTi' generator instead?")
 
     elif typ == "logTiG":
-        target_gate_inv = _spl.inv(target_gate)
+        target_op_inv = _spl.inv(target_op)
         try:
-            errgen = _mt.near_identity_matrix_log(_np.dot(target_gate_inv,gate), TOL)
+            errgen = _mt.near_identity_matrix_log(_np.dot(target_op_inv,gate), TOL)
         except AssertionError: #not near the identity, fall back to the real log
             _warnings.warn(("Near-identity matrix log failed; falling back "
                             "to approximate log for logTiG error generator"))
-            errgen = _mt.real_matrix_log(_np.dot(target_gate_inv,gate), "warn", TOL)
+            errgen = _mt.real_matrix_log(_np.dot(target_op_inv,gate), "warn", TOL)
             
         if _np.linalg.norm(errgen.imag) > TOL:
             _warnings.warn("Falling back to approximate log for logTiG error generator")
-            errgen = _mt.approximate_matrix_log(_np.dot(target_gate_inv,gate),
+            errgen = _mt.approximate_matrix_log(_np.dot(target_op_inv,gate),
                                                 _np.zeros(gate.shape,'d'), TOL=TOL)
 
     elif typ == "logGTi":
-        target_gate_inv = _spl.inv(target_gate)
+        target_op_inv = _spl.inv(target_op)
         try:
-            errgen = _mt.near_identity_matrix_log(_np.dot(gate,target_gate_inv), TOL)
+            errgen = _mt.near_identity_matrix_log(_np.dot(gate,target_op_inv), TOL)
         except AssertionError as e: #not near the identity, fall back to the real log
             _warnings.warn(("Near-identity matrix log failed; falling back "
                             "to approximate log for logGTi error generator:\n%s") % str(e))
-            errgen = _mt.real_matrix_log(_np.dot(gate,target_gate_inv), "warn", TOL)
+            errgen = _mt.real_matrix_log(_np.dot(gate,target_op_inv), "warn", TOL)
             
         if _np.linalg.norm(errgen.imag) > TOL:
             _warnings.warn("Falling back to approximate log for logGTi error generator")
-            errgen = _mt.approximate_matrix_log(_np.dot(gate,target_gate_inv),
+            errgen = _mt.approximate_matrix_log(_np.dot(gate,target_op_inv),
                                                 _np.zeros(gate.shape,'d'), TOL=TOL)
 
     else:
@@ -1160,40 +1160,40 @@ def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
 
 
 
-def gate_from_error_generator(error_gen, target_gate, typ="logG-logT"):
+def operation_from_error_generator(error_gen, target_op, typ="logG-logT"):
     """
     Construct a gate from an error generator and a target gate.
 
     Inverts the computation fone in :func:`error_generator` and
     returns the value of the gate given by
-    gate = target_gate * exp(error_gen).
+    gate = target_op * exp(error_gen).
 
     Parameters
     ----------
     error_gen : ndarray
       The error generator matrix
 
-    target_gate : ndarray
-      The target gate matrix
+    target_op : ndarray
+      The target operation matrix
 
     typ : {"logG-logT", "logTiG"}
       The type of error generator to compute.  Allowed values are:
       
-      - "logG-logT" : errgen = log(gate) - log(target_gate)
-      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+      - "logG-logT" : errgen = log(gate) - log(target_op)
+      - "logTiG" : errgen = log( dot(inv(target_op), gate) )
 
 
     Returns
     -------
     ndarray
-      The gate matrix.
+      The operation matrix.
     """
     if typ == "logG-logT":
-        return _spl.expm(error_gen + _spl.logm(target_gate))
+        return _spl.expm(error_gen + _spl.logm(target_op))
     elif typ == "logTiG":
-        return _np.dot(target_gate, _spl.expm(error_gen))
+        return _np.dot(target_op, _spl.expm(error_gen))
     elif typ == "logGTi":
-        return _np.dot(_spl.expm(error_gen), target_gate)
+        return _np.dot(_spl.expm(error_gen), target_op)
     else:
         raise ValueError("Invalid error-generator type: %s" % typ)
 
@@ -1346,7 +1346,7 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
 
     generators : numpy.ndarray
       Only returned when `return_generators == True`.  An array of shape
-      (#basis-els,gate_dim,gate_dim) such that  `generators[i]` is the
+      (#basis-els,op_dim,op_dim) such that  `generators[i]` is the
       generator corresponding to the i-th basis element.  Note 
       that these matricies are in the *std* (matrix unit) basis.
 
@@ -2147,7 +2147,7 @@ def lindblad_projections_to_paramvals(hamProjs, otherProjs, param_mode="cptp",
     to that for (real) parameter values correspond to projections for a valid
     CPTP gate (e.g. by parameterizing the Cholesky decomposition of `otherProjs`
     instead of otherProjs itself).  This function is closely related to
-    implementation details of the LindbladParameterizedGateMap class.
+    implementation details of the LindbladParameterizedOpMap class.
 
     Parameters
     ----------
@@ -2440,9 +2440,9 @@ def paramvals_to_lindblad_projections(paramvals, ham_basis_size,
 # calls to this one and unitary_to_processmx
 def rotation_gate_mx(r, mxBasis="gm"):
     """
-    Construct a rotation gate matrix.
+    Construct a rotation operation matrix.
 
-    Build the gate matrix corresponding to the unitary
+    Build the operation matrix corresponding to the unitary
     `exp(-i * (r[0]/2*PP[0]*sqrt(d) + r[1]/2*PP[1]*sqrt(d) + ...) )`
     where `PP' is the array of Pauli-product matrices 
     obtained via `pp_matrices(d)`, where `d = sqrt(len(r)+1)`.
@@ -2464,7 +2464,7 @@ def rotation_gate_mx(r, mxBasis="gm"):
     Returns
     -------
     numpy array
-        a d^2 x d^2 gate matrix in the specified basis.
+        a d^2 x d^2 operation matrix in the specified basis.
     """
     d = int(round(_np.sqrt(len(r)+1)))
     assert(d**2 == len(r)+1), "Invalid number of rotation angles"
@@ -2486,24 +2486,24 @@ def rotation_gate_mx(r, mxBasis="gm"):
 
 
 
-def project_gateset(gateset, targetGateset,
+def project_gateset(model, targetModel,
                     projectiontypes=('H','S','H+S','LND'),
                     genType="logG-logT"):
     """
-    Construct one or more new gatesets by projecting the error generator of
-    `gateset` onto some sub-space then reconstructing.
+    Construct one or more new models by projecting the error generator of
+    `model` onto some sub-space then reconstructing.
 
     Parameters
     ----------
-    gateset : GateSet
-        The gate set whose error generator should be projected.
+    model : Model
+        The model whose error generator should be projected.
 
-    targetGateset : GateSet
+    targetModel : Model
         The set of target (ideal) gates.
 
     projectiontypes : tuple of {'H','S','H+S','LND','LNDCP'}
         Which projections to use.  The length of this tuple gives the
-        number of `GateSet` objects returned.  Allowed values are:
+        number of `Model` objects returned.  Allowed values are:
 
         - 'H' = Hamiltonian errors
         - 'S' = Stochastic Pauli-channel errors
@@ -2514,42 +2514,42 @@ def project_gateset(gateset, targetGateset,
     genType : {"logG-logT", "logTiG"}
       The type of error generator to compute.  Allowed values are:
       
-      - "logG-logT" : errgen = log(gate) - log(target_gate)
-      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+      - "logG-logT" : errgen = log(gate) - log(target_op)
+      - "logTiG" : errgen = log( dot(inv(target_op), gate) )
 
     Returns
     -------
-    projected_gatesets : list of GateSets
-       Elements are projected versions of `gateset` corresponding to
+    projected_gatesets : list of Models
+       Elements are projected versions of `model` corresponding to
        the elements of `projectiontypes`.
 
     Nps : list of parameter counts
-       Integer parameter counts for each gate set in `projected_gatesets`.
+       Integer parameter counts for each model in `projected_gatesets`.
        Useful for computing the expected log-likelihood or chi2.
     """
     
-    gateLabels = list(gateset.gates.keys())  # gate labels
-    basis = gateset.basis
+    opLabels = list(model.operations.keys())  # operation labels
+    basis = model.basis
     
-    if basis.name != targetGateset.basis.name:
-        raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
-                         % (gateset.basis.name, targetGateset.basis.name))
+    if basis.name != targetModel.basis.name:
+        raise ValueError("Basis mismatch between model (%s) and target (%s)!"\
+                         % (model.basis.name, targetModel.basis.name))
     
     # Note: set to "full" parameterization so we can set the gates below
-    #  regardless of what parameterization the original gateset had.
+    #  regardless of what parameterization the original model had.
     gsDict = {}; NpDict = {}
     for p in projectiontypes:
-        gsDict[p] = gateset.copy()
+        gsDict[p] = model.copy()
         gsDict[p].set_all_parameterizations("full")
         NpDict[p] = 0
 
         
-    errgens = [ error_generator(gateset.gates[gl],
-                                targetGateset.gates[gl],
-                                targetGateset.basis, genType)
-                for gl in gateLabels ]
+    errgens = [ error_generator(model.operations[gl],
+                                targetModel.operations[gl],
+                                targetModel.basis, genType)
+                for gl in opLabels ]
 
-    for gl,errgen in zip(gateLabels,errgens):
+    for gl,errgen in zip(opLabels,errgens):
         if ('H' in projectiontypes) or ('H+S' in projectiontypes):
             hamProj, hamGens = std_errgen_projections(
                 errgen, "hamiltonian", basis.name, basis, True)
@@ -2576,26 +2576,26 @@ def project_gateset(gateset, targetGateset,
                             _np.tensordot(OProj, OGens, ((0,1),(0,1)))
             lnd_error_gen = _bt.change_basis(lnd_error_gen,"std",basis)
 
-        targetGate = targetGateset.gates[gl]
+        targetOp = targetModel.operations[gl]
             
         if 'H' in projectiontypes:
-            gsDict['H'].gates[gl] = gate_from_error_generator(
-                ham_error_gen, targetGate, genType)
+            gsDict['H'].operations[gl] = operation_from_error_generator(
+                ham_error_gen, targetOp, genType)
             NpDict['H'] += len(hamProj)
             
         if 'S' in projectiontypes:
-            gsDict['S'].gates[gl]  = gate_from_error_generator(
-                sto_error_gen, targetGate, genType)
+            gsDict['S'].operations[gl]  = operation_from_error_generator(
+                sto_error_gen, targetOp, genType)
             NpDict['S'] += len(stoProj)
 
         if 'H+S' in projectiontypes:
-            gsDict['H+S'].gates[gl] = gate_from_error_generator(
-                ham_error_gen+sto_error_gen, targetGate, genType)
+            gsDict['H+S'].operations[gl] = operation_from_error_generator(
+                ham_error_gen+sto_error_gen, targetOp, genType)
             NpDict['H+S'] += len(hamProj) + len(stoProj)
 
         if 'LNDF' in projectiontypes:
-            gsDict['LNDF'].gates[gl] = gate_from_error_generator(
-                lnd_error_gen, targetGate, genType)
+            gsDict['LNDF'].operations[gl] = operation_from_error_generator(
+                lnd_error_gen, targetOp, genType)
             NpDict['LNDF'] += HProj.size + OProj.size
 
         if 'LND' in projectiontypes:
@@ -2609,8 +2609,8 @@ def project_gateset(gateset, targetGateset,
                                _np.tensordot(OProj_cp, OGens, ((0,1),(0,1)))
             lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp,"std",basis)
 
-            gsDict['LND'].gates[gl] = gate_from_error_generator(
-                lnd_error_gen_cp, targetGate, genType)
+            gsDict['LND'].operations[gl] = operation_from_error_generator(
+                lnd_error_gen_cp, targetOp, genType)
             NpDict['LND'] += HProj.size + OProj.size
 
         #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,
@@ -2618,12 +2618,12 @@ def project_gateset(gateset, targetGateset,
         #sto_error_gen_cp = _np.einsum('i,ijk', stoProj.clip(None,0), stoGens)
         #  # (only negative stochastic projections OK)
         #sto_error_gen_cp = _tools.std_to_pp(sto_error_gen_cp)
-        #gsHSCP.gates[gl] = _tools.gate_from_error_generator(
-        #    ham_error_gen, targetGate, genType) #+sto_error_gen_cp
+        #gsHSCP.operations[gl] = _tools.operation_from_error_generator(
+        #    ham_error_gen, targetOp, genType) #+sto_error_gen_cp
 
 
     #DEBUG!!!
-    #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_evals(gateset))
+    #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_evals(model))
     #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_evals(gsDict['LND']))
     
     #Check for CPTP where expected
@@ -2635,31 +2635,31 @@ def project_gateset(gateset, targetGateset,
     ret_Nps = [ NpDict[p] for p in projectiontypes ]
     return ret_gs, ret_Nps
 
-def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
+def project_to_target_eigenspace(model, targetModel, EPS=1e-6):
     """
-    Project each gate of `gateset` onto the eigenspace of the corresponding
-    gate within `targetGateset`.  Return the resulting `GateSet`.
+    Project each gate of `model` onto the eigenspace of the corresponding
+    gate within `targetModel`.  Return the resulting `Model`.
 
     Parameters
     ----------
-    gateset, targetGateset : GateSet
-        The gate set being projected and the gate set specifying the "target"
+    model, targetModel : Model
+        The model being projected and the model specifying the "target"
         eigen-spaces, respectively.
 
     EPS : float, optional
         Small magnitude specifying how much to "nudge" the target gates
         before eigen-decomposing them, so that their spectra will have the
-        same conjugacy structure as the gates of `gateset`.
+        same conjugacy structure as the gates of `model`.
 
     Returns
     -------
-    GateSet
+    Model
     """
-    ret = targetGateset.copy()
+    ret = targetModel.copy()
     ret.set_all_parameterizations("full") # so we can freely assign gates new values
     
-    for gl,gate in gateset.gates.items():
-        tgt_gate = targetGateset.gates[gl].copy()
+    for gl,gate in model.operations.items():
+        tgt_gate = targetModel.operations[gl].copy()
         evals_gate = _np.linalg.eigvals(gate.todense())
 
         #Essentially, we want to replace the eigenvalues of `tgt_gate`
@@ -2674,7 +2674,7 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
         #    (treat conj-pair eigenvalues of `gate` together).
 
         evals_tgt, Utgt = _np.linalg.eig(tgt_gate.todense())
-        evals_gate, Ugate = _np.linalg.eig(gate.todense())
+        evals_gate, Uop = _np.linalg.eig(gate.todense())
         #_, pairs = _mt.minweight_match(evals_tgt, evals_gate, return_pairs=True)
         pairs = _mt.minweight_match_realmxeigs(evals_tgt, evals_gate)
 
@@ -2689,7 +2689,7 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
             else:
                 eigenspace[i] = [ Utgt[:,i] ] # new list = new eigenspace
 
-        #Project each eigenvector (col of Ugate) onto space of cols
+        #Project each eigenvector (col of Uop) onto space of cols
         evectors = {} # key = index of gate eigenval, val = assoc. (projected) eigenvec
         for ipair,(i,j) in enumerate(pairs):
             tgt_eval = evals_tgt[i]
@@ -2702,7 +2702,7 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
             # E*coeffs = E * inv(E.dag * E) * E.dag * v
 
             E = _np.array(eigenspace[i]).T; Edag = E.T.conjugate()
-            coeffs = _np.dot( _np.dot( _np.linalg.inv(_np.dot(Edag,E)), Edag), Ugate[:,j])
+            coeffs = _np.dot( _np.dot( _np.linalg.inv(_np.dot(Edag,E)), Edag), Uop[:,j])
             evectors[j] = _np.dot(E, coeffs)
             
             #check for conjugate pair
@@ -2724,7 +2724,7 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
           # this should never happen & indicates an uncaught failure in
           # minweight_match_realmxeigs(...)
 
-        ret.gates[gl] = epgate
+        ret.operations[gl] = epgate
 
     return ret
     

@@ -1,4 +1,4 @@
-""" Defines the GatesetObject class, which represents GateSet members """
+""" Defines the GatesetObject class, which represents Model members """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -10,14 +10,14 @@ import numpy as _np
 import copy as _copy
 from ..tools import slicetools as _slct
 
-class GateSetChild(object):
+class ModelChild(object):
     """
-    Base class for all objects contained in a GateSet that
-    hold a `parent` reference to their parent GateSet.
+    Base class for all objects contained in a Model that
+    hold a `parent` reference to their parent Model.
     """
     def __init__(self, parent=None):
-        self._parent = parent # parent GateSet used to determine how to process
-                              # a Gate's gpindices when inserted into a GateSet
+        self._parent = parent # parent Model used to determine how to process
+                              # a LinearOperator's gpindices when inserted into a Model
 
     def copy(self, parent=None):
         """
@@ -25,10 +25,10 @@ class GateSetChild(object):
 
         Returns
         -------
-        GateSetChild
+        ModelChild
             A copy of this object.
         """
-        #Copying resets or updates the parent of a GateSetChild
+        #Copying resets or updates the parent of a ModelChild
         memo = {id(self.parent): None} # so deepcopy uses None instead of copying parent
         copyOfMe = _copy.deepcopy(self,memo) # parent == None now
         copyOfMe.parent = parent
@@ -53,25 +53,25 @@ class GateSetChild(object):
 
         
 
-class GateSetMember(GateSetChild):
+class ModelMember(ModelChild):
     """ 
-    Base class for all GateSet member objects which possess a definite
+    Base class for all Model member objects which possess a definite
     dimension, number of parmeters, and evolution type (_evotype).  A 
-    GateSetMember can be vectorized into/onto a portion of their parent
-    GateSet's (or other GateSetMember's) parameter vector.  They therefore
-    contain a `gpindices` reference to the global GateSet indices "owned" by
+    ModelMember can be vectorized into/onto a portion of their parent
+    Model's (or other ModelMember's) parameter vector.  They therefore
+    contain a `gpindices` reference to the global Model indices "owned" by
     this member.  Note that GateSetMembers may contain other GateSetMembers (may
     be nested).
     """
     def __init__(self, dim, evotype, gpindices=None, parent=None):
-        """ Initialize a new GateSetMember """
+        """ Initialize a new ModelMember """
         self.dim = dim
         self._evotype = evotype
         self._gpindices = gpindices
         self.dirty = False # True when there's any *possibility* that this
                            # gate's parameters have been changed since the
                            # last setting of dirty=False
-        super(GateSetMember,self).__init__(parent)
+        super(ModelMember,self).__init__(parent)
         
     def get_dimension(self):
         """ Return the dimension of this object. """
@@ -80,14 +80,14 @@ class GateSetMember(GateSetChild):
     @property
     def gpindices(self):
         """ 
-        Gets the gateset parameter indices of this object.
+        Gets the model parameter indices of this object.
         """
         return self._gpindices
 
     @gpindices.setter
     def gpindices(self, value):
         raise ValueError(("Use set_gpindices(...) to set the gpindices member"
-                          " of a GateSetMember object"))
+                          " of a ModelMember object"))
 
     @property
     def parent(self):
@@ -99,19 +99,19 @@ class GateSetMember(GateSetChild):
     @parent.setter
     def parent(self, value):
         raise ValueError(("Use set_gpindices(...) to set the parent"
-                          " of a GateSetMember object"))
+                          " of a ModelMember object"))
 
     def submembers(self):
         """
-        Returns a sequence of any sub-GateSetMember objects contained in
+        Returns a sequence of any sub-ModelMember objects contained in
         this one.
 
-        Sub-members are processed by other :class:`GateSetMember` methods
+        Sub-members are processed by other :class:`ModelMember` methods
         (e.g. `unlink_parent` and `set_gpindices`) as though the parent
         object is *just* a container for these sub-members and has no
         parameters of its own.  Member objects that contain other members
         *and* possess their own independent parameters should implement
-        the appropriate `GateSetMember` functions (usually just
+        the appropriate `ModelMember` functions (usually just
         `allocate_gpindices`, using the base implementation as a reference).
 
         Returns
@@ -127,7 +127,7 @@ class GateSetMember(GateSetChild):
         This operation is appropriate to do when "re-linking" a parent with
         its children after the parent and child have been serialized.
         (the parent is *not* saved in serialization - see 
-         GateSetChild.__getstate__ -- and so must be manually re-linked
+         ModelChild.__getstate__ -- and so must be manually re-linked
          upon de-serialization).
 
         In addition to setting the parent of this object, this method 
@@ -163,14 +163,14 @@ class GateSetMember(GateSetChild):
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
-        are used by this GateSetMember object.
+        are used by this ModelMember object.
 
         Parameters
         ----------
         gpindices : slice or integer ndarray
             The indices of this objects parameters in its parent's array.
 
-        parent : GateSet or GateSetMember
+        parent : Model or ModelMember
             The parent whose parameter array gpindices references.
 
         memo : set, optional
@@ -220,7 +220,7 @@ class GateSetMember(GateSetChild):
         startingIndex : int
             The starting index for un-allocated parameters.
 
-        parent : GateSet or GateSetMember
+        parent : Model or ModelMember
             The parent whose parameter array gpindices references.
 
         Returns
@@ -328,7 +328,7 @@ class GateSetMember(GateSetChild):
 
         Returns
         -------
-        Gate
+        LinearOperator
             A copy of this object.
         """
         # A default for derived classes - deep copy everything except the parent,
@@ -337,7 +337,7 @@ class GateSetMember(GateSetChild):
         return self._copy_gpindices(_copy.deepcopy(self,memo), parent)
 
     
-    def _copy_gpindices(self, gateObj, parent):
+    def _copy_gpindices(self, opObj, parent):
         """ Helper function for implementing copy in derived classes """
         gpindices_copy = None
         if isinstance(self.gpindices, slice):
@@ -349,16 +349,16 @@ class GateSetMember(GateSetChild):
         # "advanced" implementations containing sub-members assume that the
         # gpindices has already been set and is just being updated (so it compares
         # the "old" (existing) gpindices with the value being set).  Here,
-        # we just want to copy any existing gpindices from "self" to gateObj
-        # and *not* cause gateObj to shift any underlying indices (they'll
+        # we just want to copy any existing gpindices from "self" to opObj
+        # and *not* cause opObj to shift any underlying indices (they'll
         # be copied separately. -- FUTURE: make separate "update_gpindices" and
         # "copy_gpindices" functions?
-        gateObj._set_only_my_gpindices(gpindices_copy, parent)
-        #gateObj.set_gpindices(gpindices_copy, parent) #don't do this, as
+        opObj._set_only_my_gpindices(gpindices_copy, parent)
+        #opObj.set_gpindices(gpindices_copy, parent) #don't do this, as
         # this routines doesn't copy sub-member indices yet -- copy(...) methods
         # of derived classes do this.
         
-        return gateObj
+        return opObj
 
     def _print_gpindices(self,prefix=""):
         print(self.gpindices, " [%s]" % str(type(self)))

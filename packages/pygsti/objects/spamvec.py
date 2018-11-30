@@ -19,7 +19,7 @@ import copy as _copy
 
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
-from ..tools import gatetools as _gt
+from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
@@ -27,7 +27,7 @@ from ..tools import compattools as _compat
 from ..tools import symplectic as _symp
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import ProtectedArray as _ProtectedArray
-from . import gatesetmember as _gatesetmember
+from . import modelmember as _modelmember
 
 from . import term as _term
 from . import stabilizer as _stabilizer
@@ -98,7 +98,7 @@ def convert(spamvec, toType, basis, extra=None):
     toType : {"full","TP","static","static unitary","clifford",LINDBLAD}
         The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
         for the various Lindblad parameterization types.  See
-        :method:`GateSet.set_all_parameterizations` for more details.
+        :method:`Model.set_all_parameterizations` for more details.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `spamvec`.  Allowed values are Matrix-unit (std),
@@ -167,7 +167,7 @@ def convert(spamvec, toType, basis, extra=None):
             return spamvec #no conversion necessary
 
         purevec = spamvec.flatten() # assume a pure state (otherwise would
-                                    # need to change GateSet dim)
+                                    # need to change Model dim)
         return StabilizerSPAMVec.from_dense_purevec(purevec)
 
     else:
@@ -265,7 +265,7 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
     deriv_to_check : numpy.ndarray or None, optional
         If not None, the Jacobian to compare against the finite difference
         result.  If None, `spamvec.deriv_wrt_parms()` is used.  Setting this
-        argument can be useful when the function is called *within* a Gate
+        argument can be useful when the function is called *within* a LinearOperator
         class's `deriv_wrt_params()` method itself as a part of testing.
         
     eps : float, optional
@@ -299,7 +299,7 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
                          _np.linalg.norm(fd_deriv - deriv_to_check))
 
 
-class SPAMVec(_gatesetmember.GateSetMember):
+class SPAMVec(_modelmember.ModelMember):
     """
     Excapulates a parameterization of a state preparation OR POVM effect
     vector. This class is the  common base class for all specific
@@ -403,7 +403,7 @@ class SPAMVec(_gatesetmember.GateSetMember):
 
         The coefficients of these terms are typically polynomials of the 
         SPAMVec's parameters, where the polynomial's variable indices index the
-        *global* parameters of the SPAMVec's parent (usually a :class:`GateSet`)
+        *global* parameters of the SPAMVec's parent (usually a :class:`Model`)
         , not the SPAMVec's local parameter array (i.e. that returned from
         `to_vector`).
 
@@ -638,7 +638,7 @@ class SPAMVec(_gatesetmember.GateSetMember):
         Construct the Hessian of this SPAM vector with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
-        flattened gate matrix and whose 2nd and 3rd axes correspond to the
+        flattened operation matrix and whose 2nd and 3rd axes correspond to the
         parameters that are differentiated with respect to.
 
         Parameters
@@ -1202,7 +1202,7 @@ class ComplementSPAMVec(DenseSPAMVec):
         Np = len(self.gpindices_as_array())
         neg_deriv = _np.zeros( (self.dim, Np), 'd')
         for ovec in self.other_vecs:
-            local_inds = _gatesetmember._decompose_gpindices(
+            local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, ovec.gpindices)
               #Note: other_vecs are not copies but other *sibling* effect vecs
               # so their gpindices index the same space as this complement vec's
@@ -1507,7 +1507,7 @@ class CPTPParameterizedSPAMVec(DenseSPAMVec):
         Construct the Hessian of this SPAM vector with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
-        flattened gate matrix and whose 2nd and 3rd axes correspond to the
+        flattened operation matrix and whose 2nd and 3rd axes correspond to the
         parameters that are differentiated with respect to.
 
         Parameters
@@ -1579,7 +1579,7 @@ class TensorProdSPAMVec(SPAMVec):
                                                   # (they should all be the same)
         else:
             # don't init our own gpindices (prep case), since our parent
-            # is likely to be a GateSet and it will init them correctly.
+            # is likely to be a Model and it will init them correctly.
             #But do set the indices of self.factors, since they're now 
             # considered "owned" by this product-prep-vec (different from
             # the "effect" case when the factors are shared).
@@ -1737,7 +1737,7 @@ class TensorProdSPAMVec(SPAMVec):
 
         The coefficients of these terms are typically polynomials of the 
         SPAMVec's parameters, where the polynomial's variable indices index the
-        *global* parameters of the SPAMVec's parent (usually a :class:`GateSet`)
+        *global* parameters of the SPAMVec's parent (usually a :class:`Model`)
         , not the SPAMVec's local parameter array (i.e. that returned from
         `to_vector`).
 
@@ -1756,7 +1756,7 @@ class TensorProdSPAMVec(SPAMVec):
         elif self._evotype == "cterm": tt = "clifford"
         else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
         
-        from .gate import EmbeddedGateMap as _EmbeddedGateMap
+        from .gate import EmbeddedOpMap as _EmbeddedGateMap
         terms = []
         fnq = [ int(round(_np.log2(f.dim)))//2 for f in self.factors ] # num of qubits per factor
           # assumes density matrix evolution
@@ -1858,7 +1858,7 @@ class TensorProdSPAMVec(SPAMVec):
             #then this is the *first* vector in the larger TensorProdPOVM
             # and we should initialize all of the factorPOVMs
             for povm in self.factors:
-                local_inds = _gatesetmember._decompose_gpindices(
+                local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, povm.gpindices)
                 povm.from_vector( v[local_inds] )
 
@@ -1917,7 +1917,7 @@ class TensorProdSPAMVec(SPAMVec):
             if self.typ == "prep":
                 local_inds = fct.gpindices # factor vectors hold local indices
             else: # in effect case, POVM-factors hold global indices (b/c they're meant to be shareable)
-                local_inds = _gatesetmember._decompose_gpindices(
+                local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, fct.gpindices)
 
             assert(local_inds is not None), \
@@ -2039,7 +2039,7 @@ class PureStateSPAMVec(SPAMVec):
 
         The coefficients of these terms are typically polynomials of the 
         SPAMVec's parameters, where the polynomial's variable indices index the
-        *global* parameters of the SPAMVec's parent (usually a :class:`GateSet`)
+        *global* parameters of the SPAMVec's parent (usually a :class:`Model`)
         , not the SPAMVec's local parameter array (i.e. that returned from
         `to_vector`).
 
@@ -2226,7 +2226,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             purevec = StaticSPAMVec(purevec) #assume spamvec is just a vector
 
         #Break paramType in to a "base" type and an evotype
-        from .gate import LindbladParameterizedGateMap as _LPGMap
+        from .gate import LindbladParameterizedOpMap as _LPGMap
         bTyp, evotype, nonham_mode, param_mode = _LPGMap.decomp_paramtype(paramType)
 
         ham_basis = proj_basis if (("H+" in bTyp) or bTyp in ("CPTP","GLND")) else None
@@ -2373,13 +2373,13 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         assert(pureVec._evotype == evotype), "`pureVec` must have evotype == '%s'" % evotype
 
         from .gate import LindbladErrorgen as _LErrorgen
-        from .gate import LindbladParameterizedGateMap as _LPGMap
-        from .gate import LindbladParameterizedGate as _LPGate
+        from .gate import LindbladParameterizedOpMap as _LPGMap
+        from .gate import LindbladParameterizedOp as _LPOp
 
         errgen = _LErrorgen.from_error_generator(errgen, ham_basis,
                                                  nonham_basis, param_mode, nonham_mode,
                                                  mxBasis, truncate, evotype)
-        errcls = _LPGate if (pureVec.dim <= 64 and evotype == "densitymx") else _LPGMap
+        errcls = _LPOp if (pureVec.dim <= 64 and evotype == "densitymx") else _LPGMap
         errmap = errcls(None,errgen)
 
         return cls(pureVec, errmap, typ)
@@ -2461,9 +2461,9 @@ class LindbladParameterizedSPAMVec(SPAMVec):
     #    -------
     #    LindbladParameterizedSPAMVec
     #    """
-    #    from .gate import LindbladParameterizedGateMap as _LPGMap
-    #    from .gate import LindbladParameterizedGate as _LPGate
-    #    errcls = _LPGate if (pureVec.dim <= 64 and evotype == "densitymx") else _LPGMap
+    #    from .gate import LindbladParameterizedOpMap as _LPGMap
+    #    from .gate import LindbladParameterizedOp as _LPOp
+    #    errcls = _LPOp if (pureVec.dim <= 64 and evotype == "densitymx") else _LPGMap
     #    errmap = errcls.from_error_generator(
     #        None, errgen, ham_basis, nonham_basis, param_mode,
     #        nonham_mode, truncate, mxBasis, evotype)
@@ -2541,14 +2541,14 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
         Returns
         -------
-        LindbladParameterizedGateMap                
+        LindbladParameterizedOpMap                
         """
         #Need a dimension for error map construction (basisdict could be completely empty)
         if not isinstance(pureVec, SPAMVec):
             pureVec = StaticSPAMVec(pureVec, evotype) #assume spamvec is just a vector
         d2 = pureVec.dim
 
-        from .gate import LindbladParameterizedGateMap as _LPGMap
+        from .gate import LindbladParameterizedOpMap as _LPGMap
         errmap = _LPGMap(d2, Ltermdict, basisdict, param_mode, nonham_mode,
                          truncate, mxBasis, evotype)
         return cls(pureVec, errmap, typ)
@@ -2559,7 +2559,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         Initialize a LindbladParameterizedSPAMVec object.
 
         Essentially a pure state preparation or projection that is followed
-        or preceded by, respectively, the action of LindbladParameterizedGate.
+        or preceded by, respectively, the action of LindbladParameterizedOp.
 
         Parameters
         ----------
@@ -2572,17 +2572,17 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             (This argument is *not* copied if it is a SPAMVec.  A numpy array
              is converted to a new StaticSPAMVec.)
 
-        errormap : GateMap
+        errormap : MapOp
             The error generator action and parameterization, encapsulated in
-            a gate object.  Usually a :class:`LindbladParameterizedGateMap`
-            or :class:`ComposedGateMap` object.  (This argument is *not* copied,
+            a gate object.  Usually a :class:`LindbladParameterizedOpMap`
+            or :class:`ComposedOpMap` object.  (This argument is *not* copied,
             to allow LindbladParameterizedSPAMVecs to share error generator
             parameters with other gates and spam vectors.)
 
         typ : {"prep","effect"}
             Whether this is a state preparation or POVM effect vector.
         """
-        from .gate import LindbladParameterizedGateMap as _LPGMap
+        from .gate import LindbladParameterizedOpMap as _LPGMap
         evotype = errormap._evotype
         assert(evotype in ("densitymx","svterm","cterm")), \
             "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
@@ -2604,7 +2604,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
     def submembers(self):
         """
-        Get the GateSetMember-derived objects contained in this one.
+        Get the ModelMember-derived objects contained in this one.
         
         Returns
         -------
@@ -2619,7 +2619,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
         Returns
         -------
-        Gate
+        LinearOperator
             A copy of this object.
         """
         # We need to override this method so that embedded gate has its
@@ -2632,14 +2632,14 @@ class LindbladParameterizedSPAMVec(SPAMVec):
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
-        are used by this GateSetMember object.
+        are used by this ModelMember object.
 
         Parameters
         ----------
         gpindices : slice or integer ndarray
             The indices of this objects parameters in its parent's array.
 
-        parent : GateSet or GateSetMember
+        parent : Model or ModelMember
             The parent whose parameter array gpindices references.
 
         Returns
@@ -2647,7 +2647,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         None
         """
         self.terms = {} # clear terms cache since param indices have changed now
-        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent, memo)
+        _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
 
         
     def todense(self, scratch=None):
@@ -2709,7 +2709,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
         The coefficients of these terms are typically polynomials of the 
         SPAMVec's parameters, where the polynomial's variable indices index the
-        *global* parameters of the SPAMVec's parent (usually a :class:`GateSet`)
+        *global* parameters of the SPAMVec's parent (usually a :class:`Model`)
         , not the SPAMVec's local parameter array (i.e. that returned from
         `to_vector`).
 
@@ -2728,7 +2728,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             if self._evotype == "svterm": tt = "dense"
             elif self._evotype == "cterm": tt = "clifford"
             else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
-            assert(self.gpindices is not None),"LindbladParameterizedSPAMVec must be added to a GateSet before use!"
+            assert(self.gpindices is not None),"LindbladParameterizedSPAMVec must be added to a Model before use!"
 
             state_terms = self.state_vec.get_order_terms(0); assert(len(state_terms) == 1)
             stateTerm = state_terms[0]
@@ -2780,7 +2780,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         Construct the Hessian of this SPAM vector with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
-        flattened gate matrix and whose 2nd and 3rd axes correspond to the
+        flattened operation matrix and whose 2nd and 3rd axes correspond to the
         parameters that are differentiated with respect to.
 
         Parameters
@@ -2875,7 +2875,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         typ : { 'prep', 'effect' }
             Which type of SPAM vector is being transformed (see above).
         """
-        #Defer everything to LindbladParameterizedGateMap's
+        #Defer everything to LindbladParameterizedOpMap's
         # `spam_tranform` function, which applies either 
         # error_map -> inv(S) * error_map ("prep" case) OR
         # error_map -> error_map * S      ("effect" case)
@@ -3206,7 +3206,7 @@ class ComputationalSPAMVec(SPAMVec):
 
         The coefficients of these terms are typically polynomials of the 
         SPAMVec's parameters, where the polynomial's variable indices index the
-        *global* parameters of the SPAMVec's parent (usually a :class:`GateSet`)
+        *global* parameters of the SPAMVec's parent (usually a :class:`Model`)
         , not the SPAMVec's local parameter array (i.e. that returned from
         `to_vector`).
 

@@ -127,11 +127,11 @@ class NQPauliState(object):
     def __hash__(self):
         return hash(str(self))
 
-    def to_gatestring(self, pauliBasisDict):
+    def to_circuit(self, pauliBasisDict):
         """
-        Convert this Pauli basis state or measurement to a fiducial gate string.
+        Convert this Pauli basis state or measurement to a fiducial operation sequence.
         
-        When the returned gate string follows a preparation in the |0...0>
+        When the returned operation sequence follows a preparation in the |0...0>
         Z-basis state or is followed by a Z-basis measurement (with all "+"
         signs), then the Pauli state preparation or measurement described by
         this object will be performed.
@@ -146,9 +146,9 @@ class NQPauliState(object):
 
         Returns
         -------
-        GateString
+        OpString
         """
-        gstr = []
+        opstr = []
         sgn = {1:'+', -1:'-'}
         for i,(s,let) in enumerate(zip(self.signs,self.rep)):
             key = sgn[s] + let # e.g. "+X", "-Y", etc
@@ -157,9 +157,9 @@ class NQPauliState(object):
             if key not in pauliBasisDict:
                 raise ValueError("'%s' is not in `pauliBasisDict` (keys = %s)"
                                  % (key,str(list(pauliBasisDict.keys()))))
-            gstr.extend( [ _Lbl(gatenm,i) for gatenm in pauliBasisDict[key] ] )
+            opstr.extend( [ _Lbl(opname,i) for opname in pauliBasisDict[key] ] )
               # pauliBasisDict just has 1Q gate *names* -- need to make into labels
-        return _objs.GateString(gstr).parallelize()
+        return _objs.OpString(opstr).parallelize()
 
 
 

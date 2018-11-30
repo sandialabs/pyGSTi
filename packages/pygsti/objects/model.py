@@ -1,4 +1,4 @@
-""" Defines the GateSet class and supporting functionality."""
+""" Defines the Model class and supporting functionality."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -16,7 +16,7 @@ import uuid as _uuid
 import bisect as _bisect
 
 from ..tools import matrixtools as _mt
-from ..tools import gatetools as _gt
+from ..tools import optools as _gt
 from ..tools import slicetools as _slct
 from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
@@ -25,17 +25,17 @@ from ..tools import basistools as _bt
 from ..tools import listtools as _lt
 from ..tools import symplectic as _symp
 
-from . import gatesetmember as _gm
-from . import gatestring as _gs
-from . import gate as _gate
+from . import modelmember as _gm
+from . import opstring as _gs
+from . import gate as _op
 from . import spamvec as _sv
 from . import povm as _povm
 from . import instrument as _instrument
 from . import labeldicts as _ld
 from . import gaugegroup as _gg
-from . import gatematrixcalc as _gatematrixcalc
-from . import gatemapcalc as _gatemapcalc
-from . import gatetermcalc as _gatetermcalc
+from . import matrixforwardsim as _matrixfwdsim
+from . import mapforwardsim as _mapfwdsim
+from . import termforwardsim as _termfwdsim
 from . import autogator as _autogator
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
@@ -43,16 +43,16 @@ from ..baseobjs import Basis as _Basis
 from ..baseobjs import Label as _Label
 
 
-class GateSet(object):
+class Model(object):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
 
-    A GateSet stores a set of labeled Gate objects and provides dictionary-like
+    A Model stores a set of labeled LinearOperator objects and provides dictionary-like
     access to their matrices.  State preparation and POVM effect operations are
     represented as column vectors.
     """
 
-    #Whether access to gates & spam vecs via GateSet indexing is allowed
+    #Whether access to gates & spam vecs via Model indexing is allowed
     _strict = False
 
     #Whether to perform extra parameter-vector integrity checks
@@ -63,7 +63,7 @@ class GateSet(object):
                  povm_prefix="M", instrument_prefix="I", sim_type="auto",
                  auto_idle_name=None):
         """
-        Initialize a gate set.
+        Initialize a model.
 
         Parameters
         ----------
@@ -76,7 +76,7 @@ class GateSet(object):
         povm_prefix, instrument_prefix : string, optional
             Key prefixes designating state preparations, POVM effects,
             gates, POVM, and instruments respectively.  These prefixes allow
-            the GateSet to determine what type of object a key corresponds to.
+            the Model to determine what type of object a key corresponds to.
 
         sim_type : {"auto", "matrix", "map", "termorder:<X>"}
             The type of gate sequence / circuit simulation used to compute any
@@ -85,11 +85,11 @@ class GateSet(object):
             selects the simulation type, and is usually what you want. Allowed
             values are:
 
-            - "matrix" : gate_matrix-gate_matrix products are computed and
+            - "matrix" : op_matrix-op_matrix products are computed and
               cached to get composite gates which can then quickly simulate
               a circuit for any preparation and outcome.  High memory demand;
               best for a small number of (1 or 2) qubits.
-            - "map" : gate_matrix-state_vector products are repeatedly computed
+            - "map" : op_matrix-state_vector products are repeatedly computed
               to simulate circuits.  Slower for a small number of qubits, but
               faster and more memory efficient for higher numbers of qubits (3+).
             - "termorder:<X>" : Use Taylor expansions of gates in error rates
@@ -99,8 +99,8 @@ class GateSet(object):
         auto_idle_name : str, optional
             A gate *name* (i.e. without any state-space labels) that indicates a
             *perfect* idle operation and thus can be used as a placeholder
-            within compound gate labels without actually being stored in the
-            GateSet.
+            within compound operation labels without actually being stored in the
+            Model.
         """
 
         #More options now (TODO enumerate?)
@@ -109,14 +109,14 @@ class GateSet(object):
 
         #default_e_param = "full" if default_param == "TP" else default_param
 
-        #Gate dimension of this GateSet (None => unset, to be determined)
+        #LinearOperator dimension of this Model (None => unset, to be determined)
         self._dim = None
         self._evotype = None
 
         #Name and dimension (or list of dims) of the *basis*
         # that the gates and SPAM vectors are expressed in.  This
         # is for interpretational purposes only, and is reset often
-        # (for instance, when reading GateSet params from a vector)
+        # (for instance, when reading Model params from a vector)
         self.reset_basis()
 
         #SPAM vectors
@@ -129,7 +129,7 @@ class GateSet(object):
         #self.spamdefs = _ld.OrderedSPAMLabelDict('remainder')
 
         #Gates
-        self.gates = _ld.OrderedMemberDict(self, default_param, gate_prefix, "gate")
+        self.operations = _ld.OrderedMemberDict(self, default_param, gate_prefix, "gate")
         self.instruments = _ld.OrderedMemberDict(self, default_param, instrument_prefix, "instrument")
 
         if sim_type != "auto":
@@ -146,15 +146,15 @@ class GateSet(object):
         self._autogator = _autogator.SimpleCompositionAutoGator(self) # the default
         self.auto_idle_gatename = auto_idle_name
 
-        self.uuid = _uuid.uuid4() # a GateSet's uuid is like a persistent id(), useful for hashing
+        self.uuid = _uuid.uuid4() # a Model's uuid is like a persistent id(), useful for hashing
 
-        super(GateSet, self).__init__()
+        super(Model, self).__init__()
 
     def set_simtype(self, sim_type, calc_cache=None):
         #Calculator selection based on simulation type
 
         if sim_type == "auto":
-            default_param = self.gates.default_param # assume the same for other dicts
+            default_param = self.operations.default_param # assume the same for other dicts
             if _gt.is_valid_lindblad_paramtype(default_param) and \
                _gt.split_lindblad_paramtype(default_param)[1] in ("svterm","cterm"):
                 sim_type = "termorder:1"
@@ -164,9 +164,9 @@ class GateSet(object):
 
         simtype_and_args = sim_type.split(":")
         sim_type = simtype_and_args[0]
-        if sim_type == "matrix":      c = _gatematrixcalc.GateMatrixCalc
-        elif sim_type == "map":       c = _gatemapcalc.GateMapCalc
-        elif sim_type == "termorder": c = _gatetermcalc.GateTermCalc
+        if sim_type == "matrix":      c = _matrixfwdsim.MatrixForwardSimulator
+        elif sim_type == "map":       c = _mapfwdsim.MapForwardSimulator
+        elif sim_type == "termorder": c = _termfwdsim.TermForwardSimulator
         else: raise ValueError("Invalid `sim_type` (%s)" % sim_type)
 
         self._calcClass = c
@@ -181,7 +181,7 @@ class GateSet(object):
     def set_state_space_labels(self, lbls):
         """
         Sets labels for the components of the Hilbert space upon which 
-        the gates of this GateSet act.
+        the gates of this Model act.
 
         Parameters
         ----------
@@ -199,51 +199,51 @@ class GateSet(object):
             self.stateSpaceLabels = _ld.StateSpaceLabels(lbls)
 
 
-    def _embedGate(self, gateTargetLabels, gateVal, force=False):
+    def _embedOperation(self, opTargetLabels, opVal, force=False):
         """
         Called by OrderedMemberDict._auto_embed to create an embedded-gate
-        object that embeds `gateVal` into the sub-space of
-        `self.stateSpaceLabels` given by `gateTargetLabels`.
+        object that embeds `opVal` into the sub-space of
+        `self.stateSpaceLabels` given by `opTargetLabels`.
 
         Parameters
         ----------
-        gateTargetLabels : list
-            A list of `gateVal`'s target state space labels.
+        opTargetLabels : list
+            A list of `opVal`'s target state space labels.
 
-        gateVal : Gate
+        opVal : LinearOperator
             The gate object to embed.  Note this should be a legitimate
-            Gate-derived object and not just a numpy array.
+            LinearOperator-derived object and not just a numpy array.
 
         force : bool, optional
-            Always wrap with an embedded Gate, even if the
-            dimension of `gateVal` is the full gate set dimension.
+            Always wrap with an embedded LinearOperator, even if the
+            dimension of `opVal` is the full model dimension.
 
         Returns
         -------
-        Gate
-            A gate of the full gate set dimension.
+        LinearOperator
+            A gate of the full model dimension.
         """
         if self.dim is None:
-            raise ValueError("Must set gateset dimension before adding auto-embedded gates.")
+            raise ValueError("Must set model dimension before adding auto-embedded gates.")
         if self.stateSpaceLabels is None:
-            raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
+            raise ValueError("Must set model.stateSpaceLabels before adding auto-embedded gates.")
 
-        if gateVal.dim == self.dim and not force:
-            return gateVal # if gate operates on full dimension, no need to embed.
+        if opVal.dim == self.dim and not force:
+            return opVal # if gate operates on full dimension, no need to embed.
 
         if self._sim_type == "matrix":
-            return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
+            return _op.EmbeddedOp(self.stateSpaceLabels, opTargetLabels, opVal)
         elif self._sim_type in ("map","termorder"):
-            return _gate.EmbeddedGateMap(self.stateSpaceLabels, gateTargetLabels, gateVal)
+            return _op.EmbeddedOpMap(self.stateSpaceLabels, opTargetLabels, opVal)
         else:
-            assert(False), "Invalid GateSet sim type == %s" % str(self._sim_type)
+            assert(False), "Invalid Model sim type == %s" % str(self._sim_type)
 
 
     @property
     def default_gauge_group(self):
         """
         Gets the default gauge group for performing gauge
-        transformations on this GateSet.
+        transformations on this Model.
         """
         return self._default_gauge_group
 
@@ -255,39 +255,39 @@ class GateSet(object):
     @property
     def dim(self):
         """
-        The dimension of the gateset, which equals d when the gate
+        The dimension of the model, which equals d when the gate
         matrices have shape d x d and spam vectors have shape d x 1.
 
         Returns
         -------
         int
-            gateset dimension
+            model dimension
         """
         return self._dim
 
 
     def get_dimension(self):
         """
-        Get the dimension of the gateset, which equals d when the gate
+        Get the dimension of the model, which equals d when the gate
         matrices have shape d x d and spam vectors have shape d x 1.
-        Equivalent to gateset.dim.
+        Equivalent to model.dim.
 
         Returns
         -------
         int
-            gateset dimension
+            model dimension
         """
         return self._dim
 
     @property
     def prep(self):
         """
-        The unique state preparation in this gateset, if one exists.  If not,
+        The unique state preparation in this model, if one exists.  If not,
         a ValueError is raised.
         """
         if len(self.preps) != 1:
-            raise ValueError("'.prep' can only be used on gate sets" +
-                             " with a *single* state prep.  This GateSet has" +
+            raise ValueError("'.prep' can only be used on models" +
+                             " with a *single* state prep.  This Model has" +
                              " %d state preps!" % len(self.preps))
         return list(self.preps.values())[0]
 
@@ -295,34 +295,34 @@ class GateSet(object):
     @property
     def effects(self):
         """
-        The unique POVM in this gateset, if one exists.  If not,
+        The unique POVM in this model, if one exists.  If not,
         a ValueError is raised.
         """
         if len(self.povms) != 1:
-            raise ValueError("'.effects' can only be used on gate sets" +
-                             " with a *single* POVM.  This GateSet has" +
+            raise ValueError("'.effects' can only be used on models" +
+                             " with a *single* POVM.  This Model has" +
                              " %d POVMS!" % len(self.povms))
         return list(self.povms.values())[0]
 
 
     def get_basis_name(self):
         """ DEPRECATED: use `<this object>.basis.name` instead. """
-        _warnings.warn('gs.get_basis_name() is deprecated. ' + \
-                'Use gs.basis.name instead.')
+        _warnings.warn('mdl.get_basis_name() is deprecated. ' + \
+                'Use mdl.basis.name instead.')
         return self.basis.name
 
     def get_basis_dimension(self):
         """ DEPRECATED: use `<this object>.basis.dim.dmDim` instead. """
-        _warnings.warn('gs.get_basis_dimension() is deprecated. ' + \
-                'Use gs.basis.dim.dmDim (same functionality) or gs.basis.dim.blockDims (full blockDims) instead')
+        _warnings.warn('mdl.get_basis_dimension() is deprecated. ' + \
+                'Use mdl.basis.dim.dmDim (same functionality) or mdl.basis.dim.blockDims (full blockDims) instead')
         return self.basis.dim.dmDim
 
     def set_basis(self, name, dimension):
         """ DEPRECATED: use `<this object>.basis = Basis(...) instead. """
-        _warnings.warn('gs.set_basis() is deprecated. ' + \
-                'Use gs.basis = Basis({}, {}) ' + \
+        _warnings.warn('mdl.set_basis() is deprecated. ' + \
+                'Use mdl.basis = Basis({}, {}) ' + \
                 '(or another method of basis construction, ' + \
-                'like gs.basis = Basis([(\'std\', 2), (\'gm\', 2)])) ' + \
+                'like mdl.basis = Basis([(\'std\', 2), (\'gm\', 2)])) ' + \
                 'instead.'.format(name, dimension))
         self.basis = _Basis(name, dimension)
 
@@ -363,7 +363,7 @@ class GateSet(object):
         DEPRECATED.
         Get an list of all the state prepartion vectors.  These
         vectors are copies of internally stored data and thus
-        can be modified without altering the gateset.
+        can be modified without altering the model.
 
         Returns
         -------
@@ -379,7 +379,7 @@ class GateSet(object):
         Get an list of all the POVM effect vectors.  This list will include
         the "compliment" effect vector at the end of the list if one has been
         specified.  Also, the returned vectors are copies of internally stored
-        data and thus can be modified without altering the gateset.
+        data and thus can be modified without altering the model.
 
         Returns
         -------
@@ -442,7 +442,7 @@ class GateSet(object):
         #return list(self.spamdefs.keys())
 
 
-    def get_spamgate(self, spamLabel):
+    def get_spamop(self, spamLabel):
         """
         Construct the SPAM gate associated with
         a given spam label.
@@ -463,19 +463,19 @@ class GateSet(object):
 
     def __setitem__(self, label, value):
         """
-        Set a Gate or SPAM vector associated with a given label.
+        Set a LinearOperator or SPAM vector associated with a given label.
 
         Parameters
         ----------
         label : string
             the gate or SPAM vector label.
 
-        value : numpy array or Gate or SPAMVec
-            a gate matrix, SPAM vector, or object, which must have the
-            appropriate dimension for the GateSet and appropriate type
+        value : numpy array or LinearOperator or SPAMVec
+            a operation matrix, SPAM vector, or object, which must have the
+            appropriate dimension for the Model and appropriate type
             given the prefix of the label.
         """
-        if GateSet._strict:
+        if Model._strict:
             raise KeyError("Strict-mode: invalid key %s" % repr(label))
 
         if not isinstance(label, _Label): label = _Label(label)
@@ -486,8 +486,8 @@ class GateSet(object):
             self.povms[label] = value
         #elif label.has_prefix(self.effects._prefix):
         #    self.effects[label] = value
-        elif label.has_prefix(self.gates._prefix):
-            self.gates[label] = value
+        elif label.has_prefix(self.operations._prefix):
+            self.operations[label] = value
         elif label.has_prefix(self.instruments._prefix, typ="any"):
             self.instruments[label] = value
         else:
@@ -495,14 +495,14 @@ class GateSet(object):
 
     def __getitem__(self, label):
         """
-        Get a Gate or SPAM vector associated with a given label.
+        Get a LinearOperator or SPAM vector associated with a given label.
 
         Parameters
         ----------
         label : string
             the gate or SPAM vector label.
         """
-        if GateSet._strict:
+        if Model._strict:
             raise KeyError("Strict-mode: invalid key %s" % label)
 
         if not isinstance(label, _Label): label = _Label(label)
@@ -513,8 +513,8 @@ class GateSet(object):
             return self.povms[label]
         #elif label.name.startswith(self.effects._prefix):
         #    return self.effects[label]
-        elif label.has_prefix(self.gates._prefix):
-            return self.gates[label]
+        elif label.has_prefix(self.operations._prefix):
+            return self.operations[label]
         elif label.has_prefix(self.instruments._prefix, typ="any"):
             return self.instruments[label]
         else:
@@ -602,8 +602,8 @@ class GateSet(object):
         povmtyp = rtyp = typ #assume spam types are available to all objects
         ityp = "TP" if _gt.is_valid_lindblad_paramtype(typ) else typ
 
-        for lbl,gate in self.gates.items():
-            self.gates[lbl] = _gate.convert(gate, typ, basis,
+        for lbl,gate in self.operations.items():
+            self.operations[lbl] = _op.convert(gate, typ, basis,
                                             extra.get(lbl,None))
 
         for lbl,inst in self.instruments.items():
@@ -633,29 +633,29 @@ class GateSet(object):
 
     def __setstate__(self, stateDict):
         if "effects" in stateDict:
-            #unpickling an OLD-version GateSet - like a re-__init__
+            #unpickling an OLD-version Model - like a re-__init__
             #print("DB: UNPICKLING AN OLD GATESET"); print("Keys = ",stateDict.keys())
             default_param = "full"
             self.preps = _ld.OrderedMemberDict(self, default_param, "rho", "spamvec")
             self.povms = _ld.OrderedMemberDict(self, default_param, "M", "povm")
             self.effects_prefix = 'E'
-            self.gates = _ld.OrderedMemberDict(self, default_param, "G", "gate")
+            self.operations = _ld.OrderedMemberDict(self, default_param, "G", "gate")
             self.instruments = _ld.OrderedMemberDict(self, default_param, "I", "instrument")
             self._paramvec = _np.zeros(0, 'd')
             self._rebuild_paramvec()
 
             self._dim = stateDict['_dim']
-            self._calcClass = stateDict.get('_calcClass',_gatematrixcalc.GateMatrixCalc)
+            self._calcClass = stateDict.get('_calcClass',_matrixfwdsim.MatrixForwardSimulator)
             self._evotype = "densitymx"
-            self._autogator = None # the default for *old* gatesets
+            self._autogator = None # the default for *old* models
             self._default_gauge_group = stateDict['_default_gauge_group']
             self.basis = stateDict.get('basis', _Basis('unknown', None))
             if self.basis.name == "unknown" and '_basisNameAndDim' in stateDict:
                 self.basis = _Basis(stateDict['_basisNameAndDim'][0],
                                     stateDict['_basisNameAndDim'][1])
 
-            assert(len(stateDict['preps']) <= 1), "Cannot convert GateSets with multiple preps!"
-            for lbl,gate in stateDict['gates'].items(): self.gates[lbl] = gate
+            assert(len(stateDict['preps']) <= 1), "Cannot convert Models with multiple preps!"
+            for lbl,gate in stateDict['gates'].items(): self.operations[lbl] = gate
             for lbl,vec in stateDict['preps'].items(): self.preps[lbl] = vec
 
             effect_vecs = []; remL = stateDict['_remainderlabel']
@@ -681,19 +681,19 @@ class GateSet(object):
         if 'auto_idle_gatename' not in stateDict:
             self.auto_idle_gatename = None
 
-        #Additionally, must re-connect this gateset as the parent
+        #Additionally, must re-connect this model as the parent
         # of relevant OrderedDict-derived classes, which *don't*
         # preserve this information upon pickling so as to avoid
         # circular pickling...
         self.preps.parent = self
         self.povms.parent = self
         #self.effects.parent = self
-        self.gates.parent = self
+        self.operations.parent = self
         self.instruments.parent = self
         for o in self.preps.values(): o.relink_parent(self)
         for o in self.povms.values(): o.relink_parent( self)
         #for o in self.effects.values(): o.relink_parent(self)
-        for o in self.gates.values(): o.relink_parent(self)
+        for o in self.operations.values(): o.relink_parent(self)
         for o in self.instruments.values(): o.relink_parent(self)
         if self._autogator is not None: # (just in case)
             self._autogator.parent = self
@@ -703,45 +703,45 @@ class GateSet(object):
     def num_params(self):
         """
         Return the number of free parameters when vectorizing
-        this gateset.
+        this model.
 
         Returns
         -------
         int
-            the number of gateset parameters.
+            the number of model parameters.
         """
         return len(self._paramvec)
 
 
     def num_elements(self):
         """
-        Return the number of total gate matrix and spam vector
-        elements in this gateset.  This is in general different
-        from the number of *parameters* in the gateset, which
+        Return the number of total operation matrix and spam vector
+        elements in this model.  This is in general different
+        from the number of *parameters* in the model, which
         are the number of free variables used to generate all of
         the matrix and vector *elements*.
 
         Returns
         -------
         int
-            the number of gateset elements.
+            the number of model elements.
         """
         rhoSize = [ rho.size for rho in self.preps.values() ]
         povmSize = [ povm.num_elements() for povm in self.povms.values() ]
-        gateSize = [ gate.size for gate in self.gates.values() ]
+        opSize = [ gate.size for gate in self.operations.values() ]
         instSize = [ i.num_elements() for i in self.instruments.values() ]
-        return sum(rhoSize) + sum(povmSize) + sum(gateSize) + sum(instSize)
+        return sum(rhoSize) + sum(povmSize) + sum(opSize) + sum(instSize)
 
 
     def num_nongauge_params(self):
         """
         Return the number of non-gauge parameters when vectorizing
-        this gateset according to the optional parameters.
+        this model according to the optional parameters.
 
         Returns
         -------
         int
-            the number of non-gauge gateset parameters.
+            the number of non-gauge model parameters.
         """
         return self.num_params() - self.num_gauge_params()
 
@@ -749,12 +749,12 @@ class GateSet(object):
     def num_gauge_params(self):
         """
         Return the number of gauge parameters when vectorizing
-        this gateset according to the optional parameters.
+        this model according to the optional parameters.
 
         Returns
         -------
         int
-            the number of gauge gateset parameters.
+            the number of gauge model parameters.
         """
         dPG = self._calc()._buildup_dPG()
         gaugeDirs = _mt.nullspace_qr(dPG) #cols are gauge directions
@@ -762,7 +762,7 @@ class GateSet(object):
 
 
     def _check_paramvec(self, debug=False):
-        if debug: print("---- GateSet._check_paramvec ----")
+        if debug: print("---- Model._check_paramvec ----")
         TOL=1e-8
         for lbl,obj in self.iter_objs():
             if debug: print(lbl,":",obj.num_params(),obj.gpindices)
@@ -771,7 +771,7 @@ class GateSet(object):
             assert(obj.parent is self), "%s's parent is not set correctly (%s)!" % (lbl,msg)
             if obj.gpindices is not None and len(w) > 0:
                 if _np.linalg.norm(self._paramvec[obj.gpindices]-w) > TOL:
-                    if debug: print(lbl,".to_vector() = ",w," but GateSet's paramvec = ",self._paramvec[obj.gpindices])
+                    if debug: print(lbl,".to_vector() = ",w," but Model's paramvec = ",self._paramvec[obj.gpindices])
                     raise ValueError("%s is out of sync with paramvec!!!" % lbl)
 
 
@@ -781,7 +781,7 @@ class GateSet(object):
             sync with the element's internal data.  It *may* be necessary
             to resolve conflicts where multiple dirty elements want different
             values for a single parameter.  This method is used as a safety net
-            that tries to insure _paramvec & GateSet elements are consistent
+            that tries to insure _paramvec & Model elements are consistent
             before their use."""
         dirty = False; TOL=1e-8
         for _,obj in self.iter_objs():
@@ -795,11 +795,11 @@ class GateSet(object):
             #print("DEBUG: non-trivially CLEANED paramvec due to dirty elements")
             self.from_vector(self._paramvec,False)
 
-        if GateSet._pcheck: self._check_paramvec()
+        if Model._pcheck: self._check_paramvec()
 
 
     def _update_paramvec(self, modified_obj=None):
-        """Updates self._paramvec after a member of this GateSet is modified"""
+        """Updates self._paramvec after a member of this Model is modified"""
         self._rebuild_paramvec() # prepares _paramvec & gpindices
 
         #update parameters changed by modified_obj
@@ -825,7 +825,7 @@ class GateSet(object):
         v = self._paramvec; Np = self.num_params()
         off = 0; shift = 0
 
-        #ellist = ", ".join(map(str,list(self.preps.keys()) +list(self.povms.keys()) +list(self.gates.keys())))
+        #ellist = ", ".join(map(str,list(self.preps.keys()) +list(self.povms.keys()) +list(self.operations.keys())))
         #print("DEBUG: rebuilding... %s" % ellist)
 
         #Step 1: remove any unused indices from paramvec and shift accordingly
@@ -906,11 +906,11 @@ class GateSet(object):
 
     def _init_virtual_obj(self, obj):
         """ 
-        Initializes a "virtual object" - an object (e.g. Gate) that *could* be a
-        member of the GateSet but won't be, as it's just built for temporary
+        Initializes a "virtual object" - an object (e.g. LinearOperator) that *could* be a
+        member of the Model but won't be, as it's just built for temporary
         use (e.g. the parallel action of several "base" gates).  As such
         we need to fully initialize its parent and gpindices members so it 
-        knows it belongs to this GateSet BUT it's not allowed to add any new
+        knows it belongs to this Model BUT it's not allowed to add any new
         parameters (they'd just be temporary).  It's also assumed that virtual
         objects don't need to be to/from-vectored as there are already enough
         real (non-virtual) gates/spamvecs/etc. to accomplish this.
@@ -924,7 +924,7 @@ class GateSet(object):
         assert(num_new_params == 0),"Virtual object is requesting %d new params!" % num_new_params
 
     def _obj_refcount(self, obj):
-        """ Number of references to `obj` contained within this GateSet """
+        """ Number of references to `obj` contained within this Model """
         cnt = 0
         for lbl,o in self.iter_objs():
             cnt += obj._obj_refcount(o)
@@ -933,12 +933,12 @@ class GateSet(object):
 
     def to_vector(self):
         """
-        Returns the gateset vectorized according to the optional parameters.
+        Returns the model vectorized according to the optional parameters.
 
         Returns
         -------
         numpy array
-            The vectorized gateset parameters.
+            The vectorized model parameters.
         """
         self._clean_paramvec()
         return self._paramvec
@@ -949,8 +949,8 @@ class GateSet(object):
         The inverse of to_vector.  Loads values of gates and rho and E vecs from
         from the vector `v`.  Note that `v` does not specify the number of
         gates, etc., and their labels: this information must be contained in
-        this `GateSet` prior to calling `from_vector`.  In practice, this just
-        means you should call the `from_vector` method using the same `GateSet`
+        this `Model` prior to calling `from_vector`.  In practice, this just
+        means you should call the `from_vector` method using the same `Model`
         that was used to generate the vector `v` in the first place.
         """
         assert( len(v) == self.num_params() )
@@ -964,18 +964,18 @@ class GateSet(object):
             self.reset_basis()
             # assume the vector we're loading isn't producing gates & vectors in
             # a known basis.
-        if GateSet._pcheck: self._check_paramvec()
+        if Model._pcheck: self._check_paramvec()
 
 
     def deriv_wrt_params(self):
         """
         Construct a matrix whose columns are the vectorized derivatives of all
-        the gateset's raw matrix and vector *elements* (placed in a vector)
-        with respect to each single gateset parameter.
+        the model's raw matrix and vector *elements* (placed in a vector)
+        with respect to each single model parameter.
 
         Thus, each column has length equal to the number of elements in the
-        gateset, and there are num_params() columns.  In the case of a "fully
-        parameterized gateset" (i.e. all gate matrices and SPAM vectors are
+        model, and there are num_params() columns.  In the case of a "fully
+        parameterized model" (i.e. all operation matrices and SPAM vectors are
         fully parameterized) then the resulting matrix will be the (square)
         identity matrix.
 
@@ -1025,7 +1025,7 @@ class GateSet(object):
 
     def transform(self, S):
         """
-        Update each of the gate matrices G in this gateset with inv(S) * G * S,
+        Update each of the operation matrices G in this model with inv(S) * G * S,
         each rhoVec with inv(S) * rhoVec, and each EVec with EVec * S
 
         Parameters
@@ -1040,8 +1040,8 @@ class GateSet(object):
         for povm in self.povms.values():
             povm.transform(S)
 
-        for gateObj in self.gates.values():
-            gateObj.transform(S)
+        for opObj in self.operations.values():
+            opObj.transform(S)
 
         for instrument in self.instruments.values():
             instrument.transform(S)
@@ -1051,93 +1051,93 @@ class GateSet(object):
 
     def _calc(self):
         if not hasattr(self,"_calcClass"): #for backward compatibility
-            self._calcClass = _gatematrixcalc.GateMatrixCalc
+            self._calcClass = _matrixfwdsim.MatrixForwardSimulator
 
         compiled_effects = _collections.OrderedDict()
         for povm_lbl,povm in self.povms.items():
             for k,e in povm.compile_effects(povm_lbl).items():
                 compiled_effects[k] = e
 
-        compiled_gates = _collections.OrderedDict()
-        for k,g in self.gates.items(): compiled_gates[k] = g
+        compiled_ops = _collections.OrderedDict()
+        for k,g in self.operations.items(): compiled_ops[k] = g
         for inst_lbl,inst in self.instruments.items():
-            for k,g in inst.compile_gates(inst_lbl).items():
-                compiled_gates[k] = g
+            for k,g in inst.compile_operations(inst_lbl).items():
+                compiled_ops[k] = g
 
         kwargs = {}
         if self._sim_type == "termorder":
             kwargs['max_order'] = int(self._sim_args[0])
             kwargs['cache'] = self._sim_args[-1] # always the list argument
 
-        assert(self._calcClass is not None), "Gateset does not have a calculator setup yet!"
-        return self._calcClass(self._dim, compiled_gates, self.preps,
+        assert(self._calcClass is not None), "Model does not have a calculator setup yet!"
+        return self._calcClass(self._dim, compiled_ops, self.preps,
                                compiled_effects, self._paramvec, self._autogator, **kwargs)
 
 
-    def split_gatestring(self, gatestring, erroron=('prep','povm')):
+    def split_circuit(self, circuit, erroron=('prep','povm')):
         """
-        Splits a gate string into prepLabel + gatesOnlyString + povmLabel
-        components.  If `gatestring` does not contain a prep label or a
+        Splits a operation sequence into prepLabel + opsOnlyString + povmLabel
+        components.  If `circuit` does not contain a prep label or a
         povm label a default label is returned if one exists.
 
         Parameters
         ----------
-        gatestring : GateString
-            A gate string, possibly beginning with a state preparation
+        circuit : OpString
+            A operation sequence, possibly beginning with a state preparation
             label and ending with a povm label.
 
         erroron : tuple of {'prep','povm'}
             A ValueError is raised if a preparation or povm label cannot be
             resolved when 'prep' or 'povm' is included in 'erroron'.  Otherwise
             `None` is returned in place of unresolvable labels.  An exception
-            is when this gateset has no preps or povms, in which case `None`
+            is when this model has no preps or povms, in which case `None`
             is always returned and errors are never raised, since in this
-            case one usually doesn't expect to use the GateSet to compute
+            case one usually doesn't expect to use the Model to compute
             probabilities (e.g. in germ selection).
 
         Returns
         -------
         prepLabel : str or None
-        gatesOnlyString : GateString
+        opsOnlyString : OpString
         povmLabel : str or None
         """
-        if len(gatestring) > 0 and gatestring[0] in self.preps:
-            prep_lbl = gatestring[0]
-            gatestring = gatestring[1:]
+        if len(circuit) > 0 and circuit[0] in self.preps:
+            prep_lbl = circuit[0]
+            circuit = circuit[1:]
         elif len(self.preps) == 1:
             prep_lbl = list(self.preps.keys())[0]
         else:
             if 'prep' in erroron and len(self.preps) > 0:
-                raise ValueError("Cannot resolve state prep in %s" % gatestring)
+                raise ValueError("Cannot resolve state prep in %s" % circuit)
             else: prep_lbl = None
 
-        if len(gatestring) > 0 and gatestring[-1] in self.povms:
-            povm_lbl = gatestring[-1]
-            gatestring = gatestring[:-1]
+        if len(circuit) > 0 and circuit[-1] in self.povms:
+            povm_lbl = circuit[-1]
+            circuit = circuit[:-1]
         elif len(self.povms) == 1:
             povm_lbl = list(self.povms.keys())[0]
         else:
             if 'povm' in erroron and len(self.povms) > 0:
-                raise ValueError("Cannot resolve POVM in %s" % gatestring)
+                raise ValueError("Cannot resolve POVM in %s" % circuit)
             else: povm_lbl = None
 
-        return prep_lbl, gatestring, povm_lbl
+        return prep_lbl, circuit, povm_lbl
 
 
-    def compile_gatestrings(self, gatestrings, dataset=None):
+    def compile_circuits(self, circuits, dataset=None):
         """
-        Compiles a list of :class:`GateString`s.
+        Compiles a list of :class:`OpString`s.
 
-        Gate strings must be "compiled" before probabilities can be computed for
+        LinearOperator strings must be "compiled" before probabilities can be computed for
         them. Each string corresponds to some number of "outcomes", indexed by an
         "outcome label" that is a tuple of POVM-effect or instrument-element
-        labels like "0".  Compiling creates maps between gate strings and their
+        labels like "0".  Compiling creates maps between operation sequences and their
         outcomes and the structures used in probability computation (see return
         values below).
 
         Parameters
         ----------
-        gatestrings : list of GateStrings
+        circuits : list of Circuits
             The list to compile.
 
         dataset : DataSet, optional
@@ -1148,7 +1148,7 @@ class GateSet(object):
         Returns
         -------
         raw_spamTuples_dict : collections.OrderedDict
-            A dictionary whose keys are raw gate sequences (containing just
+            A dictionary whose keys are raw operation sequences (containing just
             "compiled" gates, i.e. not instruments), and whose values are
             lists of (preplbl, effectlbl) tuples.  The effectlbl names a
             "compiled" effect vector; preplbl is just a prep label. Each tuple
@@ -1159,31 +1159,31 @@ class GateSet(object):
             axis of an output array that is being filled (computed).
 
         elIndices : collections.OrderedDict
-            A dictionary whose keys are integer indices into `gatestrings` and
+            A dictionary whose keys are integer indices into `circuits` and
             whose values are slices and/or integer-arrays into the space/axis of
             final elements.  Thus, to get the final elements corresponding to
-            `gatestrings[i]`, use `filledArray[ elIndices[i] ]`.
+            `circuits[i]`, use `filledArray[ elIndices[i] ]`.
 
         outcomes : collections.OrderedDict
-            A dictionary whose keys are integer indices into `gatestrings` and
+            A dictionary whose keys are integer indices into `circuits` and
             whose values are lists of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th gate strings's final elements
+            what outcomes the i-th operation sequences's final elements
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
 
         nTotElements : int
             The total number of "final elements" - this is how big of an array
-            is need to hold all of the probabilities `gatestrings` generates.
+            is need to hold all of the probabilities `circuits` generates.
         """
-        # gateset.compile -> odict[raw_gstr] = spamTuples, elementIndices, nElements
+        # model.compile -> odict[raw_gstr] = spamTuples, elementIndices, nElements
         # dataset.compile -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
         # compile all gsplaq strs -> elementIndices[(i,j)],
 
-        gatestrings = [ _gs.GateString(gstr) for gstr in gatestrings ] # cast to GateStrings
+        circuits = [ _gs.OpString(opstr) for opstr in circuits ] # cast to Circuits
 
-        #Indexed by raw gate string
+        #Indexed by raw operation sequence
         raw_spamTuples_dict = _collections.OrderedDict()  # final
-        raw_gateOutcomes_dict = _collections.OrderedDict()
+        raw_opOutcomes_dict = _collections.OrderedDict()
         raw_offsets = _collections.OrderedDict()
 
         #Indexed by parent index (an integer)
@@ -1199,50 +1199,50 @@ class GateSet(object):
                     spamTupleToOutcome[ (prep_lbl, povm_lbl + "_" + elbl) ] = (elbl,)
 
 
-        def resolveSPAM(gatestring):
-            """ Determines spam tuples that correspond to gatestring
+        def resolveSPAM(circuit):
+            """ Determines spam tuples that correspond to circuit
                 and strips any spam-related pieces off """
-            prep_lbl, gatestring, povm_lbl = \
-                self.split_gatestring(gatestring)
+            prep_lbl, circuit, povm_lbl = \
+                self.split_circuit(circuit)
             if prep_lbl is None or povm_lbl is None:
                 spamtups = [ None ] #put a single "dummy" spam-tuple placeholder
                   # so that there's a single "element" for each compiled string,
                   # which means that the usual "lookup" or "elIndices" will map
-                  # original gatestring-list indices to compiled-string, i.e.,
+                  # original circuit-list indices to compiled-string, i.e.,
                   # evalTree index, which is useful when computing products
-                  # (often the case when a GateSet has no preps or povms,
+                  # (often the case when a Model has no preps or povms,
                   #  e.g. in germ selection)
             else:
                 spamtups = [ (prep_lbl, povm_lbl + "_" + elbl)
                              for elbl in self.povms[povm_lbl]]
-            return gatestring, spamtups
+            return circuit, spamtups
 
         def process(s, spamtuples, observed_outcomes, elIndsToOutcomes,
-                    gate_outcomes=(), start=0):
+                    op_outcomes=(), start=0):
             """
             Implements recursive processing of a string. Separately
             implements two different behaviors:
-              "add" : add entries to raw_spamTuples_dict and raw_gateOutcomes_dict
+              "add" : add entries to raw_spamTuples_dict and raw_opOutcomes_dict
               "index" : adds entries to elIndicesByParent and outcomesByParent
-                        assuming that raw_spamTuples_dict and raw_gateOutcomes_dict
+                        assuming that raw_spamTuples_dict and raw_opOutcomes_dict
                         are already build (and won't be modified anymore).
             """
-            for i,gate_label in enumerate(s[start:],start=start):
+            for i,op_label in enumerate(s[start:],start=start):
 
                 # OLD: now allow "gate-level" labels which can contain
                 # multiple (parallel) instrument labels
-                #if gate_label in self.instruments: 
+                #if op_label in self.instruments: 
                 #    #we've found an instrument - recurse!
-                #    for inst_el_lbl in self.instruments[gate_label]:
-                #        compiled_el_lbl = gate_label + "_" + inst_el_lbl
-                #        process(s[0:i] + _gs.GateString((compiled_el_lbl,)) + s[i+1:],
-                #                spamtuples, elIndsToOutcomes, gate_outcomes + (inst_el_lbl,), i+1)
+                #    for inst_el_lbl in self.instruments[op_label]:
+                #        compiled_el_lbl = op_label + "_" + inst_el_lbl
+                #        process(s[0:i] + _gs.OpString((compiled_el_lbl,)) + s[i+1:],
+                #                spamtuples, elIndsToOutcomes, op_outcomes + (inst_el_lbl,), i+1)
                 #    break
 
-                if any([ sub_gl in self.instruments for sub_gl in gate_label.components]):
+                if any([ sub_gl in self.instruments for sub_gl in op_label.components]):
                     # we've found an instrument - recurse!
                     sublabel_tups_to_iter = [] # one per label component (may be only 1)
-                    for sub_gl in gate_label.components:
+                    for sub_gl in op_label.components:
                         if sub_gl in self.instruments:
                             sublabel_tups_to_iter.append( [ (sub_gl,inst_el_lbl)
                                                             for inst_el_lbl in self.instruments[sub_gl].keys() ])
@@ -1250,7 +1250,7 @@ class GateSet(object):
                             sublabel_tups_to_iter.append( [(sub_gl,None)] ) # just a single element
                             
                     for sublabel_tups in _itertools.product(*sublabel_tups_to_iter):
-                        sublabels = [] # the sub-labels of the overall gate label to add
+                        sublabels = [] # the sub-labels of the overall operation label to add
                         outcomes = [] # the outcome tuple associated with this overall label
                         for sub_gl,inst_el_lbl in sublabel_tups:
                             if inst_el_lbl is not None:
@@ -1261,18 +1261,18 @@ class GateSet(object):
                                 
                         compiled_el_lbl = _Label(sublabels)
                         compiled_el_outcomes = tuple(outcomes)
-                        process(s[0:i] + _gs.GateString((compiled_el_lbl,)) + s[i+1:],
+                        process(s[0:i] + _gs.OpString((compiled_el_lbl,)) + s[i+1:],
                                 spamtuples, observed_outcomes, elIndsToOutcomes,
-                                gate_outcomes + compiled_el_outcomes, i+1)
+                                op_outcomes + compiled_el_outcomes, i+1)
                     break
                     
-            else: #no instruments -- add "raw" gate string s
+            else: #no instruments -- add "raw" operation sequence s
                 if s in raw_spamTuples_dict:
-                    assert(gate_outcomes == raw_gateOutcomes_dict[s]) #DEBUG
+                    assert(op_outcomes == raw_opOutcomes_dict[s]) #DEBUG
                     #if action == "add":
                     od = raw_spamTuples_dict[s] # ordered dict
                     for spamtup in spamtuples:
-                        outcome_tup = gate_outcomes + spamTupleToOutcome[spamtup]
+                        outcome_tup = op_outcomes + spamTupleToOutcome[spamtup]
                         if (observed_outcomes is not None) and \
                            (outcome_tup not in observed_outcomes): continue
                            # don't add spamtuples we don't observe
@@ -1289,7 +1289,7 @@ class GateSet(object):
                 else:
                     # Note: store elements of raw_spamTuples_dict as dicts for
                     # now, for faster lookup during "index" mode
-                    outcome_tuples =  [ gate_outcomes + spamTupleToOutcome[x] for x in spamtuples ]
+                    outcome_tuples =  [ op_outcomes + spamTupleToOutcome[x] for x in spamtuples ]
                     
                     if observed_outcomes is not None:
                         # only add els of `spamtuples` corresponding to observed data (w/indexes starting at 0)
@@ -1309,17 +1309,17 @@ class GateSet(object):
                               # Note: works even if `i` already exists - doesn't reorder keys then
 
                     raw_spamTuples_dict[s] = spamtup_dict
-                    raw_gateOutcomes_dict[s] = gate_outcomes #DEBUG
+                    raw_opOutcomes_dict[s] = op_outcomes #DEBUG
 
         #Begin actual processing work:
 
         # Step1: recursively populate raw_spamTuples_dict,
-        #        raw_gateOutcomes_dict, and elIndsToOutcomesByParent
-        resolved_gatestrings = list(map(resolveSPAM, gatestrings))
-        for iParent,(gstr,spamtuples) in enumerate(resolved_gatestrings):
+        #        raw_opOutcomes_dict, and elIndsToOutcomesByParent
+        resolved_circuits = list(map(resolveSPAM, circuits))
+        for iParent,(opstr,spamtuples) in enumerate(resolved_circuits):
             elIndsToOutcomesByParent[iParent] = _collections.OrderedDict()
-            oouts = None if (dataset is None) else set(dataset[gstr].outcomes)
-            process(gstr,spamtuples, oouts, elIndsToOutcomesByParent[iParent])
+            oouts = None if (dataset is None) else set(dataset[opstr].outcomes)
+            process(opstr,spamtuples, oouts, elIndsToOutcomesByParent[iParent])
 
         # Step2: fill raw_offsets dictionary
         off = 0
@@ -1350,16 +1350,16 @@ class GateSet(object):
 
 
         ##DEBUG: SANITY CHECK
-        #if len(gatestrings) > 1:
-        #    for k,gstr in enumerate(gatestrings):
-        #        _,outcomes_k = self.compile_gatestring(gstr)
+        #if len(circuits) > 1:
+        #    for k,opstr in enumerate(circuits):
+        #        _,outcomes_k = self.compile_circuit(opstr)
         #        nIndices = _slct.length(elIndicesByParent[k]) if isinstance(elIndicesByParent[k], slice) \
         #                      else len(elIndicesByParent[k])
         #        assert(len(outcomes_k) == nIndices)
         #        assert(outcomes_k == outcomesByParent[k])
 
-        #print("GateSet.compile debug:")
-        #print("input = ",gatestrings)
+        #print("Model.compile debug:")
+        #print("input = ",circuits)
         #print("raw_dict = ", raw_spamTuples_dict)
         #print("elIndices = ", elIndicesByParent)
         #print("outcomes = ", outcomesByParent)
@@ -1369,24 +1369,24 @@ class GateSet(object):
                 outcomesByParent, nTotElements)
 
 
-    def compile_gatestring(self, gatestring):
+    def compile_circuit(self, circuit):
         """
-        Compiles a single :class:`GateString`.
+        Compiles a single :class:`OpString`.
 
         Parameters
         ----------
-        gatestring : GateString
-            The gate string to compile
+        circuit : OpString
+            The operation sequence to compile
 
         Returns
         -------
         raw_spamTuples_dict : collections.OrderedDict
-            A dictionary whose keys are raw gate sequences (containing just
+            A dictionary whose keys are raw operation sequences (containing just
             "compiled" gates, i.e. not instruments), and whose values are
             lists of (preplbl, effectlbl) tuples.  The effectlbl names a
             "compiled" effect vector; preplbl is just a prep label. Each tuple
             corresponds to a single "final element" of the computation for this
-            gate string.  The ordering is important - and is why this needs to be
+            operation sequence.  The ordering is important - and is why this needs to be
             an ordered dictionary - when the lists of tuples are concatenated (by
             key) the resulting tuple orderings corresponds to the final-element
             axis of an output array that is being filled (computed).
@@ -1396,23 +1396,23 @@ class GateSet(object):
             of POVM-effect and/or instrument-element labels), corresponding to
             the final elements.
         """
-        raw_dict,_,outcomes,nEls = self.compile_gatestrings([gatestring])
+        raw_dict,_,outcomes,nEls = self.compile_circuits([circuit])
         assert(len(outcomes[0]) == nEls)
         return raw_dict,outcomes[0]
 
 
-    def product(self, gatestring, bScale=False):
+    def product(self, circuit, bScale=False):
         """
-        Compute the product of a specified sequence of gate labels.
+        Compute the product of a specified sequence of operation labels.
 
-        Note: Gate matrices are multiplied in the reversed order of the tuple. That is,
-        the first element of gatestring can be thought of as the first gate operation
+        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
+        the first element of circuit can be thought of as the first gate operation
         performed, which is on the far right of the product of matrices.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-            The sequence of gate labels.
+        circuit : OpString or tuple of operation labels
+            The sequence of operation labels.
 
         bScale : bool, optional
             When True, return a scaling factor (see below).
@@ -1420,7 +1420,7 @@ class GateSet(object):
         Returns
         -------
         product : numpy array
-            The product or scaled product of the gate matrices.
+            The product or scaled product of the operation matrices.
 
         scale : float
             Only returned when bScale == True, in which case the
@@ -1428,18 +1428,18 @@ class GateSet(object):
             is to allow a trace or other linear operation to be done
             prior to the scaling.
         """
-        gatestring = _gs.GateString(gatestring) # cast to GateString
-        return self._calc().product(gatestring, bScale)
+        circuit = _gs.OpString(circuit) # cast to OpString
+        return self._calc().product(circuit, bScale)
 
 
-    def dproduct(self, gatestring, flat=False):
+    def dproduct(self, circuit, flat=False):
         """
-        Compute the derivative of a specified sequence of gate labels.
+        Compute the derivative of a specified sequence of operation labels.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels.
+        circuit : OpString or tuple of operation labels
+          The sequence of operation labels.
 
         flat : bool, optional
           Affects the shape of the returned derivative array (see below).
@@ -1449,32 +1449,32 @@ class GateSet(object):
         deriv : numpy array
             * if flat == False, a M x G x G array, where:
 
-              - M == length of the vectorized gateset (number of gateset parameters)
-              - G == the linear dimension of a gate matrix (G x G gate matrices).
+              - M == length of the vectorized model (number of model parameters)
+              - G == the linear dimension of a operation matrix (G x G operation matrices).
 
               and deriv[i,j,k] holds the derivative of the (j,k)-th entry of the product
-              with respect to the i-th gateset parameter.
+              with respect to the i-th model parameter.
 
             * if flat == True, a N x M array, where:
 
               - N == the number of entries in a single flattened gate (ordering as numpy.flatten)
-              - M == length of the vectorized gateset (number of gateset parameters)
+              - M == length of the vectorized model (number of model parameters)
 
               and deriv[i,j] holds the derivative of the i-th entry of the flattened
-              product with respect to the j-th gateset parameter.
+              product with respect to the j-th model parameter.
         """
-        gatestring = _gs.GateString(gatestring) # cast to GateString
-        return self._calc().dproduct(gatestring, flat)
+        circuit = _gs.OpString(circuit) # cast to OpString
+        return self._calc().dproduct(circuit, flat)
 
 
-    def hproduct(self, gatestring, flat=False):
+    def hproduct(self, circuit, flat=False):
         """
-        Compute the hessian of a specified sequence of gate labels.
+        Compute the hessian of a specified sequence of operation labels.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels.
+        circuit : OpString or tuple of operation labels
+          The sequence of operation labels.
 
         flat : bool, optional
           Affects the shape of the returned derivative array (see below).
@@ -1484,25 +1484,25 @@ class GateSet(object):
         hessian : numpy array
             * if flat == False, a  M x M x G x G numpy array, where:
 
-              - M == length of the vectorized gateset (number of gateset parameters)
-              - G == the linear dimension of a gate matrix (G x G gate matrices).
+              - M == length of the vectorized model (number of model parameters)
+              - G == the linear dimension of a operation matrix (G x G operation matrices).
 
               and hessian[i,j,k,l] holds the derivative of the (k,l)-th entry of the product
-              with respect to the j-th then i-th gateset parameters.
+              with respect to the j-th then i-th model parameters.
 
             * if flat == True, a  N x M x M numpy array, where:
 
               - N == the number of entries in a single flattened gate (ordered as numpy.flatten)
-              - M == length of the vectorized gateset (number of gateset parameters)
+              - M == length of the vectorized model (number of model parameters)
 
               and hessian[i,j,k] holds the derivative of the i-th entry of the flattened
-              product with respect to the k-th then k-th gateset parameters.
+              product with respect to the k-th then k-th model parameters.
         """
-        gatestring = _gs.GateString(gatestring) # cast to GateString
-        return self._calc().hproduct(gatestring, flat)
+        circuit = _gs.OpString(circuit) # cast to OpString
+        return self._calc().hproduct(circuit, flat)
 
 
-#    def pr(self, spamLabel, gatestring, clipTo=None, bUseScaling=True):
+#    def pr(self, spamLabel, circuit, clipTo=None, bUseScaling=True):
 #        """
 #        Compute the probability of the given gate sequence, where initialization
 #        & measurement operations are together specified by spamLabel.
@@ -1512,8 +1512,8 @@ class GateSet(object):
 #        spamLabel : string
 #           the label specifying the state prep and measure operations
 #
-#        gatestring : GateString or tuple of gate labels
-#          The sequence of gate labels specifying the gate string.
+#        circuit : OpString or tuple of operation labels
+#          The sequence of operation labels specifying the operation sequence.
 #
 #        clipTo : 2-tuple, optional
 #          (min,max) to clip return value if not None.
@@ -1528,14 +1528,14 @@ class GateSet(object):
 #        -------
 #        float
 #        """
-#        return self._calc().pr(spamLabel, gatestring, clipTo, bUseScaling)
+#        return self._calc().pr(spamLabel, circuit, clipTo, bUseScaling)
 #
 #
-#    def dpr(self, spamLabel, gatestring,
+#    def dpr(self, spamLabel, circuit,
 #            returnPr=False,clipTo=None):
 #        """
-#        Compute the derivative of a probability generated by a gate string and
-#        spam label as a 1 x M numpy array, where M is the number of gateset
+#        Compute the derivative of a probability generated by a operation sequence and
+#        spam label as a 1 x M numpy array, where M is the number of model
 #        parameters.
 #
 #        Parameters
@@ -1543,8 +1543,8 @@ class GateSet(object):
 #        spamLabel : string
 #           the label specifying the state prep and measure operations
 #
-#        gatestring : GateString or tuple of gate labels
-#          The sequence of gate labels specifying the gate string.
+#        circuit : OpString or tuple of operation labels
+#          The sequence of operation labels specifying the operation sequence.
 #
 #        returnPr : bool, optional
 #          when set to True, additionally return the probability itself.
@@ -1557,19 +1557,19 @@ class GateSet(object):
 #        -------
 #        derivative : numpy array
 #            a 1 x M numpy array of derivatives of the probability w.r.t.
-#            each gateset parameter (M is the length of the vectorized gateset).
+#            each model parameter (M is the length of the vectorized model).
 #
 #        probability : float
 #            only returned if returnPr == True.
 #        """
-#        return self._calc().dpr(spamLabel, gatestring,returnPr,clipTo)
+#        return self._calc().dpr(spamLabel, circuit,returnPr,clipTo)
 #
 #
-#    def hpr(self, spamLabel, gatestring,
+#    def hpr(self, spamLabel, circuit,
 #            returnPr=False,returnDeriv=False,clipTo=None):
 #        """
-#        Compute the Hessian of a probability generated by a gate string and
-#        spam label as a 1 x M x M array, where M is the number of gateset
+#        Compute the Hessian of a probability generated by a operation sequence and
+#        spam label as a 1 x M x M array, where M is the number of model
 #        parameters.
 #
 #        Parameters
@@ -1577,8 +1577,8 @@ class GateSet(object):
 #        spamLabel : string
 #           the label specifying the state prep and measure operations
 #
-#        gatestring : GateString or tuple of gate labels
-#          The sequence of gate labels specifying the gate string.
+#        circuit : OpString or tuple of operation labels
+#          The sequence of operation labels specifying the operation sequence.
 #
 #        returnPr : bool, optional
 #          when set to True, additionally return the probability itself.
@@ -1594,30 +1594,30 @@ class GateSet(object):
 #        Returns
 #        -------
 #        hessian : numpy array
-#            a 1 x M x M array, where M is the number of gateset parameters.
+#            a 1 x M x M array, where M is the number of model parameters.
 #            hessian[0,j,k] is the derivative of the probability w.r.t. the
-#            k-th then the j-th gateset parameter.
+#            k-th then the j-th model parameter.
 #
 #        derivative : numpy array
 #            only returned if returnDeriv == True. A 1 x M numpy array of
-#            derivatives of the probability w.r.t. each gateset parameter.
+#            derivatives of the probability w.r.t. each model parameter.
 #
 #        probability : float
 #            only returned if returnPr == True.
 #        """
-#        return self._calc().hpr(spamLabel, gatestring,
+#        return self._calc().hpr(spamLabel, circuit,
 #                                returnPr,returnDeriv,clipTo)
 
 
-    def probs(self, gatestring, clipTo=None):
+    def probs(self, circuit, clipTo=None):
         """
         Construct a dictionary containing the probabilities of every spam label
-        given a gate string.
+        given a operation sequence.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels specifying the gate string.
+        circuit : OpString or tuple of operation labels
+          The sequence of operation labels specifying the operation sequence.
 
         clipTo : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
@@ -1626,21 +1626,21 @@ class GateSet(object):
         -------
         probs : dictionary
             A dictionary such that
-            probs[SL] = pr(SL,gatestring,clipTo)
+            probs[SL] = pr(SL,circuit,clipTo)
             for each spam label (string) SL.
         """
-        return self._calc().probs(self.compile_gatestring(gatestring), clipTo)
+        return self._calc().probs(self.compile_circuit(circuit), clipTo)
 
 
-    def dprobs(self, gatestring, returnPr=False,clipTo=None):
+    def dprobs(self, circuit, returnPr=False,clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
-        spam label for a given gate string.
+        spam label for a given operation sequence.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels specifying the gate string.
+        circuit : OpString or tuple of operation labels
+          The sequence of operation labels specifying the operation sequence.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -1653,22 +1653,22 @@ class GateSet(object):
         -------
         dprobs : dictionary
             A dictionary such that
-            dprobs[SL] = dpr(SL,gatestring,gates,G0,SPAM,SP0,returnPr,clipTo)
+            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,clipTo)
             for each spam label (string) SL.
         """
-        return self._calc().dprobs(self.compile_gatestring(gatestring),
+        return self._calc().dprobs(self.compile_circuit(circuit),
                                    returnPr,clipTo)
 
 
-    def hprobs(self, gatestring, returnPr=False,returnDeriv=False,clipTo=None):
+    def hprobs(self, circuit, returnPr=False,returnDeriv=False,clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
-        spam label for a given gate string.
+        spam label for a given operation sequence.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels specifying the gate string.
+        circuit : OpString or tuple of operation labels
+          The sequence of operation labels specifying the operation sequence.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -1685,14 +1685,14 @@ class GateSet(object):
         -------
         hprobs : dictionary
             A dictionary such that
-            hprobs[SL] = hpr(SL,gatestring,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo)
+            hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo)
             for each spam label (string) SL.
         """
-        return self._calc().hprobs(self.compile_gatestring(gatestring),
+        return self._calc().hprobs(self.compile_circuit(circuit),
                                    returnPr, returnDeriv, clipTo)
 
 
-    def bulk_evaltree_from_resources(self, gatestring_list, comm=None, memLimit=None,
+    def bulk_evaltree_from_resources(self, circuit_list, comm=None, memLimit=None,
                                      distributeMethod="default", subcalls=[],
                                      dataset=None, verbosity=0):
         """
@@ -1700,12 +1700,12 @@ class GateSet(object):
 
         This tree can be used by other Bulk_* functions, and is it's own
         function so that for many calls to Bulk_* made with the same
-        gatestring_list, only a single call to bulk_evaltree is needed.
+        circuit_list, only a single call to bulk_evaltree is needed.
 
         Parameters
         ----------
-        gatestring_list : list of (tuples or GateStrings)
-            Each element specifies a gate string to include in the evaluation tree.
+        circuit_list : list of (tuples or Circuits)
+            Each element specifies a operation sequence to include in the evaluation tree.
 
         comm : mpi4py.MPI.Comm
             When not None, an MPI communicator for distributing computations
@@ -1715,15 +1715,15 @@ class GateSet(object):
             A rough memory limit in bytes which is used to determine subtree
             number and size.
 
-        distributeMethod : {"gatestrings", "deriv"}
+        distributeMethod : {"circuits", "deriv"}
             How to distribute calculation amongst processors (only has effect
-            when comm is not None).  "gatestrings" will divide the list of
-            gatestrings and thereby result in more subtrees; "deriv" will divide
+            when comm is not None).  "circuits" will divide the list of
+            circuits and thereby result in more subtrees; "deriv" will divide
             the columns of any jacobian matrices, thereby resulting in fewer
             (larger) subtrees.
 
         subcalls : list, optional
-            A list of the names of the GateSet functions that will be called
+            A list of the names of the Model functions that will be called
             using the returned evaluation tree, which are necessary for
             estimating memory usage (for comparison to memLimit).  If
             memLimit is None, then there's no need to specify `subcalls`.
@@ -1752,9 +1752,9 @@ class GateSet(object):
         """
 
         # Let np = # param groups, so 1 <= np <= num_params, size of each param group = num_params/np
-        # Let ng = # gate string groups == # subtrees, so 1 <= ng <= max_split_num; size of each group = size of corresponding subtree
+        # Let ng = # operation sequence groups == # subtrees, so 1 <= ng <= max_split_num; size of each group = size of corresponding subtree
         # With nprocs processors, split into Ng comms of ~nprocs/Ng procs each.  These comms are each assigned
-        #  some number of gate string groups, where their ~nprocs/Ng processors are used to partition the np param
+        #  some number of operation sequence groups, where their ~nprocs/Ng processors are used to partition the np param
         #  groups. Note that 1 <= Ng <= min(ng,nprocs).
         # Notes:
         #  - making np or ng > nprocs can be useful for saving memory.  Raising np saves *Jacobian* and *Hessian*
@@ -1763,7 +1763,7 @@ class GateSet(object):
         #  - any given CPU will be running a *single* (ng-index,np-index) pair at any given time, and so many
         #     memory estimates only depend on ng and np, not on Ng.  (The exception is when a routine *gathers*
         #     the end results from a divided computation.)
-        #  - "gatestrings" distributeMethod: never distribute num_params (np == 1, Ng == nprocs always).
+        #  - "circuits" distributeMethod: never distribute num_params (np == 1, Ng == nprocs always).
         #     Choose ng such that ng >= nprocs, memEstimate(ng,np=1) < memLimit, and ng % nprocs == 0 (ng % Ng == 0).
         #  - "deriv" distributeMethod: if possible, set ng=1, nprocs <= np <= num_params, Ng = 1 (np % nprocs == 0?)
         #     If memory constraints don't allow this, set np = num_params, Ng ~= nprocs/num_params (but Ng >= 1),
@@ -1799,7 +1799,7 @@ class GateSet(object):
             """ Returns a memory estimate based on arguments """
             tm = _time.time()
 
-            nFinalStrs = int(round(len(gatestring_list) / ng)) #may not need to be an int...
+            nFinalStrs = int(round(len(circuit_list) / ng)) #may not need to be an int...
 
             if cacheSize is None:
                 #Get cache size
@@ -1807,10 +1807,10 @@ class GateSet(object):
                     #Slower (but more accurate way)
                     if ng not in evt_cache:
                         evt_cache[ng] = self.bulk_evaltree(
-                            gatestring_list, minSubtrees=ng, numSubtreeComms=Ng,
+                            circuit_list, minSubtrees=ng, numSubtreeComms=Ng,
                             dataset=dataset)
                         # FUTURE: make a _bulk_evaltree_precompiled version that takes compiled
-                        # gate strings as input so don't have to recompile every time we hit this line.
+                        # operation sequences as input so don't have to recompile every time we hit this line.
                     cacheSize = max([s.cache_size() for s in evt_cache[ng][0].get_sub_trees()])
                     nFinalStrs = max([s.num_final_strings() for s in evt_cache[ng][0].get_sub_trees()])
                 else:
@@ -1847,8 +1847,8 @@ class GateSet(object):
         if distributeMethod == "default":
             distributeMethod = calc.default_distribute_method()
 
-        if distributeMethod == "gatestrings":
-            Nstrs = len(gatestring_list)
+        if distributeMethod == "circuits":
+            Nstrs = len(circuit_list)
             np1 = 1; np2 = 1; Ng = min(nprocs,Nstrs)
             ng = Ng
             if memLimit is not None:
@@ -1864,7 +1864,7 @@ class GateSet(object):
                             memEstimate(Nstrs,np1,np2,Ng,verb=1)
                         if hasattr(evt_cache[Nstrs],"squeeze") and \
                            memEstimate(Nstrs,np1,np2,Ng,cacheSize=0) <= memLimit:
-                            evt_cache[Nstrs].squeeze(0) #To get here, need to use higher-dim gatesets
+                            evt_cache[Nstrs].squeeze(0) #To get here, need to use higher-dim models
                         else:
                             raise MemoryError("Cannot split or squeeze tree to achieve memory limit")
 
@@ -2002,19 +2002,19 @@ class GateSet(object):
 
 
 
-    def bulk_evaltree(self, gatestring_list, minSubtrees=None, maxTreeSize=None,
+    def bulk_evaltree(self, circuit_list, minSubtrees=None, maxTreeSize=None,
                       numSubtreeComms=1, dataset=None, verbosity=0):
         """
-        Create an evaluation tree for all the gate strings in gatestring_list.
+        Create an evaluation tree for all the operation sequences in circuit_list.
 
         This tree can be used by other Bulk_* functions, and is it's own
         function so that for many calls to Bulk_* made with the same
-        gatestring_list, only a single call to bulk_evaltree is needed.
+        circuit_list, only a single call to bulk_evaltree is needed.
 
         Parameters
         ----------
-        gatestring_list : list of (tuples or GateStrings)
-            Each element specifies a gate string to include in the evaluation tree.
+        circuit_list : list of (tuples or Circuits)
+            Each element specifies a operation sequence to include in the evaluation tree.
 
         minSubtrees : int (optional)
             The minimum number of subtrees the resulting EvalTree must have.
@@ -2042,30 +2042,30 @@ class GateSet(object):
             An evaluation tree object.
 
         elIndices : collections.OrderedDict
-            A dictionary whose keys are integer indices into `gatestring_list` and
+            A dictionary whose keys are integer indices into `circuit_list` and
             whose values are slices and/or integer-arrays into the space/axis of
             final elements returned by the 'bulk fill' routines.  Thus, to get the
-            final elements corresponding to `gatestrings[i]`, use
+            final elements corresponding to `circuits[i]`, use
             `filledArray[ elIndices[i] ]`.
 
         outcomes : collections.OrderedDict
-            A dictionary whose keys are integer indices into `gatestring_list` and
+            A dictionary whose keys are integer indices into `circuit_list` and
             whose values are lists of outcome labels (an outcome label is a tuple
             of POVM-effect and/or instrument-element labels).  Thus, to obtain
-            what outcomes the i-th gate strings's final elements
+            what outcomes the i-th operation sequences's final elements
             (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         """
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
 
         compiled_gatestrings, elIndices, outcomes, nEls = \
-                            self.compile_gatestrings(gatestring_list, dataset)
+                            self.compile_circuits(circuit_list, dataset)
 
         evalTree = self._calc().construct_evaltree()
         evalTree.initialize(compiled_gatestrings, numSubtreeComms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
-                    (len(gatestring_list),_time.time()-tm)); tm = _time.time()
+                    (len(circuit_list),_time.time()-tm)); tm = _time.time()
 
         if maxTreeSize is not None:
             elIndices = evalTree.split(elIndices, maxTreeSize, None, printer) # won't split if unnecessary
@@ -2091,12 +2091,12 @@ class GateSet(object):
 
     def bulk_product(self, evalTree, bScale=False, comm=None):
         """
-        Compute the products of many gate strings at once.
+        Compute the products of many operation sequences at once.
 
         Parameters
         ----------
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.
 
         bScale : bool, optional
@@ -2104,7 +2104,7 @@ class GateSet(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.  This is done over gate strings when a
+           across multiple processors.  This is done over operation sequences when a
            *split* evalTree is given, otherwise no parallelization is performed.
 
 
@@ -2113,8 +2113,8 @@ class GateSet(object):
         prods : numpy array
             Array of shape S x G x G, where:
 
-            - S == the number of gate strings
-            - G == the linear dimension of a gate matrix (G x G gate matrices).
+            - S == the number of operation sequences
+            - G == the linear dimension of a operation matrix (G x G operation matrices).
 
         scaleValues : numpy array
             Only returned when bScale == True. A length-S array specifying
@@ -2127,12 +2127,12 @@ class GateSet(object):
     def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False,
                       bScale=False, comm=None):
         """
-        Compute the derivative of many gate strings at once.
+        Compute the derivative of many operation sequences at once.
 
         Parameters
         ----------
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.
 
         flat : bool, optional
@@ -2148,7 +2148,7 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first done over the set
            of parameters being differentiated with respect to.  If there are
-           more processors than gateset parameters, distribution over a split
+           more processors than model parameters, distribution over a split
            evalTree (if given) is possible.
 
 
@@ -2158,12 +2158,12 @@ class GateSet(object):
 
           * if `flat` is ``False``, an array of shape S x M x G x G, where:
 
-            - S = len(gatestring_list)
-            - M = the length of the vectorized gateset
-            - G = the linear dimension of a gate matrix (G x G gate matrices)
+            - S = len(circuit_list)
+            - M = the length of the vectorized model
+            - G = the linear dimension of a operation matrix (G x G operation matrices)
 
             and ``derivs[i,j,k,l]`` holds the derivative of the (k,l)-th entry
-            of the i-th gate string product with respect to the j-th gateset
+            of the i-th operation sequence product with respect to the j-th model
             parameter.
 
           * if `flat` is ``True``, an array of shape S*N x M where:
@@ -2173,17 +2173,17 @@ class GateSet(object):
             - S,M = as above,
 
             and ``deriv[i,j]`` holds the derivative of the ``(i % G^2)``-th
-            entry of the ``(i / G^2)``-th flattened gate string product  with
-            respect to the j-th gateset parameter.
+            entry of the ``(i / G^2)``-th flattened operation sequence product  with
+            respect to the j-th model parameter.
 
         products : numpy array
           Only returned when `bReturnProds` is ``True``.  An array of shape
-          S x G x G; ``products[i]`` is the i-th gate string product.
+          S x G x G; ``products[i]`` is the i-th operation sequence product.
 
         scaleVals : numpy array
           Only returned when `bScale` is ``True``.  An array of shape S such
           that ``scaleVals[i]`` contains the multiplicative scaling needed for
-          the derivatives and/or products for the i-th gate string.
+          the derivatives and/or products for the i-th operation sequence.
         """
         return self._calc().bulk_dproduct(evalTree, flat, bReturnProds,
                                           bScale, comm)
@@ -2192,12 +2192,12 @@ class GateSet(object):
     def bulk_hproduct(self, evalTree, flat=False, bReturnDProdsAndProds=False,
                       bScale=False, comm=None):
         """
-        Return the Hessian of many gate string products at once.
+        Return the Hessian of many operation sequence products at once.
 
         Parameters
         ----------
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.
 
         flat : bool, optional
@@ -2215,7 +2215,7 @@ class GateSet(object):
            across multiple processors.  Distribution is first done over the
            set of parameters being differentiated with respect to when the
            *second* derivative is taken.  If there are more processors than
-           gateset parameters, distribution over a split evalTree (if given)
+           model parameters, distribution over a split evalTree (if given)
            is possible.
 
 
@@ -2224,13 +2224,13 @@ class GateSet(object):
         hessians : numpy array
             * if flat == False, an  array of shape S x M x M x G x G, where
 
-              - S == len(gatestring_list)
-              - M == the length of the vectorized gateset
-              - G == the linear dimension of a gate matrix (G x G gate matrices)
+              - S == len(circuit_list)
+              - M == the length of the vectorized model
+              - G == the linear dimension of a operation matrix (G x G operation matrices)
 
               and hessians[i,j,k,l,m] holds the derivative of the (l,m)-th entry
-              of the i-th gate string product with respect to the k-th then j-th
-              gateset parameters.
+              of the i-th operation sequence product with respect to the k-th then j-th
+              model parameters.
 
             * if flat == True, an array of shape S*N x M x M where
 
@@ -2238,20 +2238,20 @@ class GateSet(object):
               - S,M == as above,
 
               and hessians[i,j,k] holds the derivative of the (i % G^2)-th entry
-              of the (i / G^2)-th flattened gate string product with respect to
-              the k-th then j-th gateset parameters.
+              of the (i / G^2)-th flattened operation sequence product with respect to
+              the k-th then j-th model parameters.
 
         derivs : numpy array
           Only returned if bReturnDProdsAndProds == True.
 
           * if flat == False, an array of shape S x M x G x G, where
 
-            - S == len(gatestring_list)
-            - M == the length of the vectorized gateset
-            - G == the linear dimension of a gate matrix (G x G gate matrices)
+            - S == len(circuit_list)
+            - M == the length of the vectorized model
+            - G == the linear dimension of a operation matrix (G x G operation matrices)
 
             and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
-            of the i-th gate string product with respect to the j-th gateset
+            of the i-th operation sequence product with respect to the j-th model
             parameter.
 
           * if flat == True, an array of shape S*N x M where
@@ -2261,30 +2261,30 @@ class GateSet(object):
             - S,M == as above,
 
             and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
-            the (i / G^2)-th flattened gate string product  with respect to
-            the j-th gateset parameter.
+            the (i / G^2)-th flattened operation sequence product  with respect to
+            the j-th model parameter.
 
         products : numpy array
           Only returned when bReturnDProdsAndProds == True.  An array of shape
-          S x G x G; products[i] is the i-th gate string product.
+          S x G x G; products[i] is the i-th operation sequence product.
 
         scaleVals : numpy array
           Only returned when bScale == True.  An array of shape S such that
           scaleVals[i] contains the multiplicative scaling needed for
-          the hessians, derivatives, and/or products for the i-th gate string.
+          the hessians, derivatives, and/or products for the i-th operation sequence.
         """
         ret = self._calc().bulk_hproduct(
             evalTree, flat, bReturnDProdsAndProds, bScale, comm)
         if bReturnDProdsAndProds:
             return ret[0:2] + ret[3:] #remove ret[2] == deriv wrt filter2,
-                         # which isn't an input param for GateSet version
+                         # which isn't an input param for Model version
         else: return ret
 
 
 #Deprecated: use bulk_probs, bulk_dprobs, and bulk_hprobs
 #    def bulk_pr(self, spamLabel, evalTree, clipTo=None, check=False, comm=None):
 #        """
-#        Compute the probabilities of the gate sequences given by evalTree,
+#        Compute the probabilities of the operation sequences given by evalTree,
 #        where initialization & measurement operations are always the same
 #        and are together specified by spamLabel.
 #
@@ -2294,7 +2294,7 @@ class GateSet(object):
 #           the label specifying the state prep and measure operations
 #
 #        evalTree : EvalTree
-#           given by a prior call to bulk_evaltree.  Specifies the gate strings
+#           given by a prior call to bulk_evaltree.  Specifies the operation sequences
 #           to compute the bulk operation on.
 #
 #        clipTo : 2-tuple, optional
@@ -2314,7 +2314,7 @@ class GateSet(object):
 #        Returns
 #        -------
 #        numpy array
-#          An array of length equal to the number of gate strings containing
+#          An array of length equal to the number of operation sequences containing
 #          the (float) probabilities.
 #        """
 #        return self._calc().bulk_pr(spamLabel, evalTree, clipTo, check, comm)
@@ -2336,7 +2336,7 @@ class GateSet(object):
 #           the label specifying the state prep and measure operations
 #
 #        evalTree : EvalTree
-#           given by a prior call to bulk_evaltree.  Specifies the gate strings
+#           given by a prior call to bulk_evaltree.  Specifies the operation sequences
 #           to compute the bulk operation on.
 #
 #        returnPr : bool, optional
@@ -2371,15 +2371,15 @@ class GateSet(object):
 #        dprobs : numpy array
 #            An array of shape S x M, where
 #
-#            - S == the number of gate strings
-#            - M == the length of the vectorized gateset
+#            - S == the number of operation sequences
+#            - M == the length of the vectorized model
 #
 #            and dprobs[i,j] holds the derivative of the i-th probability w.r.t.
-#            the j-th gateset parameter.
+#            the j-th model parameter.
 #
 #        probs : numpy array
 #            Only returned when returnPr == True. An array of shape S containing
-#            the probabilities of each gate string.
+#            the probabilities of each operation sequence.
 #        """
 #        return self._calc().bulk_dpr(spamLabel, evalTree, returnPr,clipTo,
 #                                     check, comm, None, wrtBlockSize)
@@ -2401,7 +2401,7 @@ class GateSet(object):
 #          the label specifying the state prep and measure operations
 #
 #        evalTree : EvalTree
-#          given by a prior call to bulk_evaltree.  Specifies the gate strings
+#          given by a prior call to bulk_evaltree.  Specifies the operation sequences
 #          to compute the bulk operation on.
 #
 #        returnPr : bool, optional
@@ -2438,36 +2438,36 @@ class GateSet(object):
 #        hessians : numpy array
 #            a S x M x M array, where
 #
-#            - S == the number of gate strings
-#            - M == the length of the vectorized gateset
+#            - S == the number of operation sequences
+#            - M == the length of the vectorized model
 #
 #            and hessians[i,j,k] is the derivative of the i-th probability
-#            w.r.t. the k-th then the j-th gateset parameter.
+#            w.r.t. the k-th then the j-th model parameter.
 #
 #        derivs : numpy array
 #            only returned if returnDeriv == True. A S x M array where
 #            derivs[i,j] holds the derivative of the i-th probability
-#            w.r.t. the j-th gateset parameter.
+#            w.r.t. the j-th model parameter.
 #
 #        probabilities : numpy array
 #            only returned if returnPr == True.  A length-S array
-#            containing the probabilities for each gate string.
+#            containing the probabilities for each operation sequence.
 #        """
 #        return self._calc().bulk_hpr(spamLabel, evalTree, returnPr,returnDeriv,
 #                                    clipTo, check, comm, None, None,
 #                                     wrtBlockSize1, wrtBlockSize2)
 
 
-    def bulk_probs(self, gatestring_list, clipTo=None, check=False,
+    def bulk_probs(self, circuit_list, clipTo=None, check=False,
                    comm=None, memLimit=None, dataset=None, smartc=None):
         """
         Construct a dictionary containing the probabilities
-        for an entire list of gate sequences.
+        for an entire list of operation sequences.
 
         Parameters
         ----------
-        gatestring_list : list of (tuples or GateStrings)
-          Each element specifies a gate string to compute quantities for.
+        circuit_list : list of (tuples or Circuits)
+          Each element specifies a operation sequence to compute quantities for.
 
         clipTo : 2-tuple, optional
            (min,max) to clip return value if not None.
@@ -2499,29 +2499,29 @@ class GateSet(object):
         Returns
         -------
         probs : dictionary
-            A dictionary such that `probs[gstr]` is an ordered dictionary of
+            A dictionary such that `probs[opstr]` is an ordered dictionary of
             `(outcome, p)` tuples, where `outcome` is a tuple of labels
             and `p` is the corresponding probability.
         """
-        gatestring_list = [ _gs.GateString(gstr) for gstr in gatestring_list]  # cast to GateStrings
+        circuit_list = [ _gs.OpString(opstr) for opstr in circuit_list]  # cast to Circuits
         evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
-            gatestring_list, comm, memLimit, subcalls=['bulk_fill_probs'],
+            circuit_list, comm, memLimit, subcalls=['bulk_fill_probs'],
             dataset=dataset, verbosity=0) # FUTURE (maybe make verbosity into an arg?)
-        return self._calc().bulk_probs(gatestring_list, evalTree, elIndices,
+        return self._calc().bulk_probs(circuit_list, evalTree, elIndices,
                                        outcomes, clipTo, check, comm, smartc)
 
 
-    def bulk_dprobs(self, gatestring_list, returnPr=False,clipTo=None,
+    def bulk_dprobs(self, circuit_list, returnPr=False,clipTo=None,
                     check=False,comm=None,wrtBlockSize=None,dataset=None):
 
         """
         Construct a dictionary containing the probability-derivatives
-        for an entire list of gate sequences.
+        for an entire list of operation sequences.
 
         Parameters
         ----------
-        gatestring_list : list of (tuples or GateStrings)
-          Each element specifies a gate string to compute quantities for.
+        circuit_list : list of (tuples or Circuits)
+          Each element specifies a operation sequence to compute quantities for.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -2558,32 +2558,32 @@ class GateSet(object):
         Returns
         -------
         dprobs : dictionary
-            A dictionary such that `probs[gstr]` is an ordered dictionary of
+            A dictionary such that `probs[opstr]` is an ordered dictionary of
             `(outcome, dp, p)` tuples, where `outcome` is a tuple of labels,
             `p` is the corresponding probability, and `dp` is an array containing
             the derivative of `p` with respect to each parameter.  If `returnPr`
             if False, then `p` is not included in the tuples (so they're just
             `(outcome, dp)`).
         """
-        gatestring_list = [ _gs.GateString(gstr) for gstr in gatestring_list]  # cast to GateStrings
-        evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list, dataset=dataset)
-        return self._calc().bulk_dprobs(gatestring_list, evalTree, elIndices,
+        circuit_list = [ _gs.OpString(opstr) for opstr in circuit_list]  # cast to Circuits
+        evalTree, elIndices, outcomes = self.bulk_evaltree(circuit_list, dataset=dataset)
+        return self._calc().bulk_dprobs(circuit_list, evalTree, elIndices,
                                         outcomes, returnPr,clipTo,
                                         check, comm, None, wrtBlockSize)
 
 
-    def bulk_hprobs(self, gatestring_list, returnPr=False,returnDeriv=False,
+    def bulk_hprobs(self, circuit_list, returnPr=False,returnDeriv=False,
                     clipTo=None, check=False, comm=None,
                     wrtBlockSize1=None, wrtBlockSize2=None, dataset=None):
 
         """
         Construct a dictionary containing the probability-Hessians
-        for an entire list of gate sequences.
+        for an entire list of operation sequences.
 
         Parameters
         ----------
-        gatestring_list : list of (tuples or GateStrings)
-          Each element specifies a gate string to compute quantities for.
+        circuit_list : list of (tuples or Circuits)
+          Each element specifies a operation sequence to compute quantities for.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -2622,7 +2622,7 @@ class GateSet(object):
         Returns
         -------
         hprobs : dictionary
-            A dictionary such that `probs[gstr]` is an ordered dictionary of
+            A dictionary such that `probs[opstr]` is an ordered dictionary of
             `(outcome, hp, dp, p)` tuples, where `outcome` is a tuple of labels,
             `p` is the corresponding probability, `dp` is a 1D array containing
             the derivative of `p` with respect to each parameter, and `hp` is a
@@ -2630,9 +2630,9 @@ class GateSet(object):
             If `returnPr` if False, then `p` is not included in the tuples.
             If `returnDeriv` if False, then `dp` is not included in the tuples.
         """
-        gatestring_list = [ _gs.GateString(gstr) for gstr in gatestring_list]  # cast to GateStrings
-        evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list, dataset=dataset)
-        return self._calc().bulk_hprobs(gatestring_list, evalTree, elIndices,
+        circuit_list = [ _gs.OpString(opstr) for opstr in circuit_list]  # cast to Circuits
+        evalTree, elIndices, outcomes = self.bulk_evaltree(circuit_list, dataset=dataset)
+        return self._calc().bulk_hprobs(circuit_list, evalTree, elIndices,
                                         outcomes, returnPr, returnDeriv,
                                         clipTo, check, comm, None, None,
                                         wrtBlockSize1, wrtBlockSize2)
@@ -2640,11 +2640,11 @@ class GateSet(object):
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False, comm=None):
         """
-        Compute the outcome probabilities for an entire tree of gate strings.
+        Compute the outcome probabilities for an entire tree of operation sequences.
 
         This routine fills a 1D array, `mxToFill` with the probabilities
-        corresponding to the *compiled* gate strings found in an evaluation
-        tree, `evalTree`.  An initial list of (general) :class:`GateString`
+        corresponding to the *compiled* operation sequences found in an evaluation
+        tree, `evalTree`.  An initial list of (general) :class:`OpString`
         objects is *compiled* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently
@@ -2652,7 +2652,7 @@ class GateSet(object):
         must have length equal to the number of final elements (this can be
         obtained by `evalTree.num_final_elements()`.  To interpret which elements
         correspond to which strings and outcomes, you'll need the mappings
-        generated when the original list of `GateStrings` was compiled.
+        generated when the original list of `Circuits` was compiled.
 
         Parameters
         ----------
@@ -2701,7 +2701,7 @@ class GateSet(object):
         mxToFill : numpy ndarray
           an already-allocated ExM numpy array where E is the total number of
           computed elements (i.e. evalTree.num_final_elements()) and M is the
-          number of gate set parameters.
+          number of model parameters.
 
         evalTree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
@@ -2781,7 +2781,7 @@ class GateSet(object):
         derivMxToFill1, derivMxToFill2 : numpy array, optional
           when not None, an already-allocated ExM numpy array that is filled
           with probability derivatives, similar to bulk_fill_dprobs(...), but
-          where M is the number of gateset parameters selected for the 1st and 2nd
+          where M is the number of model parameters selected for the 1st and 2nd
           differentiation, respectively (i.e. by wrtFilter1 and wrtFilter2).
 
         clipTo : 2-tuple, optional
@@ -2837,7 +2837,7 @@ class GateSet(object):
         reduce results from a single column of the Hessian at a time.  For
         example, the Hessian of a function of many gate sequence probabilities
         can often be computed column-by-column from the using the columns of
-        the gate sequences.
+        the operation sequences.
 
 
         Parameters
@@ -2848,7 +2848,7 @@ class GateSet(object):
           correspondence between rows of mxToFill and spam labels.
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.  This tree *cannot* be split.
 
         wrtSlicesList : list
@@ -2861,9 +2861,9 @@ class GateSet(object):
         bReturnDProbs12 : boolean, optional
            If true, the generator computes a 2-tuple: (hessian_col, d12_col),
            where d12_col is a column of the matrix d12 defined by:
-           d12[iSpamLabel,iGateStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
+           d12[iSpamLabel,iOpStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
            the probability generated by the sequence and spam label indexed
-           by iGateStr and iSpamLabel.  d12 has the same dimensions as the
+           by iOpStr and iSpamLabel.  d12 has the same dimensions as the
            Hessian, and turns out to be useful when computing the Hessian
            of functions of the probabilities.
 
@@ -2883,7 +2883,7 @@ class GateSet(object):
           arrays of shape K x S x B x B', where:
 
           - K is the length of spam_label_rows,
-          - S is the number of gate strings (i.e. evalTree.num_final_strings()),
+          - S is the number of operation sequences (i.e. evalTree.num_final_strings()),
           - B is the number of parameter rows (the length of rowSlice)
           - B' is the number of parameter columns (the length of colSlice)
 
@@ -2898,11 +2898,11 @@ class GateSet(object):
             bReturnDProbs12, comm)
 
 
-    def frobeniusdist(self, otherGateSet, transformMx=None,
+    def frobeniusdist(self, otherModel, transformMx=None,
                       itemWeights=None, normalize=True):
         """
         Compute the weighted frobenius norm of the difference between this
-        gateset and otherGateSet.  Differences in each corresponding gate
+        model and otherModel.  Differences in each corresponding gate
         matrix and spam vector element are squared, weighted (using
         `itemWeights` as applicable), then summed.  The value returned is the
         square root of this sum, or the square root of this sum divided by the
@@ -2910,15 +2910,15 @@ class GateSet(object):
 
         Parameters
         ----------
-        otherGateSet : GateSet
-            the other gate set to difference against.
+        otherModel : Model
+            the other model to difference against.
 
         transformMx : numpy array, optional
-            if not None, transform this gateset by
-            G => inv(transformMx) * G * transformMx, for each gate matrix G
+            if not None, transform this model by
+            G => inv(transformMx) * G * transformMx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
-            not alter the values stored in this gateset.
+            not alter the values stored in this model.
 
         itemWeights : dict, optional
            Dictionary of weighting factors for individual gates and spam
@@ -2939,25 +2939,25 @@ class GateSet(object):
         -------
         float
         """
-        return self._calc().frobeniusdist(otherGateSet._calc(), transformMx,
+        return self._calc().frobeniusdist(otherModel._calc(), transformMx,
                                           itemWeights, normalize)
 
-    def residuals(self, otherGateSet, transformMx=None, itemWeights=None):
+    def residuals(self, otherModel, transformMx=None, itemWeights=None):
         """
-        Compute the weighted residuals between two gate sets (the differences
-        in corresponding gate matrix and spam vector elements).
+        Compute the weighted residuals between two models (the differences
+        in corresponding operation matrix and spam vector elements).
 
         Parameters
         ----------
-        otherGateSet : GateSet
-            the other gate set to difference against.
+        otherModel : Model
+            the other model to difference against.
 
         transformMx : numpy array, optional
-            if not None, transform this gateset by
-            G => inv(transformMx) * G * transformMx, for each gate matrix G
+            if not None, transform this model by
+            G => inv(transformMx) * G * transformMx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
-            not alter the values stored in this gateset.
+            not alter the values stored in this model.
 
         itemWeights : dict, optional
            Dictionary of weighting factors for individual gates and spam
@@ -2977,83 +2977,83 @@ class GateSet(object):
         nSummands : int
             The (weighted) number of elements accounted for by the residuals.
         """
-        return self._calc().residuals(otherGateSet._calc(), transformMx, itemWeights)
+        return self._calc().residuals(otherModel._calc(), transformMx, itemWeights)
 
 
-    def jtracedist(self, otherGateSet, transformMx=None):
+    def jtracedist(self, otherModel, transformMx=None):
         """
         Compute the Jamiolkowski trace distance between this
-        gateset and otherGateSet, defined as the maximum
+        model and otherModel, defined as the maximum
         of the trace distances between each corresponding gate,
         including spam gates.
 
         Parameters
         ----------
-        otherGateSet : GateSet
-            the other gate set to difference against.
+        otherModel : Model
+            the other model to difference against.
 
         transformMx : numpy array, optional
-            if not None, transform this gateset by
-            G => inv(transformMx) * G * transformMx, for each gate matrix G
+            if not None, transform this model by
+            G => inv(transformMx) * G * transformMx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
-            not alter the values stored in this gateset.
+            not alter the values stored in this model.
 
         Returns
         -------
         float
         """
-        return self._calc().jtracedist(otherGateSet._calc(), transformMx)
+        return self._calc().jtracedist(otherModel._calc(), transformMx)
 
 
-    def diamonddist(self, otherGateSet, transformMx=None):
+    def diamonddist(self, otherModel, transformMx=None):
         """
         Compute the diamond-norm distance between this
-        gateset and otherGateSet, defined as the maximum
+        model and otherModel, defined as the maximum
         of the diamond-norm distances between each
         corresponding gate, including spam gates.
 
         Parameters
         ----------
-        otherGateSet : GateSet
-            the other gate set to difference against.
+        otherModel : Model
+            the other model to difference against.
 
         transformMx : numpy array, optional
-            if not None, transform this gateset by
-            G => inv(transformMx) * G * transformMx, for each gate matrix G
+            if not None, transform this model by
+            G => inv(transformMx) * G * transformMx, for each operation matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
-            not alter the values stored in this gateset.
+            not alter the values stored in this model.
 
         Returns
         -------
         float
         """
-        return self._calc().diamonddist(otherGateSet._calc(), transformMx)
+        return self._calc().diamonddist(otherModel._calc(), transformMx)
 
 
     def tpdist(self):
         """
-        Compute the "distance" between this gateset and the space of
+        Compute the "distance" between this model and the space of
         trace-preserving (TP) maps, defined as the sqrt of the sum-of-squared
-        deviations among the first row of all gate matrices and the
+        deviations among the first row of all operation matrices and the
         first element of all state preparations.
         """
         penalty = 0.0
-        for gateMx in list(self.gates.values()):
-            penalty += abs(gateMx[0,0] - 1.0)**2
-            for k in range(1,gateMx.shape[1]):
-                penalty += abs(gateMx[0,k])**2
+        for operationMx in list(self.operations.values()):
+            penalty += abs(operationMx[0,0] - 1.0)**2
+            for k in range(1,operationMx.shape[1]):
+                penalty += abs(operationMx[0,k])**2
 
-        gate_dim = self.get_dimension()
-        firstEl = 1.0 / gate_dim**0.25
+        op_dim = self.get_dimension()
+        firstEl = 1.0 / op_dim**0.25
         for rhoVec in list(self.preps.values()):
             penalty += abs(rhoVec[0,0] - firstEl)**2
 
         return _np.sqrt(penalty)
 
 
-    def strdiff(self, otherGateSet):
+    def strdiff(self, otherModel):
         """
         Return a string describing
         the frobenius distances between
@@ -3062,30 +3062,30 @@ class GateSet(object):
 
         Parameters
         ----------
-        otherGateSet : GateSet
-            the other gate set to difference against.
+        otherModel : Model
+            the other model to difference against.
 
         Returns
         -------
         str
         """
-        s =  "Gateset Difference:\n"
+        s =  "Model Difference:\n"
         s += " Preps:\n"
         for lbl in self.preps:
             s += "  %s = %g\n" % \
-                (lbl, _np.linalg.norm(self.preps[lbl].todense()-otherGateSet.preps[lbl].todense()))
+                (lbl, _np.linalg.norm(self.preps[lbl].todense()-otherModel.preps[lbl].todense()))
 
         s += " POVMs:\n"
         for povm_lbl,povm in self.povms.items():
             s += "  %s: " % povm_lbl
             for lbl in povm:
                 s += "    %s = %g\n" % \
-                     (lbl, _np.linalg.norm(povm[lbl].todense()-otherGateSet.povms[povm_lbl][lbl].todense()))
+                     (lbl, _np.linalg.norm(povm[lbl].todense()-otherModel.povms[povm_lbl][lbl].todense()))
 
         s += " Gates:\n"
-        for lbl in self.gates:
+        for lbl in self.operations:
             s += "  %s = %g\n" % \
-                (lbl, _np.linalg.norm(self.gates[lbl].todense()-otherGateSet.gates[lbl].todense()))
+                (lbl, _np.linalg.norm(self.operations[lbl].todense()-otherModel.operations[lbl].todense()))
 
         if len(self.instruments) > 0:
             s += " Instruments:\n"
@@ -3093,60 +3093,60 @@ class GateSet(object):
                 s += "  %s: " % inst_lbl
                 for lbl in inst:
                     s += "    %s = %g\n" % \
-                         (lbl, _np.linalg.norm(inst[lbl].todense()-otherGateSet.instruments[inst_lbl][lbl].todense()))
+                         (lbl, _np.linalg.norm(inst[lbl].todense()-otherModel.instruments[inst_lbl][lbl].todense()))
 
         return s
 
 
     def copy(self):
         """
-        Copy this gateset
+        Copy this model
 
         Returns
         -------
-        GateSet
-            a (deep) copy of this gateset.
+        Model
+            a (deep) copy of this model.
         """
-        if GateSet._pcheck: self._check_paramvec()
+        if Model._pcheck: self._check_paramvec()
 
-        newGateset = GateSet()
-        newGateset._evotype = self._evotype
-        newGateset.preps = self.preps.copy(newGateset)
-        newGateset.povms = self.povms.copy(newGateset)
-        #newGateset.effects = self.effects.copy(newGateset)
-        newGateset.gates = self.gates.copy(newGateset)
-        newGateset.instruments = self.instruments.copy(newGateset)
-        newGateset._paramvec = self._paramvec.copy()
-        #newGateset._rebuild_paramvec() # unnecessary, as copy will change parent and copy gpindices
+        newModel = Model()
+        newModel._evotype = self._evotype
+        newModel.preps = self.preps.copy(newModel)
+        newModel.povms = self.povms.copy(newModel)
+        #newModel.effects = self.effects.copy(newModel)
+        newModel.operations = self.operations.copy(newModel)
+        newModel.instruments = self.instruments.copy(newModel)
+        newModel._paramvec = self._paramvec.copy()
+        #newModel._rebuild_paramvec() # unnecessary, as copy will change parent and copy gpindices
 
-        if GateSet._pcheck: newGateset._check_paramvec()
+        if Model._pcheck: newModel._check_paramvec()
 
-        #newGateset.spamdefs = self.spamdefs.copy()
-        newGateset._dim = self._dim
-        newGateset._default_gauge_group = self._default_gauge_group #Note: SHALLOW copy
+        #newModel.spamdefs = self.spamdefs.copy()
+        newModel._dim = self._dim
+        newModel._default_gauge_group = self._default_gauge_group #Note: SHALLOW copy
 
         if not hasattr(self,"_calcClass"): #for backward compatibility
-            self._calcClass = _gatematrixcalc.GateMatrixCalc
-        newGateset._calcClass = self._calcClass
+            self._calcClass = _matrixfwdsim.MatrixForwardSimulator
+        newModel._calcClass = self._calcClass
 
         if not hasattr(self,"_autogator"): #for backward compatibility
-            self._autogator = None # the default for *old* gatesets
-        newGateset._autogator = self._autogator.copy(newGateset)
-        newGateset.auto_idle_gatename = self.auto_idle_gatename
+            self._autogator = None # the default for *old* models
+        newModel._autogator = self._autogator.copy(newModel)
+        newModel.auto_idle_gatename = self.auto_idle_gatename
 
         if not hasattr(self,"_sim_type"): #for backward compatibility
             self._sim_type = "dmmatrix"
             self._sim_args = []
-        newGateset._sim_type = self._sim_type
-        newGateset._sim_args = self._sim_args
+        newModel._sim_type = self._sim_type
+        newModel._sim_args = self._sim_args
 
         if not hasattr(self,"basis") and hasattr(self,'_basisNameAndDim'): #for backward compatibility
             self.basis = _Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
-        newGateset.basis = self.basis.copy()
-        newGateset.stateSpaceLabels = self.stateSpaceLabels # TODO: copy()?
-        if GateSet._pcheck: self._check_paramvec()
+        newModel.basis = self.basis.copy()
+        newModel.stateSpaceLabels = self.stateSpaceLabels # TODO: copy()?
+        if Model._pcheck: self._check_paramvec()
 
-        return newGateset
+        return newModel
 
     def __str__(self):
         s = ""
@@ -3156,7 +3156,7 @@ class GateSet(object):
         for lbl,povm in self.povms.items():
             s += "%s = " % str(lbl) + str(povm) + "\n"
         s += "\n"
-        for lbl,gate in self.gates.items():
+        for lbl,gate in self.operations.items():
             s += "%s = \n" % str(lbl) + str(gate) + "\n\n"
         for lbl,inst in self.instruments.items():
             s += "%s = " % str(lbl) + str(inst) + "\n"
@@ -3174,19 +3174,19 @@ class GateSet(object):
     def iter_objs(self):
         for lbl,obj in _itertools.chain(self.preps.items(),
                                         self.povms.items(),
-                                        self.gates.items(),
+                                        self.operations.items(),
                                         self.instruments.items()):
             yield (lbl,obj)
 
-    def iter_gates(self):
+    def iter_operations(self):
         """
         Returns
         -------
         iterator
-            an iterator over all (gateLabel,gate) pairs
+            an iterator over all (opLabel,gate) pairs
         """
         assert(False),"Deprecated!"
-        #for (label,gate) in self.gates.items():
+        #for (label,gate) in self.operations.items():
         #    yield (label, gate)
 
     def iter_preps(self):
@@ -3216,39 +3216,39 @@ class GateSet(object):
 #TODO: how to handle these given possibility of different parameterizations...
 #  -- maybe only allow these methods to be called when using a "full" parameterization?
 #  -- or perhaps better to *move* them to the parameterization class
-    def depolarize(self, gate_noise=None, spam_noise=None, max_gate_noise=None,
+    def depolarize(self, op_noise=None, spam_noise=None, max_op_noise=None,
                    max_spam_noise=None, seed=None):
         """
-        Apply depolarization uniformly or randomly to this gateset's gate
+        Apply depolarization uniformly or randomly to this model's gate
         and/or SPAM elements, and return the result, without modifying the
-        original (this) gateset.  You must specify either gate_noise or
-        max_gate_noise (for the amount of gate depolarization), and  either
+        original (this) model.  You must specify either op_noise or
+        max_op_noise (for the amount of gate depolarization), and  either
         spam_noise or max_spam_noise (for spam depolarization).
 
         Parameters
         ----------
-        gate_noise : float, optional
-         apply depolarizing noise of strength ``1-gate_noise`` to all gates in
-          the gateset. (Multiplies each assumed-Pauli-basis gate matrix by the
-          diagonal matrix with ``(1.0-gate_noise)`` along all the diagonal
+        op_noise : float, optional
+         apply depolarizing noise of strength ``1-op_noise`` to all gates in
+          the model. (Multiplies each assumed-Pauli-basis operation matrix by the
+          diagonal matrix with ``(1.0-op_noise)`` along all the diagonal
           elements except the first (the identity).
 
         spam_noise : float, optional
           apply depolarizing noise of strength ``1-spam_noise`` to all SPAM
-          vectors in the gateset. (Multiplies the non-identity part of each
+          vectors in the model. (Multiplies the non-identity part of each
           assumed-Pauli-basis state preparation vector and measurement vector
           by ``(1.0-spam_noise)``).
 
-        max_gate_noise : float, optional
+        max_op_noise : float, optional
 
-          specified instead of `gate_noise`; apply a random depolarization
-          with maximum strength ``1-max_gate_noise`` to each gate in the
-          gateset.
+          specified instead of `op_noise`; apply a random depolarization
+          with maximum strength ``1-max_op_noise`` to each gate in the
+          model.
 
         max_spam_noise : float, optional
           specified instead of `spam_noise`; apply a random depolarization
           with maximum strength ``1-max_spam_noise`` to SPAM vector in the
-          gateset.
+          model.
 
         seed : int, optional
           if not ``None``, seed numpy's random number generator with this value
@@ -3256,31 +3256,31 @@ class GateSet(object):
 
         Returns
         -------
-        GateSet
-            the depolarized GateSet
+        Model
+            the depolarized Model
         """
-        newGateset = self.copy() # start by just copying the current gateset
-        gateDim = self.get_dimension()
+        newModel = self.copy() # start by just copying the current model
+        opDim = self.get_dimension()
         rndm = _np.random.RandomState(seed)
 
-        if max_gate_noise is not None:
-            if gate_noise is not None:
-                raise ValueError("Must specify at most one of 'gate_noise' and 'max_gate_noise' NOT both")
+        if max_op_noise is not None:
+            if op_noise is not None:
+                raise ValueError("Must specify at most one of 'op_noise' and 'max_op_noise' NOT both")
 
             #Apply random depolarization to each gate
-            r = max_gate_noise * rndm.random_sample(len(self.gates))
-            for i,label in enumerate(self.gates):
-                newGateset.gates[label].depolarize(r[i])
-            r = max_gate_noise * rndm.random_sample(len(self.instruments))
+            r = max_op_noise * rndm.random_sample(len(self.operations))
+            for i,label in enumerate(self.operations):
+                newModel.operations[label].depolarize(r[i])
+            r = max_op_noise * rndm.random_sample(len(self.instruments))
             for i,label in enumerate(self.instruments):
-                newGateset.instruments[label].depolarize(r[i])
+                newModel.instruments[label].depolarize(r[i])
 
-        elif gate_noise is not None:
+        elif op_noise is not None:
             #Apply the same depolarization to each gate
-            for label in self.gates:
-                newGateset.gates[label].depolarize(gate_noise)
+            for label in self.operations:
+                newModel.operations[label].depolarize(op_noise)
             for label in self.instruments:
-                newGateset.instruments[label].depolarize(gate_noise)
+                newModel.instruments[label].depolarize(op_noise)
 
         if max_spam_noise is not None:
             if spam_noise is not None:
@@ -3289,33 +3289,33 @@ class GateSet(object):
             #Apply random depolarization to each rho and E vector
             r = max_spam_noise * rndm.random_sample( len(self.preps) )
             for (i,lbl) in enumerate(self.preps):
-                newGateset.preps[lbl].depolarize(r[i])
+                newModel.preps[lbl].depolarize(r[i])
             r = max_spam_noise * rndm.random_sample( len(self.povms) )
             for label in self.povms:
-                newGateset.povms[label].depolarize(r[i])
+                newModel.povms[label].depolarize(r[i])
 
         elif spam_noise is not None:
             #Apply the same depolarization to each gate
-            D = _np.diag( [1]+[1-spam_noise]*(gateDim-1) )
+            D = _np.diag( [1]+[1-spam_noise]*(opDim-1) )
             for lbl in self.preps:
-                newGateset.preps[lbl].depolarize(spam_noise)
+                newModel.preps[lbl].depolarize(spam_noise)
 
             # Just depolarize the preps - leave POVMs alone
             #for label in self.povms:
-            #    newGateset.povms[label].depolarize(spam_noise)
+            #    newModel.povms[label].depolarize(spam_noise)
 
-        newGateset._clean_paramvec() #depolarize may leave dirty members
-        return newGateset
+        newModel._clean_paramvec() #depolarize may leave dirty members
+        return newModel
 
 
     def rotate(self, rotate=None, max_rotate=None, seed=None):
         """
         Apply a rotation uniformly (the same rotation applied to each gate)
-        or randomly (different random rotations to each gate) to this gateset,
-        and return the result, without modifying the original (this) gateset.
+        or randomly (different random rotations to each gate) to this model,
+        and return the result, without modifying the original (this) model.
 
         You must specify either 'rotate' or 'max_rotate'. This method currently
-        only works on n-qubit gatesets.
+        only works on n-qubit models.
 
         Parameters
         ----------
@@ -3332,7 +3332,7 @@ class GateSet(object):
         max_rotate : float, optional
             If `max_rotate` is specified (*instead* of `rotate`), then pyGSTi
             randomly generates a different `rotate` tuple, and applies the
-            corresponding rotation, to each gate in this `GateSet`.  Each
+            corresponding rotation, to each gate in this `Model`.  Each
             component of each tuple is drawn uniformly from [0, `max_rotate`).
 
         seed : int, optional
@@ -3341,10 +3341,10 @@ class GateSet(object):
 
         Returns
         -------
-        GateSet
-            the rotated GateSet
+        Model
+            the rotated Model
         """
-        newGateset = self.copy() # start by just copying gateset
+        newModel = self.copy() # start by just copying model
         dim = self.get_dimension()
         myBasis = self.basis
 
@@ -3354,37 +3354,37 @@ class GateSet(object):
 
             #Apply random rotation to each gate
             rndm = _np.random.RandomState(seed)
-            r = max_rotate * rndm.random_sample( len(self.gates) * (dim-1) )
-            for i,label in enumerate(self.gates):
+            r = max_rotate * rndm.random_sample( len(self.operations) * (dim-1) )
+            for i,label in enumerate(self.operations):
                 rot = _np.array(r[(dim-1)*i:(dim-1)*(i+1)])
-                newGateset.gates[label].rotate(rot, myBasis)
+                newModel.operations[label].rotate(rot, myBasis)
             r = max_rotate * rndm.random_sample( len(self.instruments) * (dim-1) )
             for i,label in enumerate(self.instruments):
                 rot = _np.array(r[(dim-1)*i:(dim-1)*(i+1)])
-                newGateset.instruments[label].rotate(rot, myBasis)
+                newModel.instruments[label].rotate(rot, myBasis)
 
 
         elif rotate is not None:
             assert(len(rotate) == dim-1), \
                 "Invalid 'rotate' argument. You must supply a tuple of length %d" % (dim-1)
-            for label in self.gates:
-                newGateset.gates[label].rotate(rotate, myBasis)
+            for label in self.operations:
+                newModel.operations[label].rotate(rotate, myBasis)
             for label in self.instruments:
-                newGateset.instruments[label].rotate(rotate, myBasis)
+                newModel.instruments[label].rotate(rotate, myBasis)
 
         else: raise ValueError("Must specify either 'rotate' or 'max_rotate' "
                                + "-- neither was non-None")
 
-        newGateset._clean_paramvec() #rotate may leave dirty members
-        return newGateset
+        newModel._clean_paramvec() #rotate may leave dirty members
+        return newModel
 
 
     def randomize_with_unitary(self, scale, seed=None, randState=None):
-        """Create a new gateset with random unitary perturbations.
+        """Create a new model with random unitary perturbations.
 
-        Apply a random unitary to each element of a gateset, and return the
-        result, without modifying the original (this) gateset. This method
-        works on GateSet as long as the dimension is a perfect square.
+        Apply a random unitary to each element of a model, and return the
+        result, without modifying the original (this) model. This method
+        works on Model as long as the dimension is a perfect square.
 
         Parameters
         ----------
@@ -3404,68 +3404,68 @@ class GateSet(object):
 
         Returns
         -------
-        GateSet
-            the randomized GateSet
+        Model
+            the randomized Model
         """
         if randState is None:
             rndm = _np.random.RandomState(seed)
         else:
             rndm = randState
 
-        gate_dim = self.get_dimension()
-        unitary_dim = int(round(_np.sqrt(gate_dim)))
-        assert( unitary_dim**2 == gate_dim ), \
-            "GateSet dimension must be a perfect square, %d is not" % gate_dim
+        op_dim = self.get_dimension()
+        unitary_dim = int(round(_np.sqrt(op_dim)))
+        assert( unitary_dim**2 == op_dim ), \
+            "Model dimension must be a perfect square, %d is not" % op_dim
 
-        gs_randomized = self.copy()
+        mdl_randomized = self.copy()
 
-        for gateLabel,gate in self.gates.items():
+        for opLabel,gate in self.operations.items():
             randMat = scale * (rndm.randn(unitary_dim,unitary_dim) \
                                    + 1j * rndm.randn(unitary_dim,unitary_dim))
             randMat = _np.transpose(_np.conjugate(randMat)) + randMat
                   # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
             randUnitary   = _scipy.linalg.expm(-1j*randMat)
 
-            randGate = _gt.unitary_to_process_mx(randUnitary) #in std basis
-            randGate = _bt.change_basis(randGate, "std", self.basis)
+            randOp = _gt.unitary_to_process_mx(randUnitary) #in std basis
+            randOp = _bt.change_basis(randOp, "std", self.basis)
 
-            gs_randomized.gates[gateLabel] = _gate.FullyParameterizedGate(
-                            _np.dot(randGate,gate))
+            mdl_randomized.operations[opLabel] = _op.FullyParameterizedOp(
+                            _np.dot(randOp,gate))
 
         #Note: this function does NOT randomize instruments
 
-        return gs_randomized
+        return mdl_randomized
 
 
     def increase_dimension(self, newDimension):
         """
-        Enlarge the spam vectors and gate matrices of gateset to a specified
-        dimension, and return the resulting inflated gateset.  Spam vectors
-        are zero-padded and gate matrices are padded with 1's on the diagonal
+        Enlarge the spam vectors and operation matrices of model to a specified
+        dimension, and return the resulting inflated model.  Spam vectors
+        are zero-padded and operation matrices are padded with 1's on the diagonal
         and zeros on the off-diagonal (effectively padded by identity operation).
 
         Parameters
         ----------
         newDimension : int
-          the dimension of the returned gateset.  That is,
-          the returned gateset will have rho and E vectors that
-          have shape (newDimension,1) and gate matrices with shape
+          the dimension of the returned model.  That is,
+          the returned model will have rho and E vectors that
+          have shape (newDimension,1) and operation matrices with shape
           (newDimension,newDimension)
 
         Returns
         -------
-        GateSet
-            the increased-dimension GateSet
+        Model
+            the increased-dimension Model
         """
 
         curDim = self.get_dimension()
         assert(newDimension > curDim)
 
-        new_gateset = GateSet("full", self.preps._prefix, self.effects_prefix,
-                              self.gates._prefix, self.povms._prefix,
+        new_model = Model("full", self.preps._prefix, self.effects_prefix,
+                              self.operations._prefix, self.povms._prefix,
                               self.instruments._prefix, self._sim_type)
-        new_gateset._dim = newDimension
-        new_gateset.reset_basis() #FUTURE: maybe user can specify how increase is being done?
+        new_model._dim = newDimension
+        new_model.reset_basis() #FUTURE: maybe user can specify how increase is being done?
 
         addedDim = newDimension-curDim
         vec_zeroPad = _np.zeros( (addedDim,1), 'd')
@@ -3473,7 +3473,7 @@ class GateSet(object):
         #Increase dimension of rhoVecs and EVecs by zero-padding
         for lbl,rhoVec in self.preps.items():
             assert( len(rhoVec) == curDim )
-            new_gateset.preps[lbl] = \
+            new_model.preps[lbl] = \
                 _sv.FullyParameterizedSPAMVec(_np.concatenate( (rhoVec, vec_zeroPad) ))
 
         for lbl,povm in self.povms.items():
@@ -3482,61 +3482,61 @@ class GateSet(object):
                         for elbl,EVec in povm.items() ]
 
             if isinstance(povm, _povm.TPPOVM):
-                new_gateset.povms[lbl] = _povm.TPPOVM(effects)
+                new_model.povms[lbl] = _povm.TPPOVM(effects)
             else:
-                new_gateset.povms[lbl] = _povm.UnconstrainedPOVM(effects) #everything else
+                new_model.povms[lbl] = _povm.UnconstrainedPOVM(effects) #everything else
 
         #Increase dimension of gates by assuming they act as identity on additional (unknown) space
-        for gateLabel,gate in self.gates.items():
+        for opLabel,gate in self.operations.items():
             assert( gate.shape == (curDim,curDim) )
-            newGate = _np.zeros( (newDimension,newDimension) )
-            newGate[ 0:curDim, 0:curDim ] = gate[:,:]
-            for i in range(curDim,newDimension): newGate[i,i] = 1.0
-            new_gateset.gates[gateLabel] = _gate.FullyParameterizedGate(newGate)
+            newOp = _np.zeros( (newDimension,newDimension) )
+            newOp[ 0:curDim, 0:curDim ] = gate[:,:]
+            for i in range(curDim,newDimension): newOp[i,i] = 1.0
+            new_model.operations[opLabel] = _op.FullyParameterizedOp(newOp)
 
         for instLabel,inst in self.instruments.items():
-            inst_gates = []
+            inst_ops = []
             for outcomeLbl,gate in inst.items():
-                newGate = _np.zeros( (newDimension,newDimension) )
-                newGate[ 0:curDim, 0:curDim ] = gate[:,:]
-                for i in range(curDim,newDimension): newGate[i,i] = 1.0
-                inst_gates.append( (outcomeLbl,_gate.FullyParameterizedGate(newGate)) )
-            new_gateset.instruments[instLabel] = _instrument.Instrument(inst_gates)
+                newOp = _np.zeros( (newDimension,newDimension) )
+                newOp[ 0:curDim, 0:curDim ] = gate[:,:]
+                for i in range(curDim,newDimension): newOp[i,i] = 1.0
+                inst_ops.append( (outcomeLbl,_op.FullyParameterizedOp(newOp)) )
+            new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
 
-        return new_gateset
+        return new_model
 
 
     def decrease_dimension(self, newDimension):
         """
-        Shrink the spam vectors and gate matrices of gateset to a specified
-        dimension, and return the resulting gate set.
+        Shrink the spam vectors and operation matrices of model to a specified
+        dimension, and return the resulting model.
 
         Parameters
         ----------
         newDimension : int
-          the dimension of the returned gateset.  That is,
-          the returned gateset will have rho and E vectors that
-          have shape (newDimension,1) and gate matrices with shape
+          the dimension of the returned model.  That is,
+          the returned model will have rho and E vectors that
+          have shape (newDimension,1) and operation matrices with shape
           (newDimension,newDimension)
 
         Returns
         -------
-        GateSet
-            the decreased-dimension GateSet
+        Model
+            the decreased-dimension Model
         """
         curDim = self.get_dimension()
         assert(newDimension < curDim)
 
-        new_gateset = GateSet("full", self.preps._prefix, self.effects_prefix,
-                              self.gates._prefix, self.povms._prefix,
+        new_model = Model("full", self.preps._prefix, self.effects_prefix,
+                              self.operations._prefix, self.povms._prefix,
                               self.instruments._prefix, self._sim_type)
-        new_gateset._dim = newDimension
-        new_gateset.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
+        new_model._dim = newDimension
+        new_model.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 
         #Decrease dimension of rhoVecs and EVecs by truncation
         for lbl,rhoVec in self.preps.items():
             assert( len(rhoVec) == curDim )
-            new_gateset.preps[lbl] = \
+            new_model.preps[lbl] = \
                 _sv.FullyParameterizedSPAMVec(rhoVec[0:newDimension,:])
 
         for lbl,povm in self.povms.items():
@@ -3544,33 +3544,33 @@ class GateSet(object):
             effects = [ (elbl,EVec[0:newDimension,:]) for elbl,EVec in povm.items()]
 
             if isinstance(povm, _povm.TPPOVM):
-                new_gateset.povms[lbl] = _povm.TPPOVM(effects)
+                new_model.povms[lbl] = _povm.TPPOVM(effects)
             else:
-                new_gateset.povms[lbl] = _povm.UnconstrainedPOVM(effects) #everything else
+                new_model.povms[lbl] = _povm.UnconstrainedPOVM(effects) #everything else
 
 
         #Decrease dimension of gates by truncation
-        for gateLabel,gate in self.gates.items():
+        for opLabel,gate in self.operations.items():
             assert( gate.shape == (curDim,curDim) )
-            newGate = _np.zeros( (newDimension,newDimension) )
-            newGate[ :, : ] = gate[0:newDimension,0:newDimension]
-            new_gateset.gates[gateLabel] = _gate.FullyParameterizedGate(newGate)
+            newOp = _np.zeros( (newDimension,newDimension) )
+            newOp[ :, : ] = gate[0:newDimension,0:newDimension]
+            new_model.operations[opLabel] = _op.FullyParameterizedOp(newOp)
 
         for instLabel,inst in self.instruments.items():
-            inst_gates = []
+            inst_ops = []
             for outcomeLbl,gate in inst.items():
-                newGate = _np.zeros( (newDimension,newDimension) )
-                newGate[ :, : ] = gate[0:newDimension,0:newDimension]
-                inst_gates.append( (outcomeLbl,_gate.FullyParameterizedGate(newGate)) )
-            new_gateset.instruments[instLabel] = _instrument.Instrument(inst_gates)
+                newOp = _np.zeros( (newDimension,newDimension) )
+                newOp[ :, : ] = gate[0:newDimension,0:newDimension]
+                inst_ops.append( (outcomeLbl,_op.FullyParameterizedOp(newOp)) )
+            new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
 
-        return new_gateset
+        return new_model
 
     def kick(self, absmag=1.0, bias=0, seed=None):
         """
-        Kick gateset by adding to each gate a random matrix with values
+        Kick model by adding to each gate a random matrix with values
         uniformly distributed in the interval [bias-absmag,bias+absmag],
-        and return the resulting "kicked" gate set.
+        and return the resulting "kicked" model.
 
         Parameters
         ----------
@@ -3587,40 +3587,40 @@ class GateSet(object):
 
         Returns
         -------
-        GateSet
-            the kicked gate set.
+        Model
+            the kicked model.
         """
         kicked_gs = self.copy()
         rndm = _np.random.RandomState(seed)
-        for gateLabel,gate in self.gates.items():
+        for opLabel,gate in self.operations.items():
             delta = absmag * 2.0*(rndm.random_sample(gate.shape)-0.5) + bias
-            kicked_gs.gates[gateLabel] = _gate.FullyParameterizedGate(
-                                            kicked_gs.gates[gateLabel] + delta )
+            kicked_gs.operations[opLabel] = _op.FullyParameterizedOp(
+                                            kicked_gs.operations[opLabel] + delta )
 
         #Note: does not alter intruments!
         return kicked_gs
 
 
-    def get_clifford_symplectic_reps(self, gatelabel_filter=None):
+    def get_clifford_symplectic_reps(self, oplabel_filter=None):
         """
         Constructs a dictionary of the symplectic representations for all
-        the Clifford gates in this gateset.  Non-:class:`CliffordGate` gates
+        the Clifford gates in this model.  Non-:class:`CliffordOp` gates
         will be ignored and their entries omitted from the returned dictionary.
 
         Parameters
         ----------
-        gatelabel_filter : iterable, optional
-            A list, tuple, or set of gate labels whose symplectic
+        oplabel_filter : iterable, optional
+            A list, tuple, or set of operation labels whose symplectic
             representations should be returned (if they exist).
 
         Returns
         -------
         dict
-            keys are gate labels and/or just the root names of gates
+            keys are operation labels and/or just the root names of gates
             (without any state space indices/labels).  Values are
             `(symplectic_matrix, phase_vector)` tuples.
         """
-        gfilter = set(gatelabel_filter) if gatelabel_filter is not None \
+        gfilter = set(oplabel_filter) if oplabel_filter is not None \
                   else None
 
         srep_dict = {}
@@ -3628,16 +3628,16 @@ class GateSet(object):
             # Special case: gatename for a 1-qubit perfect idle (not actually stored as gates)
             srep_dict[self.auto_idle_gatename] = _symp.unitary_to_symplectic(_np.identity(2,'d'))
 
-        for gl,gate in self.gates.items():
+        for gl,gate in self.operations.items():
             if (gfilter is not None) and (gl not in gfilter): continue
 
-            if isinstance(gate, _gate.EmbeddedGateMap):
-                assert(isinstance(gate.embedded_gate, _gate.CliffordGate)), \
-                    "EmbeddedClifforGate contains a non-CliffordGate!"
+            if isinstance(gate, _op.EmbeddedOpMap):
+                assert(isinstance(gate.embedded_op, _op.CliffordOp)), \
+                    "EmbeddedClifforGate contains a non-CliffordOp!"
                 lbl = gl.name # strip state space labels off since this is a
                               # symplectic rep for the *embedded* gate
-                srep = (gate.embedded_gate.smatrix,gate.embedded_gate.svector)
-            elif isinstance(gate, _gate.CliffordGate):
+                srep = (gate.embedded_op.smatrix,gate.embedded_op.svector)
+            elif isinstance(gate, _op.CliffordOp):
                 lbl = gl.name 
                 srep = (gate.smatrix,gate.svector)
             else:
@@ -3656,7 +3656,7 @@ class GateSet(object):
 
     def print_info(self):
         """
-        Print to stdout relevant information about this gateset,
+        Print to stdout relevant information about this model,
           including the Choi matrices and their eigenvalues.
 
         Parameters
@@ -3671,7 +3671,7 @@ class GateSet(object):
         print("\n")
         print("Basis = ",self.basis.name)
         print("Choi Matrices:")
-        for (label,gate) in self.gates.items():
+        for (label,gate) in self.operations.items():
             print(("Choi(%s) in pauli basis = \n" % label,
             _mt.mx_to_string_complex(_jt.jamiolkowski_iso(gate))))
             print(("  --eigenvals = ", sorted(

@@ -1,4 +1,4 @@
-""" Helper functions for standard gate set modules. """
+""" Helper functions for standard model modules. """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -37,7 +37,7 @@ def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=Fal
     """ 
     A utility routine to for creating the term-based cache files for a standard module
     """
-    gs_target = std_module.gs_target.copy()
+    target_model = std_module.target_model.copy()
     prep_fiducials = std_module.prepStrs
     effect_fiducials = std_module.effectStrs
     germs = std_module.germs
@@ -49,12 +49,12 @@ def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=Fal
         x *= 2
         
     listOfExperiments = _stdlists.make_lsgst_experiment_list(
-                            gs_target, prep_fiducials, effect_fiducials, germs, maxLengths)
+                            target_model, prep_fiducials, effect_fiducials, germs, maxLengths)
 
-    gs_terms = gs_target.copy()
-    gs_terms.set_all_parameterizations("H+S terms") # CPTP terms?
+    mdl_terms = target_model.copy()
+    mdl_terms.set_all_parameterizations("H+S terms") # CPTP terms?
     my_calc_cache = {}
-    gs_terms.set_simtype("termorder:%d" % termOrder,my_calc_cache)
+    mdl_terms.set_simtype("termorder:%d" % termOrder,my_calc_cache)
 
     comm_method = "scheduler"
     if comm is not None and comm.Get_size() > 1 and comm_method == "scheduler":
@@ -98,7 +98,7 @@ def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=Fal
             while index_to_compute >= 0:
                 print("Worker %d computing prob %d of %d" % (rank, index_to_compute, N))
                 t0 = _time.time()
-                gs_terms.probs(listOfExperiments[index_to_compute])
+                mdl_terms.probs(listOfExperiments[index_to_compute])
                 print("Worker %d finished computing prob %d in %.2fs" % (rank, index_to_compute, _time.time()-t0))
     
                 buf[0] = rank
@@ -116,13 +116,13 @@ def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=Fal
         rankStr = "" if (comm is None) else "Rank%d: " % comm.Get_rank()
     
         if comm is not None and comm.Get_rank() == 0:
-            print("%d gate strings divided among %d processors" % (len(listOfExperiments),comm.Get_size()))
+            print("%d operation sequences divided among %d processors" % (len(listOfExperiments),comm.Get_size()))
     
         t0 = _time.time()
-        for i,gstr in enumerate(my_expList):
+        for i,opstr in enumerate(my_expList):
             print("%s%.2fs: Computing prob %d of %d" % (rankStr, _time.time()-t0,i,len(my_expList)))
-            gs_terms.probs(gstr)
-        #gs_terms.bulk_probs(my_expList) # also fills cache, but allocs more mem at once
+            mdl_terms.probs(opstr)
+        #mdl_terms.bulk_probs(my_expList) # also fills cache, but allocs more mem at once
 
     py_version = 3 if (_sys.version_info > (3, 0)) else 2
     key_fn, val_fn = _get_cachefile_names(std_module, "H+S terms",
@@ -283,41 +283,41 @@ def _load_calccache(key_fn, val_fn):
     
 def _copy_target(std_module, param_type, sim_type="auto", gscache=None):
     """ 
-    Returns a copy of `std_module.gs_target` in the given parameterization.
+    Returns a copy of `std_module.target_model` in the given parameterization.
 
     Parameters
     ----------
     std_module : module
-        The standard gate set module whose target gateset should be 
+        The standard model module whose target model should be 
         copied and returned.
 
     param_type : {"TP", "CPTP", "H+S", "S", ... }
         The gate and SPAM vector parameterization type. See 
-        :function:`GateSet.set_all_parameterizations` for all allowed values.
+        :function:`Model.set_all_parameterizations` for all allowed values.
         
     sim_type : {"auto", "matrix", "map", "termorder:X" }
-        The simulator type to be used for gate set calculations (leave as
+        The simulator type to be used for model calculations (leave as
         "auto" if you're not sure what this is).
 
     gscache : dict, optional
         A dictionary for maintaining the results of past calls to 
         `_copy_target`.  Keys are `(param_type,sim_type)` tuples and values
-        are `GateSet` objects.  If `gscache` contains the requested
+        are `Model` objects.  If `gscache` contains the requested
         `param_type` and `sim_type` then a copy of the cached value is 
         returned instead of doing any real work.  Furthermore, if `gscache`
-        is not None and a new `GateSet` is constructed, it will be added
+        is not None and a new `Model` is constructed, it will be added
         to the given `gscache` for future use.
     
     Returns
     -------
-    GateSet
+    Model
     """
     if gscache is not None:
         if (param_type,sim_type) in gscache:
             return gscache[(param_type,sim_type)].copy()
 
-    gs = std_module.gs_target.copy()
-    gs.set_all_parameterizations(param_type) # automatically sets sim_type
+    mdl = std_module.target_model.copy()
+    mdl.set_all_parameterizations(param_type) # automatically sets sim_type
     if param_type == "H+S terms": 
         assert(sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"
         simt = "termorder:1" if sim_type == "auto" else sim_type # don't update sim_type b/c gscache
@@ -332,12 +332,12 @@ def _copy_target(std_module, param_type, sim_type="auto", gscache=None):
             if _os.path.exists(key_fn) and _os.path.exists(val_fn):
                 calc_cache = _load_calccache(key_fn, val_fn)
 
-        gs.set_simtype(simt,calc_cache)
+        mdl.set_simtype(simt,calc_cache)
     else:
         if sim_type != "auto":
-            gs.set_simtype(sim_type)
+            mdl.set_simtype(sim_type)
 
     if gscache is not None:
-        gscache[(param_type,sim_type)] = gs
+        gscache[(param_type,sim_type)] = mdl
     
-    return gs.copy()
+    return mdl.copy()

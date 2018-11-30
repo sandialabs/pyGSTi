@@ -171,7 +171,7 @@ def nparams_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     # noise can be either a seed or a random array that is long enough to use
 
     printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
-    printer.log("Computing parameters for a %d-qubit %s gateset" % (nQubits,geometry))
+    printer.log("Computing parameters for a %d-qubit %s model" % (nQubits,geometry))
 
     qubitGraph = QubitGraph(nQubits, geometry)
     #printer.log("Created qubit graph:\n"+str(qubitGraph))
@@ -187,7 +187,7 @@ def nparams_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
             ret += nErrTargetLocations * nErrParams
         return ret
 
-    def gate_count_nparams(target_qubit_inds,weight_maxhops_tuples,debug=False):
+    def op_count_nparams(target_qubit_inds,weight_maxhops_tuples,debug=False):
         ret = 0
         #Note: no contrib from idle noise (already parameterized)
         for wt, maxHops in weight_maxhops_tuples:
@@ -217,20 +217,20 @@ def nparams_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     if independent1Qgates:
         for i in range(nQubits):
             printer.log("Creating 1Q X(pi/2) and Y(pi/2) gates on qubit %d!!" % i)
-            nParams["Gx%d"%i] = gate_count_nparams((i,), weight_maxhops_tuples_1Q)
-            nParams["Gy%d"%i] = gate_count_nparams((i,), weight_maxhops_tuples_1Q)
+            nParams["Gx%d"%i] = op_count_nparams((i,), weight_maxhops_tuples_1Q)
+            nParams["Gy%d"%i] = op_count_nparams((i,), weight_maxhops_tuples_1Q)
     else:
         printer.log("Creating common 1Q X(pi/2) and Y(pi/2) gates")
         rep = int(nQubits / 2)
-        nParams["Gxrep"] = gate_count_nparams((rep,), weight_maxhops_tuples_1Q)
-        nParams["Gyrep"] = gate_count_nparams((rep,), weight_maxhops_tuples_1Q)
+        nParams["Gxrep"] = op_count_nparams((rep,), weight_maxhops_tuples_1Q)
+        nParams["Gyrep"] = op_count_nparams((rep,), weight_maxhops_tuples_1Q)
 
     #2Q gates: CNOT gates along each graph edge
     weight_maxhops_tuples_2Q = [(1,maxhops+extraWeight1Hops),(2,maxhops)] + \
                                [ (2+x,maxhops) for x in range(1,extraGateWeight+1) ]
     for i,j in qubitGraph.edges(): #note: all edges have i<j so "control" of CNOT is always lower index (arbitrary)
         printer.log("Creating CNOT gate between qubits %d and %d!!" % (i,j))
-        nParams["Gc%dt%d"% (i,j)] = gate_count_nparams((i,j), weight_maxhops_tuples_2Q)
+        nParams["Gc%dt%d"% (i,j)] = op_count_nparams((i,j), weight_maxhops_tuples_2Q)
 
     #SPAM
     nPOVM_1Q = 4 # params for a single 1Q POVM
@@ -247,62 +247,62 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     # noise can be either a seed or a random array that is long enough to use
 
     printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
-    printer.log("Creating a %d-qubit %s gateset" % (nQubits,geometry))
+    printer.log("Creating a %d-qubit %s model" % (nQubits,geometry))
 
-    gs = pygsti.obj.GateSet() # no preps/POVMs
+    mdl = pygsti.obj.Model() # no preps/POVMs
     # TODO: sparse prep & effect vecs... acton(...) analogue?
 
     #Full preps & povms -- maybe another option
-    ##Create initial gate set with std prep & POVM
+    ##Create initial model with std prep & POVM
     #eLbls = []; eExprs = []
     #formatStr = '0' + str(nQubits) + 'b'
     #for i in range(2**nQubits):
     #    eLbls.append( format(i,formatStr))
     #    eExprs.append( str(i) )    
     #Qlbls = tuple( ['Q%d' % i for i in range(nQubits)] )
-    #gs = pygsti.construction.build_gateset(
+    #mdl = pygsti.construction.build_model(
     #    [2**nQubits], [Qlbls], [], [], 
     #    effectLabels=eLbls, effectExpressions=eExprs)
-    printer.log("Created initial gateset")
+    printer.log("Created initial model")
 
     qubitGraph = QubitGraph(nQubits, geometry)
     printer.log("Created qubit graph:\n"+str(qubitGraph))
 
     printer.log("Creating Idle:")
-    gs.gates['Gi'] = create_global_idle(qubitGraph, maxIdleWeight, sparse, printer-1)
+    mdl.operations['Gi'] = create_global_idle(qubitGraph, maxIdleWeight, sparse, printer-1)
      
     #1Q gates: X(pi/2) & Y(pi/2) on each qubit
-    Gx = std1Q_XY.gs_target.gates['Gx']
-    Gy = std1Q_XY.gs_target.gates['Gy'] 
+    Gx = std1Q_XY.target_model.operations['Gx']
+    Gy = std1Q_XY.target_model.operations['Gy'] 
     weight_maxhops_tuples_1Q = [(1,maxhops+extraWeight1Hops)] + \
                                [ (1+x,maxhops) for x in range(1,extraGateWeight+1) ]
     for i in range(nQubits):
         printer.log("Creating 1Q X(pi/2) gate on qubit %d!!" % i)
-        gs.gates["Gx%d"%i] = create_composed_gate(
+        mdl.operations["Gx%d"%i] = create_composed_gate(
             Gx, (i,), qubitGraph, weight_maxhops_tuples_1Q,
-            idle_noise=gs.gates['Gi'], loc_noise_type="manylittle",
+            idle_noise=mdl.operations['Gi'], loc_noise_type="manylittle",
             sparse=sparse, verbosity=printer-1)
 
         printer.log("Creating 1Q Y(pi/2) gate on qubit %d!!" % i)
-        gs.gates["Gy%d"%i] = create_composed_gate(
+        mdl.operations["Gy%d"%i] = create_composed_gate(
             Gy, (i,), qubitGraph, weight_maxhops_tuples_1Q,
-            idle_noise=gs.gates['Gi'], loc_noise_type="manylittle",
+            idle_noise=mdl.operations['Gi'], loc_noise_type="manylittle",
             sparse=sparse, verbosity=printer-1)
         
     #2Q gates: CNOT gates along each graph edge
-    Gcnot = std2Q_XYICNOT.gs_target.gates['Gcnot']
+    Gcnot = std2Q_XYICNOT.target_model.operations['Gcnot']
     weight_maxhops_tuples_2Q = [(1,maxhops+extraWeight1Hops),(2,maxhops)] + \
                                [ (2+x,maxhops) for x in range(1,extraGateWeight+1) ]
     for i,j in qubitGraph.edges(): #note: all edges have i<j so "control" of CNOT is always lower index (arbitrary)
         printer.log("Creating CNOT gate between qubits %d and %d!!" % (i,j))
-        gs.gates["Gc%dt%d"% (i,j)] = create_composed_gate(
+        mdl.operations["Gc%dt%d"% (i,j)] = create_composed_gate(
             Gcnot, (i,j), qubitGraph, weight_maxhops_tuples_2Q,
-            idle_noise=gs.gates['Gi'], loc_noise_type="manylittle",
+            idle_noise=mdl.operations['Gi'], loc_noise_type="manylittle",
             sparse=sparse, verbosity=printer-1)
 
 
     #Insert noise on gates
-    vecNoSpam = gs.to_vector()
+    vecNoSpam = mdl.to_vector()
     assert( _np.linalg.norm(vecNoSpam)/len(vecNoSpam) < 1e-6 )
     if gateNoise is not None:
         if isinstance(gateNoise,tuple): # use as (seed, strength)
@@ -311,7 +311,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
             vecNoSpam += _np.abs(rndm.random_sample(len(vecNoSpam))*strength) #abs b/c some params need to be positive
         else: #use as a vector
             vecNoSpam += gateNoise[0:len(vecNoSpam)]
-        gs.from_vector(vecNoSpam)
+        mdl.from_vector(vecNoSpam)
 
         
     #SPAM
@@ -326,7 +326,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         else:
             depolAmts = prepNoise[0:nQubits]
         for amt,vec in zip(depolAmts,prepFactors): vec.depolarize(amt) 
-    gs.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep',prepFactors)
+    mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep',prepFactors)
     
     factorPOVMs = []
     for i in range(nQubits):
@@ -340,10 +340,10 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         else:
             depolAmts = povmNoise[0:nQubits]
         for amt,povm in zip(depolAmts,factorPOVMs): povm.depolarize(amt) 
-    gs.povms['Mdefault'] = pygsti.obj.TensorProdPOVM( factorPOVMs )
+    mdl.povms['Mdefault'] = pygsti.obj.TensorProdPOVM( factorPOVMs )
         
-    printer.log("DONE! - returning GateSet with dim=%d and gates=%s" % (gs.dim, list(gs.gates.keys())))
-    return gs
+    printer.log("DONE! - returning Model with dim=%d and gates=%s" % (mdl.dim, list(mdl.operations.keys())))
+    return mdl
     
 
 
@@ -351,13 +351,13 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
     assert(maxWeight <= 2), "Only `maxWeight` equal to 0, 1, or 2 is supported"
 
     if sparse:
-        Lindblad = _objs.LindbladParameterizedGateMap
-        Composed = _objs.ComposedGateMap
-        Embedded = _objs.EmbeddedGateMap
+        Lindblad = _objs.LindbladParameterizedOpMap
+        Composed = _objs.ComposedOpMap
+        Embedded = _objs.EmbeddedOpMap
     else:
-        Lindblad = _objs.LindbladParameterizedGate
-        Composed = _objs.ComposedGate
-        Embedded = _objs.EmbeddedGate
+        Lindblad = _objs.LindbladParameterizedOp
+        Composed = _objs.ComposedOp
+        Embedded = _objs.EmbeddedOp
     
     printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
     printer.log("*** Creating global idle ***")
@@ -439,10 +439,10 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #    basisAllQ = pygsti.objects.Basis('pp', 2**qubitGraph.nQubits)
 #    
 #    if mode == "no-embedding":     
-#        fullTargetOp = EmbeddedGate(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
+#        fullTargetOp = EmbeddedOp(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
 #                                    targetOp, basisAllQ) 
-#        fullTargetOp = StaticGate( fullTargetOp ) #Make static
-#        fullLocalErr = LindbladParameterizedGate(fullTargetOp, fullTargetOp,
+#        fullTargetOp = StaticOp( fullTargetOp ) #Make static
+#        fullLocalErr = LindbladParameterizedOp(fullTargetOp, fullTargetOp,
 #                         ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
 #                         nonham_diagonal_only=True, truncate=True, mxBasis=basisAllQ)
 #          # gate on full qubit space that accounts for error on the "local qubits", that is,
@@ -453,12 +453,12 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #        
 #        ssLocQ = ['Q%d'%i for i in range(nPossible)]
 #        basisLocQ = pygsti.objects.Basis('pp', 2**nPossible)
-#        locTargetOp = StaticGate( EmbeddedGate(ssLocQ, ['Q%d'%i for i in loc_target_inds],
+#        locTargetOp = StaticOp( EmbeddedOp(ssLocQ, ['Q%d'%i for i in loc_target_inds],
 #                                    targetOp, basisLocQ) )
-#        localErr = LindbladParameterizedGate(locTargetOp, locTargetOp,
+#        localErr = LindbladParameterizedOp(locTargetOp, locTargetOp,
 #                         ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
 #                         nonham_diagonal_only=True, truncate=True, mxBasis=basisLocQ)
-#        fullLocalErr = EmbeddedGate(ssAllQ, ['Q%d'%i for i in possible_err_qubit_inds],
+#        fullLocalErr = EmbeddedOp(ssAllQ, ['Q%d'%i for i in possible_err_qubit_inds],
 #                                   localErr, basisAllQ)
 #    else:
 #        raise ValueError("Invalid Mode: %s" % mode)
@@ -480,32 +480,32 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
     
     where `idle_noise` is given by the `idle_noise` parameter and loc_noise is given
     by the other params.  loc_noise can be implemented either by 
-    a single embedded LindbladParameterizedGate with all relevant error generators,
+    a single embedded LindbladParameterizedOp with all relevant error generators,
     or as a composition of embedded-single-error-term gates (see param `loc_noise_type`)
     
     Parameters
     ----------
     
-    idle_noise : Gate or boolean
+    idle_noise : LinearOperator or boolean
         either given as an existing gate (on all qubits) or a boolean indicating
         whether a composition of weight-1 noise terms (separately on all the qubits),
         is created.  If `apply_idle_noise_to == "nonlocal"` then `idle_noise` is *only*
-        applied to the non-local qubits and `idle_noise` must be a ComposedGate or
+        applied to the non-local qubits and `idle_noise` must be a ComposedOp or
         ComposedMap with nQubits terms so that individual terms for each qubit can
         be extracted as needed.
 
     TODO   
     """
     if sparse:
-        Lindblad = _objs.LindbladParameterizedGateMap
-        Composed = _objs.ComposedGateMap
-        Embedded = _objs.EmbeddedGateMap
-        Static = _objs.StaticGate # TODO: create StaticGateMap
+        Lindblad = _objs.LindbladParameterizedOpMap
+        Composed = _objs.ComposedOpMap
+        Embedded = _objs.EmbeddedOpMap
+        Static = _objs.StaticOp # TODO: create StaticGateMap
     else:
-        Lindblad = _objs.LindbladParameterizedGate
-        Composed = _objs.ComposedGate
-        Embedded = _objs.EmbeddedGate
-        Static = _objs.StaticGate
+        Lindblad = _objs.LindbladParameterizedOp
+        Composed = _objs.ComposedOp
+        Embedded = _objs.EmbeddedOp
+        Static = _objs.StaticOp
     
     printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
     printer.log("*** Creating composed gate ***")
@@ -521,7 +521,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
     #Factor2: idle_noise operation
     printer.log("Creating idle error factor",2)
     if apply_idle_noise_to == "all":
-        if isinstance(idle_noise, pygsti.obj.Gate):
+        if isinstance(idle_noise, pygsti.obj.LinearOperator):
             printer.log("Using supplied full idle gate",3)
             fullIdleErr = idle_noise
         elif idle_noise == True:

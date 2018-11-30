@@ -14,8 +14,8 @@ class GaugeGroupTestCase(BaseTestCase):
 
     def test_construction(self):
         gg   = ggrp.GaugeGroup('myGaugeGroupName')
-        ggg  = ggrp.GateGaugeGroup(gate.FullyParameterizedGate(np.identity(4,'d')),
-                                   ggrp.GateGaugeGroupElement,'myGateGaugeGroupName')
+        ggg  = ggrp.OpGaugeGroup(gate.FullyParameterizedOp(np.identity(4,'d')),
+                                   ggrp.OpGaugeGroupElement,'myGateGaugeGroupName')
         fgg  = ggrp.FullGaugeGroup(4)
         tgg  = ggrp.TPGaugeGroup(4)
         dgg  = ggrp.DiagGaugeGroup(4)
@@ -60,7 +60,7 @@ class GaugeGroupTestCase(BaseTestCase):
         trgg_el = trgg.get_element(trgg_ip)
         
         self.assertIsInstance(gg_el, ggrp.GaugeGroupElement)
-        self.assertIsInstance(ggg_el, ggrp.GateGaugeGroupElement)
+        self.assertIsInstance(ggg_el, ggrp.OpGaugeGroupElement)
         self.assertIsInstance(fgg_el, ggrp.FullGaugeGroupElement)
         self.assertIsInstance(tgg_el, ggrp.TPGaugeGroupElement)
         self.assertIsInstance(dgg_el, ggrp.DiagGaugeGroupElement)
@@ -71,8 +71,8 @@ class GaugeGroupTestCase(BaseTestCase):
     def test_elements(self):
         ggs = []
         ggs.append(ggrp.GaugeGroup('myGroupName'))
-        ggs.append(ggrp.GateGaugeGroup(gate.FullyParameterizedGate(np.identity(4,'d')),
-                                       ggrp.GateGaugeGroupElement,'myGateGroupName'))
+        ggs.append(ggrp.OpGaugeGroup(gate.FullyParameterizedOp(np.identity(4,'d')),
+                                       ggrp.OpGaugeGroupElement,'myGateGroupName'))
         ggs.append(ggrp.FullGaugeGroup(4))
         ggs.append(ggrp.TPGaugeGroup(4))
         ggs.append(ggrp.DiagGaugeGroup(4))

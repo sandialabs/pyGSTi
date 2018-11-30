@@ -4,7 +4,7 @@ import importlib
 import pygsti
 
 #if __name__ == "__main__":
-#    tutorialFile = "01 GateSets.ipynb"
+#    tutorialFile = "01 Models.ipynb"
 #    tutorialDir = os.path.join("..","jupyter_notebooks","Tutorials")
 #    tutorialModuleName = os.path.splitext(tutorialFile)[0]
 #    os.chdir(tutorialDir)
@@ -24,9 +24,9 @@ class TutorialsTestCase(unittest.TestCase):
         self.old = os.getcwd()
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
 
-        #Set GateSet objects to non-"strict" mode, as this would be the
+        #Set Model objects to non-"strict" mode, as this would be the
         # tutorial environment
-        pygsti.objects.GateSet._strict = False
+        pygsti.objects.Model._strict = False
 
     def tearDown(self):
         os.chdir(self.old)
@@ -101,13 +101,13 @@ class TutorialsMethods(TutorialsTestCase):
         self.runTutorial_jupyter("00 Getting Started.ipynb")
 
     def test_tutorial_01(self):
-        self.runTutorial_jupyter("01 GateSets.ipynb")
+        self.runTutorial_jupyter("01 Models.ipynb")
 
     def test_tutorial_02(self):
         self.runTutorial_jupyter("02 Matrix Bases.ipynb")
 
     def test_tutorial_03(self):
-        self.runTutorial_jupyter("03 GateStrings.ipynb")
+        self.runTutorial_jupyter("03 Circuits.ipynb")
 
     def test_tutorial_04(self):
         self.runTutorial_jupyter("04 DataSets.ipynb")

@@ -7,9 +7,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 class GSTRuntimeError(Exception):
-    """Gate Set Tomography run-time exception class."""
+    """LinearOperator Set Tomography run-time exception class."""
     pass
 
 class GSTValueError(Exception):
-    """Gate Set Tomography value error exception class."""
+    """LinearOperator Set Tomography value error exception class."""
     pass

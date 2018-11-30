@@ -47,16 +47,16 @@ import copy as _copy
 #                                   maxLengthList=None, transform='DCT', control='FDR'):
 
 #     """
-#     prepStrs : list of GateStrings
-#         List of the preparation fiducial gate strings, which follow state
+#     prepStrs : list of Circuits
+#         List of the preparation fiducial operation sequences, which follow state
 #         preparation.
 
-#     effectStrs : list of GateStrings
-#         List of the measurement fiducial gate strings, which precede
+#     effectStrs : list of Circuits
+#         List of the measurement fiducial operation sequences, which precede
 #         measurement.
 
-#     germList : list of GateStrings
-#         List of the germ gate strings.
+#     germList : list of Circuits
+#         List of the germ operation sequences.
 
 #     maxLengthList : list of ints
 #         List of maximum lengths. A zero value in this list has special
@@ -85,7 +85,7 @@ def do_drift_characterization(ds, significance=0.05, marginalize='auto', transfo
     ----------
     ds : DataSet
         The time series data to analyze. This must contain time series data, rather than data that
-        is not time-resolved and contains only one set of counts for each outcome and each gatestring.
+        is not time-resolved and contains only one set of counts for each outcome and each circuit.
 
     significance : float, optional
         The "global" statistical significance to use in the drift detection hypothesis testing, and
@@ -197,7 +197,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
 
 
      enforceConstNumTimes : bool, optional
-        If True, if the number of data points varies between GateStrings (i.e., the time series is
+        If True, if the number of data points varies between Circuits (i.e., the time series is
         a different length for different sequences), then the ... todo
 
     name : None or str.
@@ -216,7 +216,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
     results = _dresults.DriftResults(name=name)
 
     num_sequences = len(list(ds.keys()))
-    gatestringlist = list(ds.keys())
+    circuitlist = list(ds.keys())
     
     timestamps = []
     num_timesteps = []
@@ -225,7 +225,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
     # Find the timestamps for each sequence, and the total number of counts at each timestamp.
     for i in range(num_sequences):
         # Find the set of all timestamps and total counts
-        timesforseq, countsforseq = ds[gatestringlist[i]].timeseries('all')
+        timesforseq, countsforseq = ds[circuitlist[i]].timeseries('all')
         # Record the number of timestamps for this sequence
         num_timesteps.append(len(timesforseq))
         timestamps.append(timesforseq)
@@ -285,7 +285,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
             for s in range(num_sequences):
                 timeseries[e][s] = {}
                 for o in range(2):
-                    junk, timeseries[e][s][o] = tempdata[gatestringlist[s]].timeseries(outcomes[o],timestamps[s])
+                    junk, timeseries[e][s][o] = tempdata[circuitlist[s]].timeseries(outcomes[o],timestamps[s])
 
     else:
         outcomes = ds.get_outcome_labels()
@@ -298,9 +298,9 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
             timeseries[0][s] = {}
             for o in outcomes:
                 #print(len(timestamps[s]))
-                junk, timeseries[0][s][o] = ds[gatestringlist[s]].timeseries(o,timestamps[s])
+                junk, timeseries[0][s][o] = ds[circuitlist[s]].timeseries(o,timestamps[s])
 
-    results.add_formatted_data(timeseries, timestamps, gatestringlist, outcomes, counts, constNumTimes, 
+    results.add_formatted_data(timeseries, timestamps, circuitlist, outcomes, counts, constNumTimes, 
                                enforcedConstNumTimes=enforceConstNumTimes, marginalized=marginalize)
     return results
 
@@ -711,7 +711,7 @@ def estimate_probability_trajectories(results, modelSelector=(('per','per','avg'
 
 
     for e, ent in enumerate(results.entitieslist):
-        for s, seq in enumerate(results.gatestringlist):
+        for s, seq in enumerate(results.circuitlist):
             
             if verbosity > 0:
                 print("    - Generating estimates for entity {} and sequence {}".format(ent,seq))

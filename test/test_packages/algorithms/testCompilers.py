@@ -1,7 +1,7 @@
 import unittest
 import pygsti
 from pygsti.objects import Circuit
-from pygsti.objects import GateString
+from pygsti.objects import OpString
 from pygsti.baseobjs import Label
 from pygsti.objects import ProcessorSpec
 from pygsti.tools import symplectic
@@ -92,15 +92,15 @@ class TestCompilers(AlgorithmsBase):
         pspec6 = ProcessorSpec(n,gate_names=gate_names,availability=availability,qubit_labels=qubit_labels)
     
         nsubset = 6
-        gatestring = []
+        circuit = []
         for i in range(100):
             a = np.random.randint(nsubset)
             b = np.random.randint(nsubset)
             if a != b:
-                gatestring.append(Label('CNOT',('Q'+str(a),'Q'+str(b))))
+                circuit.append(Label('CNOT',('Q'+str(a),'Q'+str(b))))
     
                 subsetQs = ['Q'+str(i) for i in range(nsubset)] 
-        circuit = Circuit(gatestring=gatestring, line_labels = subsetQs)
+        circuit = Circuit(circuit=circuit, line_labels = subsetQs)
         s, p  = pygsti.tools.symplectic.symplectic_rep_of_clifford_circuit(circuit)
     
         aargs= {}

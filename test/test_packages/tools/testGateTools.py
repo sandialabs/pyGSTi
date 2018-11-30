@@ -1,7 +1,7 @@
 from ..testutils import BaseTestCase, compare_files, temp_files
 
 import pygsti
-import pygsti.tools.gatetools as gatetools
+import pygsti.tools.optools as optools
 
 from pygsti.construction import std2Q_XXYYII
 from pygsti.construction import std1Q_XYI
@@ -63,7 +63,7 @@ class GateBaseTestCase(BaseTestCase):
         expected = np.array([[ 0.55368857+0.46439416j,  0.80696073-0.21242648j],
              [ 1.21044109-0.31863972j,  1.76412966+0.14575444j]]
              )
-        sqrt = gatetools._hack_sqrtm(np.array([[1, 2], [3, 4]]))
+        sqrt = optools._hack_sqrtm(np.array([[1, 2], [3, 4]]))
         self.assertArraysAlmostEqual(sqrt, expected)
 
     def test_frobenius_distance(self):
@@ -71,11 +71,11 @@ class GateBaseTestCase(BaseTestCase):
         self.assertAlmostEqual( pygsti.frobeniusdist2(A,A), 0.0 )
 
     def test_entanglement_fidelity(self):
-        fidelity = gatetools.entanglement_fidelity(A, B)
+        fidelity = optools.entanglement_fidelity(A, B)
         self.assertAlmostEqual(fidelity, 0.42686642003)
 
     def test_fidelity_upper_bound(self):
-        upperBound = gatetools.fidelity_upper_bound(A)
+        upperBound = optools.fidelity_upper_bound(A)
         expected   = (np.array([[ 0.25]]),
                       np.array([[  1.00000000e+00,  -8.27013523e-16,   8.57305616e-33, 1.95140273e-15],
                                 [ -8.27013523e-16,   1.00000000e+00,   6.28036983e-16, -8.74760501e-31],
@@ -86,33 +86,33 @@ class GateBaseTestCase(BaseTestCase):
 
     def test_unitary_to_process_mx(self):
         identity  = np.identity(2)
-        processMx = gatetools.unitary_to_process_mx(identity)
+        processMx = optools.unitary_to_process_mx(identity)
         self.assertArraysAlmostEqual(processMx, np.identity(4))
 
     def test_err_gen(self):
-        gs_target = std2Q_XXYYII.gs_target
-        gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
+        target_model = std2Q_XXYYII.target_model
+        mdl_datagen = target_model.depolarize(op_noise=0.1, spam_noise=0.001)
 
         projectionTypes = ['hamiltonian', 'stochastic', 'affine']
         basisNames      = ['std', 'gm', 'pp'] #, 'qt'] #dim must == 3 for qt
 
-        for (lbl,gateTarget), gate in zip(gs_target.gates.items(), gs_datagen.gates.values()):
-            print("Gate %s" % lbl)
-            errgen    = gatetools.error_generator(gate, gateTarget, gs_target.basis, 'logG-logT')
-            altErrgen = gatetools.error_generator(gate, gateTarget, gs_target.basis, 'logTiG')
-            altErrgen2 = gatetools.error_generator(gate, gateTarget, gs_target.basis, 'logGTi')            
+        for (lbl,gateTarget), gate in zip(target_model.operations.items(), mdl_datagen.operations.values()):
+            print("LinearOperator %s" % lbl)
+            errgen    = optools.error_generator(gate, gateTarget, target_model.basis, 'logG-logT')
+            altErrgen = optools.error_generator(gate, gateTarget, target_model.basis, 'logTiG')
+            altErrgen2 = optools.error_generator(gate, gateTarget, target_model.basis, 'logGTi')            
             with self.assertRaises(ValueError):
-                gatetools.error_generator(gate, gateTarget, gs_target.basis, 'adsf')
+                optools.error_generator(gate, gateTarget, target_model.basis, 'adsf')
 
             for projectionType in projectionTypes:
                 for basisName in basisNames:
-                    gatetools.std_errgen_projections(errgen, projectionType, basisName)
+                    optools.std_errgen_projections(errgen, projectionType, basisName)
 
-            originalGate     = gatetools.gate_from_error_generator(errgen, gateTarget, 'logG-logT')
-            altOriginalGate  = gatetools.gate_from_error_generator(altErrgen, gateTarget, 'logTiG')
-            altOriginalGate2 = gatetools.gate_from_error_generator(altErrgen, gateTarget, 'logGTi')
+            originalGate     = optools.operation_from_error_generator(errgen, gateTarget, 'logG-logT')
+            altOriginalGate  = optools.operation_from_error_generator(altErrgen, gateTarget, 'logTiG')
+            altOriginalGate2 = optools.operation_from_error_generator(altErrgen, gateTarget, 'logGTi')
             with self.assertRaises(ValueError):
-                gatetools.gate_from_error_generator(errgen, gateTarget, 'adsf')
+                optools.operation_from_error_generator(errgen, gateTarget, 'adsf')
             #self.assertArraysAlmostEqual(originalGate, gate) # sometimes need to approximate the log for this one
             self.assertArraysAlmostEqual(altOriginalGate, gate)
             self.assertArraysAlmostEqual(altOriginalGate2, gate)
@@ -120,21 +120,21 @@ class GateBaseTestCase(BaseTestCase):
         #test odd cases:
 
         # when target is not unitary
-        errgen_nonunitary = gatetools.error_generator(gs_datagen.gates['Gxi'], gs_datagen.gates['Gxi'],
-                                                      gs_datagen.basis)
+        errgen_nonunitary = optools.error_generator(mdl_datagen.operations['Gxi'], mdl_datagen.operations['Gxi'],
+                                                      mdl_datagen.basis)
         # when target is not near gate
-        errgen_notsmall = gatetools.error_generator(gs_datagen.gates['Gxi'], gs_target.gates['Gix'],
-                                                    gs_target.basis, 'logTiG')
-        errgen_notsmall = gatetools.error_generator(gs_datagen.gates['Gxi'], gs_target.gates['Gix'],
-                                                    gs_target.basis, 'logGTi')
+        errgen_notsmall = optools.error_generator(mdl_datagen.operations['Gxi'], target_model.operations['Gix'],
+                                                    target_model.basis, 'logTiG')
+        errgen_notsmall = optools.error_generator(mdl_datagen.operations['Gxi'], target_model.operations['Gix'],
+                                                    target_model.basis, 'logGTi')
 
         with self.assertRaises(ValueError):
-            gatetools.error_generator(gs_datagen.gates['Gxi'], gs_target.gates['Gxi'],
-                                      gs_target.basis, 'foobar')
+            optools.error_generator(mdl_datagen.operations['Gxi'], target_model.operations['Gxi'],
+                                      target_model.basis, 'foobar')
 
         #Check helper routine _assert_shape
         with self.assertRaises(NotImplementedError): #boundary case
-            gatetools._assert_shape(np.zeros((2,2,2,2,2),'d'), (2,2,2,2,2),sparse=True) # ndims must be <= 4
+            optools._assert_shape(np.zeros((2,2,2,2,2),'d'), (2,2,2,2,2),sparse=True) # ndims must be <= 4
 
         
 
@@ -143,78 +143,78 @@ class GateBaseTestCase(BaseTestCase):
         basisNames      = ['std', 'gm', 'pp'] #, 'qt'] #dim must == 3 for qt
         
         for projectionType in projectionTypes:
-            gatetools.std_scale_factor(4, projectionType)
+            optools.std_scale_factor(4, projectionType)
             for basisName in basisNames:
-                gatetools.std_error_generators(4, projectionType, basisName)
+                optools.std_error_generators(4, projectionType, basisName)
 
         with self.assertRaises(ValueError):
-            gatetools.std_scale_factor(4, "foobar")
+            optools.std_scale_factor(4, "foobar")
         with self.assertRaises(ValueError):
-            gatetools.std_error_generators(4, "foobar", 'gm')
+            optools.std_error_generators(4, "foobar", 'gm')
 
     def test_lind_errgens(self):
         basis = pygsti.obj.Basis('gm',2)
 
         normalize = False
         other_mode = "all"
-        gatetools.lindblad_error_generators(basis, basis, normalize, other_mode)
-        gatetools.lindblad_error_generators(None, basis, normalize, other_mode)
-        gatetools.lindblad_error_generators(basis, None, normalize, other_mode)
-        gatetools.lindblad_error_generators(None, None, normalize, other_mode)                
+        optools.lindblad_error_generators(basis, basis, normalize, other_mode)
+        optools.lindblad_error_generators(None, basis, normalize, other_mode)
+        optools.lindblad_error_generators(basis, None, normalize, other_mode)
+        optools.lindblad_error_generators(None, None, normalize, other_mode)                
 
         normalize = True
         other_mode = "all"
-        gatetools.lindblad_error_generators(basis, basis, normalize, other_mode)
-        gatetools.lindblad_error_generators(None, basis, normalize, other_mode)
-        gatetools.lindblad_error_generators(basis, None, normalize, other_mode)
-        gatetools.lindblad_error_generators(None, None, normalize, other_mode)                
+        optools.lindblad_error_generators(basis, basis, normalize, other_mode)
+        optools.lindblad_error_generators(None, basis, normalize, other_mode)
+        optools.lindblad_error_generators(basis, None, normalize, other_mode)
+        optools.lindblad_error_generators(None, None, normalize, other_mode)                
 
         normalize = True
         other_mode = "diagonal"
-        gatetools.lindblad_error_generators(basis, basis, normalize, other_mode)
-        gatetools.lindblad_error_generators(None, basis, normalize, other_mode)
-        gatetools.lindblad_error_generators(basis, None, normalize, other_mode)
-        gatetools.lindblad_error_generators(None, None, normalize, other_mode)
+        optools.lindblad_error_generators(basis, basis, normalize, other_mode)
+        optools.lindblad_error_generators(None, basis, normalize, other_mode)
+        optools.lindblad_error_generators(basis, None, normalize, other_mode)
+        optools.lindblad_error_generators(None, None, normalize, other_mode)
 
 
         basis = pygsti.obj.Basis('gm',4)
         mxBasis = pygsti.obj.Basis('gm',4)
         errgen = np.identity(16,'d')
-        gatetools.lindblad_errgen_projections(errgen, basis, basis, mxBasis, 
+        optools.lindblad_errgen_projections(errgen, basis, basis, mxBasis, 
                                     normalize=True, return_generators=False, 
                                     other_mode="all", sparse=False)
 
-        gatetools.lindblad_errgen_projections(errgen, None, 'gm', mxBasis, 
+        optools.lindblad_errgen_projections(errgen, None, 'gm', mxBasis, 
                                     normalize=True, return_generators=False, 
                                     other_mode="all", sparse=False)
-        gatetools.lindblad_errgen_projections(errgen, 'gm', None, mxBasis, 
+        optools.lindblad_errgen_projections(errgen, 'gm', None, mxBasis, 
                                     normalize=True, return_generators=True, 
                                     other_mode="diagonal", sparse=False)
 
         basisMxs = pygsti.tools.basis_matrices('gm', 4, sparse=False) 
-        gatetools.lindblad_errgen_projections(errgen, basisMxs, basisMxs, mxBasis, 
+        optools.lindblad_errgen_projections(errgen, basisMxs, basisMxs, mxBasis, 
                                     normalize=True, return_generators=False, 
                                     other_mode="all", sparse=False)
 
-        gatetools.lindblad_errgen_projections(errgen, None, None, mxBasis, 
+        optools.lindblad_errgen_projections(errgen, None, None, mxBasis, 
                                               normalize=True, return_generators=False, 
                                               other_mode="all", sparse=False)
                 
 
     def test_project_gateset(self):
         projectionTypes=('H','S','H+S','LND', 'LNDF')
-        gs_target = std2Q_XXYYII.gs_target.copy()
-        gs = gs_target.depolarize(gate_noise=0.01)
+        target_model = std2Q_XXYYII.target_model.copy()
+        mdl = target_model.depolarize(op_noise=0.01)
 
         for genType in ("logG-logT", "logTiG", "logGTi"):
-            proj_gateset, Np_dict = gatetools.project_gateset(
-                gs, gs_target, projectionTypes, genType)
+            proj_gateset, Np_dict = optools.project_gateset(
+                mdl, target_model, projectionTypes, genType)
 
         with self.assertRaises(ValueError):
-            gs_target_gm = std2Q_XXYYII.gs_target.copy()
-            gs_target_gm.basis = pygsti.obj.Basis("gm",4)
-            gatetools.project_gateset(
-                gs, gs_target_gm, projectionTypes, genType) # basis mismatch
+            mdl_target_gm = std2Q_XXYYII.target_model.copy()
+            mdl_target_gm.basis = pygsti.obj.Basis("gm",4)
+            optools.project_gateset(
+                mdl, mdl_target_gm, projectionTypes, genType) # basis mismatch
 
 
 if __name__ == '__main__':

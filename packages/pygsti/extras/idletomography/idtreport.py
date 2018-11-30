@@ -8,7 +8,7 @@ import collections as _collections
 
 from ... import _version
 from ...baseobjs import VerbosityPrinter as _VerbosityPrinter
-from ...objects import GateString as _GateString
+from ...objects import OpString as _OpString
 from ...report import workspace as _ws
 from ...report import workspaceplots as _wp
 from ...report import table as _reporttable
@@ -24,7 +24,7 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
     """ 
     A table of the largest N (in absolute value) observed error rates.
     """
-    def __init__(self, ws, idtresults, threshold=1.0, gs_simulator=None):
+    def __init__(self, ws, idtresults, threshold=1.0, mdl_simulator=None):
         """
         Create a IdleTomographyObservedRatesTable object.
 
@@ -40,8 +40,8 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
             If a float, display the top `threshold` fraction of all the rates
             (e.g. 0.2 will show the to 20%).
             
-        gs_simulator : GateSet, optional
-            If not None, use this GateSet to simulate the observed data
+        mdl_simulator : Model, optional
+            If not None, use this Model to simulate the observed data
             points and plot these simulated values alongside the data.
 
         Returns
@@ -49,9 +49,9 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         ReportTable
         """
         super(IdleTomographyObservedRatesTable,self).__init__(
-            ws, self._create, idtresults, threshold, gs_simulator)
+            ws, self._create, idtresults, threshold, mdl_simulator)
 
-    def _create(self, idtresults, threshold, gs_simulator):
+    def _create(self, idtresults, threshold, mdl_simulator):
         colHeadings = ['Observable Rate', 'Relation to intrinsic rates', ]
 
         # compute rate_threshold, so we know what to display
@@ -109,7 +109,7 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         for typ, fidpair, obsOrOutcome, jac_row, _ in obs_rate_specs:
             fig = IdleTomographyObservedRatePlot(self.ws, idtresults, typ, 
                                                  fidpair, obsOrOutcome, title="auto",
-                                                 gs_simulator=gs_simulator)
+                                                 mdl_simulator=mdl_simulator)
             intrinsic_reln = ""
             for i,el in enumerate(jac_row):
                 if abs(el) > 1e-6:
@@ -150,7 +150,7 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
     observed rates.
     """
     def __init__(self, ws, idtresults, typ, errorOp, threshold=1.0,
-                 gs_simulator=None):
+                 mdl_simulator=None):
         """
         Create a IdleTomographyObservedRatesForIntrinsicRateTable.
 
@@ -175,8 +175,8 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
             then nothing is displayed.  If a float, display the top `threshold`
             fraction, again of *all* the rates (e.g. 0.2 means the top 20%).
             
-        gs_simulator : GateSet, optional
-            If not None, use this GateSet to simulate the observed data
+        mdl_simulator : Model, optional
+            If not None, use this Model to simulate the observed data
             points and plot these simulated values alongside the data.
 
         Returns
@@ -185,9 +185,9 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
         """
         super(IdleTomographyObservedRatesForIntrinsicRateTable,self).__init__(
             ws, self._create, idtresults, typ, errorOp, threshold,
-            gs_simulator)
+            mdl_simulator)
 
-    def _create(self, idtresults, typ, errorOp, threshold, gs_simulator):
+    def _create(self, idtresults, typ, errorOp, threshold, mdl_simulator):
         colHeadings = ['Jacobian El', 'Observable Rate']
 
         if not isinstance(errorOp, _pobjs.NQPauliOp):
@@ -246,7 +246,7 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
         for fidpair, obsOrOutcome, jac_element, _ in obs_rate_specs:
             fig = IdleTomographyObservedRatePlot(self.ws, idtresults, typ, 
                                                  fidpair, obsOrOutcome, title="auto",
-                                                 gs_simulator=gs_simulator)
+                                                 mdl_simulator=mdl_simulator)
             row_data = [str(jac_element), fig]
             row_formatters = [None, 'Figure']
             table.addrow(row_data, row_formatters)
@@ -267,7 +267,7 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
     of observed data to a simple polynomial.
     """
     def __init__(self, ws, idtresults, typ, fidpair, obsORoutcome, title="auto",
-                 scale=1.0, gs_simulator=None):
+                 scale=1.0, mdl_simulator=None):
         """
         Create a IdleTomographyObservedRatePlot.
 
@@ -298,21 +298,21 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
 
-        gs_simulator : GateSet, optional
-            If not None, use this GateSet to simulate the observed data
+        mdl_simulator : Model, optional
+            If not None, use this Model to simulate the observed data
             points and plot these simulated values alongside the data.
         """
         super(IdleTomographyObservedRatePlot,self).__init__(
             ws, self._create, idtresults, typ, fidpair, obsORoutcome,
-                 title, scale, gs_simulator)
+                 title, scale, mdl_simulator)
         
     def _create(self, idtresults, typ, fidpair, obsORoutcome,
-                title, scale, gs_simulator):
+                title, scale, mdl_simulator):
     
         maxLens = idtresults.max_lengths
-        GiStr = _GateString(idtresults.idle_str)
-        prepStr = fidpair[0].to_gatestring(idtresults.prep_basis_strs)
-        measStr = fidpair[1].to_gatestring(idtresults.meas_basis_strs)
+        GiStr = _OpString(idtresults.idle_str)
+        prepStr = fidpair[0].to_circuit(idtresults.prep_basis_strs)
+        measStr = fidpair[1].to_circuit(idtresults.meas_basis_strs)
 
         ifidpair = idtresults.pauli_fidpairs[typ].index(fidpair)
         info_dict = idtresults.observed_rate_infos[typ][ifidpair][obsORoutcome]
@@ -357,12 +357,12 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
                 size=10),
             name='observed data' ))
 
-        if gs_simulator:
-            gatestrings = [ prepStr + GiStr*L + measStr for L in maxLens ]
-            probs = gs_simulator.bulk_probs(gatestrings)
+        if mdl_simulator:
+            circuits = [ prepStr + GiStr*L + measStr for L in maxLens ]
+            probs = mdl_simulator.bulk_probs(circuits)
             sim_data = []
-            for gstr in gatestrings:
-                ps = probs[gstr]
+            for opstr in circuits:
+                ps = probs[opstr]
 
                 #Expectation value - assume weight at most 2 for now
                 if typ == "diffbasis": 
@@ -793,7 +793,7 @@ def create_idletomography_report(results, filename, title="auto",
     connected = advancedOptions.get('connected',False)
     resizable = advancedOptions.get('resizable',True)
     autosize = advancedOptions.get('autosize','initial')
-    gs_sim = advancedOptions.get('simulator',None) # a gateset
+    mdl_sim = advancedOptions.get('simulator',None) # a model
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -862,7 +862,7 @@ def create_idletomography_report(results, filename, title="auto",
 
     addqty(A,'intrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, results)
     addqty(A,'observedRatesTable', ws.IdleTomographyObservedRatesTable, results,
-           20, gs_sim) # HARDCODED - show only top 20 rates
+           20, mdl_sim) # HARDCODED - show only top 20 rates
     # errortype, errorop, 
 
 
@@ -874,7 +874,7 @@ def create_idletomography_report(results, filename, title="auto",
     if multidataset:
         #check if data sets are comparable (if they have the same sequences)
         comparable = True
-        gstrCmpList = list(results_dict[ dataset_labels[0] ].dataset.keys()) #maybe use gatestring_lists['final']??
+        gstrCmpList = list(results_dict[ dataset_labels[0] ].dataset.keys()) #maybe use circuit_lists['final']??
         for dslbl in dataset_labels:
             if list(results_dict[dslbl].dataset.keys()) != gstrCmpList:
                 _warnings.warn("Not all data sets are comparable - no comparisions will be made.")
@@ -892,7 +892,7 @@ def create_idletomography_report(results, filename, title="auto",
             dscmp_switchBd.add("refds",(0,))
 
             for d1, dslbl1 in enumerate(dataset_labels):
-                dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
+                dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].circuit_structs['final']
                 dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset #only used for #of spam labels below
 
             dsComp = dict()

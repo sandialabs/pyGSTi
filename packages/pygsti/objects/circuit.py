@@ -11,27 +11,27 @@ import numpy as _np
 import copy as _copy
 import sys as _sys
 
-from . import gatestring as _gstr
+from . import opstring as _gstr
 from . import labeldicts as _ld
 from ..baseobjs import Label as _Label
 from ..tools import internalgates as _itgs
 from ..tools import compattools as _compat
 
 
-class Circuit(_gstr.GateString):
+class Circuit(_gstr.OpString):
     """
     A Circuit is a more structured representation of a sequence of preparation,
     gate, and measurement operations.  It is composed of some number of "lines",
     typically one per qubit, and permits a richer set of operations than 
-    :class:`GateString`.  These operations include a range of methods for
+    :class:`OpString`.  These operations include a range of methods for
     manipulating quantum circuits. E.g., basic depth compression algorithms.
     """   
-    def __init__(self, line_items=None, gatestring=None, num_lines=None,
+    def __init__(self, line_items=None, circuit=None, num_lines=None,
                  line_labels=None, parallelize=False, identity='I'):
         """
         Creates a new Circuit object, encapsulating a quantum circuit.
 
-        You can supply at most one of `line_items` and `gatestring` (alternate
+        You can supply at most one of `line_items` and `circuit` (alternate
         ways of specifying the gates).  If neither are specified an empty
         Circuit is created.  Unless `line_items` is specified, you must also
         specify the number of lines via `num_lines` and/or `line_labels`. If
@@ -40,12 +40,12 @@ class Circuit(_gstr.GateString):
         Parameters
         ----------
         line_items : list, optional
-            A list of lists of Label objects, giving the gate labels present on
+            A list of lists of Label objects, giving the operation labels present on
             each "line" (usually "qubit") of the circuit.  When a gate occupies
             more than one line its label is present in the lists of *all* the
             lines it occupies.
 
-        gatestring : list, optional
+        circuit : list, optional
             A list of Label objects, specifying a serial sequence of gates to
             be made into a circuit.  Gates are placed in as few "layers" as 
             possible, meaning that gates acting on different qubits are 
@@ -65,8 +65,8 @@ class Circuit(_gstr.GateString):
             integers starting with 0.
 
         parallelize : bool, optional
-            Only used when initializing from `gatestring`.  When True, automatic
-            parallelization is performed: consecutive gates in `gatestring`
+            Only used when initializing from `circuit`.  When True, automatic
+            parallelization is performed: consecutive gates in `circuit`
             acting on disjoint sets of qubits are placed in the same layer.
 
         identity : str, optional
@@ -83,7 +83,7 @@ class Circuit(_gstr.GateString):
         assert(_compat.isstr(identity)), "The identity name must be a string!"
         self.identity = identity
 
-        assert((line_items is not None) or (gatestring is not None) or (num_lines is not None) or (line_labels is not None)), \
+        assert((line_items is not None) or (circuit is not None) or (num_lines is not None) or (line_labels is not None)), \
             "At least one of these arguments must be not None!"
 
         self._static = False
@@ -92,7 +92,7 @@ class Circuit(_gstr.GateString):
             assert(num_lines == len(line_labels)), "Inconsistent `num_lines` and `line_labels`!"
                 
         if line_items is not None:
-            assert(gatestring is None), "Cannot specify both `line_items` and `gatestring`"
+            assert(circuit is None), "Cannot specify both `line_items` and `circuit`"
             self.line_items = line_items
             if num_lines is not None:
                 assert(num_lines == len(line_items)), "Inconsistent `line_items` and `num_lines` arguments!"
@@ -113,12 +113,12 @@ class Circuit(_gstr.GateString):
             else:
                 self.line_labels = list(range(num_lines))
             
-            if gatestring is not None:
-                self._initialize_from_gatestring(gatestring, parallelize)
+            if circuit is not None:
+                self._initialize_from_circuit(circuit, parallelize)
             else:
                 self.clear() # initializes an empty circuit
 
-        """ Initialize the members of the GateString base class """
+        """ Initialize the members of the OpString base class """
         tup = self._flatten_to_tup()
         strRep = None  #don't worry about string representation currently - just auto-compute it.
         super(Circuit, self).__init__(tup, strRep)
@@ -130,16 +130,16 @@ class Circuit(_gstr.GateString):
         #self.barriers = _np.zeros(self.depth()+1,bool)
 
     def _reinit_base(self):
-        """ Re-initialize the members of the base GateString object """
+        """ Re-initialize the members of the base OpString object """
         if self._tup_dirty:
             self._tup = self._flatten_to_tup()
             self._tup_dirty = False
         if self._str_dirty:
-            self._str = _gstr._gateSeqToStr(self._tup)
+            self._str = _gstr._opSeqToStr(self._tup)
             self._str_dirty = False
         
     def _flatten_to_tup(self):
-        """ Flatten self.line_items into a serial tuple of gate labels """
+        """ Flatten self.line_items into a serial tuple of operation labels """
         #print("DB: flattening to tuple!!")
         if self.number_of_lines() <= 0:
             return ()
@@ -169,7 +169,7 @@ class Circuit(_gstr.GateString):
     @property
     def tup(self):
         """ This Circuit as a standard Python tuple of Labels."""
-        # Note: this overrides GateString method so we can compute tuple in on-demand way
+        # Note: this overrides OpString method so we can compute tuple in on-demand way
         #print("Circuit.tup accessed")
         self._reinit_base()
         return self._tup
@@ -183,14 +183,14 @@ class Circuit(_gstr.GateString):
 
     @property
     def str(self):
-        """ The Python string representation of this GateString."""
+        """ The Python string representation of this OpString."""
         #print("Circuit.str accessed")
         self._reinit_base()
         return self._str
 
     @str.setter
     def str(self, value):
-        """ The Python string representation of this GateString."""
+        """ The Python string representation of this OpString."""
         #print("Circuit.str setter accessed")
         self._reinit_base()
         self._str = value
@@ -225,33 +225,33 @@ class Circuit(_gstr.GateString):
             self.line_items.append([])
         self._tup_dirty = self._str_dirty = True
                         
-    def _initialize_from_gatestring(self,gatestring,parallelize):
+    def _initialize_from_circuit(self,circuit,parallelize):
         """
         Initializes self.line_items from a sequence of Label objects.
         
         Parameters
         ----------
-        gatestring : GateString or tuple
+        circuit : OpString or tuple
             A sequence of state preparation (optional), gates, and measurement
-            (optional), given by a :class:`GateString` object.
+            (optional), given by a :class:`OpString` object.
 
         parallelize : bool
             Whether or not automatic parallelization should be performed, where
-            subsequent gates in `gatestring` acting on disjoint sets of qubits
+            subsequent gates in `circuit` acting on disjoint sets of qubits
             should be placed in the same layer.
         """
         assert(not self._static),"Cannot edit a read-only circuit!"
         
-        # Get a proper GateString object if one isn't given to us
-        if not isinstance(gatestring, _gstr.GateString):
-            gatestring = _gstr.GateString(gatestring)
+        # Get a proper OpString object if one isn't given to us
+        if not isinstance(circuit, _gstr.OpString):
+            circuit = _gstr.OpString(circuit)
 
         if parallelize:
-            gatestring = gatestring.parallelize()
+            circuit = circuit.parallelize()
 
-        # Note: elements of gatestring are guaranteed to be Label objs b/c GateString enforces this.
+        # Note: elements of circuit are guaranteed to be Label objs b/c OpString enforces this.
             
-        # Create an empty circuit, to populate from gatestring
+        # Create an empty circuit, to populate from circuit
         self.clear() # inits self.line_items
 
         # keeps track of which gates have been added to the circuit from the list.
@@ -260,18 +260,18 @@ class Circuit(_gstr.GateString):
         # keeps track of the circuit layer number
         layer_number = 0
         
-        while j < len(gatestring):
+        while j < len(circuit):
             layer = [] # The gates that are going into this layer.
 
-            #OLD TODO REMOVE (parallelization code - now rely on GateString.parallelize())
+            #OLD TODO REMOVE (parallelization code - now rely on OpString.parallelize())
             #  TODO - could condense this function some after this is removed
             #if parallelize:
             #    k = 0 # The number of gates beyond j that are going into this layer.
             #    used_qubits = set() # The qubits used in this layer.
-            #    while j+k < len(gatestring):
+            #    while j+k < len(circuit):
             #        
             #        # look at the j+kth gate and include in this layer
-            #        gate = gatestring[j+k] # really a gate *label*
+            #        gate = circuit[j+k] # really a gate *label*
             #
             #        # Label *can* have None as its .qubits, this in interpeted
             #        # to mean the label applies to all the lines.
@@ -287,9 +287,9 @@ class Circuit(_gstr.GateString):
             #        # added to the layer if it does not act on any qubits
             #        # with a gate already in this layer
             #        k += 1
-            #else: # just add the next gate label as the next layer
+            #else: # just add the next operation label as the next layer
             k = 1 # The number of gates beyond j that are going into this layer.
-            gate = gatestring[j]
+            gate = circuit[j]
             layer.append(gate)
                 
             # Insert the layer into the circuit.
@@ -311,7 +311,7 @@ class Circuit(_gstr.GateString):
         Parameters
         ----------
         gatelbl : Label
-            The gate label to insert.
+            The operation label to insert.
             
         j : int
             The layer index (depth) at which to insert the gate.
@@ -329,7 +329,7 @@ class Circuit(_gstr.GateString):
             for i in range(0,self.number_of_lines()):
                 self.line_items[i].insert(j,_Label(self.identity,self.line_labels[i]))
             
-        # Put the gate label in at the jth layer - note this label may
+        # Put the operation label in at the jth layer - note this label may
         # be a "parallel-gate" label and have mulitple components.
         for gl_comp in gatelbl.components:
             gate_qubits = gl_comp.qubits if (gl_comp.qubits is not None) \
@@ -672,7 +672,7 @@ class Circuit(_gstr.GateString):
     def change_gate_library(self, compilation, allowed_filter=None, allow_unchanged_gates=False, depth_compression=True, 
                             oneQgate_relations=None, identity=None):
         """
-        Re-express a circuit over a different gateset.
+        Re-express a circuit over a different model.
         
         Parameters
         ----------
@@ -704,7 +704,7 @@ class Circuit(_gstr.GateString):
             often result in a massive increase in circuit depth.
   
         oneQgate_relations : dict, optional
-            Gate relations for the one-qubit gates in the new gate library, that are used in the  depth compression, to 
+            LinearOperator relations for the one-qubit gates in the new gate library, that are used in the  depth compression, to 
             cancel / combine gates. E.g., one key-value pair might be  ('Gh','Gh') : 'I', to signify that two Hadamards c
             ompose to the idle gate 'Gi'. See the depth_compression() method for more details.
 
@@ -1668,7 +1668,7 @@ class Circuit(_gstr.GateString):
             # Go through the (non-self.identity) gates in the layer and convert them to quil
             for gate in layer:
                 gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
-                assert(len(gate_qubits) <= 2 or gate.qubits is None), 'Gate on more than 2 qubits given; this is currently not supported!'
+                assert(len(gate_qubits) <= 2 or gate.qubits is None), 'LinearOperator on more than 2 qubits given; this is currently not supported!'
                 
                 
                 # Find the quil for the gate.
@@ -1822,25 +1822,25 @@ class Circuit(_gstr.GateString):
             
         return openqasm
 
-    def simulate(self, gateset, return_all_outcomes=False): 
+    def simulate(self, model, return_all_outcomes=False): 
         """
-        Compute the outcome probabilities of this Circuit using `gateset` as a
+        Compute the outcome probabilities of this Circuit using `model` as a
         model for the gates. The order of the outcome strings (e.g., '0100') is
         w.r.t to the ordering of the qubits in the circuit. That is, the ith element
         of the outcome string corresponds to the qubit with label self.qubit_labels[i].
 
         Parameters
         ----------
-        gateset : GateSet
+        model : Model
             A description of the gate and SPAM operations corresponding to the
-            labels stored in this Circuit. If this gateset is over more qubits 
+            labels stored in this Circuit. If this model is over more qubits 
             than the circuit, the output will be the probabilities for the qubits 
             in the circuit marginalized over the other qubits. But, the simulation
-            is over the full set of qubits in the gateset, and so the time taken for
-            the simulation scales with the number of qubits in the gateset. For
+            is over the full set of qubits in the model, and so the time taken for
+            the simulation scales with the number of qubits in the model. For
             models whereby "spectator" qubits do not affect the qubits in this
             circuit (such as with perfect gates), more efficient simulations will
-            be obtained by first creating a gateset only over the qubits in this 
+            be obtained by first creating a model only over the qubits in this 
             circuit.
 
         return_all_outcomes: bool, optional
@@ -1856,13 +1856,13 @@ class Circuit(_gstr.GateString):
             outcomes, and values that are float probabilities.
         """
         # These results is a dict with strings of outcomes (normally bits) ordered according to the
-        # state space ordering in the gateset.
-        results = gateset.probs(self)
+        # state space ordering in the model.
+        results = model.probs(self)
 
-        # Mapping from the state-space labels of the gateset to their indices.
-        # (e.g. if gateset.stateSpaceLabels is [('Qa','Qb')] then sslInds['Qb'] = 1
+        # Mapping from the state-space labels of the model to their indices.
+        # (e.g. if model.stateSpaceLabels is [('Qa','Qb')] then sslInds['Qb'] = 1
         # (and 'Qb' may be a circuit line label)
-        sslInds = { sslbl:i for i,sslbl in enumerate(gateset.stateSpaceLabels.labels[0]) }
+        sslInds = { sslbl:i for i,sslbl in enumerate(model.stateSpaceLabels.labels[0]) }
           # Note: we ignore all but the first tensor product block of the state space.
         
         def process_outcome(outcome):

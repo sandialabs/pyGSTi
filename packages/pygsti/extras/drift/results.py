@@ -34,7 +34,7 @@ class DriftResults(object):
         self.name = name
         return None
 
-    def add_formatted_data(self, timeseries, timestamps, gatestringlist, outcomes, number_of_counts, 
+    def add_formatted_data(self, timeseries, timestamps, circuitlist, outcomes, number_of_counts, 
                            constNumTimes, entitieslist=None, enforcedConstNumTimes=None, marginalized=None, 
                            overwrite=False):
         """
@@ -47,13 +47,13 @@ class DriftResults(object):
         
         # The timeseries is a list of lists of dicts. The first index is entity index (corresponding
         # to the entity at that index of the lsit self.entities). The second index is the 
-        # gatestring index, (corresponding to the gatestring at that index of the list 
-        # self.gatestringlist). The dictionary keys correspond to the outcomes in self.outcomeslist.
+        # circuit index, (corresponding to the circuit at that index of the list 
+        # self.circuitlist). The dictionary keys correspond to the outcomes in self.outcomeslist.
         self.timeseries = timeseries
         self.timestamps = timestamps
-        self.gatestringlist = gatestringlist
-        self.number_of_sequences = len(gatestringlist)
-        self.indexforGatestring = {gatestringlist[i]:i for i in range(self.number_of_sequences)}
+        self.circuitlist = circuitlist
+        self.number_of_sequences = len(circuitlist)
+        self.indexforCircuit = {circuitlist[i]:i for i in range(self.number_of_sequences)}
 
         self.outcomes = outcomes
         self.number_of_outcomes = len(outcomes)
@@ -371,7 +371,7 @@ class DriftResults(object):
             if isinstance(sequence,int):
                 dicttup.append(sequence)
             else:
-                dicttup.append(self.indexforGatestring[sequence])
+                dicttup.append(self.indexforCircuit[sequence])
 
         if outcome == 'avg':
             if pad: dicttup.append('avg')
@@ -457,7 +457,7 @@ class DriftResults(object):
             self.estimationAuxDict = {}
 
         eInd = self.entitieslist.index(entity)
-        sInd = self.indexforGatestring[sequence]
+        sInd = self.indexforCircuit[sequence]
 
         if (eInd, sInd) not in self.models.keys():
             self.models[eInd,sInd] = {}
@@ -733,11 +733,11 @@ class DriftResults(object):
       
     
     # Todo:
-    #def add_target_probabilities(targetGateset):
+    #def add_target_probabilities(targetModel):
     #
     #    return  None
    
-    def plot_probability_trajectory_estimates(self, gatestringlist, entity='0', outcome=('0',), uncertainties=False,
+    def plot_probability_trajectory_estimates(self, circuitlist, entity='0', outcome=('0',), uncertainties=False,
                                               plotData=False, targetValue=None, figsize=(15,3), 
                                               savepath=None, loc=None, title=True, 
                                               estimatekey=None):
@@ -765,8 +765,8 @@ class DriftResults(object):
         _plt.figure(figsize=figsize)
                 
         times = []
-        for gstr in gatestringlist:
-            gstrInd = self.indexforGatestring[gstr]
+        for opstr in circuitlist:
+            gstrInd = self.indexforCircuit[opstr]
             times += list(self.timestamps[gstrInd])
         
         times.sort()       
@@ -792,20 +792,20 @@ class DriftResults(object):
         entityInd = self.entitieslist.index(entity)
         outcomeInd = self.outcomes.index(outcome)
 
-        for gstr in gatestringlist:
-            gstrInd = self.indexforGatestring[gstr]
+        for opstr in circuitlist:
+            gstrInd = self.indexforCircuit[opstr]
             if estimatekey is None:
-                gs_estimatekey = self.defaultmodelkey[entityInd,gstrInd]
+                mdl_estimatekey = self.defaultmodelkey[entityInd,gstrInd]
             else:
-                 gs_estimatekey = estimatekey
-            p = self.models[entityInd,gstrInd][gs_estimatekey].get_probabilities(times)[outcome]
+                 mdl_estimatekey = estimatekey
+            p = self.models[entityInd,gstrInd][mdl_estimatekey].get_probabilities(times)[outcome]
         # error = self.pspepo_reconstruction_uncertainty[sequence_index,entity,outcome_index]
         # upper = p+error
         # lower = p-error
         # upper[upper > 1.] = 1.
         # lower[lower < 0.] = 0.
         
-            _plt.plot(times,p,'-',label='{}'.format(gstr))
+            _plt.plot(times,p,'-',label='{}'.format(opstr))
         
         # if errorbars:
         #     _plt.fill_between(times, upper, lower, alpha=0.2, color='r')

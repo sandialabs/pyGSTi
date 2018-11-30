@@ -34,7 +34,7 @@ def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, erro
         ProcessorSpec `pspec` and are Clifford gates.
 
     pspec : ProcessorSpec
-        The ProcessorSpec that defines the device. The Clifford gateset in ProcessorSpec should contain all of 
+        The ProcessorSpec that defines the device. The Clifford model in ProcessorSpec should contain all of 
         the gates that are in the circuit.
 
     errormodel : dict
@@ -109,7 +109,7 @@ def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, psp
         ProcessorSpec `pspec` and are Clifford gates.
 
     pspec : ProcessorSpec
-        The ProcessorSpec that defines the device. The Clifford gateset in ProcessorSpec should contain all of 
+        The ProcessorSpec that defines the device. The Clifford model in ProcessorSpec should contain all of 
         the gates that are in the circuit.
 
     errormodel : dict
@@ -366,9 +366,9 @@ def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, 
     errormodel = {}
 
     if pspec.models['clifford'].auto_idle_gatename is not None:
-        #Added by EGN: special behavior needed when GateSet has
+        #Added by EGN: special behavior needed when Model has
         # an gate name used to designate a perfect 1-qubit idle op (used as placeholder).
-        # This translates to a set of "<gatename>:X" gate labels all w/idle_errorrate
+        # This translates to a set of "<gatename>:X" operation labels all w/idle_errorrate
         nQubits = int(round(_np.log2(pspec.models['clifford'].dim)))
         idleLbl = pspec.models['clifford'].auto_idle_gatename
         for q in pspec.qubit_labels:
@@ -377,7 +377,7 @@ def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, 
             errormodel[gl][:,0] = _np.ones(n,float)
             errormodel[gl][pspec.qubit_labels.index(q),:] =  error_row(idle_errorrate)
 
-    for gate in list(pspec.models['clifford'].gates.keys()):
+    for gate in list(pspec.models['clifford'].operations.keys()):
         errormodel[gate] = _np.zeros((n,4),float)
         errormodel[gate][:,0] = _np.ones(n,float)
     
@@ -460,9 +460,9 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
     errormodel = {}
 
     if pspec.models['clifford'].auto_idle_gatename is not None:
-        #Added by EGN: special behavior needed when GateSet has
+        #Added by EGN: special behavior needed when Model has
         # an gate name used to designate a perfect 1-qubit idle op (used as placeholder).
-        # This translates to a set of "<gatename>:X" gate labels all w/appropriate errorrate
+        # This translates to a set of "<gatename>:X" operation labels all w/appropriate errorrate
         nQubits = int(round(_np.log2(pspec.models['clifford'].dim)))
         idleLbl = pspec.models['clifford'].auto_idle_gatename
         for q in pspec.qubit_labels:
@@ -472,7 +472,7 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
             errormodel[gl][:,0] = _np.ones(n,float)
             errormodel[gl][pspec.qubit_labels.index(q),:] =  error_row(er)
 
-    for gate in list(pspec.models['clifford'].gates.keys()):
+    for gate in list(pspec.models['clifford'].operations.keys()):
         errormodel[gate] = _np.zeros((n,4),float)
         errormodel[gate][:,0] = _np.ones(n,float)
     
@@ -544,7 +544,7 @@ def create_local_pauli_error_model(pspec, oneQgate_errorrate_dict, twoQgate_erro
     n = pspec.number_of_qubits
 
     errormodel = {}
-    for gate in list(pspec.models['clifford'].gates.keys()):
+    for gate in list(pspec.models['clifford'].operations.keys()):
         errormodel[gate] = _np.zeros((n,4),float)
         errormodel[gate][:,0] = _np.ones(n,float)
     

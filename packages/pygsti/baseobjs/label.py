@@ -34,7 +34,7 @@ class Label(object):
 
     def __new__(cls,name,stateSpaceLabels=None):
         """
-        Creates a new GateSet-item label, which is divided into a simple string
+        Creates a new Model-item label, which is divided into a simple string
         label and a tuple specifying the part of the Hilbert space upon which the
         item acts (often just qubit indices).
         
@@ -93,7 +93,7 @@ class LabelTup(Label,tuple):
   
     def __new__(cls,name,stateSpaceLabels):
         """
-        Creates a new GateSet-item label, which is divided into a simple string
+        Creates a new Model-item label, which is divided into a simple string
         label and a tuple specifying the part of the Hilbert space upon which the
         item acts (often just qubit indices).
         
@@ -286,7 +286,7 @@ class LabelStr(Label,str):
   
     def __new__(cls,name):
         """
-        Creates a new GateSet-item label, which is just a simple string label.
+        Creates a new Model-item label, which is just a simple string label.
         
         Parameters
         ----------
@@ -389,7 +389,7 @@ class LabelTupTup(Label,tuple):
   
     def __new__(cls,tupOfTups):
         """
-        Creates a new GateSet-item label, which is a tuple of tuples of simple
+        Creates a new Model-item label, which is a tuple of tuples of simple
         string labels and tuples specifying the part of the Hilbert space upon
         which that item acts (often just qubit indices).
         

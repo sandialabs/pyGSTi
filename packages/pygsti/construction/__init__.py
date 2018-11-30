@@ -1,4 +1,4 @@
-""" Gate Set Tomography Object Construction Python Package """
+""" LinearOperator Set Tomography Object Construction Python Package """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -7,9 +7,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 from .gateconstruction import *
-from .gatesetconstruction import *
-from .gatestringconstruction import *
+from .modelconstruction import *
+from .circuitconstruction import *
 from .datasetconstruction import *
 from .nqnoiseconstruction import *
 from .stdlists import *
-from .qutrit import make_qutrit_gateset
+from .qutrit import make_qutrit_model

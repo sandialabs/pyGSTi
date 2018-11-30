@@ -115,11 +115,11 @@ def embed_term(term, stateSpaceLabels, targetLabels, basisdim=None): #TODO: REMO
     -------
     RankOneTerm
     """
-    from . import gate as _gate
+    from . import gate as _op
     ret = RankOneTerm(term.coeff, None, None, term.typ)
-    ret.pre_ops = [ _gate.EmbeddedGateMap(stateSpaceLabels, targetLabels, op, basisdim)
+    ret.pre_ops = [ _op.EmbeddedOpMap(stateSpaceLabels, targetLabels, op, basisdim)
                     for op in term.pre_ops ]
-    ret.post_ops = [ _gate.EmbeddedGateMap(stateSpaceLabels, targetLabels, op, basisdim)
+    ret.post_ops = [ _op.EmbeddedOpMap(stateSpaceLabels, targetLabels, op, basisdim)
                      for op in term.post_ops ]
     return ret
 
@@ -171,12 +171,12 @@ class RankOneTerm(object):
             The coefficient of this term.
 
         pre_op : object
-            Typically a Gate- or SPAMVec-derived object giving the 
+            Typically a LinearOperator- or SPAMVec-derived object giving the 
             left-hand ("pre-rho") unitary action, pure state, or projection of
             the term.  Can be None to indicate no operation/state.
 
         post_op : object
-            Typically a Gate- or SPAMVec-derived object giving the *adjoint* of
+            Typically a LinearOperator- or SPAMVec-derived object giving the *adjoint* of
             the right-hand ("post-rho") unitary action, pure state, or
             projection of the term. Can be None to indicate no operation/state.
 
@@ -185,8 +185,8 @@ class RankOneTerm(object):
             propagation or stabilizer state propagation
 
         """
-        from . import gatesetmember as _gsm
-        from . import gate as _gate
+        from . import modelmember as _mm
+        from . import gate as _op
         from . import spamvec as _spamvec
         self.coeff = coeff # potentially a Polynomial
         self.pre_ops = [] # list of ops to perform - in order of operation to a ket
@@ -199,12 +199,12 @@ class RankOneTerm(object):
         #acting with pre_ops in-order on a ket
         
         if pre_op is not None:
-            if not isinstance(pre_op,_gsm.GateSetMember):
+            if not isinstance(pre_op,_mm.ModelMember):
                 try:
                     if typ == "dense":
-                        pre_op = _gate.StaticGate(pre_op)
+                        pre_op = _op.StaticOp(pre_op)
                     elif typ == "clifford":
-                        pre_op = _gate.CliffordGate(pre_op)
+                        pre_op = _op.CliffordOp(pre_op)
                     else: assert(False), "Invalid `typ` argument: %s" % typ
                 except ValueError: # raised when size/shape is wrong
                     if typ == "dense":
@@ -212,12 +212,12 @@ class RankOneTerm(object):
                     else: assert(False), "No default vector for typ=%s" % typ
             self.pre_ops.append(pre_op)
         if post_op is not None:
-            if not isinstance(post_op,_gsm.GateSetMember):
+            if not isinstance(post_op,_mm.ModelMember):
                 try:
                     if typ == "dense":
-                        post_op = _gate.StaticGate(post_op)
+                        post_op = _op.StaticOp(post_op)
                     elif typ == "clifford":
-                        post_op = _gate.CliffordGate(post_op)
+                        post_op = _op.CliffordOp(post_op)
                     else: assert(False), "Invalid `typ` argument: %s" % typ
                 except ValueError: # raised when size/shape is wrong
                     if typ == "dense":
@@ -286,7 +286,7 @@ class RankOneTerm(object):
     def collapse_vec(self):
         """
         Returns a copy of this term with all pre & post ops by reduced
-        ("collapsed") by action of Gate ops on an initial SPAMVec.  This results
+        ("collapsed") by action of LinearOperator ops on an initial SPAMVec.  This results
         in a term with only a single pre/post op which are SPAMVecs.
 
         Returns

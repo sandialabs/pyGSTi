@@ -14,7 +14,7 @@ import collections as _collections
 from .. import optimize as _opt
 from .. import tools as _tools
 
-from .gatecalc import P_RANK_TOL
+from .forwardsim import P_RANK_TOL
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 # NON-MARKOVIAN ERROR BARS
@@ -35,8 +35,8 @@ from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 #           = dx*H*dx ==> delta' is just like C1 or Ck scaling factors
 #                         used for computing normal confidence regions
 #    (recall delta' is computed as the alpha-th quantile of a
-#     non-central chi^2_{K',r2} where K' = #of gateset params and
-#     r2 = lambda(G_mle) - (K-K'), where K = #max-model params (~#gatestrings)
+#     non-central chi^2_{K',r2} where K' = #of model params and
+#     r2 = lambda(G_mle) - (K-K'), where K = #max-model params (~#circuits)
 #     is the difference between the expected (mean) lambda (=K-K') and what
 #     we actually observe (=lambda(G_mle)).
 #
@@ -46,14 +46,14 @@ class ConfidenceRegionFactory(object):
     An object which is capable of generating confidence intervals/regions.
 
     Often times, it does so by holding the Hessian of a fit function with
-    respect to a `GateSet`'s parameters and related projections of it onto the
+    respect to a `Model`'s parameters and related projections of it onto the
     non-gauge space.
 
     Alternative (non-Hessian-based) means of computing confidence intervals
     are also available, such as by using so-called "linear reponse error bars".
     """
 
-    def __init__(self, parent, gateset_lbl, gatestring_list_lbl,
+    def __init__(self, parent, model_lbl, circuit_list_lbl,
                  hessian=None, nonMarkRadiusSq=None):
         """
         Initializes a new ConfidenceRegionFactory.
@@ -61,22 +61,22 @@ class ConfidenceRegionFactory(object):
         Parameters
         ----------
         parent : Estimate
-            the parent estimate object, needed to resolve gate set and gate
+            the parent estimate object, needed to resolve model and gate
             string list labels.
 
-        gateset_lbl : str
-            The key into the parent `Estimate`'s `.gatesets` dictionary that
-            gives the `GateSet` about which confidence regions will be 
+        model_lbl : str
+            The key into the parent `Estimate`'s `.models` dictionary that
+            gives the `Model` about which confidence regions will be 
             constructed.
 
-        gatestring_list_lbl : str
-            The key into the parent `Results`'s `.gatestring_lists` dictionary
-            that specifies which gate sequences should be or were included 
+        circuit_list_lbl : str
+            The key into the parent `Results`'s `.circuit_lists` dictionary
+            that specifies which operation sequences should be or were included 
             when computing fit functions (the log-likelihood or chi2).
 
         hessian : numpy array, optional
             A pre-computed nParams x nParams Hessian matrix, where nParams is
-            the number of dimensions of gateset space, i.e. gateset.num_params().
+            the number of dimensions of model space, i.e. model.num_params().
 
         nonMarkRadiusSq : float, optional
             The non-Markovian radius associated with the goodness of fit found
@@ -96,8 +96,8 @@ class ConfidenceRegionFactory(object):
         self.linresponse_mlgst_params = None
         self.nNonGaugeParams = self.nGaugeParams = None
 
-        self.gateset_lbl = gateset_lbl
-        self.gatestring_list_lbl = gatestring_list_lbl
+        self.model_lbl = model_lbl
+        self.circuit_list_lbl = circuit_list_lbl
         self.set_parent( parent )
 
     def __getstate__(self):
@@ -159,15 +159,15 @@ class ConfidenceRegionFactory(object):
         
     def get_gateset(self):
         """
-        Retrieve the associated gate set.
+        Retrieve the associated model.
 
         Returns
         -------
-        GateSet
-            the gate set marking the center location of this confidence region.
+        Model
+            the model marking the center location of this confidence region.
         """
         assert(self.parent is not None) # Estimate
-        return self.parent.gatesets[self.gateset_lbl]
+        return self.parent.models[self.model_lbl]
 
         
     def compute_hessian(self, comm=None, memLimit=None, approximate=False):
@@ -197,8 +197,8 @@ class ConfidenceRegionFactory(object):
         assert(self.parent is not None) # Estimate
         assert(self.parent.parent is not None) # Results
 
-        gateset = self.parent.gatesets[self.gateset_lbl]
-        gatestring_list = self.parent.parent.gatestring_lists[self.gatestring_list_lbl]
+        model = self.parent.models[self.model_lbl]
+        circuit_list = self.parent.parent.circuit_lists[self.circuit_list_lbl]
         dataset = self.parent.parent.dataset
 
         #extract any parameters we can get from the Estimate
@@ -211,7 +211,7 @@ class ConfidenceRegionFactory(object):
         cptp_penalty_factor = parameters.get('cptpPenaltyFactor',0)
         spam_penalty_factor = parameters.get('spamPenaltyFactor',0)
         useFreqWt = parameters.get('useFreqWeightedChiSq',False)
-        aliases = parameters.get('gateLabelAliases',None)
+        aliases = parameters.get('opLabelAliases',None)
         if memLimit is None:
             memLimit = parameters.get('memLimit',None)
 
@@ -221,13 +221,13 @@ class ConfidenceRegionFactory(object):
         assert(spam_penalty_factor == 0), 'spam_penalty_factor unsupported in hessian computation'
         assert(useFreqWt == False), 'useFreqWeightedChiSq unsupported in hessian computation'
 
-        #Expand gate label aliases used in DataSet lookups
-        ds_gatestring_list = _tools.find_replace_tuple_list(
-            gatestring_list, aliases)
+        #Expand operation label aliases used in DataSet lookups
+        ds_circuit_list = _tools.find_replace_tuple_list(
+            circuit_list, aliases)
 
-        nGateStrings = len(gatestring_list)
-        nModelParams = gateset.num_nongauge_params()        
-        nDataParams  = dataset.get_degrees_of_freedom(ds_gatestring_list)
+        nCircuits = len(circuit_list)
+        nModelParams = model.num_nongauge_params()        
+        nDataParams  = dataset.get_degrees_of_freedom(ds_circuit_list)
           #number of independent parameters in dataset (max. model # of params)
 
         MIN_NON_MARK_RADIUS = 1e-8 #must be >= 0
@@ -235,21 +235,21 @@ class ConfidenceRegionFactory(object):
         if obj == 'logl':
             hessian_fn = _tools.logl_approximate_hessian if approximate \
                          else _tools.logl_hessian
-            hessian = hessian_fn(gateset, dataset, gatestring_list,
+            hessian = hessian_fn(model, dataset, circuit_list,
                                  minProbClip, probClipInterval, radius,
                                  comm=comm, memLimit=memLimit, verbosity=vb,
-                                 gateLabelAliases=aliases)
+                                 opLabelAliases=aliases)
 
-            nonMarkRadiusSq = max( 2*(_tools.logl_max(gateset, dataset)
-                                      - _tools.logl(gateset, dataset,
-                                                    gateLabelAliases=aliases)) \
+            nonMarkRadiusSq = max( 2*(_tools.logl_max(model, dataset)
+                                      - _tools.logl(model, dataset,
+                                                    opLabelAliases=aliases)) \
                                    - (nDataParams-nModelParams), MIN_NON_MARK_RADIUS )
 
         elif obj == 'chi2':
-            chi2, hessian = _tools.chi2(gateset, dataset, gatestring_list,
+            chi2, hessian = _tools.chi2(model, dataset, circuit_list,
                                         False, True, minProbClipForWeighting,
                                         probClipInterval, memLimit=memLimit,
-                                        gateLabelAliases=aliases,
+                                        opLabelAliases=aliases,
                                         approximateHessian=approximate)
             
             nonMarkRadiusSq = max(chi2 - (nDataParams-nModelParams), MIN_NON_MARK_RADIUS)
@@ -283,7 +283,7 @@ class ConfidenceRegionFactory(object):
               which minimizes the (average) size of the confidence intervals
               corresponding to gate (as opposed to SPAM vector) parameters.
             - 'intrinsic error' -- compute separately the intrinsic error
-              in the gate and spam GateSet parameters and set weighting metric
+              in the gate and spam Model parameters and set weighting metric
               based on their ratio.
 
         label : str, optional
@@ -308,10 +308,10 @@ class ConfidenceRegionFactory(object):
         if label is None:
             label = projection_type 
         
-        gateset = self.parent.gatesets[self.gateset_lbl]
-        proj_non_gauge = gateset.get_nongauge_projector()
+        model = self.parent.models[self.model_lbl]
+        proj_non_gauge = model.get_nongauge_projector()
         self.nNonGaugeParams = _np.linalg.matrix_rank(proj_non_gauge, P_RANK_TOL)
-        self.nGaugeParams = gateset.num_params() - self.nNonGaugeParams
+        self.nGaugeParams = model.num_params() - self.nNonGaugeParams
 
         #Project Hessian onto non-gauge space
         if projection_type == 'none':
@@ -319,7 +319,7 @@ class ConfidenceRegionFactory(object):
         elif projection_type == 'std':
             projected_hessian = _np.dot(proj_non_gauge, _np.dot(self.hessian, proj_non_gauge))
         elif projection_type == 'optimal gate CIs':
-            projected_hessian = self._optProjectionForGateCIs("L-BFGS-B", maxiter, maxiter,
+            projected_hessian = self._optProjectionForOperationCIs("L-BFGS-B", maxiter, maxiter,
                                                               tol, verbosity=3) #verbosity for DEBUG
         elif projection_type == 'intrinsic error':
             projected_hessian = self._optProjectionFromSplit(verbosity=3) #verbosity for DEBUG
@@ -371,7 +371,7 @@ class ConfidenceRegionFactory(object):
         assert(self.parent is not None) # Estimate
         assert(self.parent.parent is not None) # Results
 
-        gatestring_list = self.parent.parent.gatestring_lists[self.gatestring_list_lbl]
+        circuit_list = self.parent.parent.circuit_lists[self.circuit_list_lbl]
         dataset = self.parent.parent.dataset
 
         parameters = self.parent.parameters
@@ -381,14 +381,14 @@ class ConfidenceRegionFactory(object):
         radius = parameters.get('radius',1e-4)
         cptp_penalty_factor = parameters.get('cptpPenaltyFactor',0)
         spam_penalty_factor = parameters.get('spamPenaltyFactor',0)
-        aliases = parameters.get('gateLabelAliases',None)
+        aliases = parameters.get('opLabelAliases',None)
         distributeMethod = parameters.get('distributeMethod','deriv')
         memLimit = parameters.get('memLimit',None)
         comm = parameters.get('comm',None)
         
         self.linresponse_mlgst_params = {
             'dataset': dataset,
-            'gateStringsToUse': gatestring_list,
+            'circuitsToUse': circuit_list,
             'maxiter': 10000, 'tol': 1e-10,
             'cptp_penalty_factor': cptp_penalty_factor,
             'spam_penalty_factor': spam_penalty_factor,
@@ -398,7 +398,7 @@ class ConfidenceRegionFactory(object):
             'poissonPicture': True, 'verbosity': 2, #NOTE: HARDCODED
             'memLimit': memLimit, 'comm': comm,
             'distributeMethod': distributeMethod, 'profiler': None,
-            'gateLabelAliases': aliases
+            'opLabelAliases': aliases
             }
 
         #Count everything as non-gauge? TODO BETTER
@@ -440,7 +440,7 @@ class ConfidenceRegionFactory(object):
         linresponse_mlgst_params = None
 
         assert(self.parent is not None) # Estimate
-        gateset = self.parent.gatesets[self.gateset_lbl]
+        model = self.parent.models[self.model_lbl]
         
         if self.hessian is not None:
             assert(len(self.inv_hessian_projections) > 0), \
@@ -465,22 +465,22 @@ class ConfidenceRegionFactory(object):
         else:
             raise ValueError("Invalid confidence region type: %s" % regionType)
 
-        return ConfidenceRegionFactoryView(gateset, inv_hessian_projection, linresponse_mlgst_params,
+        return ConfidenceRegionFactoryView(model, inv_hessian_projection, linresponse_mlgst_params,
                                            confidenceLevel, nonMarkRadiusSq,
                                            self.nNonGaugeParams, self.nGaugeParams)
         
         #TODO: where to move this?
-        ##Check that number of gauge parameters reported by gateset is consistent with confidence region
+        ##Check that number of gauge parameters reported by model is consistent with confidence region
         ## since the parameter number computed this way is used in chi2 or logl progress tables
-        #Np_check =  gateset.num_nongauge_params()
+        #Np_check =  model.num_nongauge_params()
         #if(Np_check != cri.nNonGaugeParams):
-        #    _warnings.warn("Number of non-gauge parameters in gateset and confidence region do "
+        #    _warnings.warn("Number of non-gauge parameters in model and confidence region do "
         #                   + " not match.  This indicates an internal logic error.")
 
-    def _optProjectionForGateCIs(self, method="L-BFGS-B", maxiter=10000,
+    def _optProjectionForOperationCIs(self, method="L-BFGS-B", maxiter=10000,
                                  maxfev = 10000, tol=1e-6, verbosity=0):
         printer = _VerbosityPrinter.build_printer(verbosity)
-        gateset = self.parent.gatesets[self.gateset_lbl]
+        model = self.parent.models[self.model_lbl]
         base_hessian = self.hessian
         level = 95 # or 50, or whatever - the scale factory doesn't matter for the optimization
     
@@ -489,17 +489,17 @@ class ConfidenceRegionFactory(object):
     
         def _objective_func(vectorM):
             matM = vectorM.reshape( (self.nNonGaugeParams,self.nGaugeParams) )
-            proj_extra = gateset.get_nongauge_projector(nonGaugeMixMx=matM)
+            proj_extra = model.get_nongauge_projector(nonGaugeMixMx=matM)
             projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
     
-            sub_crf = ConfidenceRegionFactory(self.parent, self.gateset_lbl, self.gatestring_list_lbl,
+            sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl, self.circuit_list_lbl,
                                               projected_hessian_ex, 0.0)
             sub_crf.project_hessian('none')
             crfv = sub_crf.view(level)
 
-            gateCIs = _np.concatenate( [ crfv.get_profile_likelihood_confidence_intervals(gl).flatten()
-                                         for gl in gateset.gates] )
-            return _np.sqrt( _np.sum(gateCIs**2) )
+            operationCIs = _np.concatenate( [ crfv.get_profile_likelihood_confidence_intervals(gl).flatten()
+                                         for gl in model.operations] )
+            return _np.sqrt( _np.sum(operationCIs**2) )
     
         #Run Minimization Algorithm
         startM = _np.zeros( (self.nNonGaugeParams,self.nGaugeParams), 'd')
@@ -511,66 +511,66 @@ class ConfidenceRegionFactory(object):
                                callback = print_obj_func if verbosity > 2 else None)
     
         mixMx = minSol.x.reshape( (self.nNonGaugeParams,self.nGaugeParams) )
-        proj_extra = gateset.get_nongauge_projector(nonGaugeMixMx=mixMx)
+        proj_extra = model.get_nongauge_projector(nonGaugeMixMx=mixMx)
         projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
     
-        printer.log('The resulting min sqrt(sum(gateCIs**2)): %g' % minSol.fun, 2)
+        printer.log('The resulting min sqrt(sum(operationCIs**2)): %g' % minSol.fun, 2)
         return projected_hessian_ex
     
     
     def _optProjectionFromSplit(self, verbosity=0):
         printer = _VerbosityPrinter.build_printer(verbosity)
-        gateset = self.parent.gatesets[self.gateset_lbl]
+        model = self.parent.models[self.model_lbl]
         base_hessian = self.hessian
         level = 95 # or 50, or whatever - the scale factory doesn't matter for the optimization
     
         printer.log('', 3)
-        printer.log("--- Hessian Projector Optimization from separate SPAM and Gate weighting ---", 2, indentOffset=-1)
+        printer.log("--- Hessian Projector Optimization from separate SPAM and LinearOperator weighting ---", 2, indentOffset=-1)
         
         #get gate-intrinsic-error
-        proj = gateset.get_nongauge_projector(itemWeights={'gates':1.0,'spam': 0.0})
+        proj = model.get_nongauge_projector(itemWeights={'gates':1.0,'spam': 0.0})
         projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
-        sub_crf = ConfidenceRegionFactory(self.parent, self.gateset_lbl,
-                                          self.gatestring_list_lbl, projected_hessian, 0.0)
+        sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl,
+                                          self.circuit_list_lbl, projected_hessian, 0.0)
         sub_crf.project_hessian('none')
         crfv = sub_crf.view(level)
-        gateCIs = _np.concatenate( [ crfv.get_profile_likelihood_confidence_intervals(gl).flatten()
-                                         for gl in gateset.gates] )
-        gate_intrinsic_err = _np.sqrt( _np.mean(gateCIs**2) )
+        operationCIs = _np.concatenate( [ crfv.get_profile_likelihood_confidence_intervals(gl).flatten()
+                                         for gl in model.operations] )
+        op_intrinsic_err = _np.sqrt( _np.mean(operationCIs**2) )
     
         #get spam-intrinsic-error
-        proj = gateset.get_nongauge_projector(itemWeights={'gates':0.0,'spam': 1.0})
+        proj = model.get_nongauge_projector(itemWeights={'gates':0.0,'spam': 1.0})
         projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
-        sub_crf = ConfidenceRegionFactory(self.parent, self.gateset_lbl,
-                                          self.gatestring_list_lbl, projected_hessian, 0.0)
+        sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl,
+                                          self.circuit_list_lbl, projected_hessian, 0.0)
         sub_crf.project_hessian('none')
         crfv = sub_crf.view(level)
         spamCIs = _np.concatenate( [ crfv.get_profile_likelihood_confidence_intervals(sl).flatten()
-                                         for sl in _itertools.chain(iter(gateset.preps),
-                                                                    iter(gateset.povms))] )
+                                         for sl in _itertools.chain(iter(model.preps),
+                                                                    iter(model.povms))] )
         spam_intrinsic_err = _np.sqrt( _np.mean(spamCIs**2) )
     
-        ratio = gate_intrinsic_err / spam_intrinsic_err
-        proj = gateset.get_nongauge_projector(itemWeights={'gates':1.0,'spam': ratio})
+        ratio = op_intrinsic_err / spam_intrinsic_err
+        proj = model.get_nongauge_projector(itemWeights={'gates':1.0,'spam': ratio})
         projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
     
         if printer.verbosity >= 2:
             #Create crfv here just to extract #'s for print stmts
-            sub_crf = ConfidenceRegionFactory(self.parent, self.gateset_lbl,
-                                              self.gatestring_list_lbl, projected_hessian, 0.0)
+            sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl,
+                                              self.circuit_list_lbl, projected_hessian, 0.0)
             sub_crf.project_hessian('none')
             crfv = sub_crf.view(level)
 
-            gateCIs = _np.concatenate( [ crfv.get_profile_likelihood_confidence_intervals(gl).flatten()
-                                             for gl in gateset.gates] )
+            operationCIs = _np.concatenate( [ crfv.get_profile_likelihood_confidence_intervals(gl).flatten()
+                                             for gl in model.operations] )
             spamCIs = _np.concatenate( [ crfv.get_profile_likelihood_confidence_intervals(sl).flatten()
-                                             for sl in _itertools.chain(iter(gateset.preps),
-                                                                        iter(gateset.povms))] )
-            gate_err = _np.sqrt( _np.mean(gateCIs**2) )
+                                             for sl in _itertools.chain(iter(model.preps),
+                                                                        iter(model.povms))] )
+            op_err = _np.sqrt( _np.mean(operationCIs**2) )
             spam_err = _np.sqrt( _np.mean(spamCIs**2) )
             printer.log('Resulting intrinsic errors: %g (gates), %g (spam)' %
-                        (gate_intrinsic_err, spam_intrinsic_err), 2)
-            printer.log('Resulting sqrt(mean(gateCIs**2)): %g' % gate_err, 2)
+                        (op_intrinsic_err, spam_intrinsic_err), 2)
+            printer.log('Resulting sqrt(mean(operationCIs**2)): %g' % op_err, 2)
             printer.log('Resulting sqrt(mean(spamCIs**2)): %g' % spam_err, 2)
     
         return projected_hessian
@@ -588,7 +588,7 @@ class ConfidenceRegionFactoryView(object):
     typically don't depend on what confidence-level is being used.
     """
 
-    def __init__(self, gateset, inv_projected_hessian, mlgst_params, confidenceLevel,
+    def __init__(self, model, inv_projected_hessian, mlgst_params, confidenceLevel,
                  nonMarkRadiusSq, nNonGaugeParams, nGaugeParams):
         """
         Creates a new ConfidenceRegionFactoryView.
@@ -599,8 +599,8 @@ class ConfidenceRegionFactoryView(object):
 
         Parameters
         ----------
-        gateset : GateSet
-            The gateset at the center of this confidence region.
+        model : Model
+            The model at the center of this confidence region.
 
         inv_projected_hessian : numpy.ndarray
             The computed inverse of the non-gauge-projected Hessian.
@@ -616,17 +616,17 @@ class ConfidenceRegionFactoryView(object):
         nonMarkRadiusSq : float, optional
             When non-zero, "a non-Markovian error region" is constructed using
             this value as the squared "non-markovian radius". This specifies the
-            portion of 2*(max-log-likelihood - gateset-log-likelihood) that we
+            portion of 2*(max-log-likelihood - model-log-likelihood) that we
             attribute to non-Markovian errors (typically the previous
             difference minus it's expected value, the difference in number of
-            parameters between the maximal and gateset models).  If set to
+            parameters between the maximal and model models).  If set to
             zero (the default), a standard and thereby statistically rigorous
             conficence region is created.  Non-zero values should only be
             supplied if you really know what you're doing.
 
         nNonGaugeParams, nGaugeParams : int
             The numbers of non-gauge and gauge parameters, respectively.  These could be
-            computed from `gateset` but they're passed in to save compuational time.
+            computed from `model` but they're passed in to save compuational time.
         """
     
         #Scale projected Hessian for desired confidence level => quadratic form for confidence region
@@ -641,7 +641,7 @@ class ConfidenceRegionFactoryView(object):
 
         # Get constants C such that xT*Hessian*x = C gives contour for the desired confidence region.
         #  C1 == Single DOF case: constant for a single-DOF likelihood, (or a profile likelihood in our case)
-        #  Ck == Total DOF case: constant for a region of the likelihood as a function of *all non-gauge* gateset parameters
+        #  Ck == Total DOF case: constant for a region of the likelihood as a function of *all non-gauge* model parameters
         self.nonMarkRadiusSq = nonMarkRadiusSq
         if nonMarkRadiusSq == 0.0: #use == to test for *exact* zero floating pt value as herald
             C1 = _stats.chi2.ppf(confidenceLevel/100.0, 1)
@@ -699,7 +699,7 @@ class ConfidenceRegionFactoryView(object):
         else:
             self.profLCI = None
 
-        self.gateset = gateset
+        self.model = model
         self.level = confidenceLevel #a percentage, i.e. btwn 0 and 100
         self.nNonGaugeParams = nNonGaugeParams
         self.nGaugeParams = nGaugeParams
@@ -732,7 +732,7 @@ class ConfidenceRegionFactoryView(object):
     def get_profile_likelihood_confidence_intervals(self, label=None):
         """
         Retrieve the profile-likelihood confidence intervals for a specified
-        gate set object (or all such intervals).
+        model object (or all such intervals).
 
         Parameters
         ----------
@@ -740,7 +740,7 @@ class ConfidenceRegionFactoryView(object):
             If not None, can be either a gate or SPAM vector label
             to specify the confidence intervals corresponding to gate, rhoVec,
             or EVec parameters respectively.  If None, then intervals corresponding
-            to all of the gateset's parameters are returned.
+            to all of the model's parameters are returned.
 
         Returns
         -------
@@ -754,14 +754,14 @@ class ConfidenceRegionFactoryView(object):
         if label is None:
             return self.profLCI
         
-        elif label in self.gateset.gates:
-            return self.profLCI[self.gateset.gates[label].gpindices]
+        elif label in self.model.operations:
+            return self.profLCI[self.model.operations[label].gpindices]
 
-        elif label in self.gateset.preps:
-            return self.profLCI[self.gateset.preps[label].gpindices]
+        elif label in self.model.preps:
+            return self.profLCI[self.model.preps[label].gpindices]
 
-        elif label in self.gateset.povms:
-            return self.profLCI[self.gateset.povms[label].gpindices]
+        elif label in self.model.povms:
+            return self.profLCI[self.model.povms[label].gpindices]
 
         else:
             raise ValueError(("Invalid item label (%s) for computing" % label)
@@ -774,22 +774,22 @@ class ConfidenceRegionFactoryView(object):
         Compute the confidence interval for an arbitrary function.
 
         This "function", however, must be encapsulated as a 
-        `GateSetFunction` object, which allows it to neatly specify
+        `ModelFunction` object, which allows it to neatly specify
         what its dependencies are and allows it to compaute finite-
         different derivatives more efficiently.
 
         Parameters
         ----------
-        fnObj : GateSetFunction
+        fnObj : ModelFunction
             An object representing the function to evaluate. The
             returned confidence interval is based on linearizing this function
-            and propagating the gateset-space confidence region.
+            and propagating the model-space confidence region.
 
         eps : float, optional
-            Step size used when taking finite-difference derivatives of fnOfGate.
+            Step size used when taking finite-difference derivatives of fnOfOp.
 
         returnFnVal : bool, optional
-            If True, return the value of fnOfGate along with it's confidence
+            If True, return the value of fnOfOp along with it's confidence
             region half-widths.
 
         verbosity : int, optional
@@ -799,16 +799,16 @@ class ConfidenceRegionFactoryView(object):
         -------
         df : float or numpy array
             Half-widths of confidence intervals for each of the elements
-            in the float or array returned by fnOfGate.  Thus, shape of
-            df matches that returned by fnOfGate.
+            in the float or array returned by fnOfOp.  Thus, shape of
+            df matches that returned by fnOfOp.
 
         f0 : float or numpy array
-            Only returned when returnFnVal == True. Value of fnOfGate
-            at the gate specified by gateLabel.
+            Only returned when returnFnVal == True. Value of fnOfOp
+            at the gate specified by opLabel.
         """
 
-        nParams = self.gateset.num_params()
-        f0 = fnObj.evaluate(self.gateset) #function value at "base point"
+        nParams = self.model.num_params()
+        f0 = fnObj.evaluate(self.model) #function value at "base point"
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
         gradF = _create_empty_gradF(f0, nParams)
@@ -817,36 +817,36 @@ class ConfidenceRegionFactoryView(object):
         if 'all' in fn_dependencies:
             fn_dependencies = ['all'] #no need to do anything else
         if 'spam' in fn_dependencies:
-            fn_dependencies = ["prep:%s"%l for l in self.gateset.preps.keys()] + \
-                              ["povm:%s"%l for l in self.gateset.povms.keys()]
+            fn_dependencies = ["prep:%s"%l for l in self.model.preps.keys()] + \
+                              ["povm:%s"%l for l in self.model.povms.keys()]
 
         #elements of fn_dependencies are either 'all', 'spam', or
         # the "type:label" of a specific gate or spam vector.
         all_gpindices = []
         for dependency in fn_dependencies:
-            gs = self.gateset.copy() #copy that will contain the "+eps" gate set
+            mdl = self.model.copy() #copy that will contain the "+eps" model
             
             if dependency == 'all':
-                all_gpindices.extend( range(gs.num_params()) )
+                all_gpindices.extend( range(mdl.num_params()) )
             else:
                 # copy objects because we add eps to them below
                 typ,lbl = dependency.split(":")
-                if typ == "gate":     gatesetObj = gs.gates[lbl]
-                elif typ == "prep":   gatesetObj = gs.preps[lbl]
-                elif typ == "povm":   gatesetObj = gs.povms[lbl]
-                elif typ == "instrument": gatesetObj = gs.instruments[lbl]
+                if typ == "gate":     modelObj = mdl.operations[lbl]
+                elif typ == "prep":   modelObj = mdl.preps[lbl]
+                elif typ == "povm":   modelObj = mdl.povms[lbl]
+                elif typ == "instrument": modelObj = mdl.instruments[lbl]
                 else: raise ValueError("Invalid dependency type: %s" % typ)
-                all_gpindices.extend( gatesetObj.gpindices_as_array() )
+                all_gpindices.extend( modelObj.gpindices_as_array() )
 
-        vec0 = gs.to_vector()
+        vec0 = mdl.to_vector()
         all_gpindices = sorted(list(set(all_gpindices))) #remove duplicates
         
-        for igp in all_gpindices: #iterate over "global" GateSet-parameter indices
+        for igp in all_gpindices: #iterate over "global" Model-parameter indices
             vec = vec0.copy(); vec[igp] += eps;
-            gs.from_vector(vec)
-            gs.basis = self.gateset.basis #we're still in the same basis (maybe needed by fnObj)
+            mdl.from_vector(vec)
+            mdl.basis = self.model.basis #we're still in the same basis (maybe needed by fnObj)
             
-            f = fnObj.evaluate_nearby( gs )
+            f = fnObj.evaluate_nearby( mdl )
             if isinstance(f0, dict): #special behavior for dict: process each item separately
                 for ky in gradF:
                     gradF[ky][igp] = ( f[ky] - f0[ky] ) / eps
@@ -886,7 +886,7 @@ class ConfidenceRegionFactoryView(object):
             raise NotImplementedError("Can't handle complex-valued functions yet")
 
         if hasattr(f0,'shape') and len(f0.shape) > 2:
-            raise ValueError("Unsupported number of dimensions returned by fnOfGate or fnOfGateset: %d" % len(f0.shape))
+            raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfGateset: %d" % len(f0.shape))
               #May not be needed here, but gives uniformity with Hessian case
 
         #massage gradF, which has shape (nParams,) + f0.shape
@@ -901,14 +901,14 @@ class ConfidenceRegionFactoryView(object):
         assert(len(gradF.shape) == 2)
 
         mlgst_args = self.mlgst_params.copy()
-        mlgst_args['startGateset'] = self.gateset
+        mlgst_args['startModel'] = self.model
         mlgst_args['forcefn_grad'] = gradF
         mlgst_args['shiftFctr'] = 100.0
         mlgst_args['evaltree_cache'] = self.mlgst_evaltree_cache
         _, bestGS = _alg.core._do_mlgst_base(**mlgst_args)
-        bestGS = _alg.gaugeopt_to_target(bestGS, self.gateset) #maybe more params here?
+        bestGS = _alg.gaugeopt_to_target(bestGS, self.model) #maybe more params here?
         norms = _np.array([_np.dot(gradF[i],gradF[i]) for i in range(gradF.shape[0])])
-        delta2 = _np.abs(_np.dot(gradF, bestGS.to_vector() - self.gateset.to_vector()) \
+        delta2 = _np.abs(_np.dot(gradF, bestGS.to_vector() - self.model.to_vector()) \
             * _np.where(norms > 1e-10, 1.0/norms, 0.0))
         delta2 *= self._C1 #scaling appropriate for confidence level
         delta = _np.sqrt(delta2) # error^2 -> error
@@ -971,7 +971,7 @@ class ConfidenceRegionFactoryView(object):
                             df[i,j] = _np.sqrt( abs( _np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF[i,j].real))) ) \
                                 + 1j * _np.sqrt( abs( _np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF[i,j].imag))) )
                 else:
-                    raise ValueError("Unsupported number of dimensions returned by fnOfGate or fnOfGateset: %d" % fDims)
+                    raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfGateset: %d" % fDims)
 
             else: #assume real -- so really don't need conjugate calls below
                 if fDims == 0: #same as float case above
@@ -992,7 +992,7 @@ class ConfidenceRegionFactoryView(object):
                             gradFdag = _np.conjugate(_np.transpose(gradF[i,j]))
                             df[i,j] = _np.sqrt( abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF[i,j]))) )
                 else:
-                    raise ValueError("Unsupported number of dimensions returned by fnOfGate or fnOfGateset: %d" % fDims)
+                    raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfGateset: %d" % fDims)
 
         printer.log("df = %s" % df)
 

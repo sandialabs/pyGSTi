@@ -1,4 +1,4 @@
-"""The standard unitaries and gate names, used internal compilers and short-hand gateset init"""
+"""The standard unitaries and gate names, used internal compilers and short-hand model init"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -8,9 +8,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import scipy.linalg as _spl
-from . import gatetools as _gts
+from . import optools as _gts
 from . import symplectic as _symp
-from . import gatetools as _gts
+from . import optools as _gts
 
 def get_internal_gate_unitaries():
     """
@@ -164,7 +164,7 @@ def get_standard_gatename_unitaries():
 
     Mostly, pyGSTi does not assume that a gate with one of these names is indeed
     the unitary specified here. Instead, these names are intended as short-hand
-    for defining ProcessorSpecs and n-qubit gatesets. Moreover, when these names
+    for defining ProcessorSpecs and n-qubit models. Moreover, when these names
     are used then conversion of circuits to QUIL or QISKIT is particular convenient,
     and does not require the user to specify the syntax conversion.
 
@@ -177,22 +177,22 @@ def get_standard_gatename_unitaries():
     sigmax = _np.array([[0,1],[1,0]])
     sigmay = _np.array([[0,-1.0j],[1.0j,0]])
     sigmaz = _np.array([[1,0],[0,-1]])
-    def Ugate(exp):
+    def Uop(exp):
         return _np.array(_spl.expm(-1j * exp/2),complex)
     
     std_unitaries['Gi'] = _np.array([[1.,0.],[0.,1.]],complex)
 
-    std_unitaries['Gx'] = std_unitaries['Gxpi2'] = Ugate(_np.pi/2 * sigmax)
-    std_unitaries['Gy'] = std_unitaries['Gypi2'] = Ugate(_np.pi/2 * sigmay)
-    std_unitaries['Gz'] = std_unitaries['Gzpi2'] = Ugate(_np.pi/2 * sigmaz)
+    std_unitaries['Gx'] = std_unitaries['Gxpi2'] = Uop(_np.pi/2 * sigmax)
+    std_unitaries['Gy'] = std_unitaries['Gypi2'] = Uop(_np.pi/2 * sigmay)
+    std_unitaries['Gz'] = std_unitaries['Gzpi2'] = Uop(_np.pi/2 * sigmaz)
 
     std_unitaries['Gxpi'] = _np.array([[0.,1.],[1.,0.]],complex)
     std_unitaries['Gypi'] = _np.array([[0.,-1j],[1j,0.]],complex)
     std_unitaries['Gzpi'] = _np.array([[1.,0.],[0.,-1.]],complex)  
 
-    std_unitaries['Gxmpi2'] = Ugate(-1*_np.pi/2 * sigmax)
-    std_unitaries['Gympi2'] = Ugate(-1*_np.pi/2 * sigmay)
-    std_unitaries['Gzmpi2'] = Ugate(-1*_np.pi/2 * sigmaz)
+    std_unitaries['Gxmpi2'] = Uop(-1*_np.pi/2 * sigmax)
+    std_unitaries['Gympi2'] = Uop(-1*_np.pi/2 * sigmay)
+    std_unitaries['Gzmpi2'] = Uop(-1*_np.pi/2 * sigmaz)
     
     H = (1/_np.sqrt(2))*_np.array([[1.,1.],[1.,-1.]],complex) 
     P = _np.array([[1.,0.],[0.,1j]],complex)

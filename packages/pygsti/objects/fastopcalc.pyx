@@ -274,24 +274,24 @@ def fast_compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
     
 
 
-def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order,
+def fast_prs_as_polys(circuit, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order,
                       int stabilizer_evo):
-    #NOTE: gatestring and gate_terms use *integers* as gate labels, not Label objects, to speed
+    #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
     # lookups and avoid weird string conversion stuff with Cython
     
-    #print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
+    #print("DB: pr_as_poly for ",str(tuple(map(str,circuit))), " max_order=",self.max_order)
     
 
     #cdef double complex *pLeft = <double complex*>malloc(len(Es) * sizeof(double complex))
     #cdef double complex *pRight = <double complex*>malloc(len(Es) * sizeof(double complex))
-    cdef int N = len(gatestring)
+    cdef int N = len(circuit)
     cdef int* p = <int*>malloc((N+2) * sizeof(int))
     cdef int i,j,k,order,nTerms
     cdef int max_poly_order=-1, max_poly_vars=-1
     cdef int gn
 
     #extract raw data from gate_terms dictionary-of-lists for faster lookup
-    #gate_term_prefactors = _np.empty( (nGates,max_order+1,dim,dim)
+    #gate_term_prefactors = _np.empty( (nOperations,max_order+1,dim,dim)
     cdef unordered_map[int, vector[vector[unordered_map[int, complex]]]] gate_term_coeffs
     cdef vector[vector[unordered_map[int, complex]]] rho_term_coeffs
     cdef vector[vector[unordered_map[int, complex]]] E_term_coeffs
@@ -346,12 +346,12 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
         
         if order == 0:
             #inner loop(p)
-            #factor_lists = [ gate_terms[glbl][pi] for glbl,pi in zip(gatestring,p) ]
+            #factor_lists = [ gate_terms[glbl][pi] for glbl,pi in zip(circuit,p) ]
             factor_lists[0] = rho_terms[p[0]]
             coeff_lists[0] = rho_term_coeffs[p[0]]
             for k in range(N):
-                gn = gatestring[k]
-                factor_lists[k+1] = gate_terms[gatestring[k]][p[k+1]]
+                gn = circuit[k]
+                factor_lists[k+1] = gate_terms[circuit[k]][p[k+1]]
                 coeff_lists[k+1] = gate_term_coeffs[gn][p[k+1]]
                 if len(factor_lists[k+1]) == 0: continue
             factor_lists[N+1] = E_terms[p[N+1]]
@@ -370,8 +370,8 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
                 factor_lists[0] = rho_terms[p[0]]
                 coeff_lists[0] = rho_term_coeffs[p[0]]
                 for k in range(N):
-                    gn = gatestring[k]
-                    factor_lists[k+1] = gate_terms[gatestring[k]][p[k+1]]
+                    gn = circuit[k]
+                    factor_lists[k+1] = gate_terms[circuit[k]][p[k+1]]
                     coeff_lists[k+1] = gate_term_coeffs[gn][p[k+1]]
                     if len(factor_lists[k+1]) == 0: continue
                 factor_lists[N+1] = E_terms[p[N+1]]
@@ -391,8 +391,8 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
                 factor_lists[0] = rho_terms[p[0]]
                 coeff_lists[0] = rho_term_coeffs[p[0]]
                 for k in range(N):
-                    gn = gatestring[k]
-                    factor_lists[k+1] = gate_terms[gatestring[k]][p[k+1]]
+                    gn = circuit[k]
+                    factor_lists[k+1] = gate_terms[circuit[k]][p[k+1]]
                     coeff_lists[k+1] = gate_term_coeffs[gn][p[k+1]]
                     if len(factor_lists[k+1]) == 0: continue
                 factor_lists[N+1] = E_terms[p[N+1]]
@@ -413,8 +413,8 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
                     factor_lists[0] = rho_terms[p[0]]
                     coeff_lists[0] = rho_term_coeffs[p[0]]
                     for k in range(N):
-                        gn = gatestring[k]
-                        factor_lists[k+1] = gate_terms[gatestring[k]][p[k+1]]
+                        gn = circuit[k]
+                        factor_lists[k+1] = gate_terms[circuit[k]][p[k+1]]
                         coeff_lists[k+1] = gate_term_coeffs[gn][p[k+1]]
                         if len(factor_lists[k+1]) == 0: continue
                     factor_lists[N+1] = E_terms[p[N+1]]
@@ -802,7 +802,7 @@ cdef vector[vector[unordered_map[int, complex] ]] extract_term_coeffs(python_ter
     return ret
 
 cdef double stabilizer_measurement_prob(state_sp_tuple, moutcomes):
-    #Note: an abridged version from what is in GateCalc... (no qubit_filter or return_state)
+    #Note: an abridged version from what is in ForwardSimulator... (no qubit_filter or return_state)
     #TODO: make this routine faster - port pauli_z_measurement to C?
     cdef float p = 1.0
     state_s, state_p = state_sp_tuple

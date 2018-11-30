@@ -1,4 +1,4 @@
-""" Defines the GateMatrixCalc calculator class"""
+""" Defines the MatrixForwardSimulator calculator class"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -20,7 +20,7 @@ from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from ..baseobjs import Label as _Label
 from .matrixevaltree import MatrixEvalTree as _MatrixEvalTree
-from .gatecalc import GateCalc
+from .forwardsim import ForwardSimulator
 _dummy_profiler = _DummyProfiler()
 
 # Smallness tolerances, used internally for conditional scaling required
@@ -29,63 +29,63 @@ PSMALL = 1e-100
 DSMALL = 1e-100
 HSMALL = 1e-100
 
-class GateMatrixCalc(GateCalc):
+class MatrixForwardSimulator(ForwardSimulator):
     """
-    Encapsulates a calculation tool used by gate set objects to perform product
+    Encapsulates a calculation tool used by model objects to perform product
     and derivatives-of-product calculations.
 
-    This is contained in a class separate from GateSet to allow for additional
-    gate set classes (e.g. ones which use entirely different -- non-gate-local
-    -- parameterizations of gate matrices and SPAM vectors) access to these
+    This is contained in a class separate from Model to allow for additional
+    model classes (e.g. ones which use entirely different -- non-gate-local
+    -- parameterizations of operation matrices and SPAM vectors) access to these
     fundamental operations.
     """
 
     def __init__(self, dim, gates, preps, effects, paramvec, autogator):
         """
-        Construct a new GateMatrixCalc object.
+        Construct a new MatrixForwardSimulator object.
 
         Parameters
         ----------
         dim : int
-            The gate-dimension.  All gate matrices should be dim x dim, and all
+            The gate-dimension.  All operation matrices should be dim x dim, and all
             SPAM vectors should be dim x 1.
 
         gates, preps, effects : OrderedDict
-            Ordered dictionaries of Gate, SPAMVec, and SPAMVec objects,
+            Ordered dictionaries of LinearOperator, SPAMVec, and SPAMVec objects,
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
         paramvec : ndarray
-            The parameter vector of the GateSet.
+            The parameter vector of the Model.
 
         autogator : AutoGator
             An auto-gator object that may be used to construct virtual gates
             for use in computations.
         """
-        super(GateMatrixCalc, self).__init__(
+        super(MatrixForwardSimulator, self).__init__(
             dim, gates, preps, effects, paramvec, autogator)
         if self.evotype not in ("statevec","densitymx"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "matrix-based calculations" % self.evotype))
 
     def copy(self):
-        """ Return a shallow copy of this GateMatrixCalc """
-        return GateMatrixCalc(self.dim, self.gates, self.preps,
+        """ Return a shallow copy of this MatrixForwardSimulator """
+        return MatrixForwardSimulator(self.dim, self.operations, self.preps,
                               self.effects, self.paramvec, self.autogator)
         
 
-    def product(self, gatestring, bScale=False):
+    def product(self, circuit, bScale=False):
         """
-        Compute the product of a specified sequence of gate labels.
+        Compute the product of a specified sequence of operation labels.
 
-        Note: Gate matrices are multiplied in the reversed order of the tuple. That is,
-        the first element of gatestring can be thought of as the first gate operation
+        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
+        the first element of circuit can be thought of as the first gate operation
         performed, which is on the far right of the product of matrices.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-            The sequence of gate labels.
+        circuit : OpString or tuple of operation labels
+            The sequence of operation labels.
 
         bScale : bool, optional
             When True, return a scaling factor (see below).
@@ -93,7 +93,7 @@ class GateMatrixCalc(GateCalc):
         Returns
         -------
         product : numpy array
-            The product or scaled product of the gate matrices.
+            The product or scaled product of the operation matrices.
 
         scale : float
             Only returned when bScale == True, in which case the
@@ -105,13 +105,13 @@ class GateMatrixCalc(GateCalc):
             scaledGatesAndExps = {};
             scale_exp = 0
             G = _np.identity( self.dim )
-            for lGate in gatestring:
-                if lGate not in scaledGatesAndExps: #fill "on-demand" b/c can't just iterate through self.gates anymore (autogator)
-                    gatemx = self._getgate(lGate)
-                    ng = max(_nla.norm(gatemx),1.0)
-                    scaledGatesAndExps[lGate] = (gatemx / ng, _np.log(ng))
+            for lOp in circuit:
+                if lOp not in scaledGatesAndExps: #fill "on-demand" b/c can't just iterate through self.operations anymore (autogator)
+                    opmx = self._getoperation(lOp)
+                    ng = max(_nla.norm(opmx),1.0)
+                    scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
                 
-                gate, ex = scaledGatesAndExps[lGate]
+                gate, ex = scaledGatesAndExps[lOp]
                 H = _np.dot(gate,G)   # product of gates, starting with identity
                 scale_exp += ex   # scale and keep track of exponent
                 if H.max() < PSMALL and H.min() > -PSMALL:
@@ -127,13 +127,13 @@ class GateMatrixCalc(GateCalc):
 
         else:
             G = _np.identity( self.dim )
-            for lGate in gatestring:
-                G = _np.dot(self._getgate(lGate).base,G) #product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
+            for lOp in circuit:
+                G = _np.dot(self._getoperation(lOp).base,G) #product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
         
     def _process_wrtFilter(self, wrtFilter, obj):
-        """ Helper function for dgate and hgate below: pulls out pieces of
+        """ Helper function for doperation and hoperation below: pulls out pieces of
             a wrtFilter argument relevant for a single object (gate or spam vec) """
         
         #Create per-gate with-respect-to parameter filters, used to
@@ -183,38 +183,38 @@ class GateMatrixCalc(GateCalc):
     # vec( A * E(0,1) * B ) = vec( mx w/ col_i = A[col0] * B[0,1] ) = B^T tensor A * vec( E(0,1) )
     # In general: vec( A * X * B ) = B^T tensor A * vec( X )
 
-    def dgate(self, gateLabel, flat=False, wrtFilter=None):
+    def doperation(self, opLabel, flat=False, wrtFilter=None):
         """ Return the derivative of a length-1 (single-gate) sequence """
         dim = self.dim
-        gate = self._getgate(gateLabel)
-        gate_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, gate)
+        gate = self._getoperation(opLabel)
+        op_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, gate)
 
         # Allocate memory for the final result
         num_deriv_cols =  self.Np if (wrtFilter is None) else len(wrtFilter)
         flattened_dprod = _np.zeros((dim**2, num_deriv_cols),'d')
 
         _fas(flattened_dprod, [None,gpindices], 
-             gate.deriv_wrt_params(gate_wrtFilter)) # (dim**2, nParams[gateLabel])
+             gate.deriv_wrt_params(op_wrtFilter)) # (dim**2, nParams[opLabel])
 
         if _slct.length(gpindices) > 0: #works for arrays too
-            # Compute the derivative of the entire gate string with respect to the 
+            # Compute the derivative of the entire operation sequence with respect to the 
             # gate's parameters and fill appropriate columns of flattened_dprod.
-            #gate = self._getgate[gateLabel] UNNEEDED (I think)
+            #gate = self._getoperation[opLabel] UNNEEDED (I think)
             _fas(flattened_dprod,[None,gpindices],
-                gate.deriv_wrt_params(gate_wrtFilter)) # (dim**2, nParams in wrtFilter for gateLabel)
+                gate.deriv_wrt_params(op_wrtFilter)) # (dim**2, nParams in wrtFilter for opLabel)
                 
         if flat:
             return flattened_dprod
         else:
             return _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (num_deriv_cols, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
 
-    def hgate(self, gateLabel, flat=False, wrtFilter1=None, wrtFilter2=None):
+    def hoperation(self, opLabel, flat=False, wrtFilter1=None, wrtFilter2=None):
         """ Return the hessian of a length-1 (single-gate) sequence """
         dim = self.dim
 
-        gate = self._getgate(gateLabel)
-        gate_wrtFilter1, gpindices1 = self._process_wrtFilter(wrtFilter1, gate)
-        gate_wrtFilter2, gpindices2 = self._process_wrtFilter(wrtFilter2, gate)
+        gate = self._getoperation(opLabel)
+        op_wrtFilter1, gpindices1 = self._process_wrtFilter(wrtFilter1, gate)
+        op_wrtFilter2, gpindices2 = self._process_wrtFilter(wrtFilter2, gate)
 
         # Allocate memory for the final result
         num_deriv_cols1 =  self.Np if (wrtFilter1 is None) else len(wrtFilter1)
@@ -222,10 +222,10 @@ class GateMatrixCalc(GateCalc):
         flattened_hprod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2),'d')
 
         if _slct.length(gpindices1) > 0 and _slct.length(gpindices2) > 0: #works for arrays too
-            # Compute the derivative of the entire gate string with respect to the 
+            # Compute the derivative of the entire operation sequence with respect to the 
             # gate's parameters and fill appropriate columns of flattened_dprod.
             _fas(flattened_hprod, [None,gpindices1,gpindices2],
-                gate.hessian_wrt_params(gate_wrtFilter1, gate_wrtFilter2))
+                gate.hessian_wrt_params(op_wrtFilter1, op_wrtFilter2))
                 
         if flat:
             return flattened_hprod
@@ -235,14 +235,14 @@ class GateMatrixCalc(GateCalc):
 
         
 
-    def dproduct(self, gatestring, flat=False, wrtFilter=None):
+    def dproduct(self, circuit, flat=False, wrtFilter=None):
         """
-        Compute the derivative of a specified sequence of gate labels.
+        Compute the derivative of a specified sequence of operation labels.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels.
+        circuit : OpString or tuple of operation labels
+          The sequence of operation labels.
 
         flat : bool, optional
           Affects the shape of the returned derivative array (see below).
@@ -251,7 +251,7 @@ class GateMatrixCalc(GateCalc):
           If not None, a list of integers specifying which gate parameters
           to include in the derivative.  Each element is an index into an
           array of gate parameters ordered by concatenating each gate's
-          parameters (in the order specified by the gate set).  This argument
+          parameters (in the order specified by the model).  This argument
           is used internally for distributing derivative calculations across
           multiple processors.
 
@@ -260,34 +260,34 @@ class GateMatrixCalc(GateCalc):
         deriv : numpy array
             * if flat == False, a M x G x G array, where:
 
-              - M == length of the vectorized gateset (number of gateset parameters)
-              - G == the linear dimension of a gate matrix (G x G gate matrices).
+              - M == length of the vectorized model (number of model parameters)
+              - G == the linear dimension of a operation matrix (G x G operation matrices).
 
               and deriv[i,j,k] holds the derivative of the (j,k)-th entry of the product
-              with respect to the i-th gateset parameter.
+              with respect to the i-th model parameter.
 
             * if flat == True, a N x M array, where:
 
               - N == the number of entries in a single flattened gate (ordering as numpy.flatten)
-              - M == length of the vectorized gateset (number of gateset parameters)
+              - M == length of the vectorized model (number of model parameters)
 
               and deriv[i,j] holds the derivative of the i-th entry of the flattened
-              product with respect to the j-th gateset parameter.
+              product with respect to the j-th model parameter.
         """
 
         # LEXICOGRAPHICAL VS MATRIX ORDER
-        revGateLabelList = tuple(reversed(tuple(gatestring))) # we do matrix multiplication in this order (easier to think about)
-        N = len(revGateLabelList) # length of gate string
+        revOpLabelList = tuple(reversed(tuple(circuit))) # we do matrix multiplication in this order (easier to think about)
+        N = len(revOpLabelList) # length of operation sequence
 
         #  prod = G1 * G2 * .... * GN , a matrix
-        #  dprod/d(gateLabel)_ij   = sum_{L s.t. G(L) == gatelabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)
-        #  vec( dprod/d(gateLabel)_ij ) = sum_{L s.t. G(L) == gatelabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]
-        #                               = [ sum_{L s.t. G(L) == gatelabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]] * vec( dG(L)/dij) )
+        #  dprod/d(opLabel)_ij   = sum_{L s.t. G(L) == oplabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)
+        #  vec( dprod/d(opLabel)_ij ) = sum_{L s.t. G(L) == oplabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]
+        #                               = [ sum_{L s.t. G(L) == oplabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]] * vec( dG(L)/dij) )
         #  if dG(L)/dij = E(i,j)
-        #                               = vec(i,j)-col of [ sum_{L s.t. G(L) == gatelabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]]
-        # So for each gateLabel the matrix [ sum_{L s.t. GL == gatelabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]] has columns which
+        #                               = vec(i,j)-col of [ sum_{L s.t. G(L) == oplabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]]
+        # So for each opLabel the matrix [ sum_{L s.t. GL == oplabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]] has columns which
         #  correspond to the vectorized derivatives of each of the product components (i.e. prod_kl) with respect to a given gateLabel_ij
-        # This function returns a concatenated form of the above matrices, so that each column corresponds to a (gateLabel,i,j) tuple and
+        # This function returns a concatenated form of the above matrices, so that each column corresponds to a (opLabel,i,j) tuple and
         #  each row corresponds to an element of the product (els of prod.flatten()).
         #
         # Note: if gate G(L) is just a matrix of parameters, then dG(L)/dij = E(i,j), an elementary matrix
@@ -297,34 +297,34 @@ class GateMatrixCalc(GateCalc):
         #Cache partial products (relatively little mem required)
         leftProds = [ ]
         G = _np.identity( dim ); leftProds.append(G)
-        for gateLabel in revGateLabelList:
-            G = _np.dot(G,self._getgate(gateLabel).base)
+        for opLabel in revOpLabelList:
+            G = _np.dot(G,self._getoperation(opLabel).base)
             leftProds.append(G)
 
         rightProdsT = [ ]
         G = _np.identity( dim ); rightProdsT.append( _np.transpose(G) )
-        for gateLabel in reversed(revGateLabelList):
-            G = _np.dot(self._getgate(gateLabel).base,G)
+        for opLabel in reversed(revOpLabelList):
+            G = _np.dot(self._getoperation(opLabel).base,G)
             rightProdsT.append( _np.transpose(G) )
 
         # Allocate memory for the final result
         num_deriv_cols =  self.Np if (wrtFilter is None) else len(wrtFilter)
         flattened_dprod = _np.zeros((dim**2, num_deriv_cols),'d')
         
-        # For each gate label, compute the derivative of the entire gate string
+        # For each operation label, compute the derivative of the entire operation sequence
         #  with respect to only that gate's parameters and fill the appropriate
         #  columns of flattened_dprod.
-        uniqueGateLabels = sorted(list(set(revGateLabelList)))
-        for gateLabel in uniqueGateLabels:
-            gate = self._getgate(gateLabel)
-            gate_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, gate)
-            dgate_dgateLabel = gate.deriv_wrt_params(gate_wrtFilter)
+        uniqueOpLabels = sorted(list(set(revOpLabelList)))
+        for opLabel in uniqueOpLabels:
+            gate = self._getoperation(opLabel)
+            op_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, gate)
+            dop_dopLabel = gate.deriv_wrt_params(op_wrtFilter)
 
-            for (i,gl) in enumerate(revGateLabelList):
-                if gl != gateLabel: continue # loop over locations of gateLabel
+            for (i,gl) in enumerate(revOpLabelList):
+                if gl != opLabel: continue # loop over locations of opLabel
                 LRproduct = _np.kron( leftProds[i], rightProdsT[N-1-i] )  # (dim**2, dim**2)
                 _fas(flattened_dprod, [None,gpindices],
-                     _np.dot( LRproduct, dgate_dgateLabel ), add=True) # (dim**2, nParams[gateLabel])
+                     _np.dot( LRproduct, dop_dopLabel ), add=True) # (dim**2, nParams[opLabel])
 
         if flat:
             return flattened_dprod
@@ -332,14 +332,14 @@ class GateMatrixCalc(GateCalc):
             return _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (num_deriv_cols, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
 
 
-    def hproduct(self, gatestring, flat=False, wrtFilter1=None, wrtFilter2=None):
+    def hproduct(self, circuit, flat=False, wrtFilter1=None, wrtFilter2=None):
         """
-        Compute the hessian of a specified sequence of gate labels.
+        Compute the hessian of a specified sequence of operation labels.
 
         Parameters
         ----------
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels.
+        circuit : OpString or tuple of operation labels
+          The sequence of operation labels.
 
         flat : bool, optional
           Affects the shape of the returned derivative array (see below).
@@ -349,7 +349,7 @@ class GateMatrixCalc(GateCalc):
           to differentiate with respect to in the first (row) and second (col)
           derivative operations, respectively.  Each element is an index into an
           array of gate parameters ordered by concatenating each gate's
-          parameters (in the order specified by the gate set).  This argument
+          parameters (in the order specified by the model).  This argument
           is used internally for distributing derivative calculations across
           multiple processors.
 
@@ -358,84 +358,84 @@ class GateMatrixCalc(GateCalc):
         hessian : numpy array
             * if flat == False, a  M x M x G x G numpy array, where:
 
-              - M == length of the vectorized gateset (number of gateset parameters)
-              - G == the linear dimension of a gate matrix (G x G gate matrices).
+              - M == length of the vectorized model (number of model parameters)
+              - G == the linear dimension of a operation matrix (G x G operation matrices).
 
               and hessian[i,j,k,l] holds the derivative of the (k,l)-th entry of the product
-              with respect to the j-th then i-th gateset parameters.
+              with respect to the j-th then i-th model parameters.
 
             * if flat == True, a  N x M x M numpy array, where:
 
               - N == the number of entries in a single flattened gate (ordered as numpy.flatten)
-              - M == length of the vectorized gateset (number of gateset parameters)
+              - M == length of the vectorized model (number of model parameters)
 
               and hessian[i,j,k] holds the derivative of the i-th entry of the flattened
-              product with respect to the k-th then k-th gateset parameters.
+              product with respect to the k-th then k-th model parameters.
         """
 
         # LEXICOGRAPHICAL VS MATRIX ORDER
-        revGateLabelList = tuple(reversed(tuple(gatestring))) # we do matrix multiplication in this order (easier to think about)
+        revOpLabelList = tuple(reversed(tuple(circuit))) # we do matrix multiplication in this order (easier to think about)
 
         #  prod = G1 * G2 * .... * GN , a matrix
-        #  dprod/d(gateLabel)_ij   = sum_{L s.t. GL == gatelabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)
-        #  d2prod/d(gateLabel1)_kl*d(gateLabel2)_ij = sum_{M s.t. GM == gatelabel1} sum_{L s.t. GL == gatelabel2, M < L}
+        #  dprod/d(opLabel)_ij   = sum_{L s.t. GL == oplabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)
+        #  d2prod/d(opLabel1)_kl*d(opLabel2)_ij = sum_{M s.t. GM == gatelabel1} sum_{L s.t. GL == gatelabel2, M < L}
         #                                                 [ G1 ... G(M-1) dG(M)/dkl G(M+1) ... G(L-1) dG(L)/dij G(L+1) ... GN ] + {similar with L < M}
         #                                                 + sum{M==L} [ G1 ... G(M-1) d2G(M)/(dkl*dij) G(M+1) ... GN ]
         #                                                 a matrix for each given (i,j,k,l)
-        #  vec( d2prod/d(gateLabel1)_kl*d(gateLabel2)_ij ) = sum{...} [ G1 ...  G(M-1) dG(M)/dkl G(M+1) ... G(L-1) tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]
+        #  vec( d2prod/d(opLabel1)_kl*d(opLabel2)_ij ) = sum{...} [ G1 ...  G(M-1) dG(M)/dkl G(M+1) ... G(L-1) tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]
         #                                                  = sum{...} [ unvec( G1 ...  G(M-1) tensor (G(M+1) ... G(L-1))^T vec( dG(M)/dkl ) )
         #                                                                tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]
         #                                                  + sum{ L < M} [ G1 ...  G(L-1) tensor
         #                                                       ( unvec( G(L+1) ... G(M-1) tensor (G(M+1) ... GN)^T vec( dG(M)/dkl ) ) )^T vec( dG(L)/dij ) ]
         #                                                  + sum{ L == M} [ G1 ...  G(M-1) tensor (G(M+1) ... GN)^T vec( d2G(M)/dkl*dji )
         #
-        #  Note: ignoring L == M terms assumes that d^2 G/(dij)^2 == 0, which is true IF each gate matrix element is at most
-        #        *linear* in each of the gate parameters.  If this is not the case, need Gate objects to have a 2nd-deriv method in addition of deriv_wrt_params
+        #  Note: ignoring L == M terms assumes that d^2 G/(dij)^2 == 0, which is true IF each operation matrix element is at most
+        #        *linear* in each of the gate parameters.  If this is not the case, need LinearOperator objects to have a 2nd-deriv method in addition of deriv_wrt_params
         #
         #  Note: unvec( X ) can be done efficiently by actually computing X^T ( note (A tensor B)^T = A^T tensor B^T ) and using numpy's reshape
 
         dim = self.dim
 
-        uniqueGateLabels = sorted(list(set(revGateLabelList)))
-        used_gates = _collections.OrderedDict()
+        uniqueOpLabels = sorted(list(set(revOpLabelList)))
+        used_operations = _collections.OrderedDict()
 
         #Cache processed parameter filters for multiple uses below
         gpindices1 = {}; gate_wrtFilters1 = {}
         gpindices2 = {}; gate_wrtFilters2 = {}
-        for l in uniqueGateLabels:
-            used_gates[l] = self._getgate(l)
-            gate_wrtFilters1[l], gpindices1[l] = self._process_wrtFilter(wrtFilter1, used_gates[l])
-            gate_wrtFilters2[l], gpindices2[l] = self._process_wrtFilter(wrtFilter2, used_gates[l])
+        for l in uniqueOpLabels:
+            used_operations[l] = self._getoperation(l)
+            gate_wrtFilters1[l], gpindices1[l] = self._process_wrtFilter(wrtFilter1, used_operations[l])
+            gate_wrtFilters2[l], gpindices2[l] = self._process_wrtFilter(wrtFilter2, used_operations[l])
         
         #Cache partial products (relatively little mem required)
         prods = {}
         ident = _np.identity( dim )
-        for (i,gateLabel1) in enumerate(revGateLabelList): #loop over "starting" gate
+        for (i,opLabel1) in enumerate(revOpLabelList): #loop over "starting" gate
             prods[ (i,i-1) ] = ident #product of no gates
             G = ident
-            for (j,gateLabel2) in enumerate(revGateLabelList[i:],start=i): #loop over "ending" gate (>= starting gate)
-                G = _np.dot(G,self._getgate(gateLabel2).base)
+            for (j,opLabel2) in enumerate(revOpLabelList[i:],start=i): #loop over "ending" gate (>= starting gate)
+                G = _np.dot(G,self._getoperation(opLabel2).base)
                 prods[ (i,j) ] = G
-        prods[ (len(revGateLabelList),len(revGateLabelList)-1) ] = ident #product of no gates
+        prods[ (len(revOpLabelList),len(revOpLabelList)-1) ] = ident #product of no gates
 
         #Also Cache gate jacobians (still relatively little mem required)
-        dgate_dgateLabel1 = {
-            gateLabel: gate.deriv_wrt_params( gate_wrtFilters1[gateLabel] )
-            for gateLabel,gate in used_gates.items() }
+        dop_dopLabel1 = {
+            opLabel: gate.deriv_wrt_params( gate_wrtFilters1[opLabel] )
+            for opLabel,gate in used_operations.items() }
         
         if wrtFilter1 == wrtFilter2:
-            dgate_dgateLabel2 = dgate_dgateLabel1
+            dop_dopLabel2 = dop_dopLabel1
         else:
-            dgate_dgateLabel2 = {
-                gateLabel: gate.deriv_wrt_params( gate_wrtFilters2[gateLabel] )
-                for gateLabel,gate in used_gates.items() }
+            dop_dopLabel2 = {
+                opLabel: gate.deriv_wrt_params( gate_wrtFilters2[opLabel] )
+                for opLabel,gate in used_operations.items() }
 
         #Finally, cache any nonzero gate hessians (memory?)
-        hgate_dgateLabels = {}
-        for gateLabel,gate in used_gates.items():
+        hop_dopLabels = {}
+        for opLabel,gate in used_operations.items():
             if gate.has_nonzero_hessian():
-                hgate_dgateLabels[gateLabel] = gate.hessian_wrt_params(
-                    gate_wrtFilters1[gateLabel], gate_wrtFilters2[gateLabel])
+                hop_dopLabels[opLabel] = gate.hessian_wrt_params(
+                    gate_wrtFilters1[opLabel], gate_wrtFilters2[opLabel])
 
                 
         # Allocate memory for the final result
@@ -444,69 +444,69 @@ class GateMatrixCalc(GateCalc):
         flattened_d2prod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2),'d')
 
         # For each pair of gates in the string, compute the hessian of the entire
-        #  gate string with respect to only those two gates' parameters and fill
+        #  operation sequence with respect to only those two gates' parameters and fill
         #  add the result to the appropriate block of flattened_d2prod.
         
         #NOTE: if we needed to perform a hessian calculation (i.e. for l==m) then
-        # it could make sense to iterate through the self.gates.keys() as in
+        # it could make sense to iterate through the self.operations.keys() as in
         # dproduct(...) and find the labels in the string which match the current
         # gate (so we only need to compute this gate hessian once).  But since we're
         # assuming that the gates are at most linear in their parameters, this
         # isn't currently needed.
         
-        N = len(revGateLabelList)
-        for m,gateLabel1 in enumerate(revGateLabelList):
-            inds1 = gpindices1[gateLabel1]
-            nDerivCols1 = dgate_dgateLabel1[gateLabel1].shape[1]
+        N = len(revOpLabelList)
+        for m,opLabel1 in enumerate(revOpLabelList):
+            inds1 = gpindices1[opLabel1]
+            nDerivCols1 = dop_dopLabel1[opLabel1].shape[1]
             if nDerivCols1 == 0: continue
             
-            for l,gateLabel2 in enumerate(revGateLabelList):
-                inds2 = gpindices1[gateLabel2]
-                #nDerivCols2 = dgate_dgateLabel2[gateLabel2].shape[1]
+            for l,opLabel2 in enumerate(revOpLabelList):
+                inds2 = gpindices1[opLabel2]
+                #nDerivCols2 = dop_dopLabel2[opLabel2].shape[1]
                 
                 # FUTURE: we could add logic that accounts for the symmetry of the Hessian, so that
-                # if gl1 and gl2 are both in gatesToVectorize1 and gatesToVectorize2 we only compute d2(prod)/d(gl1)d(gl2)
+                # if gl1 and gl2 are both in opsToVectorize1 and opsToVectorize2 we only compute d2(prod)/d(gl1)d(gl2)
                 # and not d2(prod)/d(gl2)d(gl1) ...
                 
                 if m < l:
                     x0 = _np.kron(_np.transpose(prods[(0,m-1)]),prods[(m+1,l-1)])  # (dim**2, dim**2)
-                    x  = _np.dot( _np.transpose(dgate_dgateLabel1[gateLabel1]), x0); xv = x.view() # (nDerivCols1,dim**2)
+                    x  = _np.dot( _np.transpose(dop_dopLabel1[opLabel1]), x0); xv = x.view() # (nDerivCols1,dim**2)
                     xv.shape = (nDerivCols1, dim, dim) # (reshape without copying - throws error if copy is needed)
-                    y = _np.dot( _np.kron(xv, _np.transpose(prods[(l+1,N-1)])), dgate_dgateLabel2[gateLabel2] )
+                    y = _np.dot( _np.kron(xv, _np.transpose(prods[(l+1,N-1)])), dop_dopLabel2[opLabel2] )
                       # above: (nDerivCols1,dim**2,dim**2) * (dim**2,nDerivCols2) = (nDerivCols1,dim**2,nDerivCols2)
                     flattened_d2prod[:,inds1,inds2] += _np.swapaxes(y,0,1)
                       # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
                 elif l < m:
                     x0 = _np.kron(_np.transpose(prods[(l+1,m-1)]),prods[(m+1,N-1)]) # (dim**2, dim**2)
-                    x  = _np.dot( _np.transpose(dgate_dgateLabel1[gateLabel1]), x0); xv = x.view() # (nDerivCols1,dim**2)
+                    x  = _np.dot( _np.transpose(dop_dopLabel1[opLabel1]), x0); xv = x.view() # (nDerivCols1,dim**2)
                     xv.shape = (nDerivCols1, dim, dim) # (reshape without copying - throws error if copy is needed)
                     xv = _np.swapaxes(xv,1,2) # transposes each of the now un-vectorized dim x dim mxs corresponding to a single kl
-                    y = _np.dot( _np.kron(prods[(0,l-1)], xv), dgate_dgateLabel2[gateLabel2] )
+                    y = _np.dot( _np.kron(prods[(0,l-1)], xv), dop_dopLabel2[opLabel2] )
                     # above: (nDerivCols1,dim**2,dim**2) * (dim**2,nDerivCols2) = (nDerivCols1,dim**2,nDerivCols2)
                     
                     flattened_d2prod[:,inds1,inds2] += _np.swapaxes(y,0,1)
                       # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
 
                 else: # l==m, which we *used* to assume gave no contribution since we assume all gate elements are at most linear in the parameters
-                    assert(gateLabel1 == gateLabel2)
-                    if gateLabel1 in hgate_dgateLabels: #indicates a non-zero hessian
+                    assert(opLabel1 == opLabel2)
+                    if opLabel1 in hop_dopLabels: #indicates a non-zero hessian
                         x0 = _np.kron(_np.transpose(prods[(0,m-1)]),prods[(m+1,N-1)]) # (dim**2, dim**2)
-                        x  = _np.dot( _np.transpose(hgate_dgateLabels[gateLabel1], axes=(1,2,0)), x0); xv = x.view() # (nDerivCols1,nDerivCols2,dim**2)
+                        x  = _np.dot( _np.transpose(hop_dopLabels[opLabel1], axes=(1,2,0)), x0); xv = x.view() # (nDerivCols1,nDerivCols2,dim**2)
                         xv = _np.transpose(xv, axes=(2,0,1)) # (dim2, nDerivCols1, nDerivCols2)
                         flattened_d2prod[:,inds1,inds2] += xv
 
         if flat:
-            return flattened_d2prod # axes = (vectorized_gate_el_index, gateset_parameter1, gateset_parameter2)
+            return flattened_d2prod # axes = (vectorized_op_el_index, model_parameter1, model_parameter2)
         else:
             vec_kl_size, vec_ij_size = flattened_d2prod.shape[1:3] # == num_deriv_cols1, num_deriv_cols2
             return _np.rollaxis( flattened_d2prod, 0, 3 ).reshape( (vec_kl_size, vec_ij_size, dim, dim) )
-            # axes = (gateset_parameter1, gateset_parameter2, gateset_element_row, gateset_element_col)
+            # axes = (model_parameter1, model_parameter2, model_element_row, model_element_col)
 
         
-    def prs(self, rholabel, elabels, gatestring, clipTo, bUseScaling=False):
+    def prs(self, rholabel, elabels, circuit, clipTo, bUseScaling=False):
         """
         Compute probabilities of a multiple "outcomes" (spam-tuples) for a single
-        gate string.  The spam tuples may only vary in their effect-label (their
+        operation sequence.  The spam tuples may only vary in their effect-label (their
         prep labels must be the same)
 
         Parameters
@@ -517,7 +517,7 @@ class GateMatrixCalc(GateCalc):
         elabels : list
             A list of :class:`Label` objects giving the *compiled* effect labels.
 
-        gatestring : GateString or tuple
+        circuit : OpString or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
@@ -542,7 +542,7 @@ class GateMatrixCalc(GateCalc):
 
         if bUseScaling:
             old_err = _np.seterr(over='ignore')
-            G,scale = self.product(gatestring, True)
+            G,scale = self.product(circuit, True)
             if self.evotype == "statevec":
                 ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)) * scale)**2)
             else: # evotype == "densitymx"
@@ -550,7 +550,7 @@ class GateMatrixCalc(GateCalc):
             _np.seterr(**old_err)
 
         else: #no scaling -- faster but susceptible to overflow
-            G = self.product(gatestring, False)
+            G = self.product(circuit, False)
             if self.evotype == "statevec":
                 ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)))**2)
             else: # evotype == "densitymx"
@@ -558,16 +558,16 @@ class GateMatrixCalc(GateCalc):
         ps = ps.flatten()
 
         if _np.any(_np.isnan(ps)):
-            if len(gatestring) < 10:
-                strToPrint = str(gatestring)
+            if len(circuit) < 10:
+                strToPrint = str(circuit)
             else:
-                strToPrint = str(gatestring[0:10]) + " ... (len %d)" % len(gatestring)
+                strToPrint = str(circuit[0:10]) + " ... (len %d)" % len(circuit)
             _warnings.warn("pr(%s) == nan" % strToPrint)
             #DEBUG: print "backtrace" of product leading up to nan
 
             #G = _np.identity( self.dim ); total_exp = 0.0
-            #for i,lGate in enumerate(gateLabelList):
-            #    G = _np.dot(G,self[lGate])  # product of gates, starting with G0
+            #for i,lOp in enumerate(gateLabelList):
+            #    G = _np.dot(G,self[lOp])  # product of gates, starting with G0
             #    nG = norm(G); G /= nG; total_exp += log(nG) # scale and keep track of exponent
             #
             #    p = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) ) * exp(total_exp) # probability
@@ -579,15 +579,15 @@ class GateMatrixCalc(GateCalc):
         else: ret = ps
 
         #DEBUG CHECK
-        #check_ps = _np.array( [ self.pr( (rholabel,elabel), gatestring, clipTo, bScale) for elabel in elabels ])
+        #check_ps = _np.array( [ self.pr( (rholabel,elabel), circuit, clipTo, bScale) for elabel in elabels ])
         #assert(_np.linalg.norm(ps-check_ps) < 1e-8)
         return ps
 
 
-    def dpr(self, spamTuple, gatestring, returnPr, clipTo):
+    def dpr(self, spamTuple, circuit, returnPr, clipTo):
         """
-        Compute the derivative of a probability generated by a gate string and
-        spam tuple as a 1 x M numpy array, where M is the number of gateset
+        Compute the derivative of a probability generated by a operation sequence and
+        spam tuple as a 1 x M numpy array, where M is the number of model
         parameters.
 
         Parameters
@@ -595,7 +595,7 @@ class GateMatrixCalc(GateCalc):
         spamTuple : (rho_label, compiled_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
-        gatestring : GateString or tuple
+        circuit : OpString or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
@@ -610,7 +610,7 @@ class GateMatrixCalc(GateCalc):
         -------
         derivative : numpy array
             a 1 x M numpy array of derivatives of the probability w.r.t.
-            each gateset parameter (M is the length of the vectorized gateset).
+            each model parameter (M is the length of the vectorized model).
 
         probability : float
             only returned if returnPr == True.
@@ -624,7 +624,7 @@ class GateMatrixCalc(GateCalc):
           
         
         #  pr = Tr( |rho><E| * prod ) = sum E_k prod_kl rho_l
-        #  dpr/d(gateLabel)_ij = sum E_k [dprod/d(gateLabel)_ij]_kl rho_l
+        #  dpr/d(opLabel)_ij = sum E_k [dprod/d(opLabel)_ij]_kl rho_l
         #  dpr/d(rho)_i = sum E_k prod_ki
         #  dpr/d(E)_i   = sum prod_il rho_l
 
@@ -635,11 +635,11 @@ class GateMatrixCalc(GateCalc):
 
         #Derivs wrt Gates
         old_err = _np.seterr(over='ignore')
-        prod,scale = self.product(gatestring, True)
-        dprod_dGates = self.dproduct(gatestring)
-        dpr_dGates = _np.empty( (1, self.Np) )
+        prod,scale = self.product(circuit, True)
+        dprod_dOps = self.dproduct(circuit)
+        dpr_dOps = _np.empty( (1, self.Np) )
         for i in range(self.Np):
-            dpr_dGates[0,i] = float(_np.dot(E, _np.dot( dprod_dGates[i], rho)))
+            dpr_dOps[0,i] = float(_np.dot(E, _np.dot( dprod_dOps[i], rho)))
 
         if returnPr:
             p = _np.dot(E, _np.dot(prod, rho)) * scale  #may generate overflow, but OK
@@ -660,14 +660,14 @@ class GateMatrixCalc(GateCalc):
         _np.seterr(**old_err)
 
         if returnPr:
-            return dpr_drhos + dpr_dEs + dpr_dGates, p
-        else: return dpr_drhos + dpr_dEs + dpr_dGates
+            return dpr_drhos + dpr_dEs + dpr_dOps, p
+        else: return dpr_drhos + dpr_dEs + dpr_dOps
 
         
-    def hpr(self, spamTuple, gatestring, returnPr, returnDeriv, clipTo):
+    def hpr(self, spamTuple, circuit, returnPr, returnDeriv, clipTo):
         """
-        Compute the Hessian of a probability generated by a gate string and
-        spam tuple as a 1 x M x M array, where M is the number of gateset
+        Compute the Hessian of a probability generated by a operation sequence and
+        spam tuple as a 1 x M x M array, where M is the number of model
         parameters.
 
         Parameters
@@ -675,7 +675,7 @@ class GateMatrixCalc(GateCalc):
         spamTuple : (rho_label, compiled_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
-        gatestring : GateString or tuple
+        circuit : OpString or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
@@ -693,13 +693,13 @@ class GateMatrixCalc(GateCalc):
         Returns
         -------
         hessian : numpy array
-            a 1 x M x M array, where M is the number of gateset parameters.
+            a 1 x M x M array, where M is the number of model parameters.
             hessian[0,j,k] is the derivative of the probability w.r.t. the
-            k-th then the j-th gateset parameter.
+            k-th then the j-th model parameter.
 
         derivative : numpy array
             only returned if returnDeriv == True. A 1 x M numpy array of
-            derivatives of the probability w.r.t. each gateset parameter.
+            derivatives of the probability w.r.t. each model parameter.
 
         probability : float
             only returned if returnPr == True.
@@ -707,9 +707,9 @@ class GateMatrixCalc(GateCalc):
         if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
         
         #  pr = Tr( |rho><E| * prod ) = sum E_k prod_kl rho_l
-        #  d2pr/d(gateLabel1)_mn d(gateLabel2)_ij = sum E_k [dprod/d(gateLabel1)_mn d(gateLabel2)_ij]_kl rho_l
-        #  d2pr/d(rho)_i d(gateLabel)_mn = sum E_k [dprod/d(gateLabel)_mn]_ki     (and same for other diff order)
-        #  d2pr/d(E)_i d(gateLabel)_mn   = sum [dprod/d(gateLabel)_mn]_il rho_l   (and same for other diff order)
+        #  d2pr/d(opLabel1)_mn d(opLabel2)_ij = sum E_k [dprod/d(opLabel1)_mn d(opLabel2)_ij]_kl rho_l
+        #  d2pr/d(rho)_i d(opLabel)_mn = sum E_k [dprod/d(opLabel)_mn]_ki     (and same for other diff order)
+        #  d2pr/d(E)_i d(opLabel)_mn   = sum [dprod/d(opLabel)_mn]_il rho_l   (and same for other diff order)
         #  d2pr/d(E)_i d(rho)_j          = prod_ij                                (and same for other diff order)
         #  d2pr/d(E)_i d(E)_j            = 0
         #  d2pr/d(rho)_i d(rho)_j        = 0
@@ -719,27 +719,27 @@ class GateMatrixCalc(GateCalc):
         rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
         EVec = self.effects[elabel]   # arrays, these are SPAMVecs
 
-        d2prod_dGates = self.hproduct(gatestring)
+        d2prod_dGates = self.hproduct(circuit)
         assert( d2prod_dGates.shape[0] == d2prod_dGates.shape[1] )
 
-        d2pr_dGates2 = _np.empty( (1, self.Np, self.Np) )
+        d2pr_dOps2 = _np.empty( (1, self.Np, self.Np) )
         for i in range(self.Np):
             for j in range(self.Np):
-                d2pr_dGates2[0,i,j] = float(_np.dot(E, _np.dot( d2prod_dGates[i,j], rho)))
+                d2pr_dOps2[0,i,j] = float(_np.dot(E, _np.dot( d2prod_dGates[i,j], rho)))
 
         old_err = _np.seterr(over='ignore')
 
-        prod,scale = self.product(gatestring, True)
+        prod,scale = self.product(circuit, True)
         if returnPr:
             p = _np.dot(E, _np.dot(prod, rho)) * scale  #may generate overflow, but OK
             if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
 
-        dprod_dGates  = self.dproduct(gatestring)
-        assert( dprod_dGates.shape[0] == self.Np )
+        dprod_dOps  = self.dproduct(circuit)
+        assert( dprod_dOps.shape[0] == self.Np )
         if returnDeriv: # same as in dpr(...)
-            dpr_dGates = _np.empty( (1, self.Np) )
+            dpr_dOps = _np.empty( (1, self.Np) )
             for i in range(self.Np):
-                dpr_dGates[0,i] = float(_np.dot(E, _np.dot( dprod_dGates[i], rho)))
+                dpr_dOps[0,i] = float(_np.dot(E, _np.dot( dprod_dOps[i], rho)))
 
 
         #Derivs wrt SPAM
@@ -754,14 +754,14 @@ class GateMatrixCalc(GateCalc):
             _fas(dpr_dEs, [0,EVec.gpindices],
                _np.dot( derivWrtAnyEvec, EVec.deriv_wrt_params() ))
 
-            dpr = dpr_drhos + dpr_dEs + dpr_dGates
+            dpr = dpr_drhos + dpr_dEs + dpr_dOps
 
         d2pr_drhos = _np.zeros( (1, self.Np, self.Np) )
         _fas(d2pr_drhos, [0,None, self.preps[rholabel].gpindices],
-             _np.dot( _np.dot(E,dprod_dGates), rhoVec.deriv_wrt_params())[0]) # (= [0,:,:])
+             _np.dot( _np.dot(E,dprod_dOps), rhoVec.deriv_wrt_params())[0]) # (= [0,:,:])
 
         d2pr_dEs = _np.zeros( (1, self.Np, self.Np) )
-        derivWrtAnyEvec = _np.squeeze(_np.dot(dprod_dGates,rho), axis=(2,))
+        derivWrtAnyEvec = _np.squeeze(_np.dot(dprod_dOps,rho), axis=(2,))
         _fas(d2pr_dEs,[0,None,EVec.gpindices],
              _np.dot(derivWrtAnyEvec, EVec.deriv_wrt_params()))
 
@@ -793,7 +793,7 @@ class GateMatrixCalc(GateCalc):
         ret = d2pr_dErhos + _np.transpose(d2pr_dErhos,(0,2,1)) + \
               d2pr_drhos + _np.transpose(d2pr_drhos,(0,2,1)) + \
               d2pr_dEs + _np.transpose(d2pr_dEs,(0,2,1)) + \
-              d2pr_d2rhos + d2pr_d2Es + d2pr_dGates2
+              d2pr_d2rhos + d2pr_d2Es + d2pr_dOps2
         # Note: add transposes b/c spam terms only compute one triangle of hessian
         # Note: d2pr_d2rhos and d2pr_d2Es terms are always zero
         
@@ -839,24 +839,24 @@ class GateMatrixCalc(GateCalc):
         prodCache = _np.zeros( (cacheSize, dim, dim) )
         scaleCache = _np.zeros( cacheSize, 'd' )
 
-        #First element of cache are given by evalTree's initial single- or zero-gate labels
-        for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
-            if gateLabel == "": #special case of empty label == no gate
+        #First element of cache are given by evalTree's initial single- or zero-operation labels
+        for i,opLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
+            if opLabel == "": #special case of empty label == no gate
                 prodCache[i] = _np.identity( dim )
                 # Note: scaleCache[i] = 0.0 from initialization
             else:
-                gate = self._getgate(gateLabel).base
+                gate = self._getoperation(opLabel).base
                 nG = max(_nla.norm(gate), 1.0)
                 prodCache[i] = gate / nG
                 scaleCache[i] = _np.log(nG)
 
-        #evaluate gate strings using tree (skip over the zero and single-gate-strings)
+        #evaluate operation sequences using tree (skip over the zero and single-gate-strings)
         #cnt = 0
         for i in evalTree.get_evaluation_order():
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
-            # (iRight,iLeft,iFinal) = tup implies gatestring[i] = gatestring[iLeft] + gatestring[iRight], but we want:
-            (iRight,iLeft) = evalTree[i]   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
+            # (iRight,iLeft,iFinal) = tup implies circuit[i] = circuit[iLeft] + circuit[iRight], but we want:
+            (iRight,iLeft) = evalTree[i]   # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
             L,R = prodCache[iLeft], prodCache[iRight]
             prodCache[i] = _np.dot(L,R)
             scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight]
@@ -942,23 +942,23 @@ class GateMatrixCalc(GateCalc):
         # This iteration **must** match that in bulk_evaltree
         #   in order to associate the right single-gate-strings w/indices
         wrtIndices = _slct.indices(wrtSlice) if (wrtSlice is not None) else None
-        for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
-            if gateLabel == "": #special case of empty label == no gate
+        for i,opLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
+            if opLabel == "": #special case of empty label == no gate
                 dProdCache[i] = _np.zeros( deriv_shape )
             else:                
-                #dgate = self.dproduct( (gateLabel,) , wrtFilter=wrtIndices)
-                dgate = self.dgate(gateLabel, wrtFilter=wrtIndices)
-                dProdCache[i] = dgate / _np.exp(scaleCache[i])
+                #doperation = self.dproduct( (opLabel,) , wrtFilter=wrtIndices)
+                doperation = self.doperation(opLabel, wrtFilter=wrtIndices)
+                dProdCache[i] = doperation / _np.exp(scaleCache[i])
 
         #profiler.print_mem("DEBUGMEM: POINT1"); profiler.comm.barrier()
 
-        #evaluate gate strings using tree (skip over the zero and single-gate-strings)
+        #evaluate operation sequences using tree (skip over the zero and single-gate-strings)
         for i in evalTree.get_evaluation_order():
             tm = _time.time()
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
-            # (iRight,iLeft,iFinal) = tup implies gatestring[i] = gatestring[iLeft] + gatestring[iRight], but we want:
-            (iRight,iLeft) = evalTree[i]   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
+            # (iRight,iLeft,iFinal) = tup implies circuit[i] = circuit[iLeft] + circuit[iRight], but we want:
+            (iRight,iLeft) = evalTree[i]   # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
             L,R = prodCache[iLeft], prodCache[iRight]
             dL,dR = dProdCache[iLeft], dProdCache[iRight]
             dProdCache[i] = _np.dot(dL, R) + \
@@ -994,7 +994,7 @@ class GateMatrixCalc(GateCalc):
 
         dim = self.dim
 
-        # Note: dProdCache?.shape = (#gatestrings,#params_to_diff_wrt,dim,dim)
+        # Note: dProdCache?.shape = (#circuits,#params_to_diff_wrt,dim,dim)
         nDerivCols1 = dProdCache1.shape[1]
         nDerivCols2 = dProdCache2.shape[1]
         assert(wrtSlice1 is None or _slct.length(wrtSlice1) == nDerivCols1)
@@ -1027,7 +1027,7 @@ class GateMatrixCalc(GateCalc):
             deriv1Slices, myDeriv1ColSlice, deriv1Owners, mySubComm = \
                 _mpit.distribute_slice(allDeriv1ColSlice, comm)
  
-            # Get slice into entire range of gateset params so that
+            # Get slice into entire range of model params so that
             #  per-gate hessians can be computed properly
             if wrtSlice1 is not None and wrtSlice1.start is not None:
                 myHessianSlice1 = _slct.shift(myDeriv1ColSlice, wrtSlice1.start)
@@ -1040,7 +1040,7 @@ class GateMatrixCalc(GateCalc):
                 deriv2Slices, myDeriv2ColSlice, deriv2Owners, mySubSubComm = \
                     _mpit.distribute_slice(allDeriv2ColSlice, mySubComm)
 
-                # Get slice into entire range of gateset params (see above)
+                # Get slice into entire range of model params (see above)
                 if wrtSlice2 is not None and wrtSlice2.start is not None:
                     myHessianSlice2 = _slct.shift(myDeriv2ColSlice, wrtSlice2.start)
                 else: myHessianSlice2 = myDeriv2ColSlice
@@ -1082,29 +1082,29 @@ class GateMatrixCalc(GateCalc):
 
         hProdCache = _np.zeros( (cacheSize,) + hessn_shape )
 
-        #First element of cache are given by evalTree's initial single- or zero-gate labels
+        #First element of cache are given by evalTree's initial single- or zero-operation labels
         wrtIndices1 = _slct.indices(wrtSlice1) if (wrtSlice1 is not None) else None
         wrtIndices2 = _slct.indices(wrtSlice2) if (wrtSlice2 is not None) else None
-        for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
-            if gateLabel == "": #special case of empty label == no gate
+        for i,opLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
+            if opLabel == "": #special case of empty label == no gate
                 hProdCache[i] = _np.zeros( hessn_shape )
-            elif not self._getgate(gateLabel).has_nonzero_hessian():
+            elif not self._getoperation(opLabel).has_nonzero_hessian():
                 #all gate elements are at most linear in params, so
-                # all hessians for single- or zero-gate strings are zero.
+                # all hessians for single- or zero-operation sequences are zero.
                 hProdCache[i] = _np.zeros( hessn_shape )
             else:
-                hgate = self.hgate(gateLabel,
+                hoperation = self.hoperation(opLabel,
                                    wrtFilter1=wrtIndices1,
                                    wrtFilter2=wrtIndices2)
-                hProdCache[i] = hgate / _np.exp(scaleCache[i])            
+                hProdCache[i] = hoperation / _np.exp(scaleCache[i])            
 
-        #evaluate gate strings using tree (skip over the zero and single-gate-strings)
+        #evaluate operation sequences using tree (skip over the zero and single-gate-strings)
         for i in evalTree.get_evaluation_order():
 
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
-            # (iRight,iLeft,iFinal) = tup implies gatestring[i] = gatestring[iLeft] + gatestring[iRight], but we want:
-            (iRight,iLeft) = evalTree[i]   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
+            # (iRight,iLeft,iFinal) = tup implies circuit[i] = circuit[iLeft] + circuit[iRight], but we want:
+            (iRight,iLeft) = evalTree[i]   # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
             L,R = prodCache[iLeft], prodCache[iRight]
             dL1,dR1 = dProdCache1[iLeft], dProdCache1[iRight]
             dL2,dR2 = dProdCache2[iLeft], dProdCache2[iRight]
@@ -1136,16 +1136,16 @@ class GateMatrixCalc(GateCalc):
         """
         return "deriv"
 
-    def estimate_cache_size(self, nGateStrings):
+    def estimate_cache_size(self, nCircuits):
         """
         Return an estimate of the ideal/desired cache size given a number of 
-        gate strings.
+        operation sequences.
 
         Returns
         -------
         int
         """
-        return int( 1.3 * nGateStrings )
+        return int( 1.3 * nCircuits )
     
 
     def construct_evaltree(self):
@@ -1267,12 +1267,12 @@ class GateMatrixCalc(GateCalc):
 
     def bulk_product(self, evalTree, bScale=False, comm=None):
         """
-        Compute the products of many gate strings at once.
+        Compute the products of many operation sequences at once.
 
         Parameters
         ----------
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.
 
         bScale : bool, optional
@@ -1280,7 +1280,7 @@ class GateMatrixCalc(GateCalc):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.  This is done over gate strings when a
+           across multiple processors.  This is done over operation sequences when a
            *split* evalTree is given, otherwise no parallelization is performed.
 
         Returns
@@ -1288,8 +1288,8 @@ class GateMatrixCalc(GateCalc):
         prods : numpy array
             Array of shape S x G x G, where:
 
-            - S == the number of gate strings
-            - G == the linear dimension of a gate matrix (G x G gate matrices).
+            - S == the number of operation sequences
+            - G == the linear dimension of a operation matrix (G x G operation matrices).
 
         scaleValues : numpy array
             Only returned when bScale == True. A length-S array specifying
@@ -1300,7 +1300,7 @@ class GateMatrixCalc(GateCalc):
 
         #use cached data to construct return values
         Gs = evalTree.final_view(prodCache, axis=0)
-           #shape == ( len(gatestring_list), dim, dim ), Gs[i] is product for i-th gate string
+           #shape == ( len(circuit_list), dim, dim ), Gs[i] is product for i-th operation sequence
         scaleExps = evalTree.final_view(scaleCache)
 
         old_err = _np.seterr(over='ignore')
@@ -1320,12 +1320,12 @@ class GateMatrixCalc(GateCalc):
     def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False,
                       bScale=False, comm=None, wrtFilter=None):
         """
-        Compute the derivative of a many gate strings at once.
+        Compute the derivative of a many operation sequences at once.
 
         Parameters
         ----------
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.
 
         flat : bool, optional
@@ -1341,14 +1341,14 @@ class GateMatrixCalc(GateCalc):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first done over the
            set of parameters being differentiated with respect to.  If there are
-           more processors than gateset parameters, distribution over a split
+           more processors than model parameters, distribution over a split
            evalTree (if given) is possible.
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which gate parameters
           to include in the derivative.  Each element is an index into an
           array of gate parameters ordered by concatenating each gate's
-          parameters (in the order specified by the gate set).  This argument
+          parameters (in the order specified by the model).  This argument
           is used internally for distributing derivative calculations across
           multiple processors.
 
@@ -1359,12 +1359,12 @@ class GateMatrixCalc(GateCalc):
 
           * if flat == False, an array of shape S x M x G x G, where:
 
-            - S == len(gatestring_list)
-            - M == the length of the vectorized gateset
-            - G == the linear dimension of a gate matrix (G x G gate matrices)
+            - S == len(circuit_list)
+            - M == the length of the vectorized model
+            - G == the linear dimension of a operation matrix (G x G operation matrices)
 
             and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
-            of the i-th gate string product with respect to the j-th gateset
+            of the i-th operation sequence product with respect to the j-th model
             parameter.
 
           * if flat == True, an array of shape S*N x M where:
@@ -1373,19 +1373,19 @@ class GateMatrixCalc(GateCalc):
             - S,M == as above,
 
             and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
-            the (i / G^2)-th flattened gate string product  with respect to
-            the j-th gateset parameter.
+            the (i / G^2)-th flattened operation sequence product  with respect to
+            the j-th model parameter.
 
         products : numpy array
           Only returned when bReturnProds == True.  An array of shape
-          S x G x G; products[i] is the i-th gate string product.
+          S x G x G; products[i] is the i-th operation sequence product.
 
         scaleVals : numpy array
           Only returned when bScale == True.  An array of shape S such that
           scaleVals[i] contains the multiplicative scaling needed for
-          the derivatives and/or products for the i-th gate string.
+          the derivatives and/or products for the i-th operation sequence.
         """
-        nGateStrings = evalTree.num_final_strings()
+        nCircuits = evalTree.num_final_strings()
         nDerivCols = self.Np if (wrtFilter is None) else _slct.length(wrtFilter)
         dim = self.dim
 
@@ -1403,12 +1403,12 @@ class GateMatrixCalc(GateCalc):
 
         if bReturnProds:
             Gs  = evalTree.final_view(prodCache, axis=0)
-              #shape == ( len(gatestring_list), dim, dim ), 
-              # Gs[i] is product for i-th gate string
+              #shape == ( len(circuit_list), dim, dim ), 
+              # Gs[i] is product for i-th operation sequence
 
             dGs = evalTree.final_view(dProdCache, axis=0) 
-              #shape == ( len(gatestring_list), nDerivCols, dim, dim ),
-              # dGs[i] is dprod_dGates for ith string
+              #shape == ( len(circuit_list), nDerivCols, dim, dim ),
+              # dGs[i] is dprod_dOps for ith string
 
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
@@ -1419,14 +1419,14 @@ class GateMatrixCalc(GateCalc):
 
             if flat:
                 dGs =  _np.swapaxes( _np.swapaxes(dGs,0,1).reshape(
-                    (nDerivCols, nGateStrings*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened everything else
+                    (nDerivCols, nCircuits*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened everything else
 
             return (dGs, Gs, scaleVals) if bScale else (dGs, Gs)
 
         else:
             dGs = evalTree.final_view(dProdCache, axis=0) 
-              #shape == ( len(gatestring_list), nDerivCols, dim, dim ),
-              # dGs[i] is dprod_dGates for ith string
+              #shape == ( len(circuit_list), nDerivCols, dim, dim ),
+              # dGs[i] is dprod_dOps for ith string
 
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
@@ -1440,7 +1440,7 @@ class GateMatrixCalc(GateCalc):
 
             if flat:
                 dGs =  _np.swapaxes( _np.swapaxes(dGs,0,1).reshape(
-                    (nDerivCols, nGateStrings*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened everything else
+                    (nDerivCols, nCircuits*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened everything else
             return (dGs, scaleVals) if bScale else dGs
 
 
@@ -1449,12 +1449,12 @@ class GateMatrixCalc(GateCalc):
                       bScale=False, comm=None, wrtFilter1=None, wrtFilter2=None):
 
         """
-        Return the Hessian of many gate string products at once.
+        Return the Hessian of many operation sequence products at once.
 
         Parameters
         ----------
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           given by a prior call to bulk_evaltree.  Specifies the operation sequences
            to compute the bulk operation on.
 
         flat : bool, optional
@@ -1472,7 +1472,7 @@ class GateMatrixCalc(GateCalc):
            across multiple processors.  Distribution is first done over the
            set of parameters being differentiated with respect to when the
            *second* derivative is taken.  If there are more processors than
-           gateset parameters, distribution over a split evalTree (if given)
+           model parameters, distribution over a split evalTree (if given)
            is possible.
 
         wrtFilter1, wrtFilter2 : list of ints, optional
@@ -1480,7 +1480,7 @@ class GateMatrixCalc(GateCalc):
           to differentiate with respect to in the first (row) and second (col)
           derivative operations, respectively.  Each element is an index into an
           array of gate parameters ordered by concatenating each gate's
-          parameters (in the order specified by the gate set).  This argument
+          parameters (in the order specified by the model).  This argument
           is used internally for distributing derivative calculations across
           multiple processors.
 
@@ -1489,13 +1489,13 @@ class GateMatrixCalc(GateCalc):
         hessians : numpy array
             * if flat == False, an  array of shape S x M x M x G x G, where
 
-              - S == len(gatestring_list)
-              - M == the length of the vectorized gateset
-              - G == the linear dimension of a gate matrix (G x G gate matrices)
+              - S == len(circuit_list)
+              - M == the length of the vectorized model
+              - G == the linear dimension of a operation matrix (G x G operation matrices)
 
               and hessians[i,j,k,l,m] holds the derivative of the (l,m)-th entry
-              of the i-th gate string product with respect to the k-th then j-th
-              gateset parameters.
+              of the i-th operation sequence product with respect to the k-th then j-th
+              model parameters.
 
             * if flat == True, an array of shape S*N x M x M where
 
@@ -1503,20 +1503,20 @@ class GateMatrixCalc(GateCalc):
               - S,M == as above,
 
               and hessians[i,j,k] holds the derivative of the (i % G^2)-th entry
-              of the (i / G^2)-th flattened gate string product with respect to
-              the k-th then j-th gateset parameters.
+              of the (i / G^2)-th flattened operation sequence product with respect to
+              the k-th then j-th model parameters.
 
         derivs1, derivs2 : numpy array
           Only returned if bReturnDProdsAndProds == True.
 
           * if flat == False, two arrays of shape S x M x G x G, where
 
-            - S == len(gatestring_list)
-            - M == the number of gateset params or wrtFilter1 or 2, respectively
-            - G == the linear dimension of a gate matrix (G x G gate matrices)
+            - S == len(circuit_list)
+            - M == the number of model params or wrtFilter1 or 2, respectively
+            - G == the linear dimension of a operation matrix (G x G operation matrices)
 
             and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
-            of the i-th gate string product with respect to the j-th gateset
+            of the i-th operation sequence product with respect to the j-th model
             parameter.
 
           * if flat == True, an array of shape S*N x M where
@@ -1526,23 +1526,23 @@ class GateMatrixCalc(GateCalc):
             - S,M == as above,
 
             and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
-            the (i / G^2)-th flattened gate string product  with respect to
-            the j-th gateset parameter.
+            the (i / G^2)-th flattened operation sequence product  with respect to
+            the j-th model parameter.
 
         products : numpy array
           Only returned when bReturnDProdsAndProds == True.  An array of shape
-          S x G x G; products[i] is the i-th gate string product.
+          S x G x G; products[i] is the i-th operation sequence product.
 
         scaleVals : numpy array
           Only returned when bScale == True.  An array of shape S such that
           scaleVals[i] contains the multiplicative scaling needed for
-          the hessians, derivatives, and/or products for the i-th gate string.
+          the hessians, derivatives, and/or products for the i-th operation sequence.
 
         """
         dim = self.dim
         nDerivCols1 = self.Np if (wrtFilter1 is None) else _slct.length(wrtFilter1)
         nDerivCols2 = self.Np if (wrtFilter2 is None) else _slct.length(wrtFilter2)
-        nGateStrings = evalTree.num_final_strings() #len(gatestring_list)
+        nCircuits = evalTree.num_final_strings() #len(circuit_list)
         wrtSlice1 = _slct.list_to_slice(wrtFilter1) if (wrtFilter1 is not None) else None
         wrtSlice2 = _slct.list_to_slice(wrtFilter2) if (wrtFilter2 is not None) else None
           #TODO: just allow slices as argument: wrtFilter -> wrtSlice?
@@ -1565,16 +1565,16 @@ class GateMatrixCalc(GateCalc):
 
         if bReturnDProdsAndProds:
             Gs  = evalTree.final_view( prodCache, axis=0)
-              #shape == ( len(gatestring_list), dim, dim ), 
-              # Gs[i] is product for i-th gate string
+              #shape == ( len(circuit_list), dim, dim ), 
+              # Gs[i] is product for i-th operation sequence
 
             dGs1 = evalTree.final_view(dProdCache1, axis=0)
             dGs2 = evalTree.final_view(dProdCache2, axis=0)
-              #shape == ( len(gatestring_list), nDerivColsX, dim, dim ),
-              # dGs[i] is dprod_dGates for ith string
+              #shape == ( len(circuit_list), nDerivColsX, dim, dim ),
+              # dGs[i] is dprod_dOps for ith string
 
             hGs = evalTree.final_view(hProdCache, axis=0)
-              #shape == ( len(gatestring_list), nDerivCols1, nDerivCols2, dim, dim ),
+              #shape == ( len(circuit_list), nDerivCols1, nDerivCols2, dim, dim ),
               # hGs[i] is hprod_dGates for ith string
 
             if not bScale:
@@ -1589,15 +1589,15 @@ class GateMatrixCalc(GateCalc):
                 _np.seterr(**old_err)
 
             if flat:
-                dGs1 = _np.swapaxes( _np.swapaxes(dGs1,0,1).reshape( (nDerivCols1, nGateStrings*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened all else
-                dGs2 = _np.swapaxes( _np.swapaxes(dGs2,0,1).reshape( (nDerivCols2, nGateStrings*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened all else
-                hGs = _np.rollaxis( _np.rollaxis(hGs,0,3).reshape( (nDerivCols1, nDerivCols2, nGateStrings*dim**2) ), 2) # cols = deriv cols, rows = all else
+                dGs1 = _np.swapaxes( _np.swapaxes(dGs1,0,1).reshape( (nDerivCols1, nCircuits*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened all else
+                dGs2 = _np.swapaxes( _np.swapaxes(dGs2,0,1).reshape( (nDerivCols2, nCircuits*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened all else
+                hGs = _np.rollaxis( _np.rollaxis(hGs,0,3).reshape( (nDerivCols1, nDerivCols2, nCircuits*dim**2) ), 2) # cols = deriv cols, rows = all else
 
             return (hGs, dGs1, dGs2, Gs, scaleVals) if bScale else (hGs, dGs1, dGs2, Gs)
 
         else:
             hGs = evalTree.final_view(hProdCache, axis=0) 
-              #shape == ( len(gatestring_list), nDerivCols, nDerivCols, dim, dim )
+              #shape == ( len(circuit_list), nDerivCols, nDerivCols, dim, dim )
 
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
@@ -1609,7 +1609,7 @@ class GateMatrixCalc(GateCalc):
                 #hGs = clip(hGs,-1e300,1e300)
                 _np.seterr(**old_err)
 
-            if flat: hGs = _np.rollaxis( _np.rollaxis(hGs,0,3).reshape( (nDerivCols1, nDerivCols2, nGateStrings*dim**2) ), 2) # as above
+            if flat: hGs = _np.rollaxis( _np.rollaxis(hGs,0,3).reshape( (nDerivCols1, nDerivCols2, nCircuits*dim**2) ), 2) # as above
 
             return (hGs, scaleVals) if bScale else hGs
 
@@ -1652,7 +1652,7 @@ class GateMatrixCalc(GateCalc):
         #  vp[i] = dot( E, dot(Gs, rho))[0,i,0]      * scaleVals[i]
         #  vp    = squeeze( dot( E, dot(Gs, rho)), axis=(0,2) ) * scaleVals
         return _np.squeeze( _np.dot(E, _np.dot(Gs, rho)), axis=(0,2) ) * scaleVals
-          # shape == (len(gatestring_list),) ; may overflow but OK
+          # shape == (len(circuit_list),) ; may overflow but OK
 
 
     def _dprobs_from_rhoE(self, spamTuple, rho, E, Gs, dGs, scaleVals, wrtSlice=None):
@@ -1661,7 +1661,7 @@ class GateMatrixCalc(GateCalc):
         rholabel,elabel = spamTuple
         rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
         EVec = self.effects[elabel]   # arrays, these are SPAMVecs
-        nGateStrings = Gs.shape[0]
+        nCircuits = Gs.shape[0]
         rho_wrtFilter, rho_gpindices = self._process_wrtFilter(wrtSlice, self.preps[rholabel])
         E_wrtFilter, E_gpindices = self._process_wrtFilter(wrtSlice, self.effects[elabel])
         nDerivCols = self.Np if wrtSlice is None else _slct.length(wrtSlice)
@@ -1670,19 +1670,19 @@ class GateMatrixCalc(GateCalc):
         # GATE DERIVS (assume dGs is already sized/filtered) -------------------
         assert( dGs.shape[1] == nDerivCols ), "dGs must be pre-filtered!"
         
-        #Compute d(probability)/dGates and save in return list (now have G,dG => product, dprod_dGates)
-        #  prod, dprod_dGates = G,dG
-        # dp_dGates[i,j] = sum_k,l E[0,k] dGs[i,j,k,l] rho[l,0]
-        # dp_dGates[i,j] = sum_k E[0,k] dot( dGs, rho )[i,j,k,0]
-        # dp_dGates[i,j] = dot( E, dot( dGs, rho ) )[0,i,j,0]
-        # dp_dGates      = squeeze( dot( E, dot( dGs, rho ) ), axis=(0,3))
+        #Compute d(probability)/dOps and save in return list (now have G,dG => product, dprod_dOps)
+        #  prod, dprod_dOps = G,dG
+        # dp_dOps[i,j] = sum_k,l E[0,k] dGs[i,j,k,l] rho[l,0]
+        # dp_dOps[i,j] = sum_k E[0,k] dot( dGs, rho )[i,j,k,0]
+        # dp_dOps[i,j] = dot( E, dot( dGs, rho ) )[0,i,j,0]
+        # dp_dOps      = squeeze( dot( E, dot( dGs, rho ) ), axis=(0,3))
         old_err2 = _np.seterr(invalid='ignore', over='ignore')
-        dp_dGates = _np.squeeze( _np.dot( E, _np.dot( dGs, rho ) ), axis=(0,3) ) * scaleVals[:,None]
+        dp_dOps = _np.squeeze( _np.dot( E, _np.dot( dGs, rho ) ), axis=(0,3) ) * scaleVals[:,None]
         _np.seterr(**old_err2)
-           # may overflow, but OK ; shape == (len(gatestring_list), nDerivCols)
+           # may overflow, but OK ; shape == (len(circuit_list), nDerivCols)
            # may also give invalid value due to scaleVals being inf and dot-prod being 0. In
            #  this case set to zero since we can't tell whether it's + or - inf anyway...
-        dp_dGates[ _np.isnan(dp_dGates) ] = 0
+        dp_dOps[ _np.isnan(dp_dOps) ] = 0
 
         #SPAM -------------
 
@@ -1691,7 +1691,7 @@ class GateMatrixCalc(GateCalc):
         # dp_drhos[i,J0+J] = dot(E, Gs, drhoP)[0,i,J]
         # dp_drhos[:,J0+J] = squeeze(dot(E, Gs, drhoP),axis=(0,))[:,J]
 
-        dp_drhos = _np.zeros( (nGateStrings, nDerivCols ) )
+        dp_drhos = _np.zeros( (nCircuits, nDerivCols ) )
         _fas(dp_drhos, [None,rho_gpindices],
              _np.squeeze(_np.dot(_np.dot(E, Gs),
                                  rhoVec.deriv_wrt_params(rho_wrtFilter)),
@@ -1703,12 +1703,12 @@ class GateMatrixCalc(GateCalc):
         # dp_dEs[i,J0+J] = sum_j dot(Gs, rho)[i,j,0] dEP[j,J]
         # dp_dEs[i,J0+J] = dot(squeeze(dot(Gs, rho),2), dEP)[i,J]
         # dp_dEs[:,J0+J] = dot(squeeze(dot(Gs, rho),axis=(2,)), dEP)[:,J]
-        dp_dEs = _np.zeros( (nGateStrings, nDerivCols) )
+        dp_dEs = _np.zeros( (nCircuits, nDerivCols) )
         dp_dAnyE = _np.squeeze(_np.dot(Gs, rho),axis=(2,)) * scaleVals[:,None] #may overflow, but OK (deriv w.r.t any of self.effects - independent of which)
         _fas(dp_dEs, [None,E_gpindices],
              _np.dot(dp_dAnyE, EVec.deriv_wrt_params(E_wrtFilter)))
 
-        sub_vdp = dp_drhos + dp_dEs + dp_dGates
+        sub_vdp = dp_drhos + dp_dEs + dp_dOps
         return sub_vdp
 
 
@@ -1769,7 +1769,7 @@ class GateMatrixCalc(GateCalc):
         rholabel,elabel = spamTuple
         rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
         EVec = self.effects[elabel]   # arrays, these are SPAMVecs
-        nGateStrings = Gs.shape[0]
+        nCircuits = Gs.shape[0]
 
         rho_wrtFilter1, rho_gpindices1 = self._process_wrtFilter(wrtSlice1, self.preps[rholabel])
         rho_wrtFilter2, rho_gpindices2 = self._process_wrtFilter(wrtSlice2, self.preps[rholabel])
@@ -1787,18 +1787,18 @@ class GateMatrixCalc(GateCalc):
         assert( hGs.shape[2] == nDerivCols2 ), "hGs must be pre-filtered!"
 
         #Compute d2(probability)/dGates2 and save in return list
-        # d2pr_dGates2[i,j,k] = sum_l,m E[0,l] hGs[i,j,k,l,m] rho[m,0]
-        # d2pr_dGates2[i,j,k] = sum_l E[0,l] dot( dGs, rho )[i,j,k,l,0]
-        # d2pr_dGates2[i,j,k] = dot( E, dot( dGs, rho ) )[0,i,j,k,0]
-        # d2pr_dGates2        = squeeze( dot( E, dot( dGs, rho ) ), axis=(0,4))
+        # d2pr_dOps2[i,j,k] = sum_l,m E[0,l] hGs[i,j,k,l,m] rho[m,0]
+        # d2pr_dOps2[i,j,k] = sum_l E[0,l] dot( dGs, rho )[i,j,k,l,0]
+        # d2pr_dOps2[i,j,k] = dot( E, dot( dGs, rho ) )[0,i,j,k,0]
+        # d2pr_dOps2        = squeeze( dot( E, dot( dGs, rho ) ), axis=(0,4))
         old_err2 = _np.seterr(invalid='ignore', over='ignore')
-        d2pr_dGates2 = _np.squeeze( _np.dot( E, _np.dot( hGs, rho ) ), axis=(0,4) ) * scaleVals[:,None,None]
+        d2pr_dOps2 = _np.squeeze( _np.dot( E, _np.dot( hGs, rho ) ), axis=(0,4) ) * scaleVals[:,None,None]
         _np.seterr(**old_err2)
 
-        # may overflow, but OK ; shape == (len(gatestring_list), nDerivCols, nDerivCols)
+        # may overflow, but OK ; shape == (len(circuit_list), nDerivCols, nDerivCols)
         # may also give invalid value due to scaleVals being inf and dot-prod being 0. In
         #  this case set to zero since we can't tell whether it's + or - inf anyway...
-        d2pr_dGates2[ _np.isnan(d2pr_dGates2) ] = 0
+        d2pr_dOps2[ _np.isnan(d2pr_dOps2) ] = 0
 
 
         # SPAM DERIVS (assume dGs1 and dGs2 are already sized/filtered) --------
@@ -1810,7 +1810,7 @@ class GateMatrixCalc(GateCalc):
         # d2pr_drhos[i,j,J0+J] = dot(E, dGs, drhoP)[0,i,j,J]
         # d2pr_drhos[:,:,J0+J] = squeeze(dot(E, dGs, drhoP),axis=(0,))[:,:,J]
         drho = rhoVec.deriv_wrt_params(rho_wrtFilter2)
-        d2pr_drhos1 = _np.zeros( (nGateStrings, nDerivCols1, nDerivCols2) )
+        d2pr_drhos1 = _np.zeros( (nCircuits, nDerivCols1, nDerivCols2) )
         _fas(d2pr_drhos1,[None, None, rho_gpindices2],
              _np.squeeze( _np.dot(_np.dot(E,dGs1),drho), axis=(0,)) \
              * scaleVals[:,None,None]) #overflow OK
@@ -1821,7 +1821,7 @@ class GateMatrixCalc(GateCalc):
             d2pr_drhos2 = _np.transpose(d2pr_drhos1,(0,2,1))
         else:
             drho = rhoVec.deriv_wrt_params(rho_wrtFilter1)
-            d2pr_drhos2 = _np.zeros( (nGateStrings, nDerivCols2, nDerivCols1) )
+            d2pr_drhos2 = _np.zeros( (nCircuits, nDerivCols2, nDerivCols1) )
             _fas(d2pr_drhos2,[None,None,rho_gpindices1],
                  _np.squeeze( _np.dot(_np.dot(E,dGs2),drho), axis=(0,))
                  * scaleVals[:,None,None]) #overflow OK
@@ -1833,7 +1833,7 @@ class GateMatrixCalc(GateCalc):
         # d2pr_dEs[i,j,J0+J] = sum_k dEP[k,J] dot(dGs, rho)[i,j,k,0]
         # d2pr_dEs[i,j,J0+J] = dot( squeeze(dot(dGs, rho),axis=(3,)), dEP)[i,j,J]
         # d2pr_dEs[:,:,J0+J] = dot( squeeze(dot(dGs, rho),axis=(3,)), dEP)[:,:,J]
-        d2pr_dEs1 = _np.zeros( (nGateStrings, nDerivCols1, nDerivCols2) )
+        d2pr_dEs1 = _np.zeros( (nCircuits, nDerivCols1, nDerivCols2) )
         dp_dAnyE = _np.squeeze(_np.dot(dGs1,rho), axis=(3,)) * scaleVals[:,None,None] #overflow OK
         devec = EVec.deriv_wrt_params(E_wrtFilter2)
         _fas(d2pr_dEs1,[None,None,E_gpindices2],
@@ -1844,7 +1844,7 @@ class GateMatrixCalc(GateCalc):
             assert(nDerivCols1 == nDerivCols2)
             d2pr_dEs2 = _np.transpose(d2pr_dEs1,(0,2,1))
         else:
-            d2pr_dEs2 = _np.zeros( (nGateStrings, nDerivCols2, nDerivCols1) )
+            d2pr_dEs2 = _np.zeros( (nCircuits, nDerivCols2, nDerivCols1) )
             dp_dAnyE = _np.squeeze(_np.dot(dGs2,rho), axis=(3,)) * scaleVals[:,None,None] #overflow OK
             devec = EVec.deriv_wrt_params(E_wrtFilter1)
             _fas(d2pr_dEs2,[None,None,E_gpindices1], _np.dot(dp_dAnyE, devec))
@@ -1858,7 +1858,7 @@ class GateMatrixCalc(GateCalc):
         # d2pr_dErhos[i,J0+J,K0+K] = dot(dEPT,prod,drhoP)[J,i,K]
         # d2pr_dErhos[i,J0+J,K0+K] = swapaxes(dot(dEPT,prod,drhoP),0,1)[i,J,K]
         # d2pr_dErhos[:,J0+J,K0+K] = swapaxes(dot(dEPT,prod,drhoP),0,1)[:,J,K]
-        d2pr_dErhos1 = _np.zeros( (nGateStrings, nDerivCols1, nDerivCols2) )
+        d2pr_dErhos1 = _np.zeros( (nCircuits, nDerivCols1, nDerivCols2) )
         drho = rhoVec.deriv_wrt_params(rho_wrtFilter2)
         dp_dAnyE = _np.dot(Gs, drho) * scaleVals[:,None,None] #overflow OK
         devec = EVec.deriv_wrt_params(E_wrtFilter1)
@@ -1869,7 +1869,7 @@ class GateMatrixCalc(GateCalc):
         if wrtSlice1 == wrtSlice2: #Note: this doesn't involve gate derivatives
             d2pr_dErhos2 = _np.transpose(d2pr_dErhos1,(0,2,1))
         else:
-            d2pr_dErhos2 = _np.zeros( (nGateStrings, nDerivCols2, nDerivCols1) )
+            d2pr_dErhos2 = _np.zeros( (nCircuits, nDerivCols2, nDerivCols1) )
             drho = rhoVec.deriv_wrt_params(rho_wrtFilter1)
             dp_dAnyE = _np.dot(Gs, drho) * scaleVals[:,None,None] #overflow OK
             devec = EVec.deriv_wrt_params(E_wrtFilter2)
@@ -1882,7 +1882,7 @@ class GateMatrixCalc(GateCalc):
         # a more than linear dependence on their parameters.
         if self.preps[rholabel].has_nonzero_hessian():
             dp_dAnyRho = _np.dot(E, Gs).squeeze(0) * scaleVals[:,None] #overflow OK
-            d2pr_d2rhos = _np.zeros( (nGateStrings, nDerivCols1, nDerivCols2) )
+            d2pr_d2rhos = _np.zeros( (nCircuits, nDerivCols1, nDerivCols2) )
             _fas(d2pr_d2rhos,[None, rho_gpindices1, rho_gpindices2],
                  _np.tensordot(dp_dAnyRho, self.preps[rholabel].hessian_wrt_params(
                         rho_wrtFilter1, rho_wrtFilter2), (1,0)))
@@ -1893,7 +1893,7 @@ class GateMatrixCalc(GateCalc):
 
         if self.effects[elabel].has_nonzero_hessian():
             dp_dAnyE = _np.dot(Gs, rho).squeeze(2) * scaleVals[:,None] #overflow OK
-            d2pr_d2Es   = _np.zeros( (nGateStrings, nDerivCols1, nDerivCols2) )
+            d2pr_d2Es   = _np.zeros( (nCircuits, nDerivCols1, nDerivCols2) )
             _fas(d2pr_d2Es,[None, E_gpindices1, E_gpindices2],
                  _np.tensordot(dp_dAnyE, self.effects[elabel].hessian_wrt_params(
                         E_wrtFilter1, E_wrtFilter2), (1,0)))
@@ -1907,33 +1907,33 @@ class GateMatrixCalc(GateCalc):
 
         ret  = d2pr_d2rhos + d2pr_dErhos2 + d2pr_drhos2    # wrt rho
         ret += d2pr_dErhos1+ d2pr_d2Es    + d2pr_dEs2      # wrt E
-        ret += d2pr_drhos1 + d2pr_dEs1    + d2pr_dGates2   # wrt gates
+        ret += d2pr_drhos1 + d2pr_dEs1    + d2pr_dOps2   # wrt gates
     
         return ret
 
 
     def _check(self, evalTree, prMxToFill=None, dprMxToFill=None, hprMxToFill=None, clipTo=None):
         # compare with older slower version that should do the same thing (for debugging)
-        master_gatestring_list = evalTree.generate_gatestring_list(permute=False) #raw gate strings
+        master_circuit_list = evalTree.generate_circuit_list(permute=False) #raw operation sequences
         
         for spamTuple, (fInds,gInds) in evalTree.spamtuple_indices.items():
-            gatestring_list = master_gatestring_list[gInds]
+            circuit_list = master_circuit_list[gInds]
 
             if prMxToFill is not None:
-                check_vp = _np.array( [ self.prs(spamTuple[0], [spamTuple[1]], gateString, clipTo, False)[0] for gateString in gatestring_list ] )
+                check_vp = _np.array( [ self.prs(spamTuple[0], [spamTuple[1]], circuit, clipTo, False)[0] for circuit in circuit_list ] )
                 if _nla.norm(prMxToFill[fInds] - check_vp) > 1e-6:
                     _warnings.warn("norm(vp-check_vp) = %g - %g = %g" % \
                                (_nla.norm(prMxToFill[fInds]),
                                 _nla.norm(check_vp),
                                 _nla.norm(prMxToFill[fInds] - check_vp))) # pragma: no cover
-                    #for i,gs in enumerate(gatestring_list):
+                    #for i,mdl in enumerate(circuit_list):
                     #    if abs(vp[i] - check_vp[i]) > 1e-7:
-                    #        print "   %s => p=%g, check_p=%g, diff=%g" % (str(gs),vp[i],check_vp[i],abs(vp[i]-check_vp[i]))
+                    #        print "   %s => p=%g, check_p=%g, diff=%g" % (str(mdl),vp[i],check_vp[i],abs(vp[i]-check_vp[i]))
             
             if dprMxToFill is not None:
                 check_vdp = _np.concatenate(
-                    [ self.dpr(spamTuple, gateString, False,clipTo)
-                      for gateString in gatestring_list ], axis=0 )
+                    [ self.dpr(spamTuple, circuit, False,clipTo)
+                      for circuit in circuit_list ], axis=0 )
                 if _nla.norm(dprMxToFill[fInds] - check_vdp) > 1e-6:
                     _warnings.warn("norm(vdp-check_vdp) = %g - %g = %g" %
                           (_nla.norm(dprMxToFill[fInds]),
@@ -1942,8 +1942,8 @@ class GateMatrixCalc(GateCalc):
 
             if hprMxToFill is not None:
                 check_vhp = _np.concatenate(
-                    [ self.hpr(spamTuple, gateString, False,False,clipTo)
-                      for gateString in gatestring_list ], axis=0 )
+                    [ self.hpr(spamTuple, circuit, False,False,clipTo)
+                      for circuit in circuit_list ], axis=0 )
                 if _nla.norm(hprMxToFill[fInds][0] - check_vhp[0]) > 1e-6:
                     _warnings.warn("norm(vhp-check_vhp) = %g - %g = %g" %
                              (_nla.norm(hprMxToFill[fInds]),
@@ -1955,11 +1955,11 @@ class GateMatrixCalc(GateCalc):
     def bulk_fill_probs(self, mxToFill, evalTree,
                         clipTo=None, check=False, comm=None):
         """
-        Compute the outcome probabilities for an entire tree of gate strings.
+        Compute the outcome probabilities for an entire tree of operation sequences.
 
         This routine fills a 1D array, `mxToFill` with the probabilities
-        corresponding to the *compiled* gate strings found in an evaluation
-        tree, `evalTree`.  An initial list of (general) :class:`GateString`
+        corresponding to the *compiled* operation sequences found in an evaluation
+        tree, `evalTree`.  An initial list of (general) :class:`OpString`
         objects is *compiled* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently
@@ -1967,7 +1967,7 @@ class GateMatrixCalc(GateCalc):
         must have length equal to the number of final elements (this can be 
         obtained by `evalTree.num_final_elements()`.  To interpret which elements
         correspond to which strings and outcomes, you'll need the mappings 
-        generated when the original list of `GateStrings` was compiled.
+        generated when the original list of `Circuits` was compiled.
 
         Parameters
         ----------
@@ -2015,7 +2015,7 @@ class GateMatrixCalc(GateCalc):
             #use cached data to final values
             scaleVals = self._scaleExp( evalSubTree.final_view(scaleCache) )
             Gs  = evalSubTree.final_view( prodCache, axis=0)
-              # ( nGateStrings, dim, dim )
+              # ( nCircuits, dim, dim )
 
             def calc_and_fill(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
@@ -2056,7 +2056,7 @@ class GateMatrixCalc(GateCalc):
         mxToFill : numpy ndarray
           an already-allocated ExM numpy array where E is the total number of
           computed elements (i.e. evalTree.num_final_elements()) and M is the 
-          number of gate set parameters.
+          number of model parameters.
 
         evalTree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
@@ -2152,7 +2152,7 @@ class GateMatrixCalc(GateCalc):
             #use cached data to final values
             scaleVals = self._scaleExp( evalSubTree.final_view( scaleCache ))
             Gs  = evalSubTree.final_view( prodCache, axis=0 )
-              #( nGateStrings, dim, dim )
+              #( nCircuits, dim, dim )
             profiler.mem_check("bulk_fill_dprobs: post compute product")
 
             def calc_and_fill(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
@@ -2188,7 +2188,7 @@ class GateMatrixCalc(GateCalc):
                 dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
                                                           mySubComm, wrtSlice, profiler)
                 dGs = evalSubTree.final_view(dProdCache, axis=0)
-                  #( nGateStrings, nDerivCols, dim, dim )
+                  #( nCircuits, nDerivCols, dim, dim )
                 profiler.add_time("bulk_fill_dprobs: compute_dproduct_cache", tm)
                 profiler.mem_check("bulk_fill_dprobs: post compute dproduct")
 
@@ -2261,7 +2261,7 @@ class GateMatrixCalc(GateCalc):
                                                  str(dProdCache.shape)) )
 
                     dGs = evalSubTree.final_view(dProdCache, axis=0)
-                      #( nGateStrings, nDerivCols, dim, dim )
+                      #( nCircuits, nDerivCols, dim, dim )
                     self._fill_result_tuple( 
                         (mxToFill,), evalSubTree,
                         blocks[iBlk], slice(None), calc_and_fill_blk )                    
@@ -2332,7 +2332,7 @@ class GateMatrixCalc(GateCalc):
         derivMxToFill1, derivMxToFill2 : numpy array, optional
           when not None, an already-allocated ExM numpy array that is filled
           with probability derivatives, similar to bulk_fill_dprobs(...), but
-          where M is the number of gateset parameters selected for the 1st and 2nd
+          where M is the number of model parameters selected for the 1st and 2nd
           differentiation, respectively (i.e. by wrtFilter1 and wrtFilter2).
 
         clipTo : 2-tuple, optional
@@ -2351,7 +2351,7 @@ class GateMatrixCalc(GateCalc):
            wrtBlockSize).
 
         wrtFilter1, wrtFilter2 : list of ints, optional
-          If not None, a list of integers specifying which gate set parameters
+          If not None, a list of integers specifying which model parameters
           to differentiate with respect to in the first (row) and second (col)
           derivative operations, respectively.
 
@@ -2406,7 +2406,7 @@ class GateMatrixCalc(GateCalc):
             prodCache, scaleCache = self._compute_product_cache(evalSubTree, mySubComm)
             scaleVals = self._scaleExp( evalSubTree.final_view(scaleCache))
             Gs  = evalSubTree.final_view(prodCache, axis=0)
-              #( nGateStrings, dim, dim )
+              #( nCircuits, dim, dim )
 
             def calc_and_fill(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
@@ -2454,13 +2454,13 @@ class GateMatrixCalc(GateCalc):
 
                 dGs1 = evalSubTree.final_view(dProdCache1, axis=0) 
                 dGs2 = evalSubTree.final_view(dProdCache2, axis=0) 
-                  #( nGateStrings, nDerivColsX, dim, dim )
+                  #( nCircuits, nDerivColsX, dim, dim )
 
                 hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache1,
                                                           dProdCache2, scaleCache, mySubComm,
                                                           wrtSlice1, wrtSlice2)
                 hGs = evalSubTree.final_view(hProdCache, axis=0)
-                   #( nGateStrings, len(wrtFilter1), len(wrtFilter2), dim, dim )
+                   #( nCircuits, len(wrtFilter1), len(wrtFilter2), dim, dim )
 
                 #Compute all requested derivative columns at once
                 self._fill_result_tuple((prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
@@ -2570,7 +2570,7 @@ class GateMatrixCalc(GateCalc):
         reduce results from a single column of the Hessian at a time.  For
         example, the Hessian of a function of many gate sequence probabilities
         can often be computed column-by-column from the using the columns of
-        the gate sequences.
+        the operation sequences.
 
 
         Parameters
@@ -2581,7 +2581,7 @@ class GateMatrixCalc(GateCalc):
             correspondence between rows of mxToFill and spam labels.
 
         evalTree : EvalTree
-            given by a prior call to bulk_evaltree.  Specifies the gate strings
+            given by a prior call to bulk_evaltree.  Specifies the operation sequences
             to compute the bulk operation on.  This tree *cannot* be split.
 
         wrtSlicesList : list
@@ -2594,9 +2594,9 @@ class GateMatrixCalc(GateCalc):
         bReturnDProbs12 : boolean, optional
            If true, the generator computes a 2-tuple: (hessian_col, d12_col),
            where d12_col is a column of the matrix d12 defined by:
-           d12[iSpamLabel,iGateStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
+           d12[iSpamLabel,iOpStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
            the probability generated by the sequence and spam label indexed
-           by iGateStr and iSpamLabel.  d12 has the same dimensions as the
+           by iOpStr and iSpamLabel.  d12 has the same dimensions as the
            Hessian, and turns out to be useful when computing the Hessian
            of functions of the probabilities.
 
@@ -2616,7 +2616,7 @@ class GateMatrixCalc(GateCalc):
           arrays of shape K x S x B x B', where:
 
           - K is the length of spam_label_rows,
-          - S is the number of gate strings (i.e. evalTree.num_final_strings()),
+          - S is the number of operation sequences (i.e. evalTree.num_final_strings()),
           - B is the number of parameter rows (the length of rowSlice)
           - B' is the number of parameter columns (the length of colSlice)
 
@@ -2633,7 +2633,7 @@ class GateMatrixCalc(GateCalc):
         prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
         scaleVals = self._scaleExp( evalTree.final_view(scaleCache))
         Gs  = evalTree.final_view(prodCache, axis=0)
-          #( nGateStrings, dim, dim )
+          #( nCircuits, dim, dim )
 
         #Same as in bulk_fill_hprobs (TODO consolidate?)
         #NOTE: filtering is done via the yet-to-be-defined local variables

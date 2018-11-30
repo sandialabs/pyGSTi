@@ -1,4 +1,4 @@
-""" Routines for building qutrit gates and gate sets """
+""" Routines for building qutrit gates and models """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -83,17 +83,17 @@ def _random_rot(scale,arrType = _np.array, seed=None):
     return arrType(randU)
 
 
-def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
+def make_qutrit_model(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
                         MSglobal = _np.pi/2, MSlocal = 0,
                         similarity=False, seed=None, basis='qt'):
     """ 
-    Constructs a standard qutrit :class:`GateSet` containing the identity,
+    Constructs a standard qutrit :class:`Model` containing the identity,
     XX, YY, and Molmer-Sorenson gates.
 
     Parameters
     ----------
     errorScale : float
-        Magnitude of random rotations to apply to the returned gateset.  If
+        Magnitude of random rotations to apply to the returned model.  If
         zero, then perfect "ideal" gates are constructed.
 
     Xangle, Yangle : float
@@ -112,7 +112,7 @@ def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
     similarity : bool, optional
         If true, then apply the random rotations (whose strengths are given 
         by `errorScale`) as similarity transformations rather than just as
-        post-multiplications to the ideal gate matrices.
+        post-multiplications to the ideal operation matrices.
 
     seed : int, optional
         The seed used to generate random rotations.
@@ -124,7 +124,7 @@ def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
 
     Returns
     -------
-    GateSet
+    Model
     """
     arrType = _np.array#Are we casting gates as matrices or arrays?
 
@@ -181,16 +181,16 @@ def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
     E1final = change_basis(_np.reshape(E1,(9,1)), "std", basis)
     E2final = change_basis(_np.reshape(E2,(9,1)), "std", basis)
 
-    qutritGS = _objs.GateSet()
-    qutritGS.preps['rho0'] = rho0final
-    qutritGS.povms['Mdefault'] = _objs.UnconstrainedPOVM([('0bright',E0final),
+    qutritMDL = _objs.Model()
+    qutritMDL.preps['rho0'] = rho0final
+    qutritMDL.povms['Mdefault'] = _objs.UnconstrainedPOVM([('0bright',E0final),
                                                           ('1bright',E1final),
                                                           ('2bright',E2final)] )
-    qutritGS.gates['Gi'] = _objs.FullyParameterizedGate(arrType(gateISOfinal))
-    qutritGS.gates['Gx'] = _objs.FullyParameterizedGate(arrType(gateXSOfinal))
-    qutritGS.gates['Gy'] = _objs.FullyParameterizedGate(arrType(gateYSOfinal))
-    qutritGS.gates['Gm'] = _objs.FullyParameterizedGate(arrType(gateMSOfinal))
-    qutritGS.basis = Basis(basis,3)
-    qutritGS.default_gauge_group = _objs.gaugegroup.FullGaugeGroup(qutritGS.dim)
+    qutritMDL.operations['Gi'] = _objs.FullyParameterizedOp(arrType(gateISOfinal))
+    qutritMDL.operations['Gx'] = _objs.FullyParameterizedOp(arrType(gateXSOfinal))
+    qutritMDL.operations['Gy'] = _objs.FullyParameterizedOp(arrType(gateYSOfinal))
+    qutritMDL.operations['Gm'] = _objs.FullyParameterizedOp(arrType(gateMSOfinal))
+    qutritMDL.basis = Basis(basis,3)
+    qutritMDL.default_gauge_group = _objs.gaugegroup.FullGaugeGroup(qutritMDL.dim)
     
-    return qutritGS
+    return qutritMDL

@@ -82,13 +82,13 @@ def std_matrices(dim):
     a single "1" entry amidst a background of zeros, and there
     are never "1"s in positions outside the block-diagonal structure.
     """
-    gateDim = dim ** 2
+    opDim = dim ** 2
 
     mxList = []
     for i in range(dim):
         for j in range(dim):
             mxList.append(mut(i, j, dim))
-    assert len(mxList) == gateDim
+    assert len(mxList) == opDim
     return mxList
 
 def _GetGellMannNonIdentityDiagMxs(dimension):

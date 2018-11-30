@@ -12,33 +12,33 @@ from pygsti.construction import std1Q_XYI as std
 g_maxLengths = [1,2,4,8]
 g_numSubTrees = 3
 
-def assertGatesetsInSync(gs, comm):
+def assertGatesetsInSync(mdl, comm):
     if comm is not None:
-        bc = gs if comm.Get_rank() == 0 else None
-        gs_cmp = comm.bcast(bc, root=0)
-        assert(gs.frobeniusdist(gs_cmp) < 1e-6)
+        bc = mdl if comm.Get_rank() == 0 else None
+        mdl_cmp = comm.bcast(bc, root=0)
+        assert(mdl.frobeniusdist(mdl_cmp) < 1e-6)
 
         
 def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
                 useFreqWeightedChiSq=False,
                 minProbClipForWeighting=1e-4, fidPairList=None,
-                comm=None, distributeMethod="gatestrings"):
+                comm=None, distributeMethod="circuits"):
 
-    #Run LGST to get starting gate set
+    #Run LGST to get starting model
     assertGatesetsInSync(gsTarget, comm)
-    gs_lgst = pygsti.do_lgst(ds, prepStrs, effectStrs, gsTarget,
+    mdl_lgst = pygsti.do_lgst(ds, prepStrs, effectStrs, gsTarget,
                              svdTruncateTo=gsTarget.dim, verbosity=3)
 
-    assertGatesetsInSync(gs_lgst, comm)
-    gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,gsTarget)
+    assertGatesetsInSync(mdl_lgst, comm)
+    mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,gsTarget)
     
-    assertGatesetsInSync(gs_lgst_go, comm)
+    assertGatesetsInSync(mdl_lgst_go, comm)
 
     #Run full iterative LSGST
     tStart = time.time()
     if obj == "chi2":
         all_gs_lsgst = pygsti.do_iterative_mc2gst(
-            ds, gs_lgst_go, lsgstStringsToUse,
+            ds, mdl_lgst_go, lsgstStringsToUse,
             minProbClipForWeighting=minProbClipForWeighting,
             probClipInterval=(-1e5,1e5),
             verbosity=1, memLimit=3*(1024)**3, returnAll=True,
@@ -46,7 +46,7 @@ def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
             distributeMethod=distributeMethod)
     elif obj == "logl":
         all_gs_lsgst = pygsti.do_iterative_mlgst(
-            ds, gs_lgst_go, lsgstStringsToUse,
+            ds, mdl_lgst_go, lsgstStringsToUse,
             minProbClip=minProbClipForWeighting,
             probClipInterval=(-1e5,1e5),
             verbosity=1, memLimit=3*(1024)**3, returnAll=True,
@@ -59,12 +59,12 @@ def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
     return all_gs_lsgst
 
 
-def runOneQubit(obj, ds, lsgstStrings, comm=None, distributeMethod="gatestrings"):
+def runOneQubit(obj, ds, lsgstStrings, comm=None, distributeMethod="circuits"):
     #specs = pygsti.construction.build_spam_specs(
-    #    std.fiducials, prep_labels=std.gs_target.get_prep_labels(),
-    #    effect_labels=std.gs_target.get_effect_labels())
+    #    std.fiducials, prep_labels=std.target_model.get_prep_labels(),
+    #    effect_labels=std.target_model.get_effect_labels())
 
-    return runAnalysis(obj, ds, std.fiducials, std.fiducials, std.gs_target,
+    return runAnalysis(obj, ds, std.fiducials, std.fiducials, std.target_model,
                         lsgstStrings, comm=comm,
                         distributeMethod=distributeMethod)
 
@@ -74,60 +74,60 @@ def create_fake_dataset(comm):
     maxLengths = [1,2,4,8,16]
     nSamples = 1000
     #specs = pygsti.construction.build_spam_specs(
-    #    std.fiducials, prep_labels=std.gs_target.get_prep_labels(),
-    #    effect_labels=std.gs_target.get_effect_labels())
+    #    std.fiducials, prep_labels=std.target_model.get_prep_labels(),
+    #    effect_labels=std.target_model.get_effect_labels())
     #rhoStrs, EStrs = pygsti.construction.get_spam_strs(specs)
 
     rhoStrs = EStrs = std.fiducials
-    lgstStrings = pygsti.construction.list_lgst_gatestrings(
-        rhoStrs, EStrs, list(std.gs_target.gates.keys()))
+    lgstStrings = pygsti.construction.list_lgst_circuits(
+        rhoStrs, EStrs, list(std.target_model.operations.keys()))
     lsgstStrings = pygsti.construction.make_lsgst_lists(
-            list(std.gs_target.gates.keys()), rhoStrs, EStrs,
+            list(std.target_model.operations.keys()), rhoStrs, EStrs,
             std.germs, maxLengths, fidPairList )
 
     lsgstStringsToUse = lsgstStrings
     allRequiredStrs = pygsti.remove_duplicates(lgstStrings + lsgstStrings[-1])
 
     if comm is None or comm.Get_rank() == 0:
-        gs_dataGen = std.gs_target.depolarize(gate_noise=0.1)
+        mdl_dataGen = std.target_model.depolarize(op_noise=0.1)
         dsFake = pygsti.construction.generate_fake_data(
-            gs_dataGen, allRequiredStrs, nSamples, sampleError="multinomial",
+            mdl_dataGen, allRequiredStrs, nSamples, sampleError="multinomial",
             seed=1234)
         dsFake = comm.bcast(dsFake, root=0)
     else:
         dsFake = comm.bcast(None, root=0)
 
-    #for gs in dsFake:
-    #    if abs(dsFake[gs]['0']-dsFake_cmp[gs]['0']) > 0.5:
-    #        print("DS DIFF: ",gs, dsFake[gs]['0'], "vs", dsFake_cmp[gs]['0'] )
+    #for mdl in dsFake:
+    #    if abs(dsFake[mdl]['0']-dsFake_cmp[mdl]['0']) > 0.5:
+    #        print("DS DIFF: ",mdl, dsFake[mdl]['0'], "vs", dsFake_cmp[mdl]['0'] )
     return dsFake, lsgstStrings
 
 
 @mpitest(4)
 def test_MPI_products(comm):
 
-    #Create some gateset
-    gs = std.gs_target.copy()
+    #Create some model
+    mdl = std.target_model.copy()
 
     #Remove spam elements so product calculations have element indices <=> product indices
-    del gs.preps['rho0']
-    del gs.povms['Mdefault']
+    del mdl.preps['rho0']
+    del mdl.povms['Mdefault']
     
-    gs.kick(0.1,seed=1234)
+    mdl.kick(0.1,seed=1234)
 
-    #Get some gate strings
+    #Get some operation sequences
     maxLengths = [1,2,4,8]
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
-    tree,lookup,outcome_lookup = gs.bulk_evaltree(gstrs)
+        list(std.target_model.operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
+    tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
     split_tree = tree.copy()
     split_lookup = split_tree.split(lookup,numSubTrees=g_numSubTrees)
 
     # Check wrtFilter functionality in dproduct
     some_wrtFilter = [0,2,3,5,10]
     for s in gstrs[0:20]:
-        result = gs._calc().dproduct(s, wrtFilter=some_wrtFilter)
-        chk_result = gs.dproduct(s) #no filtering
+        result = mdl._calc().dproduct(s, wrtFilter=some_wrtFilter)
+        chk_result = mdl.dproduct(s) #no filtering
         for ii,i in enumerate(some_wrtFilter):
             assert(np.linalg.norm(chk_result[i]-result[ii]) < 1e-6)
         taken_chk_result = chk_result.take( some_wrtFilter, axis=0 )
@@ -137,65 +137,65 @@ def test_MPI_products(comm):
     #Check bulk products
 
       #bulk_product - no parallelization unless tree is split
-    serial = gs.bulk_product(tree, bScale=False)
-    parallel = gs.bulk_product(tree, bScale=False, comm=comm)
+    serial = mdl.bulk_product(tree, bScale=False)
+    parallel = mdl.bulk_product(tree, bScale=False, comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial_scl, sscale = gs.bulk_product(tree, bScale=True)
-    parallel, pscale = gs.bulk_product(tree, bScale=True, comm=comm)
+    serial_scl, sscale = mdl.bulk_product(tree, bScale=True)
+    parallel, pscale = mdl.bulk_product(tree, bScale=True, comm=comm)
     assert(np.linalg.norm(serial_scl*sscale[:,None,None] -
                           parallel*pscale[:,None,None]) < 1e-6)
 
       # will use a split tree to parallelize
-    parallel = gs.bulk_product(split_tree, bScale=False, comm=comm)
-    for i,gstr in enumerate(gstrs):
+    parallel = mdl.bulk_product(split_tree, bScale=False, comm=comm)
+    for i,opstr in enumerate(gstrs):
         assert(np.linalg.norm(serial[lookup[i]]-parallel[split_lookup[i]]) < 1e-6)
 
-    parallel, pscale = gs.bulk_product(split_tree, bScale=True, comm=comm)
-    for i,gstr in enumerate(gstrs):
+    parallel, pscale = mdl.bulk_product(split_tree, bScale=True, comm=comm)
+    for i,opstr in enumerate(gstrs):
         assert(np.linalg.norm(serial_scl[lookup[i]]*sscale[lookup[i],None,None] -
                               parallel[split_lookup[i]]*pscale[split_lookup[i],None,None]) < 1e-6)
 
 
       #bulk_dproduct - no split tree => parallel by col
-    serial = gs.bulk_dproduct(tree, bScale=False)
-    parallel = gs.bulk_dproduct(tree, bScale=False, comm=comm)
+    serial = mdl.bulk_dproduct(tree, bScale=False)
+    parallel = mdl.bulk_dproduct(tree, bScale=False, comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial_scl, sscale = gs.bulk_dproduct(tree, bScale=True)
-    parallel, pscale = gs.bulk_dproduct(tree, bScale=True, comm=comm)
+    serial_scl, sscale = mdl.bulk_dproduct(tree, bScale=True)
+    parallel, pscale = mdl.bulk_dproduct(tree, bScale=True, comm=comm)
     assert(np.linalg.norm(serial_scl*sscale[:,None,None,None] -
                           parallel*pscale[:,None,None,None]) < 1e-6)
 
       # will just ignore a split tree for now (just parallel by col)
-    parallel = gs.bulk_dproduct(split_tree, bScale=False, comm=comm)
-    for i,gstr in enumerate(gstrs):
+    parallel = mdl.bulk_dproduct(split_tree, bScale=False, comm=comm)
+    for i,opstr in enumerate(gstrs):
         assert(np.linalg.norm(serial[lookup[i]] - parallel[split_lookup[i]]) < 1e-6)
 
-    parallel, pscale = gs.bulk_dproduct(split_tree, bScale=True, comm=comm)
-    for i,gstr in enumerate(gstrs):
+    parallel, pscale = mdl.bulk_dproduct(split_tree, bScale=True, comm=comm)
+    for i,opstr in enumerate(gstrs):
         assert(np.linalg.norm(serial_scl[lookup[i]]*sscale[lookup[i],None,None,None] -
                               parallel[split_lookup[i]]*pscale[split_lookup[i],None,None,None]) < 1e-6)
 
 
 
       #bulk_hproduct - no split tree => parallel by col
-    serial = gs.bulk_hproduct(tree, bScale=False)
-    parallel = gs.bulk_hproduct(tree, bScale=False, comm=comm)
+    serial = mdl.bulk_hproduct(tree, bScale=False)
+    parallel = mdl.bulk_hproduct(tree, bScale=False, comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial_scl, sscale = gs.bulk_hproduct(tree, bScale=True)
-    parallel, pscale = gs.bulk_hproduct(tree, bScale=True, comm=comm)
+    serial_scl, sscale = mdl.bulk_hproduct(tree, bScale=True)
+    parallel, pscale = mdl.bulk_hproduct(tree, bScale=True, comm=comm)
     assert(np.linalg.norm(serial_scl*sscale[:,None,None,None,None] -
                           parallel*pscale[:,None,None,None,None]) < 1e-6)
 
       # will just ignore a split tree for now (just parallel by col)
-    parallel = gs.bulk_hproduct(split_tree, bScale=False, comm=comm)
-    for i,gstr in enumerate(gstrs):
+    parallel = mdl.bulk_hproduct(split_tree, bScale=False, comm=comm)
+    for i,opstr in enumerate(gstrs):
         assert(np.linalg.norm(serial[lookup[i]] - parallel[split_lookup[i]]) < 1e-6)
 
-    parallel, pscale = gs.bulk_hproduct(split_tree, bScale=True, comm=comm)
-    for i,gstr in enumerate(gstrs):
+    parallel, pscale = mdl.bulk_hproduct(split_tree, bScale=True, comm=comm)
+    for i,opstr in enumerate(gstrs):
         assert(np.linalg.norm(serial_scl[lookup[i]]*sscale[lookup[i],None,None,None,None] -
                               parallel[split_lookup[i]]*pscale[split_lookup[i],None,None,None,None]) < 1e-6)
 
@@ -205,15 +205,15 @@ def test_MPI_products(comm):
 #@mpitest(4)
 #def test_MPI_pr(comm):
 #
-#    #Create some gateset
-#    gs = std.gs_target.copy()
-#    gs.kick(0.1,seed=1234)
+#    #Create some model
+#    mdl = std.target_model.copy()
+#    mdl.kick(0.1,seed=1234)
 #
-#    #Get some gate strings
+#    #Get some operation sequences
 #    maxLengths = g_maxLengths
 #    gstrs = pygsti.construction.make_lsgst_experiment_list(
-#        list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
-#    tree,lookup,outcome_lookup = gs.bulk_evaltree(gstrs)
+#        list(std.target_model.operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
+#    tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
 #    split_tree = tree.copy()
 #    lookup = split_tree.split(lookup,numSubTrees=g_numSubTrees)
 #
@@ -221,22 +221,22 @@ def test_MPI_products(comm):
 #
 #    # non-split tree => automatically adjusts wrtBlockSize to accomodate
 #    #                    the number of processors
-#    serial = gs.bulk_pr('0', tree, clipTo=(-1e6,1e6))
-#    parallel = gs.bulk_pr('0', tree, clipTo=(-1e6,1e6), comm=comm)
+#    serial = mdl.bulk_pr('0', tree, clipTo=(-1e6,1e6))
+#    parallel = mdl.bulk_pr('0', tree, clipTo=(-1e6,1e6), comm=comm)
 #    assert(np.linalg.norm(serial-parallel) < 1e-6)
 #
-#    serial = gs.bulk_dpr('0', tree, clipTo=(-1e6,1e6))
-#    parallel = gs.bulk_dpr('0', tree, clipTo=(-1e6,1e6), comm=comm)
+#    serial = mdl.bulk_dpr('0', tree, clipTo=(-1e6,1e6))
+#    parallel = mdl.bulk_dpr('0', tree, clipTo=(-1e6,1e6), comm=comm)
 #    assert(np.linalg.norm(serial-parallel) < 1e-6)
 #
-#    serial, sp = gs.bulk_dpr('0', tree, returnPr=True, clipTo=(-1e6,1e6))
-#    parallel, pp = gs.bulk_dpr('0', tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
+#    serial, sp = mdl.bulk_dpr('0', tree, returnPr=True, clipTo=(-1e6,1e6))
+#    parallel, pp = mdl.bulk_dpr('0', tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
 #    assert(np.linalg.norm(serial-parallel) < 1e-6)
 #    assert(np.linalg.norm(sp-pp) < 1e-6)
 #
-#    serial, sdp, sp = gs.bulk_hpr('0', tree, returnPr=True, returnDeriv=True,
+#    serial, sdp, sp = mdl.bulk_hpr('0', tree, returnPr=True, returnDeriv=True,
 #                             clipTo=(-1e6,1e6))
-#    parallel, pdp, pp = gs.bulk_hpr('0', tree, returnPr=True,
+#    parallel, pdp, pp = mdl.bulk_hpr('0', tree, returnPr=True,
 #                                 returnDeriv=True, clipTo=(-1e6,1e6), comm=comm)
 #    assert(np.linalg.norm(serial-parallel) < 1e-6)
 #    assert(np.linalg.norm(sdp-pdp) < 1e-6)
@@ -245,26 +245,26 @@ def test_MPI_products(comm):
 #
 #    # split tree =>  distribures on sub-trees prior to adjusting
 #    #                wrtBlockSize to accomodate remaining processors
-#    serial = gs.bulk_pr('0', tree, clipTo=(-1e6,1e6))
-#    parallel = gs.bulk_pr('0', split_tree, clipTo=(-1e6,1e6), comm=comm)
+#    serial = mdl.bulk_pr('0', tree, clipTo=(-1e6,1e6))
+#    parallel = mdl.bulk_pr('0', split_tree, clipTo=(-1e6,1e6), comm=comm)
 #    parallel = split_tree.permute_computation_to_original(parallel)
 #    assert(np.linalg.norm(serial-parallel) < 1e-6)
 #
-#    serial = gs.bulk_dpr('0', tree, clipTo=(-1e6,1e6))
-#    parallel = gs.bulk_dpr('0', split_tree, clipTo=(-1e6,1e6), comm=comm)
+#    serial = mdl.bulk_dpr('0', tree, clipTo=(-1e6,1e6))
+#    parallel = mdl.bulk_dpr('0', split_tree, clipTo=(-1e6,1e6), comm=comm)
 #    parallel = split_tree.permute_computation_to_original(parallel)
 #    assert(np.linalg.norm(serial-parallel) < 1e-6)
 #
-#    serial, sp = gs.bulk_dpr('0', tree, returnPr=True, clipTo=(-1e6,1e6))
-#    parallel, pp = gs.bulk_dpr('0', split_tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
+#    serial, sp = mdl.bulk_dpr('0', tree, returnPr=True, clipTo=(-1e6,1e6))
+#    parallel, pp = mdl.bulk_dpr('0', split_tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
 #    parallel = split_tree.permute_computation_to_original(parallel)
 #    pp = split_tree.permute_computation_to_original(pp)
 #    assert(np.linalg.norm(serial-parallel) < 1e-6)
 #    assert(np.linalg.norm(sp-pp) < 1e-6)
 #
-#    serial, sdp, sp = gs.bulk_hpr('0', tree, returnPr=True, returnDeriv=True,
+#    serial, sdp, sp = mdl.bulk_hpr('0', tree, returnPr=True, returnDeriv=True,
 #                             clipTo=(-1e6,1e6))
-#    parallel, pdp, pp = gs.bulk_hpr('0', split_tree, returnPr=True,
+#    parallel, pdp, pp = mdl.bulk_hpr('0', split_tree, returnPr=True,
 #                                 returnDeriv=True, clipTo=(-1e6,1e6), comm=comm)
 #    parallel = split_tree.permute_computation_to_original(parallel)
 #    pdp = split_tree.permute_computation_to_original(pdp)
@@ -278,74 +278,74 @@ def test_MPI_products(comm):
 @mpitest(4)
 def test_MPI_probs(comm):
 
-    #Create some gateset
-    gs = std.gs_target.copy()
-    gs.kick(0.1,seed=1234)
+    #Create some model
+    mdl = std.target_model.copy()
+    mdl.kick(0.1,seed=1234)
 
-    #Get some gate strings
+    #Get some operation sequences
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
-    #tree,lookup,outcome_lookup = gs.bulk_evaltree(gstrs)
+        list(std.target_model.operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
+    #tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
     #split_tree = tree.copy()
     #lookup = split_tree.split(lookup, numSubTrees=g_numSubTrees)
 
     #Check all-spam-label bulk probabilities
     def compare_prob_dicts(a,b,indices=None):
-        for gstr in gstrs:
-            for outcome in a[gstr].keys():
+        for opstr in gstrs:
+            for outcome in a[opstr].keys():
                 if indices is None:
-                    assert(np.linalg.norm(a[gstr][outcome] -b[gstr][outcome]) < 1e-6)
+                    assert(np.linalg.norm(a[opstr][outcome] -b[opstr][outcome]) < 1e-6)
                 else:
                     for i in indices:
-                        assert(np.linalg.norm(a[gstr][outcome][i] -b[gstr][outcome][i]) < 1e-6)
+                        assert(np.linalg.norm(a[opstr][outcome][i] -b[opstr][outcome][i]) < 1e-6)
 
     # non-split tree => automatically adjusts wrtBlockSize to accomodate
     #                    the number of processors
-    serial = gs.bulk_probs(gstrs, clipTo=(-1e6,1e6))
-    parallel = gs.bulk_probs(gstrs, clipTo=(-1e6,1e6), comm=comm)
+    serial = mdl.bulk_probs(gstrs, clipTo=(-1e6,1e6))
+    parallel = mdl.bulk_probs(gstrs, clipTo=(-1e6,1e6), comm=comm)
     compare_prob_dicts(serial,parallel)
 
-    serial = gs.bulk_dprobs(gstrs, clipTo=(-1e6,1e6))
-    parallel = gs.bulk_dprobs(gstrs, clipTo=(-1e6,1e6), comm=comm)
+    serial = mdl.bulk_dprobs(gstrs, clipTo=(-1e6,1e6))
+    parallel = mdl.bulk_dprobs(gstrs, clipTo=(-1e6,1e6), comm=comm)
     compare_prob_dicts(serial,parallel)
 
-    serial = gs.bulk_dprobs(gstrs, returnPr=True, clipTo=(-1e6,1e6))
-    parallel = gs.bulk_dprobs(gstrs, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
+    serial = mdl.bulk_dprobs(gstrs, returnPr=True, clipTo=(-1e6,1e6))
+    parallel = mdl.bulk_dprobs(gstrs, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
     compare_prob_dicts(serial,parallel,(0,1))
 
-    serial = gs.bulk_hprobs(gstrs, returnPr=True, returnDeriv=True,
+    serial = mdl.bulk_hprobs(gstrs, returnPr=True, returnDeriv=True,
                              clipTo=(-1e6,1e6))
-    parallel = gs.bulk_hprobs(gstrs, returnPr=True,
+    parallel = mdl.bulk_hprobs(gstrs, returnPr=True,
                                  returnDeriv=True, clipTo=(-1e6,1e6), comm=comm)
     compare_prob_dicts(serial,parallel,(0,1,2))
 
     ##OLD: cannot tell bulk_probs to use a split tree anymore (just give list)
     ## split tree =>  distribures on sub-trees prior to adjusting
     ##                wrtBlockSize to accomodate remaining processors
-    #serial = gs.bulk_probs(tree, clipTo=(-1e6,1e6))
-    #parallel = gs.bulk_probs(split_tree, clipTo=(-1e6,1e6), comm=comm)
+    #serial = mdl.bulk_probs(tree, clipTo=(-1e6,1e6))
+    #parallel = mdl.bulk_probs(split_tree, clipTo=(-1e6,1e6), comm=comm)
     #for sl in serial:
     #    p = split_tree.permute_computation_to_original(parallel[sl])
     #    assert(np.linalg.norm(serial[sl]-p) < 1e-6)
     #
-    #serial = gs.bulk_dprobs(tree, clipTo=(-1e6,1e6))
-    #parallel = gs.bulk_dprobs(split_tree, clipTo=(-1e6,1e6), comm=comm)
+    #serial = mdl.bulk_dprobs(tree, clipTo=(-1e6,1e6))
+    #parallel = mdl.bulk_dprobs(split_tree, clipTo=(-1e6,1e6), comm=comm)
     #for sl in serial:
     #    p = split_tree.permute_computation_to_original(parallel[sl])
     #    assert(np.linalg.norm(serial[sl]-p) < 1e-6)
     #
-    #serial = gs.bulk_dprobs(tree, returnPr=True, clipTo=(-1e6,1e6))
-    #parallel = gs.bulk_dprobs(split_tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
+    #serial = mdl.bulk_dprobs(tree, returnPr=True, clipTo=(-1e6,1e6))
+    #parallel = mdl.bulk_dprobs(split_tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
     #for sl in serial:
     #    p0 = split_tree.permute_computation_to_original(parallel[sl][0])
     #    p1 = split_tree.permute_computation_to_original(parallel[sl][1])
     #    assert(np.linalg.norm(serial[sl][0]-p0) < 1e-6)
     #    assert(np.linalg.norm(serial[sl][1]-p1) < 1e-6)
     #
-    #serial = gs.bulk_hprobs(tree, returnPr=True, returnDeriv=True,
+    #serial = mdl.bulk_hprobs(tree, returnPr=True, returnDeriv=True,
     #                        clipTo=(-1e6,1e6))
-    #parallel = gs.bulk_hprobs(split_tree, returnPr=True,
+    #parallel = mdl.bulk_hprobs(split_tree, returnPr=True,
     #                          returnDeriv=True, clipTo=(-1e6,1e6), comm=comm)
     #for sl in serial:
     #    p0 = split_tree.permute_computation_to_original(parallel[sl][0])
@@ -360,23 +360,23 @@ def test_MPI_probs(comm):
 @mpitest(4)
 def test_MPI_fills(comm):
 
-    #Create some gateset
-    gs = std.gs_target.copy()
-    gs.kick(0.1,seed=1234)
+    #Create some model
+    mdl = std.target_model.copy()
+    mdl.kick(0.1,seed=1234)
 
-    #Get some gate strings
+    #Get some operation sequences
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
-    tree,lookup,outcome_lookup = gs.bulk_evaltree(gstrs)
+        list(std.target_model.operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
+    tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
     split_tree = tree.copy()
     split_lookup = split_tree.split(lookup,numSubTrees=g_numSubTrees)
 
 
     #Check fill probabilities
     nEls = tree.num_final_elements()
-    nGateStrings = len(gstrs)
-    nDerivCols = gs.num_params()
+    nCircuits = len(gstrs)
+    nDerivCols = mdl.num_params()
 
     #Get serial results
     vhp_serial = np.empty( (nEls,nDerivCols,nDerivCols),'d')
@@ -387,15 +387,15 @@ def test_MPI_fills(comm):
     vdp_serial2 = np.empty( (nEls,nDerivCols), 'd' )
     vp_serial2  = np.empty(  nEls, 'd' )
 
-    gs.bulk_fill_probs(vp_serial, tree,
+    mdl.bulk_fill_probs(vp_serial, tree,
                        (-1e6,1e6), comm=None)
 
-    gs.bulk_fill_dprobs(vdp_serial, tree,
+    mdl.bulk_fill_dprobs(vdp_serial, tree,
                         vp_serial2, (-1e6,1e6), comm=None,
                         wrtBlockSize=None)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
 
-    gs.bulk_fill_hprobs(vhp_serial, tree,
+    mdl.bulk_fill_hprobs(vhp_serial, tree,
                         vp_serial2, vdp_serial2, (-1e6,1e6), comm=None,
                         wrtBlockSize1=None, wrtBlockSize2=None)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
@@ -403,25 +403,25 @@ def test_MPI_fills(comm):
 
 
     #Check serial results with a split tree, just to be sure
-    gs.bulk_fill_probs(vp_serial2, split_tree,
+    mdl.bulk_fill_probs(vp_serial2, split_tree,
                        (-1e6,1e6), comm=None)
-    for i,gstr in enumerate(gstrs):
+    for i,opstr in enumerate(gstrs):
         assert(np.linalg.norm(vp_serial[ lookup[i] ] -
                               vp_serial2[ split_lookup[i] ]) < 1e-6)
 
-    gs.bulk_fill_dprobs(vdp_serial2, split_tree,
+    mdl.bulk_fill_dprobs(vdp_serial2, split_tree,
                         vp_serial2, (-1e6,1e6), comm=None,
                         wrtBlockSize=None)
-    for i,gstr in enumerate(gstrs):
+    for i,opstr in enumerate(gstrs):
         assert(np.linalg.norm(vp_serial[ lookup[i] ] -
                               vp_serial2[ split_lookup[i] ]) < 1e-6)
         assert(np.linalg.norm(vdp_serial[ lookup[i] ] -
                               vdp_serial2[ split_lookup[i] ]) < 1e-6)
 
-    gs.bulk_fill_hprobs(vhp_serial2, split_tree,
+    mdl.bulk_fill_hprobs(vhp_serial2, split_tree,
                         vp_serial2, vdp_serial2, (-1e6,1e6), comm=None,
                         wrtBlockSize1=None, wrtBlockSize2=None)
-    for i,gstr in enumerate(gstrs):
+    for i,opstr in enumerate(gstrs):
         assert(np.linalg.norm(vp_serial[ lookup[i] ] -
                               vp_serial2[ split_lookup[i] ]) < 1e-6)
         assert(np.linalg.norm(vdp_serial[ lookup[i] ] -
@@ -436,27 +436,27 @@ def test_MPI_fills(comm):
 
     for tstTree,tstLookup in zip([tree, split_tree],[lookup,split_lookup]):
 
-        gs.bulk_fill_probs(vp_parallel, tstTree,
+        mdl.bulk_fill_probs(vp_parallel, tstTree,
                            (-1e6,1e6), comm=comm)
-        for i,gstr in enumerate(gstrs):
+        for i,opstr in enumerate(gstrs):
             assert(np.linalg.norm(vp_parallel[ tstLookup[i] ] -
                                   vp_serial[ lookup[i] ]) < 1e-6)
 
         for blkSize in [None, 4]:
-            gs.bulk_fill_dprobs(vdp_parallel, tstTree,
+            mdl.bulk_fill_dprobs(vdp_parallel, tstTree,
                                 vp_parallel, (-1e6,1e6), comm=comm,
                                 wrtBlockSize=blkSize)
-            for i,gstr in enumerate(gstrs):
+            for i,opstr in enumerate(gstrs):
                 assert(np.linalg.norm(vp_parallel[ tstLookup[i] ] -
                                       vp_serial[ lookup[i] ]) < 1e-6)
                 assert(np.linalg.norm(vdp_parallel[ tstLookup[i] ] -
                                       vdp_serial[ lookup[i] ]) < 1e-6)
 
             for blkSize2 in [None, 2, 4]:
-                gs.bulk_fill_hprobs(vhp_parallel, tstTree,
+                mdl.bulk_fill_hprobs(vhp_parallel, tstTree,
                                     vp_parallel, vdp_parallel, (-1e6,1e6), comm=comm,
                                     wrtBlockSize1=blkSize, wrtBlockSize2=blkSize2)
-                for i,gstr in enumerate(gstrs):
+                for i,opstr in enumerate(gstrs):
                     assert(np.linalg.norm(vp_parallel[ tstLookup[i] ] -
                                           vp_serial[ lookup[i] ]) < 1e-6)
                     assert(np.linalg.norm(vdp_parallel[ tstLookup[i] ] -
@@ -473,35 +473,35 @@ def test_MPI_fills(comm):
 
     for tstTree,tstLookup in zip([tree, split_tree],[lookup, split_lookup]):
 
-        gs._calc().bulk_fill_dprobs(vdp_parallelF, tstTree,
+        mdl._calc().bulk_fill_dprobs(vdp_parallelF, tstTree,
                             None, (-1e6,1e6), comm=comm,
                             wrtFilter=some_wrtFilter, wrtBlockSize=None)
-        for k,gstr in enumerate(gstrs):
+        for k,opstr in enumerate(gstrs):
             for ii,i in enumerate(some_wrtFilter):
                 assert(np.linalg.norm(vdp_serial[lookup[k],i]-vdp_parallelF[tstLookup[k],ii]) < 1e-6)
         taken_result = vdp_serial.take( some_wrtFilter, axis=1 )
-        for k,gstr in enumerate(gstrs):
+        for k,opstr in enumerate(gstrs):
             assert(np.linalg.norm(taken_result[lookup[k]]-vdp_parallelF[tstLookup[k]]) < 1e-6)
 
-        gs._calc().bulk_fill_hprobs(vhp_parallelF, tstTree,
+        mdl._calc().bulk_fill_hprobs(vhp_parallelF, tstTree,
                         None, None,None, (-1e6,1e6), comm=comm,
                         wrtFilter2=some_wrtFilter, wrtBlockSize2=None)
-        for k,gstr in enumerate(gstrs):
+        for k,opstr in enumerate(gstrs):
             for ii,i in enumerate(some_wrtFilter):
                 assert(np.linalg.norm(vhp_serial[lookup[k],:,i]-vhp_parallelF[tstLookup[k],:,ii]) < 1e-6)
         taken_result = vhp_serial.take( some_wrtFilter, axis=2 )
-        for k,gstr in enumerate(gstrs):
+        for k,opstr in enumerate(gstrs):
             assert(np.linalg.norm(taken_result[lookup[k]]-vhp_parallelF[tstLookup[k]]) < 1e-6)
 
-        gs._calc().bulk_fill_hprobs(vhp_parallelF2, tstTree,
+        mdl._calc().bulk_fill_hprobs(vhp_parallelF2, tstTree,
                         None, None,None, (-1e6,1e6), comm=comm,
                         wrtFilter1=some_wrtFilter, wrtFilter2=some_wrtFilter2)
-        for k,gstr in enumerate(gstrs):
+        for k,opstr in enumerate(gstrs):
             for ii,i in enumerate(some_wrtFilter):
                 for jj,j in enumerate(some_wrtFilter2):
                     assert(np.linalg.norm(vhp_serial[lookup[k],i,j]-vhp_parallelF2[tstLookup[k],ii,jj]) < 1e-6)
         taken_result = vhp_serial.take( some_wrtFilter, axis=1 ).take( some_wrtFilter2, axis=2)
-        for k,gstr in enumerate(gstrs):
+        for k,opstr in enumerate(gstrs):
             assert(np.linalg.norm(taken_result[lookup[k]]-vhp_parallelF2[tstLookup[k]]) < 1e-6)
 
 @mpitest(4)
@@ -510,35 +510,35 @@ def test_MPI_compute_cache(comm):
     # the number of elements being computed:
     from pygsti.construction import std1Q_XY #nice b/c only 2 gates
 
-    #Create some gateset
-    gs = std.gs_target.copy()
-    gs.kick(0.1,seed=1234)
+    #Create some model
+    mdl = std.target_model.copy()
+    mdl.kick(0.1,seed=1234)
 
-    #Get some gate strings
-    gstrs = pygsti.construction.gatestring_list([('Gx',), ('Gy')])
-    tree,lookup,outcome_lookup = gs.bulk_evaltree(gstrs)
+    #Get some operation sequences
+    gstrs = pygsti.construction.circuit_list([('Gx',), ('Gy')])
+    tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
 
     #Check fill probabilities
     nEls = tree.num_final_elements()
-    nGateStrings = len(gstrs)
-    nDerivCols = gs.num_params()
-    print("NUMS = ",nEls,nGateStrings,nDerivCols)
+    nCircuits = len(gstrs)
+    nDerivCols = mdl.num_params()
+    print("NUMS = ",nEls,nCircuits,nDerivCols)
 
     #Get serial results
     vhp_serial = np.empty( (nEls,nDerivCols,nDerivCols),'d')
 
-    d = gs.dim
+    d = mdl.dim
     slc1 = slice(0,2)
     slc2 = slice(0,2)
     scache = np.empty(nEls,'d')
     pcache = np.empty((nEls,d,d),'d')
     dcache1 = np.empty((nEls,2,d,d),'d')
     dcache2 = np.empty((nEls,2,d,d),'d')
-    hcache = gs._calc()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
+    hcache = mdl._calc()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
                                                 comm, wrtSlice1=slc1, wrtSlice2=slc2)
 
     #without comm
-    hcache_chk = gs._calc()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
+    hcache_chk = mdl._calc()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
                                                 comm=None, wrtSlice1=slc1, wrtSlice2=slc2)
     assert(np.linalg.norm(hcache-hcache_chk) < 1e-6)
     
@@ -547,34 +547,34 @@ def test_MPI_compute_cache(comm):
 @mpitest(4)
 def test_MPI_by_block(comm):
 
-    #Create some gateset
+    #Create some model
     if comm is None or comm.Get_rank() == 0:
-        gs = std.gs_target.copy()
-        gs.kick(0.1,seed=1234)
-        gs = comm.bcast(gs, root=0)
+        mdl = std.target_model.copy()
+        mdl.kick(0.1,seed=1234)
+        mdl = comm.bcast(mdl, root=0)
     else:
-        gs = comm.bcast(None, root=0)
+        mdl = comm.bcast(None, root=0)
 
-    #Get some gate strings
+    #Get some operation sequences
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
-    tree,lookup,outcome_lookkup = gs.bulk_evaltree(gstrs)
+        list(std.target_model.operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
+    tree,lookup,outcome_lookkup = mdl.bulk_evaltree(gstrs)
     #split_tree = tree.copy()
     #split_lookup = split_tree.split(lookup,numSubTrees=g_numSubTrees)
 
 
     #Check that "by column" matches standard "at once" methods:
     nEls = tree.num_final_elements()
-    nGateStrings = len(gstrs)
-    nDerivCols = gs.num_params()
+    nCircuits = len(gstrs)
+    nDerivCols = mdl.num_params()
 
     #Get serial results
     vhp_serial = np.empty( (nEls,nDerivCols,nDerivCols),'d')
     vdp_serial = np.empty( (nEls,nDerivCols), 'd' )
     vp_serial = np.empty( nEls, 'd' )
 
-    gs.bulk_fill_hprobs(vhp_serial, tree,
+    mdl.bulk_fill_hprobs(vhp_serial, tree,
                         vp_serial, vdp_serial, (-1e6,1e6), comm=None)
     dprobs12_serial = vdp_serial[:,:,None] * vdp_serial[:,None,:]
 
@@ -583,7 +583,7 @@ def test_MPI_by_block(comm):
         hcols = []
         d12cols = []
         slicesList = [ (slice(0,nDerivCols),slice(i,i+1)) for i in range(nDerivCols) ]
-        for s1,s2, hprobs, dprobs12 in gs.bulk_hprobs_by_block(
+        for s1,s2, hprobs, dprobs12 in mdl.bulk_hprobs_by_block(
             tstTree, slicesList, True, comm):
             hcols.append(hprobs)
             d12cols.append(dprobs12)
@@ -606,7 +606,7 @@ def test_MPI_by_block(comm):
         #            print "Diff(%d,%d) = " % (i,j), np.linalg.norm(all_hcols[0,:,8:,i]-vhp_serial[0,:,8:,j])
         #    assert(np.linalg.norm(all_hcols[0,:,8:,i]-vhp_serial[0,:,8:,i]) < 1e-6)
 
-        for i,gstr in enumerate(gstrs):
+        for i,opstr in enumerate(gstrs):
             assert(np.linalg.norm(all_hcols[tstLookup[i]]-vhp_serial[lookup[i]]) < 1e-6)
 
         #for i in range(all_d12cols.shape[3]):
@@ -615,21 +615,21 @@ def test_MPI_by_block(comm):
         #        for j in range(all_d12cols.shape[3]):
         #            print "Diff(%d,%d) = " % (i,j), np.linalg.norm(all_d12cols[0,:,8:,i]-dprobs12_serial[0,:,8:,j])
 
-        for i,gstr in enumerate(gstrs):
+        for i,opstr in enumerate(gstrs):
             assert(np.linalg.norm(all_d12cols[tstLookup[i]]-dprobs12_serial[lookup[i]]) < 1e-6)
 
 
         hcols = []
         d12cols = []
         slicesList = [ (slice(2,12),slice(i,i+1)) for i in range(1,10) ]
-        for s1,s2, hprobs, dprobs12 in gs.bulk_hprobs_by_block(
+        for s1,s2, hprobs, dprobs12 in mdl.bulk_hprobs_by_block(
             tstTree, slicesList, True, comm):
             hcols.append(hprobs)
             d12cols.append(dprobs12)
 
         all_hcols = np.concatenate( hcols, axis=2 )
         all_d12cols = np.concatenate( d12cols, axis=2 )
-        for i,gstr in enumerate(gstrs):
+        for i,opstr in enumerate(gstrs):
             assert(np.linalg.norm(all_hcols[tstLookup[i]]-vhp_serial[lookup[i],2:12,1:10]) < 1e-6)
             assert(np.linalg.norm(all_d12cols[tstLookup[i]]-dprobs12_serial[lookup[i],2:12,1:10]) < 1e-6)
 
@@ -639,12 +639,12 @@ def test_MPI_by_block(comm):
         blocks1 = pygsti.tools.mpitools.slice_up_range(nDerivCols, 3)
         blocks2 = pygsti.tools.mpitools.slice_up_range(nDerivCols, 5)
         slicesList = list(itertools.product(blocks1,blocks2))
-        for s1,s2, hprobs_blk, dprobs12_blk in gs.bulk_hprobs_by_block(
+        for s1,s2, hprobs_blk, dprobs12_blk in mdl.bulk_hprobs_by_block(
             tstTree, slicesList, True, comm):
             hprobs_by_block[:,s1,s2] = hprobs_blk
             dprobs12_by_block[:,s1,s2] = dprobs12_blk
 
-        for i,gstr in enumerate(gstrs):
+        for i,opstr in enumerate(gstrs):
             assert(np.linalg.norm(hprobs_by_block[tstLookup[i]]-vhp_serial[lookup[i]]) < 1e-6)
             assert(np.linalg.norm(dprobs12_by_block[tstLookup[i]]-dprobs12_serial[lookup[i]]) < 1e-6)
 
@@ -704,7 +704,7 @@ def test_MPI_gatestrings_chi2(comm):
     my1ProcResults = runOneQubit("chi2",ds,lsgstStrings)
 
     #Using all processors
-    myManyProcResults = runOneQubit("chi2",ds,lsgstStrings,comm,"gatestrings")
+    myManyProcResults = runOneQubit("chi2",ds,lsgstStrings,comm,"circuits")
 
     for i,(gs1,gs2) in enumerate(zip(my1ProcResults,myManyProcResults)):
         assertGatesetsInSync(gs1, comm)
@@ -721,13 +721,13 @@ def test_MPI_gatestrings_chi2(comm):
 @mpitest(4)
 def test_MPI_gaugeopt(comm):
     #Gauge Opt to Target
-    gs_other = std.gs_target.depolarize(gate_noise=0.01, spam_noise=0.01)
-    gs_other['Gx'].rotate( (0,0,0.01) )
-    gs_other['Gy'].rotate( (0,0,0.01) )
-    gs_gopt = pygsti.gaugeopt_to_target(gs_other, std.gs_target, verbosity=10, comm=comm)
+    mdl_other = std.target_model.depolarize(op_noise=0.01, spam_noise=0.01)
+    mdl_other['Gx'].rotate( (0,0,0.01) )
+    mdl_other['Gy'].rotate( (0,0,0.01) )
+    mdl_gopt = pygsti.gaugeopt_to_target(mdl_other, std.target_model, verbosity=10, comm=comm)
 
     #use a method that isn't parallelized with non-None comm (warning is given)
-    gs_gopt_slow = pygsti.gaugeopt_to_target(gs_other, std.gs_target, verbosity=10, method="BFGS", comm=comm)
+    mdl_gopt_slow = pygsti.gaugeopt_to_target(mdl_other, std.target_model, verbosity=10, method="BFGS", comm=comm)
 
 
 @mpitest(4)
@@ -739,7 +739,7 @@ def test_MPI_gatestrings_logl(comm):
     my1ProcResults = runOneQubit("logl",ds,lsgstStrings)
 
     #Using all processors
-    myManyProcResults = runOneQubit("logl",ds,lsgstStrings,comm,"gatestrings")
+    myManyProcResults = runOneQubit("logl",ds,lsgstStrings,comm,"circuits")
 
     for i,(gs1,gs2) in enumerate(zip(my1ProcResults,myManyProcResults)):
         assertGatesetsInSync(gs1, comm)
@@ -755,12 +755,12 @@ def test_MPI_gatestrings_logl(comm):
 @mpitest(4)
 def test_MPI_mlgst_forcefn(comm):
     fiducials = std.fiducials
-    gs_target = std.gs_target
-    lgstStrings = pygsti.construction.list_lgst_gatestrings(fiducials, fiducials,
-                                                             list(gs_target.gates.keys()))
+    target_model = std.target_model
+    lgstStrings = pygsti.construction.list_lgst_circuits(fiducials, fiducials,
+                                                             list(target_model.operations.keys()))
     #Create dataset on root proc
     if comm is None or comm.Get_rank() == 0:
-        datagen_gateset = gs_target.depolarize(gate_noise=0.01, spam_noise=0.01)
+        datagen_gateset = target_model.depolarize(op_noise=0.01, spam_noise=0.01)
         ds = pygsti.construction.generate_fake_data(datagen_gateset, lgstStrings,
                                                     nSamples=10000, sampleError='binomial', seed=100)
         ds = comm.bcast(ds, root=0)
@@ -768,12 +768,12 @@ def test_MPI_mlgst_forcefn(comm):
         ds = comm.bcast(None, root=0)
 
     
-    gs_lgst = pygsti.do_lgst(ds, fiducials, fiducials, gs_target, svdTruncateTo=4, verbosity=0)
-    gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,gs_target, {'spam':1.0, 'gates': 1.0})
+    mdl_lgst = pygsti.do_lgst(ds, fiducials, fiducials, target_model, svdTruncateTo=4, verbosity=0)
+    mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,target_model, {'spam':1.0, 'gates': 1.0})
 
-    forcingfn_grad = np.ones((1,gs_lgst_go.num_params()), 'd')
-    gs_lsgst_chk_opts3 = pygsti.algorithms.core._do_mlgst_base(
-        ds, gs_lgst_go, lgstStrings, verbosity=3,
+    forcingfn_grad = np.ones((1,mdl_lgst_go.num_params()), 'd')
+    mdl_lsgst_chk_opts3 = pygsti.algorithms.core._do_mlgst_base(
+        ds, mdl_lgst_go, lgstStrings, verbosity=3,
         minProbClip=1e-4, probClipInterval=(-1e2,1e2),
         forcefn_grad=forcingfn_grad, comm=comm)
 
@@ -804,15 +804,15 @@ def test_MPI_derivcols(comm):
 @mpitest(4)
 def test_run1Q_end2end(comm):
     from pygsti.construction import std1Q_XYI
-    gs_target = std1Q_XYI.gs_target
+    target_model = std1Q_XYI.target_model
     fiducials = std1Q_XYI.fiducials
     germs = std1Q_XYI.germs
     maxLengths = [1,2,4]
     
-    gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
+    mdl_datagen = target_model.depolarize(op_noise=0.1, spam_noise=0.001)
     listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
-        list(gs_target.gates.keys()), fiducials, fiducials, germs, maxLengths)
-    ds = pygsti.construction.generate_fake_data(gs_datagen, listOfExperiments,
+        list(target_model.operations.keys()), fiducials, fiducials, germs, maxLengths)
+    ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments,
                                                 nSamples=1000,
                                                 sampleError="binomial",
                                                 seed=1234, comm=comm)
@@ -821,11 +821,11 @@ def test_run1Q_end2end(comm):
     comm.barrier() #to make sure dataset file is written
 
     #test with pkl file - should only read in on rank0 then broadcast
-    results = pygsti.do_long_sequence_gst("mpi_dataset.pkl", gs_target, fiducials, fiducials,
+    results = pygsti.do_long_sequence_gst("mpi_dataset.pkl", target_model, fiducials, fiducials,
                                           germs, [1], comm=comm)
 
     #test with dataset object
-    results = pygsti.do_long_sequence_gst(ds, gs_target, fiducials, fiducials,
+    results = pygsti.do_long_sequence_gst(ds, target_model, fiducials, fiducials,
                                           germs, maxLengths, comm=comm)
 
     #Use dummy duplicate of results to trigger MPI data-comparison processing:
@@ -837,25 +837,25 @@ def test_run1Q_end2end(comm):
 @mpitest(4)
 def test_MPI_germsel(comm):
     if comm is None or comm.Get_rank() == 0:
-        gatesetNeighborhood = pygsti.alg.randomizeGatesetList(
-            [std.gs_target], randomizationStrength=1e-3,
+        gatesetNeighborhood = pygsti.alg.randomize_model_list(
+            [std.target_model], randomizationStrength=1e-3,
             numCopies=3, seed=2018)
         comm.bcast(gatesetNeighborhood, root=0)
     else:
         gatesetNeighborhood = comm.bcast(None, root=0)
 
     max_length   = 6
-    gates        = std.gs_target.gates.keys()
-    superGermSet = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(gates, max_length)
+    gates        = std.target_model.operations.keys()
+    superGermSet = pygsti.construction.list_all_circuits_without_powers_and_cycles(gates, max_length)
 
     #germs = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
     #                                    randomize=False, seed=2018, scoreFunc='all',
-    #                                    threshold=1e6, verbosity=1, gatePenalty=1.0,
+    #                                    threshold=1e6, verbosity=1, opPenalty=1.0,
     #                                    memLimit=3*(1024**3), comm=comm)
     
     germs_lowmem = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
                                                randomize=False, seed=2018, scoreFunc='all',
-                                               threshold=1e6, verbosity=1, gatePenalty=1.0,
+                                               threshold=1e6, verbosity=1, opPenalty=1.0,
                                                memLimit=3*(1024**2), comm=comm) # force "single-Jac" mode
 
 @mpitest(4)
