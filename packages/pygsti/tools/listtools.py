@@ -46,10 +46,10 @@ def remove_duplicates_in_place(l,indexToTest=None):
             #Special case of weighted gate strings: if collisions
             # keep the hightest weight string
             #if isinstance(t, _WeightedGateString) and t in s:
-            #    for gs in l[0:n]:
-            #        if gs == t:
+            #    for gstr in l[0:n]:
+            #        if gstr == t:
             #            if isinstance(gs, _WeightedGateString):
-            #                gs.weight = max(gs.weight, t.weight)
+            #                gstr.weight = max(gstr.weight, t.weight)
             #            break
     
             if t not in s:

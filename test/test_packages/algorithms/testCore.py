@@ -41,9 +41,9 @@ class TestCoreMethods(AlgorithmsBase):
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        #pygsti.io.write_gateset(gs_lgst,compare_files + "/lgst.gateset", "Saved LGST Gateset before gauge optimization")
-        #pygsti.io.write_gateset(gs_lgst_go,compare_files + "/lgst_go.gateset", "Saved LGST Gateset after gauge optimization")
-        #pygsti.io.write_gateset(gs_clgst,compare_files + "/clgst.gateset", "Saved LGST Gateset after G.O. and CPTP contraction")
+        pygsti.io.write_gateset(gs_lgst,compare_files + "/lgst.gateset", "Saved LGST Gateset before gauge optimization")
+        pygsti.io.write_gateset(gs_lgst_go,compare_files + "/lgst_go.gateset", "Saved LGST Gateset after gauge optimization")
+        pygsti.io.write_gateset(gs_clgst,compare_files + "/clgst.gateset", "Saved LGST Gateset after G.O. and CPTP contraction")
 
         gs_lgst_compare = pygsti.io.load_gateset(compare_files + "/lgst.gateset")
         gs_lgst_go_compare = pygsti.io.load_gateset(compare_files + "/lgst_go.gateset")
@@ -178,8 +178,8 @@ class TestCoreMethods(AlgorithmsBase):
                                                    check_jacobian=True)
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        #pygsti.io.write_gateset(gs_exlgst,compare_files + "/exlgst.gateset", "Saved Extended-LGST (eLGST) Gateset")
-        #pygsti.io.write_gateset(gs_exlgst_reg,compare_files + "/exlgst_reg.gateset", "Saved Extended-LGST (eLGST) Gateset w/regularization")
+        pygsti.io.write_gateset(gs_exlgst,compare_files + "/exlgst.gateset", "Saved Extended-LGST (eLGST) Gateset")
+        pygsti.io.write_gateset(gs_exlgst_reg,compare_files + "/exlgst_reg.gateset", "Saved Extended-LGST (eLGST) Gateset w/regularization")
 
         gs_exlgst_compare = pygsti.io.load_gateset(compare_files + "/exlgst.gateset")
         gs_exlgst_reg_compare = pygsti.io.load_gateset(compare_files + "/exlgst_reg.gateset")
@@ -290,8 +290,8 @@ class TestCoreMethods(AlgorithmsBase):
 
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        #pygsti.io.write_gateset(gs_lsgst,compare_files + "/lsgst.gateset", "Saved LSGST Gateset")
-        #pygsti.io.write_gateset(gs_lsgst_reg,compare_files + "/lsgst_reg.gateset", "Saved LSGST Gateset w/Regularization")
+        pygsti.io.write_gateset(gs_lsgst,compare_files + "/lsgst.gateset", "Saved LSGST Gateset")
+        pygsti.io.write_gateset(gs_lsgst_reg,compare_files + "/lsgst_reg.gateset", "Saved LSGST Gateset w/Regularization")
 
         gs_lsgst_compare = pygsti.io.load_gateset(compare_files + "/lsgst.gateset")
         gs_lsgst_reg_compare = pygsti.io.load_gateset(compare_files + "/lsgst_reg.gateset")
@@ -304,9 +304,9 @@ class TestCoreMethods(AlgorithmsBase):
         self.assertAlmostEqual( gs_lsgst_reg_go.frobeniusdist(gs_lsgst_reg_compare), 0, places=4)
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        #gs_lsgst_go = pygsti.gaugeopt_to_target(gs_lsgst, self.gateset, {'spam':1.0})
-        #pygsti.io.write_gateset(gs_lsgst_go,compare_files + "/analysis.gateset", "Saved LSGST Analysis Gateset")
-        #print("DEBUG: analysis.gateset = "); print(gs_lgst_go)
+        gs_lsgst_go = pygsti.gaugeopt_to_target(gs_lsgst, self.gateset, {'spam':1.0})
+        pygsti.io.write_gateset(gs_lsgst_go,compare_files + "/analysis.gateset", "Saved LSGST Analysis Gateset")
+        print("DEBUG: analysis.gateset = "); print(gs_lgst_go)
 
 
     def test_MLGST(self):
@@ -423,7 +423,7 @@ class TestCoreMethods(AlgorithmsBase):
 
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        #pygsti.io.write_gateset(gs_mlegst,compare_files + "/mle_gst.gateset", "Saved MLE-GST Gateset")
+        pygsti.io.write_gateset(gs_mlegst,compare_files + "/mle_gst.gateset", "Saved MLE-GST Gateset")
 
         gs_mle_compare = pygsti.io.load_gateset(compare_files + "/mle_gst.gateset")
         gs_mlegst_go = pygsti.gaugeopt_to_target(gs_mlegst, gs_mle_compare, {'spam':1.0}, checkJac=True)
@@ -488,7 +488,7 @@ class TestCoreMethods(AlgorithmsBase):
 
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        #pygsti.io.write_gateset(gs_lsgst,compare_files + "/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
+        pygsti.io.write_gateset(gs_lsgst,compare_files + "/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
 
         gs_lsgst_compare = pygsti.io.load_gateset(compare_files + "/lsgstMS.gateset")
         gs_lsgst_go = pygsti.gaugeopt_to_target(gs_lsgst, gs_lsgst_compare, {'spam':1.0}, checkJac=True)

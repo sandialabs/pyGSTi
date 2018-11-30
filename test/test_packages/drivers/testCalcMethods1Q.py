@@ -41,10 +41,10 @@ class CalcMethods1QTestCase(BaseTestCase):
         cls.listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
             std.gs_target, std.prepStrs, std.effectStrs, std.germs, cls.maxLengths)
 
-        #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate)
-        #ds = pygsti.construction.generate_fake_data(cls.gs_datagen, cls.listOfExperiments,
-        #                                                 nSamples=1000, sampleError="multinomial", seed=1234)
-        #ds.save(compare_files + "/calcMethods1Q.dataset%s" % cls.versionsuffix)
+        #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate) (SAVE)
+        ds = pygsti.construction.generate_fake_data(cls.gs_datagen, cls.listOfExperiments,
+                                                         nSamples=1000, sampleError="multinomial", seed=1234)
+        ds.save(compare_files + "/calcMethods1Q.dataset%s" % cls.versionsuffix)
 
         #DEBUG TEST- was to make sure data files have same info -- seemed ultimately unnecessary
         #ds_swp = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods1Q.datasetv3") # run in Python3
@@ -76,9 +76,9 @@ class CalcMethods1QTestCase(BaseTestCase):
             cls.gs_redmod_datagen, cls.redmod_fiducials, cls.redmod_fiducials,
             cls.redmod_germs, cls.redmod_maxLs)
 
-        #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate)
-        #redmod_ds = pygsti.construction.generate_fake_data(cls.gs_redmod_datagen, expList, 1000, "round", seed=1234)
-        #redmod_ds.save(compare_files + "/calcMethods1Q_redmod.dataset%s" % cls.versionsuffix)
+        #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate) (SAVE)
+        redmod_ds = pygsti.construction.generate_fake_data(cls.gs_redmod_datagen, expList, 1000, "round", seed=1234)
+        redmod_ds.save(compare_files + "/calcMethods1Q_redmod.dataset%s" % cls.versionsuffix)
 
         cls.redmod_ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/calcMethods1Q_redmod.dataset%s" % cls.versionsuffix)
         
@@ -123,9 +123,9 @@ class CalcMethods1QTestCase(BaseTestCase):
         print(gs.strdiff(gs_copy))
         self.assertAlmostEqual( gs.frobeniusdist(gs_copy), 0, places=3)        
 
-        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
-        #pygsti.io.json.dump(results.estimates['default'].gatesets['go0'],
-        #                    open(compare_files + "/test1Qcalc_std_exact.gateset",'w'))
+        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate) (SAVE)
+        pygsti.io.json.dump(results.estimates['default'].gatesets['go0'],
+                            open(compare_files + "/test1Qcalc_std_exact.gateset",'w'))
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 3.0, delta=2.0)
@@ -168,9 +168,9 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.do_long_sequence_gst(self.ds, gs_target, std.prepStrs, std.effectStrs,
                                               std.germs, self.maxLengths, verbosity=1)
 
-        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
-        #pygsti.io.json.dump(results.estimates['default'].gatesets['go0'],
-        #                    open(compare_files + "/test1Qcalc_std_terms.gateset",'w'))
+        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate) (SAVE)
+        pygsti.io.json.dump(results.estimates['default'].gatesets['go0'],
+                            open(compare_files + "/test1Qcalc_std_terms.gateset",'w'))
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 5, delta=1.0)
@@ -209,9 +209,9 @@ class CalcMethods1QTestCase(BaseTestCase):
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advancedOptions={'tolerance': 1e-3})
 
-        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
-        #pygsti.io.json.dump(results.estimates['default'].gatesets['go0'],
-        #                    open(compare_files + "/test1Qcalc_redmod_exact.gateset",'w'))
+        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate) (SAVE)
+        pygsti.io.json.dump(results.estimates['default'].gatesets['go0'],
+                            open(compare_files + "/test1Qcalc_redmod_exact.gateset",'w'))
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)
@@ -302,9 +302,9 @@ class CalcMethods1QTestCase(BaseTestCase):
                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                               verbosity=4, advancedOptions={'tolerance': 1e-3})
 
-        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
-        #pygsti.io.json.dump(results.estimates['default'].gatesets['go0'],
-        #                    open(compare_files + "/test1Qcalc_redmod_terms.gateset",'w'))
+        #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate) (SAVE)
+        pygsti.io.json.dump(results.estimates['default'].gatesets['go0'],
+                            open(compare_files + "/test1Qcalc_redmod_terms.gateset",'w'))
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 0.0, delta=1.0)

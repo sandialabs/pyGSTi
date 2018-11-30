@@ -72,7 +72,7 @@ class TermEvalTree(EvalTree):
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 
-        gatestring_list = [tuple(gs) for gs in compiled_gatestring_list.keys()]
+        gatestring_list = [tuple(gstr) for gstr in compiled_gatestring_list.keys()]
         self.compiled_gatestring_spamTuples = list(compiled_gatestring_list.values())
         self.num_final_els = sum([len(v) for v in self.compiled_gatestring_spamTuples])
         #self._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples

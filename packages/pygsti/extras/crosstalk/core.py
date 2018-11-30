@@ -108,8 +108,8 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
     # This converts a DataSet to an array, as the code below uses arrays 
     if type(ds) == _pygobjs.dataset.DataSet:
 
-        gs = ds.keys()[0]
-        temp = ds.auxInfo[gs]['settings']
+        gstr = ds.keys()[0]
+        temp = ds.auxInfo[gstr]['settings']
         num_settings = len(temp)
 
         settings_shape = _np.shape(settings)
@@ -125,10 +125,10 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
         data = []
         collect_settings = {key: [] for key in range(num_settings)}
         for row in range(num_data):
-            gs = ds.keys()[row]
+            gstr = ds.keys()[row]
 
             templine_set = [0]*num_settings
-            settings_row = ds.auxInfo[gs]['settings']
+            settings_row = ds.auxInfo[gstr]['settings']
 
             for key in settings_row:
                 if len(key)==1: # single region/qubit gate
@@ -138,7 +138,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                     print("Two qubit gate, not sure what to do!!")  #TODO
                     return
             
-            outcomes_row = ds[gs]
+            outcomes_row = ds[gstr]
             for outcome in outcomes_row:
                 templine_out = [0]*number_of_regions
 

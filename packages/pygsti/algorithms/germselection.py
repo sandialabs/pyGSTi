@@ -978,8 +978,8 @@ def build_up(gatesetList, germsList, randomize=True,
             goodGerms = [germ for germ
                              in _np.array(germsList)[_np.where(germLengths==1)]]
         else: #force should be a list of GateStrings
-            for gs in force:
-                weights[germsList.index(gs)] = 1
+            for gstr in force:
+                weights[germsList.index(gstr)] = 1
             goodGerms = force[:]
 
     undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
@@ -1164,8 +1164,8 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
             goodGerms = [germ for germ
                              in _np.array(germsList)[_np.where(germLengths==1)]]
         else: #force should be a list of GateStrings
-            for gs in force:
-                weights[germsList.index(gs)] = 1
+            for gstr in force:
+                weights[germsList.index(gstr)] = 1
             goodGerms = force[:]
 
     if pretest:
@@ -1519,7 +1519,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         if force == "singletons":
             forceIndices = _np.where(germLengths == 1)
         else: #force should be a list of GateStrings
-            forceIndices = _np.array([germsList.index(gs) for gs in force])
+            forceIndices = _np.array([germsList.index(gstr) for gstr in force])
     else:
         forceIndices = None
 
@@ -1791,8 +1791,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
         if force == "singletons":
             initialWeights[_np.where(germLengths == 1)] = 1
         else: #force should be a list of GateStrings
-            for gs in force:
-                initialWeights[germsList.index(gs)] = 1
+            for gstr in force:
+                initialWeights[germsList.index(gstr)] = 1
 
     getNeighborsFn = lambda weights: _grasp.get_swap_neighbors(
         weights, forcedWeights=initialWeights, shuffle=shuffle)

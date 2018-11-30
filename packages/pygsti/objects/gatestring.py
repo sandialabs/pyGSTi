@@ -597,8 +597,8 @@ class CompressedGateString(object):
 
 #Now tested in unit tests
 #if __name__ == "__main__":
-#    wgs = WeightedGateString(('Gx',), weight=0.5)
-#    gs = GateString(('Gx',) )
-#    print ((gs + wgs)*2).weight
-#    print (wgs + gs).weight
+#    wgstr = WeightedGateString(('Gx',), weight=0.5)
+#    gstr = GateString(('Gx',) )
+#    print ((gstr + wgstr)*2).weight
+#    print (wgstr + gstr).weight
 

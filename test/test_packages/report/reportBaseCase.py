@@ -48,13 +48,13 @@ class ReportBaseCase(BaseTestCase):
         except NameError:
             cls.versionsuffix = "v3" #Python 3
         
-        # RUN BELOW LINES TO GENERATE ANALYSIS DATASET
-        #ds = pygsti.construction.generate_fake_data(datagen_gateset, cls.lsgstStrings[-1], nSamples=1000,
-        #                                            sampleError='binomial', seed=100)
-        #ds.save(compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
-        #ds2 = pygsti.construction.generate_fake_data(datagen_gateset2, cls.lsgstStrings[-1], nSamples=1000,
-        #                                            sampleError='binomial', seed=100)
-        #ds2.save(compare_files + "/reportgen2.dataset%s" % cls.versionsuffix)
+        # RUN BELOW LINES TO GENERATE ANALYSIS DATASET (SAVE)
+        ds = pygsti.construction.generate_fake_data(datagen_gateset, cls.lsgstStrings[-1], nSamples=1000,
+                                                    sampleError='binomial', seed=100)
+        ds.save(compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
+        ds2 = pygsti.construction.generate_fake_data(datagen_gateset2, cls.lsgstStrings[-1], nSamples=1000,
+                                                    sampleError='binomial', seed=100)
+        ds2.save(compare_files + "/reportgen2.dataset%s" % cls.versionsuffix)
 
 
         cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset%s" % cls.versionsuffix)

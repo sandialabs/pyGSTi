@@ -765,9 +765,9 @@ class DriftResults(object):
         _plt.figure(figsize=figsize)
                 
         times = []
-        for gs in gatestringlist:
-            gsInd = self.indexforGatestring[gs]
-            times += list(self.timestamps[gsInd])
+        for gstr in gatestringlist:
+            gstrInd = self.indexforGatestring[gstr]
+            times += list(self.timestamps[gstrInd])
         
         times.sort()       
 
@@ -792,20 +792,20 @@ class DriftResults(object):
         entityInd = self.entitieslist.index(entity)
         outcomeInd = self.outcomes.index(outcome)
 
-        for gs in gatestringlist:
-            gsInd = self.indexforGatestring[gs]
+        for gstr in gatestringlist:
+            gstrInd = self.indexforGatestring[gstr]
             if estimatekey is None:
-                gs_estimatekey = self.defaultmodelkey[entityInd,gsInd]
+                gs_estimatekey = self.defaultmodelkey[entityInd,gstrInd]
             else:
                  gs_estimatekey = estimatekey
-            p = self.models[entityInd,gsInd][gs_estimatekey].get_probabilities(times)[outcome]
+            p = self.models[entityInd,gstrInd][gs_estimatekey].get_probabilities(times)[outcome]
         # error = self.pspepo_reconstruction_uncertainty[sequence_index,entity,outcome_index]
         # upper = p+error
         # lower = p-error
         # upper[upper > 1.] = 1.
         # lower[lower < 0.] = 0.
         
-            _plt.plot(times,p,'-',label='{}'.format(gs))
+            _plt.plot(times,p,'-',label='{}'.format(gstr))
         
         # if errorbars:
         #     _plt.fill_between(times, upper, lower, alpha=0.2, color='r')

@@ -1179,7 +1179,7 @@ class GateSet(object):
         # dataset.compile -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
         # compile all gsplaq strs -> elementIndices[(i,j)],
 
-        gatestrings = [ _gs.GateString(gs) for gs in gatestrings ] # cast to GateStrings
+        gatestrings = [ _gs.GateString(gstr) for gstr in gatestrings ] # cast to GateStrings
 
         #Indexed by raw gate string
         raw_spamTuples_dict = _collections.OrderedDict()  # final
@@ -2503,7 +2503,7 @@ class GateSet(object):
             `(outcome, p)` tuples, where `outcome` is a tuple of labels
             and `p` is the corresponding probability.
         """
-        gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
+        gatestring_list = [ _gs.GateString(gstr) for gstr in gatestring_list]  # cast to GateStrings
         evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
             gatestring_list, comm, memLimit, subcalls=['bulk_fill_probs'],
             dataset=dataset, verbosity=0) # FUTURE (maybe make verbosity into an arg?)
@@ -2565,7 +2565,7 @@ class GateSet(object):
             if False, then `p` is not included in the tuples (so they're just
             `(outcome, dp)`).
         """
-        gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
+        gatestring_list = [ _gs.GateString(gstr) for gstr in gatestring_list]  # cast to GateStrings
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list, dataset=dataset)
         return self._calc().bulk_dprobs(gatestring_list, evalTree, elIndices,
                                         outcomes, returnPr,clipTo,
@@ -2630,7 +2630,7 @@ class GateSet(object):
             If `returnPr` if False, then `p` is not included in the tuples.
             If `returnDeriv` if False, then `dp` is not included in the tuples.
         """
-        gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
+        gatestring_list = [ _gs.GateString(gstr) for gstr in gatestring_list]  # cast to GateStrings
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list, dataset=dataset)
         return self._calc().bulk_hprobs(gatestring_list, evalTree, elIndices,
                                         outcomes, returnPr, returnDeriv,

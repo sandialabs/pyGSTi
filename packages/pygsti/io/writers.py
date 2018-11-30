@@ -196,8 +196,8 @@ def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabe
     with open(filename, 'w') as output:
         output.write(headerString + '\n')
         for gateString in gatestring_list: #gateString should be a GateString object here
-            gs = gateString.tup #gatestring tuple
-            cnts = [multidataset[dsl][gs].counts.get(ol,'--') for dsl in dsLabels for ol in outcomeLabels]
+            gstr = gateString.tup #gatestring tuple
+            cnts = [multidataset[dsl][gstr].counts.get(ol,'--') for dsl in dsLabels for ol in outcomeLabels]
             output.write(gateString.str + "  " + "  ".join( [ (("%g" % cnt) if (cnt != '--') else cnt)
                                                               for cnt in cnts] ) + '\n')
 

@@ -591,8 +591,8 @@ def translate_gatestring_list(gatestringList, aliasDict):
         return gatestringList
     else:
         new_gatestrings = [ _gs.GateString(tuple(_itertools.chain(
-            *[aliasDict.get(lbl,(lbl,)) for lbl in gs])))
-                            for gs in gatestringList ]
+            *[aliasDict.get(lbl,(lbl,)) for lbl in gstr])))
+                            for gstr in gatestringList ]
         return new_gatestrings
 
 
@@ -734,7 +734,7 @@ def manipulate_gatestring_list(gatestringList, sequenceRules):
     if sequenceRules is None:
         return gatestringList
     else:
-        return [ manipulate_gatestring(gs, sequenceRules) for gs in gatestringList ]
+        return [ manipulate_gatestring(gstr, sequenceRules) for gstr in gatestringList ]
 
 
 def filter_gatestrings(gatestrings, sslbls_to_keep, new_sslbls=None, drop=False, idle='Gi'):

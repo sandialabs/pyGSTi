@@ -56,8 +56,8 @@ class RepLibTestCase(BaseTestCase):
         #LATER: save & check outputs of dprobs
         dprobs = gs.bulk_dprobs([('Gx',),('Gx','Gx'),('Gx','Gx','Gy')])
 
-        #RUN TO save outputs
-        #pickle.dump(dprobs, open(compare_files + "/repLib_dprobs%s.pkl" % self.versionsuffix,'wb'))
+        #RUN TO SAVE outputs
+        pickle.dump(dprobs, open(compare_files + "/repLib_dprobs%s.pkl" % self.versionsuffix,'wb'))
 
         compare = pickle.load(open(compare_files + "/repLib_dprobs%s.pkl" % self.versionsuffix,'rb'))
         for gstr in dprobs:

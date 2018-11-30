@@ -648,8 +648,8 @@ def drift_oneoverpvalue_matrices(gsplaq, driftresults):
 
     """
     pvalues_and_strings_dict = {}
-    #for gs in driftresults.gatestringlist:
-    #    pvalues_and_strings_dict[gs] = driftresults.get_maxpower_pvalue(sequence=gs)
+    #for gstr in driftresults.gatestringlist:
+    #    pvalues_and_strings_dict[gstr] = driftresults.get_maxpower_pvalue(sequence=gstr)
 
     ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for i,j,gstr in gsplaq:
@@ -692,8 +692,8 @@ def drift_maxpower_matrices(gsplaq, driftresults):
 
     """
     maxpowers_and_strings_dict = {}
-    #for gs in driftresults.gatestringlist:
-    #    maxpowers_and_strings_dict[gs] = driftresults.get_maxpower(sequence=gs)
+    #for gstr in driftresults.gatestringlist:
+    #    maxpowers_and_strings_dict[gstr] = driftresults.get_maxpower(sequence=gstr)
 
     ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for i,j,gstr in gsplaq:

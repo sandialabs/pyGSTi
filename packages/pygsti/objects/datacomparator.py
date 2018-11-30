@@ -533,9 +533,9 @@ class DataComparator():
 
         if len(self.dataset_list_or_multidataset) == 2:
             sstvds = {}
-            for gs in list(self.llrs.keys()):
-                if self.results.hypothesis_rejected[gs]:               
-                    sstvds[gs] = self.tvds[gs]
+            for gstr in list(self.llrs.keys()):
+                if self.results.hypothesis_rejected[gstr]:               
+                    sstvds[gstr] = self.tvds[gstr]
             self.sstvds = sstvds
 
         if verbosity >= 2:

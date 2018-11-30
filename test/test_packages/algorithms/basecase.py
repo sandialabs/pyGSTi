@@ -31,18 +31,18 @@ class AlgorithmsBase(BaseTestCase):
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
             self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
 
-        ## RUN BELOW LINES to create analysis dataset
-        #expList = pygsti.construction.make_lsgst_experiment_list(
-        #    self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
-        #ds = pygsti.construction.generate_fake_data(self.datagen_gateset, expList,
-        #   nSamples=10000, sampleError='binomial', seed=100)
-        #ds.save(compare_files + "/analysis.dataset%s" % self.versionsuffix)
+        ## RUN BELOW LINES to create analysis dataset (SAVE)
+        expList = pygsti.construction.make_lsgst_experiment_list(
+            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
+        ds = pygsti.construction.generate_fake_data(self.datagen_gateset, expList,
+           nSamples=10000, sampleError='binomial', seed=100)
+        ds.save(compare_files + "/analysis.dataset%s" % self.versionsuffix)
 
         self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
 
-        ## RUN BELOW LINES to create LGST analysis dataset
-        #ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
-        #   nSamples=10000,sampleError='binomial', seed=100)
-        #ds_lgst.save(compare_files + "/analysis_lgst.dataset%s" % self.versionsuffix)
+        ## RUN BELOW LINES to create LGST analysis dataset (SAVE)
+        ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
+           nSamples=10000,sampleError='binomial', seed=100)
+        ds_lgst.save(compare_files + "/analysis_lgst.dataset%s" % self.versionsuffix)
         
         self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis_lgst.dataset%s" % self.versionsuffix)

@@ -34,28 +34,28 @@ class DriversTestCase(BaseTestCase):
             truncScheme='length as exponent' )
 
         ## RUN BELOW LINES TO GENERATE SAVED DATASETS
-        #datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
-        #datagen_gateset2 = self.gateset.depolarize(gate_noise=0.1, spam_noise=0.03).rotate((0.05,0.13,0.02))
-        #ds = pygsti.construction.generate_fake_data(
-        #    datagen_gateset, self.lsgstStrings[-1],
-        #    nSamples=1000,sampleError='binomial', seed=100)
-        #ds2 = pygsti.construction.generate_fake_data(
-        #    datagen_gateset2, self.lsgstStrings[-1],
-        #    nSamples=1000,sampleError='binomial', seed=100)
-        #ds2 = ds2.copy_nonstatic()
-        #ds2.add_counts_from_dataset(ds)
-        #ds2.done_adding_data()
-        #ds_tgp = pygsti.construction.generate_fake_data(
-        #    datagen_gateset, self.lsgstStrings_tgp[-1],
-        #    nSamples=1000,sampleError='binomial', seed=100)
-        #
-        #ds_lae = pygsti.construction.generate_fake_data(
-        #    datagen_gateset, self.lsgstStrings_lae[-1],
-        #    nSamples=1000,sampleError='binomial', seed=100)
-        #ds.save(compare_files + "/drivers.dataset%s" % self.versionsuffix)
-        #ds2.save(compare_files + "/drivers2.dataset%s" % self.versionsuffix) #non-markovian
-        #ds_tgp.save(compare_files + "/drivers_tgp.dataset%s" % self.versionsuffix)
-        #ds_lae.save(compare_files + "/drivers_lae.dataset%s" % self.versionsuffix)
+        datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
+        datagen_gateset2 = self.gateset.depolarize(gate_noise=0.1, spam_noise=0.03).rotate((0.05,0.13,0.02))
+        ds = pygsti.construction.generate_fake_data(
+            datagen_gateset, self.lsgstStrings[-1],
+            nSamples=1000,sampleError='binomial', seed=100)
+        ds2 = pygsti.construction.generate_fake_data(
+            datagen_gateset2, self.lsgstStrings[-1],
+            nSamples=1000,sampleError='binomial', seed=100)
+        ds2 = ds2.copy_nonstatic()
+        ds2.add_counts_from_dataset(ds)
+        ds2.done_adding_data()
+        ds_tgp = pygsti.construction.generate_fake_data(
+            datagen_gateset, self.lsgstStrings_tgp[-1],
+            nSamples=1000,sampleError='binomial', seed=100)
+        
+        ds_lae = pygsti.construction.generate_fake_data(
+            datagen_gateset, self.lsgstStrings_lae[-1],
+            nSamples=1000,sampleError='binomial', seed=100)
+        ds.save(compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        ds2.save(compare_files + "/drivers2.dataset%s" % self.versionsuffix) #non-markovian
+        ds_tgp.save(compare_files + "/drivers_tgp.dataset%s" % self.versionsuffix)
+        ds_lae.save(compare_files + "/drivers_lae.dataset%s" % self.versionsuffix)
 
 class TestDriversMethods(DriversTestCase):
 

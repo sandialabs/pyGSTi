@@ -457,15 +457,15 @@ class MultiDataSet(object):
             sorted_gsIndex = sorted(list(self.gsIndex.items()),key=lambda x: x[1].start)
 
             off = 0
-            for gs,slc in sorted_gsIndex:
-                other_slc = dataset.gsIndex[gs] # we know key exists from check above
+            for gstr,slc in sorted_gsIndex:
+                other_slc = dataset.gsIndex[gstr] # we know key exists from check above
                 l1 = slc.stop-slc.start; assert(slc.step is None)
                 l2 = other_slc.stop-other_slc.start; assert(slc.step is None)
 
                 #Update gsIndex - (expands slice if l2 > l1; adds in offset)
                 l = max(l1,l2)
                 new_slc = slice(off + slc.start, off + slc.start + l)
-                self.gsIndex[gs] = new_slc
+                self.gsIndex[gstr] = new_slc
 
                 #Update existing data & new data arrays
                 if l2 > l1: # insert 0-reps into self's data arrays

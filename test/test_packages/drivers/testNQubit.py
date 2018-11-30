@@ -49,10 +49,10 @@ class NQubitTestCase(BaseTestCase):
             extraWeight1Hops=0, extraGateWeight=0, verbosity=4, cache=cache, algorithm="sequential")
         expList = gss.allstrs #[ tup[0] for tup in expList_tups]
 
-        #RUN to save list & dataset
-        #pygsti.io.json.dump(gss, open(compare_files + "/nqubit_2Q_seqs.json",'w'))
-        #ds = pygsti.construction.generate_fake_data(gs_datagen, expList, 1000, "multinomial", seed=1234)
-        #pygsti.io.json.dump(ds,open(compare_files + "/nqubit_2Q_dataset.json",'w'))
+        #RUN to SAVE list & dataset
+        pygsti.io.json.dump(gss, open(compare_files + "/nqubit_2Q_seqs.json",'w'))
+        ds = pygsti.construction.generate_fake_data(gs_datagen, expList, 1000, "multinomial", seed=1234)
+        pygsti.io.json.dump(ds,open(compare_files + "/nqubit_2Q_dataset.json",'w'))
 
         compare_gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
         self.assertEqual(set(gss.allstrs), set(compare_gss.allstrs))
@@ -75,8 +75,8 @@ class NQubitTestCase(BaseTestCase):
             extraWeight1Hops=0, extraGateWeight=0, verbosity=4, cache=cache, algorithm="greedy")
         #expList = gss.allstrs #[ tup[0] for tup in expList_tups]
 
-        #RUN to save list
-        #pygsti.io.json.dump(gss, open(compare_files + "/nqubit_1Q_seqs.json",'w'))
+        #RUN to SAVE list
+        pygsti.io.json.dump(gss, open(compare_files + "/nqubit_1Q_seqs.json",'w'))
 
         compare_gss = pygsti.io.json.load(open(compare_files + "/nqubit_1Q_seqs.json"))
         
@@ -147,11 +147,11 @@ class NQubitTestCase(BaseTestCase):
                                                   extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
                                                   sim_type="termorder:1", parameterization="H+S terms", sparse=False)
 
-        #RUN to create cache
-        #calc_cache = {}
-        #gs_to_optimize.set_simtype("termorder:1",calc_cache)
-        #gs_to_optimize.bulk_probs(lsgstLists[-1])
-        #pygsti.io.json.dump(calc_cache, open(compare_files + '/nqubit_2Qterms.cache','w'))
+        #RUN to create cache (SAVE)
+        calc_cache = {}
+        gs_to_optimize.set_simtype("termorder:1",calc_cache)
+        gs_to_optimize.bulk_probs(gss.allstrs) #lsgstLists[-1]
+        pygsti.io.json.dump(calc_cache, open(compare_files + '/nqubit_2Qterms.cache','w'))
 
         #Just load precomputed cache (we test do_long_sequence_gst_base here, not cache computation)
         calc_cache = pygsti.io.json.load(open(compare_files + '/nqubit_2Qterms.cache'))

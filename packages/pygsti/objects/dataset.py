@@ -45,15 +45,15 @@ class DataSet_KeyValIterator(object):
         cntcache = self.dataset.cnt_cache
         auxInfo = dataset.auxInfo
 
-        def getcache(gs):
-            return dataset.cnt_cache[gs] if dataset.bStatic else None
+        def getcache(gstr):
+            return dataset.cnt_cache[gstr] if dataset.bStatic else None
 
         if repData is None:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gs), auxInfo[gs])
-                             for gs,gsi in self.dataset.gsIndex.items() )
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gstr), auxInfo[gstr])
+                             for gstr,gsi in self.dataset.gsIndex.items() )
         else:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(gs), auxInfo[gs])
-                             for gs,gsi in self.dataset.gsIndex.items() )
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(gstr), auxInfo[gstr])
+                             for gstr,gsi in self.dataset.gsIndex.items() )
         #Note: gsi above will be an index for a non-static dataset and
         #  a slice for a static dataset.
 
@@ -76,15 +76,15 @@ class DataSet_ValIterator(object):
         cntcache = self.dataset.cnt_cache
         auxInfo = dataset.auxInfo
 
-        def getcache(gs):
-            return dataset.cnt_cache[gs] if dataset.bStatic else None
+        def getcache(gstr):
+            return dataset.cnt_cache[gstr] if dataset.bStatic else None
 
         if repData is None:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gs), auxInfo[gs])
-                             for gs,gsi in self.dataset.gsIndex.items() )
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None, getcache(gstr), auxInfo[gstr])
+                             for gstr,gsi in self.dataset.gsIndex.items() )
         else:
-            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(gs), auxInfo[gs])
-                             for gs,gsi in self.dataset.gsIndex.items() )
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ], getcache(gstr), auxInfo[gstr])
+                             for gstr,gsi in self.dataset.gsIndex.items() )
         #Note: gsi above will be an index for a non-static dataset and
         #  a slice for a static dataset.
 
@@ -524,13 +524,13 @@ class DataSet(object):
         #   values = slices into oli, time, & rep arrays (static case) or
         #            integer list indices (non-static case)
         if gateStringIndices is not None:
-            self.gsIndex = _OrderedDict( [(gs if isinstance(gs,_gs.GateString) else _gs.GateString(gs),i)
-                                          for gs,i in gateStringIndices.items()] )
+            self.gsIndex = _OrderedDict( [(gstr if isinstance(gstr,_gs.GateString) else _gs.GateString(gstr),i)
+                                          for gstr,i in gateStringIndices.items()] )
                                          #convert keys to GateStrings if necessary
         elif not bStatic:
             if gateStrings is not None:
-                dictData = [ (gs if isinstance(gs,_gs.GateString) else _gs.GateString(gs),i) \
-                             for (i,gs) in enumerate(gateStrings) ] #convert to GateStrings if necessary
+                dictData = [ (gstr if isinstance(gstr,_gs.GateString) else _gs.GateString(gstr),i) \
+                             for (i,gstr) in enumerate(gateStrings) ] #convert to GateStrings if necessary
                 self.gsIndex = _OrderedDict( dictData )
             else:
                 self.gsIndex = _OrderedDict()
@@ -625,7 +625,7 @@ class DataSet(object):
 
         # count cache (only used when static; not saved/loaded from disk)
         if bStatic:
-            self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
+            self.cnt_cache = { gstr:_ld.OutcomeLabelDict() for gstr in self.gsIndex }
         else:
             self.cnt_cache = None
 
@@ -747,8 +747,8 @@ class DataSet(object):
         """
         if stripOccurrenceTags and self.collisionAction == "keepseparate":
             # Note: assumes keys are GateStrings containing Labels
-            return [ (gs[:-1] if (len(gs)>0 and gs[-1].name.startswith("#")) else gs)
-                     for gs in self.gsIndex.keys() ]
+            return [ (gstr[:-1] if (len(gstr)>0 and gstr[-1].name.startswith("#")) else gstr)
+                     for gstr in self.gsIndex.keys() ]
         else:
             return list(self.gsIndex.keys())
 
@@ -1229,8 +1229,8 @@ class DataSet(object):
         if self.bStatic:
             gateStringIndices = []
             gateStrings = []
-            for gs in listOfGateStringsToKeep:
-                gateString = gs if isinstance(gs, _gs.GateString) else _gs.GateString(gs)
+            for gstr in listOfGateStringsToKeep:
+                gateString = gstr if isinstance(gstr, _gs.GateString) else _gs.GateString(gstr)
 
                 if gateString not in self.gsIndex:
                     if missingAction == "raise":
@@ -1257,8 +1257,8 @@ class DataSet(object):
             
         else:
             trunc_dataset = DataSet(outcomeLabels=self.get_outcome_labels())
-            for gs in _lt.remove_duplicates(listOfGateStringsToKeep):
-                gateString = gs if isinstance(gs, _gs.GateString) else _gs.GateString(gs)
+            for gstr in _lt.remove_duplicates(listOfGateStringsToKeep):
+                gateString = gstr if isinstance(gstr, _gs.GateString) else _gs.GateString(gstr)
                 if gateString in self.gsIndex:
                     gateStringIndx = self.gsIndex[gateString]
                     repData = self.repData[ gateStringIndx ].copy() if (self.repData is not None) else None
@@ -1430,20 +1430,20 @@ class DataSet(object):
         """
         missingStrs = [] # to issue warning - only used if missingAction=="warn"
         gstr_indices = []; auxkeys_to_remove = []
-        for gs in gatestrings:
-            if not isinstance(gs,_gs.GateString):
-                gs = _gs.GateString(gs)
+        for gstr in gatestrings:
+            if not isinstance(gstr,_gs.GateString):
+                gstr = _gs.GateString(gstr)
 
-            if self.has_key(gs):
-                gstr_indices.append( self.gsIndex[gs] )
-                if gs in self.auxInfo:
-                    auxkeys_to_remove.append(gs)
+            if self.has_key(gstr):
+                gstr_indices.append( self.gsIndex[gstr] )
+                if gstr in self.auxInfo:
+                    auxkeys_to_remove.append(gstr)
             elif missingAction == "raise":
                 raise KeyError(("Gate string %s does not exist and therefore "
                                 "cannot be removed when `missingAction` == "
-                                "'raise'") % str(gs))
+                                "'raise'") % str(gstr))
             elif missingAction == "warn":
-                missingStrs.append(gs)
+                missingStrs.append(gstr)
             elif missingAction != "ignore":
                 raise ValueError("Invalid `missingAction`: %s" % str(missingAction))
 
@@ -1584,7 +1584,7 @@ class DataSet(object):
             if self.repData is not None:
                 self.repData = _np.empty( (0,), self.repType)
 
-        self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
+        self.cnt_cache = { gstr:_ld.OutcomeLabelDict() for gstr in self.gsIndex }
         self.bStatic = True
         self.uuid = _uuid.uuid4()
 
@@ -1607,7 +1607,7 @@ class DataSet(object):
         return toPickle
 
     def __setstate__(self, state_dict):
-        gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
+        gsIndexKeys = [ cgstr.expand() for cgstr in state_dict['gsIndexKeys'] ]
         gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
         bStatic = state_dict['bStatic']
 
@@ -1648,7 +1648,7 @@ class DataSet(object):
             self.repType  = _np.dtype(state_dict['repType'])
             self.comment  = state_dict.get('comment','')
             if bStatic: #always empty - don't save this, just init
-                self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex }
+                self.cnt_cache = { gstr:_ld.OutcomeLabelDict() for gstr in self.gsIndex }
             else: self.cnt_cache = None
 
         self.auxInfo = state_dict.get('auxInfo', _DefaultDict(dict) )
@@ -1747,7 +1747,7 @@ class DataSet(object):
                 _warnings.warn("Deprecated dataset format.  Please re-save " +
                                "this dataset soon to avoid future incompatibility.")
                 return _gs.GateString(_gs.CompressedGateString.expand_gate_label_tuple(x))
-        gsIndexKeys = [ expand(cgs) for cgs in state_dict['gsIndexKeys'] ]
+        gsIndexKeys = [ expand(cgstr) for cgstr in state_dict['gsIndexKeys'] ]
 
         #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
         self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
@@ -1769,7 +1769,7 @@ class DataSet(object):
             self.timeData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
             if useReps:
                 self.repData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
-            self.cnt_cache = { gs:_ld.OutcomeLabelDict() for gs in self.gsIndex } # init cnt_cache afresh
+            self.cnt_cache = { gstr:_ld.OutcomeLabelDict() for gstr in self.gsIndex } # init cnt_cache afresh
         else:
             self.oliData = []
             for _ in range(state_dict['nRows']):

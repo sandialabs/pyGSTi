@@ -63,9 +63,9 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
 
         vs = self.versionsuffix
         cmpFilenm = compare_files + "/IFPR_fidPairs_dict%s.pkl" % vs
-        #Uncomment to save reference fidPairs dictionary
-        #with open(cmpFilenm,"wb") as pklfile:
-        #    pickle.dump(fidPairs, pklfile)
+        #Uncomment to SAVE reference fidPairs dictionary
+        with open(cmpFilenm,"wb") as pklfile:
+            pickle.dump(fidPairs, pklfile)
 
         with open(cmpFilenm,"rb") as pklfile:
             fidPairs_cmp = pickle.load(pklfile)
