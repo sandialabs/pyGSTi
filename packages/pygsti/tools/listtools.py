@@ -13,10 +13,6 @@ def remove_duplicates_in_place(l,indexToTest=None):
     """
     Remove duplicates from the list passed as an argument.
 
-    In the special case when l contains WeightedOpString instances, the
-    duplicates are removed in such a way that the largest weight instance
-    of any set of duplicates is kept.
-
     Parameters
     ----------
     l : list
@@ -41,17 +37,6 @@ def remove_duplicates_in_place(l,indexToTest=None):
         for x in l:
             t = x[indexToTest]
     
-            #TODO: create a special duplicate removal function for use with
-            #  WeighedOpStrings and include the below commented block:
-            #Special case of weighted operation sequences: if collisions
-            # keep the hightest weight string
-            #if isinstance(t, _WeightedOpString) and t in s:
-            #    for opstr in l[0:n]:
-            #        if opstr == t:
-            #            if isinstance(mdl, _WeightedOpString):
-            #                opstr.weight = max(opstr.weight, t.weight)
-            #            break
-    
             if t not in s:
                 s.add(t)
                 l[n] = x; n += 1
@@ -61,10 +46,6 @@ def remove_duplicates_in_place(l,indexToTest=None):
 def remove_duplicates(l,indexToTest=None):
     """
     Remove duplicates from the a list and return the result.
-
-    In the special case when l contains WeightedOpString instances, the
-    duplicates are removed in such a way that the largest weight instance
-    of any set of duplicates is kept.
 
     Parameters
     ----------

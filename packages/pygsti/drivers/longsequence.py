@@ -130,7 +130,7 @@ def do_model_test(modelFilenameOrObj,
     #Get/load dataset
     ds = _load_dataset(dataFilenameOrSet, comm, verbosity)
 
-    #Construct OpString lists
+    #Construct Circuit lists
     lsgstLists = _get_lsgst_lists(ds, target_model, prepStrs, effectStrs, germs,
                                   maxLengths, advancedOptions, verbosity)
 
@@ -459,7 +459,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
     #Get/load dataset
     ds = _load_dataset(dataFilenameOrSet, comm, printer)
 
-    #Construct OpString lists
+    #Construct Circuit lists
     lsgstLists = _get_lsgst_lists(ds, target_model, prepStrs, effectStrs, germs,
                                   maxLengths, advancedOptions, printer)
 

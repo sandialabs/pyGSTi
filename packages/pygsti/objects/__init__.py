@@ -55,8 +55,6 @@ from .instrument import Instrument
 from .instrument import TPInstrument
 
 from .model import Model
-from .opstring import OpString
-from .opstring import WeightedOpString
 from .gatestringstructure import CircuitStructure
 from .gatestringstructure import LsGermsStructure
 from .gatestringstructure import LsGermsSerialStructure

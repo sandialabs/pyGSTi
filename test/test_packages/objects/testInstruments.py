@@ -341,10 +341,10 @@ class InstrumentTestCase(BaseTestCase):
 
     def testAdvancedGateStrs(self):
         #specify prep and/or povm labels in operation sequence:
-        mdl_normal = pygsti.obj.OpString( ('Gx',) )
-        mdl_wprep = pygsti.obj.OpString( ('rho0','Gx') )
-        mdl_wpovm = pygsti.obj.OpString( ('Gx','Mdefault') )
-        mdl_wboth = pygsti.obj.OpString( ('rho0','Gx','Mdefault') )
+        mdl_normal = pygsti.obj.Circuit( ('Gx',) )
+        mdl_wprep = pygsti.obj.Circuit( ('rho0','Gx') )
+        mdl_wpovm = pygsti.obj.Circuit( ('Gx','Mdefault') )
+        mdl_wboth = pygsti.obj.Circuit( ('rho0','Gx','Mdefault') )
 
         #Now compute probabilities for these:
         model = self.target_model.copy()

@@ -1223,7 +1223,7 @@ def evaluate_opfn_by_name(name, model, targetModel, opLabelOrString,
         The models to compare.  Only the element or product given by 
         `opLabelOrString` is compared using the named gate-function.
 
-    opLabelOrString : str or OpString or tuple
+    opLabelOrString : str or Circuit or tuple
         The operation label or sequence of labels to compare.  If a sequence
         of labels is given, then the "virtual gate" computed by taking the
         product of the specified gate matries is compared.

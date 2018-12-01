@@ -1013,9 +1013,9 @@ def build_nqn_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxh
 
 
 def _onqubit(s,iQubit):
-    """ Takes `s`, a tuple of gate *names* and creates a OpString
+    """ Takes `s`, a tuple of gate *names* and creates a Circuit
         where those names act on the `iQubit`-th qubit """
-    return _objs.OpString( [_Lbl(nm,iQubit) for nm in s])
+    return _objs.Circuit( [_Lbl(nm,iQubit) for nm in s])
 
 def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfiducials=None,
                                        prepLbl=None, effectLbls=None, initJ=None, initJrank=None,
@@ -1035,7 +1035,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
         is composed of nontrivial gates acting on a localized set of qubits
         and noise/errors are localized around these.
 
-    idleStr : OpString
+    idleStr : Circuit
         The operation sequence specifying the idle operation to consider.  This may
         just be a single idle gate, or it could be multiple non-idle gates
         which together act as an idle.
@@ -1188,7 +1188,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
         with printer.progress_logging(2):
             for itr,prep in enumerate(_itertools.product(*([singleQfiducials]*nQubits) )):
                 printer.show_progress(itr, nIters, prefix='--- Finding amped-polys for idle: ')
-                prepFid = _objs.OpString(())
+                prepFid = _objs.Circuit(())
                 for i,el in enumerate(prep):
                     prepFid = prepFid + _onqubit(el,qubit_filter[i])
                     
@@ -1204,7 +1204,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
                         cmp = [ (rev_prepDict[prep[kk]] == rev_measDict[meas[kk]]) for kk in range(nQubits) ]
                         if not ( all(cmp) or not any(cmp) ): continue # if all are not the same or all are not different, skip
 
-                    measFid = _objs.OpString(())
+                    measFid = _objs.Circuit(())
                     for i,el in enumerate(meas):
                         measFid = measFid + _onqubit(el,qubit_filter[i])
     
@@ -1212,8 +1212,8 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
                     if gatename_fidpair_list in selected_gatename_fidpair_lists:
                         continue # we've already chosen this pair in a previous iteration
             
-                    gstr_L0 = prepFid + measFid            # should be a OpString
-                    gstr_L1 = prepFid + idleStr + measFid  # should be a OpString
+                    gstr_L0 = prepFid + measFid            # should be a Circuit
+                    gstr_L1 = prepFid + idleStr + measFid  # should be a Circuit
                     ps=model._calc().prs_as_polys(prepLbl, effectLbls, gstr_L1 )
                     qs=model._calc().prs_as_polys(prepLbl, effectLbls, gstr_L0 )
 
@@ -1278,9 +1278,9 @@ def test_amped_polys_for_syntheticidle(fidpairs, idleStr, model,  prepLbl=None, 
     ----------
     fidpairs : list
         A list of `(prep,meas)` 2-tuples, where `prep` and `meas` are 
-        :class:`OpString` objects, specifying the fiducial pairs to test.
+        :class:`Circuit` objects, specifying the fiducial pairs to test.
 
-    idleStr : OpString
+    idleStr : Circuit
         The operation sequence specifying the idle operation to consider.  This may
         just be a single idle gate, or it could be multiple non-idle gates
         which together act as an idle.
@@ -1338,8 +1338,8 @@ def test_amped_polys_for_syntheticidle(fidpairs, idleStr, model,  prepLbl=None, 
     J = _np.empty( (nRows,Np), 'complex'); Jrank = 0
     
     for i,(prepFid, measFid) in enumerate(fidpairs):
-        gstr_L0 = prepFid + measFid            # should be a OpString
-        gstr_L1 = prepFid + idleStr + measFid  # should be a OpString
+        gstr_L0 = prepFid + measFid            # should be a Circuit
+        gstr_L1 = prepFid + idleStr + measFid  # should be a Circuit
         ps=model._calc().prs_as_polys(prepLbl, effectLbls, gstr_L1 )
         qs=model._calc().prs_as_polys(prepLbl, effectLbls, gstr_L0 )
 
@@ -1398,7 +1398,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
         whcih give the fiducial pairs needed to amplify all the parameters of
         a non-synthetic idle gate on max-weight qubits.
 
-    idleStr : OpString
+    idleStr : Circuit
         The operation sequence specifying the idle operation to consider.  This may
         just be a single idle gate, or it could be multiple non-idle gates
         which together act as an idle.
@@ -1532,7 +1532,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
     for gatename_fidpair_list in idle_gatename_fidpair_lists:
         # replace 0..(k-1) in each template string with the corresponding
         # gatename_fidpair (acts on the single qubit identified by the
-        # its index within the template string), then convert to a OpString/Circuit
+        # its index within the template string), then convert to a Circuit/Circuit
         gfp = []
         for tmpl_row in tmpl:
             #mod_tmpl_row = tmpl_row[:]
@@ -1557,7 +1557,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
     for gfp_list in gatename_fidpair_lists:
         # # replace 0..(k-1) in each template string with the corresponding
         # # gatename_fidpair (acts on the single qubit identified by the
-        # # its index within the template string), then convert to a OpString/Circuit
+        # # its index within the template string), then convert to a Circuit
         # tmpl_instance = [ [gatename_fidpair_list[i] for i in tmpl_row]  for tmpl_row in tmpl ]
         # for gfp_list in tmpl_instance: # circuit-fiducialpair list: one (gn-prepstr,gn-measstr) per qubit
 
@@ -1574,7 +1574,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
         #        prep[ qubit_filter.index(core_ql) ] = prep_core[i]
         #    prep = tuple(prep)
 
-        prepFid = _objs.OpString(())
+        prepFid = _objs.Circuit(())
         for i,el in enumerate(prep):
             prepFid = prepFid + _onqubit(el,qubit_filter[i])
 
@@ -1588,14 +1588,14 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
         #        #    meas[ qubit_filter.index(core_ql) ] = meas_core[i]
         #        meas = tuple(meas)
                 
-        measFid = _objs.OpString(())
+        measFid = _objs.Circuit(())
         for i,el in enumerate(meas):
             measFid = measFid + _onqubit(el,qubit_filter[i])
 
         #print("PREPMEAS = ",prepFid,measFid)
         
-        gstr_L0 = prepFid + measFid            # should be a OpString
-        gstr_L1 = prepFid + idleStr + measFid  # should be a OpString
+        gstr_L0 = prepFid + measFid            # should be a Circuit
+        gstr_L1 = prepFid + idleStr + measFid  # should be a Circuit
         ps=model._calc().prs_as_polys(prepLbl, effectLbls, gstr_L1 )
         qs=model._calc().prs_as_polys(prepLbl, effectLbls, gstr_L0 )
         added = False
@@ -1654,7 +1654,7 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
         of `qubit_filter` since errors are allowed on qubits which neighbor
         the core qubits in addition to the core qubits themselves.
 
-    germPowerStr : OpString
+    germPowerStr : Circuit
         The (non-synthetic-idle) germ power string under consideration.
 
     amped_polyJ : numpy.ndarray
@@ -1777,7 +1777,7 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
                     prep[ qubit_filter.index(core_ql) ] = prep_core[i]
                 prep = tuple(prep)
     
-            prepFid = _objs.OpString(())
+            prepFid = _objs.Circuit(())
             for i,el in enumerate(prep):
                 prepFid = prepFid + _onqubit(el,qubit_filter[i])
                 
@@ -1794,12 +1794,12 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
                         meas[ qubit_filter.index(core_ql) ] = meas_core[i]
                     meas = tuple(meas)
                 
-                measFid = _objs.OpString(())
+                measFid = _objs.Circuit(())
                 for i,el in enumerate(meas):
                     measFid = measFid + _onqubit(el,qubit_filter[i])
                 #print("CONSIDER: ",prep,"-",meas)
             
-                opstr = prepFid + germPowerStr + measFid  # should be a OpString
+                opstr = prepFid + germPowerStr + measFid  # should be a Circuit
                 if opstr in already_tried: continue
                 else: already_tried.add(opstr)
                 
@@ -1876,7 +1876,7 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
     -------
     fidpairs : list
         A list of `(prep,meas)` 2-tuples, where `prep` and `meas` are
-        :class:`OpString` objects, giving the tiled fiducial pairs.
+        :class:`Circuit` objects, giving the tiled fiducial pairs.
     """
 
     # "Tile w/overlap" the fidpairs for a k-qubit subset (where k == maxIdleWeight)
@@ -1908,7 +1908,7 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
     for gatename_fidpair_list in idle_gatename_fidpair_lists:
         # replace 0..(k-1) in each template string with the corresponding
         # gatename_fidpair (acts on the single qubit identified by the
-        # its index within the template string), then convert to a OpString/Circuit
+        # its index within the template string), then convert to a Circuit
         tmpl_instance = [ [gatename_fidpair_list[i] for i in tmpl_row]  for tmpl_row in tmpl ]
         for tmpl_instance_row in tmpl_instance: 
             # tmpl_instance_row row is nQubits long; elements give the 
@@ -1922,8 +1922,8 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
                 merge_into_1Q(prep_gates, prep_gatenames, iQubit)
                 merge_into_1Q(meas_gates, meas_gatenames, iQubit)
 
-            final_fidpairs.append( (_objs.OpString(prep_gates),
-                                    _objs.OpString(meas_gates)) )
+            final_fidpairs.append( (_objs.Circuit(prep_gates),
+                                    _objs.Circuit(meas_gates)) )
             
     _lt.remove_duplicates_in_place(final_fidpairs)    
     return final_fidpairs
@@ -1944,7 +1944,7 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
         pairs with which amplify all the desired errors for `template_germPower`
         (acting on qubits labeled by the integers 0 to the cloud size minus one).
 
-    template_germPower : OpString
+    template_germPower : Circuit
         The germ power string under consideration.  This gives the action on
         the "core" qubits of the clouds, and is needed to construct the 
         final fiducial + germPower + fiducial sequences returned by this 
@@ -1954,7 +1954,7 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
         The maximum length used to construct template_germPower.  This is only 
         needed to tag elements of the returned `sequences` list.
 
-    template_germ : OpString
+    template_germ : Circuit
         The germ string under consideration.  This is only needed to tag
         elements of the returned `sequences` list and place elements in 
         the returned `germs` list.
@@ -1966,14 +1966,14 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
     Returns
     -------
     sequences : list
-        A list of (OpString, L, germ, prepFid, measFid) tuples specifying the
+        A list of (Circuit, L, germ, prepFid, measFid) tuples specifying the
         final "tiled" fiducial pairs sandwiching `germPowerStr` for as many
         clouds in parallel as possible.  Actual qubit labels (not the always-
         integer labels used in templates) are used in these strings.  There are
         no duplicates in this list.
 
     germs : list
-        A list of OpString objects giving all the germs (with appropriate
+        A list of Circuit objects giving all the germs (with appropriate
         qubit labels).
     """    
     unused_clouds = list(clouds)
@@ -2045,9 +2045,9 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
                 merge_into(germStr, germStr_qubits, germ)
                 merge_into(germPowerStr, germPowerStr_qubits, germPower)
                 
-            germs.append( _objs.OpString(germStr) )
-            sequences.append( (_objs.OpString(prepStr + germPowerStr + measStr), L, germs[-1],
-                               _objs.OpString(prepStr), _objs.OpString(measStr) ) ) # was XX
+            germs.append( _objs.Circuit(germStr) )
+            sequences.append( (_objs.Circuit(prepStr + germPowerStr + measStr), L, germs[-1],
+                               _objs.Circuit(prepStr), _objs.Circuit(measStr) ) ) # was XX
               # circuit, L, germ, prepFidIndex, measFidIndex??
         
     # return a list of operation sequences (duplicates removed)
@@ -2065,7 +2065,7 @@ def reps_for_synthetic_idle(model, germStr, nqubits, core_qubits):
         A model containing matrix representations of all the gates
         in `germStr`.
 
-    germStr : OpString
+    germStr : Circuit
         The germ operation sequence to repeat.
 
     nqubits : int
@@ -2166,7 +2166,7 @@ def get_candidates_for_core(model, core_qubits, candidate_counts, seedStart):
     Returns
     -------
     list : candidate_germs
-        A list of OpString objects.
+        A list of Circuit objects.
     """
     # or should this be ...for_cloudbank - so then we can check that gates for all "equivalent" clouds exist?
 
@@ -2360,7 +2360,7 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
                                           # for testing for synthetic idles - so no " terms"
     
     Np = model.num_params()
-    idleOpStr = _objs.OpString(("Gi",))
+    idleOpStr = _objs.Circuit(("Gi",))
     prepLbl = _Lbl("rho0")
     effectLbls = [ _Lbl("Mdefault_%s" % l) for l in model.povms['Mdefault'].keys()]
 
@@ -2794,11 +2794,11 @@ def create_nqubit_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWe
     printer.log("Done: %d sequences, %d germs" % (len(sequences),len(selected_germs)))
     #OLD: return sequences, selected_germs
     #sequences : list
-    #    A list of (OpString, L, germ, prepFid, measFid) tuples specifying the 
+    #    A list of (Circuit, L, germ, prepFid, measFid) tuples specifying the 
     #    final sequences categorized by max-length (L) and germ.
     #
     #germs : list
-    #    A list of OpString objects specifying all the germs found in
+    #    A list of Circuit objects specifying all the germs found in
     #    `sequences`.
 
 
@@ -3145,7 +3145,7 @@ def gatename_fidpair_list_to_fidpairs(gatename_fidpair_list):
             prepnames, measnames = gatenames
             prepStr.extend( [_Lbl(name,iQubit) for name in prepnames] )
             measStr.extend( [_Lbl(name,iQubit) for name in measnames] )
-        fidpair = (pygsti.obj.OpString(prepStr), pygsti.obj.OpString(measStr)) 
+        fidpair = (pygsti.obj.Circuit(prepStr), pygsti.obj.Circuit(measStr)) 
         fidpairs.append(fidpair)
     return fidpairs
 

@@ -12,7 +12,7 @@ import warnings as _warnings
 from ..tools import listtools as _lt
 from ..objects import LsGermsStructure as _LsGermsStructure
 from ..objects import Model as _Model
-from ..objects import OpString as _OpString
+from ..objects import Circuit as _Circuit
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from . import circuitconstruction as _gsc
 
@@ -338,7 +338,7 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
     sequenceRules : list, optional
         A list of `(find,replace)` 2-tuples which specify string replacement
         rules.  Both `find` and `replace` are tuples of operation labels
-        (or `OpString` objects).
+        (or `Circuit` objects).
 
     dscheck : DataSet, optional
         A data set which is checked for each of the generated operation sequences. When
@@ -409,7 +409,7 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
 
     truncFn = _getTruncFunction(truncScheme)
 
-    empty_germ = _OpString( (), "{}" )
+    empty_germ = _Circuit( (), "{}" )
     if includeLGST: germList = [empty_germ] + germList
 
     #running structure of all strings so far (LGST strings or empty)

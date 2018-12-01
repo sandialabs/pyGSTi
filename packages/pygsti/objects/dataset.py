@@ -25,6 +25,7 @@ from collections import defaultdict as _DefaultDict
 from ..tools import listtools as _lt
 from ..tools import compattools as _compat
 
+from . import circuit as _cir
 from . import opstring as _gs
 from . import labeldicts as _ld
 #from . import dataset as _ds
@@ -461,7 +462,7 @@ class DataSet(object):
             `None` (no repetitions).
 
         circuits : list of (tuples or Circuits)
-            Each element is a tuple of operation labels or a OpString object.  Indices for these strings
+            Each element is a tuple of operation labels or a Circuit object.  Indices for these strings
             are assumed to ascend from 0.  These indices must correspond to the time series of spam-label
             indices (above).   Only specify this argument OR circuitIndices, not both.
 
@@ -520,16 +521,16 @@ class DataSet(object):
             self.load(fileToLoadFrom)
             return
 
-        # self.gsIndex  :  Ordered dictionary where keys = OpString objects,
+        # self.gsIndex  :  Ordered dictionary where keys = Circuit objects,
         #   values = slices into oli, time, & rep arrays (static case) or
         #            integer list indices (non-static case)
         if circuitIndices is not None:
-            self.gsIndex = _OrderedDict( [(opstr if isinstance(opstr,_gs.OpString) else _gs.OpString(opstr),i)
+            self.gsIndex = _OrderedDict( [(opstr if isinstance(opstr,_cir.Circuit) else _cir.Circuit(opstr),i)
                                           for opstr,i in circuitIndices.items()] )
                                          #convert keys to Circuits if necessary
         elif not bStatic:
             if circuits is not None:
-                dictData = [ (opstr if isinstance(opstr,_gs.OpString) else _gs.OpString(opstr),i) \
+                dictData = [ (opstr if isinstance(opstr,_cir.Circuit) else _cir.Circuit(opstr),i) \
                              for (i,opstr) in enumerate(circuits) ] #convert to Circuits if necessary
                 self.gsIndex = _OrderedDict( dictData )
             else:
@@ -652,8 +653,8 @@ class DataSet(object):
         return self.set_row(circuit, outcomeDictOrSeries)
 
     def __delitem__(self, circuit):
-        if not isinstance(circuit,_gs.OpString):
-            circuit = _gs.OpString(circuit)
+        if not isinstance(circuit,_cir.Circuit):
+            circuit = _cir.Circuit(circuit)
         self._remove( [self.gsIndex[circuit]] )
 
     def get_row(self, circuit, occurrence=0):
@@ -664,7 +665,7 @@ class DataSet(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple
+        circuit : Circuit or tuple
             The gate sequence to extract data for.
 
         occurrence : int, optional
@@ -679,11 +680,11 @@ class DataSet(object):
         #Convert to circuit - needed for occurrence > 0 case and
         # because name-only Labels still don't hash the same as strings
         # so key lookups need to be done at least with tuples of Labels.
-        if not isinstance(circuit,_gs.OpString):
-            circuit = _gs.OpString(circuit)
+        if not isinstance(circuit,_cir.Circuit):
+            circuit = _cir.Circuit(circuit)
 
         if occurrence > 0:
-            circuit = circuit + _gs.OpString(("#%d" % occurrence,))
+            circuit = circuit + _cir.Circuit(("#%d" % occurrence,))
 
         #Note: gsIndex value is either an int (non-static) or a slice (static)
         repData = self.repData[ self.gsIndex[circuit] ] \
@@ -701,7 +702,7 @@ class DataSet(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple
+        circuit : Circuit or tuple
             The gate sequence to extract data for.
 
         countDict : dict
@@ -711,11 +712,11 @@ class DataSet(object):
             0-based occurrence index, specifying which occurrence of
             a repeated gate sequence to extract data for.
         """
-        if not isinstance(circuit,_gs.OpString):
-            circuit = _gs.OpString(circuit)
+        if not isinstance(circuit,_cir.Circuit):
+            circuit = _cir.Circuit(circuit)
 
         if occurrence > 0:
-            circuit = _gs.OpString(circuit) + _gs.OpString(("#%d" % occurrence,))
+            circuit = _cir.Circuit(circuit) + _cir.Circuit(("#%d" % occurrence,))
 
         if isinstance(outcomeDictOrSeries, dict): # a dict of counts
             self.add_count_dict(circuit, outcomeDictOrSeries)
@@ -742,7 +743,7 @@ class DataSet(object):
         Returns
         -------
         list
-            A list of OpString objects which index the data
+            A list of Circuit objects which index the data
             counts within this data set.
         """
         if stripOccurrenceTags and self.collisionAction == "keepseparate":
@@ -759,8 +760,8 @@ class DataSet(object):
 
         Parameters
         ----------
-        circuit : tuple or OpString
-            A tuple of operation labels or a OpString instance
+        circuit : tuple or Circuit
+            A tuple of operation labels or a Circuit instance
             which specifies the the operation sequence to check for.
 
         Returns
@@ -768,8 +769,8 @@ class DataSet(object):
         bool
             whether circuit was found.
         """
-        if not isinstance(circuit,_gs.OpString):
-            circuit = _gs.OpString(circuit)
+        if not isinstance(circuit,_cir.Circuit):
+            circuit = _cir.Circuit(circuit)
         return circuit in self.gsIndex
 
 
@@ -863,14 +864,14 @@ class DataSet(object):
 
 
     def _keepseparate_update_circuit(self, circuit):
-        if not isinstance(circuit, _gs.OpString):
-            circuit = _gs.OpString(circuit) #make sure we have a OpString
+        if not isinstance(circuit, _cir.Circuit):
+            circuit = _cir.Circuit(circuit) #make sure we have a Circuit
 
         # if "keepseparate" mode, add tag onto end of circuit
         if circuit in self.gsIndex and self.collisionAction == "keepseparate":
             i=0; tagged_gateString = circuit
             while tagged_gateString in self.gsIndex:
-                i+=1; tagged_gateString = circuit + _gs.OpString(("#%d" % i,))
+                i+=1; tagged_gateString = circuit + _cir.Circuit(("#%d" % i,))
             #add data for a new (duplicate) circuit
             circuit = tagged_gateString
 
@@ -898,8 +899,8 @@ class DataSet(object):
 
         Parameters
         ----------
-        circuit : tuple or OpString
-            A tuple of operation labels specifying the operation sequence or a OpString object
+        circuit : tuple or Circuit
+            A tuple of operation labels specifying the operation sequence or a Circuit object
 
         countDict : dict
             A dictionary with keys = outcome labels and values = counts
@@ -960,8 +961,8 @@ class DataSet(object):
 
         Parameters
         ----------
-        circuit : tuple or OpString
-            A tuple of operation labels specifying the operation sequence or a OpString object
+        circuit : tuple or Circuit
+            A tuple of operation labels specifying the operation sequence or a Circuit object
 
         outcomeLabelList : list
             A list of outcome labels (strings or tuples).  An element's index
@@ -1069,8 +1070,8 @@ class DataSet(object):
 
         Parameters
         ----------
-        circuit : tuple or OpString
-            A tuple of operation labels specifying the operation sequence or a OpString object
+        circuit : tuple or Circuit
+            A tuple of operation labels specifying the operation sequence or a Circuit object
 
         countDictList : list
             A list of dictionaries holding the outcome-label:count pairs for each
@@ -1116,8 +1117,8 @@ class DataSet(object):
 
         Parameters
         ----------
-        circuit : tuple or OpString
-            A tuple of operation labels specifying the operation sequence or a OpString object
+        circuit : tuple or Circuit
+            A tuple of operation labels specifying the operation sequence or a Circuit object
 
         aux : dict, optional
             A dictionary of auxiliary meta information to be included with
@@ -1195,12 +1196,12 @@ class DataSet(object):
         if mode == "time-dependent":
             s = "Dataset outcomes: " + str(self.olIndex) + "\n"
             for circuit in self: # tuple-type operation label strings are keys
-                s += "%s :\n%s\n" % (circuit, self[circuit].to_str(mode))
+                s += "%s :\n%s\n" % (circuit.str, self[circuit].to_str(mode))
             return s + "\n"
         else: # time-independent
             s = ""
             for circuit in self: # tuple-type operation label strings are keys
-                s += "%s  :  %s\n" % (circuit, self[circuit].to_str(mode))
+                s += "%s  :  %s\n" % (circuit.str, self[circuit].to_str(mode))
             return s + "\n"
 
 
@@ -1230,7 +1231,7 @@ class DataSet(object):
             circuitIndices = []
             circuits = []
             for opstr in listOfCircuitsToKeep:
-                circuit = opstr if isinstance(opstr, _gs.OpString) else _gs.OpString(opstr)
+                circuit = opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr)
 
                 if circuit not in self.gsIndex:
                     if missingAction == "raise":
@@ -1258,7 +1259,7 @@ class DataSet(object):
         else:
             trunc_dataset = DataSet(outcomeLabels=self.get_outcome_labels())
             for opstr in _lt.remove_duplicates(listOfCircuitsToKeep):
-                circuit = opstr if isinstance(opstr, _gs.OpString) else _gs.OpString(opstr)
+                circuit = opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr)
                 if circuit in self.gsIndex:
                     circuitIndx = self.gsIndex[circuit]
                     repData = self.repData[ circuitIndx ].copy() if (self.repData is not None) else None
@@ -1349,8 +1350,8 @@ class DataSet(object):
         Parameters
         ----------
         processor_fn : function
-            A function which takes a single OpString argument and returns
-            another (or the same) OpString.  This function may also return
+            A function which takes a single Circuit argument and returns
+            another (or the same) Circuit.  This function may also return
             `None`, in which case the data for that string is deleted.
 
         aggregate : bool, optional
@@ -1371,13 +1372,13 @@ class DataSet(object):
             if new_gstr is None:
                 to_delete.append(indx)
             elif new_gstr not in new_gsIndex or aggregate == False:
-                assert(isinstance(new_gstr, _gs.OpString)), "`processor_fn` must return a OpString!"
+                assert(isinstance(new_gstr, _cir.Circuit)), "`processor_fn` must return a Circuit!"
                 new_gsIndex[ new_gstr  ] = indx
             else: # aggregate data from indx --> new_gsIndex[new_gstr]
                 # A subset of what is in add_raw_series_data(...), but we
                 # don't need to do many of the checks there since the
                 # incoming data is known to have no new outcome labels, etc.
-                assert(isinstance(new_gstr, _gs.OpString)), "`processor_fn` must return a OpString!"
+                assert(isinstance(new_gstr, _cir.Circuit)), "`processor_fn` must return a Circuit!"
                 iSrc, iDest = indx, new_gsIndex[new_gstr]
                 self.oliData[ iDest ] = _np.concatenate((self.oliData[iDest],self.oliData[iSrc]))
                 self.timeData[ iDest ] = _np.concatenate((self.timeData[iDest],self.timeData[iSrc]))
@@ -1417,7 +1418,7 @@ class DataSet(object):
         Parameters
         ----------
         circuits : iterable
-            An iterable over OpString-like objects specifying the keys
+            An iterable over Circuit-like objects specifying the keys
             (operation sequences) to remove.
 
         missingAction : {"raise","warn","ignore"}
@@ -1431,8 +1432,8 @@ class DataSet(object):
         missingStrs = [] # to issue warning - only used if missingAction=="warn"
         gstr_indices = []; auxkeys_to_remove = []
         for opstr in circuits:
-            if not isinstance(opstr,_gs.OpString):
-                opstr = _gs.OpString(opstr)
+            if not isinstance(opstr,_cir.Circuit):
+                opstr = _cir.Circuit(opstr)
 
             if self.has_key(opstr):
                 gstr_indices.append( self.gsIndex[opstr] )
@@ -1589,7 +1590,7 @@ class DataSet(object):
         self.uuid = _uuid.uuid4()
 
     def __getstate__(self):
-        toPickle = { 'gsIndexKeys': list(map(_gs.CompressedOpString, self.gsIndex.keys())),
+        toPickle = { 'gsIndexKeys': list(map(_cir.CompressedCircuit, self.gsIndex.keys())),
                      'gsIndexVals': list(self.gsIndex.values()),
                      'olIndex': self.olIndex,
                      'ol': self.ol,
@@ -1677,7 +1678,7 @@ class DataSet(object):
         None
         """
 
-        toPickle = { 'gsIndexKeys': list(map(_gs.CompressedOpString, self.gsIndex.keys())) if self.gsIndex else [],
+        toPickle = { 'gsIndexKeys': list(map(_cir.CompressedCircuit, self.gsIndex.keys())) if self.gsIndex else [],
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'olIndex': self.olIndex,
                      'ol': self.ol,
@@ -1742,11 +1743,11 @@ class DataSet(object):
         state_dict = _pickle.load(f)
         def expand(x): #to be backward compatible
             """ Expand a compressed operation sequence """
-            if isinstance(x,_gs.CompressedOpString): return x.expand()
+            if isinstance(x,_cir.CompressedCircuit): return x.expand()
             else:
                 _warnings.warn("Deprecated dataset format.  Please re-save " +
                                "this dataset soon to avoid future incompatibility.")
-                return _gs.OpString(_gs.CompressedOpString.expand_op_label_tuple(x))
+                return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x))
         gsIndexKeys = [ expand(cgstr) for cgstr in state_dict['gsIndexKeys'] ]
 
         #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]

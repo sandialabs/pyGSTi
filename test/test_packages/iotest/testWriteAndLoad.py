@@ -10,12 +10,12 @@ class TestWriteAndLoad(BaseTestCase):
     def test_dataset_file(self):
 
         strList = pygsti.construction.circuit_list( [(), ('Gx',), ('Gx','Gy') ] )
-        weighted_strList = [ pygsti.obj.WeightedOpString((), weight=0.1),
-                             pygsti.obj.WeightedOpString(('Gx',), weight=2.0),
-                             pygsti.obj.WeightedOpString(('Gx','Gy'), weight=1.5) ]
+        #weighted_strList = [ pygsti.obj.WeightedOpString((), weight=0.1),
+        #                     pygsti.obj.WeightedOpString(('Gx',), weight=2.0),
+        #                     pygsti.obj.WeightedOpString(('Gx','Gy'), weight=1.5) ]
         pygsti.io.write_empty_dataset(temp_files + "/emptyDataset.txt", strList, numZeroCols=2, appendWeightsColumn=False)
-        pygsti.io.write_empty_dataset(temp_files + "/emptyDataset2.txt", weighted_strList,
-                                  headerString='## Columns = myplus count, myminus count', appendWeightsColumn=True)
+        #pygsti.io.write_empty_dataset(temp_files + "/emptyDataset2.txt", weighted_strList,
+        #                          headerString='## Columns = myplus count, myminus count', appendWeightsColumn=True)
 
         with self.assertRaises(ValueError):
             pygsti.io.write_empty_dataset(temp_files + "/emptyDataset.txt", [ ('Gx',) ], numZeroCols=2) #must be Circuits
@@ -110,7 +110,7 @@ Gx^4 20 80 0.2 100
         with self.assertRaises(ValueError):
             pygsti.io.write_multidataset(
                 temp_files + "/TestMultiDatasetErr.txt",ds, [('Gx',)])
-              # operation sequence list must be OpString objects
+              # operation sequence list must be Circuit objects
 
 
 

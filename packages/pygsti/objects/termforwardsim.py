@@ -92,7 +92,7 @@ class TermForwardSimulator(ForwardSimulator):
             A dictionary of pre-computed compact polynomial objects.  Keys are
             `(max_order, rholabel, elabel, circuit)` tuples, where 
             `max_order` is an integer, `rholabel` and `elabel` are
-            :class:`Label` objects, and `circuit` is a :class:`OpString`.
+            :class:`Label` objects, and `circuit` is a :class:`Circuit`.
             Computed values are added to any dictionary that is supplied, so
             supplying an empty dictionary and using this calculator will cause
             the dictionary to be filled with values.
@@ -148,7 +148,7 @@ class TermForwardSimulator(ForwardSimulator):
         rho : SPAMVec
            The spam vector representing the initial state.
 
-        circuit : OpString or tuple
+        circuit : Circuit or tuple
            A tuple of labels specifying the gate sequence to apply.
 
         Returns
@@ -177,7 +177,7 @@ class TermForwardSimulator(ForwardSimulator):
         elabels : list
             A list of :class:`Label` objects giving the *compiled* effect labels.
 
-        circuit : OpString or tuple
+        circuit : Circuit or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
         
@@ -222,7 +222,7 @@ class TermForwardSimulator(ForwardSimulator):
         spamTuple : (rho_label, compiled_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
-        circuit : OpString or tuple
+        circuit : Circuit or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
         
@@ -254,7 +254,7 @@ class TermForwardSimulator(ForwardSimulator):
         elabels : list
             A list of :class:`Label` objects giving the *compiled* effect labels.
 
-        circuit : OpString or tuple
+        circuit : Circuit or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
         
@@ -299,7 +299,7 @@ class TermForwardSimulator(ForwardSimulator):
         elabels : list
             A list of :class:`Label` objects giving the *compiled* effect labels.
 
-        circuit : OpString or tuple
+        circuit : Circuit or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
@@ -335,7 +335,7 @@ class TermForwardSimulator(ForwardSimulator):
         spamTuple : (rho_label, compiled_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
-        circuit : OpString or tuple
+        circuit : Circuit or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
@@ -380,7 +380,7 @@ class TermForwardSimulator(ForwardSimulator):
         spamTuple : (rho_label, compiled_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
-        circuit : OpString or tuple
+        circuit : Circuit or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
@@ -521,7 +521,7 @@ class TermForwardSimulator(ForwardSimulator):
 
         This routine fills a 1D array, `mxToFill` with the probabilities
         corresponding to the *compiled* operation sequences found in an evaluation
-        tree, `evalTree`.  An initial list of (general) :class:`OpString`
+        tree, `evalTree`.  An initial list of (general) :class:`Circuit`
         objects is *compiled* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently

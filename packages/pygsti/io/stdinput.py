@@ -192,7 +192,7 @@ class StdInputParser(object):
             for line in stringfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] =='#': continue
-                circuit_list.append( _objs.OpString(self.parse_circuit(line), line) )
+                circuit_list.append( _objs.Circuit(self.parse_circuit(line), stringrep=line) )
         return circuit_list
 
     def parse_dictfile(self, filename):
@@ -215,7 +215,7 @@ class StdInputParser(object):
                 line = line.strip()
                 if len(line) == 0 or line[0] =='#': continue
                 label, tup, s = self.parse_dictline(line)
-                lookupDict[ label ] = _objs.OpString(tup, s)
+                lookupDict[ label ] = _objs.Circuit(tup, stringrep=s)
         return lookupDict
 
     def parse_datafile(self, filename, showProgress=True,
@@ -337,7 +337,7 @@ class StdInputParser(object):
                 if all([ (abs(v) < 1e-9) for v in list(countDict.values())]):
                     warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % circuitStr)
                     continue #skip lines in dataset file with zero counts (no experiments done)
-                opStr = _objs.OpString(circuitTuple, circuitStr, lookup=lookupDict)
+                opStr = _objs.Circuit(circuitTuple, stringrep=circuitStr) #, lookup=lookupDict)
                 dataset.add_count_dict(opStr, countDict, aux=commentDict)
 
         if warnings:
@@ -501,7 +501,7 @@ class StdInputParser(object):
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-                opStr = _objs.OpString(circuitTuple, circuitStr, lookup=lookupDict)
+                opStr = _objs.Circuit(circuitTuple, stringrep=circuitStr) #, lookup=lookupDict)
                 self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
                 for dsLabel, countDict in dsCountDicts.items():                    
                     datasets[dsLabel].add_count_dict(opStr, countDict)
@@ -653,7 +653,7 @@ class StdInputParser(object):
                     lastpart = parts[-1]
                     circuitStr = line[:-len(lastpart)].strip()
                     circuitTuple = self.parse_circuit(circuitStr, lookupDict)
-                    circuit = _objs.OpString(circuitTuple, circuitStr)
+                    circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr)
                     timeSeriesStr = lastpart.strip()
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))

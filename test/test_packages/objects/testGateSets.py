@@ -326,8 +326,8 @@ class TestGateSetMethods(GateSetTestCase):
 
         
     def test_bulk_probabilities(self):
-        gatestring1 = pygsti.obj.OpString(('Gx','Gy'))
-        gatestring2 = pygsti.obj.OpString(('Gx','Gy','Gy'))
+        gatestring1 = pygsti.obj.Circuit(('Gx','Gy'))
+        gatestring2 = pygsti.obj.Circuit(('Gx','Gy','Gy'))
         evt,lookup,outcome_lookup = self.model.bulk_evaltree( [gatestring1,gatestring2] )
         mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( [gatestring1,gatestring2] )
 
@@ -438,9 +438,9 @@ class TestGateSetMethods(GateSetTestCase):
 
 
     def test_derivatives(self):
-        gatestring0 = pygsti.obj.OpString(('Gi',)) #,'Gx'
-        gatestring1 = pygsti.obj.OpString(('Gx','Gy'))
-        gatestring2 = pygsti.obj.OpString(('Gx','Gy','Gy'))
+        gatestring0 = pygsti.obj.Circuit(('Gi',)) #,'Gx'
+        gatestring1 = pygsti.obj.Circuit(('Gx','Gy'))
+        gatestring2 = pygsti.obj.Circuit(('Gx','Gy','Gy'))
 
         circuitList = [gatestring0,gatestring1,gatestring2]
         evt,lookup,outcome_lookup = self.model.bulk_evaltree( circuitList )
@@ -616,9 +616,9 @@ class TestGateSetMethods(GateSetTestCase):
 
 
     def test_hessians(self):
-        gatestring0 = pygsti.obj.OpString(('Gi','Gx'))
-        gatestring1 = pygsti.obj.OpString(('Gx','Gy'))
-        gatestring2 = pygsti.obj.OpString(('Gx','Gy','Gy'))
+        gatestring0 = pygsti.obj.Circuit(('Gi','Gx'))
+        gatestring1 = pygsti.obj.Circuit(('Gx','Gy'))
+        gatestring2 = pygsti.obj.Circuit(('Gx','Gy','Gy'))
 
         circuitList = pygsti.construction.circuit_list([gatestring0,gatestring1,gatestring2])
         evt,lookup,outcome_lookup = self.model.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
@@ -1144,9 +1144,9 @@ class TestGateSetMethods(GateSetTestCase):
         with self.assertRaises(ValueError):
             mdl_multispam.effects #can only use this property when there's a *single* POVM
         with self.assertRaises(ValueError):
-            prep,gates,povm = mdl_multispam.split_circuit( pygsti.obj.OpString(('Gx','Mdefault')) )
+            prep,gates,povm = mdl_multispam.split_circuit( pygsti.obj.Circuit(('Gx','Mdefault')) )
         with self.assertRaises(ValueError):
-            prep,gates,povm = mdl_multispam.split_circuit( pygsti.obj.OpString(('rho0','Gx')) )
+            prep,gates,povm = mdl_multispam.split_circuit( pygsti.obj.Circuit(('rho0','Gx')) )
 
         mdl = self.model.copy()
         mdl._paramvec[:] = 0.0 #mess with paramvec to get error below

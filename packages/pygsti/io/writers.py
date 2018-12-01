@@ -41,8 +41,8 @@ def write_empty_dataset(filename, circuit_list,
 
     """
 
-    if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.OpString):
-        raise ValueError("Argument circuit_list must be a list of OpString objects!")
+    if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
+        raise ValueError("Argument circuit_list must be a list of Circuit objects!")
 
     if numZeroCols is None: #TODO: cleaner way to extract number of columns from headerString?
         if headerString.startswith('## Columns = '):
@@ -53,7 +53,7 @@ def write_empty_dataset(filename, circuit_list,
     with open(filename, 'w') as output:
         zeroCols = "  ".join( ['0']*numZeroCols )
         output.write(headerString + '\n')
-        for circuit in circuit_list: #circuit should be a OpString object here
+        for circuit in circuit_list: #circuit should be a Circuit object here
             output.write(circuit.str + "  " + zeroCols + (("  %f" % circuit.weight) if appendWeightsColumn else "") + '\n')
 
             
@@ -91,8 +91,8 @@ def write_dataset(filename, dataset, circuit_list=None,
         outcome labels (each "count" has the format <outcomeLabel>:<count>).
     """
     if circuit_list is not None:
-        if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.OpString):
-            raise ValueError("Argument circuit_list must be a list of OpString objects!")
+        if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
+            raise ValueError("Argument circuit_list must be a list of Circuit objects!")
     else:
         circuit_list = list(dataset.keys())
 
@@ -120,7 +120,7 @@ def write_dataset(filename, dataset, circuit_list=None,
                                                        for ol in outcomeLabels ]) + '\n'
     with open(filename, 'w') as output:
         output.write(headerString)
-        for circuit in circuit_list: #circuit should be a OpString object here
+        for circuit in circuit_list: #circuit should be a Circuit object here
             dataRow = dataset[circuit.tup]
             counts = dataRow.counts
 
@@ -163,8 +163,8 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
     """
 
     if circuit_list is not None:
-        if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.OpString):
-            raise ValueError("Argument circuit_list must be a list of OpString objects!")
+        if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
+            raise ValueError("Argument circuit_list must be a list of Circuit objects!")
     else:
         circuit_list = list(multidataset.gsIndex.keys()) #TODO: make access function for circuits?
 
@@ -195,7 +195,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
 
     with open(filename, 'w') as output:
         output.write(headerString + '\n')
-        for circuit in circuit_list: #circuit should be a OpString object here
+        for circuit in circuit_list: #circuit should be a Circuit object here
             opstr = circuit.tup #circuit tuple
             cnts = [multidataset[dsl][opstr].counts.get(ol,'--') for dsl in dsLabels for ol in outcomeLabels]
             output.write(circuit.str + "  " + "  ".join( [ (("%g" % cnt) if (cnt != '--') else cnt)
@@ -218,8 +218,8 @@ def write_circuit_list(filename, circuit_list, header=None):
         need to include one.
 
     """
-    if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.OpString):
-        raise ValueError("Argument circuit_list must be a list of OpString objects!")
+    if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
+        raise ValueError("Argument circuit_list must be a list of Circuit objects!")
 
     with open(filename, 'w') as output:
         if header is not None:

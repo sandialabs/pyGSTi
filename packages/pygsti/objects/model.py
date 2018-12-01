@@ -26,7 +26,7 @@ from ..tools import listtools as _lt
 from ..tools import symplectic as _symp
 
 from . import modelmember as _gm
-from . import opstring as _gs
+from . import circuit as _cir
 from . import gate as _op
 from . import spamvec as _sv
 from . import povm as _povm
@@ -1082,7 +1082,7 @@ class Model(object):
 
         Parameters
         ----------
-        circuit : OpString
+        circuit : Circuit
             A operation sequence, possibly beginning with a state preparation
             label and ending with a povm label.
 
@@ -1098,7 +1098,7 @@ class Model(object):
         Returns
         -------
         prepLabel : str or None
-        opsOnlyString : OpString
+        opsOnlyString : Circuit
         povmLabel : str or None
         """
         if len(circuit) > 0 and circuit[0] in self.preps:
@@ -1126,7 +1126,7 @@ class Model(object):
 
     def compile_circuits(self, circuits, dataset=None):
         """
-        Compiles a list of :class:`OpString`s.
+        Compiles a list of :class:`Circuit`s.
 
         LinearOperator strings must be "compiled" before probabilities can be computed for
         them. Each string corresponds to some number of "outcomes", indexed by an
@@ -1179,7 +1179,7 @@ class Model(object):
         # dataset.compile -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
         # compile all gsplaq strs -> elementIndices[(i,j)],
 
-        circuits = [ _gs.OpString(opstr) for opstr in circuits ] # cast to Circuits
+        circuits = [ _cir.Circuit(opstr) for opstr in circuits ] # cast to Circuits
 
         #Indexed by raw operation sequence
         raw_spamTuples_dict = _collections.OrderedDict()  # final
@@ -1235,7 +1235,7 @@ class Model(object):
                 #    #we've found an instrument - recurse!
                 #    for inst_el_lbl in self.instruments[op_label]:
                 #        compiled_el_lbl = op_label + "_" + inst_el_lbl
-                #        process(s[0:i] + _gs.OpString((compiled_el_lbl,)) + s[i+1:],
+                #        process(s[0:i] + _cir.Circuit((compiled_el_lbl,)) + s[i+1:],
                 #                spamtuples, elIndsToOutcomes, op_outcomes + (inst_el_lbl,), i+1)
                 #    break
 
@@ -1261,7 +1261,7 @@ class Model(object):
                                 
                         compiled_el_lbl = _Label(sublabels)
                         compiled_el_outcomes = tuple(outcomes)
-                        process(s[0:i] + _gs.OpString((compiled_el_lbl,)) + s[i+1:],
+                        process(tuple(s[0:i]) + (compiled_el_lbl,) + tuple(s[i+1:]),
                                 spamtuples, observed_outcomes, elIndsToOutcomes,
                                 op_outcomes + compiled_el_outcomes, i+1)
                     break
@@ -1371,11 +1371,11 @@ class Model(object):
 
     def compile_circuit(self, circuit):
         """
-        Compiles a single :class:`OpString`.
+        Compiles a single :class:`Circuit`.
 
         Parameters
         ----------
-        circuit : OpString
+        circuit : Circuit
             The operation sequence to compile
 
         Returns
@@ -1411,7 +1411,7 @@ class Model(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
             The sequence of operation labels.
 
         bScale : bool, optional
@@ -1428,7 +1428,7 @@ class Model(object):
             is to allow a trace or other linear operation to be done
             prior to the scaling.
         """
-        circuit = _gs.OpString(circuit) # cast to OpString
+        circuit = _cir.Circuit(circuit) # cast to Circuit
         return self._calc().product(circuit, bScale)
 
 
@@ -1438,7 +1438,7 @@ class Model(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
           The sequence of operation labels.
 
         flat : bool, optional
@@ -1463,7 +1463,7 @@ class Model(object):
               and deriv[i,j] holds the derivative of the i-th entry of the flattened
               product with respect to the j-th model parameter.
         """
-        circuit = _gs.OpString(circuit) # cast to OpString
+        circuit = _cir.Circuit(circuit) # cast to Circuit
         return self._calc().dproduct(circuit, flat)
 
 
@@ -1473,7 +1473,7 @@ class Model(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
           The sequence of operation labels.
 
         flat : bool, optional
@@ -1498,7 +1498,7 @@ class Model(object):
               and hessian[i,j,k] holds the derivative of the i-th entry of the flattened
               product with respect to the k-th then k-th model parameters.
         """
-        circuit = _gs.OpString(circuit) # cast to OpString
+        circuit = _cir.Circuit(circuit) # cast to Circuit
         return self._calc().hproduct(circuit, flat)
 
 
@@ -1512,7 +1512,7 @@ class Model(object):
 #        spamLabel : string
 #           the label specifying the state prep and measure operations
 #
-#        circuit : OpString or tuple of operation labels
+#        circuit : Circuit or tuple of operation labels
 #          The sequence of operation labels specifying the operation sequence.
 #
 #        clipTo : 2-tuple, optional
@@ -1543,7 +1543,7 @@ class Model(object):
 #        spamLabel : string
 #           the label specifying the state prep and measure operations
 #
-#        circuit : OpString or tuple of operation labels
+#        circuit : Circuit or tuple of operation labels
 #          The sequence of operation labels specifying the operation sequence.
 #
 #        returnPr : bool, optional
@@ -1577,7 +1577,7 @@ class Model(object):
 #        spamLabel : string
 #           the label specifying the state prep and measure operations
 #
-#        circuit : OpString or tuple of operation labels
+#        circuit : Circuit or tuple of operation labels
 #          The sequence of operation labels specifying the operation sequence.
 #
 #        returnPr : bool, optional
@@ -1616,7 +1616,7 @@ class Model(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
         clipTo : 2-tuple, optional
@@ -1639,7 +1639,7 @@ class Model(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
         returnPr : bool, optional
@@ -1667,7 +1667,7 @@ class Model(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
         returnPr : bool, optional
@@ -2503,7 +2503,7 @@ class Model(object):
             `(outcome, p)` tuples, where `outcome` is a tuple of labels
             and `p` is the corresponding probability.
         """
-        circuit_list = [ _gs.OpString(opstr) for opstr in circuit_list]  # cast to Circuits
+        circuit_list = [ _cir.Circuit(opstr) for opstr in circuit_list]  # cast to Circuits
         evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
             circuit_list, comm, memLimit, subcalls=['bulk_fill_probs'],
             dataset=dataset, verbosity=0) # FUTURE (maybe make verbosity into an arg?)
@@ -2565,7 +2565,7 @@ class Model(object):
             if False, then `p` is not included in the tuples (so they're just
             `(outcome, dp)`).
         """
-        circuit_list = [ _gs.OpString(opstr) for opstr in circuit_list]  # cast to Circuits
+        circuit_list = [ _cir.Circuit(opstr) for opstr in circuit_list]  # cast to Circuits
         evalTree, elIndices, outcomes = self.bulk_evaltree(circuit_list, dataset=dataset)
         return self._calc().bulk_dprobs(circuit_list, evalTree, elIndices,
                                         outcomes, returnPr,clipTo,
@@ -2630,7 +2630,7 @@ class Model(object):
             If `returnPr` if False, then `p` is not included in the tuples.
             If `returnDeriv` if False, then `dp` is not included in the tuples.
         """
-        circuit_list = [ _gs.OpString(opstr) for opstr in circuit_list]  # cast to Circuits
+        circuit_list = [ _cir.Circuit(opstr) for opstr in circuit_list]  # cast to Circuits
         evalTree, elIndices, outcomes = self.bulk_evaltree(circuit_list, dataset=dataset)
         return self._calc().bulk_hprobs(circuit_list, evalTree, elIndices,
                                         outcomes, returnPr, returnDeriv,
@@ -2644,7 +2644,7 @@ class Model(object):
 
         This routine fills a 1D array, `mxToFill` with the probabilities
         corresponding to the *compiled* operation sequences found in an evaluation
-        tree, `evalTree`.  An initial list of (general) :class:`OpString`
+        tree, `evalTree`.  An initial list of (general) :class:`Circuit`
         objects is *compiled* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently

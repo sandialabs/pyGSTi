@@ -135,7 +135,7 @@ def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, psp
     
     for l in range(depth):
         
-        layer = circuit.get_layer_with_idles(l)
+        layer = circuit.get_layer_with_idles(l,idleGateName=pspec.identity)
         s, p = _symp.symplectic_rep_of_clifford_layer(layer,n,Qlabels=circuit.line_labels,srep_dict=srep)        
         # Apply the perfect layer to the current state.
         sout, pout = _symp.apply_clifford_to_stabilizer_state(s, p, sout, pout)

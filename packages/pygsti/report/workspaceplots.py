@@ -362,7 +362,7 @@ def generate_boxplot(subMxs,
         """filter to latex-ify operation sequences.  Later add filter as a possible parameter"""
         formatted_vals = []
         for val in vals:
-            if (isinstance(val,tuple) or isinstance(val,_objs.OpString)) \
+            if (isinstance(val,tuple) or isinstance(val,_objs.Circuit)) \
                and all([_tools.isstr(el) for el in val]):
                 if len(val) == 0:
                     #formatted_vals.append(r"$\{\}$")
@@ -1322,7 +1322,7 @@ class BoxKeyPlot(WorkspacePlot):
             """filter to latex-ify operation sequences.  Later add filter as a possible parameter"""
             formatted_vals = []
             for val in vals:
-                if isinstance(val, (tuple,_objs.OpString)) and all([isinstance(el,_objs.Label) for el in val]):
+                if isinstance(val, (tuple,_objs.Circuit)) and all([isinstance(el,_objs.Label) for el in val]):
                     if len(val) == 0:
                         #formatted_vals.append(r"$\{\}$")
                         formatted_vals.append(r"{}")

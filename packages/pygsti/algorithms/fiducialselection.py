@@ -71,10 +71,10 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
 
     Returns
     -------
-    prepFidList : list of OpString
+    prepFidList : list of Circuits
         A list containing the operation sequences for the prep fiducials.
 
-    measFidList : list of OpString
+    measFidList : list of Circuits
         A list containing the operation sequences for the measurement fiducials.
 
     """

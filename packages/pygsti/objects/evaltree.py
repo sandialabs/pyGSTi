@@ -91,7 +91,7 @@ class EvalTree(list):
           Parameters
           ----------
           circuit_list : list of (tuples or Circuits)
-              A list of tuples of operation labels or OpString
+              A list of tuples of operation labels or Circuit
               objects, specifying the operation sequences that
               should be present in the evaluation tree.
 

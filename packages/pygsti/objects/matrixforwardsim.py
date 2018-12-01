@@ -84,7 +84,7 @@ class MatrixForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
             The sequence of operation labels.
 
         bScale : bool, optional
@@ -241,7 +241,7 @@ class MatrixForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
           The sequence of operation labels.
 
         flat : bool, optional
@@ -338,7 +338,7 @@ class MatrixForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
           The sequence of operation labels.
 
         flat : bool, optional
@@ -517,7 +517,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         elabels : list
             A list of :class:`Label` objects giving the *compiled* effect labels.
 
-        circuit : OpString or tuple
+        circuit : Circuit or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
@@ -595,7 +595,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         spamTuple : (rho_label, compiled_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
-        circuit : OpString or tuple
+        circuit : Circuit or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
@@ -675,7 +675,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         spamTuple : (rho_label, compiled_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
-        circuit : OpString or tuple
+        circuit : Circuit or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
@@ -1959,7 +1959,7 @@ class MatrixForwardSimulator(ForwardSimulator):
 
         This routine fills a 1D array, `mxToFill` with the probabilities
         corresponding to the *compiled* operation sequences found in an evaluation
-        tree, `evalTree`.  An initial list of (general) :class:`OpString`
+        tree, `evalTree`.  An initial list of (general) :class:`Circuit`
         objects is *compiled* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently

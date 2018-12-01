@@ -1052,7 +1052,7 @@ def build_model(stateSpaceDims, stateSpaceLabels,
 def build_alias_model(mdl_primitives, alias_dict):
     """
     Creates a new model by composing the gates of an existing `Model`,
-    `mdl_primitives`, according to a dictionary of `OpString`s, `alias_dict`.
+    `mdl_primitives`, according to a dictionary of `Circuit`s, `alias_dict`.
     The keys of `alias_dict` are the operation labels of the returned `Model`.
     SPAM vectors are unaltered, and simply copied from `mdl_primitives`.
 
@@ -1063,7 +1063,7 @@ def build_alias_model(mdl_primitives, alias_dict):
         the gates of the returned model).
     
     alias_dict : dictionary
-        A dictionary whose keys are strings and values are OpString objects
+        A dictionary whose keys are strings and values are Circuit objects
         specifying sequences of primitive gates.  Each key,value pair specifies
         the composition rule for a creating a gate in the returned model.
     

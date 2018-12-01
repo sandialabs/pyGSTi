@@ -92,9 +92,9 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #Circuit Simulation circuits
         cls.csim_nQubits=3
-        cls.circuit1 = pygsti.obj.OpString(('Gx','Gy'))
-          # now Circuit adds qubit labels... pygsti.obj.Circuit(circuit=('Gx','Gy'), num_lines=1) # 1-qubit circuit
-        cls.circuit3 = pygsti.obj.Circuit(circuit=[ ('Gxpi',0), ('Gypi',1),('Gcnot',1,2)], num_lines=3) # 3-qubit circuit
+        cls.circuit1 = pygsti.obj.Circuit(('Gx','Gy'))
+          # now Circuit adds qubit labels... pygsti.obj.Circuit(layer_labels=('Gx','Gy'), num_lines=1) # 1-qubit circuit
+        cls.circuit3 = pygsti.obj.Circuit(layer_labels=[ ('Gxpi',0), ('Gypi',1),('Gcnot',1,2)], num_lines=3) # 3-qubit circuit
 
         os.chdir(origDir) # return to original directory
 
@@ -496,10 +496,10 @@ class CalcMethods1QTestCase(BaseTestCase):
 
     def test_circuitsim_stabilizer(self):
         # Stabilizer-state simulation (of Clifford gates) using map-based calc
-        c0 = pygsti.obj.Circuit(circuit=(), num_lines=1) # 1-qubit circuit
-        c1 = pygsti.obj.Circuit(circuit=(('Gx',0),), num_lines=1) 
-        c2 = pygsti.obj.Circuit(circuit=(('Gx',0),('Gx',0)), num_lines=1)
-        c3 = pygsti.obj.Circuit(circuit=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
+        c0 = pygsti.obj.Circuit(layer_labels=(), num_lines=1) # 1-qubit circuit
+        c1 = pygsti.obj.Circuit(layer_labels=(('Gx',0),), num_lines=1) 
+        c2 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0)), num_lines=1)
+        c3 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
 
         mdl = pygsti.construction.build_nqubit_standard_model(
             1, ['Gi','Gx','Gy'], parameterization="clifford")
@@ -546,10 +546,10 @@ class CalcMethods1QTestCase(BaseTestCase):
 
     def test_circuitsim_cterm(self):
         # Density-matrix simulation (of superoperator gates) using stabilizer-based term calcs
-        c0 = pygsti.obj.Circuit(circuit=(), num_lines=1) # 1-qubit circuit
-        c1 = pygsti.obj.Circuit(circuit=(('Gx',0),), num_lines=1) 
-        c2 = pygsti.obj.Circuit(circuit=(('Gx',0),('Gx',0)), num_lines=1)
-        c3 = pygsti.obj.Circuit(circuit=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
+        c0 = pygsti.obj.Circuit(layer_labels=(), num_lines=1) # 1-qubit circuit
+        c1 = pygsti.obj.Circuit(layer_labels=(('Gx',0),), num_lines=1) 
+        c2 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0)), num_lines=1)
+        c3 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
         
         mdl = pygsti.construction.build_nqubit_standard_model(
             1, ['Gi','Gx','Gy'], sim_type="termorder:1", parameterization="H+S clifford terms")

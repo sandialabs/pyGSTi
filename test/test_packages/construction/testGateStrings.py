@@ -68,7 +68,7 @@ class TestGateStringMethods(BaseTestCase):
                      "Gf0(G1aG1b)^2Gf1",
                      "Gf1(G1aG1b)^2Gf0",
                      "Gf1(G1aG1b)^2Gf1" ]
-        self.assertEqual( list(map(str,gateStrings1)), expected1 )
+        self.assertEqual( [ x.str for x in gateStrings1], expected1 )
 
 
         gateStrings2 = pygsti.construction.create_circuit_list("f0+T(germ,N)+f1", f0=fids, f1=fids,
@@ -82,7 +82,7 @@ class TestGateStringMethods(BaseTestCase):
                      "Gf0G1aG1bG1aGf1",
                      "Gf1G1aG1bG1aGf0",
                      "Gf1G1aG1bG1aGf1" ]
-        self.assertEqual( list(map(str,gateStrings2)), expected2 )
+        self.assertEqual( [ x.str for x in gateStrings2], expected2 )
 
 
         gateStrings3 = pygsti.construction.create_circuit_list("f0+T(germ,N)+f1", f0=fids, f1=fids,
@@ -97,28 +97,28 @@ class TestGateStringMethods(BaseTestCase):
                       "Gf0(G1aG1b)Gf1",
                       "Gf1(G1aG1b)Gf0",
                       "Gf1(G1aG1b)Gf1" ]
-        self.assertEqual( list(map(str,gateStrings3)), expected3 )
+        self.assertEqual( [ x.str for x in gateStrings3], expected3 )
 
     def test_string_compression(self):
-        mdl = pygsti.objects.OpString(None, stringRepresentation="Gx^100")
-        comp_gs = pygsti.objects.opstring.CompressedOpString.compress_op_label_tuple(tuple(mdl))
-        exp_gs = pygsti.objects.opstring.CompressedOpString.expand_op_label_tuple(comp_gs)
+        mdl = pygsti.objects.Circuit(None, stringrep="Gx^100")
+        comp_gs = pygsti.objects.circuit.CompressedCircuit.compress_op_label_tuple(tuple(mdl))
+        exp_gs = pygsti.objects.circuit.CompressedCircuit.expand_op_label_tuple(comp_gs)
         self.assertEqual(tuple(mdl), exp_gs)
 
     def test_repeat(self):
-        mdl = pygsti.objects.OpString( ('Gx','Gx','Gy') )
+        mdl = pygsti.objects.Circuit( ('Gx','Gx','Gy') )
 
         gs2 = pygsti.construction.repeat(mdl, 2)
-        self.assertEqual( gs2, pygsti.obj.OpString( ('Gx','Gx','Gy','Gx','Gx','Gy') ))
+        self.assertEqual( gs2, pygsti.obj.Circuit( ('Gx','Gx','Gy','Gx','Gx','Gy') ))
 
         gs3 = pygsti.construction.repeat_with_max_length(mdl, 7)
-        self.assertEqual( gs3, pygsti.obj.OpString( ('Gx','Gx','Gy','Gx','Gx','Gy') ))
+        self.assertEqual( gs3, pygsti.obj.Circuit( ('Gx','Gx','Gy','Gx','Gx','Gy') ))
 
         gs4 = pygsti.construction.repeat_and_truncate(mdl, 4)
-        self.assertEqual( gs4, pygsti.obj.OpString( ('Gx','Gx','Gy','Gx') ))
+        self.assertEqual( gs4, pygsti.obj.Circuit( ('Gx','Gx','Gy','Gx') ))
 
         gs5 = pygsti.construction.repeat_remainder_for_truncation(mdl, 4)
-        self.assertEqual( gs5, pygsti.obj.OpString( ('Gx',) ))
+        self.assertEqual( gs5, pygsti.obj.Circuit( ('Gx',) ))
 
     def test_simplify(self):
         s = "{}Gx^1Gy{}Gz^1"
@@ -155,13 +155,13 @@ class TestGateStringMethods(BaseTestCase):
 
 
     def test_python_string_conversion(self):
-        mdl = pygsti.obj.OpString(None, stringRepresentation="Gx^3Gy^2GxGz")
+        mdl = pygsti.obj.Circuit(None, stringrep="Gx^3Gy^2GxGz")
 
         op_labels = (L('Gx'),L('Gy'),L('Gz'))
         pystr = mdl.to_pythonstr( op_labels )
         self.assertEqual( pystr, "AAABBAC" )
 
-        gs2_tup = pygsti.obj.OpString.from_pythonstr( pystr, op_labels )
+        gs2_tup = pygsti.obj.Circuit.from_pythonstr( pystr, op_labels )
         self.assertEqual( gs2_tup, tuple(mdl) )
 
     def test_std_lists_and_structs(self):
@@ -267,7 +267,7 @@ class TestGateStringMethods(BaseTestCase):
         lgst_strings = pygsti.construction.list_lgst_circuits(strs,strs,opLabels)
         lsgstStructs10 = pygsti.construction.make_lsgst_structs(
             opLabels, strs, strs, germs, maxLens, dscheck=ds, actionIfMissing="drop", verbosity=4 )
-        self.assertEqual([pygsti.obj.OpString(('Gx',))], lsgstStructs10[-1].allstrs)
+        self.assertEqual([pygsti.obj.Circuit(('Gx',))], lsgstStructs10[-1].allstrs)
         
         with self.assertRaises(ValueError):
             pygsti.construction.make_lsgst_structs(
@@ -308,8 +308,8 @@ class TestGateStringMethods(BaseTestCase):
 
         
     def test_gatestring_object(self):
-        s1 = pygsti.obj.OpString( ('Gx','Gx'), "Gx^2" )
-        s2 = pygsti.obj.OpString( s1, "Gx^2" )
+        s1 = pygsti.obj.Circuit( ('Gx','Gx'), "Gx^2" )
+        s2 = pygsti.obj.Circuit( s1, "Gx^2" )
         s3 = s1 + s2
         s4 = s1**3
         s5 = s4
@@ -330,51 +330,52 @@ class TestGateStringMethods(BaseTestCase):
         #b1 = s1 < s2
         #b2 = s1 > s2
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             s1[0] = 'Gx' #cannot set items - like a tuple they're read-only
         with self.assertRaises(ValueError):
-            bad = s1 + ("Gx",) #can't add non-OpString to circuit
+            bad = s1 + ("Gx",) #can't add non-Circuit to circuit
         with self.assertRaises(ValueError):
-            pygsti.obj.OpString( ('Gx','Gx'), "GxGy" ) #mismatch
+            pygsti.obj.Circuit( ('Gx','Gx'), stringrep="GxGy", check=True) #mismatch
         with self.assertRaises(ValueError):
-            pygsti.obj.OpString( None )
+            pygsti.obj.Circuit( None )
         with self.assertRaises(ValueError): 
-            pygsti.obj.OpString( ('foobar',), "foobar" ) # lexer illegal character
+            pygsti.obj.Circuit( ('foobar',), stringrep="foobar", check=True ) # lexer illegal character
 
-        w1 = pygsti.obj.WeightedOpString( ('Gx','Gy'), "GxGy", weight=0.5)
-        w2 = pygsti.obj.WeightedOpString( ('Gy',), "Gy", weight=0.5)
-        w3 = w1 + w2
-        w4 = w2**2
-        w5 = s1 + w2
-        w6 = w2 + s1
-        w7 = copy.copy(w1)
+        #REMOVED: WeightedOpString
+        #w1 = pygsti.obj.WeightedOpString( ('Gx','Gy'), "GxGy", weight=0.5)
+        #w2 = pygsti.obj.WeightedOpString( ('Gy',), "Gy", weight=0.5)
+        #w3 = w1 + w2
+        #w4 = w2**2
+        #w5 = s1 + w2
+        #w6 = w2 + s1
+        #w7 = copy.copy(w1)
+        #
+        #with self.assertRaises(ValueError):
+        #    w1 + ('Gx',) #can only add to other Circuits
+        #with self.assertRaises(ValueError):
+        #    ('Gx',) + w1 #can only add to other Circuits
+        #
+        #w1_str = str(w1)
+        #w1_repr = repr(w1)
+        #x = w1[0]
+        #x2 = w1[0:2]
+        #
+        #self.assertEqual( w1, ('Gx','Gy') ); self.assertEqual(w1.weight, 0.5)
+        #self.assertEqual( w2, ('Gy',) ); self.assertEqual(w2.weight, 0.5)
+        #self.assertEqual( w3, ('Gx','Gy','Gy') ); self.assertEqual(w3.weight, 1.0)
+        #self.assertEqual( w4, ('Gy','Gy') ); self.assertEqual(w4.weight, 0.5)
+        #self.assertEqual( w5, ('Gx','Gx','Gy') ); self.assertEqual(w5.weight, 0.5)
+        #self.assertEqual( w6, ('Gy','Gx','Gx') ); self.assertEqual(w6.weight, 0.5)
+        #self.assertEqual( x, 'Gx' )
+        #self.assertEqual( x2, ('Gx','Gy') )
+        #self.assertEqual( w1, w7)
 
-        with self.assertRaises(ValueError):
-            w1 + ('Gx',) #can only add to other Circuits
-        with self.assertRaises(ValueError):
-            ('Gx',) + w1 #can only add to other Circuits
-
-        w1_str = str(w1)
-        w1_repr = repr(w1)
-        x = w1[0]
-        x2 = w1[0:2]
-
-        self.assertEqual( w1, ('Gx','Gy') ); self.assertEqual(w1.weight, 0.5)
-        self.assertEqual( w2, ('Gy',) ); self.assertEqual(w2.weight, 0.5)
-        self.assertEqual( w3, ('Gx','Gy','Gy') ); self.assertEqual(w3.weight, 1.0)
-        self.assertEqual( w4, ('Gy','Gy') ); self.assertEqual(w4.weight, 0.5)
-        self.assertEqual( w5, ('Gx','Gx','Gy') ); self.assertEqual(w5.weight, 0.5)
-        self.assertEqual( w6, ('Gy','Gx','Gx') ); self.assertEqual(w6.weight, 0.5)
-        self.assertEqual( x, 'Gx' )
-        self.assertEqual( x2, ('Gx','Gy') )
-        self.assertEqual( w1, w7)
-
-        c1 = pygsti.objects.opstring.CompressedOpString(s1)
+        c1 = pygsti.objects.circuit.CompressedCircuit(s1)
         s1_expanded = c1.expand()
         self.assertEqual(s1,s1_expanded)
 
         with self.assertRaises(ValueError):
-            pygsti.objects.opstring.CompressedOpString( ('Gx',) ) #can only create from Circuits
+            pygsti.objects.circuit.CompressedCircuit( ('Gx',) ) #can only create from Circuits
 
 
     def test_alias_manips(self):

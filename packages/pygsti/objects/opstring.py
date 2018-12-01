@@ -245,7 +245,6 @@ class OpString(object):
         return OpString(parallel_lbls)
                     
             
-    #Conversion routines for evalTree usage -- TODO: make these member functions
     def to_pythonstr(self,opLabels):
         """
         Convert this operation sequence into a python string, where each operation label is

@@ -8,7 +8,7 @@ import collections as _collections
 
 from ... import _version
 from ...baseobjs import VerbosityPrinter as _VerbosityPrinter
-from ...objects import OpString as _OpString
+from ...objects import Circuit as _Circuit
 from ...report import workspace as _ws
 from ...report import workspaceplots as _wp
 from ...report import table as _reporttable
@@ -310,7 +310,7 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
                 title, scale, mdl_simulator):
     
         maxLens = idtresults.max_lengths
-        GiStr = _OpString(idtresults.idle_str)
+        GiStr = _Circuit(idtresults.idle_str)
         prepStr = fidpair[0].to_circuit(idtresults.prep_basis_strs)
         measStr = fidpair[1].to_circuit(idtresults.meas_basis_strs)
 

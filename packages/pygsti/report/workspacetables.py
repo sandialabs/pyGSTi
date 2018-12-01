@@ -612,7 +612,7 @@ class GatesVsTargetTable(WorkspaceTable):
             - "frob" :    frobenius distance
 
         virtual_ops : list, optional
-            If not None, a list of `OpString` objects specifying additional "gates"
+            If not None, a list of `Circuit` objects specifying additional "gates"
             (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
             automatically discarded so they are not displayed twice.
 
@@ -652,7 +652,7 @@ class GatesVsTargetTable(WorkspaceTable):
             iterOver = opLabels + [v for v in virtual_ops if len(v) > 1]
 
         for gl in iterOver:
-            #Note: gl may be a operation label (a string) or a OpString
+            #Note: gl may be a operation label (a string) or a Circuit
             row_data = [ str(gl) ]
 
             for disp in display:
@@ -1537,7 +1537,7 @@ class GateEigenvalueTable(WorkspaceTable):
             - "evinf" : the gauge-invariant "eigenvalue infidelity" metric
 
         virtual_ops : list, optional
-            If not None, a list of `OpString` objects specifying additional "gates"
+            If not None, a list of `Circuit` objects specifying additional "gates"
             (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
             automatically discarded so they are not displayed twice.
 
@@ -1629,7 +1629,7 @@ class GateEigenvalueTable(WorkspaceTable):
             iterOver = opLabels + [v for v in virtual_ops if len(v) > 1]
 
         for gl in iterOver:
-            #Note: gl may be a operation label (a string) or a OpString
+            #Note: gl may be a operation label (a string) or a Circuit
             row_data = [ str(gl) ]
             row_formatters = [None]
 
@@ -1916,7 +1916,7 @@ class GatestringTable(WorkspaceTable):
 
         Parameters
         ----------
-        gsLists : OpString list or list of OpString lists
+        gsLists : Circuit list or list of Circuit lists
             List(s) of operation sequences to put in table.
 
         titles : string or list of strings
@@ -1943,7 +1943,7 @@ class GatestringTable(WorkspaceTable):
 
         if len(gsLists) == 0:
             gsLists = [ [] ]
-        elif isinstance(gsLists[0], _objs.OpString) or \
+        elif isinstance(gsLists[0], _objs.Circuit) or \
            (isinstance(gsLists[0], tuple) and _tools.isstr(gsLists[0][0])):
             gsLists = [ gsLists ]
 
@@ -1970,7 +1970,7 @@ class GatestringTable(WorkspaceTable):
                                  customHeader={'latex': latex_head,
                                                'html': html_head })
 
-        formatters = (('Normal',) + ('OpString',)*len(gsLists))*nCols
+        formatters = (('Normal',) + ('Circuit',)*len(gsLists))*nCols
 
         maxListLength = max(list(map(len,gsLists)))
         nRows = (maxListLength+(nCols-1)) // nCols #ceiling

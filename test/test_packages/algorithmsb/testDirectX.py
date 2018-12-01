@@ -29,7 +29,7 @@ class DirectXTestCase(BaseTestCase):
 #                                                            f0=std.prepStrs, f1=std.effectStrs,
 #                                                            base=self.strs)
 
-#        expstrs = [ pygsti.objects.OpString( () ) ] + expstrs #add empty string, which is always needed
+#        expstrs = [ pygsti.objects.Circuit( () ) ] + expstrs #add empty string, which is always needed
         
         mdl_datagen = self.tgt.depolarize(op_noise=0.05, spam_noise=0.1)
         self.ds = pygsti.construction.generate_fake_data(mdl_datagen, expstrs, 1000, "multinomial", seed=1234)
@@ -46,7 +46,7 @@ class DirectXTestCase(BaseTestCase):
 
         aliases = {'Gy2': ('Gy',)}
         mdl = directx.model_with_lgst_circuit_estimates(
-            [pygsti.obj.OpString(('Gy2',))], self.ds, self.prepStrs, self.effectStrs, self.tgt, includeTargetOps=True,
+            [pygsti.obj.Circuit(('Gy2',))], self.ds, self.prepStrs, self.effectStrs, self.tgt, includeTargetOps=True,
             gateStringLabels=None, svdTruncateTo=4, verbosity=10, opLabelAliases=aliases)
 
 

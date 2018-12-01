@@ -1,7 +1,6 @@
 import unittest
 import pygsti
 from pygsti.objects import Circuit
-from pygsti.objects import OpString
 from pygsti.baseobjs import Label
 from pygsti.objects import ProcessorSpec
 from pygsti.tools import symplectic
@@ -100,7 +99,7 @@ class TestCompilers(AlgorithmsBase):
                 circuit.append(Label('CNOT',('Q'+str(a),'Q'+str(b))))
     
                 subsetQs = ['Q'+str(i) for i in range(nsubset)] 
-        circuit = Circuit(circuit=circuit, line_labels = subsetQs)
+        circuit = Circuit(layer_labels=circuit, line_labels = subsetQs)
         s, p  = pygsti.tools.symplectic.symplectic_rep_of_clifford_circuit(circuit)
     
         aargs= {}
@@ -158,6 +157,7 @@ class TestCompilers(AlgorithmsBase):
         s, p  = symplectic.random_clifford(n)
         c1 = compilers.compile_stabilizer_state(s,p,pspec6,algorithm='COiCAGE',paulirandomize=False)
         c2 = compilers.compile_stabilizer_measurement(s,p,pspec6,algorithm='COiCAGE',paulirandomize=True)
+        c2 = c2.copy(editable=True)
         c2.prefix_circuit(c1)
         zerosstate_s, zerosstate_p = symplectic.prep_stabilizer_state(n)
         sc, pc = symplectic.symplectic_rep_of_clifford_circuit(c2,pspec=pspec6)

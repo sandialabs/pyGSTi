@@ -59,10 +59,10 @@ class LabelTestCase(BaseTestCase):
 
     def test_circuit_init(self):
         #Check that parallel operation labels get converted to circuits properly
-        opstr = pygsti.obj.OpString( ((('Gx',0),('Gy',1)),('Gcnot',0,1)) )
-        c = pygsti.obj.Circuit(circuit=opstr, num_lines=2)
-        print(c)
-        self.assertEqual(c.line_items, [[L(('Gx',0)), L(('Gcnot',0,1))], [ L(('Gy',1)), L(('Gcnot',0,1))]])
+        opstr = pygsti.obj.Circuit( ((('Gx',0),('Gy',1)),('Gcnot',0,1)) )
+        c = pygsti.obj.Circuit(layer_labels=opstr, num_lines=2)
+        print(c._labels)
+        self.assertEqual(c._labels, ( L( (('Gx',0),('Gy',1)) ), L('Gcnot',(0,1)) ))
 
 
     def test_autogator(self):
@@ -80,7 +80,7 @@ class LabelTestCase(BaseTestCase):
         with self.assertRaises(KeyError):
             mdl.operations[parallelLbl]
         
-        opstr = pygsti.obj.OpString( (parallelLbl,) )
+        opstr = pygsti.obj.Circuit( (parallelLbl,) )
         probs = mdl.probs(opstr)
         print(probs)
 

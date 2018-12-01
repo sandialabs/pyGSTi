@@ -1058,9 +1058,9 @@ def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None
     
     Parameters
     ----------
-    layer : list/tuple of operation labels
-        The Clifford gates to calculate the global action of, input as a
-        list of Label objects.
+    layer : Label
+        A layer label, often a compound label with components. Specifies
+        The Clifford gate(s) to calculate the global action of.
 
     n : int, optional
         The total number of qubits. Must be specified if `Qlabels` is None.
@@ -1107,25 +1107,26 @@ def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None
     s = _np.identity(2*n,int)
     p = _np.zeros(2*n,int)
 
-    for gatelbl in layer:
-        for sub_gl in gatelbl.components:
-
-            matrix, phase = sreps[sub_gl.name]           
-            nforgate = sub_gl.number_of_qubits
-            sub_gl_qubits = sub_gl.qubits if (sub_gl.qubits is not None) else Qlabels
-            for ind1, qlabel1 in enumerate(sub_gl_qubits):
-                qindex1 = Qlabels.index(qlabel1)
-                for ind2, qlabel2 in enumerate(sub_gl_qubits):
-                    qindex2 = Qlabels.index(qlabel2)
-                    # Put in the symp matrix elements
-                    s[qindex1,qindex2] = matrix[ind1,ind2]
-                    s[qindex1,qindex2+n] = matrix[ind1,ind2+nforgate]
-                    s[qindex1+n,qindex2] = matrix[ind1+nforgate,ind2]
-                    s[qindex1+n,qindex2+n] = matrix[ind1+nforgate,ind2+nforgate]
-                
-                # Put in the phase elements
-                p[qindex1] = phase[ind1] 
-                p[qindex1+n] = phase[ind1+nforgate]                      
+    if not isinstance(layer,_Label):
+        layer = _Label(layer)
+        
+    for sub_lbl in layer.components:
+        matrix, phase = sreps[sub_lbl.name]           
+        nforgate = sub_lbl.number_of_qubits
+        sub_lbl_qubits = sub_lbl.qubits if (sub_lbl.qubits is not None) else Qlabels
+        for ind1, qlabel1 in enumerate(sub_lbl_qubits):
+            qindex1 = Qlabels.index(qlabel1)
+            for ind2, qlabel2 in enumerate(sub_lbl_qubits):
+                qindex2 = Qlabels.index(qlabel2)
+                # Put in the symp matrix elements
+                s[qindex1,qindex2] = matrix[ind1,ind2]
+                s[qindex1,qindex2+n] = matrix[ind1,ind2+nforgate]
+                s[qindex1+n,qindex2] = matrix[ind1+nforgate,ind2]
+                s[qindex1+n,qindex2+n] = matrix[ind1+nforgate,ind2+nforgate]
+            
+            # Put in the phase elements
+            p[qindex1] = phase[ind1] 
+            p[qindex1+n] = phase[ind1+nforgate]                      
                 
     return s, p
 

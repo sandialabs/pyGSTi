@@ -63,9 +63,9 @@ class TestDataSetMethods(BaseTestCase):
         # Invoke the DataSet constructor other ways
         gstrs = [ ('Gx',), ('Gx','Gy'), ('Gy',) ]
         gstrInds = collections.OrderedDict( [ (('Gx',),0),  (('Gx','Gy'),1), (('Gy',),2) ] )
-        gstrInds_static = collections.OrderedDict( [ (pygsti.obj.OpString(('Gx',)),slice(0,2)),
-                                                     (pygsti.obj.OpString(('Gx','Gy')),slice(2,4)),
-                                                     (pygsti.obj.OpString(('Gy',)),slice(4,6)) ] )
+        gstrInds_static = collections.OrderedDict( [ (pygsti.obj.Circuit(('Gx',)),slice(0,2)),
+                                                     (pygsti.obj.Circuit(('Gx','Gy')),slice(2,4)),
+                                                     (pygsti.obj.Circuit(('Gy',)),slice(4,6)) ] )
         olInds = collections.OrderedDict( [ ('0',0),  ('1',1) ] )
 
         oli = np.array([0,1],'i')
@@ -114,7 +114,7 @@ class TestDataSetMethods(BaseTestCase):
             if opstr in ds:
                 if opstr in ds:
                     pass
-                if pygsti.obj.OpString(opstr) in ds:
+                if pygsti.obj.Circuit(opstr) in ds:
                     pass
 
             dsRow = ds[opstr]
@@ -248,12 +248,13 @@ Gx^4 0.2 100
         ds_otherds = pygsti.construction.generate_fake_data(ds_none, circuits,
                                                              nSamples=None, sampleError='none')
 
-        weightedStrings = [ pygsti.obj.WeightedOpString( mdl.tup, weight=1.0 ) for mdl in circuits ]
-        ds_fromwts = pygsti.construction.generate_fake_data(depol_gateset, weightedStrings,
-                                                            nSamples=1000, sampleError='none')
+        #Removed weighted gate strings
+        #weightedStrings = [ pygsti.obj.WeightedOpString( mdl.tup, weight=1.0 ) for mdl in circuits ]
+        #ds_fromwts = pygsti.construction.generate_fake_data(depol_gateset, weightedStrings,
+        #                                                    nSamples=1000, sampleError='none')
 
         with self.assertRaises(ValueError):
-            pygsti.construction.generate_fake_data(depol_gateset, weightedStrings,
+            pygsti.construction.generate_fake_data(depol_gateset, circuits,
                                                    nSamples=1000, sampleError='FooBar') #invalid sampleError
 
 
@@ -327,9 +328,9 @@ Gx^4 20 80 0.2 100
         with self.assertRaises(ValueError):
             pygsti.io.load_multidataset(temp_files + "/BadTinyMultiDataset.txt")
 
-        gstrInds = collections.OrderedDict( [ (pygsti.obj.OpString(('Gx',)),slice(0,2)),
-                                              (pygsti.obj.OpString(('Gx','Gy')),slice(2,4)),
-                                              (pygsti.obj.OpString(('Gy',)),slice(4,6)) ] )
+        gstrInds = collections.OrderedDict( [ (pygsti.obj.Circuit(('Gx',)),slice(0,2)),
+                                              (pygsti.obj.Circuit(('Gx','Gy')),slice(2,4)),
+                                              (pygsti.obj.Circuit(('Gy',)),slice(4,6)) ] )
         olInds = collections.OrderedDict( [ ('0',0),  ('1',1) ] )
 
         ds1_oli = np.array( [0,1]*3, 'i' ) # 3 operation sequences * 2 outcome labels
@@ -512,10 +513,10 @@ Gx^4 20 80 0.2 100
 
         #Create an static already initialized dataset
         ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
-        GS = pygsti.objects.OpString #no auto-convert to Circuits when using circuitIndices
+        CIR = pygsti.objects.Circuit #no auto-convert to Circuits when using circuitIndices
         gatestringIndices = collections.OrderedDict([ #always need this when creating a static dataset
-            ( GS(('Gx',)) , slice(0,3) ),                 # (now a dict of *slices* into flattened 1D 
-            ( GS(('Gy','Gx')), slice(3,6) ) ])            #  data arrays)
+            ( CIR(('Gx',)) , slice(0,3) ),                 # (now a dict of *slices* into flattened 1D 
+            ( CIR(('Gy','Gx')), slice(3,6) ) ])            #  data arrays)
         oliData = np.array([0,1,0,1,1,0])
         timeData = np.array([1.0,2.0,3.0,4.0,5.0,6.0]) 
         repData = np.array([1,1,1,2,2,2])

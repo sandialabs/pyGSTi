@@ -302,7 +302,7 @@ def small_eigval_err_rate(sigma, directGSTmodels):
 
     Parameters
     ----------
-    sigma : OpString or tuple of operation labels
+    sigma : Circuit or tuple of operation labels
         The gate sequence that is used to estimate the error rate
 
     dataset : DataSet
@@ -508,7 +508,7 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directModel,
     """
     if len(gsplaq.get_all_strs()) > 0: #skip cases with no strings
         plaq_ds = gsplaq.expand_aliases(dataset, circuit_compiler=directModel)
-        plaq_pr = gss.create_plaquette( _objs.OpString( ("GsigmaLbl",) ) )
+        plaq_pr = gss.create_plaquette( _objs.Circuit( ("GsigmaLbl",) ) )
         plaq_pr.compile_circuits(directModel)
 
         cnts = total_count_matrix(plaq_ds, dataset)
@@ -571,7 +571,7 @@ def direct_logl_matrix(gsplaq, gss, dataset, directModel,
     """
     if len(gsplaq.get_all_strs()) > 0: #skip cases with no strings
         plaq_ds = gsplaq.expand_aliases(dataset, circuit_compiler=directModel)
-        plaq_pr = gss.create_plaquette( _objs.OpString( ("GsigmaLbl",) ) )
+        plaq_pr = gss.create_plaquette( _objs.Circuit( ("GsigmaLbl",) ) )
         plaq_pr.compile_circuits(directModel)
 
         cnts = total_count_matrix(plaq_ds, dataset)

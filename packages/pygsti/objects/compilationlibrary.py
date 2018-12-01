@@ -176,8 +176,8 @@ class CompilationLibrary(_collections.OrderedDict):
         #If a template has been found, use it.
         if template_to_use is not None:
             opstr = list( map(to_real_label, template_to_use) )
-            return _Circuit(circuit=opstr,
-                            line_labels=self.model.stateSpaceLabels.labels[0],identity=self.identity)
+            return _Circuit(layer_labels=opstr,
+                            line_labels=self.model.stateSpaceLabels.labels[0]) #,identity=self.identity)
         else:
             raise CompilationError("Cannot locally compile %s" % str(oplabel))
 
@@ -319,7 +319,7 @@ class CompilationLibrary(_collections.OrderedDict):
         
         if srep is None:
             template_lbl = _Label(gate_name,tuple(range(nqubits))) # integer ascending qubit labels
-            smatrix, svector = _symp.symplectic_rep_of_clifford_layer([template_lbl], nqubits)
+            smatrix, svector = _symp.symplectic_rep_of_clifford_layer(template_lbl, nqubits)
         else:
             smatrix, svector = srep
                 
@@ -410,7 +410,7 @@ class CompilationLibrary(_collections.OrderedDict):
                         
                     # Calculate the symp rep of this parallel gate
                     sadd, padd = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
-                    key = seq + layer # tuple/OpString concatenation
+                    key = seq + layer # tuple/Circuit concatenation
                         
                     # Calculate and record the symplectic rep of this gate sequence.
                     new_obtained_sreps[key] =_symp.compose_cliffords(s, p, sadd, padd)                    
@@ -588,11 +588,14 @@ class CompilationLibrary(_collections.OrderedDict):
         cnot_circuit = part_1 + part_2 + part_3 + part_4
         
         # Convert the operationlist to a circuit.
-        circuit = _Circuit(circuit=cnot_circuit, line_labels=self.model.stateSpaceLabels.labels[0], identity=self.identity)
+        circuit = _Circuit(layer_labels=cnot_circuit,
+                           line_labels=self.model.stateSpaceLabels.labels[0],
+                           editable=True)#, identity=self.identity)
 
         ## Change into the native gates, using the compilation for CNOTs between
         ## connected qubits.
-        circuit.change_gate_library(self, identity=self.identity)
+        circuit.change_gate_library(self) #, identity=self.identity)
+        circuit.done_editing()
 
         if check:
             # Calculate the symplectic matrix implemented by this circuit, to check the compilation
@@ -604,7 +607,7 @@ class CompilationLibrary(_collections.OrderedDict):
             nQ = int(round(_np.log2(self.model.dim))) # assumes *unitary* mode (OK?)
             iq1 = self.model.stateSpaceLabels.labels[0].index(q1) # assumes single tensor-prod term
             iq2 = self.model.stateSpaceLabels.labels[0].index(q2) # assumes single tensor-prod term
-            s_cnot, p_cnot = _symp.symplectic_rep_of_clifford_layer([_Label('CNOT',(iq1,iq2)),],nQ)
+            s_cnot, p_cnot = _symp.symplectic_rep_of_clifford_layer(_Label('CNOT',(iq1,iq2)),nQ)
     
             assert(_np.array_equal(s,s_cnot)), "Compilation has failed!"
             if self.ctype == "absolute":

@@ -210,7 +210,7 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr) )
         tbls.append( w.GateEigenvalueTable(self.mdl, None, cr, display=("polar",) ) ) # polar with no target model
         tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("evdm","evinf","rel"),
-                                           virtual_ops=[pygsti.obj.OpString(('Gx','Gx'))] ) )
+                                           virtual_ops=[pygsti.obj.Circuit(('Gx','Gx'))] ) )
         with self.assertRaises(ValueError):
             tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("foobar",)) )
         
@@ -703,7 +703,7 @@ class TestWorkspace(ReportBaseCase):
         gss2 = pygsti.obj.LsGermsStructure([1,2],germs,preps,effects)
         for L in [1,2]:
             for germ in germs:
-                gss2.add_plaquette(germ*L + pygsti.obj.OpString(('Gy',)), L, germ) # makes base strs != germ^some_power
+                gss2.add_plaquette(germ*L + pygsti.obj.Circuit(('Gy',)), L, germ) # makes base strs != germ^some_power
         gss3 = gss.copy()        
         cls = type('DummyClass', pygsti.obj.LsGermsStructure.__bases__, dict(pygsti.obj.LsGermsStructure.__dict__))
         gss3.__class__ = cls  # mimic a non-LsGermsStructure object when we don't actually have any currently (HACK)

@@ -499,7 +499,7 @@ class Results(object):
         s += "\n"
         s += "How to access my contents:\n\n"
         s += " .dataset    -- the DataSet used to generate these results\n\n"
-        s += " .circuit_lists   -- a dict of OpString lists w/keys:\n"
+        s += " .circuit_lists   -- a dict of Circuit lists w/keys:\n"
         s += " ---------------------------------------------------------\n"
         s += "  " + "\n  ".join(list(self.circuit_lists.keys())) + "\n"
         s += "\n"

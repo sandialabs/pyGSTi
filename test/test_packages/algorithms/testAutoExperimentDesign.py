@@ -56,7 +56,7 @@ class AutoExperimentDesignTestCase(BaseTestCase):
                                                               measFiducials, germs, maxLengths)
 
 
-        # The list of `OpString` that the previous function gave us isn't necessarily the most readable
+        # The list of `Circuit` that the previous function gave us isn't necessarily the most readable
         # form to present the information in, so we can write the experiment list out to an empty data
         # file to be filled in after the experiments are performed.
 

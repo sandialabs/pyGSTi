@@ -34,7 +34,7 @@ def model_with_lgst_circuit_estimates(
         The data to use for LGST
 
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     targetModel : Model
@@ -114,7 +114,7 @@ def direct_lgst_model(circuitToEstimate, circuitLabel, dataset,
 
     Parameters
     ----------
-    circuitToEstimate : OpString or tuple
+    circuitToEstimate : Circuit or tuple
         The single operation sequence to estimate using LGST
 
     circuitLabel : string
@@ -125,7 +125,7 @@ def direct_lgst_model(circuitToEstimate, circuitLabel, dataset,
         The data to use for LGST
 
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     targetModel : Model
@@ -165,7 +165,7 @@ def direct_lgst_models(circuits, dataset, prepStrs, effectStrs, targetModel,
 
     Parameters
     ----------
-    circuits : list of OpString or tuple objects
+    circuits : list of Circuit or tuple objects
         The operation sequences to estimate using LGST.  The elements of this list
         are the keys of the returned dictionary.
 
@@ -173,7 +173,7 @@ def direct_lgst_models(circuits, dataset, prepStrs, effectStrs, targetModel,
         The data to use for all LGST estimates.
 
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     targetModel : Model
@@ -238,7 +238,7 @@ def direct_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
 
     Parameters
     ----------
-    circuitToEstimate : OpString or tuple
+    circuitToEstimate : Circuit or tuple
         The single operation sequence to estimate using LSGST
 
     circuitLabel : string
@@ -249,7 +249,7 @@ def direct_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
         The data to use for LGST
 
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     targetModel : Model
@@ -291,7 +291,7 @@ def direct_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
     # LEXICOGRAPHICAL VS MATRIX ORDER
     circuits = prepStrs + effectStrs + [ prepStr + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
     for opLabel in direct_lgst.operations:
-        circuits.extend( [ prepStr + _objs.OpString( (opLabel,), bCheck=False) + effectStr
+        circuits.extend( [ prepStr + _objs.Circuit( (opLabel,) ) + effectStr
                               for prepStr in prepStrs for effectStr in effectStrs ] )
 
     aliases = {} if (opLabelAliases is None) else opLabelAliases.copy()
@@ -315,7 +315,7 @@ def direct_mc2gst_models(circuits, dataset, prepStrs, effectStrs,
 
     Parameters
     ----------
-    circuits : list of OpString or tuple objects
+    circuits : list of Circuit or tuple objects
         The operation sequences to estimate using LSGST.  The elements of this list
         are the keys of the returned dictionary.
 
@@ -323,7 +323,7 @@ def direct_mc2gst_models(circuits, dataset, prepStrs, effectStrs,
         The data to use for all LGST and LSGST estimates.
 
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     targetModel : Model
@@ -395,7 +395,7 @@ def direct_mlgst_model( circuitToEstimate, circuitLabel, dataset,
 
     Parameters
     ----------
-    circuitToEstimate : OpString or tuple
+    circuitToEstimate : Circuit or tuple
         The single operation sequence to estimate using LSGST
 
     circuitLabel : string
@@ -406,7 +406,7 @@ def direct_mlgst_model( circuitToEstimate, circuitLabel, dataset,
         The data to use for LGST
 
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     targetModel : Model
@@ -448,7 +448,7 @@ def direct_mlgst_model( circuitToEstimate, circuitLabel, dataset,
     # LEXICOGRAPHICAL VS MATRIX ORDER
     circuits = prepStrs + effectStrs + [ prepStr + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
     for opLabel in direct_lgst.operations:
-        circuits.extend( [ prepStr + _objs.OpString( (opLabel,), bCheck=False) + effectStr
+        circuits.extend( [ prepStr + _objs.Circuit( (opLabel,) ) + effectStr
                               for prepStr in prepStrs for effectStr in effectStrs ] )
 
     aliases = {} if (opLabelAliases is None) else opLabelAliases.copy()
@@ -469,7 +469,7 @@ def direct_mlgst_models(circuits, dataset, prepStrs, effectStrs, targetModel,
 
     Parameters
     ----------
-    circuits : list of OpString or tuple objects
+    circuits : list of Circuit or tuple objects
         The operation sequences to estimate using MLEGST.  The elements of this list
         are the keys of the returned dictionary.
 
@@ -477,7 +477,7 @@ def direct_mlgst_models(circuits, dataset, prepStrs, effectStrs, targetModel,
         The data to use for all LGST and LSGST estimates.
 
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     targetModel : Model
@@ -542,7 +542,7 @@ def focused_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
 
     Parameters
     ----------
-    circuitToEstimate : OpString or tuple
+    circuitToEstimate : Circuit or tuple
         The single operation sequence to estimate using LSGST
 
     circuitLabel : string
@@ -553,7 +553,7 @@ def focused_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
         The data to use for LGST
 
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     startModel : Model
@@ -604,7 +604,7 @@ def focused_mc2gst_models(circuits, dataset, prepStrs, effectStrs,
 
     Parameters
     ----------
-    circuits : list of OpString or tuple objects
+    circuits : list of Circuit or tuple objects
         The operation sequences to estimate using LSGST.  The elements of this list
         are the keys of the returned dictionary.
 
@@ -612,7 +612,7 @@ def focused_mc2gst_models(circuits, dataset, prepStrs, effectStrs,
         The data to use for all LGST and LSGST estimates.
 
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     startModel : Model

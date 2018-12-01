@@ -448,7 +448,7 @@ def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
         return {}
 
     idt_results_dict = {}
-    GiStr = _objs.OpString((idtIdleOp,))
+    GiStr = _objs.Circuit((idtIdleOp,))
 
     from ..extras import idletomography as _idt
     autodict = bool(idtPauliDicts == "auto")

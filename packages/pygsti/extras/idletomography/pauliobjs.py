@@ -146,7 +146,7 @@ class NQPauliState(object):
 
         Returns
         -------
-        OpString
+        Circuit
         """
         opstr = []
         sgn = {1:'+', -1:'-'}
@@ -159,7 +159,7 @@ class NQPauliState(object):
                                  % (key,str(list(pauliBasisDict.keys()))))
             opstr.extend( [ _Lbl(opname,i) for opname in pauliBasisDict[key] ] )
               # pauliBasisDict just has 1Q gate *names* -- need to make into labels
-        return _objs.OpString(opstr).parallelize()
+        return _objs.Circuit(opstr).parallelize()
 
 
 

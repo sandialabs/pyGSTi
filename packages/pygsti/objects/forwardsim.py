@@ -497,7 +497,7 @@ class ForwardSimulator(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
             The sequence of operation labels.
 
         bScale : bool, optional
@@ -523,7 +523,7 @@ class ForwardSimulator(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
           The sequence of operation labels.
 
         flat : bool, optional
@@ -565,7 +565,7 @@ class ForwardSimulator(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
           The sequence of operation labels.
 
         flat : bool, optional
@@ -612,7 +612,7 @@ class ForwardSimulator(object):
 #        spamLabel : string
 #           the label specifying the state prep and measure operations
 #
-#        circuit : OpString or tuple of operation labels
+#        circuit : Circuit or tuple of operation labels
 #          The sequence of operation labels specifying the operation sequence.
 #
 #        clipTo : 2-tuple, optional
@@ -652,7 +652,7 @@ class ForwardSimulator(object):
 #        spamLabel : string
 #           the label specifying the state prep and measure operations
 #
-#        circuit : OpString or tuple of operation labels
+#        circuit : Circuit or tuple of operation labels
 #          The sequence of operation labels specifying the operation sequence.
 #
 #        returnPr : bool, optional
@@ -701,7 +701,7 @@ class ForwardSimulator(object):
 #        spamLabel : string
 #           the label specifying the state prep and measure operations
 #
-#        circuit : OpString or tuple of operation labels
+#        circuit : Circuit or tuple of operation labels
 #          The sequence of operation labels specifying the operation sequence.
 #
 #        returnPr : bool, optional
@@ -761,7 +761,7 @@ class ForwardSimulator(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
         clipTo : 2-tuple, optional
@@ -808,7 +808,7 @@ class ForwardSimulator(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
         returnPr : bool, optional
@@ -844,7 +844,7 @@ class ForwardSimulator(object):
 
         Parameters
         ----------
-        circuit : OpString or tuple of operation labels
+        circuit : Circuit or tuple of operation labels
           The sequence of operation labels specifying the operation sequence.
 
         returnPr : bool, optional
@@ -1152,7 +1152,7 @@ class ForwardSimulator(object):
 
         This routine fills a 1D array, `mxToFill` with the probabilities
         corresponding to the *compiled* operation sequences found in an evaluation
-        tree, `evalTree`.  An initial list of (general) :class:`OpString`
+        tree, `evalTree`.  An initial list of (general) :class:`Circuit`
         objects is *compiled* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently

@@ -201,11 +201,11 @@ class DMOpRep(object):
     def aslinearoperator(self):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = DMStateRep(np.ascontiguousarray(v,'d'))
+            in_state = DMStateRep(_np.ascontiguousarray(v,'d'))
             return self.acton(in_state).todense()
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = DMStateRep(np.ascontiguousarray(v,'d'))
+            in_state = DMStateRep(_np.ascontiguousarray(v,'d'))
             return self.adjoint_acton(in_state).todense()
         return LinearOperator((self.dim,self.dim), matvec=mv, rmatvec=rmv) # transpose, adjoint, dot, matmat?
 
@@ -349,7 +349,7 @@ class DMOpRep_Lindblad(DMOpRep):
     def __init__(self, errgen_rep,
                  mu, eta, m_star, s, unitarypost_data,
                  unitarypost_indices, unitarypost_indptr):
-        dim = errgen.dim
+        dim = errgen_rep.dim
         self.errgen_rep = errgen_rep
         if len(unitarypost_data) > 0: # (nnz > 0)
             self.unitary_postfactor = _sps.csr_matrix(
@@ -394,8 +394,8 @@ class DMOpRep_Sparse(DMOpRep):
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        Aadj = A.conjugate(copy=True).transpose()
-        return DMStateRep( self.Aadj.dot(state.data) )
+        Aadj = self.A.conjugate(copy=True).transpose()
+        return DMStateRep( Aadj.dot(state.data) )
 
 
 # State vector (SV) propagation wrapper classes
@@ -1286,7 +1286,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
         of `elabels` determines the ordering of the returned probability 
         polynomials.
 
-    circuit : OpString
+    circuit : Circuit
         The gate sequence to sandwich between the prep and effect labels.
 
     comm : mpi4py.MPI.Comm, optional

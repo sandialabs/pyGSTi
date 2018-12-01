@@ -127,7 +127,7 @@ class RBTestCase(BaseTestCase):
         circuit = rb.sample.random_circuit(pspec_1, length=5, sampler='local')
         self.assertEqual(circuit.depth(), 5)
         circuit = rb.sample.random_circuit(pspec_1, length=5, sampler='local',samplerargs=[['Gx']])
-        self.assertEqual(circuit.line_items[0][0].name, 'Gx')
+        self.assertEqual(circuit[0,'Q0'].name, 'Gx')
         
         lengths = [0,2,5]
         circuits_per_length = 2

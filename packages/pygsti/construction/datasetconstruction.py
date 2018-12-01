@@ -34,7 +34,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
         If a DataSet, the data set whose frequencies generate the data.
 
     circuit_list : list of (tuples or Circuits) or None
-        Each tuple or OpString contains operation labels and
+        Each tuple or Circuit contains operation labels and
         specifies a gate sequence whose counts are included
         in the returned DataSet. e.g. ``[ (), ('Gx',), ('Gx','Gy') ]``
 
@@ -185,11 +185,7 @@ def generate_fake_data(modelOrDataset, circuit_list, nSamples,
                 except:
                     N = nSamples #if not indexable, nSamples should be a single number
 
-            #Weight the number of samples according to a WeightedOpString
-            if isinstance(s, _gs.WeightedOpString):
-                nWeightedSamples = int(round(s.weight * N))
-            else:
-                nWeightedSamples = N
+            nWeightedSamples = N
 
             counts = {} #don't use an ordered dict here - add_count_dict will sort keys
             labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1]) ]

@@ -124,7 +124,7 @@ def generate_germs(target_model, randomize=True, randomizationStrength=1e-2,
 
     Returns
     -------
-    list of OpString
+    list of Circuit
         A list containing the germs making up the germ set.
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
@@ -371,7 +371,7 @@ def compute_composite_germ_score(scoreFn, thresholdAC=1e6, initN=1,
     model : Model, optional
         The model against which the germ set is to be scored. Not needed if
         `partialDerivDaggerDeriv` is provided.
-    partialGermsList : list of OpString, optional
+    partialGermsList : list of Circuit, optional
         The list of germs in the partial germ set to be evaluated. Not needed
         if `partialDerivDaggerDeriv` (and `germLengths` when
         ``opPenalty > 0``) are provided.
@@ -713,7 +713,7 @@ def twirled_deriv(model, circuit, eps=1e-6):
     ----------
     model : Model object
         The Model which associates operation labels with operators.
-    circuit : OpString object
+    circuit : Circuit object
         The operation sequence to take a twirled derivative of.
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
@@ -748,7 +748,7 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
     model : Model object
         The Model which associates operation labels with operators.
 
-    circuits : list of OpString objects
+    circuits : list of Circuit objects
         The operation sequence to take a twirled derivative of.
 
     eps : float, optional
@@ -887,7 +887,7 @@ def test_germ_list_infl(model, germsToTest, scoreFunc='all', weights=None,
     ----------
     model : Model
         The Model (associates operation matrices with operation labels).
-    germsToTest : list of OpString
+    germsToTest : list of Circuit
         List of germs operation sequences to test for completeness.
     scoreFunc : string
         Label to indicate how a germ set is scored. See
@@ -1066,7 +1066,7 @@ def build_up_breadth(modelList, germsList, randomize=True,
     modelList : Model or list
         The model or list of `Model`s to select germs for.
 
-    germsList : list of OpString
+    germsList : list of Circuit
         The list of germs to contruct a germ set from.
 
     randomize : bool, optional
@@ -1112,7 +1112,7 @@ def build_up_breadth(modelList, germsList, randomize=True,
         substantially).
 
     force : list of Circuits
-        A list of `OpString` objects which *must* be included in the final 
+        A list of `Circuit` objects which *must* be included in the final 
         germ set.  If the special string "singletons" is given, then all of
         the single gates (length-1 sequences) must be included.
 
@@ -1376,7 +1376,7 @@ def optimize_integer_germs_slack(modelList, germsList, randomize=True,
         be made (set by the kwarg `numCopies`), or the user may specify their
         own list of Models, each of which in turn may or may not be
         randomized (set by the kwarg `randomize`).
-    germsList : list of OpString
+    germsList : list of Circuit
         List of all germs operation sequences to consider.
     randomize : Bool, optional
         Whether or not the input Model(s) are first subject to unitary
@@ -1463,7 +1463,7 @@ def optimize_integer_germs_slack(modelList, germsList, randomize=True,
     See Also
     --------
     :class:`~pygsti.objects.Model`
-    :class:`~pygsti.objects.OpString`
+    :class:`~pygsti.objects.Circuit`
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
@@ -1644,9 +1644,9 @@ def germ_breadth_score_fn(germSet, germsList, twirledDerivDaggerDerivList,
     collection of models and return the worst score among that collection.
     Parameters
     ----------
-    germSet : list of OpString
+    germSet : list of Circuit
         The set of germs to score.
-    germsList : list of OpString
+    germsList : list of Circuit
         The list of all germs whose Jacobians are provided in
         `twirledDerivDaggerDerivList`.
     twirledDerivDaggerDerivList : numpy.array
@@ -1699,7 +1699,7 @@ def grasp_germ_set_optimization(modelList, germsList, alpha, randomize=True,
         be made (set by the kwarg `numCopies`, or the user may specify their
         own list of Models, each of which in turn may or may not be
         randomized (set by the kwarg `randomize`).
-    germsList : list of OpString
+    germsList : list of Circuit
         List of all germs operation sequences to consider.
     alpha : float
         A number between 0 and 1 that roughly specifies a score theshold
@@ -1771,7 +1771,7 @@ def grasp_germ_set_optimization(modelList, germsList, alpha, randomize=True,
     
     Returns
     -------
-    finalGermList : list of OpString
+    finalGermList : list of Circuit
         Sublist of `germsList` specifying the final, optimal set of germs.
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)

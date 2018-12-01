@@ -25,7 +25,7 @@ class CircuitPlaquette(object):
 
         Parameters
         ----------
-        base : OpString
+        base : Circuit
             The "base" operation sequence of this plaquette.  Typically the sequence
             that is sandwiched between fiducial pairs.
 
@@ -34,7 +34,7 @@ class CircuitPlaquette(object):
 
         elements : list
             A list of `(i,j,s)` tuples where `i` and `j` are row and column
-            indices and `s` is the corresponding `OpString`.
+            indices and `s` is the corresponding `Circuit`.
 
         aliases : dict
             A dictionary of operation label aliases that is carried along
@@ -212,7 +212,7 @@ class CircuitStructure(object):
 
         Parameters
         ----------
-        baseStr : OpString
+        baseStr : Circuit
 
         Returns
         -------
@@ -305,7 +305,7 @@ class LsGermsStructure(CircuitStructure):
         sequenceRules : list, optional
             A list of `(find,replace)` 2-tuples which specify string replacement
             rules.  Both `find` and `replace` are tuples of operation labels
-            (or `OpString` objects).
+            (or `Circuit` objects).
         """
         self.Ls = Ls[:]
         self.germs = germs[:]
@@ -346,12 +346,12 @@ class LsGermsStructure(CircuitStructure):
 
         Parameters
         ----------
-        basestr : OpString
+        basestr : Circuit
             The base operation sequence of the new plaquette.
 
         L : int
 
-        germ : OpString
+        germ : Circuit
 
         fidpairs : list
             A list if `(i,j)` tuples of integers, where `i` is a prepation
@@ -494,10 +494,10 @@ class LsGermsStructure(CircuitStructure):
             The integer L-values to keep.  If None, then all are kept.
             
         germs : list, optional
-            The (OpString) germs to keep.  If None, then all are kept.
+            The (Circuit) germs to keep.  If None, then all are kept.
             
         prepStrs, effectStrs : list, optional
-            The (OpString) preparation and effect fiducial sequences to keep.
+            The (Circuit) preparation and effect fiducial sequences to keep.
             If None, then all are kept.
 
         Returns
@@ -530,7 +530,7 @@ class LsGermsStructure(CircuitStructure):
 
         Parameters
         ----------
-        baseStr : OpString
+        baseStr : Circuit
 
         fidpairs : list
             A list if `(i,j)` tuples of integers, where `i` is a prepation
@@ -613,7 +613,7 @@ class LsGermsSerialStructure(CircuitStructure):
         sequenceRules : list, optional
             A list of `(find,replace)` 2-tuples which specify string replacement
             rules.  Both `find` and `replace` are tuples of operation labels
-            (or `OpString` objects).
+            (or `Circuit` objects).
         """
         self.Ls = Ls[:]
         self.germs = germs[:]
@@ -654,18 +654,18 @@ class LsGermsSerialStructure(CircuitStructure):
 
         Parameters
         ----------
-        basestr : OpString
+        basestr : Circuit
             The base operation sequence of the new plaquette, typically `germ^power` 
             such that `len(germ^power) <= L`.
 
         L : int
             The maximum length value.
 
-        germ : OpString
+        germ : Circuit
             The germ string.
 
         fidpairs : list
-            A list if `(prep,meas)` tuples of OpString objects, specifying
+            A list if `(prep,meas)` tuples of Circuit objects, specifying
             the fiducial pairs for this plaquette.  Note that this argument
             is different from the corresponding one in 
             :method:`LsGermsStructure.add_plaquette` which takes pairs of 
@@ -805,7 +805,7 @@ class LsGermsSerialStructure(CircuitStructure):
             The integer L-values to keep.  If None, then all are kept.
             
         germs : list, optional
-            The (OpString) germs to keep.  If None, then all are kept.
+            The (Circuit) germs to keep.  If None, then all are kept.
             
         nMinorRows, nMinorCols : int or "auto", optional
             The number of minor rows and columns in the new structure.  If the
@@ -861,10 +861,10 @@ class LsGermsSerialStructure(CircuitStructure):
 
         Parameters
         ----------
-        baseStr : OpString
+        baseStr : Circuit
 
         fidpairs : list
-            A list if `(prep,meas)` tuples of OpString objects, specifying
+            A list if `(prep,meas)` tuples of Circuit objects, specifying
             the fiducial pairs for this plaquette.  Note that this argument
             is mandatory and cannot be None as for :class:`LsGermsStructure`.
 

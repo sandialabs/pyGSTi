@@ -263,7 +263,7 @@ class TestCoreMethods(AlgorithmsBase):
                                                       useFreqWeightedChiSq=True, circuitSetLabels=["Set1","Set2"],
                                                       circuitWeightsDict={ ('Gx',): 2.0 } )
 
-        aliased_list = [ pygsti.obj.OpString( [ (x if x != L("Gx") else L("GA1")) for x in mdl]) for mdl in self.lsgstStrings[0] ]
+        aliased_list = [ pygsti.obj.Circuit( [ (x if x != L("Gx") else L("GA1")) for x in mdl]) for mdl in self.lsgstStrings[0] ]
         mdl_withA1 = mdl_clgst.copy(); mdl_withA1.operations["GA1"] = mdl_clgst.operations["Gx"]
         del mdl_withA1.operations["Gx"] # otherwise mdl_withA1 will have Gx params that we have no knowledge of!
         mdl_lsgst_chk_opts2 = pygsti.do_mc2gst(ds, mdl_withA1, aliased_list, minProbClipForWeighting=1e-6,
@@ -375,7 +375,7 @@ class TestCoreMethods(AlgorithmsBase):
                                                        circuitSetLabels=["Set1","Set2"], useFreqWeightedChiSq=True,
                                                        circuitWeightsDict={ (L('Gx'),): 2.0 } )
 
-        aliased_list = [ pygsti.obj.OpString( [ (x if x != L("Gx") else L("GA1")) for x in mdl]) for mdl in self.lsgstStrings[0] ]
+        aliased_list = [ pygsti.obj.Circuit( [ (x if x != L("Gx") else L("GA1")) for x in mdl]) for mdl in self.lsgstStrings[0] ]
         mdl_withA1 = mdl_clgst.copy(); mdl_withA1.operations["GA1"] = mdl_clgst.operations["Gx"]
         del mdl_withA1.operations["Gx"] # otherwise mdl_withA1 will have Gx params that we have no knowledge of!
         mdl_mlegst_chk_opts2 = pygsti.do_mlgst(ds, mdl_withA1, aliased_list, minProbClip=1e-4,
@@ -481,7 +481,7 @@ class TestCoreMethods(AlgorithmsBase):
                                                  probClipInterval=(-1e5,1e5), circuitWeightsDict={ ('Gx',): 2.0 },
                                                  returnAll=True, returnErrorVec=True)
 
-        # Do non-iterative to cover OpString->tuple conversion
+        # Do non-iterative to cover Circuit->tuple conversion
         mdl_non_iterative = self.runSilent( pygsti.do_mc2gst_with_model_selection, ds,
                                            mdl_lgst4, 1, self.lsgstStrings[0],
                                            verbosity=10, probClipInterval=(-1e5,1e5) )

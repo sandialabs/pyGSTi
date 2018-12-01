@@ -277,7 +277,7 @@ class DataComparator():
             and no comparison will be made for those strings.
 
         op_exclusions : None or list of gates, optional (default is None)
-            If not None, a OpString will be dropped from the list to implement the comparisons for
+            If not None, a Circuit will be dropped from the list to implement the comparisons for
             if it doesn't include *some* gate from this list (or is the empty circuit). 
 
         DS_names : None or list, optional (default is None)
@@ -572,7 +572,7 @@ class DataComparator():
 
         Parameters
         ----------
-        circuit : OpString
+        circuit : Circuit
             The circuit to return the TVD of.
 
         Returns
@@ -598,7 +598,7 @@ class DataComparator():
 
         Parameters
         ----------
-        circuit : OpString
+        circuit : Circuit
             The circuit to return the SSTVD of.
 
         Returns
@@ -642,7 +642,7 @@ class DataComparator():
   
         Parameters
         ----------
-        circuit : OpString
+        circuit : Circuit
             The circuit to return the p-value of.
 
        Returns
@@ -676,7 +676,7 @@ class DataComparator():
         
         Parameters
         ----------
-        circuit : OpString
+        circuit : Circuit
             The circuit to return the LLR of.
 
         Returns
@@ -714,7 +714,7 @@ class DataComparator():
 
         Parameters
         ----------
-        circuit : OpString
+        circuit : Circuit
             The circuit to return the JSD of
 
         Returns
@@ -756,7 +756,7 @@ class DataComparator():
 
         Parameters
         ----------
-        circuit : OpString
+        circuit : Circuit
             The circuit to return the JSD of
 
         Returns

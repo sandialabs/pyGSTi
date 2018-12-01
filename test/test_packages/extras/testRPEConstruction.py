@@ -1,5 +1,5 @@
 from ..testutils import BaseTestCase, compare_files, temp_files
-from pygsti.objects import OpString
+from pygsti.objects import Circuit
 
 import pygsti.extras.rpe.rpeconstruction as rc
 from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_00 import rpeconfig_GxPi2_GyPi2_00
@@ -18,8 +18,8 @@ class RPEConstructionTestCase(BaseTestCase):
         self.rpeconfig_inst_list = [rpeconfig_GxPi2_GyPi2_UpDn,rpeconfig_GxPi2_GyPi2_00]
 
     def build_lists(self, fids1, fids2, germ):
-        lists = ([OpString(fids1 % (germ + str(length))) for length in self.lengths],
-                 [OpString(fids2 % (germ + str(length))) for length in self.lengths])
+        lists = ([Circuit(fids1 % (germ + str(length))) for length in self.lengths],
+                 [Circuit(fids2 % (germ + str(length))) for length in self.lengths])
         return lists
 
     def to_tuples(self, l1, l2):

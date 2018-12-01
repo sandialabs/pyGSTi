@@ -47,7 +47,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
         The data used to generate the LGST estimates
 
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     targetModel : Model
@@ -215,7 +215,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
         for effectLabel in targetModel.povms[povmLabel]:
             EVec = _np.zeros( (1,nRhoSpecs) )
             for i,rhostr in enumerate(prepStrs):
-                circuit = rhostr + _objs.OpString((povmLabel,))
+                circuit = rhostr + _objs.Circuit((povmLabel,))
                 if circuit not in dataset and len(targetModel.povms) == 1:
                     # try without povmLabel since it will be the default
                     circuit = rhostr
@@ -230,7 +230,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     for prepLabel in rhoLabelsToEstimate:
         rhoVec = _np.zeros((nESpecs,1)); eoff = 0
         for i,(estr,povmLbl,povmLen) in enumerate(zip(effectStrs,povmLbls,povmLens)):
-            circuit = _objs.OpString((prepLabel,)) + estr  #; spamLabel = spamDict[ (prepLabel, espec.lbl) ]
+            circuit = _objs.Circuit((prepLabel,)) + estr  #; spamLabel = spamDict[ (prepLabel, espec.lbl) ]
             if circuit not in dataset and len(targetModel.preps) == 1:
                 # try without prepLabel since it will be the default
                 circuit = estr
@@ -394,7 +394,7 @@ def _constructXMatrix(prepStrs, effectStrs, model, opLabelTuple, dataset, opLabe
     eoff = 0 # effect-dimension offset
     for i,(estr,povmLen) in enumerate(zip(effectStrs,povmLens)):
         for j,rhostr in enumerate(prepStrs):
-            opLabelString = rhostr + _objs.OpString(opLabelTuple) + estr # LEXICOGRAPHICAL VS MATRIX ORDER
+            opLabelString = rhostr + _objs.Circuit(opLabelTuple) + estr # LEXICOGRAPHICAL VS MATRIX ORDER
             dsStr = _tools.find_replace_tuple(tuple(opLabelString),opLabelAliases)
             raw_dict, outcomes = model.compile_circuit(opLabelString)
             dsRow = dataset[dsStr]
@@ -426,7 +426,7 @@ def _constructA(effectStrs, mdl):
         for i in range(dim): # propagate each basis initial state
             basis_st[i] = 1.0
             mdl.preps['rho_LGST_tmp'] = basis_st
-            probs = mdl.probs( _objs.OpString(('rho_LGST_tmp',)) + estr )
+            probs = mdl.probs( _objs.Circuit(('rho_LGST_tmp',)) + estr )
             A[eoff:eoff+povmLen, i] = [ probs[(ol,)] for ol in mdl.povms[povmLbl] ] #CHECK will this work?
             del mdl.preps['rho_LGST_tmp']
             basis_st[i] = 0.0
@@ -452,7 +452,7 @@ def _constructB(prepStrs, mdl):
     for k,rhostr in enumerate(prepStrs):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
         # B[:,k] = st[:,0] # rho_k == kth column of B
-        probs = mdl.probs( rhostr + _objs.OpString(('M_LGST_tmp_povm',)) )
+        probs = mdl.probs( rhostr + _objs.Circuit(('M_LGST_tmp_povm',)) )
         B[:, k] = [ probs[("E%d" % i,)] for i in range(dim) ] #CHECK will this work?
 
     del mdl.povms['M_LGST_tmp_povm']
@@ -545,7 +545,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
         e.g. [ (), ('Gx',), ('Gx','Gy') ]
 
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     targetModel : Model
@@ -620,7 +620,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
     printer.log("--- eLGST (least squares) ---", 1)
 
     #convert list of Circuits to list of raw tuples since that's all we'll need
-    if len(circuitsToUseInEstimation) > 0 and isinstance(circuitsToUseInEstimation[0],_objs.OpString):
+    if len(circuitsToUseInEstimation) > 0 and isinstance(circuitsToUseInEstimation[0],_objs.Circuit):
         circuitsToUseInEstimation = [ opstr.tup for opstr in circuitsToUseInEstimation ]
 
     #Setup and solve a least-squares problem where each element of each
@@ -803,13 +803,13 @@ def do_iterative_exlgst(
         optimization.
 
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     circuitSetsToUseInEstimation : list of lists of (tuples or Circuits)
         The i-th element is a list of the operation sequences to be used in the i-th iteration
         of extended-LGST.  Each element of these lists is a operation sequence, specifed as
-        either a OpString object or as a tuple of operation labels (but all must be specified
+        either a Circuit object or as a tuple of operation labels (but all must be specified
         using the same type).
         e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
 
@@ -891,7 +891,7 @@ def do_iterative_exlgst(
     #convert lists of Circuits to lists of raw tuples since that's all we'll need
     if len(circuitSetsToUseInEstimation ) > 0 and \
        len(circuitSetsToUseInEstimation[0]) > 0 and \
-       isinstance(circuitSetsToUseInEstimation[0][0],_objs.OpString):
+       isinstance(circuitSetsToUseInEstimation[0][0],_objs.Circuit):
         circuitLists = [ [opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation ]
     else:
         circuitLists = circuitSetsToUseInEstimation
@@ -1082,7 +1082,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
 
     #convert list of Circuits to list of raw tuples since that's all we'll need
     if len(circuitsToUse) > 0 and \
-          isinstance(circuitsToUse[0],_objs.OpString):
+          isinstance(circuitsToUse[0],_objs.Circuit):
         circuitsToUse = [ opstr.tup for opstr in circuitsToUse ]
 
     vec_gs_len = mdl.num_params()
@@ -1629,7 +1629,7 @@ def do_mc2gst_with_model_selection(
     printer.log("--- Minimum Chi^2 GST with model selection (starting dim = %d) ---" % dim, 1)
 
     #convert list of Circuits to list of raw tuples since that's all we'll need
-    if len(circuitsToUse) > 0 and isinstance(circuitsToUse[0],_objs.OpString):
+    if len(circuitsToUse) > 0 and isinstance(circuitsToUse[0],_objs.Circuit):
         circuitsToUse = [ opstr.tup for opstr in circuitsToUse ]
 
     minErr, mdl = do_mc2gst(dataset, startModel, circuitsToUse, maxiter,
@@ -1753,7 +1753,7 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
     circuitSetsToUseInEstimation : list of lists of (tuples or Circuits)
         The i-th element is a list of the operation sequences to be used in the i-th iteration
         of MC2GST.  Each element of these lists is a operation sequence, specifed as
-        either a OpString object or as a tuple of operation labels (but all must be specified
+        either a Circuit object or as a tuple of operation labels (but all must be specified
         using the same type).
         e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
 
@@ -1874,7 +1874,7 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
     #convert lists of Circuits to lists of raw tuples since that's all we'll need
     if len(circuitSetsToUseInEstimation ) > 0 and \
        len(circuitSetsToUseInEstimation[0]) > 0 and \
-       isinstance(circuitSetsToUseInEstimation[0][0],_objs.OpString):
+       isinstance(circuitSetsToUseInEstimation[0][0],_objs.Circuit):
         circuitLists = [ [opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation ]
     else:
         circuitLists = circuitSetsToUseInEstimation
@@ -2064,7 +2064,7 @@ def do_iterative_mc2gst_with_model_selection(
     #convert lists of Circuits to lists of raw tuples since that's all we'll need
     if len(circuitSetsToUseInEstimation ) > 0 and \
        len(circuitSetsToUseInEstimation[0]) > 0 and \
-       isinstance(circuitSetsToUseInEstimation[0][0],_objs.OpString):
+       isinstance(circuitSetsToUseInEstimation[0][0],_objs.Circuit):
         circuitLists = [ [opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation ]
     else:
         circuitLists = circuitSetsToUseInEstimation
@@ -2715,7 +2715,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
     circuitSetsToUseInEstimation : list of lists of (tuples or Circuits)
         The i-th element is a list of the operation sequences to be used in the i-th iteration
         of MLGST.  Each element of these lists is a operation sequence, specifed as
-        either a OpString object or as a tuple of operation labels (but all must be specified
+        either a Circuit object or as a tuple of operation labels (but all must be specified
         using the same type).
         e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
 
@@ -2841,7 +2841,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
     #convert lists of Circuits to lists of raw tuples since that's all we'll need
     if len(circuitSetsToUseInEstimation ) > 0 and \
        len(circuitSetsToUseInEstimation[0]) > 0 and \
-       isinstance(circuitSetsToUseInEstimation[0][0],_objs.OpString):
+       isinstance(circuitSetsToUseInEstimation[0][0],_objs.Circuit):
         circuitLists = [ [opstr.tup for opstr in gsList] for gsList in circuitSetsToUseInEstimation ]
     else:
         circuitLists = circuitSetsToUseInEstimation

@@ -164,7 +164,7 @@ formatDict['Vec'] = {
     'latex' : _Formatter(latex, ebstring='%s $\pm$ %s'),
     'python'  : _no_format }
 
-formatDict['OpString'] = {
+formatDict['Circuit'] = {
     'html'  : _Formatter(lambda s,specs : '.'.join(map(str,s)) if s is not None else ''),
     'latex' : _Formatter(lambda s,specs : '' if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % str(gl)) for gl in s]))),
     'python'  : _no_format }

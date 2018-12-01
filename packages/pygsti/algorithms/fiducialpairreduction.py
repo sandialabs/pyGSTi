@@ -123,7 +123,7 @@ def find_sufficient_fiducial_pairs(targetModel, prepStrs, effectStrs, germList,
         firstRho = list(targetModel.preps.keys())[0]
         firstPOVM = list(targetModel.povms.keys())[0]
         prepovmTuples = [ (firstRho, firstPOVM) ]
-    prepovmTuples = [ (_objs.OpString((prepLbl,)), _objs.OpString((povmLbl,)))
+    prepovmTuples = [ (_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
                       for prepLbl,povmLbl in prepovmTuples ]
 
     nModelParams = targetModel.num_params()
@@ -352,7 +352,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
         firstRho = list(targetModel.preps.keys())[0]
         firstPOVM = list(targetModel.povms.keys())[0]
         prepovmTuples = [ (firstRho, firstPOVM) ]
-    prepovmTuples = [ (_objs.OpString((prepLbl,)), _objs.OpString((povmLbl,)))
+    prepovmTuples = [ (_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
                       for prepLbl,povmLbl in prepovmTuples ]
     
 
@@ -384,7 +384,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
             #  (i.e. the parameters of the gsGerm model).
             lst = _gsc.create_circuit_list(
                 "pp[0]+f0+germ+f1+pp[1]", f0=prepStrs, f1=effectStrs,
-                germ=_objs.OpString(("Ggerm",)), pp=prepovmTuples,
+                germ=_objs.Circuit(("Ggerm",)), pp=prepovmTuples,
                 order=('f0','f1','pp'))
 
             evTree,blkSz,_,lookup,_ = gsGerm.bulk_evaltree_from_resources(
@@ -537,7 +537,7 @@ def test_fiducial_pairs(fidPairs, targetModel, prepStrs, effectStrs, germList,
         firstRho = list(targetModel.preps.keys())[0]
         firstPOVM = list(targetModel.povms.keys())[0]
         prepovmTuples = [ (firstRho, firstPOVM) ]
-    prepovmTuples = [ (_objs.OpString((prepLbl,)), _objs.OpString((povmLbl,)))
+    prepovmTuples = [ (_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
                       for prepLbl,povmLbl in prepovmTuples ]
 
 
@@ -561,7 +561,7 @@ def test_fiducial_pairs(fidPairs, targetModel, prepStrs, effectStrs, germList,
             subcalls=['bulk_fill_dprobs'], verbosity=0)
 
         dP = _np.empty( (evTree.num_final_elements(), nModelParams) )
-           #indexed by [iSpamLabel,iCircuit,iGatesetParam] : gives d(<SP|OpString|AM>)/d(iGatesetParam)
+           #indexed by [iSpamLabel,iCircuit,iGatesetParam] : gives d(<SP|Circuit|AM>)/d(iGatesetParam)
         
         targetModel.bulk_fill_dprobs(dP, evTree, wrtBlockSize=wrtSize)
         return dP

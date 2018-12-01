@@ -14,7 +14,7 @@ from collections import OrderedDict as _OrderedDict
 from ..tools import compattools as _compat
 
 from .dataset import DataSet as _DataSet
-from . import opstring as _gs
+from . import circuit as _cir
 from . import labeldicts as _ld
 
 
@@ -520,7 +520,7 @@ class MultiDataSet(object):
 
 
     def __getstate__(self):
-        toPickle = { 'gsIndexKeys': list(map(_gs.CompressedOpString, list(self.gsIndex.keys()))) if self.gsIndex else [],
+        toPickle = { 'gsIndexKeys': list(map(_cir.CompressedCircuit, list(self.gsIndex.keys()))) if self.gsIndex else [],
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'olIndex': self.olIndex,
                      'oliDict': self.oliDict,
@@ -553,7 +553,7 @@ class MultiDataSet(object):
             filename ends in ".gz", the file will be gzip compressed.
         """
 
-        toPickle = { 'gsIndexKeys': list(map(_gs.CompressedOpString, list(self.gsIndex.keys()))) if self.gsIndex else [],
+        toPickle = { 'gsIndexKeys': list(map(_cir.CompressedCircuit, list(self.gsIndex.keys()))) if self.gsIndex else [],
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'olIndex': self.olIndex,
                      'oliKeys': list(self.oliDict.keys()),
@@ -611,12 +611,12 @@ class MultiDataSet(object):
         state_dict = _pickle.load(f)
         def expand(x): 
             """ Expand a comproessed operation sequence """
-            assert isinstance(x,_gs.CompressedOpString)
+            assert isinstance(x,_cir.CompressedCircuit)
             return x.expand()
             #else: #to be backward compatible
             #  _warnings.warn("Deprecated dataset format.  Please re-save " +
             #                 "this dataset soon to avoid future incompatibility.")
-            #  return _gs.OpString(_gs.CompressedOpString.expand_op_label_tuple(x))
+            #  return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x))
         gsIndexKeys = [ expand(cgs) for cgs in state_dict['gsIndexKeys'] ]
 
         #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]

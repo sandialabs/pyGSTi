@@ -35,7 +35,7 @@ class TestReportables(BaseTestCase):
         gs1 = std.target_model.depolarize(op_noise=0.1, spam_noise=0.05)
         gs2 = std.target_model.copy()
         gl = "Gx" # operation label
-        opstr = pygsti.obj.OpString( ('Gx','Gx') )
+        opstr = pygsti.obj.Circuit( ('Gx','Gx') )
         syntheticIdles = pygsti.construction.circuit_list( [
              ('Gx',)*4, ('Gy',)*4 ] )
 
@@ -177,7 +177,7 @@ class TestReportables(BaseTestCase):
     def test_nearby_gatesetfns(self):
         gs1 = std.target_model.depolarize(op_noise=0.1, spam_noise=0.05)
         gs2 = std.target_model.copy()
-        opstr = pygsti.obj.OpString( ('Gx','Gx') )
+        opstr = pygsti.obj.Circuit( ('Gx','Gx') )
         
         fn = rptbl.Half_diamond_norm(gs1,gs2,'Gx')
         fn.evaluate(gs1)

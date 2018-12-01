@@ -12,7 +12,7 @@ import numpy.random as _rndm
 
 from ..tools import listtools as _lt
 from ..tools import compattools as _compat
-from ..objects import opstring as _gs
+from ..objects import circuit as _cir
 from ..objects import Model as _Model
 from ..baseobjs import Label as _Lbl
 
@@ -30,7 +30,7 @@ def create_circuit_list(*args,**kwargs):
     ----------
     args : list of strings
         Positional arguments are strings that python can evaluate into either
-        a tuple of operation labels or a OpString instance.  If evaluation raises
+        a tuple of operation labels or a Circuit instance.  If evaluation raises
         an AssertionError (an assert statement fails) then that inner loop
         evaluation is skipped and list construction proceeds.
 
@@ -40,7 +40,7 @@ def create_circuit_list(*args,**kwargs):
 
     Returns
     -------
-    list of OpString
+    list of Circuit
 
     Examples
     --------
@@ -77,7 +77,7 @@ def create_circuit_list(*args,**kwargs):
     #print "DEBUG: looplists = ",loopLists
     for str_expression in args:
         if len(str_expression) == 0:
-            lst.append( _gs.OpString( () ) ); continue #special case
+            lst.append( _cir.Circuit( () ) ); continue #special case
 
         keysToLoop = [ key for key in loopOrder if key in str_expression ]
         loopListsToLoop = [ loopLists[key] for key in keysToLoop ] #list of lists
@@ -88,12 +88,12 @@ def create_circuit_list(*args,**kwargs):
                 result = _runExpression(str_expression, myLocals)
             except AssertionError: continue #just don't append
 
-            if isinstance(result,_gs.OpString):
+            if isinstance(result,_cir.Circuit):
                 opStr = result
             elif isinstance(result,list) or isinstance(result,tuple):
-                opStr = _gs.OpString(result)
+                opStr = _cir.Circuit(result)
             elif _compat.isstr(result):
-                opStr = _gs.OpString(None, result)
+                opStr = _cir.Circuit(None, stringrep=result)
             lst.append(opStr)
 
     return lst
@@ -105,7 +105,7 @@ def repeat(x,nTimes,assertAtLeastOneRep=False):
 
     Parameters
     ----------
-    x : tuple or OpString
+    x : tuple or Circuit
        the operation sequence to repeat
 
     nTimes : int
@@ -119,7 +119,7 @@ def repeat(x,nTimes,assertAtLeastOneRep=False):
 
     Returns
     -------
-    tuple or OpString (whichever x was)
+    tuple or Circuit (whichever x was)
     """
     if assertAtLeastOneRep:  assert(nTimes > 0)
     return x*nTimes
@@ -131,7 +131,7 @@ def repeat_count_with_max_length(x,maxLength,assertAtLeastOneRep=False):
 
     Parameters
     ----------
-    x : tuple or OpString
+    x : tuple or Circuit
        the operation sequence to repeat
 
     maxLength : int
@@ -160,7 +160,7 @@ def repeat_with_max_length(x,maxLength,assertAtLeastOneRep=False):
 
     Parameters
     ----------
-    x : tuple or OpString
+    x : tuple or Circuit
        the operation sequence to repeat.
 
     maxLength : int
@@ -174,7 +174,7 @@ def repeat_with_max_length(x,maxLength,assertAtLeastOneRep=False):
 
     Returns
     -------
-    tuple or OpString (whichever x was)
+    tuple or Circuit (whichever x was)
         the repeated operation sequence
     """
     return repeat(x,repeat_count_with_max_length(x,maxLength,assertAtLeastOneRep),assertAtLeastOneRep)
@@ -190,7 +190,7 @@ def repeat_and_truncate(x,N,assertAtLeastOneRep=False):
 
     Parameters
     ----------
-    x : tuple or OpString
+    x : tuple or Circuit
        the operation sequence to repeat & truncate.
 
     N : int
@@ -202,7 +202,7 @@ def repeat_and_truncate(x,N,assertAtLeastOneRep=False):
 
     Returns
     -------
-    tuple or OpString (whichever x was)
+    tuple or Circuit (whichever x was)
         the repeated-then-truncated operation sequence
     """
     reps = repeat_count_with_max_length(x,N,assertAtLeastOneRep) + 1
@@ -217,7 +217,7 @@ def repeat_remainder_for_truncation(x,N,assertAtLeastOneRep=False):
 
     Parameters
     ----------
-    x : tuple or OpString
+    x : tuple or Circuit
        the operation sequence to operate on.
 
     N : int
@@ -229,7 +229,7 @@ def repeat_remainder_for_truncation(x,N,assertAtLeastOneRep=False):
 
     Returns
     -------
-    tuple or OpString (whichever x was)
+    tuple or Circuit (whichever x was)
         the remainder operation sequence
 
     """
@@ -282,18 +282,18 @@ def list_all_circuits(opLabels, minlength, maxlength):
     Returns
     -------
     list
-        A list of OpString objects.
+        A list of Circuit objects.
     """
     opTuples = _itertools.chain(*[_itertools.product(opLabels, repeat=N)
                                     for N in range(minlength, maxlength + 1)])
-    return list(map(_gs.OpString, opTuples))
+    return list(map(_cir.Circuit, opTuples))
 
 def gen_all_circuits(opLabels, minlength, maxlength):
     """ Generator version of list_all_circuits """
     opTuples = _itertools.chain(*[_itertools.product(opLabels, repeat=N)
                                     for N in range(minlength, maxlength + 1)])
     for opTuple in opTuples:
-        yield _gs.OpString(opTuple)
+        yield _cir.Circuit(opTuple)
 
 def list_all_circuits_onelen(opLabels, length):
     """
@@ -310,16 +310,16 @@ def list_all_circuits_onelen(opLabels, length):
     Returns
     -------
     list
-        A list of OpString objects.
+        A list of Circuit objects.
     """
     opTuples = _itertools.product(opLabels, repeat=length)
-    return list(map(_gs.OpString, opTuples))
+    return list(map(_cir.Circuit, opTuples))
 
 
 def gen_all_circuits_onelen(opLabels, length):
     """Generator version of list_all_circuits_onelen"""
     for opTuple in _itertools.product(opLabels, repeat=length):
-        yield _gs.OpString(opTuple)
+        yield _cir.Circuit(opTuple)
 
 
 def list_all_circuits_without_powers_and_cycles(opLabels, maxLength):
@@ -333,7 +333,7 @@ def list_all_circuits_without_powers_and_cycles(opLabels, maxLength):
     Parameters
     ----------
     opLabels : list
-        A list of the operation labels to for operation sequences from.
+        A list of the operation (gate) labels to form operation sequences from.
 
     maxLength : int
         The maximum length strings to return.  Gatestrings from length 1
@@ -342,7 +342,7 @@ def list_all_circuits_without_powers_and_cycles(opLabels, maxLength):
     Returns
     -------
     list
-       Of :class:`OpString` objects.
+       Of :class:`Circuit` objects.
     """
 
     #Are we trying to add a germ that is a permutation of a germ we already have?  False if no, True if yes.
@@ -375,7 +375,7 @@ def list_all_circuits_without_powers_and_cycles(opLabels, maxLength):
 
     output = []
     for length in _np.arange(1,maxLength+1):
-        output.extend( [ _gs.OpString.from_pythonstr(pys, opLabels) for pys in outputDict[length] ] )
+        output.extend( [ _cir.Circuit.from_pythonstr(pys, opLabels) for pys in outputDict[length] ] )
     return output
 
 
@@ -401,14 +401,14 @@ def list_random_circuits_onelen(opLabels, length, count, seed=None):
     Returns
     -------
     list of Circuits
-        A list of random operation sequences as OpString objects.
+        A list of random operation sequences as Circuit objects.
     """
     ret = [ ]
     rndm = _rndm.RandomState(seed) # ok if seed is None
     opLabels = list(opLabels) # b/c we need to index it below
     for i in range(count): #pylint: disable=unused-variable
         r = rndm.random_sample(length) * len(opLabels)
-        ret.append( _gs.OpString( [opLabels[int(k)] for k in r]) )
+        ret.append( _cir.Circuit( [opLabels[int(k)] for k in r]) )
     return ret
 
 def list_partial_strings(circuit):
@@ -419,12 +419,12 @@ def list_partial_strings(circuit):
 
     Parameters
     ----------
-    circuit : tuple of operation labels or OpString
+    circuit : tuple of operation labels or Circuit
         The operation sequence to act upon.
 
     Returns
     -------
-    list of OpString objects.
+    list of Circuit objects.
        The parial operation sequences.
     """
     ret = [ ]
@@ -439,7 +439,7 @@ def list_lgst_circuits(prepStrs, effectStrs, opLabelSrc):
     Parameters
     ----------
     prepStrs,effectStrs : list of Circuits
-        Fiducial OpString lists used to construct a informationally complete
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
     opLabelSrc : tuple or Model
@@ -448,7 +448,7 @@ def list_lgst_circuits(prepStrs, effectStrs, opLabelSrc):
 
     Returns
     -------
-    list of OpString objects
+    list of Circuit objects
         The list of required operation sequences, without duplicates.
     """
     if isinstance(opLabelSrc, _Model):
@@ -456,7 +456,7 @@ def list_lgst_circuits(prepStrs, effectStrs, opLabelSrc):
                      list(opLabelSrc.instruments.keys())
     else: opLabels = opLabelSrc
 
-    singleOps = [ _gs.OpString( (gl,), "(%s)" % str(gl) ) for gl in opLabels ]
+    singleOps = [ _cir.Circuit( (gl,), stringrep="(%s)" % str(gl) ) for gl in opLabels ]
     ret = create_circuit_list('eStr','prepStr','prepStr+eStr','prepStr+g+eStr',
                                eStr=effectStrs, prepStr=prepStrs, g=singleOps,
                                order=['g','prepStr','eStr'] ) # LEXICOGRAPHICAL VS MATRIX ORDER
@@ -474,7 +474,7 @@ def list_strings_lgst_can_estimate(dataset, prepStrs, effectStrs):
           The data used to generate the LGST estimates
 
       prepStrs,effectStrs : list of Circuits
-          Fiducial OpString lists used to construct a informationally complete
+          Fiducial Circuit lists used to construct a informationally complete
           preparation and measurement.
 
       Returns
@@ -511,41 +511,41 @@ def list_strings_lgst_can_estimate(dataset, prepStrs, effectStrs):
 def circuit_list( listOfOpLabelTuplesOrStrings ):
     """
     Converts a list of operation label tuples or strings to
-     a list of OpString objects.
+     a list of Circuit objects.
 
     Parameters
     ----------
     listOfOpLabelTuplesOrStrings : list
-        List which may contain a mix of OpString objects, tuples of gate
+        List which may contain a mix of Circuit objects, tuples of gate
         labels, and strings in standard-text-format.
 
     Returns
     -------
-    list of OpString objects
-        Each item of listOfOpLabelTuplesOrStrings converted to a OpString.
+    list of Circuit objects
+        Each item of listOfOpLabelTuplesOrStrings converted to a Circuit.
     """
     ret = []
     for x in listOfOpLabelTuplesOrStrings:
-        if isinstance(x,_gs.OpString):
+        if isinstance(x,_cir.Circuit):
             ret.append(x)
         elif isinstance(x,tuple) or isinstance(x,list):
-            ret.append( _gs.OpString(x) )
+            ret.append( _cir.Circuit(x) )
         elif _compat.isstr(x):
-            ret.append( _gs.OpString(None, x) )
+            ret.append( _cir.Circuit(None, stringrep=x) )
         else:
-            raise ValueError("Cannot convert type %s into a OpString" % str(type(x)))
+            raise ValueError("Cannot convert type %s into a Circuit" % str(type(x)))
     return ret
 
 
 def translate_circuit(circuit, aliasDict):
     """
-    Creates a new OpString object from an existing one by replacing
+    Creates a new Circuit object from an existing one by replacing
     operation labels in `circuit` by (possibly multiple) new labels according
     to `aliasDict`.
 
     Parameters
     ----------
-    circuit : OpString
+    circuit : Circuit
         The operation sequence to use as the base for find & replace
         operations.
 
@@ -556,19 +556,19 @@ def translate_circuit(circuit, aliasDict):
 
     Returns
     -------
-    OpString
+    Circuit
     """
     if aliasDict is None:
         return circuit
     else:
-        return _gs.OpString(tuple(_itertools.chain(
+        return _cir.Circuit(tuple(_itertools.chain(
             *[aliasDict.get(lbl, (lbl,) ) for lbl in circuit])))
 
 
 
 def translate_circuit_list(circuitList, aliasDict):
     """
-    Creates a new list of OpString objects from an existing one by replacing
+    Creates a new list of Circuit objects from an existing one by replacing
     operation labels in `circuitList` by (possibly multiple) new labels according
     to `aliasDict`.
 
@@ -590,7 +590,7 @@ def translate_circuit_list(circuitList, aliasDict):
     if aliasDict is None:
         return circuitList
     else:
-        new_circuits = [ _gs.OpString(tuple(_itertools.chain(
+        new_circuits = [ _cir.Circuit(tuple(_itertools.chain(
             *[aliasDict.get(lbl,(lbl,)) for lbl in opstr])))
                             for opstr in circuitList ]
         return new_circuits
@@ -623,7 +623,7 @@ def compose_alias_dicts(aliasDict1, aliasDict2):
 
 def manipulate_circuit(circuit, sequenceRules):
     """
-    Manipulates a OpString object according to `sequenceRules`.
+    Manipulates a Circuit object according to `sequenceRules`.
 
     Each element of `sequenceRules` is of the form `(find,replace)`,
     and specifies a replacement rule.  For example,
@@ -633,13 +633,13 @@ def manipulate_circuit(circuit, sequenceRules):
 
     Parameters
     ----------
-    circuit : OpString or tuple
+    circuit : Circuit or tuple
         The operation sequence to manipulate.
 
     sequenceRules : list
         A list of `(find,replace)` 2-tuples which specify the replacement
         rules.  Both `find` and `replace` are tuples of operation labels 
-        (or `OpString` objects).  If `sequenceRules is None` then
+        (or `Circuit` objects).  If `sequenceRules is None` then
         `circuit` is returned.
 
     Returns
@@ -707,12 +707,12 @@ def manipulate_circuit(circuit, sequenceRules):
             circuit = begin + repl + end
             #print("Applied rule %d at index %d: " % (k,i), begin, repl, end, " ==> ", circuit) #DEBUG
 
-    return _gs.OpString(circuit)
+    return _cir.Circuit(circuit)
 
 
 def manipulate_circuit_list(circuitList, sequenceRules):
     """
-    Creates a new list of OpString objects from an existing one by performing
+    Creates a new list of Circuit objects from an existing one by performing
     replacements according to `sequenceRules` (see :func:`manipulate_circuit`).
 
     Parameters
@@ -724,7 +724,7 @@ def manipulate_circuit_list(circuitList, sequenceRules):
     sequenceRules : list
         A list of `(find,replace)` 2-tuples which specify the replacement
         rules.  Both `find` and `replace` are tuples of operation labels 
-        (or `OpString` objects).  If `sequenceRules is None` then
+        (or `Circuit` objects).  If `sequenceRules is None` then
         `circuitList` is returned.
 
     Returns
@@ -799,7 +799,7 @@ def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle='Gi'):
     
     Parameters
     ----------
-    circuit : OpString
+    circuit : Circuit
         The operation sequence to act on.
 
     sslbls_to_keep : list
@@ -816,7 +816,7 @@ def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle='Gi'):
 
     Returns
     -------
-    OpString
+    Circuit
     """
     if new_sslbls is not None:
         sslbl_map = { old: new for old,new in zip(sslbls_to_keep,new_sslbls) }
@@ -856,4 +856,4 @@ def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle='Gi'):
             # is just an idle: add idle placeholder if there were any components
             if idle is not None: lbls.append(_Lbl(idle))
 
-    return _gs.OpString(lbls)
+    return _cir.Circuit(lbls)

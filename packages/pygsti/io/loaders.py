@@ -197,7 +197,7 @@ def load_gatestring_dict(filename):
     Returns
     -------
     Dictionary with keys = operation sequence labels and
-      values = OpString objects.
+      values = Circuit objects.
     """
     std = _stdinput.StdInputParser()
     return std.parse_dictfile(filename)
@@ -218,7 +218,7 @@ def load_circuit_list(filename, readRawStrings=False):
 
     Returns
     -------
-    list of OpString objects
+    list of Circuit objects
     """
     if readRawStrings:
         rawList = []

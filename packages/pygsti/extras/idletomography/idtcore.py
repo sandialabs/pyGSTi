@@ -453,7 +453,7 @@ def fidpairs_to_pauli_fidpairs(fidpairsList, pauliBasisDicts, nQubits):
     Parameters
     ----------
     fidpairsList : list
-        A list whose elements are 2-tuples of :class:`OpString` objects.
+        A list whose elements are 2-tuples of :class:`Circuit` objects.
 
     pauliBasisDicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries 
@@ -462,7 +462,7 @@ def fidpairs_to_pauli_fidpairs(fidpairsList, pauliBasisDicts, nQubits):
         dictionary's format.
         
     nQubits : int
-        The number of qubits.  Needed because :class:`OpString`
+        The number of qubits.  Needed because :class:`Circuit`
         objects don't contain this information.
         
     Returns
@@ -658,8 +658,8 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
     maxweight : int, optional
         The maximum weight of errors to consider.
 
-    idle_string : OpString-like, optional
-        A OpString or tuple of operation labels that represents the idle
+    idle_string : Circuit-like, optional
+        A Circuit or tuple of operation labels that represents the idle
         gate being characterized by idle tomography.
 
     include_hamiltonian, include_stochastic, include_affine : bool, optional
@@ -685,7 +685,7 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
     Returns
     -------
     list
-        A list of :class:`OpString` objects.
+        A list of :class:`Circuit` objects.
     """
 
     prepDict,measDict = pauliBasisDicts
@@ -694,7 +694,7 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
     if preferred_meas_basis_signs == "auto":
         preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
         
-    GiStr = _objs.OpString( idle_string )
+    GiStr = _objs.Circuit( idle_string )
 
     pauli_fidpairs = idle_tomography_fidpairs(
         nQubits, maxweight, include_hamiltonian, include_stochastic,
@@ -737,8 +737,8 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, idle_str
         :function:`preferred_signs_from_paulidict` for details on each
         dictionary's format.
 
-    idle_string : OpString
-        The OpString representing the idle operation being characterized.
+    idle_string : Circuit
+        The Circuit representing the idle operation being characterized.
 
     outcome : NQOutcome
         The outcome being tracked.
@@ -821,8 +821,8 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
         :function:`preferred_signs_from_paulidict` for details on each
         dictionary's format.
 
-    idle_string : OpString
-        The OpString representing the idle operation being characterized.
+    idle_string : Circuit
+        The Circuit representing the idle operation being characterized.
 
     observable : NQPauliOp
         The observable whose expectation value is being tracked.
@@ -946,8 +946,8 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
     maxweight : int, optional
         The maximum weight of errors to consider.
 
-    idle_string : OpString-like, optional
-        A OpString or tuple of operation labels that represents the idle
+    idle_string : Circuit-like, optional
+        A Circuit or tuple of operation labels that represents the idle
         gate being characterized by idle tomography.
 
     include_hamiltonian, include_stochastic, include_affine : {True,False,"auto"}
@@ -986,7 +986,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
         advancedOptions = {}
 
     prepDict,measDict = pauliBasisDicts
-    GiStr = _objs.OpString( idle_string )
+    GiStr = _objs.Circuit( idle_string )
 
     jacmode = advancedOptions.get("jacobian mode", "separate")
     sto_aff_jac = None; sto_aff_obs_err_rates = None

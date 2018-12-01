@@ -4,7 +4,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for creating RPE Models and OpString lists """
+""" Functions for creating RPE Models and Circuit lists """
 import numpy as _np
 from . import modelconstruction as _setc
 from . import datasetconstruction as _dsc
@@ -113,30 +113,30 @@ def make_rpe_alpha_str_lists_gx_gz(kList):
     cosStrList = []
     sinStrList = []
     for k in kList:
-        cosStrList += [ _objs.OpString(('Gi','Gx','Gx','Gz')+
+        cosStrList += [ _objs.Circuit(('Gi','Gx','Gx','Gz')+
                                          ('Gz',)*k +
                                          ('Gz','Gz','Gz','Gx','Gx'),
                                          'GiGxGxGzGz^'+str(k)+'GzGzGzGxGx')]
 
-        sinStrList += [ _objs.OpString(('Gx','Gx','Gz','Gz')+
+        sinStrList += [ _objs.Circuit(('Gx','Gx','Gz','Gz')+
                                          ('Gz',)*k +
                                          ('Gz','Gz','Gz','Gx','Gx'),
                                          'GxGxGzGzGz^'+str(k)+'GzGzGzGxGx')]
 
         #From RPEToolsNewNew.py
-        ##cosStrList += [_objs.OpString(('Gi','Gx','Gx')+
+        ##cosStrList += [_objs.Circuit(('Gi','Gx','Gx')+
         ##                                ('Gz',)*k +
         ##                                ('Gx','Gx'),
         ##                                'GiGxGxGz^'+str(k)+'GxGx')]
         #
         #
-        #cosStrList += [_objs.OpString(('Gx','Gx')+
+        #cosStrList += [_objs.Circuit(('Gx','Gx')+
         #                                ('Gz',)*k +
         #                                ('Gx','Gx'),
         #                                'GxGxGz^'+str(k)+'GxGx')]
         #
         #
-        #sinStrList += [_objs.OpString(('Gx','Gx')+
+        #sinStrList += [_objs.Circuit(('Gx','Gx')+
         #                                ('Gz',)*k +
         #                                ('Gz','Gx','Gx'),
         #                                'GxGxGz^'+str(k)+'GzGxGx')]
@@ -166,20 +166,20 @@ def make_rpe_epsilon_str_lists_gx_gz(kList):
     epsilonSinStrList = []
 
     for k in kList:
-        epsilonCosStrList += [_objs.OpString(('Gx',)*k+
+        epsilonCosStrList += [_objs.Circuit(('Gx',)*k+
                                                ('Gx',)*4,
                                                'Gx^'+str(k)+'GxGxGxGx')]
 
-        epsilonSinStrList += [_objs.OpString(('Gx','Gx','Gz','Gz')+
+        epsilonSinStrList += [_objs.Circuit(('Gx','Gx','Gz','Gz')+
                                                ('Gx',)*k+
                                                ('Gx',)*4,
                                                'GxGxGzGzGx^'+str(k)+'GxGxGxGx')]
 
         #From RPEToolsNewNew.py
-        #epsilonCosStrList += [_objs.OpString(('Gx',)*k,
+        #epsilonCosStrList += [_objs.Circuit(('Gx',)*k,
         #                                       'Gx^'+str(k))]
         #
-        #epsilonSinStrList += [_objs.OpString(('Gx','Gx')+('Gx',)*k,
+        #epsilonSinStrList += [_objs.Circuit(('Gx','Gx')+('Gx',)*k,
         #                                       'GxGxGx^'+str(k))]
 
     return epsilonCosStrList, epsilonSinStrList
@@ -206,22 +206,22 @@ def make_rpe_theta_str_lists_gx_gz(kList):
     thetaSinStrList = []
 
     for k in kList:
-        thetaCosStrList += [_objs.OpString(
+        thetaCosStrList += [_objs.Circuit(
                 ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k+
                 ('Gx',)*4, '(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k)+'GxGxGxGx')]
 
-        thetaSinStrList += [_objs.OpString(
+        thetaSinStrList += [_objs.Circuit(
                 ('Gx','Gx','Gz','Gz')+
                 ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k+
                 ('Gx',)*4,
                 '(GxGxGzGz)(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k)+'GxGxGxGx')]
 
         #From RPEToolsNewNew.py
-        #thetaCosStrList += [_objs.OpString(
+        #thetaCosStrList += [_objs.Circuit(
         #       ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k,
         #       '(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k))]
         #
-        #thetaSinStrList += [_objs.OpString(
+        #thetaSinStrList += [_objs.Circuit(
         #       ('Gx','Gx')+
         #       ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k,
         #       'GxGx(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k))]
@@ -291,7 +291,7 @@ def make_rpe_data_set(modelOrDataset,stringListD,nSamples,sampleError='binomial'
         If a DataSet, the data set whose frequencies generate the data.
 
     stringListD : Dictionary of list of (tuples or Circuits)
-        Each tuple or OpString contains operation labels and
+        Each tuple or Circuit contains operation labels and
         specifies a gate sequence whose counts are included
         in the returned DataSet.  The dictionary must have the key
         'totalStrList'; easiest if this dictionary is generated by
