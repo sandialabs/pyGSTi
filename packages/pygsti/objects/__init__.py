@@ -55,6 +55,8 @@ from .instrument import Instrument
 from .instrument import TPInstrument
 
 from .model import Model
+from .model import ExplicitOpModel
+from .model import ImplicitOpModel
 from .gatestringstructure import CircuitStructure
 from .gatestringstructure import LsGermsStructure
 from .gatestringstructure import LsGermsSerialStructure

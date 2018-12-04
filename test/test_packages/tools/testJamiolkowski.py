@@ -14,7 +14,7 @@ class JamiolkowskiTestCase(unittest.TestCase):
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
 
         #Set Model objects to "strict" mode for testing
-        pygsti.objects.Model._strict = True
+        pygsti.objects.ExplicitOpModel._strict = True
 
 
         # density matrix == 3x3 block diagonal matrix: a 2x2 block followed by a 1x1 block

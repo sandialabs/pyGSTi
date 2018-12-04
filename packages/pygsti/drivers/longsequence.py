@@ -594,9 +594,13 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
                        for i in range(len(master.Ls))]
 
     #Starting Point - compute on rank 0 and distribute
-    LGSTcompatibleOps = all([(isinstance(g,_objs.FullyParameterizedOp) or
-                                isinstance(g,_objs.TPParameterizedOp))
-                               for g in target_model.operations.values()])
+    if isinstance(target_model, _objs.ExplicitOpModel):
+        LGSTcompatibleOps = all([(isinstance(g,_objs.FullyParameterizedOp) or
+                                  isinstance(g,_objs.TPParameterizedOp))
+                                 for g in target_model.operations.values()])
+    else:
+        LGSTcompatibleOps = False
+        
     if isinstance(lsgstLists[0],validStructTypes) and LGSTcompatibleOps:
         startingPt = advancedOptions.get('starting point',"LGST")
     else:
@@ -1234,7 +1238,7 @@ def _get_lsgst_lists(dschk, target_model, prepStrs, effectStrs, germs,
     #Construct operation sequences
     actionIfMissing = advancedOptions.get('missingDataAction','drop')
     opLabels = advancedOptions.get(
-        'opLabels', list(target_model.operations.keys()))
+        'opLabels', list(target_model.get_primitive_op_labels()))
     lsgstLists = _construction.stdlists.make_lsgst_structs(
         opLabels, prepStrs, effectStrs, germs, maxLengths,
         truncScheme = advancedOptions.get('truncScheme',"whole germ powers"),
@@ -1299,11 +1303,18 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
 
         gaugeOptParams['returnAll'] = True # so we get gaugeEl to save
         gaugeOptParams['model'] = mdl_lsgst_list[-1] #starting model
-        _, gaugeEl, go_gs_final = _alg.gaugeopt_to_target(**gaugeOptParams)
+
+
+        if isinstance(gaugeOptParams['model'], _objs.ExplicitOpModel):
+            #only explicit models can be gauge optimized
+            _, gaugeEl, go_gs_final = _alg.gaugeopt_to_target(**gaugeOptParams)
+        else:
+            #but still fill in results for other models (?)
+            gaugeEl, go_gs_final = None, gaugeOptParams['model'].copy()
+            
         gaugeOptParams['_gaugeGroupEl'] = gaugeEl #store gaugeopt el
         ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final,
-                                                 None, comm, printer-1)        
-
+                                                 None, comm, printer-1)
         tNxt = _time.time()
         profiler.add_time('%s: gauge optimization' % callerName,tRef); tRef=tNxt
 
@@ -1443,7 +1454,12 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
 
                         gaugeOptParams['returnAll'] = True # so we get gaugeEl to save
                         gaugeOptParams['model'] = mdl_reopt #starting model
-                        _, gaugeEl, go_gs_reopt = _alg.gaugeopt_to_target(**gaugeOptParams)
+
+                        if isinstance(gaugeOptParams['model'], _objs.ExplicitOpModel):
+                            #only explicit models can be gauge optimized
+                            _, gaugeEl, go_gs_reopt = _alg.gaugeopt_to_target(**gaugeOptParams)
+                        else:
+                            gaugeEl, go_gs_reopt = None, gaugeOptParams['model'].copy()
                         gaugeOptParams['_gaugeGroupEl'] = gaugeEl #store gaugeopt el
 
                         tNxt = _time.time()

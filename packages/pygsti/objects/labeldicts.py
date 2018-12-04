@@ -33,7 +33,7 @@ class PrefixOrderedDict(_collections.OrderedDict):
 
     def __setitem__(self, key, val):
         """ Assumes key is a Label object """
-        if not key.has_prefix(self._prefix):
+        if not (self._prefix is None or key.has_prefix(self._prefix)):
             raise KeyError("All keys must be strings, " +
                            "beginning with the prefix '%s'" % self._prefix)
         super(PrefixOrderedDict,self).__setitem__(key, val)
@@ -61,7 +61,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
     member type (e.g. :class:`SPAMVec`- or :class:`LinearOperator`-derived object) by converting any
     values into that type upon assignment and raising an error if this is not possible.
     """
-    def __init__(self, parent, default_param, prefix, typ, items=[]):
+    def __init__(self, parent, default_param, prefix, flags, items=[]):
         """
         Creates a new OrderedMemberDict.
 
@@ -78,7 +78,8 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         prefix : str
             The required prefix of all keys (which must be strings).
 
-        typ : {"gate","spamvec","povm","instrument"}
+        TODO: docstring : flags
+        typ : {"operation","spamvec","povm","instrument"}
             The type of objects that this dictionary holds.  This is 
             needed for automatic object creation and for validation. 
 
@@ -93,8 +94,11 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         # call this class's __setitem__ we set parent to None for this step.
         self.parent = None # so __init__ below doesn't call _rebuild_paramvec
         self.default_param = default_param  # "TP", "full", "static", "clifford",...
-        self.typ = typ
-
+        self.flags = { 'auto_embed': flags.get('auto_embed',False),
+                       'match_parent_dim':  flags.get('match_parent_dim',False),
+                       'match_parent_evotype': flags.get('match_parent_evotype',False),
+                       'cast_to_type': flags.get('cast_to_type',None)
+                       }
         PrefixOrderedDict.__init__(self, prefix, items)
         _gm.ModelChild.__init__(self, parent) # set's self.parent
 
@@ -107,11 +111,12 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             
 
     def _check_dim(self, obj):
+        if not self.flags['match_parent_dim']: return # no check
         if isinstance(obj, _gm.ModelMember):
             dim = obj.dim
-        elif self.typ == "spamvec":
+        elif self.flags['cast_to_type'] == "spamvec":
             dim = len(obj)
-        elif self.typ == "gate":
+        elif self.flags['cast_to_type'] == "operation":
             try:
                 d1 = len(obj)
                 d2 = len(obj[0]) #pylint: disable=unused-variable
@@ -135,6 +140,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
 
 
     def _check_evotype(self, evotype):
+        if not self.flags['match_parent_evotype']: return # no check
         if self.parent is None: return
         if self.parent._evotype is None:
             self.parent._evotype = evotype
@@ -156,11 +162,13 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
     
 
     def _auto_embed(self, key_label, value):
+        if not self.flags['auto_embed']: return value # no auto-embedding
         if self.parent is not None and key_label.sslbls is not None:
-            if self.typ == "gate":
+            if self.flags['cast_to_type'] == "operation":
                 return self.parent._embedOperation(key_label.sslbls, self.cast_to_obj(value))
             else:
-                raise NotImplementedError("Cannot auto-embed objects other than gates yet.")
+                raise NotImplementedError("Cannot auto-embed objects other than opeations yet (not %s)."
+                                          % self.flags['cast_to_type'])
         else:
             return value
 
@@ -178,10 +186,13 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         object
         """
         if isinstance(value, _gm.ModelMember): return value
+        if self.flags['cast_to_type'] is None:
+            raise ValueError("Can only assign `ModelMember` objects as values (not %s)."
+                             % str(type(value)))
 
         basis = self.parent.basis if self.parent else None
         obj = None; 
-        if self.typ == "spamvec":
+        if self.flags['cast_to_type'] == "spamvec":
             # not needed anymore (spam vecs can be lindblad types now ) TODO REMOVE
             #typ = self.default_param
             #rtyp = "TP" if typ in ("CPTP","H+S","S") else typ 
@@ -190,7 +201,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
 
             obj = _sv.StaticSPAMVec(value)
             obj = _sv.convert(obj, self.default_param, basis)
-        elif self.typ == "gate":
+        elif self.flags['cast_to_type'] == "operation":
             obj = _op.StaticOp(value)
             obj = _op.convert(obj, self.default_param, basis)
         return obj
@@ -280,14 +291,14 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         OrderedMemberDict
         """
         return OrderedMemberDict(parent, self.default_param,
-                                 self._prefix, self.typ,
+                                 self._prefix, self.flags,
                                  [(lbl,val.copy(parent)) for lbl,val in self.items()])
     
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of Models.  Must set parent separately.
         return (OrderedMemberDict,
-                (None, self.default_param, self._prefix, self.typ, list(self.items())), None)
+                (None, self.default_param, self._prefix, self.flags, list(self.items())), None)
 
     def __pygsti_reduce__(self):
         return self.__reduce__()

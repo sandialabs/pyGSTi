@@ -19,11 +19,11 @@ class RBTestCase(BaseTestCase):
         # -- pspecs to use in all the tests. They cover a variety of possibilities -- #
         
         n_1 = 4
-        glist = ['Gi','Gxpi2','Gypi2','Gcnot']
+        glist = ['Gxpi2','Gypi2','Gcnot'] # 'Gi',
         pspec_1 = pygsti.obj.ProcessorSpec(n_1,glist,verbosity=0,qubit_labels=['Q0','Q1','Q2','Q3'])
     
         n_2 = 3
-        glist = ['Gi','Gxpi','Gypi','Gzpi','Gh','Gp','Gcphase']
+        glist = ['Gxpi','Gypi','Gzpi','Gh','Gp','Gcphase'] # 'Gi',
         availability = {'Gcphase':[(0,1),(1,2)]}
         pspec_2 = pygsti.obj.ProcessorSpec(n_2,glist,availability=availability,verbosity=0)
         
@@ -149,7 +149,7 @@ class RBTestCase(BaseTestCase):
         
         # Tests of MRB : model must have self-inverses in the gate-set.
         n_1 = 4
-        glist = ['Gi','Gxpi2','Gxmpi2','Gypi2','Gympi2','Gcnot']
+        glist = ['Gxpi2','Gxmpi2','Gypi2','Gympi2','Gcnot'] # 'Gi',
         pspec_inv = pygsti.obj.ProcessorSpec(n_1, glist, verbosity=0, qubit_labels=['Q0','Q1','Q2','Q3'])
         lengths = [0,4,8]
         circuits_per_length = 10
@@ -379,7 +379,7 @@ class RBTestCase(BaseTestCase):
     
     def test_rb_simulate(self):
         n = 3
-        glist = ['Gi','Gxpi','Gypi','Gzpi','Gh','Gp','Gcphase']
+        glist = ['Gxpi','Gypi','Gzpi','Gh','Gp','Gcphase'] # 'Gi',
         availability = {'Gcphase':[(0,1),(1,2)]}
         pspec = pygsti.obj.ProcessorSpec(n,glist,availability=availability,verbosity=0)
     

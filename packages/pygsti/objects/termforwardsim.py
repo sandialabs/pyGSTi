@@ -62,7 +62,7 @@ class TermForwardSimulator(ForwardSimulator):
     that can be expanded into terms of different orders and PureStateSPAMVecs.
     """
 
-    def __init__(self, dim, gates, preps, effects, paramvec, autogator, max_order, cache=None):
+    def __init__(self, dim, compiled_op_server, paramvec, max_order, cache=None):
         """
         Construct a new TermForwardSimulator object.
 
@@ -104,24 +104,23 @@ class TermForwardSimulator(ForwardSimulator):
         self.max_order = max_order
         self.cache = cache
         super(TermForwardSimulator, self).__init__(
-            dim, gates, preps, effects, paramvec, autogator)
+            dim, compiled_op_server, paramvec)
         if self.evotype not in ("svterm","cterm"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "term-based calculations" % self.evotype))
         
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
-        return TermForwardSimulator(self.dim, self.operations, self.preps,
-                            self.effects, self.paramvec,
-                            self.autogator, self.max_order)
+        return TermForwardSimulator(self.dim, self.cos, self.paramvec,
+                                    self.max_order, self.cache)
 
         
     def _rhoE_from_spamTuple(self, spamTuple):
         assert( len(spamTuple) == 2 )
         if isinstance(spamTuple[0],_Label):
             rholabel,elabel = spamTuple
-            rho = self.preps[rholabel]
-            E   = self.effects[elabel]
+            rho = self.cos.get_prep(rholabel)
+            E   = self.cos.get_effect(elabel)
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
@@ -130,8 +129,8 @@ class TermForwardSimulator(ForwardSimulator):
 
     def _rhoEs_from_labels(self, rholabel, elabels):
         """ Returns SPAMVec *objects*, so must call .todense() later """
-        rho = self.preps[rholabel]
-        Es = [ self.effects[elabel] for elabel in elabels ]
+        rho = self.cos.get_prep(rholabel)
+        Es = [ self.cos.get_effect(elabel) for elabel in elabels ]
         #No support for "custom" spamlabel stuff here
         return rho,Es
 

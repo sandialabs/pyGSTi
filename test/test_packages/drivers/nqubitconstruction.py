@@ -249,7 +249,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
     printer.log("Creating a %d-qubit %s model" % (nQubits,geometry))
 
-    mdl = pygsti.obj.Model() # no preps/POVMs
+    mdl = pygsti.obj.ExplicitOpModel() # no preps/POVMs
     # TODO: sparse prep & effect vecs... acton(...) analogue?
 
     #Full preps & povms -- maybe another option

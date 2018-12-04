@@ -9,7 +9,7 @@ class TestTwoQubitMethods(BaseTestCase):
         super(TwoQubitTestCase, self).setUp()
 
         #Set Model objects to "non-strict" mode for this testing
-        pygsti.objects.Model._strict = False
+        pygsti.objects.ExplicitOpModel._strict = False
 
 
     def runTwoQubit(self):

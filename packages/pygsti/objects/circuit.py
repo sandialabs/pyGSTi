@@ -374,7 +374,8 @@ class Circuit(object):
         layers = self._proc_layers_arg(layers)
         lines = self._proc_lines_arg(lines)
         if len(layers) == 0 or len(lines) == 0:
-            return () if nonint_layers else None # zero-area region
+            return Circuit((), lines, None, not self._static, stringrep=None) \
+                if nonint_layers else None # zero-area region
         
         ret = []
         if self._static:
@@ -1333,7 +1334,8 @@ class Circuit(object):
             is a sequence of 1-qubit gates with names name1, name2, name3, ... and there are relations
             for all of (name1,name2) -> name12, (name12,name3) -> name123 etc then the entire sequence of
             1-qubit gates will be compressed into a single possibly non-idle 1-qubit gate followed by 
-            idle gates in place of the previous 1-qubit gates.
+            idle gates in place of the previous 1-qubit gates.  Note that `None` can be used as `name3`
+            to signify that the result is the identity (no gate labels).
 
             If a ProcessorSpec object has been created for the gates/device in question, the
             ProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `oneQgate_relations`.
@@ -1394,12 +1396,18 @@ class Circuit(object):
                             
                 #execute queued applies (outside of above loops)
                 sorted_applies = sorted(applies,key=lambda x: -x[1]) # sort in order of descending 'b' for removes
+                ilayer_inds_to_remove = []
                 for a,b,new_Aname,sslbls in sorted_applies:
-                    if a == -1:
+                    if a == -1: # Note: new_Aname cannot be None here
                         self._append_layer_component(ilayer,_Label(new_Aname,sslbls))
+                    elif new_Aname is None: 
+                        ilayer_inds_to_remove.append(a) # remove layer component - but wait to do so in order
                     else:
                         self._replace_layer_component(ilayer,a,_Label(new_Aname,sslbls))
                     self._remove_layer_component(ilayer+1,b)
+                    
+                for a in sorted(ilayer_inds_to_remove, reverse=True):
+                    self._remove_layer_component(ilayer,a)
 
         # returns the flag that tells us whether the algorithm achieved anything.
         return compression_implemented

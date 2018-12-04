@@ -549,8 +549,13 @@ def determine_paulidicts(model):
     #Note: this routine just punts if model's operation labels are just strings.
 
     #First, check that spam is prep/meas in Z basis (just check prep for now):
-    prepLbls = list(model.preps.keys())
-    prep = model.preps[prepLbls[0]] # just take the first one (usually there's only one anyway)
+    try:
+        prepLbls = list(model.preps.keys())
+        prep = model.preps[prepLbls[0]] # just take the first one (usually there's only one anyway)
+    except AttributeError: #HACK to work w/Implicit models
+        prepLbls = list(model.prep_blks.keys())
+        prep = model.prep_blks[prepLbls[0]]
+        
     if isinstance(prep, _objs.ComputationalSPAMVec):
         if any([b!=0 for b in prep._zvals]): return None
     elif isinstance(prep, _objs.LindbladParameterizedSPAMVec):
@@ -598,7 +603,12 @@ def determine_paulidicts(model):
 
     #try to find 1-qubit pi/2 rotations
     found = {}
-    for gl,gate in model.operations.items():
+    for gl in model.get_primitive_op_labels():
+        if isinstance(model,_objs.ExplicitOpModel):
+            gate = model.operations[gl]
+        else:
+            gate = model.operation_blks[gl]
+            
         if gl.sslbls is None or len(gl.sslbls) != 1:
             continue # skip gates that don't have 1Q-like labels
         qubit_label = gl.sslbls[0] # the qubit this gate is supposed to act on

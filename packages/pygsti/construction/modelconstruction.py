@@ -20,7 +20,7 @@ from ..tools import internalgates as _itgs
 from ..objects import gate as _op
 from ..objects import spamvec as _spamvec
 from ..objects import povm as _povm
-from ..objects import model as _gateset
+from ..objects import model as _mdl
 from ..objects import gaugegroup as _gg
 from ..objects import labeldicts as _ld
 from ..objects import qubitgraph as _qubitgraph
@@ -898,7 +898,7 @@ def basis_build_model(stateSpaceLabels, basis,
     """
     dmDim, _, blockDims = basis.dim #don't need opDim
     defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
-    ret = _gateset.Model(default_param=defP)
+    ret = _mdl.ExplicitOpModel(default_param=defP)
                  #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
 
     for label,rhoExpr in zip(prepLabels, prepExpressions):
@@ -1104,14 +1104,10 @@ def build_nqubit_model(nQubits, gatedict, availability={}, qubit_labels=None,
     gatedict : dict
         A dictionary (an `OrderedDict` if you care about insertion order) which 
         associates with string-type gate names (e.g. `"Gx"`) :class:`LinearOperator`,
-        `numpy.ndarray` objects, or the special `"PerfectIdle"` string.  When
-        the objects may act on fewer than the total number of qubits (determined
-        by their dimension/shape) then they are repeatedly embedded into
-        `nQubits`-qubit gates as specified by `availability`.  `"PerfectIdle"`
-        may be used to indicate a perfect idle gate that therefore doesn't need
-        to be included in the `Model` (but instead is set as its automatic
-        idle name it can process compound operation labels with this label in it).
-
+        `numpy.ndarray` objects. When the objects may act on fewer than the total
+        number of qubits (determined by their dimension/shape) then they are
+        repeatedly embedded into `nQubits`-qubit gates as specified by `availability`.
+      
     availability : dict, optional
         A dictionary whose keys are the same gate names as in
         `gatedict` and whose values are lists of qubit-label-tuples.  Each
@@ -1195,17 +1191,15 @@ def build_nqubit_model(nQubits, gatedict, availability={}, qubit_labels=None,
             sim_type = "map" # use map as default for stabilizer-type evolutions
         else: assert(False) # should be unreachable
 
+    #TODO REMOVE
+    #for opName, gate in gatedict.items():
+    #    if _compat.isstr(gate) and gate == "PerfectIdle":
+    #        perfectIdleName = opName; break
+    #else:
+    #    perfectIdleName = None
 
-    for opName, gate in gatedict.items():
-        if _compat.isstr(gate) and gate == "PerfectIdle":
-            perfectIdleName = opName; break
-    else:
-        perfectIdleName = None
-
-    mdl = _gateset.Model(default_param = parameterization, # "full", "TP" or "static", "clifford", ...
-                          sim_type = sim_type,              # "matrix", "map", "termorder:X"
-                          auto_idle_name = perfectIdleName)
-    mdl.stateSpaceLabels = _ld.StateSpaceLabels(tuple(qubit_labels))
+    mdl = _mdl.ImplicitOpModel({}, SimpleCompLayerLizzard, {}, sim_type=sim_type)
+    mdl.set_state_space_labels(qubit_labels)
     mdl._evotype = evotype # set this to ensure we create the types of model element we expect to.
 
     if parameterization in ("TP","full"): # then make tensor-product spam
@@ -1218,18 +1212,18 @@ def build_nqubit_model(nQubits, gatedict, availability={}, qubit_labels=None,
                     ('0',_spamvec.StaticSPAMVec(v0)),
                     ('1',_spamvec.StaticSPAMVec(v1))]) ), "TP", basis1Q) )
         
-        mdl.preps['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
-        mdl.povms['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
+        mdl.prep_blks['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
+        mdl.povm_blks['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
 
     elif parameterization == "clifford":
         # Clifford object construction is different enough we do it separately
-        mdl.preps['rho0'] = _spamvec.StabilizerSPAMVec(nQubits) # creates all-0 state by default
-        mdl.povms['Mdefault'] = _povm.ComputationalBasisPOVM(nQubits,'stabilizer')
+        mdl.prep_blks['rho0'] = _spamvec.StabilizerSPAMVec(nQubits) # creates all-0 state by default
+        mdl.povm_blks['Mdefault'] = _povm.ComputationalBasisPOVM(nQubits,'stabilizer')
 
     elif parameterization in ("static","static unitary"):
         #static computational basis
-        mdl.preps['rho0'] = _spamvec.ComputationalSPAMVec([0]*nQubits, evotype)
-        mdl.povms['Mdefault'] = _povm.ComputationalBasisPOVM(nQubits, evotype)
+        mdl.prep_blks['rho0'] = _spamvec.ComputationalSPAMVec([0]*nQubits, evotype)
+        mdl.povm_blks['Mdefault'] = _povm.ComputationalBasisPOVM(nQubits, evotype)
 
     else:
         # parameterization should be a type amenable to Lindblad
@@ -1239,18 +1233,17 @@ def build_nqubit_model(nQubits, gatedict, availability={}, qubit_labels=None,
         qubitGraph = _qubitgraph.QubitGraph.common_graph(nQubits, "line") # doesn't matter while maxSpamWeight==1
         
         prepPure = _spamvec.ComputationalSPAMVec([0]*nQubits, evotype)
-        prepNoiseMap = _nqn.build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type,
+        prepNoiseMap = _nqn.build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type,
                                                   parameterization, errcomp_type, verbosity)
-        mdl.preps['rho0'] = _spamvec.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep")
+        mdl.prep_blks['rho0'] = _spamvec.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep")
 
-        povmNoiseMap = _nqn.build_nqn_global_idle(qubitGraph, maxSpamWeight, sparse, sim_type, 
+        povmNoiseMap = _nqn.build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type, 
                                                   parameterization, errcomp_type, verbosity)
-        mdl.povms['Mdefault'] = _povm.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
-
+        mdl.povm_blks['Mdefault'] = _povm.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
 
     for opName, gate in gatedict.items():
-        if _compat.isstr(gate) and gate == "PerfectIdle": continue #taken care of above
-        elif not isinstance(gate, _op.LinearOperator):
+        #if _compat.isstr(gate) and gate == "PerfectIdle": continue #taken care of above TODO REMOVE
+        if not isinstance(gate, _op.LinearOperator):
             try:
                 gate = _op.convert(_op.StaticOp(gate), parameterization, "pp")
             except Exception as e:
@@ -1273,18 +1266,40 @@ def build_nqubit_model(nQubits, gatedict, availability={}, qubit_labels=None,
             try:
                 # Note: can't use automatic-embedding b/c we need to force embedding
                 # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qubits needs to embed)
-                embedded_op = gate if inds == tuple(qubit_labels) \
-                    else mdl._embedOperation(inds,gate,force=True)
-                mdl.operations[_label.Label(opName,inds)] = embedded_op
+                if inds == tuple(qubit_labels):
+                    embedded_op = gate
+                if sim_type == "matrix":
+                    embedded_op = _op.EmbeddedOp(mdl.stateSpaceLabels, inds, gate)
+                elif sim_type in ("map","termorder"):
+                    embedded_op = _op.EmbeddedOpMap(mdl.stateSpaceLabels, inds, gate)
+                mdl.operation_blks[_label.Label(opName,inds)] = embedded_op
             except Exception as e:
                 if on_construction_error == 'warn':
                     _warnings.warn("Failed to embed %s gate %s. Dropping it." %
                                    (parameterization, str(_label.Label(opName,inds))))
                 if on_construction_error in ('warn','ignore'): continue
                 else: raise e
-            
+                
+    mdl.set_primitive_op_labels( tuple(mdl.operation_blks.keys()) )
     return mdl
 
+class SimpleCompLayerLizzard(_mdl.ImplicitLayerLizard):
+    def get_prep(self,layerlbl):
+        return self.prep_blks[layerlbl] # prep_blks are full prep ops
+    def get_effect(self,layerlbl):
+        return self.effect_blks[layerlbl] # effect_blks are full effect ops
+    def get_operation(self,layerlbl):
+        dense = bool(self.model._sim_type == "matrix") # whether dense matrix gates should be created
+        Composed = _op.ComposedOp if dense else _op.ComposedOpMap
+        components = layerlbl.components
+
+        if len(components) == 1:
+            return self.op_blks[components[0]]
+        else:
+            #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
+            return Composed([self.op_blks[l] for l in components], dim=self.model.dim,
+                                evotype=self.model._evotype)
+        
 def build_nqubit_standard_model(nQubits, gate_names, nonstd_gate_unitaries={}, availability={}, 
                                   qubit_labels=None, parameterization='static', evotype="auto", 
                                   sim_type="auto", on_construction_error='raise'):
@@ -1294,7 +1309,7 @@ def build_nqubit_standard_model(nQubits, gate_names, nonstd_gate_unitaries={}, a
     The returned model is "standard", in that the following standard gate
     names may be specified as elements to `gate_names` without the need to
     supply their corresponding unitaries (as one must when calling
-    :function:`built_nqubit_gateset`):
+    :function:`build_nqubit_model`):
 
     - 'Gi' : the 1Q idle operation
     - 'Gx','Gy','Gz' : 1Q pi/2 rotations
@@ -1307,7 +1322,7 @@ def build_nqubit_standard_model(nQubits, gate_names, nonstd_gate_unitaries={}, a
     they are specified by their *unitary* gate action, even if
     the final model propagates density matrices (as opposed
     to state vectors).  Other than these, this function operates
-    as :function:`built_nqubit_gateset`, returning a `nQubit`-qubit
+    as :function:`build_nqubit_model`, returning a `nQubit`-qubit
     model of embedded gates.
 
     Parameters
@@ -1328,7 +1343,7 @@ def build_nqubit_standard_model(nQubits, gate_names, nonstd_gate_unitaries={}, a
 
     availability : dict, optional
         A dictionary whose keys are gate names and whose values are lists of 
-        qubit-label-tuples.  See :function:`built_nqubit_gateset` for more details.
+        qubit-label-tuples.  See :function:`build_nqubit_model` for more details.
 
     parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
                         "H+S clifford terms", "clifford"}
@@ -1375,9 +1390,10 @@ def build_nqubit_standard_model(nQubits, gate_names, nonstd_gate_unitaries={}, a
     
     gatedict = _collections.OrderedDict()
     for name in gate_names:
-        if name == "Gi": # special case: Gi as a gate *name* is interpreted as a
-            gatedict[name] = "PerfectIdle" # perfect idle operation/placeholder.
-            continue
+        #TODO REMOVE
+        #if name == "Gi": # special case: Gi as a gate *name* is interpreted as a
+        #    gatedict[name] = "PerfectIdle" # perfect idle operation/placeholder.
+        #    continue
             
         U = nonstd_gate_unitaries.get(name, std_unitaries.get(name,None))
         if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)

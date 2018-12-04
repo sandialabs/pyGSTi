@@ -330,7 +330,7 @@ def compile_symplectic(s, pspec=None, subsetQs=None, iterations=20, algorithms=[
     # If the costfunction is a string, create the relevant "standard" costfunction function.
     if _compat.isstr(costfunction):
         costfunction = create_standard_cost_function(costfunction)
-        
+
     # Deterministic basic global Gaussian elimination
     if 'BGGE' in algorithms:       
         if subsetQs is not None:

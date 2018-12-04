@@ -14,7 +14,7 @@ import collections as _collections
 from .. import optimize as _opt
 from .. import tools as _tools
 
-from .forwardsim import P_RANK_TOL
+from .explicitcalc import P_RANK_TOL
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 # NON-MARKOVIAN ERROR BARS

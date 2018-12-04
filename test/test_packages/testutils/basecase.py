@@ -1,3 +1,8 @@
+#Try to quiet-down matplotlib...
+import logging
+mpl_logger = logging.getLogger('matplotlib')
+mpl_logger.setLevel(logging.WARNING)
+
 import numpy as np
 import unittest
 import warnings
@@ -41,7 +46,7 @@ class BaseTestCase(unittest.TestCase):
         print('Running tests from %s' % os.getcwd())
 
         #Set Model objects to "strict" mode for testing
-        pygsti.objects.Model._strict = True
+        pygsti.objects.ExplicitOpModel._strict = True
 
         #enable extra paramter-vector integrity checking
         pygsti.objects.Model._pcheck = True

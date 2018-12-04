@@ -183,8 +183,13 @@ class InstrumentTestCase(BaseTestCase):
         self.assertAlmostEqual(mdl_datagen.frobeniusdist(mdl_opt), 0.0, places=4)
         #print(mdl_lgst)
         #print(mdl_datagen)
+
+        #DEBUG compiling w/dataset
+        #dbList = pygsti.construction.make_lsgst_experiment_list(self.target_model,fiducials,fiducials,germs,max_lengths)
+        ##self.target_model.compile_circuits(dbList, ds)
+        #self.target_model.compile_circuits([ pygsti.obj.Circuit(None,stringrep="Iz") ], ds )
+        #assert(False),"STOP"
         
-    
         #LSGST
         results = pygsti.do_long_sequence_gst(ds,self.target_model,fiducials,fiducials,germs,max_lengths)
         #print(results.estimates['default'].models['go0'])

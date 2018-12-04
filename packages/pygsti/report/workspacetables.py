@@ -15,6 +15,7 @@ from .. import tools      as _tools
 from .. import objects    as _objs
 from . import reportables as _reportables
 from .reportables import evaluate as _ev
+from ..baseobjs import Label as _Lbl
 
 from .table import ReportTable as _ReportTable
 
@@ -303,7 +304,8 @@ class GatesTable(WorkspaceTable):
         if isinstance(models, _objs.Model):
             models = [models]
 
-        opLabels = list(models[0].operations.keys()) #use labels of 1st model
+        opLabels = models[0].get_primitive_op_labels() #use labels of 1st model
+        assert(isinstance(models[0],_objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         if titles is None:
             titles = ['']*len(models)
@@ -426,14 +428,15 @@ class ChoiTable(WorkspaceTable):
         if isinstance(models, _objs.Model):
             models = [models]
 
-        opLabels = list(models[0].operations.keys()) #use labels of 1st model
+        opLabels = models[0].get_primitive_op_labels() #use labels of 1st model
+        assert(isinstance(models[0],_objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         if titles is None:
             titles = ['']*len(models)
 
         qtysList = []
         for model in models:
-            opLabels = list(model.operations.keys()) # operation labels
+            opLabels = model.get_primitive_op_labels() # operation labels
             #qtys_to_compute = []
             if 'matrix' in display or 'boxplot' in display:
                 choiMxs = [_ev(_reportables.Choi_matrix(model,gl)) for gl in opLabels]
@@ -627,7 +630,8 @@ class GatesVsTargetTable(WorkspaceTable):
     def _create(self, model, targetModel, confidenceRegionInfo,
                 display, virtual_ops):
 
-        opLabels  = list(model.operations.keys())  # operation labels
+        opLabels  = model.get_primitive_op_labels() # operation labels
+        assert(isinstance(model,_objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         colHeadings = ['LinearOperator'] if (virtual_ops is None) else ['LinearOperator or Germ']
         tooltips    = ['LinearOperator'] if (virtual_ops is None) else ['LinearOperator or Germ']
@@ -649,7 +653,7 @@ class GatesVsTargetTable(WorkspaceTable):
         if virtual_ops is None:
             iterOver = opLabels
         else:
-            iterOver = opLabels + [v for v in virtual_ops if len(v) > 1]
+            iterOver = opLabels + tuple((v for v in virtual_ops if len(v) > 1))
 
         for gl in iterOver:
             #Note: gl may be a operation label (a string) or a Circuit
@@ -787,7 +791,7 @@ class ErrgenTable(WorkspaceTable):
     def _create(self, model, targetModel,
                 confidenceRegionInfo, display, display_as, genType):
 
-        opLabels  = list(model.operations.keys())  # operation labels
+        opLabels  = model.get_primitive_op_labels()  # operation labels
         basis = model.basis
         basisPrefix = ""
         if basis.name == "pp": basisPrefix = "Pauli "
@@ -975,7 +979,9 @@ class GaugeRobustErrgenTable(WorkspaceTable):
 
     def _create(self, model, targetModel, confidenceRegionInfo, genType):
 
-        opLabels  = list(model.operations.keys())  # operation labels
+        opLabels  = model.get_primitive_op_labels()  # operation labels
+        assert(isinstance(model,_objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+        
         colHeadings = ['Error rates', 'Value']
 
         table = _ReportTable(colHeadings, (None,)*len(colHeadings),
@@ -1062,7 +1068,7 @@ class NQubitErrgenTable(WorkspaceTable):
                                                display, display_as)
 
     def _create(self, model, confidenceRegionInfo, display, display_as):
-        opLabels  = list(model.operations.keys())  # operation labels
+        opLabels = model.get_primitive_op_labels()  # operation labels
         
         #basis = model.basis
         #basisPrefix = ""
@@ -1169,12 +1175,21 @@ class NQubitErrgenTable(WorkspaceTable):
             return _np.array([coeffs]), xlabels, ylabels
 
         #Do computation, so shared color scales can be computed
-        for gl in opLabels:
-            process_gate(gl,model.operations[gl],(),None)
+        if isinstance(model,_objs.ExplicitOpModel):
+            for gl in opLabels:
+                process_gate(gl,model.operations[gl],(),None)
+        elif isinstance(model,_objs.ImplicitOpModel): # process primitive op error
+            for gl in opLabels:
+                process_gate(gl,model.operation_blks[_Lbl('LocalNoise_'+gl.name,gl.sslbls)],(),None)
+        else:
+            raise ValueError("Unrecognized type of model: %s" % str(type(model)))
 
         #get min/max
-        M = max(( max(map(abs,Ldict.values())) for _,_,_,Ldict,_ in pre_rows))
-        m = -M        
+        if len(pre_rows) > 0:
+            M = max(( max(map(abs,Ldict.values())) for _,_,_,Ldict,_ in pre_rows))
+            m = -M
+        else:
+            M = m = 0
 
         #Now pre_rows is filled, so we just need to create the plots:
         for gl, comppos, sslbls, Ldict, basisLbls in pre_rows:
@@ -1255,7 +1270,7 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
 
     def _create(self, model, targetModel, confidenceRegionInfo):
 
-        opLabels  = list(model.operations.keys())  # operation labels
+        opLabels  = model.get_primitive_op_labels()  # operation labels
 
         colHeadings = ('LinearOperator', "Angle between|rotation axes")
         formatters  = (None,'Conversion')
@@ -1306,7 +1321,7 @@ class GateDecompTable(WorkspaceTable):
 
 
     def _create(self, model, targetModel, confidenceRegionInfo):
-        opLabels = list(model.operations.keys())  # operation labels
+        opLabels = model.get_primitive_op_labels() # operation labels
 
         colHeadings = ('LinearOperator','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') \
                       + tuple( [ "Axis angle w/%s" % str(gl) for gl in opLabels] )
@@ -1380,10 +1395,11 @@ class old_GateDecompTable(WorkspaceTable):
 
     def _create(self, model, confidenceRegionInfo):
 
-        opLabels = list(model.operations.keys())  # operation labels
+        opLabels = model.get_primitive_op_labels()  # operation labels
         colHeadings = ('LinearOperator','Eigenvalues','Fixed pt','Rotn. axis','Diag. decay','Off-diag. decay')
         formatters = [None]*6
-
+        
+        assert(isinstance(model,_objs.ExplicitOpModel)), "old_GateDecompTable only works with explicit models"
         decomps = [_reportables.decomposition(model.operations[gl]) for gl in opLabels]
         decompNames = ('fixed point',
                        'axis of rotation',
@@ -1437,8 +1453,9 @@ class old_RotationAxisTable(WorkspaceTable):
 
     def _create(self, model, confidenceRegionInfo, showAxisAngleErrBars):
 
-        opLabels = list(model.operations.keys())
-
+        opLabels = model.get_primitive_op_labels()
+        
+        assert(isinstance(model,_objs.ExplicitOpModel)), "old_RotationAxisTable only works with explicit models"
         decomps = [_reportables.decomposition(model.operations[gl]) for gl in opLabels]
 
         colHeadings = ("LinearOperator","Angle") + tuple( [ "RAAW(%s)" % gl for gl in opLabels] )
@@ -1554,7 +1571,9 @@ class GateEigenvalueTable(WorkspaceTable):
                 confidenceRegionInfo, display,
                 virtual_ops):
 
-        opLabels = list(model.operations.keys())  # operation labels
+        opLabels = model.get_primitive_op_labels()  # operation labels
+        assert(isinstance(model,_objs.ExplicitOpModel)), "GateEigenvalueTable only works with explicit models"
+        
         colHeadings = ['LinearOperator'] if (virtual_ops is None) else ['LinearOperator or Germ']
         formatters = [None]
         for disp in display:
@@ -1626,7 +1645,7 @@ class GateEigenvalueTable(WorkspaceTable):
         if virtual_ops is None:
             iterOver = opLabels
         else:
-            iterOver = opLabels + [v for v in virtual_ops if len(v) > 1]
+            iterOver = opLabels + tuple((v for v in virtual_ops if len(v) > 1))
 
         for gl in iterOver:
             #Note: gl may be a operation label (a string) or a Circuit
@@ -1884,7 +1903,7 @@ class FitComparisonTable(WorkspaceTable):
                                 " of non-gauge parameters.  Using total"
                                 " parameters instead."))
                 NpByX = [ mdl.num_params() for mdl in modelByX ]
-            except NotImplementedError:
+            except (NotImplementedError,AttributeError):
                 _warnings.warn(("FitComparisonTable could not obtain number of"
                                 "*non-gauge* parameters - using total params instead"))
                 NpByX = [ mdl.num_params() for mdl in modelByX ]
@@ -2111,6 +2130,7 @@ class GatesSingleMetricTable(WorkspaceTable):
         row_formatters = [None] + ['Normal']*len(titles)
 
         if rowtitles is None:
+            assert(isinstance(targetModels[0],_objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
             for gl in targetModels[0].operations: # use first target's operation labels
                 row_data = [gl]
                 for mdl,gsTarget in zip(models, targetModels):
@@ -2344,42 +2364,42 @@ class MetadataTable(WorkspaceTable):
                 val = params_dict[key]
             table.addrow((key, str(val)), (None,'Verbatim'))
 
-
-        for lbl,vec in model.preps.items():
-            if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
-            elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
-            elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
-            elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
-            else: paramTyp = "unknown" # pragma: no cover
-            table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
-
-        for povmlbl, povm in model.povms.items():
-            if isinstance(povm, _objs.UnconstrainedPOVM): paramTyp = "unconstrained"
-            elif isinstance(povm, _objs.TPPOVM): paramTyp = "TP"
-            elif isinstance(povm, _objs.TensorProdPOVM): paramTyp = "TensorProd"
-            else: paramTyp = "unknown" # pragma: no cover
-            table.addrow((povmlbl + " parameterization", paramTyp), (None,'Verbatim'))
-
-            for lbl,vec in povm.items():
+        if isinstance(self,_objs.ExplicitOpModel):
+            for lbl,vec in model.preps.items():
                 if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
                 elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
                 elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
                 elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
                 else: paramTyp = "unknown" # pragma: no cover
-                table.addrow(("> " + lbl + " parameterization", paramTyp), (None,'Verbatim'))
-
-        for gl,gate in model.operations.items():
-            if isinstance(gate, _objs.StaticOp): paramTyp = "static"
-            elif isinstance(gate, _objs.FullyParameterizedOp): paramTyp = "full"
-            elif isinstance(gate, _objs.TPParameterizedOp): paramTyp = "TP"
-            elif isinstance(gate, _objs.LinearlyParameterizedOp): paramTyp = "linear"
-            elif isinstance(gate, _objs.EigenvalueParameterizedOp): paramTyp = "eigenvalue"
-            elif isinstance(gate, _objs.LindbladParameterizedOp):
-                paramTyp = "Lindblad"
-                if gate.errorgen.param_mode == "cptp": paramTyp += " CPTP "
-                paramTyp += "(%d, %d params)" % (gate.errorgen.ham_basis_size, gate.errorgen.other_basis_size)
-            else: paramTyp = "unknown" # pragma: no cover
-            table.addrow((gl + " parameterization", paramTyp), (None,'Verbatim'))
+                table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
+    
+            for povmlbl, povm in model.povms.items():
+                if isinstance(povm, _objs.UnconstrainedPOVM): paramTyp = "unconstrained"
+                elif isinstance(povm, _objs.TPPOVM): paramTyp = "TP"
+                elif isinstance(povm, _objs.TensorProdPOVM): paramTyp = "TensorProd"
+                else: paramTyp = "unknown" # pragma: no cover
+                table.addrow((povmlbl + " parameterization", paramTyp), (None,'Verbatim'))
+    
+                for lbl,vec in povm.items():
+                    if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+                    elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+                    elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+                    elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
+                    else: paramTyp = "unknown" # pragma: no cover
+                    table.addrow(("> " + lbl + " parameterization", paramTyp), (None,'Verbatim'))
+    
+            for gl,gate in model.operations.items():
+                if isinstance(gate, _objs.StaticOp): paramTyp = "static"
+                elif isinstance(gate, _objs.FullyParameterizedOp): paramTyp = "full"
+                elif isinstance(gate, _objs.TPParameterizedOp): paramTyp = "TP"
+                elif isinstance(gate, _objs.LinearlyParameterizedOp): paramTyp = "linear"
+                elif isinstance(gate, _objs.EigenvalueParameterizedOp): paramTyp = "eigenvalue"
+                elif isinstance(gate, _objs.LindbladParameterizedOp):
+                    paramTyp = "Lindblad"
+                    if gate.errorgen.param_mode == "cptp": paramTyp += " CPTP "
+                    paramTyp += "(%d, %d params)" % (gate.errorgen.ham_basis_size, gate.errorgen.other_basis_size)
+                else: paramTyp = "unknown" # pragma: no cover
+                table.addrow((gl + " parameterization", paramTyp), (None,'Verbatim'))
 
 
         table.finish()

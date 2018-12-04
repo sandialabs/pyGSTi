@@ -1173,7 +1173,7 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm, scratch=None): 
     rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
 
     #Get operationreps and ereps now so we don't make unnecessary .torep() calls
-    operationreps = { gl:calc._getoperation(gl).torep() for gl in evalTree.opLabels }
+    operationreps = { gl:calc.cos.get_operation(gl).torep() for gl in evalTree.opLabels }
     ereps = [ E.torep('effect') for E in EVecs ]
 
     #REMOVE?? - want some way to speed tensorprod effect actions...
@@ -1213,10 +1213,10 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
 
     #Get (extension-type) representation objects
-    rhorep = calc.preps[rholabel].torep('prep')
-    ereps = [ calc.effects[el].torep('effect') for el in elabels]
+    rhorep = calc.cos.get_prep(rholabel].torep('prep')
+    ereps = [ calc.cos.get_effect(el).torep('effect') for el in elabels]
     operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
-    operationreps = { i:calc._getoperation(lbl).torep() for lbl,i in operation_lookup.items() }
+    operationreps = { i:calc.cos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
     cacheSize = evalTree.cache_size()
 
     # create rho_cache (or use scratch)
@@ -1313,12 +1313,12 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
 
     # Construct dict of gate term reps
     distinct_gateLabels = sorted(set(circuit))
-    op_term_reps = { glbl: [ [t.torep(mpo,mpv,"gate") for t in calc._getoperation(glbl).get_order_terms(order)]
+    op_term_reps = { glbl: [ [t.torep(mpo,mpv,"gate") for t in calc.cos.get_operation(glbl).get_order_terms(order)]
                                       for order in range(calc.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms, but lists
-    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.preps[rholabel].get_order_terms(order)]
+    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.cos.get_prep(rholabel].get_order_terms(order)]
                       for order in range(calc.max_order+1) ]
 
     E_term_reps = []
@@ -1327,7 +1327,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.effects[elbl].get_order_terms(order) ]
+            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.cos.get_effect(elbl).get_order_terms(order) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )
@@ -1356,7 +1356,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
         #print("DB: pr_as_poly order=",order)
         db_npartitions = 0
         for p in _lt.partition_into(order, len(circuit)+2): # +2 for SPAM bookends
-            #factor_lists = [ calc._getoperation(glbl).get_order_terms(pi) for glbl,pi in zip(circuit,p) ]
+            #factor_lists = [ calc.cos.get_operation(glbl).get_order_terms(pi) for glbl,pi in zip(circuit,p) ]
             factor_lists = [ rho_term_reps[p[0]]] + \
                            [ op_term_reps[glbl][pi] for glbl,pi in zip(circuit,p[1:-1]) ] + \
                            [ E_term_reps[p[-1]] ]

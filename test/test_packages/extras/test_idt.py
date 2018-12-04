@@ -230,7 +230,7 @@ class IDTTestCase(BaseTestCase):
         from pygsti.construction import std1Q_XYI as std
         std2Q = pygsti.construction.stdmodule_to_smqmodule(std2Q)
         std = pygsti.construction.stdmodule_to_smqmodule(std)
-
+        
         maxLens = [1,2,4]
         expList = pygsti.construction.make_lsgst_experiment_list(std2Q.target_model, std2Q.prepStrs,
                                                                  std2Q.effectStrs, std2Q.germs_lite, maxLens)

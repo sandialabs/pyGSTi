@@ -143,8 +143,7 @@ def make_lsgst_lists(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
                        + "")
 
     if isinstance(opLabelSrc, _Model):
-        opLabels = list(opLabelSrc.operations.keys()) + \
-                     list(opLabelSrc.instruments.keys())
+        opLabels = opLabelSrc.get_primitive_op_labels()
     else: opLabels = opLabelSrc
 
     lgst_list = _gsc.list_lgst_circuits(prepStrs, effectStrs, opLabels)
@@ -384,8 +383,7 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
                        + "")
 
     if isinstance(opLabelSrc, _Model):
-        opLabels = list(opLabelSrc.operations.keys()) + \
-                     list(opLabelSrc.instruments.keys())
+        opLabels = opLabelSrc.get_primitive_op_labels()
     else: opLabels = opLabelSrc
 
     lgst_list = _gsc.list_lgst_circuits(prepStrs, effectStrs, opLabels)
@@ -686,8 +684,7 @@ def make_elgst_lists(opLabelSrc, germList, maxLengthList,
         label strings.
     """
     if isinstance(opLabelSrc, _Model):
-        opLabels = list(opLabelSrc.operations.keys()) + \
-                     list(opLabelSrc.instruments.keys())
+        opLabels = opLabelSrc.get_primitive_op_labels()
     else: opLabels = opLabelSrc
 
     singleOps = _gsc.circuit_list([(g,) for g in opLabels])

@@ -369,7 +369,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             try:
                 switchBd.gsGIRepEP[d,i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
                                                                               est.models['target'])
-            except NotImplementedError: # usually if not a "dense" model - todense is not impl
+            except AttributeError: # Implicit models don't support everything, like set_all_parameterizations
                 switchBd.gsGIRepEP[d,i] = None
 
             switchBd.gsFinal[d,i,:] = [ est.models.get(l,NA) for l in gauge_opt_labels ]
@@ -1999,6 +1999,9 @@ def find_std_clifford_compilation(model, verbosity=0):
         The Clifford compilation dictionary (if one can be found).
     """
     printer = _VerbosityPrinter.build_printer(verbosity)
+    if not isinstance(model,_objs.ExplicitOpModel):
+        return None # only match explicit models
+    
     std_modules = ("std1Q_XY",
                    "std1Q_XYI",
                    "std1Q_XYZI",

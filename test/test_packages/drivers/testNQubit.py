@@ -118,7 +118,6 @@ class NQubitTestCase(BaseTestCase):
         mdl_to_optimize = pc.build_nqnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                   extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
                                                   sim_type="map", parameterization="H+S", sparse=True)
-
         results = pygsti.do_long_sequence_gst_base(ds, mdl_to_optimize,
                                                    lsgstLists, gaugeOptParams=False,
                                                    advancedOptions={'tolerance': 1e-2}, verbosity=4)
@@ -180,10 +179,10 @@ class NQubitTestCase(BaseTestCase):
             gateNoise=(1234,0.1), prepNoise=(456,0.01), povmNoise=(789,0.01), sim_type="map")
         
         mdl_test = mdl_datagen
-        print("Constructed model with %d gates, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %
-              (len(mdl_test.operations),mdl_test.dim,mdl_test.num_params(), np.linalg.norm(mdl_test.to_vector()) ))
+        print("Constructed model with %d op-blks, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %
+              (len(mdl_test.operation_blks),mdl_test.dim,mdl_test.num_params(), np.linalg.norm(mdl_test.to_vector()) ))
         
-        opLabels = list(target_model.operations.keys())
+        opLabels = target_model.get_primitive_op_labels()
         fids1Q = std1Q_XY.fiducials
         fiducials = []
         for i in range(nQubits):
@@ -240,7 +239,7 @@ class NQubitTestCase(BaseTestCase):
         povm.from_vector(v)
         print("Post adding noise:"); print(povm)
     
-        mdl = pygsti.obj.Model()
+        mdl = pygsti.obj.ExplicitOpModel()
         prepFactors = [ pygsti.obj.TPParameterizedSPAMVec(pygsti.construction.basis_build_vector("0", basis1Q))
                         for i in range(nQubits)]
         mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep',prepFactors)

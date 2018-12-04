@@ -30,7 +30,7 @@ class GateSetTestCase(BaseTestCase):
 
         #OK for these tests, since we test user interface?
         #Set Model objects to "strict" mode for testing
-        pygsti.objects.Model._strict = False
+        pygsti.objects.ExplicitOpModel._strict = False
 
         self.model = pygsti.construction.build_model(
             [2], [('Q0',)],['Gi','Gx','Gy'],
@@ -610,7 +610,7 @@ class TestGateSetMethods(GateSetTestCase):
 
 
         dProds = self.model.bulk_dproduct(evt) #TODO: test output?
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(AttributeError): #NotImplementedError):
             self.mgateset.bulk_dproduct(mevt) # map-based computation doesn't compute "products"
 
 
@@ -1160,42 +1160,44 @@ class TestGateSetMethods(GateSetTestCase):
         pass
 
     def test_deprecated_functions(self):
-        name = self.model.get_basis_name()
-        dim  = self.model.get_basis_dimension()
-        self.model.set_basis(name, dim)
+        pass
+    
+        #MOST ARE REMOVED NOW:
+        #name = self.model.get_basis_name()
+        #dim  = self.model.get_basis_dimension()
+        #self.model.set_basis(name, dim)
+        #
+        #with self.assertRaises(AssertionError):
+        #    self.model.get_prep_labels()
+        #with self.assertRaises(AssertionError):
+        #    self.model.get_effect_labels()
+        #with self.assertRaises(AssertionError):
+        #    self.model.get_preps()
+        #with self.assertRaises(AssertionError):
+        #    self.model.get_effects()
+        #with self.assertRaises(AssertionError):
+        #    self.model.num_preps()
+        #with self.assertRaises(AssertionError):
+        #    self.model.num_effects()
+        #with self.assertRaises(AssertionError):
+        #    self.model.get_reverse_spam_defs()
+        #with self.assertRaises(AssertionError):
+        #    self.model.get_spam_labels()
+        #with self.assertRaises(AssertionError):
+        #    self.model.get_spamop(None)
+        #with self.assertRaises(AssertionError):
+        #    self.model.iter_operations()
+        #with self.assertRaises(AssertionError):
+        #    self.model.iter_preps()
+        #with self.assertRaises(AssertionError):
+        #    self.model.iter_effects()
 
-        with self.assertRaises(AssertionError):
-            self.model.get_prep_labels()
-        with self.assertRaises(AssertionError):
-            self.model.get_effect_labels()
-        with self.assertRaises(AssertionError):
-            self.model.get_preps()
-        with self.assertRaises(AssertionError):
-            self.model.get_effects()
-        with self.assertRaises(AssertionError):
-            self.model.num_preps()
-        with self.assertRaises(AssertionError):
-            self.model.num_effects()
-        with self.assertRaises(AssertionError):
-            self.model.get_reverse_spam_defs()
-        with self.assertRaises(AssertionError):
-            self.model.get_spam_labels()
-        with self.assertRaises(AssertionError):
-            self.model.get_spamop(None)
-        with self.assertRaises(AssertionError):
-            self.model.iter_operations()
-        with self.assertRaises(AssertionError):
-            self.model.iter_preps()
-        with self.assertRaises(AssertionError):
-            self.model.iter_effects()
-
-
-        #simulate copying an old model
-        old_gs = self.model.copy()
-        del old_gs.__dict__['_calcClass']
-        del old_gs.__dict__['basis']
-        old_gs._basisNameAndDim = ('pp',2)
-        copy_of_old = old_gs.copy()
+        ##simulate copying an old model
+        #old_gs = self.model.copy()
+        #del old_gs.__dict__['_calcClass']
+        #del old_gs.__dict__['basis']
+        #old_gs._basisNameAndDim = ('pp',2)
+        #copy_of_old = old_gs.copy()
 
     def test_load_old_gateset(self):
         vs = "v2" if self.versionsuffix == "" else "v3"
@@ -1213,27 +1215,30 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertTrue(hasattr(mdl,'_calcClass'))
 
 
-    def test_base_gatecalc(self):
-        rawCalc = pygsti.objects.forwardsim.ForwardSimulator(4, {pygsti.obj.Label('Gx'): pygsti.obj.FullyParameterizedOp(np.identity(4,'d')) },
-                                                   {},{}, np.zeros(16,'d'), None)
+    def test_base_fwdsim(self):
+        class TEMP_COS(object):
+            def get_evotype(self): return "densitymx"
+        rawCalc = pygsti.objects.forwardsim.ForwardSimulator(4, TEMP_COS(), np.zeros(16,'d'))
 
         #Lots of things that derived classes implement
         #with self.assertRaises(NotImplementedError):
         #    rawCalc._buildup_dPG() # b/c gates are not MatrixOperator-derived (they're strings in fact!)
-        with self.assertRaises(NotImplementedError):
-            rawCalc.product(('Gx',))
-        with self.assertRaises(NotImplementedError):
-            rawCalc.dproduct(('Gx',))
-        with self.assertRaises(NotImplementedError):
-            rawCalc.hproduct(('Gx',))
+
+        #Now fwdsim doesn't contain product fns?
+        #with self.assertRaises(NotImplementedError):
+        #    rawCalc.product(('Gx',))
+        #with self.assertRaises(NotImplementedError):
+        #    rawCalc.dproduct(('Gx',))
+        #with self.assertRaises(NotImplementedError):
+        #    rawCalc.hproduct(('Gx',))
         with self.assertRaises(NotImplementedError):
             rawCalc.construct_evaltree()
-        with self.assertRaises(NotImplementedError):
-            rawCalc.bulk_product(None)
-        with self.assertRaises(NotImplementedError):
-            rawCalc.bulk_dproduct(None)
-        with self.assertRaises(NotImplementedError):
-            rawCalc.bulk_hproduct(None)
+        #with self.assertRaises(NotImplementedError):
+        #    rawCalc.bulk_product(None)
+        #with self.assertRaises(NotImplementedError):
+        #    rawCalc.bulk_dproduct(None)
+        #with self.assertRaises(NotImplementedError):
+        #    rawCalc.bulk_hproduct(None)
         with self.assertRaises(NotImplementedError):
             rawCalc.bulk_fill_probs(None,None)
         with self.assertRaises(NotImplementedError):

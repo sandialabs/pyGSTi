@@ -26,7 +26,7 @@ class TutorialsTestCase(unittest.TestCase):
 
         #Set Model objects to non-"strict" mode, as this would be the
         # tutorial environment
-        pygsti.objects.Model._strict = False
+        pygsti.objects.ExpliticOpModel._strict = False
 
     def tearDown(self):
         os.chdir(self.old)

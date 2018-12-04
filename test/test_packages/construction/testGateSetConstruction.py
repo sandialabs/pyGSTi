@@ -17,7 +17,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
 
         #OK for these tests, since we test user interface?
         #Set Model objects to "strict" mode for testing
-        pygsti.objects.Model._strict = False
+        pygsti.objects.ExplicitOpModel._strict = False
 
 
     def test_constructGates(self):
@@ -312,7 +312,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
     def test_iter_gatesets(self):
         model = pygsti.construction.build_model( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                      [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
-        model2 = pygsti.objects.Model()
+        model2 = pygsti.objects.ExplicitOpModel()
         for label,gate in model.operations.items():
             model2[label] = gate
         for label,vec in model.preps.items():
@@ -327,7 +327,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
 
         stateSpace = [2] #density matrix is a 2x2 matrix
         spaceLabels = [('Q0',)] #interpret the 2x2 density matrix as a single qubit named 'Q0'
-        model1 = pygsti.objects.Model()
+        model1 = pygsti.objects.ExplicitOpModel()
         model1['rho0'] = pygsti.construction.build_vector(stateSpace,spaceLabels,"0")
         model1['Mdefault'] = pygsti.obj.UnconstrainedPOVM( [('0',pygsti.construction.build_vector(stateSpace,spaceLabels,"0")),
                                                              ('1',pygsti.construction.build_vector(stateSpace,spaceLabels,"1"))] )
@@ -337,7 +337,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
 
         SQ2 = 1/np.sqrt(2)
         for defParamType in ("full", "TP", "static"):
-            gateset_simple = pygsti.objects.Model(defParamType)
+            gateset_simple = pygsti.objects.ExplicitOpModel(defParamType)
             gateset_simple['rho0'] = [SQ2, 0, 0, SQ2]
             gateset_simple['Mdefault'] = pygsti.obj.UnconstrainedPOVM( [('0',[SQ2, 0, 0, -SQ2])] )
             gateset_simple['Gi'] = [ [1, 0, 0, 0],
@@ -364,7 +364,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
             #      # 2nd el must be 'remainder' when first is
 
 
-        gateset_badDefParam = pygsti.objects.Model("full")
+        gateset_badDefParam = pygsti.objects.ExplicitOpModel("full")
         gateset_badDefParam.preps.default_param = "foobar"
         gateset_badDefParam.operations.default_param = "foobar"
         with self.assertRaises(ValueError):
@@ -384,7 +384,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
             pygsti.construction.build_identity_vec(stateSpace, basis="foobar")
 
 
-        gateset_povm_first = pygsti.objects.Model() #set effect vector first
+        gateset_povm_first = pygsti.objects.ExplicitOpModel() #set effect vector first
         gateset_povm_first['Mdefault'] = pygsti.obj.TPPOVM(
             [ ('0', pygsti.construction.build_vector(stateSpace,spaceLabels,"0")),
               ('1', pygsti.construction.build_vector(stateSpace,spaceLabels,"1")) ] )
@@ -1095,7 +1095,9 @@ GAUGEGROUP: Full
 
 
     def test_labeldicts(self):
-        d = pygsti.objects.labeldicts.OrderedMemberDict(None,"foobar","rho","spamvec")
+        flags = { 'auto_embed': True, 'match_parent_dim': True,
+                  'match_parent_evotype': True, 'cast_to_type': "spamvec" }
+        d = pygsti.objects.labeldicts.OrderedMemberDict(None,"foobar","rho",flags)
 
         with self.assertRaises(ValueError):
             d['rho0'] = [0] # bad default parameter type

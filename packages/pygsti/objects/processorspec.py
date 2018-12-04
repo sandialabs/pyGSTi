@@ -116,6 +116,7 @@ class ProcessorSpec(object):
             except:
                 raise ValueError(str(gname)+" is not a valid 'standard' gate name, so should not be an element of `gate_names`!")
 
+        #TODO REMOVE self.identity...
         # Records the name of the identity gate, if there is one, as this is useful information to have to hand. If there
         # isn't one we use the default 'I' label.
         self.identity = None
@@ -434,24 +435,28 @@ class ProcessorSpec(object):
         -------
         None
         """
-        for gname1 in self.root_gate_names:
+        Id = _np.identity(4,float)
+        nontrivial_gname_pauligate_pairs = []
+        for gname in self.root_gate_names:
             # We convert to process matrices, to avoid global phase problems.
-            u1 = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname1])
-            if _np.shape(u1) == (4,4):
-                for gname2 in self.root_gate_names:
-                    u2 =  _gt.unitary_to_pauligate(self.root_gate_unitaries[gname2])
-                    if _np.shape(u2) == (4,4):
-                        ucombined = _np.dot(u2,u1)
-                        for gname3 in self.root_gate_names:
-                            u3 = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname3])
-                            if _np.shape(u3) == (4,4):
-                                if _np.allclose(u3,ucombined):
-                                    # If ucombined is u3, add to the inversion relation.
-                                    self.oneQgate_relations[gname1,gname2] = gname3
+            u = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname])
+            if u.shape == (4,4):
+                assert(not _np.allclose(u,Id)), "Identity should *not* be included in root gate names!"
+                nontrivial_gname_pauligate_pairs.append( (gname,u) )
+        
+        for gname1,u1 in nontrivial_gname_pauligate_pairs:
+            for gname2,u2 in nontrivial_gname_pauligate_pairs:
+                ucombined = _np.dot(u2,u1)
+                for gname3,u3 in nontrivial_gname_pauligate_pairs:
+                    if _np.allclose(u3,ucombined):
+                        # If ucombined is u3, add the gate composition relation.
+                        self.oneQgate_relations[gname1,gname2] = gname3 # != Id (asserted above)
+                    if _np.allclose(ucombined,Id):
                         # If ucombined is the identity, add the inversion relation.
-                        if _np.allclose(ucombined,_np.identity(4,float)):
-                                self.gate_inverse[gname1] = gname2
-                                self.gate_inverse[gname2] = gname1
+                        self.gate_inverse[gname1] = gname2
+                        self.gate_inverse[gname2] = gname1
+                        self.oneQgate_relations[gname1,gname2] = None
+                          # special 1Q gate relation where result is the identity (~no gates)
 
     def add_multiqubit_inversion_relations(self):
         """

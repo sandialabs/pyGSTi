@@ -181,7 +181,7 @@ def make_qutrit_model(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
     E1final = change_basis(_np.reshape(E1,(9,1)), "std", basis)
     E2final = change_basis(_np.reshape(E2,(9,1)), "std", basis)
 
-    qutritMDL = _objs.Model()
+    qutritMDL = _objs.ExplicitOpModel()
     qutritMDL.preps['rho0'] = rho0final
     qutritMDL.povms['Mdefault'] = _objs.UnconstrainedPOVM([('0bright',E0final),
                                                           ('1bright',E1final),

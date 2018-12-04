@@ -134,7 +134,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     if guessModelForGauge is None:
         guessModelForGauge = targetModel
 
-    lgstModel = _objs.Model()
+    lgstModel = _objs.ExplicitOpModel()
     lgstModel.stateSpaceLabels = targetModel.stateSpaceLabels
 
     # the dimensions of the LGST matrices, called (nESpecs, nRhoSpecs),
@@ -1118,11 +1118,11 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         wrtBlkSize = evaltree_cache['wrtBlkSize']
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
-    else:
+    else:        
         dstree = dataset if (opLabelAliases is None) else None #Note: compile_circuits doesn't support aliased dataset (yet)
         evTree, wrtBlkSize,_, lookup, outcomes_lookup = mdl.bulk_evaltree_from_resources(
             circuitsToUse, comm, mlim, distributeMethod,
-            ["bulk_fill_probs","bulk_fill_dprobs"], dstree, printer-1) 
+            ["bulk_fill_probs","bulk_fill_dprobs"], dstree, printer-1)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
@@ -1477,17 +1477,21 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         nDataParams  = dataset.get_degrees_of_freedom(dsCircuitsToUse) #number of independent parameters
                                                                           # in dataset (max. model # of params)
 
-        #Don't compute num gauge params if it's expensive (>10% of mem limit)
-        memForNumGaugeParams = mdl.num_elements() * (mdl.num_params()+mdl.dim**2) \
-            * FLOATSIZE # see Model._buildup_dPG (this is mem for dPG)
-        if memLimit is None or 0.1*memLimit < memForNumGaugeParams:
-            try:
-                nModelParams = mdl.num_nongauge_params() #len(x0)
-            except: #numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
-                printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
-                nModelParams = mdl.num_params()
+        #Don't compute num gauge params if it's expensive (>10% of mem limit) or unavailable
+        if hasattr(mdl,'num_elements'):
+            memForNumGaugeParams = mdl.num_elements() * (mdl.num_params()+mdl.dim**2) \
+                * FLOATSIZE # see Model._buildup_dPG (this is mem for dPG)
+
+            if memLimit is None or 0.1*memLimit < memForNumGaugeParams:
+                try:
+                    nModelParams = mdl.num_nongauge_params() #len(x0)
+                except: #numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
+                    printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
+                    nModelParams = mdl.num_params()
+            else:
+                printer.log("Finding num_nongauge_params is too expensive: using total params.")
+                nModelParams = mdl.num_params() #just use total number of params
         else:
-            printer.log("Finding num_nongauge_params is too expensive: using total params.")
             nModelParams = mdl.num_params() #just use total number of params
 
         totChi2 = sum([x**2 for x in minErrVec])
@@ -2660,16 +2664,19 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
                                                                               # in dataset (max. model # of params)
 
             #Don't compute num gauge params if it's expensive (>10% of mem limit)
-            memForNumGaugeParams = mdl.num_elements() * (mdl.num_params()+mdl.dim**2) \
-                * FLOATSIZE # see Model._buildup_dPG (this is mem for dPG)
-            if memLimit is None or 0.1*memLimit < memForNumGaugeParams:
-                try:
-                    nModelParams = mdl.num_nongauge_params() #len(x0)
-                except: #numpy can throw a LinAlgError
-                    printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
-                    nModelParams = mdl.num_params()
+            if hasattr(mdl,'num_elements'):
+                memForNumGaugeParams = mdl.num_elements() * (mdl.num_params()+mdl.dim**2) \
+                    * FLOATSIZE # see Model._buildup_dPG (this is mem for dPG)
+                if memLimit is None or 0.1*memLimit < memForNumGaugeParams:
+                    try:
+                        nModelParams = mdl.num_nongauge_params() #len(x0)
+                    except: #numpy can throw a LinAlgError
+                        printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
+                        nModelParams = mdl.num_params()
+                else:
+                    printer.log("Finding num_nongauge_params is too expensive: using total params.")
+                    nModelParams = mdl.num_params() #just use total number of params
             else:
-                printer.log("Finding num_nongauge_params is too expensive: using total params.")
                 nModelParams = mdl.num_params() #just use total number of params
 
             pvalue = 1.0 - _stats.chi2.cdf(2*deltaLogL,nDataParams-nModelParams) # reject GST if p-value < threshold (~0.05?)

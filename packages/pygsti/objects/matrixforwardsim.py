@@ -40,7 +40,7 @@ class MatrixForwardSimulator(ForwardSimulator):
     fundamental operations.
     """
 
-    def __init__(self, dim, gates, preps, effects, paramvec, autogator):
+    def __init__(self, dim, compiled_op_server, paramvec):
         """
         Construct a new MatrixForwardSimulator object.
 
@@ -63,15 +63,14 @@ class MatrixForwardSimulator(ForwardSimulator):
             for use in computations.
         """
         super(MatrixForwardSimulator, self).__init__(
-            dim, gates, preps, effects, paramvec, autogator)
+            dim, compiled_op_server, paramvec)
         if self.evotype not in ("statevec","densitymx"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "matrix-based calculations" % self.evotype))
 
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
-        return MatrixForwardSimulator(self.dim, self.operations, self.preps,
-                              self.effects, self.paramvec, self.autogator)
+        return MatrixForwardSimulator(self.dim, self.cos, self.paramvec)
         
 
     def product(self, circuit, bScale=False):
@@ -107,7 +106,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             G = _np.identity( self.dim )
             for lOp in circuit:
                 if lOp not in scaledGatesAndExps: #fill "on-demand" b/c can't just iterate through self.operations anymore (autogator)
-                    opmx = self._getoperation(lOp)
+                    opmx = self.cos.get_operation(lOp).base
                     ng = max(_nla.norm(opmx),1.0)
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
                 
@@ -128,7 +127,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         else:
             G = _np.identity( self.dim )
             for lOp in circuit:
-                G = _np.dot(self._getoperation(lOp).base,G) #product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
+                G = _np.dot(self.cos.get_operation(lOp).base,G) #product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
         
@@ -186,7 +185,7 @@ class MatrixForwardSimulator(ForwardSimulator):
     def doperation(self, opLabel, flat=False, wrtFilter=None):
         """ Return the derivative of a length-1 (single-gate) sequence """
         dim = self.dim
-        gate = self._getoperation(opLabel)
+        gate = self.cos.get_operation(opLabel)
         op_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, gate)
 
         # Allocate memory for the final result
@@ -199,7 +198,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         if _slct.length(gpindices) > 0: #works for arrays too
             # Compute the derivative of the entire operation sequence with respect to the 
             # gate's parameters and fill appropriate columns of flattened_dprod.
-            #gate = self._getoperation[opLabel] UNNEEDED (I think)
+            #gate = self.cos.get_operation[opLabel] UNNEEDED (I think)
             _fas(flattened_dprod,[None,gpindices],
                 gate.deriv_wrt_params(op_wrtFilter)) # (dim**2, nParams in wrtFilter for opLabel)
                 
@@ -212,7 +211,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         """ Return the hessian of a length-1 (single-gate) sequence """
         dim = self.dim
 
-        gate = self._getoperation(opLabel)
+        gate = self.cos.get_operation(opLabel)
         op_wrtFilter1, gpindices1 = self._process_wrtFilter(wrtFilter1, gate)
         op_wrtFilter2, gpindices2 = self._process_wrtFilter(wrtFilter2, gate)
 
@@ -298,13 +297,13 @@ class MatrixForwardSimulator(ForwardSimulator):
         leftProds = [ ]
         G = _np.identity( dim ); leftProds.append(G)
         for opLabel in revOpLabelList:
-            G = _np.dot(G,self._getoperation(opLabel).base)
+            G = _np.dot(G,self.cos.get_operation(opLabel).base)
             leftProds.append(G)
 
         rightProdsT = [ ]
         G = _np.identity( dim ); rightProdsT.append( _np.transpose(G) )
         for opLabel in reversed(revOpLabelList):
-            G = _np.dot(self._getoperation(opLabel).base,G)
+            G = _np.dot(self.cos.get_operation(opLabel).base,G)
             rightProdsT.append( _np.transpose(G) )
 
         # Allocate memory for the final result
@@ -316,7 +315,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         #  columns of flattened_dprod.
         uniqueOpLabels = sorted(list(set(revOpLabelList)))
         for opLabel in uniqueOpLabels:
-            gate = self._getoperation(opLabel)
+            gate = self.cos.get_operation(opLabel)
             op_wrtFilter, gpindices = self._process_wrtFilter(wrtFilter, gate)
             dop_dopLabel = gate.deriv_wrt_params(op_wrtFilter)
 
@@ -403,7 +402,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         gpindices1 = {}; gate_wrtFilters1 = {}
         gpindices2 = {}; gate_wrtFilters2 = {}
         for l in uniqueOpLabels:
-            used_operations[l] = self._getoperation(l)
+            used_operations[l] = self.cos.get_operation(l)
             gate_wrtFilters1[l], gpindices1[l] = self._process_wrtFilter(wrtFilter1, used_operations[l])
             gate_wrtFilters2[l], gpindices2[l] = self._process_wrtFilter(wrtFilter2, used_operations[l])
         
@@ -414,7 +413,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             prods[ (i,i-1) ] = ident #product of no gates
             G = ident
             for (j,opLabel2) in enumerate(revOpLabelList[i:],start=i): #loop over "ending" gate (>= starting gate)
-                G = _np.dot(G,self._getoperation(opLabel2).base)
+                G = _np.dot(G,self.cos.get_operation(opLabel2).base)
                 prods[ (i,j) ] = G
         prods[ (len(revOpLabelList),len(revOpLabelList)-1) ] = ident #product of no gates
 
@@ -630,8 +629,8 @@ class MatrixForwardSimulator(ForwardSimulator):
 
         rholabel,elabel = spamTuple #can't deal w/"custom" spam label...
         rho,E = self._rhoE_from_spamTuple(spamTuple)
-        rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
-        EVec = self.effects[elabel]   # arrays, these are SPAMVecs
+        rhoVec = self.cos.get_prep(rholabel) #distinct from rho,E b/c rho,E are
+        EVec = self.cos.get_effect(elabel)   # arrays, these are SPAMVecs
 
         #Derivs wrt Gates
         old_err = _np.seterr(over='ignore')
@@ -648,7 +647,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         #Derivs wrt SPAM
         derivWrtAnyRhovec = scale * _np.dot(E,prod)
         dpr_drhos = _np.zeros( (1, self.Np) )
-        _fas(dpr_drhos, [0,self.preps[rholabel].gpindices],
+        _fas(dpr_drhos, [0,self.cos.get_prep(rholabel).gpindices],
             _np.dot( derivWrtAnyRhovec, rhoVec.deriv_wrt_params()))  #may overflow, but OK
 
         dpr_dEs = _np.zeros( (1, self.Np) );
@@ -716,8 +715,8 @@ class MatrixForwardSimulator(ForwardSimulator):
 
         rholabel,elabel = spamTuple
         rho,E = self._rhoE_from_spamTuple(spamTuple)
-        rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
-        EVec = self.effects[elabel]   # arrays, these are SPAMVecs
+        rhoVec = self.cos.get_prep(rholabel) #distinct from rho,E b/c rho,E are
+        EVec = self.cos.get_effect(elabel)   # arrays, these are SPAMVecs
 
         d2prod_dGates = self.hproduct(circuit)
         assert( d2prod_dGates.shape[0] == d2prod_dGates.shape[1] )
@@ -746,7 +745,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         if returnDeriv:  #same as in dpr(...)
             dpr_drhos = _np.zeros( (1, self.Np) ) 
             derivWrtAnyRhovec = scale * _np.dot(E,prod)
-            _fas(dpr_drhos, [0,self.preps[rholabel].gpindices],
+            _fas(dpr_drhos, [0,self.cos.get_prep(rholabel).gpindices],
                 _np.dot( derivWrtAnyRhovec, rhoVec.deriv_wrt_params()))  #may overflow, but OK
 
             dpr_dEs = _np.zeros( (1, self.Np) )
@@ -757,7 +756,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             dpr = dpr_drhos + dpr_dEs + dpr_dOps
 
         d2pr_drhos = _np.zeros( (1, self.Np, self.Np) )
-        _fas(d2pr_drhos, [0,None, self.preps[rholabel].gpindices],
+        _fas(d2pr_drhos, [0,None, self.cos.get_prep(rholabel).gpindices],
              _np.dot( _np.dot(E,dprod_dOps), rhoVec.deriv_wrt_params())[0]) # (= [0,:,:])
 
         d2pr_dEs = _np.zeros( (1, self.Np, self.Np) )
@@ -767,26 +766,26 @@ class MatrixForwardSimulator(ForwardSimulator):
 
         d2pr_dErhos = _np.zeros( (1, self.Np, self.Np) )
         derivWrtAnyEvec = scale * _np.dot(prod, rhoVec.deriv_wrt_params()) #may generate overflow, but OK
-        _fas(d2pr_dErhos,[0,EVec.gpindices,self.preps[rholabel].gpindices],
+        _fas(d2pr_dErhos,[0,EVec.gpindices,self.cos.get_prep(rholabel).gpindices],
              _np.dot( _np.transpose(EVec.deriv_wrt_params()),derivWrtAnyEvec))
 
         #Note: these 2nd derivatives are non-zero when the spam vectors have
         # a more than linear dependence on their parameters.
-        if self.preps[rholabel].has_nonzero_hessian():
+        if self.cos.get_prep(rholabel).has_nonzero_hessian():
             derivWrtAnyRhovec = scale * _np.dot(E,prod) # may overflow, but OK
             d2pr_d2rhos = _np.zeros( (1, self.Np, self.Np) )
-            _fas(d2pr_d2rhos,[0,self.preps[rholabel].gpindices,self.preps[rholabel].gpindices],
-                 _np.tensordot(derivWrtAnyRhovec, self.preps[rholabel].hessian_wrt_params(), (1,0)))
-                 # _np.einsum('ij,jkl->ikl', derivWrtAnyRhovec, self.preps[rholabel].hessian_wrt_params())
+            _fas(d2pr_d2rhos,[0,self.cos.get_prep(rholabel).gpindices,self.cos.get_prep(rholabel).gpindices],
+                 _np.tensordot(derivWrtAnyRhovec, self.cos.get_prep(rholabel).hessian_wrt_params(), (1,0)))
+                 # _np.einsum('ij,jkl->ikl', derivWrtAnyRhovec, self.cos.get_prep(rholabel).hessian_wrt_params())
         else:
             d2pr_d2rhos = 0
 
-        if self.effects[elabel].has_nonzero_hessian():
+        if self.cos.get_effect(elabel).has_nonzero_hessian():
             derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod,rho)) # may overflow, but OK
             d2pr_d2Es   = _np.zeros( (1, self.Np, self.Np) )
-            _fas(d2pr_d2Es,[0,self.effects[elabel].gpindices,self.effects[elabel].gpindices],
-                 _np.tensordot(derivWrtAnyEvec,self.effects[elabel].hessian_wrt_params(), (1,0)))
-                 # _np.einsum('ij,jkl->ikl',derivWrtAnyEvec,self.effects[elabel].hessian_wrt_params())
+            _fas(d2pr_d2Es,[0,self.cos.get_effect(elabel).gpindices,self.cos.get_effect(elabel).gpindices],
+                 _np.tensordot(derivWrtAnyEvec,self.cos.get_effect(elabel).hessian_wrt_params(), (1,0)))
+                 # _np.einsum('ij,jkl->ikl',derivWrtAnyEvec,self.cos.get_effect(elabel).hessian_wrt_params())
         else:
             d2pr_d2Es = 0
 
@@ -845,7 +844,7 @@ class MatrixForwardSimulator(ForwardSimulator):
                 prodCache[i] = _np.identity( dim )
                 # Note: scaleCache[i] = 0.0 from initialization
             else:
-                gate = self._getoperation(opLabel).base
+                gate = self.cos.get_operation(opLabel).base
                 nG = max(_nla.norm(gate), 1.0)
                 prodCache[i] = gate / nG
                 scaleCache[i] = _np.log(nG)
@@ -1088,7 +1087,7 @@ class MatrixForwardSimulator(ForwardSimulator):
         for i,opLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
             if opLabel == "": #special case of empty label == no gate
                 hProdCache[i] = _np.zeros( hessn_shape )
-            elif not self._getoperation(opLabel).has_nonzero_hessian():
+            elif not self.cos.get_operation(opLabel).has_nonzero_hessian():
                 #all gate elements are at most linear in params, so
                 # all hessians for single- or zero-operation sequences are zero.
                 hProdCache[i] = _np.zeros( hessn_shape )
@@ -1625,8 +1624,8 @@ class MatrixForwardSimulator(ForwardSimulator):
         assert( len(spamTuple) == 2 )
         if isinstance(spamTuple[0],_Label):
             rholabel,elabel = spamTuple
-            rho = self.preps[rholabel].todense()[:,None] # This calculator uses the convention that rho has shape (N,1)
-            E   = _np.conjugate(_np.transpose(self.effects[elabel].todense()[:,None])) # convention: E has shape (1,N)
+            rho = self.cos.get_prep(rholabel).todense()[:,None] # This calculator uses the convention that rho has shape (N,1)
+            E   = _np.conjugate(_np.transpose(self.cos.get_effect(elabel).todense()[:,None])) # convention: E has shape (1,N)
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
@@ -1636,8 +1635,8 @@ class MatrixForwardSimulator(ForwardSimulator):
 
     def _rhoEs_from_spamTuples(self, rholabel, elabels):
         #Note: no support for "custom" spamlabels...
-        rho = self.preps[rholabel].todense()[:,None] # This calculator uses the convention that rho has shape (N,1)
-        Es =  [self.effects[elabel].todense()[:,None] for elabel in elabels]
+        rho = self.cos.get_prep(rholabel).todense()[:,None] # This calculator uses the convention that rho has shape (N,1)
+        Es =  [self.cos.get_effect(elabel).todense()[:,None] for elabel in elabels]
         Es = _np.conjugate(_np.transpose( _np.concatenate( Es, axis=1 ))) # convention: Es has shape (len(elabels),N)
         return rho,Es
 
@@ -1659,11 +1658,11 @@ class MatrixForwardSimulator(ForwardSimulator):
         if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
         
         rholabel,elabel = spamTuple
-        rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
-        EVec = self.effects[elabel]   # arrays, these are SPAMVecs
+        rhoVec = self.cos.get_prep(rholabel) #distinct from rho,E b/c rho,E are
+        EVec = self.cos.get_effect(elabel)   # arrays, these are SPAMVecs
         nCircuits = Gs.shape[0]
-        rho_wrtFilter, rho_gpindices = self._process_wrtFilter(wrtSlice, self.preps[rholabel])
-        E_wrtFilter, E_gpindices = self._process_wrtFilter(wrtSlice, self.effects[elabel])
+        rho_wrtFilter, rho_gpindices = self._process_wrtFilter(wrtSlice, self.cos.get_prep(rholabel))
+        E_wrtFilter, E_gpindices = self._process_wrtFilter(wrtSlice, self.cos.get_effect(elabel))
         nDerivCols = self.Np if wrtSlice is None else _slct.length(wrtSlice)
 
 
@@ -1767,14 +1766,14 @@ class MatrixForwardSimulator(ForwardSimulator):
         if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
         
         rholabel,elabel = spamTuple
-        rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
-        EVec = self.effects[elabel]   # arrays, these are SPAMVecs
+        rhoVec = self.cos.get_prep(rholabel) #distinct from rho,E b/c rho,E are
+        EVec = self.cos.get_effect(elabel)   # arrays, these are SPAMVecs
         nCircuits = Gs.shape[0]
 
-        rho_wrtFilter1, rho_gpindices1 = self._process_wrtFilter(wrtSlice1, self.preps[rholabel])
-        rho_wrtFilter2, rho_gpindices2 = self._process_wrtFilter(wrtSlice2, self.preps[rholabel])
-        E_wrtFilter1, E_gpindices1 = self._process_wrtFilter(wrtSlice1, self.effects[elabel])
-        E_wrtFilter2, E_gpindices2 = self._process_wrtFilter(wrtSlice2, self.effects[elabel])
+        rho_wrtFilter1, rho_gpindices1 = self._process_wrtFilter(wrtSlice1, self.cos.get_prep(rholabel))
+        rho_wrtFilter2, rho_gpindices2 = self._process_wrtFilter(wrtSlice2, self.cos.get_prep(rholabel))
+        E_wrtFilter1, E_gpindices1 = self._process_wrtFilter(wrtSlice1, self.cos.get_effect(elabel))
+        E_wrtFilter2, E_gpindices2 = self._process_wrtFilter(wrtSlice2, self.cos.get_effect(elabel))
         
         nDerivCols1 = self.Np if wrtSlice1 is None else _slct.length(wrtSlice1)
         nDerivCols2 = self.Np if wrtSlice2 is None else _slct.length(wrtSlice2)
@@ -1880,24 +1879,24 @@ class MatrixForwardSimulator(ForwardSimulator):
                 
         #Note: these 2nd derivatives are non-zero when the spam vectors have
         # a more than linear dependence on their parameters.
-        if self.preps[rholabel].has_nonzero_hessian():
+        if self.cos.get_prep(rholabel).has_nonzero_hessian():
             dp_dAnyRho = _np.dot(E, Gs).squeeze(0) * scaleVals[:,None] #overflow OK
             d2pr_d2rhos = _np.zeros( (nCircuits, nDerivCols1, nDerivCols2) )
             _fas(d2pr_d2rhos,[None, rho_gpindices1, rho_gpindices2],
-                 _np.tensordot(dp_dAnyRho, self.preps[rholabel].hessian_wrt_params(
+                 _np.tensordot(dp_dAnyRho, self.cos.get_prep(rholabel).hessian_wrt_params(
                         rho_wrtFilter1, rho_wrtFilter2), (1,0)))
-                 # _np.einsum('ij,jkl->ikl', dp_dAnyRho, self.preps[rholabel].hessian_wrt_params(
+                 # _np.einsum('ij,jkl->ikl', dp_dAnyRho, self.cos.get_prep(rholabel).hessian_wrt_params(
                  #    rho_wrtFilter1, rho_wrtFilter2))
         else:
             d2pr_d2rhos = 0
 
-        if self.effects[elabel].has_nonzero_hessian():
+        if self.cos.get_effect(elabel).has_nonzero_hessian():
             dp_dAnyE = _np.dot(Gs, rho).squeeze(2) * scaleVals[:,None] #overflow OK
             d2pr_d2Es   = _np.zeros( (nCircuits, nDerivCols1, nDerivCols2) )
             _fas(d2pr_d2Es,[None, E_gpindices1, E_gpindices2],
-                 _np.tensordot(dp_dAnyE, self.effects[elabel].hessian_wrt_params(
+                 _np.tensordot(dp_dAnyE, self.cos.get_effect(elabel).hessian_wrt_params(
                         E_wrtFilter1, E_wrtFilter2), (1,0)))
-                 # _np.einsum('ij,jkl->ikl', dp_dAnyE, self.effects[elabel].hessian_wrt_params(
+                 # _np.einsum('ij,jkl->ikl', dp_dAnyE, self.cos.get_effect(elabel).hessian_wrt_params(
                  #    E_wrtFilter1, E_wrtFilter2))
         else:
             d2pr_d2Es = 0

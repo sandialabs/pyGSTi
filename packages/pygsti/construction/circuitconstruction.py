@@ -508,7 +508,7 @@ def list_strings_lgst_can_estimate(dataset, prepStrs, effectStrs):
 
 
 
-def circuit_list( listOfOpLabelTuplesOrStrings ):
+def circuit_list( listOfOpLabelTuplesOrStrings, line_labels="auto"):
     """
     Converts a list of operation label tuples or strings to
      a list of Circuit objects.
@@ -518,6 +518,8 @@ def circuit_list( listOfOpLabelTuplesOrStrings ):
     listOfOpLabelTuplesOrStrings : list
         List which may contain a mix of Circuit objects, tuples of gate
         labels, and strings in standard-text-format.
+
+    TODO: docstring line_labels - only imposed for non-Circuits created by this fn
 
     Returns
     -------
@@ -529,9 +531,9 @@ def circuit_list( listOfOpLabelTuplesOrStrings ):
         if isinstance(x,_cir.Circuit):
             ret.append(x)
         elif isinstance(x,tuple) or isinstance(x,list):
-            ret.append( _cir.Circuit(x) )
+            ret.append( _cir.Circuit(x, line_labels) )
         elif _compat.isstr(x):
-            ret.append( _cir.Circuit(None, stringrep=x) )
+            ret.append( _cir.Circuit(None, line_labels, stringrep=x) )
         else:
             raise ValueError("Cannot convert type %s into a Circuit" % str(type(x)))
     return ret
@@ -562,7 +564,8 @@ def translate_circuit(circuit, aliasDict):
         return circuit
     else:
         return _cir.Circuit(tuple(_itertools.chain(
-            *[aliasDict.get(lbl, (lbl,) ) for lbl in circuit])))
+            *[aliasDict.get(lbl, (lbl,) ) for lbl in circuit])),
+                            line_labels=circuit.line_labels)
 
 
 
@@ -591,7 +594,8 @@ def translate_circuit_list(circuitList, aliasDict):
         return circuitList
     else:
         new_circuits = [ _cir.Circuit(tuple(_itertools.chain(
-            *[aliasDict.get(lbl,(lbl,)) for lbl in opstr])))
+            *[aliasDict.get(lbl,(lbl,)) for lbl in opstr])),
+                                      line_labels=opstr.line_labels) # line labels aren't allowed to change
                             for opstr in circuitList ]
         return new_circuits
 
@@ -621,7 +625,7 @@ def compose_alias_dicts(aliasDict1, aliasDict2):
     return ret
 
 
-def manipulate_circuit(circuit, sequenceRules):
+def manipulate_circuit(circuit, sequenceRules, line_labels="auto"):
     """
     Manipulates a Circuit object according to `sequenceRules`.
 
@@ -641,6 +645,8 @@ def manipulate_circuit(circuit, sequenceRules):
         rules.  Both `find` and `replace` are tuples of operation labels 
         (or `Circuit` objects).  If `sequenceRules is None` then
         `circuit` is returned.
+
+    TODO: docstring line_labels
 
     Returns
     -------
@@ -707,10 +713,10 @@ def manipulate_circuit(circuit, sequenceRules):
             circuit = begin + repl + end
             #print("Applied rule %d at index %d: " % (k,i), begin, repl, end, " ==> ", circuit) #DEBUG
 
-    return _cir.Circuit(circuit)
+    return _cir.Circuit(circuit,line_labels)
 
 
-def manipulate_circuit_list(circuitList, sequenceRules):
+def manipulate_circuit_list(circuitList, sequenceRules, line_labels="auto"):
     """
     Creates a new list of Circuit objects from an existing one by performing
     replacements according to `sequenceRules` (see :func:`manipulate_circuit`).
@@ -726,6 +732,8 @@ def manipulate_circuit_list(circuitList, sequenceRules):
         rules.  Both `find` and `replace` are tuples of operation labels 
         (or `Circuit` objects).  If `sequenceRules is None` then
         `circuitList` is returned.
+    
+    TODO: docstring line_labels
 
     Returns
     -------
@@ -734,7 +742,7 @@ def manipulate_circuit_list(circuitList, sequenceRules):
     if sequenceRules is None:
         return circuitList
     else:
-        return [ manipulate_circuit(opstr, sequenceRules) for opstr in circuitList ]
+        return [ manipulate_circuit(opstr, sequenceRules, line_labels) for opstr in circuitList ]
 
 
 def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle='Gi'):

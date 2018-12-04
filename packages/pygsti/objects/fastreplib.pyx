@@ -1138,7 +1138,7 @@ def DM_compute_pr_cache(calc, rholabel, elabels, evalTree, comm):
     rhorep = rhoVec.torep('prep')
     ereps = [ E.torep('effect') for E in EVecs]  # could cache these? then have torep keep a non-dense rep that can be quickly kron'd for a tensorprod spamvec
     operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
-    operationreps = { i:calc._getoperation(lbl).torep() for lbl,i in operation_lookup.items() }
+    operationreps = { i:calc.cos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
     
     # convert to C-mode:  evaltree, operation_lookup, operationreps
     cdef c_evalTree = convert_evaltree(evalTree, operation_lookup)
@@ -1246,10 +1246,10 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     dpr_cache  = np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
 
     #Get (extension-type) representation objects
-    rhorep = calc.preps[rholabel].torep('prep')
-    ereps = [ calc.effects[el].torep('effect') for el in elabels]
+    rhorep = calc.cos.get_prep(rholabel).torep('prep')
+    ereps = [ calc.cos.get_effect(el).torep('effect') for el in elabels]
     operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
-    operationreps = { i:calc._getoperation(lbl).torep() for lbl,i in operation_lookup.items() }
+    operationreps = { i:calc.cos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
     
     # convert to C-mode:  evaltree, operation_lookup, operationreps
     cdef c_evalTree = convert_evaltree(evalTree, operation_lookup)
@@ -1283,9 +1283,9 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
             calc.from_vector(vec)
 
             #rebuild reps (not evaltree or operation_lookup)
-            rhorep = calc.preps[rholabel].torep('prep')
-            ereps = [ calc.effects[el].torep('effect') for el in elabels]
-            operationreps = { i:calc._getoperation(lbl).torep() for lbl,i in operation_lookup.items() }
+            rhorep = calc.cos.get_prep(rholabel).torep('prep')
+            ereps = [ calc.cos.get_effect(el).torep('effect') for el in elabels]
+            operationreps = { i:calc.cos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
             c_rho = convert_rhorep(rhorep)
             c_ereps = convert_ereps(ereps)
             c_gatereps = convert_gatereps(operationreps)
@@ -1343,12 +1343,12 @@ def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, 
 
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    op_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in calc._getoperation(glbl).get_order_terms(order)]
+    op_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in calc.cos.get_operation(glbl).get_order_terms(order)]
                                       for order in range(calc.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
-    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.preps[rholabel].get_order_terms(order)]
+    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.cos.get_prep(rholabel).get_order_terms(order)]
                       for order in range(calc.max_order+1) ]
 
     E_term_reps = []
@@ -1357,7 +1357,7 @@ def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, 
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.effects[elbl].get_order_terms(order) ]
+            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.cos.get_effect(elbl).get_order_terms(order) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )
@@ -1816,12 +1816,12 @@ def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, 
     
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    op_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in calc._getoperation(glbl).get_order_terms(order)]
+    op_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in calc.cos.get_operation(glbl).get_order_terms(order)]
                                       for order in range(calc.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
-    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.preps[rholabel].get_order_terms(order)]
+    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.cos.get_prep(rholabel).get_order_terms(order)]
                       for order in range(calc.max_order+1) ]
 
     E_term_reps = []
@@ -1830,7 +1830,7 @@ def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, 
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.effects[elbl].get_order_terms(order) ]
+            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.cos.get_effect(elbl).get_order_terms(order) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )

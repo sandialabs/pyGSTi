@@ -65,20 +65,20 @@ class LabelTestCase(BaseTestCase):
         self.assertEqual(c._labels, ( L( (('Gx',0),('Gy',1)) ), L('Gcnot',(0,1)) ))
 
 
-    def test_autogator(self):
+    def test_layerlizzard(self):
         #Test this here b/c auto-gators are associated with parallel operation labels
         mdl = pc.build_nqnoise_model(2, "line", [(0,1)], maxIdleWeight=2, maxhops=1,
                                       extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
                                       sim_type="map", parameterization="H+S", sparse=True)
         
         # mdl[('Gx',0)].factorops  # Composed([fullTargetOp,fullIdleErr,fullLocalErr])
-        self.assertEqual( set(mdl.operations.keys()), set([L('Gi'), L('Gx',0), L('Gy',0), L('Gx',1), L('Gy',1), L('Gcnot',(0,1))]))
+        self.assertEqual( set(mdl.get_primitive_op_labels()), set([L('Gx',0), L('Gy',0), L('Gx',1), L('Gy',1), L('Gcnot',(0,1))]))
 
         #But we can *compute* with circuits containing parallel labels...
         parallelLbl = L( [('Gx',0),('Gy',1)] )
 
         with self.assertRaises(KeyError):
-            mdl.operations[parallelLbl]
+            mdl.operation_blks[parallelLbl]
         
         opstr = pygsti.obj.Circuit( (parallelLbl,) )
         probs = mdl.probs(opstr)

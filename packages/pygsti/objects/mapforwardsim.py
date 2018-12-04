@@ -44,7 +44,7 @@ class MapForwardSimulator(ForwardSimulator):
     -- parameterizations of operation matrices and SPAM vectors) access to these
     fundamental operations.
     """    
-    def __init__(self, dim, gates, preps, effects, paramvec, autogator):
+    def __init__(self, dim, compiled_op_server, paramvec):
         """
         Construct a new MapForwardSimulator object.
 
@@ -67,7 +67,7 @@ class MapForwardSimulator(ForwardSimulator):
             for use in computations.
         """
         super(MapForwardSimulator, self).__init__(
-            dim, gates, preps, effects, paramvec, autogator)
+            dim, compiled_op_server, paramvec)
         if self.evotype not in ("statevec","densitymx","stabilizer"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "map-based calculations" % self.evotype))
@@ -75,13 +75,12 @@ class MapForwardSimulator(ForwardSimulator):
         
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
-        return MapForwardSimulator(self.dim, self.operations, self.preps,
-                              self.effects, self.paramvec, self.autogator)
+        return MapForwardSimulator(self.dim, self.cos, self.paramvec)
     
     def _rhoEs_from_labels(self, rholabel, elabels):
         """ Returns SPAMVec *objects*, so must call .todense() later """
-        rho = self.preps[rholabel]
-        Es = [ self.effects[elabel] for elabel in elabels ]
+        rho = self.cos.get_prep(rholabel)
+        Es = [ self.cos.get_effect(elabel) for elabel in elabels ]
         #No support for "custom" spamlabel stuff here
         return rho,Es
         
@@ -116,9 +115,9 @@ class MapForwardSimulator(ForwardSimulator):
             An array of floating-point probabilities, corresponding to
             the elements of `elabels`.
         """
-        rhorep = self.preps[rholabel].torep('prep')
-        ereps = [ self.effects[elabel].torep('effect') for elabel in elabels ]
-        rhorep = replib.propagate_staterep(rhorep, [self._getoperation(gl).torep() for gl in circuit])
+        rhorep = self.cos.get_prep(rholabel).torep('prep')
+        ereps = [ self.cos.get_effect(elabel).torep('effect') for elabel in elabels ]
+        rhorep = replib.propagate_staterep(rhorep, [self.cos.get_operation(gl).torep() for gl in circuit])
         ps = _np.array([ erep.probability(rhorep) for erep in ereps ], 'd')
           #outcome probabilities
 

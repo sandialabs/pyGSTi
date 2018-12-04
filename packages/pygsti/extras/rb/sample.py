@@ -2380,7 +2380,8 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
 
     # Check that the inverse of every gate is in the model:
     for gname in pspec.root_gate_names:
-        assert(gname in list(pspec.gate_inverse.keys())), "Not every gate has its inverse in the gate-set! MRB is not possible!"
+        assert(gname in list(pspec.gate_inverse.keys())), \
+            "%s gate does not have an inverse in the gate-set! MRB is not possible!" % gname
  
     # Find a random circuit according to the sampling specified; this is the "out" circuit.
     circuit = random_circuit(pspec, random_natives_circuit_length, subsetQs=subsetQs, sampler=sampler, samplerargs=samplerargs)
