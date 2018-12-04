@@ -12,7 +12,6 @@ import copy as _copy
 import sys as _sys
 import itertools as _itertools
 
-from . import opstring as _gstr
 from . import labeldicts as _ld
 from ..baseobjs import Label as _Label
 from ..baseobjs import CircuitParser as _CircuitParser

@@ -216,7 +216,7 @@ class FullGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import gate as _op #b/c gate.py imports gaugegroup
+        from . import operation as _op #b/c operation.py imports gaugegroup
         gate = _op.FullyParameterizedOp(_np.identity(dim,'d'))
         OpGaugeGroup.__init__(self, gate, FullGaugeGroupElement, "Full")
 
@@ -242,7 +242,7 @@ class TPGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import gate as _op #b/c gate.py imports gaugegroup
+        from . import operation as _op #b/c operation.py imports gaugegroup
         gate = _op.TPParameterizedOp(_np.identity(dim,'d'))
         OpGaugeGroup.__init__(self, gate, TPGaugeGroupElement, "TP")
 
@@ -275,7 +275,7 @@ class DiagGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import gate as _op #b/c gate.py imports gaugegroup
+        from . import operation as _op #b/c operation.py imports gaugegroup
         ltrans = _np.identity(dim,'d')
         rtrans = _np.identity(dim,'d')
         baseMx = _np.identity(dim,'d')
@@ -308,7 +308,7 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import gate as _op #b/c gate.py imports gaugegroup
+        from . import operation as _op #b/c operation.py imports gaugegroup
         ltrans = _np.identity(dim,'d')
         rtrans = _np.identity(dim,'d')
         baseMx = _np.identity(dim,'d')
@@ -342,7 +342,7 @@ class UnitaryGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import gate as _op #b/c gate.py imports gaugegroup
+        from . import operation as _op #b/c operation.py imports gaugegroup
         gate = _op.LindbladParameterizedOp.from_operation_matrix(
             None, _np.identity(dim,'d'), ham_basis=basis, nonham_basis=None,
             param_mode="cptp", mxBasis=basis)
@@ -372,7 +372,7 @@ class SpamGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import gate as _op #b/c gate.py imports gaugegroup
+        from . import operation as _op #b/c operation.py imports gaugegroup
         ltrans = _np.identity(dim,'d')
         rtrans = _np.identity(dim,'d')
         baseMx = _np.identity(dim,'d')
@@ -406,7 +406,7 @@ class TPSpamGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import gate as _op #b/c gate.py imports gaugegroup
+        from . import operation as _op #b/c operation.py imports gaugegroup
         ltrans = _np.identity(dim,'d')
         rtrans = _np.identity(dim,'d')
         baseMx = _np.identity(dim,'d')

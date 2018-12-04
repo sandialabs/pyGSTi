@@ -29,7 +29,7 @@ from ..tools import symplectic as _symp
 
 from . import modelmember as _gm
 from . import circuit as _cir
-from . import gate as _op
+from . import operation as _op
 from . import spamvec as _sv
 from . import povm as _povm
 from . import instrument as _instrument
@@ -38,7 +38,6 @@ from . import gaugegroup as _gg
 from . import matrixforwardsim as _matrixfwdsim
 from . import mapforwardsim as _mapfwdsim
 from . import termforwardsim as _termfwdsim
-#from . import autogator as _autogator
 from . import explicitcalc as _explicitcalc
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
@@ -2182,8 +2181,6 @@ class ExplicitOpModel(Model):
         #for o in self.effects.values(): o.relink_parent(self)
         for o in self.operations.values(): o.relink_parent(self)
         for o in self.instruments.values(): o.relink_parent(self)
-        #if self._autogator is not None: # (just in case)
-        #    self._autogator.parent = self
 
 
     def num_elements(self):

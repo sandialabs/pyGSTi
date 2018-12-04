@@ -12,7 +12,7 @@ import numbers as _numbers
 import warnings as _warnings
 
 from . import spamvec as _sv
-from . import gate as _op
+from . import operation as _op
 from . import modelmember as _gm
 from ..tools import compattools as _compat
 from ..baseobjs import Dim as _Dim

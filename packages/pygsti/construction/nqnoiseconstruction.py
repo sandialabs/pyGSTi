@@ -19,9 +19,8 @@ from ..tools import matrixtools as _mt
 from ..tools import optools as _gt
 from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
-from ..objects import autogator as _autogator
 from ..objects import model as _mdl
-from ..objects import gate as _op
+from ..objects import operation as _op
 from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
@@ -490,9 +489,6 @@ def build_nqnoise_model(nQubits, geometry="line", cnot_edges=None,
 
     else:
         raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
-
-    #Set auto-gator to one appropriate for the global idle gate used here
-    mdl._autogator = _autogator.SharedIdleAutoGator(mdl, errcomp_type)
 
     #FUTURE - just return cloud *keys*? (operation label values are never used
     # downstream, but may still be useful for debugging, so keep for now)

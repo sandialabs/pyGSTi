@@ -13,7 +13,7 @@ from .exceptions import *
 from .profiler import Profiler
 from .profiler import DummyProfiler
 from .protectedarray import ProtectedArray
-from .gatestringparser import CircuitParser
+from .circuitparser import CircuitParser
 from .verbosityprinter import VerbosityPrinter
 from .label import Label
 

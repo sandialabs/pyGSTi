@@ -16,24 +16,24 @@ from .evaltree import EvalTree
 from .matrixevaltree import MatrixEvalTree
 from .mapevaltree import MapEvalTree
 from .termevaltree import TermEvalTree
-from .gate import LinearOperator
-from .gate import MatrixOperator
-from .gate import LinearlyParameterizedOp
-from .gate import FullyParameterizedOp
-from .gate import TPParameterizedOp
-from .gate import StaticOp
-from .gate import EigenvalueParameterizedOp
-from .gate import LindbladParameterizedOp
-from .gate import LindbladParameterizedOpMap
-from .gate import TPInstrumentOp
-from .gate import EmbeddedOpMap
-from .gate import EmbeddedOp
-from .gate import ComposedOpMap
-from .gate import ComposedOp
-from .gate import CliffordOp
-from .gate import LindbladErrorgen
-from .gate import ComposedErrorgen
-from .gate import EmbeddedErrorgen
+from .operation import LinearOperator
+from .operation import MatrixOperator
+from .operation import LinearlyParameterizedOp
+from .operation import FullyParameterizedOp
+from .operation import TPParameterizedOp
+from .operation import StaticOp
+from .operation import EigenvalueParameterizedOp
+from .operation import LindbladParameterizedOp
+from .operation import LindbladParameterizedOpMap
+from .operation import TPInstrumentOp
+from .operation import EmbeddedOpMap
+from .operation import EmbeddedOp
+from .operation import ComposedOpMap
+from .operation import ComposedOp
+from .operation import CliffordOp
+from .operation import LindbladErrorgen
+from .operation import ComposedErrorgen
+from .operation import EmbeddedErrorgen
 from .spamvec import SPAMVec
 from .spamvec import DenseSPAMVec
 from .spamvec import FullyParameterizedSPAMVec
@@ -57,9 +57,9 @@ from .instrument import TPInstrument
 from .model import Model
 from .model import ExplicitOpModel
 from .model import ImplicitOpModel
-from .gatestringstructure import CircuitStructure
-from .gatestringstructure import LsGermsStructure
-from .gatestringstructure import LsGermsSerialStructure
+from .circuitstructure import CircuitStructure
+from .circuitstructure import LsGermsStructure
+from .circuitstructure import LsGermsSerialStructure
 from .circuit import Circuit
 from .multidataset import MultiDataSet
 from .datacomparator import DataComparator
@@ -82,7 +82,7 @@ from .labeldicts import StateSpaceLabels
 from .results import Results
 
 #Functions
-from .gate import compose, optimize_operation, finite_difference_deriv_wrt_params
+from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params
 
 #Important Base Objects
 from ..baseobjs import VerbosityPrinter, Profiler, SmartCache, Basis, Label

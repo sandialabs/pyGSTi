@@ -8,7 +8,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 
-from . import opstring as _gs
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
 from .evaltree import EvalTree

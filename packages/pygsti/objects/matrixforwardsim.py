@@ -105,7 +105,7 @@ class MatrixForwardSimulator(ForwardSimulator):
             scale_exp = 0
             G = _np.identity( self.dim )
             for lOp in circuit:
-                if lOp not in scaledGatesAndExps: #fill "on-demand" b/c can't just iterate through self.operations anymore (autogator)
+                if lOp not in scaledGatesAndExps:
                     opmx = self.cos.get_operation(lOp).base
                     ng = max(_nla.norm(opmx),1.0)
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))

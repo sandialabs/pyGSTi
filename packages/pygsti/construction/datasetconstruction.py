@@ -12,7 +12,6 @@ import warnings as _warnings
 import collections as _collections
 import itertools as _itertools
 
-from ..objects import opstring as _gs
 from ..objects import dataset as _ds
 from ..objects import labeldicts as _ld
 from ..baseobjs import label as _lbl

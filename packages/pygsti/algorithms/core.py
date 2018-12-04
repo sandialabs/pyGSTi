@@ -289,7 +289,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
             for opLabel in opLabelsToEstimate:
                 if opLabel in guessModelForGauge.operations:
                     new_op = guessModelForGauge.operations[opLabel].copy()
-                    _objs.gate.optimize_operation( new_op, lgstModel.operations[opLabel])
+                    _objs.operation.optimize_operation( new_op, lgstModel.operations[opLabel])
                     lgstModel.operations[ opLabel ] = new_op
 
             for prepLabel in rhoLabelsToEstimate:

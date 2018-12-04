@@ -1756,7 +1756,7 @@ class TensorProdSPAMVec(SPAMVec):
         elif self._evotype == "cterm": tt = "clifford"
         else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
         
-        from .gate import EmbeddedOpMap as _EmbeddedGateMap
+        from .operation import EmbeddedOpMap as _EmbeddedGateMap
         terms = []
         fnq = [ int(round(_np.log2(f.dim)))//2 for f in self.factors ] # num of qubits per factor
           # assumes density matrix evolution
@@ -2226,7 +2226,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             purevec = StaticSPAMVec(purevec) #assume spamvec is just a vector
 
         #Break paramType in to a "base" type and an evotype
-        from .gate import LindbladParameterizedOpMap as _LPGMap
+        from .operation import LindbladParameterizedOpMap as _LPGMap
         bTyp, evotype, nonham_mode, param_mode = _LPGMap.decomp_paramtype(paramType)
 
         ham_basis = proj_basis if (("H+" in bTyp) or bTyp in ("CPTP","GLND")) else None
@@ -2372,9 +2372,9 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
         assert(pureVec._evotype == evotype), "`pureVec` must have evotype == '%s'" % evotype
 
-        from .gate import LindbladErrorgen as _LErrorgen
-        from .gate import LindbladParameterizedOpMap as _LPGMap
-        from .gate import LindbladParameterizedOp as _LPOp
+        from .operation import LindbladErrorgen as _LErrorgen
+        from .operation import LindbladParameterizedOpMap as _LPGMap
+        from .operation import LindbladParameterizedOp as _LPOp
 
         errgen = _LErrorgen.from_error_generator(errgen, ham_basis,
                                                  nonham_basis, param_mode, nonham_mode,
@@ -2461,8 +2461,8 @@ class LindbladParameterizedSPAMVec(SPAMVec):
     #    -------
     #    LindbladParameterizedSPAMVec
     #    """
-    #    from .gate import LindbladParameterizedOpMap as _LPGMap
-    #    from .gate import LindbladParameterizedOp as _LPOp
+    #    from .operation import LindbladParameterizedOpMap as _LPGMap
+    #    from .operation import LindbladParameterizedOp as _LPOp
     #    errcls = _LPOp if (pureVec.dim <= 64 and evotype == "densitymx") else _LPGMap
     #    errmap = errcls.from_error_generator(
     #        None, errgen, ham_basis, nonham_basis, param_mode,
@@ -2548,7 +2548,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             pureVec = StaticSPAMVec(pureVec, evotype) #assume spamvec is just a vector
         d2 = pureVec.dim
 
-        from .gate import LindbladParameterizedOpMap as _LPGMap
+        from .operation import LindbladParameterizedOpMap as _LPGMap
         errmap = _LPGMap(d2, Ltermdict, basisdict, param_mode, nonham_mode,
                          truncate, mxBasis, evotype)
         return cls(pureVec, errmap, typ)
@@ -2582,7 +2582,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         typ : {"prep","effect"}
             Whether this is a state preparation or POVM effect vector.
         """
-        from .gate import LindbladParameterizedOpMap as _LPGMap
+        from .operation import LindbladParameterizedOpMap as _LPGMap
         evotype = errormap._evotype
         assert(evotype in ("densitymx","svterm","cterm")), \
             "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)

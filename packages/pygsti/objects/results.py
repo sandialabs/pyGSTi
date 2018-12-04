@@ -13,8 +13,8 @@ import copy        as _copy
 
 from .. import tools as _tools
 from ..tools import compattools as _compat
-from .gatestringstructure import LsGermsStructure as _LsGermsStructure
-from .gatestringstructure import LsGermsSerialStructure as _LsGermsSerialStructure
+from .circuitstructure import LsGermsStructure as _LsGermsStructure
+from .circuitstructure import LsGermsSerialStructure as _LsGermsSerialStructure
 from .estimate import Estimate as _Estimate
 from .gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from .gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
@@ -503,7 +503,7 @@ class Results(object):
         s += " ---------------------------------------------------------\n"
         s += "  " + "\n  ".join(list(self.circuit_lists.keys())) + "\n"
         s += "\n"
-        s += " .circuit_structs   -- a dict of GatestringStructures w/keys:\n"
+        s += " .circuit_structs   -- a dict of CircuitStructures w/keys:\n"
         s += " ---------------------------------------------------------\n"
         s += "  " + "\n  ".join(list(self.circuit_structs.keys())) + "\n"
         s += "\n"

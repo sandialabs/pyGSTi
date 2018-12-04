@@ -115,7 +115,7 @@ def embed_term(term, stateSpaceLabels, targetLabels, basisdim=None): #TODO: REMO
     -------
     RankOneTerm
     """
-    from . import gate as _op
+    from . import operation as _op
     ret = RankOneTerm(term.coeff, None, None, term.typ)
     ret.pre_ops = [ _op.EmbeddedOpMap(stateSpaceLabels, targetLabels, op, basisdim)
                     for op in term.pre_ops ]
@@ -186,7 +186,7 @@ class RankOneTerm(object):
 
         """
         from . import modelmember as _mm
-        from . import gate as _op
+        from . import operation as _op
         from . import spamvec as _spamvec
         self.coeff = coeff # potentially a Polynomial
         self.pre_ops = [] # list of ops to perform - in order of operation to a ket

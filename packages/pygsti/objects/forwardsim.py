@@ -17,7 +17,7 @@ from ..tools import basistools as _bt
 from ..tools import matrixtools as _mt
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from . import spamvec as _sv
-from . import gate as _op
+from . import operation as _op
 from . import labeldicts as _ld
 
 _dummy_profiler = _DummyProfiler()

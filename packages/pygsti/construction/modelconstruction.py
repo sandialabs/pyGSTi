@@ -17,7 +17,7 @@ from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import compattools as _compat
 from ..tools import internalgates as _itgs
-from ..objects import gate as _op
+from ..objects import operation as _op
 from ..objects import spamvec as _spamvec
 from ..objects import povm as _povm
 from ..objects import model as _mdl

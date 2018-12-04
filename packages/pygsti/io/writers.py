@@ -166,7 +166,7 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
         if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
             raise ValueError("Argument circuit_list must be a list of Circuit objects!")
     else:
-        circuit_list = list(multidataset.gsIndex.keys()) #TODO: make access function for circuits?
+        circuit_list = list(multidataset.cirIndex.keys()) #TODO: make access function for circuits?
 
     if outcomeLabelOrder is not None: #convert to tuples if needed
         outcomeLabelOrder = [ (ol,) if _tools.isstr(ol) else ol

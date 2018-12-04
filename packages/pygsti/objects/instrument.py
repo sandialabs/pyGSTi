@@ -13,7 +13,7 @@ from ..tools import matrixtools as _mt
 
 #from . import labeldicts as _ld
 from . import modelmember as _gm
-from . import gate as _op
+from . import operation as _op
 
 
 def convert(instrument, toType, basis, extra=None):

@@ -14,7 +14,7 @@ import functools as _functools
 #from . import labeldicts as _ld
 from . import modelmember as _gm
 from . import spamvec as _sv
-from . import gate as _op
+from . import operation as _op
 from ..tools import matrixtools as _mt
 from ..tools import basistools as _bt
 from ..tools import optools as _gt
