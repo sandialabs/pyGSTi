@@ -30,7 +30,7 @@ class GateTestCase(BaseTestCase):
         #because there's no easy way to specify this TP parameterization...
         # (above is leftover from a longer feature test)
         
-        check = pygsti.objects.gate.check_deriv_wrt_params
+        check = pygsti.objects.operation.check_deriv_wrt_params
         testDeriv = check(mdl_target_lp.operations['Gi'])
         testDeriv = check(mdl_target_lp.operations['Gx'])
         testDeriv = check(mdl_target_lp2.operations['Gix'])
@@ -427,7 +427,7 @@ class GateTestCase(BaseTestCase):
             densemx,unitaryPostfactor=densemx,
             ham_basis=basis, nonham_basis=basis, param_mode="cptp",
             nonham_mode="all", truncate=True, mxBasis=basis)
-        g = pygsti.objects.gate.convert(lndgate,"CPTP",basis) 
+        g = pygsti.objects.operation.convert(lndgate,"CPTP",basis) 
         self.assertTrue(g is lndgate) #should be trivial (no) conversion
 
     def test_eigenvalue_param_gate(self):

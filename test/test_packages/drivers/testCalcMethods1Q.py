@@ -555,6 +555,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         mdl = pygsti.construction.build_nqubit_standard_model(
             1, ['Gi','Gx','Gy'], sim_type="termorder:1", parameterization="H+S clifford terms")
 
+        print("DB: ",mdl.dim)
         probs0 = mdl.probs(c0)
         probs1 = mdl.probs(c1)
         probs2 = mdl.probs(c2)

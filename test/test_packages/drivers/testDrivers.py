@@ -321,7 +321,7 @@ class TestDriversMethods(DriversTestCase):
 
         #No set_all_parameterizations option for this one, since it probably isn't so useful
         for lbl,gate in target_model.operations.items():
-            target_model.operations[lbl] = pygsti.objects.gate.convert(gate, "GLND", "gm")
+            target_model.operations[lbl] = pygsti.objects.operation.convert(gate, "GLND", "gm")
         target_model.default_gauge_group = pygsti.objects.UnitaryGaugeGroup(target_model.dim,"gm")
           #Lindblad gates only know how to do unitary transforms currently, even though
           # in the non-cptp case it they should be able to transform generally.

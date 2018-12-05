@@ -204,7 +204,7 @@ Gx^4 20 80
             output.write(dataset_txt)
         ds = pygsti.io.load_dataset(temp_files + "/TinyDataset.txt")
         self.assertEqual(ds[()][('0',)], 0)
-        print(ds.gsIndex.keys())
+        print(ds.cirIndex.keys())
         print(ds.has_key(('Gx','Gy')))
         print(('Gx','Gy') in ds.keys())
         self.assertEqual(ds[('Gx','Gy')][('1',)], 60)

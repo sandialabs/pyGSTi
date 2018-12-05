@@ -825,14 +825,14 @@ GAUGEGROUP: Full
         self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedOp)
 
         #Test specific conversions that don't get tested by compose
-        conv = pygsti.obj.gate.convert(gate_tp, "full", "gm")
-        conv = pygsti.obj.gate.convert(gate_tp, "TP", "gm")
-        conv = pygsti.obj.gate.convert(gate_static, "static", "gm")
+        conv = pygsti.obj.operation.convert(gate_tp, "full", "gm")
+        conv = pygsti.obj.operation.convert(gate_tp, "TP", "gm")
+        conv = pygsti.obj.operation.convert(gate_static, "static", "gm")
 
         with self.assertRaises(ValueError):
-            pygsti.obj.gate.convert(gate_full, "linear", "gm") #unallowed
+            pygsti.obj.operation.convert(gate_full, "linear", "gm") #unallowed
         with self.assertRaises(ValueError):
-            pygsti.obj.gate.convert(gate_full, "foobar", "gm")
+            pygsti.obj.operation.convert(gate_full, "foobar", "gm")
 
 
         #Test element access/setting

@@ -3,7 +3,7 @@ import pygsti
 import numpy as np
 
 from  pygsti.objects import gaugegroup as ggrp
-from  pygsti.objects import op
+from  pygsti.objects import operation as op
 import pygsti.construction as pc
 
 from ..testutils import BaseTestCase, compare_files, temp_files
