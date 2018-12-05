@@ -65,6 +65,7 @@ def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, erro
         A dictionary of simulated measurement outcome counts.   
     """    
     n = circuit.number_of_lines()
+    #TODO REMOVE
     #if circuit.identity != idle_name:
     #    circuit.replace_gatename(circuit.identity,idle_name)
 
@@ -387,13 +388,12 @@ def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, 
             errormodel[gl][:,0] = _np.ones(n,float)
             errormodel[gl][pspec.qubit_labels.index(q),:] =  error_row(idle_errorrate)
 
-    for gate in list(pspec.models['clifford'].operations.keys()):
+    for gate in pspec.models['clifford'].get_primitive_op_labels():
         errormodel[gate] = _np.zeros((n,4),float)
         errormodel[gate][:,0] = _np.ones(n,float)
     
         # If not a CNOT, it is a 1-qubit gate / idle.
         if gate.number_of_qubits == 2:
-        # If the idle gate, use the idle error rate
             q1 = gate.qubits[0]
             q2 = gate.qubits[1]
             er = perQ_twoQ_errorrate
@@ -402,9 +402,10 @@ def create_iid_pauli_error_model(pspec, oneQgate_errorrate, twoQgate_errorrate, 
 
         elif gate.number_of_qubits == 1:
             q = gate.qubits[0]
-            
-            if gate.name == pspec.identity: er = idle_errorrate
-            else: er = oneQgate_errorrate
+
+            # If the idle gate, use the idle error rate
+            #TODO REMOVE if gate.name == pspec.identity: er = idle_errorrate
+            er = oneQgate_errorrate
             
             errormodel[gate][pspec.qubit_labels.index(q),:] =  error_row(er)
 
@@ -484,7 +485,7 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
             errormodel[gl][:,0] = _np.ones(n,float)
             errormodel[gl][pspec.qubit_labels.index(q),:] =  error_row(er)
 
-    for gate in list(pspec.models['clifford'].operations.keys()):
+    for gate in pspec.models['clifford'].get_primitive_op_labels():
         errormodel[gate] = _np.zeros((n,4),float)
         errormodel[gate][:,0] = _np.ones(n,float)
     
@@ -556,7 +557,7 @@ def create_local_pauli_error_model(pspec, oneQgate_errorrate_dict, twoQgate_erro
     n = pspec.number_of_qubits
 
     errormodel = {}
-    for gate in list(pspec.models['clifford'].operations.keys()):
+    for gate in list(pspec.models['clifford'].get_primitive_op_labels()):
         errormodel[gate] = _np.zeros((n,4),float)
         errormodel[gate][:,0] = _np.ones(n,float)
     

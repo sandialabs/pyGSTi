@@ -1190,7 +1190,7 @@ def build_nqubit_model(nQubits, gatedict, availability={}, qubit_labels=None,
         elif evotype == "stabilizer":
             sim_type = "map" # use map as default for stabilizer-type evolutions
         else: assert(False) # should be unreachable
-
+    
     #TODO REMOVE
     #for opName, gate in gatedict.items():
     #    if _compat.isstr(gate) and gate == "PerfectIdle":
@@ -1199,6 +1199,7 @@ def build_nqubit_model(nQubits, gatedict, availability={}, qubit_labels=None,
     #    perfectIdleName = None
 
     mdl = _mdl.ImplicitOpModel({}, SimpleCompLayerLizzard, {}, sim_type=sim_type)
+    mdl.dim = 4**nQubits if evotype in ("densitymx","svterm","cterm") else 2**nQubits
     mdl.set_state_space_labels(qubit_labels)
     mdl._evotype = evotype # set this to ensure we create the types of model element we expect to.
 
@@ -1268,9 +1269,9 @@ def build_nqubit_model(nQubits, gatedict, availability={}, qubit_labels=None,
                 # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qubits needs to embed)
                 if inds == tuple(qubit_labels):
                     embedded_op = gate
-                if sim_type == "matrix":
+                elif sim_type == "matrix":
                     embedded_op = _op.EmbeddedOp(mdl.stateSpaceLabels, inds, gate)
-                elif sim_type in ("map","termorder"):
+                else: # sim_type == "map" or sim_type.startswidth("termorder"):
                     embedded_op = _op.EmbeddedOpMap(mdl.stateSpaceLabels, inds, gate)
                 mdl.operation_blks[_label.Label(opName,inds)] = embedded_op
             except Exception as e:

@@ -18,6 +18,9 @@ from ..baseobjs import Label as _Label
 from .circuit import Circuit as _Circuit
 from .qubitgraph import QubitGraph as _QubitGraph
 
+IDENT='I' # internal 1Q-identity-gate name used for compilation
+  # MUST be the same as in processorspec.py
+
 class CompilationError(Exception):
     """ A compilation error, raised by :class:`CompilationLibrary` """
     pass
@@ -49,7 +52,7 @@ class CompilationLibrary(_collections.OrderedDict):
     object.
     """
     
-    def __init__(self, clifford_model, ctyp="absolute", identity='I', items=[]):
+    def __init__(self, clifford_model, ctyp="absolute", items=[]):
         """
         Create a new CompilationLibrary.
 
@@ -69,7 +72,6 @@ class CompilationLibrary(_collections.OrderedDict):
         """
         self.model = clifford_model # model of (all Clifford) gates to compile requested gates into
         self.ctype = ctyp # "absolute" or "paulieq"
-        self.identity = identity
         self.templates = _collections.defaultdict(list) # keys=gate names (strs); vals=tuples of Labels
         self.connectivity = {} # QubitGraphs for gates currently compiled in library (key=gate_name)                    
         super(CompilationLibrary,self).__init__(items)
@@ -152,7 +154,8 @@ class CompilationLibrary(_collections.OrderedDict):
         for template_compilation in self.templates.get(oplabel.name,[]):
             #Check availability of gates in self.model to determine
             # whether template_compilation can be applied.
-            if all([(gl in self.model.operations) for gl in map(to_real_label,
+            model_primitive_ops = self.model.get_primitive_op_labels()
+            if all([(gl in model_primitive_ops) for gl in map(to_real_label,
                                                              template_compilation) ]):
                 template_to_use = template_compilation
                 if verbosity > 0: print("Existing template found!")
@@ -163,9 +166,12 @@ class CompilationLibrary(_collections.OrderedDict):
             #construct a list of the available gates on the qubits of
             # `oplabel` (or a subset of them)
             available_glabels = list( filter(lambda gl: set(gl.qubits).issubset(oplabel.qubits),
-                                             self.model.operations.keys()) )
+                                             self.model.get_primitive_op_labels()) )
+            available_glabels.extend( [_Label(IDENT,k) for k in oplabel.qubits] )
             available_template_labels = set(map(to_template_label, available_glabels))
             available_srep_dict = self.model.get_clifford_symplectic_reps(available_glabels)
+            available_srep_dict[IDENT] = _symp.unitary_to_symplectic(_np.identity(2,'d'))
+              #Manually add 1Q idle gate on each of the qubits, as this typically isn't stored in model.
                 
             if is_local_compilation_feasible(available_template_labels):
                 template_to_use = self.add_clifford_compilation_template(
@@ -176,8 +182,9 @@ class CompilationLibrary(_collections.OrderedDict):
         #If a template has been found, use it.
         if template_to_use is not None:
             opstr = list( map(to_real_label, template_to_use) )
+            #REMOVE 'I's
             return _Circuit(layer_labels=opstr,
-                            line_labels=self.model.stateSpaceLabels.labels[0]) #,identity=self.identity)
+                            line_labels=self.model.stateSpaceLabels.labels[0])
         else:
             raise CompilationError("Cannot locally compile %s" % str(oplabel))
 
@@ -334,8 +341,7 @@ class CompilationLibrary(_collections.OrderedDict):
         
         obtained_sreps = {}
         
-        #Separate the available operation labels by their number of qubits
-        # Note: could add "IDENT" gate to length-1 list?
+        #Separate the available operation labels by their target qubits
         available_glabels_by_qubit = _collections.defaultdict(list)
         for gl in available_glabels:
             available_glabels_by_qubit[tuple(sorted(gl.qubits))].append(gl)
@@ -382,7 +388,7 @@ class CompilationLibrary(_collections.OrderedDict):
                 # Look at each sequence, and see if it has more than or equal to max_number_of_idles.
                 # If so, set it to the current chosen sequence.
                 for seq in candidates:
-                    number_of_idles = len([x for x in seq if x.name == self.identity]) # or 'Gi'?
+                    number_of_idles = len([x for x in seq if x.name == IDENT])
                             
                     if number_of_idles >= max_number_of_idles:
                         max_number_of_idles = number_of_idles
@@ -418,6 +424,10 @@ class CompilationLibrary(_collections.OrderedDict):
             # Update list of potential compilations
             obtained_sreps = new_obtained_sreps
 
+        #Compilation done: remove IDENT labels, as these are just used to
+        # explicitly keep track of the number of identity gates in a circuit (really needed?)
+        compilation = list(filter(lambda gl: gl.name != IDENT, compilation))
+            
         #Store & return template that was found
         self.templates[gate_name].append(compilation)
     
@@ -590,11 +600,11 @@ class CompilationLibrary(_collections.OrderedDict):
         # Convert the operationlist to a circuit.
         circuit = _Circuit(layer_labels=cnot_circuit,
                            line_labels=self.model.stateSpaceLabels.labels[0],
-                           editable=True)#, identity=self.identity)
+                           editable=True)
 
         ## Change into the native gates, using the compilation for CNOTs between
         ## connected qubits.
-        circuit.change_gate_library(self) #, identity=self.identity)
+        circuit.change_gate_library(self)
         circuit.done_editing()
 
         if check:

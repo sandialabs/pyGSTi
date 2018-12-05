@@ -19,6 +19,9 @@ from ..tools import optools as _gt
 from ..tools import internalgates as _itgs
 from ..tools import symplectic as _symp
 
+IDENT='I' # internal 1Q-identity-gate name used for compilation
+  # MUST be the same as in compilationlibrary.py
+
 class ProcessorSpec(object):
     """
     An object that can be used to encapsulate the device specification for a one or more qubit 
@@ -116,18 +119,6 @@ class ProcessorSpec(object):
             except:
                 raise ValueError(str(gname)+" is not a valid 'standard' gate name, so should not be an element of `gate_names`!")
 
-        #TODO REMOVE self.identity...
-        # Records the name of the identity gate, if there is one, as this is useful information to have to hand. If there
-        # isn't one we use the default 'I' label.
-        self.identity = None
-        for gn in self.root_gate_names:
-            if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'I'):
-                self.identity = gn
-                break
-        if self.identity is None:
-            _warnings.warn(("There is no identity gate in the model! This may cause some unusual behave with, e.g., circuit compilers."))
-            self.identity = 'I'
-
         # If no qubit labels are provided it defaults to integers from 0 to nQubits-1.    
         if qubit_labels is None:
             self.qubit_labels = list(range(nQubits)) 
@@ -202,7 +193,7 @@ class ProcessorSpec(object):
             # Generates the QubitGraph for the multi-qubit Clifford gates. If there are multi-qubit gates which are not Clifford gates
             # then these are not counted as "connections".
             connectivity = _np.zeros((self.number_of_qubits,self.number_of_qubits),dtype=bool)
-            for oplabel in self.models['clifford'].operations:
+            for oplabel in self.models['clifford'].get_primitive_op_labels():
                 # This treats non-entangling 2-qubit gates as making qubits connected. Stopping that is
                 # something we may need to do at some point.
                 if oplabel.number_of_qubits is None: continue # skip "global" gates in connectivity consideration?
@@ -216,7 +207,7 @@ class ProcessorSpec(object):
         if 'clifford' in self.models:
             # Compute the operation labels that act on an entire set of qubits
             self.clifford_ops_on_qubits =  _collections.defaultdict(list)
-            for gl in self.models['clifford'].operations:
+            for gl in self.models['clifford'].get_primitive_op_labels():
                 if gl.qubits is None: continue # skip "global" gates (?)
                 for p in _itertools.permutations(gl.qubits):
                     self.clifford_ops_on_qubits[p].append(gl)
@@ -322,11 +313,7 @@ class ProcessorSpec(object):
         if 'clifford' not in self.models:
             raise ValueError("Cannot create standard compilations without a 'clifford' model!")
         # Creates an empty library to fill
-        if self.identity is not None:
-            identity = self.identity
-        else:
-            identity = 'I'
-        library = _CompilationLibrary(self.models['clifford'], compile_type, identity=identity) 
+        library = _CompilationLibrary(self.models['clifford'], compile_type)
 
         # 1-qubit gate compilations. These must be complied "locally" - i.e., out of native gates which act only
         # on the target qubit of the gate being compiled, and they are stored in the compilation library.
@@ -385,11 +372,13 @@ class ProcessorSpec(object):
                 # If we find CPHASE, and we have a Hadamard-like gate, we add used them to add a CNOT compilation template.
                 if H_name is not None:
                     if cphase_name is not None:
-                        # We need the identity gate for these templates
-                        if self.identity is not None:
-                            # Add it with CPHASE in both directions, in case the CPHASES have been specified as being available in only one direction
-                            library.templates['CNOT'] = [(_Label(self.identity, 0),_Label(H_name, 1),_Label(cphase_name, (0, 1)), _Label(self.identity, 0),_Label(H_name, 1))]
-                            library.templates['CNOT'].append((_Label(self.identity, 0),_Label(H_name, 1),_Label(cphase_name, (1,0)), _Label(self.identity, 0),_Label(H_name, 1)))
+                        # Note: we need the identity gate for these templates, which we put explicitly
+                        # in template layers and which all models should be able to deal with (as the
+                        # lack of labels in a layer).
+
+                        # Add it with CPHASE in both directions, in case the CPHASES have been specified as being available in only one direction
+                        library.templates['CNOT'] = [(_Label(IDENT, 0),_Label(H_name, 1),_Label(cphase_name, (0, 1)), _Label(IDENT, 0),_Label(H_name, 1))]
+                        library.templates['CNOT'].append((_Label(IDENT, 0),_Label(H_name, 1),_Label(cphase_name, (1,0)), _Label(IDENT, 0),_Label(H_name, 1)))
       
         # After adding default templates, we know generate compilations for CNOTs between all connected pairs. If the default templates were not
         # relevant or aren't relevant for some qubits, this will generate new templates by brute force.

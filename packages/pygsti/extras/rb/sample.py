@@ -91,7 +91,7 @@ def circuit_layer_by_pairing_qubits(pspec, subsetQs=None, twoQprob=0.5, oneQgate
         else:
             twoQpopulate = False
         
-        operationlist = list(pspec.models[modelname].operations.keys())
+        operationlist = pspec.models[modelname].get_primitive_op_labels()
         for gate in operationlist:
             if oneQpopulate:
                 if (gate.number_of_qubits == 1) and (gate.name not in oneQgatenames):
@@ -213,7 +213,7 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
         oneQgates_available = _copy.copy(oneQgates)    
     # If oneQgates is not specified, extract this list from the ProcessorSpec
     else:
-        oneQgates_available = list(pspec.models[modelname].operations.keys())
+        oneQgates_available = list(pspec.models[modelname].get_primitive_op_labels())
         d = len(oneQgates_available)    
         for i in range(0,d):
             # If it's not a 1-qubit gate, we delete it.
@@ -228,7 +228,7 @@ def circuit_layer_by_Qelimination(pspec, subsetQs=None, twoQprob=0.5, oneQgates=
         twoQgates_available = _copy.copy(twoQgates)    
     # If twoQgates is not specified, extract this list from the ProcessorSpec
     else:
-        twoQgates_available = list(pspec.models[modelname].operations.keys())
+        twoQgates_available = list(pspec.models[modelname].get_primitive_op_labels())
         d = len(twoQgates_available)                                      
         for i in range(0,d):
             # If it's not a 2-qubit gate, we delete it.
@@ -466,7 +466,7 @@ def circuit_layer_by_co2Qgates(pspec, subsetQs, co2Qgates, co2Qgatesprob='unifor
             if modelname == 'clifford':
                 possibleops = pspec.clifford_ops_on_qubits[(qubit,)]
             else:
-                possibleops = pspec.models[modelname].operations()
+                possibleops = pspec.models[modelname].get_primitive_op_labels()
                 l = len(possibleops)
                 for j in range(0,l):
                     if possibleops[l-j].number_of_qubits != 1:
@@ -647,13 +647,8 @@ def random_circuit(pspec, length, subsetQs=None, sampler='Qelimination', sampler
     else:
         qubits = list(pspec.qubit_labels[:]) # copy this list
     
-    # If we can, we use the identity in the pspec.
-    if pspec.identity is not None:
-        identity = pspec.identity
-    else:
-        identity = 'I'
     # Initialize an empty circuit, to populate with sampled layers.
-    circuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True) #, identity=identity)
+    circuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
     
     # If we are not add layers of random local gates between the layers, sample 'length' layers
     # according to the sampler `sampler`.
@@ -749,7 +744,7 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
         n = len(qubits_used)
     
     # Creates a empty circuit over no wires
-    circuit = _cir.Circuit(num_lines=0, identity=pspec.identity) 
+    circuit = _cir.Circuit(num_lines=0) 
 
     s_rc_dict = {}
     p_rc_dict = {}
@@ -1036,7 +1031,7 @@ def exhaustive_independent_random_circuits_experiment(pspec, allowed_lengths, ci
     parallel_circuits = {}
     it = [range(circuits_per_subset) for i in range(len(structure))]
     for setting_comb in _itertools.product(*it):
-        pcircuit = _cir.Circuit(num_lines=0, identity=pspec.identity) 
+        pcircuit = _cir.Circuit(num_lines=0)
         for ssQs_ind, subsetQs in enumerate(structure):
             pcircuit.tensor_circuit(circuits[subsetQs][setting_comb[ssQs_ind]])
             parallel_circuits[setting_comb] = pcircuit
@@ -1555,7 +1550,7 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
         assert(subgraph.are_glob_connected(list(subsetQs))), "Each subset of qubits in `structure` must be connected!"
     
     # Creates a empty circuit over no wires
-    circuit = _cir.Circuit(num_lines=0) #, identity=pspec.identity) 
+    circuit = _cir.Circuit(num_lines=0)
 
     s_rc_dict = {}
     p_rc_dict = {}
@@ -1574,9 +1569,9 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
         circuit.tensor_circuit(subset_circuit)
     
     # Creates empty circuits over no wires
-    inversion_circuit = _cir.Circuit(num_lines=0) #, identity=pspec.identity)  
+    inversion_circuit = _cir.Circuit(num_lines=0)
     if cliffordtwirl: 
-        initial_circuit = _cir.Circuit(num_lines=0) #, identity=pspec.identity)  
+        initial_circuit = _cir.Circuit(num_lines=0)
       
     for subsetQs in structure:
         subsetQs = tuple(subsetQs)
@@ -2199,8 +2194,6 @@ def pauli_layer_as_compiled_circuit(pspec, subsetQs=None, keepidle=False):
     Circuit
         A circuit corresponding to a uniformly random n-qubit Pauli.
     """
-    if pspec.identity is not None: identity = pspec.identity
-    else: identity = 'I'
     if subsetQs is not None:qubits = subsetQs[:] # copy this list
     else: qubits = pspec.qubit_labels[:] # copy this list
     n = len(qubits)
@@ -2212,12 +2205,12 @@ def pauli_layer_as_compiled_circuit(pspec, subsetQs=None, keepidle=False):
     r = _np.random.randint(0,4,size=n)           
     pauli_layer_std_lbls = [_lbl.Label(paulis[r[q]],(qubits[q],)) for q in range(n)]
     # Converts the layer to a circuit, and changes to the native model.
-    pauli_circuit = _cir.Circuit(layer_labels=pauli_layer_std_lbls, line_labels=qubits).parallelize() #, identity='I')
+    pauli_circuit = _cir.Circuit(layer_labels=pauli_layer_std_lbls, line_labels=qubits).parallelize()
     pauli_circuit = pauli_circuit.copy(editable=True)
-    pauli_circuit.change_gate_library(pspec.compilations['absolute']) #, identity=identity)
+    pauli_circuit.change_gate_library(pspec.compilations['absolute'])
     if keepidle:
         if pauli_circuit.depth() == 0:
-            pauli_circuit.insert_layer([_lbl.Label(identity,qubits[0]),],0)
+            pauli_circuit.insert_layer([_lbl.Label(())],0)
 
     pauli_circuit.done_editing()
     return pauli_circuit
@@ -2244,10 +2237,6 @@ def oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=None):
         A circuit corresponding to an independent, uniformly random 1-qubit
         Clifford gate on each qubit.
     """
-    if pspec.identity is not None:
-        identity = pspec.identity
-    else:
-        identity = 'I'
     if subsetQs is not None:
         n = len(subsetQs)
         qubits = subsetQs[:] # copy this list
@@ -2261,7 +2250,7 @@ def oneQclifford_layer_as_compiled_circuit(pspec, subsetQs=None):
     r = _np.random.randint(0,24,size=n)
             
     oneQclifford_layer_std_lbls = [_lbl.Label(oneQcliffords[r[q]],(qubits[q],)) for q in range(n)]
-    oneQclifford_circuit = _cir.Circuit(layer_labels=oneQclifford_layer_std_lbls, line_labels=qubits).parallelize() #, identity=identity)
+    oneQclifford_circuit = _cir.Circuit(layer_labels=oneQclifford_layer_std_lbls, line_labels=qubits).parallelize()
     oneQclifford_circuit = oneQclifford_circuit.copy(editable=True)
     oneQclifford_circuit.change_gate_library(pspec.compilations['absolute'])
     oneQclifford_circuit.done_editing()
@@ -2365,10 +2354,6 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
     assert(length % 2 == 0), "The mirror rb length `length` must be even!"
     random_natives_circuit_length = length//2
 
-    # This is used to fix the identity element in the circuits to be consistent with the pspec.identity element,
-    # if there is one.
-    if pspec.identity is not None: identity = pspec.identity
-    else: identity = 'I'
     if subsetQs is not None:
         assert(isinstance(subsetQs,list) or isinstance(subsetQs,tuple)), "If not None, `subsetQs` must be a list!"
         subsetQs = list(subsetQs)
@@ -2669,20 +2654,21 @@ def oneQ_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=F
         assert (generated_group is not None), "Generated group needs to be specified!"        
         if model_to_group_labels is None:
             model_to_group_labels = {}
-            for gate in model.operations.keys():
+            for gate in model.get_primitive_op_labels():
                 assert(gate in generated_group.labels), "model labels are not in \
                 the generated group! Specify a model_to_group_labels dictionary." 
                 model_to_group_labels = {'gate':'gate'}
         else:
-            for gate in model.operations.keys():
+            for gate in model.get_primitive_op_labels():
                 assert(gate in model_to_group_labels.keys()), "model to group labels \
                 are invalid!"              
                 assert(model_to_group_labels[gate] in generated_group.labels), "model to group labels \
                 are invalid!"              
-                
-        rndm_indices = rndm.randint(0,len(model.operations.keys()),m)
+
+        opLabels = model.get_primitive_op_labels()
+        rndm_indices = rndm.randint(0,len(opLabels),m)
         if interleaved:
-                interleaved_index = model.operations.keys().index(interleaved)
+                interleaved_index = opLabels.index(interleaved)
                 interleaved_indices = interleaved_index*_np.ones((m,2),int)
                 interleaved_indices[:,0] = rndm_indices
                 rndm_indices = interleaved_indices.flatten()
@@ -2693,8 +2679,8 @@ def oneQ_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=F
             prep_random_string = compilation[generated_group.labels[rndm_group_index]]
             prep_random_string_group = [generated_group.labels[rndm_group_index],]
 
-        random_string = [ model.operations.keys()[i] for i in rndm_indices ]   
-        random_string_group = [ model_to_group_labels[model.operations.keys()[i]] for i in rndm_indices ] 
+        random_string = [ opLabels[i] for i in rndm_indices ]   
+        random_string_group = [ model_to_group_labels[opLabels[i]] for i in rndm_indices ] 
         # This bit of code is a quick hashed job. Needs to be checked at somepoint
         if group_prep:
             random_string = prep_random_string + random_string
@@ -2718,8 +2704,8 @@ def oneQ_generalized_rb_sequence(m, group_or_model, inverse=True, random_pauli=F
         
     if not inverse:
         if model:
-            rndm_indices = rndm.randint(0,len(model.operations.keys()),m)
-            opLabels = list(model.operations.keys())
+            opLabels = model.get_primitive_op_labels()
+            rndm_indices = rndm.randint(0,len(opLabels),m)
             if interleaved:
                 interleaved_index = opLabels.index(interleaved)
                 interleaved_indices = interleaved_index*_np.ones((m,2),int)
