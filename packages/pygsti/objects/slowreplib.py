@@ -1213,7 +1213,7 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
 
     #Get (extension-type) representation objects
-    rhorep = calc.cos.get_prep(rholabel].torep('prep')
+    rhorep = calc.cos.get_prep(rholabel).torep('prep')
     ereps = [ calc.cos.get_effect(el).torep('effect') for el in elabels]
     operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
     operationreps = { i:calc.cos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
@@ -1318,7 +1318,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms, but lists
-    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.cos.get_prep(rholabel].get_order_terms(order)]
+    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.cos.get_prep(rholabel).get_order_terms(order)]
                       for order in range(calc.max_order+1) ]
 
     E_term_reps = []
