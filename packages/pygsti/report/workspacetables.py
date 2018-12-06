@@ -1020,8 +1020,8 @@ class NQubitErrgenTable(WorkspaceTable):
 
     Specifically, gates must be :class:`LindbladParameterizedOpMap` or
     :class:`StaticOp` objects wrapped within :class:`EmbeddedOpMap` and/or 
-    :class:`ComposedOpMap` objects (this is consistent with the gates
-    constructed by :function:`build_nqnoise_model`).  As such, error rates
+    :class:`ComposedOpMap` objects (this is consistent with the operation
+    blocks of a :class:`CloudNoiseModel`).  As such, error rates
     are read directly from the gate objects rather than being computed by
     projecting dense gate representations onto a "basis" of fixed error
     generators (e.g. H+S+A generators).
@@ -1180,7 +1180,7 @@ class NQubitErrgenTable(WorkspaceTable):
                 process_gate(gl,model.operations[gl],(),None)
         elif isinstance(model,_objs.ImplicitOpModel): # process primitive op error
             for gl in opLabels:
-                process_gate(gl,model.operation_blks[_Lbl('LocalNoise_'+gl.name,gl.sslbls)],(),None)
+                process_gate(gl,model.operation_blks[_Lbl('CloudNoise_'+gl.name,gl.sslbls)],(),None)
         else:
             raise ValueError("Unrecognized type of model: %s" % str(type(model)))
 

@@ -57,6 +57,8 @@ from .instrument import TPInstrument
 from .model import Model
 from .model import ExplicitOpModel
 from .model import ImplicitOpModel
+from .localnoisemodel import LocalNoiseModel
+from .cloudnoisemodel import CloudNoiseModel
 from .circuitstructure import CircuitStructure
 from .circuitstructure import LsGermsStructure
 from .circuitstructure import LsGermsSerialStructure

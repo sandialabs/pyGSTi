@@ -11,6 +11,7 @@ import itertools as _itertools
 import collections as _collections
 import warnings as _warnings
 
+from .localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
 from .qubitgraph import QubitGraph as _QubitGraph
@@ -101,7 +102,6 @@ class ProcessorSpec(object):
         ProcessorSpec
         """
         assert(type(nQubits) is int), "The number of qubits, n, should be an integer!"
-        from .. import construction as _cnst
 
         #Store inputs for adding models later
         self.number_of_qubits = nQubits
@@ -228,33 +228,35 @@ class ProcessorSpec(object):
         if model_name = 'target_name';  Target Clifford gates, represented in their efficient-in-n 
         symplectic form, are added if model_name = 'clifford'.
         """
-        from .. import construction as _cnst
         if model_name == 'clifford':
             assert(parameterization in ('auto','clifford')), "Clifford model must use 'clifford' parameterizations"
             assert(sim_type in ('auto','map')), "Clifford model must use 'map' simulation type"
-            model = _cnst.build_nqubit_standard_model(
-                self.number_of_qubits, self.root_gate_names,
-                self.nonstd_gate_unitaries, self.availability, self.qubit_labels,
-                parameterization='clifford', sim_type=sim_type,
-                on_construction_error='warn') # *drop* gates that aren't cliffords
+            model = _LocalNoiseModel.build_standard(self.number_of_qubits, self.root_gate_names,
+                                                    self.nonstd_gate_unitaries, self.availability,
+                                                    self.qubit_labels,  parameterization='clifford',
+                                                    sim_type=sim_type, on_construction_error='warn', # *drop* gates that aren't cliffords
+                                                    independent_gates=False, ensure_composed_gates=False) # change these? add `geometry`?
+
 
         elif model_name in ('target','Target','static','TP','full'):
             param = model_name if (parameterization == 'auto') \
                     else parameterization
             if param in ('target','Target'): param = 'static' # special case for 'target' model
-            
-            model = _cnst.build_nqubit_standard_model(
+
+            model = _LocalNoiseModel.build_standard(
                 self.number_of_qubits, self.root_gate_names,
-                self.nonstd_gate_unitaries, self.availability, self.qubit_labels,
-                param, sim_type)
+                self.nonstd_gate_unitaries, self.availability,
+                self.qubit_labels, parameterization=param, sim_type=sim_type,
+                independent_gates=False, ensure_composed_gates=False) # change these? add `geometry`?
             
         else: # unknown model name, so require parameterization
             if parameterization == 'auto':
                 raise ValueError("Non-std model name '%s' means you must specify `parameterization` argument!" % model_name)
-            model = _cnst.build_nqubit_standard_model(
+            model = _LocalNoiseModel.build_standard(
                 self.number_of_qubits, self.root_gate_names,
-                self.nonstd_gate_unitaries, self.availability, self.qubit_labels,
-                parameterization, sim_type)
+                self.nonstd_gate_unitaries, self.availability,
+                self.qubit_labels, parameterization=parameterization, sim_type=sim_type,
+                independent_gates=False, ensure_composed_gates=False) # change these? add `geometry`?
             
         self.models[model_name] = model
                   

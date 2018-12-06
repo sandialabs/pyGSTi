@@ -1198,9 +1198,8 @@ def create_nqnoise_report(results, filename, title="auto",
 
     Such models are characterized by the fact that gates and SPAM objects may
     not have dense representations (or it may be very expensive to compute them)
-    , and that these models likely have the particular structure given by
-    :function:`build_nqnoise_model`.
-
+    , and that these models are likely :class:`CloudNoiseModel` objects or have
+    similar structure.
 
     Parameters
     ----------

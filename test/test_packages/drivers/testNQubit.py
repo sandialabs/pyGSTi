@@ -19,16 +19,16 @@ class NQubitTestCase(BaseTestCase):
 
     def test_construction(self):
         print("TEST1")
-        mdl_test = pygsti.construction.build_nqnoise_model(
+        mdl_test = pygsti.construction.build_XYCNOT_cloudnoise_model(
             nQubits=1, geometry="line", maxIdleWeight=1, maxhops=0, verbosity=10)
         print("TEST2")
-        mdl_test = pygsti.construction.build_nqnoise_model(
+        mdl_test = pygsti.construction.build_XYCNOT_cloudnoise_model(
             nQubits=2, geometry="line", maxIdleWeight=1, maxhops=0, verbosity=10)
         print("TEST3")
-        mdl_test = pygsti.construction.build_nqnoise_model(
+        mdl_test = pygsti.construction.build_XYCNOT_cloudnoise_model(
             nQubits=3, geometry="line", maxIdleWeight=1, maxhops=1,
             extraWeight1Hops=0, extraGateWeight=1, sparse=True, sim_type="map", verbosity=10)
-        #                                    gateNoise=(1234,0.1), prepNoise=(456,0.01), povmNoise=(789,0.01))
+        #                                    roughNoise=(1234,0.1))
         
         #print("Constructed model with %d gates, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %
         #      (len(mdl_test.operations),mdl_test.dim,mdl_test.num_params(), np.linalg.norm(mdl_test.to_vector()) ))
@@ -38,13 +38,13 @@ class NQubitTestCase(BaseTestCase):
         maxLengths = [1,2]
         cnot_edges = [(i,i+1) for i in range(nQubits-1)] #only single direction
 
-        mdl_datagen = pc.build_nqnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
+        mdl_datagen = pc.build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                       extraWeight1Hops=0, extraGateWeight=0, sparse=True, verbosity=1,
                                       sim_type="map", parameterization="H+S",
-                                      gateNoise=(1234,0.01), prepNoise=(456,0.01), povmNoise=(789,0.01))
+                                      roughNoise=(1234,0.01))
 
         cache = {}
-        gss = pygsti.construction.create_nqubit_sequences(
+        gss = pygsti.construction.create_XYCNOT_cloudnoise_sequences(
             nQubits, maxLengths, 'line', cnot_edges, maxIdleWeight=2, maxhops=1,
             extraWeight1Hops=0, extraGateWeight=0, verbosity=4, cache=cache, algorithm="sequential")
         expList = gss.allstrs #[ tup[0] for tup in expList_tups]
@@ -64,13 +64,13 @@ class NQubitTestCase(BaseTestCase):
         maxLengths = [1,2]
         cnot_edges = []
 
-        mdl_datagen = pc.build_nqnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=1, maxhops=0,
+        mdl_datagen = pc.build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=1, maxhops=0,
                                       extraWeight1Hops=0, extraGateWeight=0, sparse=True, verbosity=1,
                                       sim_type="map", parameterization="H+S",
-                                      gateNoise=(1234,0.01), prepNoise=(456,0.01), povmNoise=(789,0.01))
+                                      roughNoise=(1234,0.01))
 
         cache = {}
-        gss = pygsti.construction.create_nqubit_sequences(
+        gss = pygsti.construction.create_XYCNOT_cloudnoise_sequences(
             nQubits, maxLengths, 'line', cnot_edges, maxIdleWeight=1, maxhops=0,
             extraWeight1Hops=0, extraGateWeight=0, verbosity=4, cache=cache, algorithm="greedy")
         #expList = gss.allstrs #[ tup[0] for tup in expList_tups]
@@ -115,7 +115,7 @@ class NQubitTestCase(BaseTestCase):
         #    lsgstLists.append(lst[:]) # append *running* list
         lsgstLists = gss # can just use gss as input to pygsti.do_long_sequence_gst_base
             
-        mdl_to_optimize = pc.build_nqnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
+        mdl_to_optimize = pc.build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                   extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
                                                   sim_type="map", parameterization="H+S", sparse=True)
         results = pygsti.do_long_sequence_gst_base(ds, mdl_to_optimize,
@@ -142,7 +142,7 @@ class NQubitTestCase(BaseTestCase):
         #    lsgstLists.append(lst[:]) # append *running* list
         lsgstLists = gss # can just use gss as input to pygsti.do_long_sequence_gst_base
 
-        mdl_to_optimize = pc.build_nqnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
+        mdl_to_optimize = pc.build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                   extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
                                                   sim_type="termorder:1", parameterization="H+S terms", sparse=False)
 
@@ -165,7 +165,7 @@ class NQubitTestCase(BaseTestCase):
 
         nQubits = 3
         print("Constructing Target LinearOperator Set")
-        target_model = pygsti.construction.build_nqnoise_model(
+        target_model = pygsti.construction.build_XYCNOT_cloudnoise_model(
             nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
             extraWeight1Hops=0, extraGateWeight=1, sparse=True, sim_type="map",verbosity=1)
         #print("nElements test = ",target_model.num_elements())
@@ -173,10 +173,10 @@ class NQubitTestCase(BaseTestCase):
         #print("nNonGaugeParams test = ",target_model.num_nongauge_params())
         
         print("Constructing Datagen LinearOperator Set")
-        mdl_datagen = pygsti.construction.build_nqnoise_model(
+        mdl_datagen = pygsti.construction.build_XYCNOT_cloudnoise_model(
             nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
             extraWeight1Hops=0, extraGateWeight=1, sparse=True, verbosity=1,
-            gateNoise=(1234,0.1), prepNoise=(456,0.01), povmNoise=(789,0.01), sim_type="map")
+            roughNoise=(1234,0.1), sim_type="map")
         
         mdl_test = mdl_datagen
         print("Constructed model with %d op-blks, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %

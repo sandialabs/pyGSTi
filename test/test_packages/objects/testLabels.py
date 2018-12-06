@@ -67,7 +67,7 @@ class LabelTestCase(BaseTestCase):
 
     def test_layerlizzard(self):
         #Test this here b/c auto-gators are associated with parallel operation labels
-        mdl = pc.build_nqnoise_model(2, "line", [(0,1)], maxIdleWeight=2, maxhops=1,
+        mdl = pc.build_XYCNOT_cloudnoise_model(2, "line", [(0,1)], maxIdleWeight=2, maxhops=1,
                                       extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
                                       sim_type="map", parameterization="H+S", sparse=True)
         

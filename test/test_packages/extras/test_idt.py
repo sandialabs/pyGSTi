@@ -39,11 +39,11 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
     base_param = '+'.join(base_param)
     parameterization = base_param+" terms" if simtype.startswith('termorder') else base_param # "H+S+A"
     
-    gateset_idleInFids = pygsti.construction.build_nqnoise_model(nQubits, "line", [], min(2,nQubits), 1,
+    gateset_idleInFids = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
                                       sim_type=simtype, parameterization=parameterization,
                                       gateNoise=None, prepNoise=prepNoise, povmNoise=povmNoise,
                                       addIdleNoiseToAllGates=True)
-    gateset_noIdleInFids = pygsti.construction.build_nqnoise_model(nQubits, "line", [], min(2,nQubits), 1,
+    gateset_noIdleInFids = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
                                       sim_type=simtype, parameterization=parameterization,
                                       gateNoise=None, prepNoise=prepNoise, povmNoise=povmNoise,
                                       addIdleNoiseToAllGates=False)
@@ -58,14 +58,14 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
         #ky = 'A(ZZ%s)' % ('I'*(nQubits-2)); debug_errdict = {ky: 0.01 }
         debug_errdict = {}
         if base_vec is None:
-            rand_vec = idt.set_Gi_errors(nQubits, gateset_idleInFids, debug_errdict, rand_default=errMag,
+            rand_vec = idt.set_idle_errors(nQubits, gateset_idleInFids, debug_errdict, rand_default=errMag,
                                         hamiltonian=hamiltonian, stochastic=stochastic, affine=affine)
             base_vec = rand_vec / errMag
             
         err_vec = base_vec * errMag # for different errMags just scale the *same* random rates
-        idt.set_Gi_errors(nQubits, gateset_idleInFids, debug_errdict, rand_default=err_vec,
+        idt.set_idle_errors(nQubits, gateset_idleInFids, debug_errdict, rand_default=err_vec,
                           hamiltonian=hamiltonian, stochastic=stochastic, affine=affine)
-        idt.set_Gi_errors(nQubits, gateset_noIdleInFids, debug_errdict, rand_default=err_vec,
+        idt.set_idle_errors(nQubits, gateset_noIdleInFids, debug_errdict, rand_default=err_vec,
                           hamiltonian=hamiltonian, stochastic=stochastic, affine=affine) # same errors for w/ and w/out idle fiducial error
     
         for nSamples in nSamplesList:
@@ -288,15 +288,15 @@ class IDTTestCase(BaseTestCase):
         self.assertEqual(len(plaq.fidpairs), 16) # (will need to change this if use H+S+A above)
 
         # ---- Create some fake data ----
-        target_model = pygsti.construction.build_nqnoise_model(nQubits, "line", [(0,1)], 2, 1,
+        target_model = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
                                                               sim_type="map", parameterization="H+S")
 
         #Note: generate data with affine errors too (H+S+A used below)
-        mdl_datagen = pygsti.construction.build_nqnoise_model(nQubits, "line", [(0,1)], 2, 1,
+        mdl_datagen = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
                                                                sim_type="map", parameterization="H+S+A",
                                                                gateNoise=(1234,0.001), prepNoise=(1234,0.001), povmNoise=(1234,0.001))
         #This *only* (re)sets Gi errors...
-        idt.set_Gi_errors(nQubits, mdl_datagen, {}, rand_default=0.001,
+        idt.set_idle_errors(nQubits, mdl_datagen, {}, rand_default=0.001,
                   hamiltonian=True, stochastic=True, affine=True) # no seed? FUTURE?
         ds = pygsti.construction.generate_fake_data(mdl_datagen, gss.allstrs, 1000, 'multinomial', seed=1234)
 
@@ -335,7 +335,7 @@ class IDTTestCase(BaseTestCase):
         expected_measDict = { 'X': ('Gy',)*3, 'Y': ('Gx',), 'Z': (),
                               '-X': ('Gy',), '-Y': ('Gx',)*3, '-Z': ('Gx','Gx')}
 
-        target_model = pygsti.construction.build_nqnoise_model(3, "line", [(0,1)], 2, 1,
+        target_model = pygsti.construction.build_XYCNOT_cloudnoise_model(3, "line", [(0,1)], 2, 1,
                                                       sim_type="map", parameterization="H+S+A")
         prepDict, measDict = idt.determine_paulidicts(target_model)
         self.assertEqual(prepDict, expected_prepDict)

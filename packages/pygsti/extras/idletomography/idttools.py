@@ -155,20 +155,19 @@ def nontrivial_paulis(wt):
         ret.append( tup )
     return ret
 
-def set_Gi_errors(nQubits, model, errdict, rand_default=None,
+def set_idle_errors(nQubits, model, errdict, rand_default=None,
                   hamiltonian=True, stochastic=True, affine=True):
     """ 
     Set specific or random error terms (typically for a data-generating model)
-    within a `model` created by `build_nqnoise_model`.
+    within a noise model (a :class:`CloudNoiseModel` object).
 
     Parameters
     ----------
     nQubits : int
         The number of qubits.
 
-    model : Model
-        The model, created by `build_nqnoise_model`, to set the "Gi"-gate
-        errors of.
+    model : CloudNoiseModel
+        The model, to set the idle errors of.
         
     errdict : dict
         A dictionary of errors to include.  Keys are `"S(<>)"`, `"H(<>)"`, and
@@ -266,9 +265,8 @@ def predicted_intrinsic_rates(nQubits, maxweight, model,
     maxweight : int, optional
         The maximum weight of errors to consider.
 
-    model : Model
-        The model, created by `build_nqnoise_model`, to extract intrinsic
-        error rates from.
+    model : CloudNoiseModel
+        The model to extract intrinsic error rates from.
 
     hamiltonian, stochastic, affine : bool, optional
         Whether `model` includes Hamiltonian, Stochastic, and/or Affine
@@ -364,9 +362,8 @@ def predicted_observable_rates(idtresults, typ, nQubits, maxweight, model):
     maxweight : int
         The maximum weight of errors to consider.
 
-    model : Model
-        The model, created by `build_nqnoise_model`, to extract
-        error rates from.
+    model : CloudNoiseModel
+        The noise model to extract error rates from.
 
     Returns
     -------

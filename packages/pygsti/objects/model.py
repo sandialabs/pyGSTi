@@ -16,6 +16,7 @@ import warnings as _warnings
 import time as _time
 import uuid as _uuid
 import bisect as _bisect
+import copy as _copy
 
 from ..tools import matrixtools as _mt
 from ..tools import optools as _gt
@@ -57,11 +58,11 @@ class Model(object):
     #Whether to perform extra parameter-vector integrity checks
     _pcheck = False
 
-    def __init__(self, compiler_helper, sim_type="auto"):
+    def __init__(self, compiler_helper, sim_type="auto", evotype=None):
 
         #Operator dimension of this Model (None => unset, to be determined)
         self._dim = None
-        self._evotype = None
+        self._evotype = evotype
         self.stateSpaceLabels = None #lbls
 
         #Name and dimension (or list of dims) of the *basis*
@@ -1686,7 +1687,7 @@ class Model(object):
              evalTree, wrtSlicesList,
             bReturnDProbs12, comm)
 
-    def copy(self):
+    def _init_copy(self,copyInto):
         """
         Copy this model
 
@@ -1695,8 +1696,29 @@ class Model(object):
         Model
             a (deep) copy of this model.
         """
-        pass # TODO
+        copyInto.uuid = _uuid.uuid4() # new uuid for a copy (don't duplicate!)
+        copyInto._chlp = None # must be set by a derived-class _init_copy() method
 
+
+    def copy(self):
+        #Avoid having to reconstruct everything via __init__;
+        # essentially deepcopy this object, but give the
+        # class opportunity to initialize tricky members instead
+        # of letting deepcopy do it.
+        newModel = type(self).__new__(self.__class__) # empty object
+
+        #first call _init_copy to initialize any tricky members
+        # (like those that contain references to self or other members)
+        self._init_copy(newModel)
+        
+        for attr,val in self.__dict__.items():
+            if not hasattr(newModel,attr):
+                setattr(newModel,attr,_copy.deepcopy(val))
+
+        if Model._pcheck: newModel._check_paramvec()
+        return newModel
+
+    
     def __str__(self):
         pass
 
@@ -2807,51 +2829,19 @@ class ExplicitOpModel(Model):
 
         return s
 
-
-    def copy(self):
-        """
-        Copy this model
-
-        Returns
-        -------
-        Model
-            a (deep) copy of this model.
-        """
-        if Model._pcheck: self._check_paramvec()
-
-        if not hasattr(self,"_sim_type"): #for backward compatibility
-            self._sim_type = "dmmatrix"
-            self._sim_args = []
-
-        #Base class copy (maybe move to new fn?)
-        newModel = ExplicitOpModel(sim_type=self._sim_type)
-
-        newModel._dim = self._dim
-        newModel._sim_type = self._sim_type
-        newModel._sim_args = self._sim_args
-        newModel._evotype = self._evotype
-
-        if not hasattr(self,"basis") and hasattr(self,'_basisNameAndDim'): #for backward compatibility
-            self.basis = _Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
-        newModel.basis = self.basis.copy()
-        newModel.stateSpaceLabels = self.stateSpaceLabels # TODO: copy()?
+    def _init_copy(self,copyInto):
+        # Copy special base class members first
+        super(ExplicitOpModel, self)._init_copy(copyInto)
         
-        if not hasattr(self,"_calcClass"): #for backward compatibility
-            self._calcClass = _matrixfwdsim.MatrixForwardSimulator
-        newModel._calcClass = self._calcClass
-        
-        # Copy our members
-        newModel.preps = self.preps.copy(newModel)
-        newModel.povms = self.povms.copy(newModel)
-        newModel.operations = self.operations.copy(newModel)
-        newModel.instruments = self.instruments.copy(newModel)
-        newModel._paramvec = self._paramvec.copy()
-        #newModel._rebuild_paramvec() # unnecessary, as copy will change parent and copy gpindices
-        newModel._chlp = MemberDictCompilerHelper(newModel.preps, newModel.povms, newModel.instruments)
-        if Model._pcheck: newModel._check_paramvec()
+        # Copy our "tricky" members
+        copyInto.preps = self.preps.copy(copyInto)
+        copyInto.povms = self.povms.copy(copyInto)
+        copyInto.operations = self.operations.copy(copyInto)
+        copyInto.instruments = self.instruments.copy(copyInto)
+        copyInto._chlp = MemberDictCompilerHelper(copyInto.preps, copyInto.povms, copyInto.instruments)
 
-        newModel._default_gauge_group = self._default_gauge_group #Note: SHALLOW copy
-        return newModel
+        copyInto._default_gauge_group = self._default_gauge_group #Note: SHALLOW copy
+
 
     def __str__(self):
         s = ""
@@ -3421,6 +3411,11 @@ class MemberDictCompilerHelper(object):
     def get_member_labels_for_instrument(self, inst_lbl):
         return tuple(self.instruments[inst_lbl].keys())
 
+
+class ImplicitModelCompilerHelper(MemberDictCompilerHelper):
+    """ Performs the work of a "Compiler Helper" using user-supplied dicts """
+    def __init__(self, implicitModel):
+        super(ImplicitModelCompilerHelper,self).__init__(implicitModel.prep_blks, implicitModel.povm_blks, implicitModel.instrument_blks)
         
 
 class ExplicitLayerLizard(object):
@@ -3484,8 +3479,8 @@ class ImplicitOpModel(Model):
     """
 
     def __init__(self, primitive_labels=None, layer_lizard_class=ImplicitLayerLizard,
-                 layer_lizard_args=(), compiler_helper=None,
-                 sim_type="auto"):
+                 layer_lizard_args=(), compiler_helper_class=None,
+                 sim_type="auto", evotype=None):
 
         flags = { 'auto_embed': False, 'match_parent_dim': False,
                   'match_parent_evotype': True, 'cast_to_type': None }
@@ -3496,20 +3491,21 @@ class ImplicitOpModel(Model):
         self.instrument_blks = _ld.OrderedMemberDict(self, None, None, flags)
 
         if primitive_labels is None: primitive_labels = {}
-        self._primitive_prep_labels = primitive_labels.get('preps',[])
-        self._primitive_povm_labels = primitive_labels.get('povms',[])
-        self._primitive_op_labels = primitive_labels.get('ops',[])
-        self._primitive_instrument_labels = primitive_labels.get('instruments',[])
+        self._primitive_prep_labels = primitive_labels.get('preps',())
+        self._primitive_povm_labels = primitive_labels.get('povms',())
+        self._primitive_op_labels = primitive_labels.get('ops',())
+        self._primitive_instrument_labels = primitive_labels.get('instruments',())
         
         self._lizardClass = layer_lizard_class
         self._lizardArgs = layer_lizard_args
         
-        if compiler_helper is None:
+        if compiler_helper_class is None:
+            compiler_helper_class = ImplicitModelCompilerHelper
             # by default, assume *_blk members have keys which match the simple
             # labels found in the circuits this model can simulate.
-            compiler_helper = MemberDictCompilerHelper(self.prep_blks, self.povm_blks,
-                                                       self.instrument_blks)
-        super(ImplicitOpModel, self).__init__(compiler_helper, sim_type)
+        self.compiler_helper_class = compiler_helper_class
+        compiler_helper = compiler_helper_class(self)
+        super(ImplicitOpModel, self).__init__(compiler_helper, sim_type, evotype)
 
 
     def get_primitive_prep_labels(self):
@@ -3571,48 +3567,17 @@ class ImplicitOpModel(Model):
 
         return self._lizardClass(compiled_prep_blks, compiled_op_blks, compiled_effect_blks, self)
 
-    def copy(self):
-        """
-        Copy this model
+    def _init_copy(self,copyInto):
+        # Copy special base class members first
+        super(ImplicitOpModel, self)._init_copy(copyInto)
 
-        Returns
-        -------
-        Model
-            a (deep) copy of this model.
-        """
-        if Model._pcheck: self._check_paramvec()
+        # Copy our "tricky" members
+        copyInto.prep_blks = self.prep_blks.copy(copyInto)
+        copyInto.povm_blks = self.povm_blks.copy(copyInto)
+        copyInto.operation_blks = self.operation_blks.copy(copyInto)
+        copyInto.instrument_blks = self.instrument_blks.copy(copyInto)
+        copyInto._chlp = self.compiler_helper_class(copyInto)
 
-        primitive_labels = {'preps': self._primitive_prep_labels,
-                            'povms': self._primitive_povm_labels,
-                            'ops': self._primitive_op_labels,
-                            'instruments': self._primitive_instrument_labels }
-        newModel = ImplicitOpModel(primitive_labels, self._lizardClass, self._lizardArgs,
-                                   self._chlp, self._sim_type)
-
-        #Base class copy (maybe move to new fn?)
-        newModel._dim = self._dim
-        newModel._sim_type = self._sim_type
-        newModel._sim_args = self._sim_args
-        newModel._evotype = self._evotype
-
-        newModel.basis = self.basis.copy()
-        newModel.stateSpaceLabels = self.stateSpaceLabels # TODO: copy()?
-        newModel._calcClass = self._calcClass
-        
-        # Copy our members
-        newModel.prep_blks = self.prep_blks.copy(newModel)
-        newModel.povm_blks = self.povm_blks.copy(newModel)
-        newModel.operation_blks = self.operation_blks.copy(newModel)
-        newModel.instrument_blks = self.instrument_blks.copy(newModel)
-        newModel._paramvec = self._paramvec.copy()
-        newModel._chlp = MemberDictCompilerHelper(newModel.prep_blks, newModel.povm_blks, newModel.instrument_blks)
-        #newModel._rebuild_paramvec() # unnecessary, as copy will change parent and copy gpindices
-        if Model._pcheck: newModel._check_paramvec()
-
-        newModel._lizardClass = self._lizardClass
-        newModel._lizardArgs = self._lizardArgs
-
-        return newModel
 
     def __setstate__(self, stateDict):
         self.__dict__.update(stateDict)
