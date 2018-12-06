@@ -599,7 +599,7 @@ def exact_RB_ASPs(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0
         if group_twirled is True:  
             extended_rho = _np.dot(R,extended_rho)
     else:
-        full_gateset = _cnst.build_alias_model(mdl,compilation)
+        full_gateset = _cnst.build_explicit_alias_model(mdl,compilation)
         R_fullgroup = R_matrix(full_gateset,group)
         extended_E = group_dim*_np.dot(extended_E, R_fullgroup)
         if group_twirled is True:        
@@ -710,8 +710,8 @@ def L_matrix_ASPs(mdl, target_model, m_max, m_min=0, m_step=1, success_outcomela
     identity_vec = _tls.vec(_np.identity(d**2,float))
     
     if compilation is not None:
-        mdl_group = _cnst.build_alias_model(mdl_go,compilation)
-        mdl_target_group = _cnst.build_alias_model(target_model,compilation)
+        mdl_group = _cnst.build_explicit_alias_model(mdl_go,compilation)
+        mdl_target_group = _cnst.build_explicit_alias_model(target_model,compilation)
         delta = gate_dependence_of_errormaps(mdl_group,mdl_target_group,norm=norm)
         emaps = errormaps(mdl_group,mdl_target_group)
         E_eff = _np.dot(mdl_go.povms['Mdefault'][success_effectLabel].T,emaps.operations['Gavg'])

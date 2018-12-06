@@ -31,7 +31,7 @@ class TestGateSetMethods(GateSetTestCase):
 
     def test_mem_estimates(self):
 
-        model = pygsti.construction.build_model(
+        model = pygsti.construction.build_explicit_model(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
 

@@ -40,7 +40,7 @@ germs = _strc.circuit_list( [('Gx',),
 germs_lite = germs[0:4]
 
 #Construct a target model:  X(pi/4), Z(pi/2)
-target_model = _setc.build_model( [2], [('Q0',)],['Gx','Gz'],
+target_model = _setc.build_explicit_model( [2], [('Q0',)],['Gx','Gz'],
                                  ["X(pi/4,Q0)", "Z(pi/2,Q0)"])
 
 _gscache = { ("full","auto"): target_model }

@@ -27,7 +27,7 @@ germs = _strc.circuit_list( [('Gii',), ('Gix',), ('Giy',), ('Gix', 'Giy'),
                                   ('Gix', 'Gix', 'Giy', 'Gix', 'Giy', 'Giy')] )
 
 #Construct a target model: Identity, X(pi/2), Y(pi/2)
-target_model = _setc.build_model([2],[('Q0',)], ['Gii','Gix','Giy'],
+target_model = _setc.build_explicit_model([2],[('Q0',)], ['Gii','Gix','Giy'],
                                 [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                 effectLabels=['00','01','10','11'], effectExpressions=["0","1","2","3"])
 

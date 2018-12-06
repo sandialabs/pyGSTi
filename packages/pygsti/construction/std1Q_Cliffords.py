@@ -36,7 +36,7 @@ expressions = ["I(Q0)","X(pi/2,Q0):Y(pi/2,Q0)","Y(-pi/2,Q0):X(-pi/2,Q0)",
                    "X(pi,Q0):Y(-pi/2,Q0)","Y(pi,Q0):X(pi/2,Q0)","X(pi/2,Q0):Y(-pi/2,Q0):X(pi/2,Q0)",
                    "Y(pi/2,Q0)","Y(pi,Q0):X(-pi/2,Q0)","X(-pi/2,Q0):Y(pi/2,Q0):X(pi/2,Q0)"]
 
-target_model = _setc.build_model([2],[('Q0',)], gates, expressions)
+target_model = _setc.build_explicit_model([2],[('Q0',)], gates, expressions)
 
 clifford_compilation = _OrderedDict()
 clifford_compilation["Gc0"] = ["Gc0",]

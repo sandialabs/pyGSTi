@@ -824,7 +824,7 @@ def build_operation(stateSpaceDims, stateSpaceLabels, opExpr, basis="gm", parame
     return basis_build_operation(stateSpaceLabels, opExpr, _Basis(basis, stateSpaceDims), parameterization, unitaryEmbedding)
 
 
-def basis_build_model(stateSpaceLabels, basis,
+def basis_build_explicit_model(stateSpaceLabels, basis,
                         opLabels, opExpressions,
                         prepLabels=('rho0',), prepExpressions=('0',),
                         effectLabels='standard', effectExpressions='labels',
@@ -946,7 +946,7 @@ def basis_build_model(stateSpaceLabels, basis,
 
     return ret
 
-def build_model(stateSpaceDims, stateSpaceLabels,
+def build_explicit_model(stateSpaceDims, stateSpaceLabels,
                   opLabels, opExpressions,
                   prepLabels=('rho0',), prepExpressions=('0',),
                   effectLabels='standard', effectExpressions='labels',
@@ -1042,14 +1042,14 @@ def build_model(stateSpaceDims, stateSpaceLabels,
             basis = "qt"
         else: basis = "gm"
 
-    return basis_build_model(stateSpaceLabels,
+    return basis_build_explicit_model(stateSpaceLabels,
                   _Basis(basis, stateSpaceDims),
                   opLabels, opExpressions,
                   prepLabels, prepExpressions,
                   effectLabels, effectExpressions,
                   povmLabels, parameterization=parameterization)
 
-def build_alias_model(mdl_primitives, alias_dict):
+def build_explicit_alias_model(mdl_primitives, alias_dict):
     """
     Creates a new model by composing the gates of an existing `Model`,
     `mdl_primitives`, according to a dictionary of `Circuit`s, `alias_dict`.

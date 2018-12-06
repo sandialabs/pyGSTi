@@ -179,7 +179,7 @@ class EvalTreeTestCase(BaseTestCase):
 
     def test_mapevaltree(self):
         # An additional specific test added from debugging mapevaltree splitting
-        mgateset = pygsti.construction.build_model(
+        mgateset = pygsti.construction.build_explicit_model(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
         mgateset._calcClass = MapForwardSimulator

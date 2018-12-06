@@ -14,7 +14,7 @@ from . import modelconstruction as _setc
 from . import stdtarget as _stdtarget
 
 
-target_model = _setc.build_model([2],[('Q0',)], ['Gz','Gn'],
+target_model = _setc.build_explicit_model([2],[('Q0',)], ['Gz','Gn'],
                                 [ "Z(pi/2,Q0)", "N(pi/2, sqrt(3)/2, 0, -0.5, Q0)"])
 
 

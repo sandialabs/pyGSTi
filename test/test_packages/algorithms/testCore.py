@@ -92,7 +92,7 @@ class TestCoreMethods(AlgorithmsBase):
 
         #Deprecated / removed:
         #LGST on an "old-style" model
-        #old_style_gateset = pygsti.construction.build_model(
+        #old_style_gateset = pygsti.construction.build_explicit_model(
         #    [2], [('Q0',)],['Gi','Gx','Gy'],
         #    [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
         #    prepLabels=["rho0"], prepExpressions=["0"],

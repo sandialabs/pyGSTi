@@ -143,7 +143,7 @@ Gx^4 20 80 0.2 100
         self.assertAlmostEqual(mdl.frobeniusdist(std.target_model), 0)
 
         #OLD (remainder model type)
-        #gateset_m1m1 = pygsti.construction.build_model([2], [('Q0',)],['Gi','Gx','Gy'],
+        #gateset_m1m1 = pygsti.construction.build_explicit_model([2], [('Q0',)],['Gi','Gx','Gy'],
         #                                                 [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
         #                                                 prepLabels=['rho0'], prepExpressions=["0"],
         #                                                 effectLabels=['E0'], effectExpressions=["0"],

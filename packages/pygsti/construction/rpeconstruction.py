@@ -52,14 +52,14 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
     """
 
     if withId:
-        outputModel = _setc.build_model(
+        outputModel = _setc.build_explicit_model(
             [2], [('Q0',)],['Gi','Gx','Gz'],
             [ "I(Q0)", "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=["0"],
             effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
             spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
     else:
-        outputModel = _setc.build_model(
+        outputModel = _setc.build_explicit_model(
             [2], [('Q0',)],['Gx','Gz'],
             [ "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=["0"],
@@ -67,7 +67,7 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
             spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
     if Yrot != 0:
-        modelAux1 = _setc.build_model(
+        modelAux1 = _setc.build_explicit_model(
             [2], [('Q0',)],['Gi','Gy','Gz'],
             [ "I(Q0)", "Y(%s,Q0)" % Yrot, "Z(pi/2,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
@@ -352,14 +352,14 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
     #percentAlphaError = 100*_np.abs((_np.pi/2-alphaTrue)/alphaTrue)
     #percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilonTrue)/epsilonTrue)
 
-    simModel = _setc.build_model( [2], [('Q0',)],['Gi','Gx','Gz'],
+    simModel = _setc.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gz'],
                                       [ "I(Q0)", "X("+str(epsilonTrue)+",Q0)", "Z("+str(alphaTrue)+",Q0)"],
                                       prepLabels=["rho0"], prepExpressions=["0"],
                                       effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
                                       spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
 
-    modelAux1 = _setc.build_model( [2], [('Q0',)],['Gi','Gy','Gz'],
+    modelAux1 = _setc.build_explicit_model( [2], [('Q0',)],['Gi','Gy','Gz'],
                                        [ "I(Q0)", "Y("+str(Yrot)+",Q0)", "Z(pi/2,Q0)"],
                                        prepLabels=["rho0"], prepExpressions=["0"],
                                        effectLabels=["E0","Ec"], effectExpressions=["0","complement"],

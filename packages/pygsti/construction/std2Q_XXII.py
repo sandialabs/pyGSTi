@@ -154,7 +154,7 @@ germs_lite = _strc.circuit_list(
     ])
   
 #Construct the target model
-target_model = _setc.build_model(
+target_model = _setc.build_explicit_model(
     [4], [('Q0','Q1')],['Gii','Gix','Giy','Gxi','Gyi','Gxx'],
     [ "I(Q0):I(Q1)", "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)",
       "Y(pi/2,Q0):I(Q1)", "X(pi/2,Q0):X(pi/2,Q1)" ],

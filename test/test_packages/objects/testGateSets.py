@@ -32,16 +32,16 @@ class GateSetTestCase(BaseTestCase):
         #Set Model objects to "strict" mode for testing
         pygsti.objects.ExplicitOpModel._strict = False
 
-        self.model = pygsti.construction.build_model(
+        self.model = pygsti.construction.build_explicit_model(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
         
-        self.tp_gateset = pygsti.construction.build_model(
+        self.tp_gateset = pygsti.construction.build_explicit_model(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             parameterization="TP")
 
-        self.static_gateset = pygsti.construction.build_model(
+        self.static_gateset = pygsti.construction.build_explicit_model(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             parameterization="static")
@@ -1022,7 +1022,7 @@ class TestGateSetMethods(GateSetTestCase):
         mdl_few.preps['rho0'] = self.model.preps['rho0'].copy()
         self.assertEqual(mdl_few.num_params(),4)
 
-        #mdl_big = pygsti.construction.build_model(
+        #mdl_big = pygsti.construction.build_explicit_model(
         #    [8], [('Q0','Q3','Q2')],['Gi'], [ "I(Q0)"])
         #mdl_big._calcClass = MapForwardSimulator
 

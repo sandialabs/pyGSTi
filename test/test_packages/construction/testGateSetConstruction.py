@@ -302,15 +302,15 @@ class TestGateSetConstructionMethods(BaseTestCase):
         self.assertArraysAlmostEqual(vec, vec_ans)
 
     def test_build_basis_gateset(self):
-        modelA = pygsti.construction.build_model([2], [('Q0',)], ['Gi','Gx','Gy'],
+        modelA = pygsti.construction.build_explicit_model([2], [('Q0',)], ['Gi','Gx','Gy'],
                                                      [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
-        modelB = pygsti.construction.basis_build_model([('Q0',)], pygsti.Basis('gm', 2),
+        modelB = pygsti.construction.basis_build_explicit_model([('Q0',)], pygsti.Basis('gm', 2),
                                                      ['Gi','Gx','Gy'], [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
         self.assertAlmostEqual(modelA.frobeniusdist(modelB), 0)
 
 
     def test_iter_gatesets(self):
-        model = pygsti.construction.build_model( [2], [('Q0',)],['Gi','Gx','Gy'],
+        model = pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                      [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
         model2 = pygsti.objects.ExplicitOpModel()
         for label,gate in model.operations.items():
@@ -394,21 +394,21 @@ class TestGateSetConstructionMethods(BaseTestCase):
         with self.assertRaises(ValueError):
             gateset_povm_first['Mdefault'] =  pygsti.obj.UnconstrainedPOVM( [('0',np.array([1,2,3],'d'))] ) #wrong dimension
 
-        model2 = pygsti.construction.build_model( [2], [('Q0',)],['Gi','Gx','Gy'],
+        model2 = pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                       [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
         
-        gateset2b = pygsti.construction.build_model( [2], [('Q0',)],['Gi','Gx','Gy'],
+        gateset2b = pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                        [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                                        effectLabels=['1','0'] )
 
-        gateset2c = pygsti.construction.build_model( [1,1], [('L0',),('L1',)],['Gi','Gd'],
+        gateset2c = pygsti.construction.build_explicit_model( [1,1], [('L0',),('L1',)],['Gi','Gd'],
                                                        [ "I(L0)","D(L1)"], parameterization="linear",
                                                        prepLabels=[], effectLabels=[])
 
         #constructions that result in non-"pp" automatic basis selection: (CANT DO THIS YET - NO Labels for odd-dim blocks...
-        #gateset2d = pygsti.construction.build_model( [3], [('L0',),('L1',),('L2',)],['Gi'],
+        #gateset2d = pygsti.construction.build_explicit_model( [3], [('L0',),('L1',),('L2',)],['Gi'],
         #                                               [ "I(L0)"], prepLabels=[], effectLabels=[]) #qutrit
-        #gateset2e = pygsti.construction.build_model( [5], [('L0',),('L1',),('L2',),('L3',),('L4',)],['Gi'],
+        #gateset2e = pygsti.construction.build_explicit_model( [5], [('L0',),('L1',),('L2',),('L3',),('L4',)],['Gi'],
         #                                               [ "I(L0)"], prepLabels=[], effectLabels=[]) #gell-mann
 
         
@@ -463,36 +463,36 @@ GAUGEGROUP: Full
             output.write(gateset4_txt)
         gateset4 = pygsti.io.load_model(temp_files + "/Test_Gateset.txt")
 
-        std_gateset = pygsti.construction.build_model( [2], [('Q0',)],['Gi','Gx','Gy'],
+        std_gateset = pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                          [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
                                                          basis="std")
 
-        pp_gateset = pygsti.construction.build_model( [2], [('Q0',)],['Gi','Gx','Gy'],
+        pp_gateset = pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                         [ "I(Q0)","X(pi/8,Q0)", "Z(pi/8,Q0)"],
                                                         basis="pp")
 
         with self.assertRaises(ValueError):
-            pygsti.construction.build_model( [2], [('A0',)],['Gi','Gx','Gy'],
+            pygsti.construction.build_explicit_model( [2], [('A0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
                                                # invalid state specifier (A0)
 
         with self.assertRaises(AssertionError):
-            pygsti.construction.build_model( [4], [('Q0',)],['Gi','Gx','Gy'],
+            pygsti.construction.build_explicit_model( [4], [('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
                                                # state space dimension mismatch (4 != 2)
 
         with self.assertRaises(NotImplementedError):
-            pygsti.construction.build_model( [2], [('Q0',)],['Gi','Gx','Gy'],
+            pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
                                                basis="FooBar") #Bad basis
 
         with self.assertRaises(ValueError):
-            pygsti.construction.build_model( [2], [('Q0',)],['Gi','Gx','Gy'],
+            pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
                                                prepLabels=['rho0'], prepExpressions=["FooBar"],)
                                                #Bad rhoExpression
         with self.assertRaises(ValueError):
-            pygsti.construction.build_model( [2], [('Q0',)],['Gi','Gx','Gy'],
+            pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
                                                effectLabels=['0','1'], effectExpressions=["FooBar","1"])
                                                #Bad EExpression
@@ -504,10 +504,10 @@ GAUGEGROUP: Full
 
     def test_gateset_tools(self):
 
-        model = pygsti.construction.build_model( [2], [('Q0',)],['Gi','Gx','Gy'],
+        model = pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                      [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
-        gateset_2q = pygsti.construction.build_model(
+        gateset_2q = pygsti.construction.build_explicit_model(
             [4], [('Q0','Q1')],['GIX','GIY','GXI','GYI','GCNOT'],
             [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ])
             #prepLabels=['rho0'], prepExpressions=["0"],

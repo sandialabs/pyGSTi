@@ -14,7 +14,7 @@ class TestTwoQubitMethods(BaseTestCase):
 
     def runTwoQubit(self):
         #The two-qubit model
-        target_model = pygsti.construction.build_model(
+        target_model = pygsti.construction.build_explicit_model(
             [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'],
             [ "X(pi/2,Q1)", "Y(pi/2,Q1)", "X(pi/2,Q0)", "Y(pi/2,Q0)", "CX(pi,Q0,Q1)" ],
             ["rho0"], ["0"], ["E0","E1","E2","Ec"], ["0","1","2","C"],

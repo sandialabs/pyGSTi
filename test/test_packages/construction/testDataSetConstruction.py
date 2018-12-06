@@ -9,7 +9,7 @@ class DataSetConstructionTestCase(BaseTestCase):
 
     def setUp(self):
         super(DataSetConstructionTestCase, self).setUp()
-        self.model = pc.build_model( [2], [('Q0',)],
+        self.model = pc.build_explicit_model( [2], [('Q0',)],
                                          ['Gi','Gx','Gy'], [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
         self.depolGateset = self.model.depolarize(op_noise=0.1)
 

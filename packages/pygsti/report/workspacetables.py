@@ -564,8 +564,8 @@ class GatesetVsTargetTable(WorkspaceTable):
         table.addrow(("Predicted primitive RB number", pRBnum), (None, 'Normal') )
 
         if clifford_compilation:
-            clifford_model = _cnst.build_alias_model(model,clifford_compilation)
-            clifford_targetModel = _cnst.build_alias_model(targetModel,clifford_compilation)
+            clifford_model = _cnst.build_explicit_alias_model(model,clifford_compilation)
+            clifford_targetModel = _cnst.build_explicit_alias_model(targetModel,clifford_compilation)
 
             ##For clifford versions we don't have a confidence region - so no error bars
             #AGsI = _ev(_reportables.Average_gateset_infidelity(clifford_model, clifford_targetModel))
