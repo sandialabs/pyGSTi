@@ -1,3 +1,9 @@
+from __future__ import print_function, unicode_literals
+
+import logging
+mpl_logger = logging.getLogger('matplotlib')
+mpl_logger.setLevel(logging.WARNING)
+
 import unittest
 import os,sys
 import numpy as np
@@ -300,6 +306,27 @@ class TestCodecs(CodecsTestCase):
         pygsti.io.jsoncodec.tobin(b"Hi")
     
 
+    #Debugging, because there was some weird python3 vs 2 json incompatibility with string labels
+    # - turned out to be that the unit test files needed to import unicode_literals from __future__
+    #def test_labels(self):
+    #    strLabel = pygsti.obj.Label("Gi")
+    #    #strLabel = ("Gi",)
+    #    from pygsti.construction import std1Q_XYI as std
+    #
+    #    s = json.dumps(strLabel)
+    #    print("s = ",str(s))
+    #    x = msgpack.loads(s)
+    #    print("x = ",x)
+    #
+    #    print("-----------------------------")
+    #    
+    #    s = json.dumps(std.prepStrs[2])
+    #    print("s = ",s)
+    #    x = json.loads(s)
+    #    print("x = ",x)
+    #    assert(False),"STOP"
+        
+        
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
