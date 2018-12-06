@@ -3,7 +3,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest
 import numpy as np
 import pickle
-import time
+import time, os
 
 import pygsti
 from pygsti.extras import idletomography as idt
@@ -261,15 +261,19 @@ class IDTTestCase(BaseTestCase):
         maxLengths = [1,2,4]
         
         ## ----- Generate n-qubit operation sequences -----
-        c = {} #Uncomment to re-generate cache SAVE
-        #c = pickle.load(open(compare_files+"/idt_nQsequenceCache%s.pkl" % self.versionsuffix,'rb'))
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+            c = {} #Uncomment to re-generate cache SAVE
+        else:
+            c = pickle.load(open(compare_files+"/idt_nQsequenceCache%s.pkl" % self.versionsuffix,'rb'))
         
         t = time.time()
         gss = pygsti.construction.create_nqubit_sequences(nQubits, maxLengths, 'line', [(0,1)], maxIdleWeight=2,
                                                           idleOnly=False, paramroot="H+S", cache=c, verbosity=3)
         gss_strs = gss.allstrs
         print("%.1fs" % (time.time()-t))
-        pickle.dump(c, open(compare_files+"/idt_nQsequenceCache%s.pkl" % self.versionsuffix,'wb')) #Uncomment to re-generate cache
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+            pickle.dump(c, open(compare_files+"/idt_nQsequenceCache%s.pkl" % self.versionsuffix,'wb'))
+              #Uncomment to re-generate cache
 
         # To run idle tomography, we need "pauli fiducial pairs", so
         #  get fiducial pairs for Gi germ from gss and convert 

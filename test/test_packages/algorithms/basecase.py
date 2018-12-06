@@ -41,8 +41,9 @@ class AlgorithmsBase(BaseTestCase):
         self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
 
         ## RUN BELOW LINES to create LGST analysis dataset (SAVE)
-        ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
-           nSamples=10000,sampleError='binomial', seed=100)
-        ds_lgst.save(compare_files + "/analysis_lgst.dataset%s" % self.versionsuffix)
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+            ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
+                                                             nSamples=10000,sampleError='binomial', seed=100)
+            ds_lgst.save(compare_files + "/analysis_lgst.dataset%s" % self.versionsuffix)
         
         self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis_lgst.dataset%s" % self.versionsuffix)

@@ -1,4 +1,4 @@
-import unittest
+import unittest, os
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 from ..testutils import compare_files, temp_files
@@ -64,8 +64,9 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
         vs = self.versionsuffix
         cmpFilenm = compare_files + "/IFPR_fidPairs_dict%s.pkl" % vs
         #Uncomment to SAVE reference fidPairs dictionary
-        with open(cmpFilenm,"wb") as pklfile:
-            pickle.dump(fidPairs, pklfile)
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+            with open(cmpFilenm,"wb") as pklfile:
+                pickle.dump(fidPairs, pklfile)
 
         with open(cmpFilenm,"rb") as pklfile:
             fidPairs_cmp = pickle.load(pklfile)

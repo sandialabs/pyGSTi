@@ -57,7 +57,8 @@ class RepLibTestCase(BaseTestCase):
         dprobs = mdl.bulk_dprobs([('Gx',),('Gx','Gx'),('Gx','Gx','Gy')])
 
         #RUN TO SAVE outputs
-        pickle.dump(dprobs, open(compare_files + "/repLib_dprobs%s.pkl" % self.versionsuffix,'wb'))
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+            pickle.dump(dprobs, open(compare_files + "/repLib_dprobs%s.pkl" % self.versionsuffix,'wb'))
 
         compare = pickle.load(open(compare_files + "/repLib_dprobs%s.pkl" % self.versionsuffix,'rb'))
         for opstr in dprobs:
