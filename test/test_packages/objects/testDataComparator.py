@@ -76,7 +76,7 @@ class DataComparatorTestCase(BaseTestCase):
         comparator_1_2.get_maximum_SSTVD()
         comparator_1_2.get_pvalue(mdl)
         comparator_1_2.get_pvalue_pseudothreshold()
-        comparator_1_2.get_worst_gatestrings(10)
+        comparator_1_2.get_worst_circuits(10)
 
         #Also test "rectification" (re-scaling to make consistent) here:
         #Currently not a function that exists/works.

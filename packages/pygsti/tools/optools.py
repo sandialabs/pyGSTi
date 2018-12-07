@@ -2486,9 +2486,9 @@ def rotation_gate_mx(r, mxBasis="gm"):
 
 
 
-def project_gateset(model, targetModel,
-                    projectiontypes=('H','S','H+S','LND'),
-                    genType="logG-logT"):
+def project_model(model, targetModel,
+                  projectiontypes=('H','S','H+S','LND'),
+                  genType="logG-logT"):
     """
     Construct one or more new models by projecting the error generator of
     `model` onto some sub-space then reconstructing.
@@ -2519,12 +2519,12 @@ def project_gateset(model, targetModel,
 
     Returns
     -------
-    projected_gatesets : list of Models
+    projected_models : list of Models
        Elements are projected versions of `model` corresponding to
        the elements of `projectiontypes`.
 
     Nps : list of parameter counts
-       Integer parameter counts for each model in `projected_gatesets`.
+       Integer parameter counts for each model in `projected_models`.
        Useful for computing the expected log-likelihood or chi2.
     """
     

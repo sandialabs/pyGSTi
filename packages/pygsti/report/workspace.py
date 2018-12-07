@@ -280,7 +280,7 @@ class Workspace(object):
         
         #Tables
           # LinearOperator sequences
-        self.GatestringTable = makefactory(_wt.GatestringTable)
+        self.CircuitTable = makefactory(_wt.CircuitTable)
         
           # Spam & Gates
         self.SpamTable = makefactory(_wt.SpamTable)
@@ -290,7 +290,7 @@ class Workspace(object):
 
           # Spam & Gates vs. a target
         self.SpamVsTargetTable = makefactory(_wt.SpamVsTargetTable)
-        self.GatesetVsTargetTable = makefactory(_wt.GatesetVsTargetTable)
+        self.ModelVsTargetTable = makefactory(_wt.ModelVsTargetTable)
         self.GatesVsTargetTable = makefactory(_wt.GatesVsTargetTable)
         self.GatesSingleMetricTable = makefactory(_wt.GatesSingleMetricTable)
         self.GateEigenvalueTable = makefactory(_wt.GateEigenvalueTable)

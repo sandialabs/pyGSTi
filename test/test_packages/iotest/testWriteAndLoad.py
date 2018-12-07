@@ -115,7 +115,7 @@ Gx^4 20 80 0.2 100
 
 
 
-    def test_gatestring_list_file(self):
+    def test_circuit_list_file(self):
         strList = pygsti.construction.circuit_list( [(), ('Gx',), ('Gx','Gy') ] )
         pygsti.io.write_circuit_list(temp_files + "/gatestringlist_loadwrite.txt", strList, "My Header")
         strList2 = pygsti.io.load_circuit_list(temp_files + "/gatestringlist_loadwrite.txt")
@@ -227,12 +227,12 @@ GAUGEGROUP: Full
 
 
 
-    def test_gatestring_dict_file(self):
+    def test_circuit_dict_file(self):
         file_txt = "# LinearOperator string dictionary\nF1 GxGx\nF2 GxGy"  #TODO: make a Writers function for operation sequence dicts
         with open(temp_files + "/gatestringdict_loadwrite.txt","w") as output:
             output.write(file_txt)
 
-        d = pygsti.io.load_gatestring_dict(temp_files + "/gatestringdict_loadwrite.txt")
+        d = pygsti.io.load_circuit_dict(temp_files + "/gatestringdict_loadwrite.txt")
         self.assertEqual( tuple(d['F1']), ('Gx','Gx'))
 
 

@@ -20,7 +20,7 @@ from .. import algorithms as _alg
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Label as _Lbl
 from ..objects.reportableqty import ReportableQty as _ReportableQty
-from ..objects import gatesetfunction as _gsf
+from ..objects import modelfunction as _modf
 
 try:
     import sys as _sys
@@ -105,13 +105,13 @@ def spam_dotprods(rhoVecs, povms):
                 ret[i,j] = _np.vdot(EVec.todense(), rhoVec.todense()); j += 1
                   # todense() gives a 1D array, so no need to transpose EVec
     return ret
-Spam_dotprods = _gsf.spamfn_factory(spam_dotprods) #init args == (model)
+Spam_dotprods = _modf.spamfn_factory(spam_dotprods) #init args == (model)
 
 
 def choi_matrix(gate, mxBasis):
     """Choi matrix"""
     return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
-Choi_matrix = _gsf.opfn_factory(choi_matrix) # init args == (model, opLabel)
+Choi_matrix = _modf.opfn_factory(choi_matrix) # init args == (model, opLabel)
 
 
 def choi_evals(gate, mxBasis):
@@ -119,22 +119,22 @@ def choi_evals(gate, mxBasis):
     choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
     choi_eigvals = _np.linalg.eigvals(choi)
     return _np.array(sorted(choi_eigvals))
-Choi_evals = _gsf.opfn_factory(choi_evals) # init args == (model, opLabel)
+Choi_evals = _modf.opfn_factory(choi_evals) # init args == (model, opLabel)
 
 
 def choi_trace(gate, mxBasis):
     """Trace of the Choi matrix"""
     choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
     return _np.trace(choi)
-Choi_trace = _gsf.opfn_factory(choi_trace) # init args == (model, opLabel)
+Choi_trace = _modf.opfn_factory(choi_trace) # init args == (model, opLabel)
 
 
 
-class Gate_eigenvalues(_gsf.ModelFunction):
+class Gate_eigenvalues(_modf.ModelFunction):
     """LinearOperator eigenvalues"""
     def __init__(self, model, oplabel):
         self.oplabel = oplabel
-        _gsf.ModelFunction.__init__(self, model, ["gate:" + str(oplabel)])
+        _modf.ModelFunction.__init__(self, model, ["gate:" + str(oplabel)])
             
     def evaluate(self, model):
         """Evaluate at `model`"""
@@ -165,18 +165,18 @@ class Gate_eigenvalues(_gsf.ModelFunction):
 #def gate_eigenvalues(gate, mxBasis):
 #    return _np.array(sorted(_np.linalg.eigvals(gate),
 #                            key=lambda ev: abs(ev), reverse=True))
-#Gate_eigenvalues = _gsf.opfn_factory(gate_eigenvalues)
+#Gate_eigenvalues = _modf.opfn_factory(gate_eigenvalues)
 ## init args == (model, opLabel)
 
 
 #Example....
-#class Gatestring_eigenvalues(_gsf.ModelFunction):
+#class Circuit_eigenvalues(_modf.ModelFunction):
 #    def __init__(self, modelA, modelB, circuit):
 #        self.circuit = circuit
 #        self.B = modelB.product(circuit)
 #        self.evB = _np.linalg.eigvals(B)
 #        self.circuit = circuit
-#        _gsf.ModelFunction.__init__(self, modelA, ["all"])
+#        _modf.ModelFunction.__init__(self, modelA, ["all"])
 #            
 #    def evaluate(self, model):
 #        Mx = model.product(self.circuit)
@@ -198,11 +198,11 @@ class Gate_eigenvalues(_gsf.ModelFunction):
 #        return _np.max( [ abs(evA[i]-self.evB[j]) for i,j in self.pairs ] )
 
 
-class Gatestring_eigenvalues(_gsf.ModelFunction):
+class Circuit_eigenvalues(_modf.ModelFunction):
     """LinearOperator sequence eigenvalues"""
     def __init__(self, model, circuit):
         self.circuit = circuit
-        _gsf.ModelFunction.__init__(self, model, ["all"])
+        _modf.ModelFunction.__init__(self, model, ["all"])
             
     def evaluate(self, model):
         """Evaluate at `model`"""
@@ -232,69 +232,69 @@ class Gatestring_eigenvalues(_gsf.ModelFunction):
     # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf
 
 
-#def gatestring_eigenvalues(model, circuit):
+#def circuit_eigenvalues(model, circuit):
 #    return _np.array(sorted(_np.linalg.eigvals(model.product(circuit)),
 #                            key=lambda ev: abs(ev), reverse=True))
-#Gatestring_eigenvalues = _gsf.modelfn_factory(gatestring_eigenvalues)
+#Circuit_eigenvalues = _modf.modelfn_factory(circuit_eigenvalues)
 ## init args == (model, circuit)
 
   
-def rel_gatestring_eigenvalues(modelA, modelB, circuit):
+def rel_circuit_eigenvalues(modelA, modelB, circuit):
     """Eigenvalues of dot(productB(circuit)^-1, productA(circuit))"""
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     rel_op = _np.dot(_np.linalg.inv(B), A) # "relative gate" == target^{-1} * gate
     return _np.linalg.eigvals(rel_op)
-Rel_gatestring_eigenvalues = _gsf.modelfn_factory(rel_gatestring_eigenvalues)
+Rel_circuit_eigenvalues = _modf.modelfn_factory(rel_circuit_eigenvalues)
 # init args == (modelA, modelB, circuit) 
 
 
-def gatestring_fro_diff(modelA, modelB, circuit):
+def circuit_fro_diff(modelA, modelB, circuit):
     """ Frobenius distance btwn productA(circuit) and productB(circuit)"""
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     return fro_diff(A,B,modelB.basis)
-Gatestring_fro_diff = _gsf.modelfn_factory(gatestring_fro_diff)
+Circuit_fro_diff = _modf.modelfn_factory(circuit_fro_diff)
 # init args == (modelA, modelB, circuit)
 
-def gatestring_entanglement_infidelity(modelA, modelB, circuit):
+def circuit_entanglement_infidelity(modelA, modelB, circuit):
     """ Entanglement infidelity btwn productA(circuit)
         and productB(circuit)"""
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     return entanglement_infidelity(A,B,modelB.basis)
-Gatestring_entanglement_infidelity = _gsf.modelfn_factory(gatestring_entanglement_infidelity)
+Circuit_entanglement_infidelity = _modf.modelfn_factory(circuit_entanglement_infidelity)
 # init args == (modelA, modelB, circuit)
 
-def gatestring_avg_gate_infidelity(modelA, modelB, circuit):
+def circuit_avg_gate_infidelity(modelA, modelB, circuit):
     """ Average gate infidelity between productA(circuit) 
         and productB(circuit)"""
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     return avg_gate_infidelity(A,B,modelB.basis)
-Gatestring_avg_gate_infidelity = _gsf.modelfn_factory(gatestring_avg_gate_infidelity)
+Circuit_avg_gate_infidelity = _modf.modelfn_factory(circuit_avg_gate_infidelity)
   # init args == (modelA, modelB, circuit)
 
 
-def gatestring_jt_diff(modelA, modelB, circuit):
+def circuit_jt_diff(modelA, modelB, circuit):
     """ Jamiolkowski trace distance between productA(circuit) 
         and productB(circuit)"""
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     return jt_diff(A, B, modelB.basis)
-Gatestring_jt_diff = _gsf.modelfn_factory(gatestring_jt_diff)
+Circuit_jt_diff = _modf.modelfn_factory(circuit_jt_diff)
 # init args == (modelA, modelB, circuit)
 
 if _cvxpy:
 
-    class Gatestring_half_diamond_norm(_gsf.ModelFunction):
+    class Circuit_half_diamond_norm(_modf.ModelFunction):
         """ 1/2 diamond norm of difference between productA(circuit)
             and productB(circuit)"""
         def __init__(self, modelA, modelB, circuit):
             self.circuit = circuit
             self.B = modelB.product(circuit)
             self.d = int(round(_np.sqrt(modelA.dim)))
-            _gsf.ModelFunction.__init__(self, modelA, ["all"])
+            _modf.ModelFunction.__init__(self, modelA, ["all"])
                 
         def evaluate(self, model):
             """Evaluate this function at `model`"""
@@ -313,94 +313,94 @@ if _cvxpy:
             Jt = (JBstd-JAstd).T
             return 0.5*_np.trace( Jt.real * self.W.real + Jt.imag * self.W.imag)
 
-    #def gatestring_half_diamond_norm(modelA, modelB, circuit):
+    #def circuit_half_diamond_norm(modelA, modelB, circuit):
     #    A = modelA.product(circuit) # "gate"
     #    B = modelB.product(circuit) # "target gate"
     #    return half_diamond_norm(A, B, modelB.basis)
-    #Gatestring_half_diamond_norm = _gsf.modelfn_factory(gatestring_half_diamond_norm)
+    #Circuit_half_diamond_norm = _modf.modelfn_factory(circuit_half_diamond_norm)
     #  # init args == (modelA, modelB, circuit)
 
 else:
-    gatestring_half_diamond_norm = None
-    Gatestring_half_diamond_norm = _nullFn
+    circuit_half_diamond_norm = None
+    Circuit_half_diamond_norm = _nullFn
 
 
-def gatestring_nonunitary_entanglement_infidelity(modelA, modelB, circuit):
+def circuit_nonunitary_entanglement_infidelity(modelA, modelB, circuit):
     """ Nonunitary entanglement infidelity between productA(circuit) 
         and productB(circuit)"""    
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     return nonunitary_entanglement_infidelity(A,B,modelB.basis)
-Gatestring_nonunitary_entanglement_infidelity = _gsf.modelfn_factory(gatestring_nonunitary_entanglement_infidelity)
+Circuit_nonunitary_entanglement_infidelity = _modf.modelfn_factory(circuit_nonunitary_entanglement_infidelity)
   # init args == (modelA, modelB, circuit)
 
 
-def gatestring_nonunitary_avg_gate_infidelity(modelA, modelB, circuit):
+def circuit_nonunitary_avg_gate_infidelity(modelA, modelB, circuit):
     """ Nonunitary average gate infidelity between productA(circuit) 
         and productB(circuit)"""    
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     return nonunitary_avg_gate_infidelity(A,B,modelB.basis)
-Gatestring_nonunitary_avg_gate_infidelity = _gsf.modelfn_factory(gatestring_nonunitary_avg_gate_infidelity)
+Circuit_nonunitary_avg_gate_infidelity = _modf.modelfn_factory(circuit_nonunitary_avg_gate_infidelity)
   # init args == (modelA, modelB, circuit)
 
 
-def gatestring_eigenvalue_entanglement_infidelity(modelA, modelB, circuit):
+def circuit_eigenvalue_entanglement_infidelity(modelA, modelB, circuit):
     """ Eigenvalue entanglement infidelity between productA(circuit) 
         and productB(circuit)"""    
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     return eigenvalue_entanglement_infidelity(A,B,modelB.basis)
-Gatestring_eigenvalue_entanglement_infidelity = _gsf.modelfn_factory(gatestring_eigenvalue_entanglement_infidelity)
+Circuit_eigenvalue_entanglement_infidelity = _modf.modelfn_factory(circuit_eigenvalue_entanglement_infidelity)
   # init args == (modelA, modelB, circuit)
 
 
-def gatestring_eigenvalue_avg_gate_infidelity(modelA, modelB, circuit):
+def circuit_eigenvalue_avg_gate_infidelity(modelA, modelB, circuit):
     """ Eigenvalue average gate infidelity between productA(circuit) 
         and productB(circuit)"""    
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     return eigenvalue_avg_gate_infidelity(A,B,modelB.basis)
-Gatestring_eigenvalue_avg_gate_infidelity = _gsf.modelfn_factory(gatestring_eigenvalue_avg_gate_infidelity)
+Circuit_eigenvalue_avg_gate_infidelity = _modf.modelfn_factory(circuit_eigenvalue_avg_gate_infidelity)
   # init args == (modelA, modelB, circuit)
 
-def gatestring_eigenvalue_nonunitary_entanglement_infidelity(modelA, modelB, circuit):
+def circuit_eigenvalue_nonunitary_entanglement_infidelity(modelA, modelB, circuit):
     """ Eigenvalue nonunitary entanglement infidelity between 
         productA(circuit) and productB(circuit)"""    
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     return eigenvalue_nonunitary_entanglement_infidelity(A,B,modelB.basis)
-Gatestring_eigenvalue_nonunitary_entanglement_infidelity = _gsf.modelfn_factory(gatestring_eigenvalue_nonunitary_entanglement_infidelity)
+Circuit_eigenvalue_nonunitary_entanglement_infidelity = _modf.modelfn_factory(circuit_eigenvalue_nonunitary_entanglement_infidelity)
   # init args == (modelA, modelB, circuit)
 
 
-def gatestring_eigenvalue_nonunitary_avg_gate_infidelity(modelA, modelB, circuit):
+def circuit_eigenvalue_nonunitary_avg_gate_infidelity(modelA, modelB, circuit):
     """ Eigenvalue nonunitary average gate infidelity between 
         productA(circuit) and productB(circuit)"""    
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     return eigenvalue_nonunitary_avg_gate_infidelity(A,B,modelB.basis)
-Gatestring_eigenvalue_nonunitary_avg_gate_infidelity = _gsf.modelfn_factory(gatestring_eigenvalue_nonunitary_avg_gate_infidelity)
+Circuit_eigenvalue_nonunitary_avg_gate_infidelity = _modf.modelfn_factory(circuit_eigenvalue_nonunitary_avg_gate_infidelity)
   # init args == (modelA, modelB, circuit)
 
   
-def gatestring_eigenvalue_diamondnorm(modelA, modelB, circuit):
+def circuit_eigenvalue_diamondnorm(modelA, modelB, circuit):
     """ Eigenvalue diamond distance between 
         productA(circuit) and productB(circuit)"""    
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     return eigenvalue_diamondnorm(A,B,modelB.basis)
-Gatestring_eigenvalue_diamondnorm = _gsf.modelfn_factory(gatestring_eigenvalue_diamondnorm)
+Circuit_eigenvalue_diamondnorm = _modf.modelfn_factory(circuit_eigenvalue_diamondnorm)
 # init args == (modelA, modelB, circuit)
 
 
-def gatestring_eigenvalue_nonunitary_diamondnorm(modelA, modelB, circuit):
+def circuit_eigenvalue_nonunitary_diamondnorm(modelA, modelB, circuit):
     """ Eigenvalue nonunitary diamond distance between 
         productA(circuit) and productB(circuit)"""    
     A = modelA.product(circuit) # "gate"
     B = modelB.product(circuit) # "target gate"
     return eigenvalue_nonunitary_diamondnorm(A,B,modelB.basis)
-Gatestring_eigenvalue_nonunitary_diamondnorm = _gsf.modelfn_factory(gatestring_eigenvalue_nonunitary_diamondnorm)
+Circuit_eigenvalue_nonunitary_diamondnorm = _modf.modelfn_factory(circuit_eigenvalue_nonunitary_diamondnorm)
 # init args == (modelA, modelB, circuit)
 
 
@@ -412,7 +412,7 @@ def povm_entanglement_infidelity(modelA, modelB, povmlbl):
     (diagonal) k by k density matrices.
     """
     return 1.0 - _tools.povm_fidelity(modelA, modelB, povmlbl)
-POVM_entanglement_infidelity = _gsf.povmfn_factory(povm_entanglement_infidelity)
+POVM_entanglement_infidelity = _modf.povmfn_factory(povm_entanglement_infidelity)
 # init args == (model1, modelB, povmlbl)
 
 def povm_jt_diff(modelA, modelB, povmlbl):
@@ -423,7 +423,7 @@ def povm_jt_diff(modelA, modelB, povmlbl):
     (diagonal) k by k density matrices.
     """
     return _tools.povm_jtracedist(modelA, modelB, povmlbl)
-POVM_jt_diff = _gsf.povmfn_factory(povm_jt_diff)
+POVM_jt_diff = _modf.povmfn_factory(povm_jt_diff)
 # init args == (model1, modelB, povmlbl)
 
 if _cvxpy:
@@ -436,7 +436,7 @@ if _cvxpy:
         (diagonal) k by k density matrices.
         """
         return 0.5 * _tools.povm_diamonddist(modelA, modelB, povmlbl)
-    POVM_half_diamond_norm = _gsf.povmfn_factory(povm_half_diamond_norm)
+    POVM_half_diamond_norm = _modf.povmfn_factory(povm_half_diamond_norm)
 else:
     povm_half_diamond_norm = None
     POVM_half_diamond_norm = _nullFn
@@ -462,7 +462,7 @@ def decomposition(gate):
 def upper_bound_fidelity(gate, mxBasis):
     """ Upper bound on entanglement fidelity """
     return _tools.fidelity_upper_bound(gate)[0]
-Upper_bound_fidelity = _gsf.opfn_factory(upper_bound_fidelity)
+Upper_bound_fidelity = _modf.opfn_factory(upper_bound_fidelity)
 # init args == (model, opLabel)
 
 
@@ -470,7 +470,7 @@ def closest_ujmx(gate, mxBasis):
     """ Jamiolkowski state of closest unitary to `gate` """
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
     return _tools.jamiolkowski_iso(closestUOpMx, mxBasis, mxBasis)
-Closest_ujmx = _gsf.opfn_factory(closest_ujmx)
+Closest_ujmx = _modf.opfn_factory(closest_ujmx)
 # init args == (model, opLabel)
 
 
@@ -480,7 +480,7 @@ def maximum_fidelity(gate, mxBasis):
     closestUJMx = _tools.jamiolkowski_iso(closestUOpMx, mxBasis, mxBasis)
     choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
     return _tools.fidelity(closestUJMx, choi)
-Maximum_fidelity = _gsf.opfn_factory(maximum_fidelity)
+Maximum_fidelity = _modf.opfn_factory(maximum_fidelity)
 # init args == (model, opLabel)
 
 
@@ -490,7 +490,7 @@ def maximum_trace_dist(gate, mxBasis):
     #closestUJMx = _tools.jamiolkowski_iso(closestUOpMx, mxBasis, mxBasis)
     _tools.jamiolkowski_iso(closestUOpMx, mxBasis, mxBasis)
     return _tools.jtracedist(gate, closestUOpMx)
-Maximum_trace_dist = _gsf.opfn_factory(maximum_trace_dist)
+Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
 # init args == (model, opLabel)
 
 
@@ -528,21 +528,21 @@ def angles_btwn_rotn_axes(model):
 
             angles_btwn_rotn_axes[j,i] = angles_btwn_rotn_axes[i,j]
     return angles_btwn_rotn_axes
-Angles_btwn_rotn_axes = _gsf.modelfn_factory(angles_btwn_rotn_axes)
+Angles_btwn_rotn_axes = _modf.modelfn_factory(angles_btwn_rotn_axes)
 # init args == (model)
 
 
 def entanglement_fidelity(A, B, mxBasis):
     """Entanglement fidelity between A and B"""
     return _tools.entanglement_fidelity(A, B, mxBasis)
-Entanglement_fidelity = _gsf.opsfn_factory(entanglement_fidelity)
+Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
 # init args == (model1, model2, opLabel)
 
 
 def entanglement_infidelity(A, B, mxBasis):
     """Entanglement infidelity between A and B"""
     return 1 - _tools.entanglement_fidelity(A, B, mxBasis)
-Entanglement_infidelity = _gsf.opsfn_factory(entanglement_infidelity)
+Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
 # init args == (model1, model2, opLabel)
 
 
@@ -562,34 +562,34 @@ def closest_unitary_fidelity(A, B, mxBasis): # assume vary model1, model2 fixed
     closeChoi1 = _tools.jamiolkowski_iso(closestUGateMx1)
     closeChoi2 = _tools.jamiolkowski_iso(closestUGateMx2)
     return _tools.fidelity(closeChoi1, closeChoi2)
-Closest_unitary_fidelity = _gsf.opsfn_factory(closest_unitary_fidelity)
+Closest_unitary_fidelity = _modf.opsfn_factory(closest_unitary_fidelity)
 # init args == (model1, model2, opLabel)
 
 
 def fro_diff(A, B, mxBasis): # assume vary model1, model2 fixed
     """ Frobenius distance between A and B """
     return _tools.frobeniusdist(A, B)
-Fro_diff = _gsf.opsfn_factory(fro_diff)
+Fro_diff = _modf.opsfn_factory(fro_diff)
 # init args == (model1, model2, opLabel)
 
 
 def jt_diff(A, B, mxBasis): # assume vary model1, model2 fixed
     """ Jamiolkowski trace distance between A and B"""
     return _tools.jtracedist(A, B, mxBasis)
-Jt_diff = _gsf.opsfn_factory(jt_diff)
+Jt_diff = _modf.opsfn_factory(jt_diff)
 # init args == (model1, model2, opLabel)
 
 
 if _cvxpy:
 
-    class Half_diamond_norm(_gsf.ModelFunction):
+    class Half_diamond_norm(_modf.ModelFunction):
         """Half the diamond distance bewteen `modelA.operations[opLabel]` and
            `modelB.operations[opLabel]` """
         def __init__(self, modelA, modelB, oplabel):
             self.oplabel = oplabel
             self.B = modelB.operations[oplabel].todense()
             self.d = int(round(_np.sqrt(modelA.dim)))
-            _gsf.ModelFunction.__init__(self, modelA, ["gate:"+str(oplabel)])
+            _modf.ModelFunction.__init__(self, modelA, ["gate:"+str(oplabel)])
                 
         def evaluate(self, model):
             """Evaluate at `modelA = model` """
@@ -610,7 +610,7 @@ if _cvxpy:
 
     #def half_diamond_norm(A, B, mxBasis):
     #    return 0.5 * _tools.diamonddist(A, B, mxBasis)
-    #Half_diamond_norm = _gsf.opsfn_factory(half_diamond_norm)
+    #Half_diamond_norm = _modf.opsfn_factory(half_diamond_norm)
     ## init args == (model1, model2, opLabel)
 
 else:
@@ -634,7 +634,7 @@ def nonunitary_entanglement_infidelity(A, B, mxBasis):
     """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the unitarity of A*B^{-1} """
     d2 = A.shape[0]; U = std_unitarity(A,B,mxBasis)
     return (d2-1.0)/d2 * (1.0 - _np.sqrt(U))
-Nonunitary_entanglement_infidelity = _gsf.opsfn_factory(nonunitary_entanglement_infidelity)
+Nonunitary_entanglement_infidelity = _modf.opsfn_factory(nonunitary_entanglement_infidelity)
 # init args == (model1, model2, opLabel)
 
 
@@ -643,14 +643,14 @@ def nonunitary_avg_gate_infidelity(A, B, mxBasis):
     d2 = A.shape[0]; d = int(round(_np.sqrt(d2)))
     U = std_unitarity(A,B,mxBasis)
     return (d-1.0)/d * (1.0 - _np.sqrt(U))
-Nonunitary_avg_gate_infidelity = _gsf.opsfn_factory(nonunitary_avg_gate_infidelity)
+Nonunitary_avg_gate_infidelity = _modf.opsfn_factory(nonunitary_avg_gate_infidelity)
 # init args == (model1, model2, opLabel)
 
 def eigenvalue_nonunitary_entanglement_infidelity(A, B, mxBasis):
     """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the eigenvalue-unitarity of A*B^{-1} """
     d2 = A.shape[0]; U = eigenvalue_unitarity(A,B)
     return (d2-1.0)/d2 * (1.0 - _np.sqrt(U))
-Eigenvalue_nonunitary_entanglement_infidelity = _gsf.opsfn_factory(eigenvalue_nonunitary_entanglement_infidelity)
+Eigenvalue_nonunitary_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_nonunitary_entanglement_infidelity)
 # init args == (model1, model2, opLabel)
 
 
@@ -659,7 +659,7 @@ def eigenvalue_nonunitary_avg_gate_infidelity(A, B, mxBasis):
     d2 = A.shape[0]; d = int(round(_np.sqrt(d2)))
     U = eigenvalue_unitarity(A,B)
     return (d-1.0)/d * (1.0 - _np.sqrt(U))
-Eigenvalue_nonunitary_avg_gate_infidelity = _gsf.opsfn_factory(eigenvalue_nonunitary_avg_gate_infidelity)
+Eigenvalue_nonunitary_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_nonunitary_avg_gate_infidelity)
 # init args == (model1, model2, opLabel)
 
 
@@ -671,7 +671,7 @@ def eigenvalue_entanglement_infidelity(A, B, mxBasis):
     mlPl = _np.sum(_tools.minweight_match(evA,evB, lambda x,y: -_np.abs(_np.conjugate(y)*x),
                                  return_pairs=False))
     return 1.0 + mlPl/float(d2)
-Eigenvalue_entanglement_infidelity = _gsf.opsfn_factory(eigenvalue_entanglement_infidelity)
+Eigenvalue_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_entanglement_infidelity)
 # init args == (model1, model2, opLabel)
 
 
@@ -683,7 +683,7 @@ def eigenvalue_avg_gate_infidelity(A, B, mxBasis):
     mlPl = _np.sum(_tools.minweight_match(evA,evB, lambda x,y: -_np.abs(_np.conjugate(y)*x),
                                  return_pairs=False))
     return (d2 + mlPl)/float(d*(d+1))
-Eigenvalue_avg_gate_infidelity = _gsf.opsfn_factory(eigenvalue_avg_gate_infidelity)
+Eigenvalue_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_avg_gate_infidelity)
 # init args == (model1, model2, opLabel)
 
 
@@ -694,7 +694,7 @@ def eigenvalue_diamondnorm(A, B, mxBasis):
     evB = _np.linalg.eigvals(B)
     return (d2-1.0)/d2 * _np.max(_tools.minweight_match(evA,evB, lambda x,y: abs(x-y),
                                                         return_pairs=False))
-Eigenvalue_diamondnorm = _gsf.opsfn_factory(eigenvalue_diamondnorm)
+Eigenvalue_diamondnorm = _modf.opsfn_factory(eigenvalue_diamondnorm)
 # init args == (model1, model2, opLabel)
 
 
@@ -705,7 +705,7 @@ def eigenvalue_nonunitary_diamondnorm(A, B, mxBasis):
     evB = _np.linalg.eigvals(B)
     return (d2-1.0)/d2 * _np.max(_tools.minweight_match(evA,evB, lambda x,y: abs(abs(x)-abs(y)),
                                                         return_pairs=False))
-Eigenvalue_nonunitary_diamondnorm = _gsf.opsfn_factory(eigenvalue_nonunitary_diamondnorm)
+Eigenvalue_nonunitary_diamondnorm = _modf.opsfn_factory(eigenvalue_nonunitary_diamondnorm)
 # init args == (model1, model2, opLabel)
 
 
@@ -713,12 +713,12 @@ def avg_gate_infidelity(A, B, mxBasis):
     """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
     d = _np.sqrt(A.shape[0])
     return _tools.average_gate_infidelity(A,B,mxBasis)
-Avg_gate_infidelity = _gsf.opsfn_factory(avg_gate_infidelity)
+Avg_gate_infidelity = _modf.opsfn_factory(avg_gate_infidelity)
 # init args == (model1, model2, opLabel)
 
 
 
-def gateset_gateset_angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
+def model_model_angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
     """ Angle between the rotation axes of A and B (1-qubit gates)"""
     decomp = _tools.decompose_gate_matrix(A)
     decomp2 = _tools.decompose_gate_matrix(B)
@@ -740,7 +740,7 @@ def gateset_gateset_angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
       #      well, must flip sign of angle of rotation if you allow axis to
       #      "reverse" by 180 degrees.
 
-Gateset_gateset_angles_btwn_axes = _gsf.opsfn_factory(gateset_gateset_angles_btwn_axes)
+Model_model_angles_btwn_axes = _modf.opsfn_factory(model_model_angles_btwn_axes)
 # init args == (model1, model2, opLabel)
 
 
@@ -749,28 +749,28 @@ def rel_eigvals(A, B, mxBasis):
     target_op_inv = _np.linalg.inv(B)
     rel_op = _np.dot(target_op_inv, A)
     return _np.linalg.eigvals(rel_op).astype("complex") #since they generally *can* be complex
-Rel_eigvals = _gsf.opsfn_factory(rel_eigvals)
+Rel_eigvals = _modf.opsfn_factory(rel_eigvals)
 # init args == (model1, model2, opLabel)
 
 def rel_logTiG_eigvals(A, B, mxBasis):
     """ Eigenvalues of log(B^{-1} * A)"""
     rel_op = _tools.error_generator(A, B, mxBasis, "logTiG")
     return _np.linalg.eigvals(rel_op).astype("complex") #since they generally *can* be complex
-Rel_logTiG_eigvals = _gsf.opsfn_factory(rel_logTiG_eigvals)
+Rel_logTiG_eigvals = _modf.opsfn_factory(rel_logTiG_eigvals)
 # init args == (model1, model2, opLabel)
 
 def rel_logGTi_eigvals(A, B, mxBasis):
     """ Eigenvalues of log(A * B^{-1})"""
     rel_op = _tools.error_generator(A, B, mxBasis, "logGTi")
     return _np.linalg.eigvals(rel_op).astype("complex") #since they generally *can* be complex
-Rel_logGTi_eigvals = _gsf.opsfn_factory(rel_logGTi_eigvals)
+Rel_logGTi_eigvals = _modf.opsfn_factory(rel_logGTi_eigvals)
 # init args == (model1, model2, opLabel)
 
 def rel_logGmlogT_eigvals(A, B, mxBasis):
     """ Eigenvalues of log(A) - log(B)"""
     rel_op = _tools.error_generator(A, B, mxBasis, "logG-logT")
     return _np.linalg.eigvals(rel_op).astype("complex") #since they generally *can* be complex
-Rel_logGmlogT_eigvals = _gsf.opsfn_factory(rel_logGmlogT_eigvals)
+Rel_logGmlogT_eigvals = _modf.opsfn_factory(rel_logGmlogT_eigvals)
 # init args == (model1, model2, opLabel)
 
 
@@ -778,7 +778,7 @@ def rel_gate_eigenvalues(A, B, mxBasis):  #DUPLICATE of rel_eigvals TODO
     """ Eigenvalues of B^{-1} * A """
     rel_op = _np.dot(_np.linalg.inv(B), A) # "relative gate" == target^{-1} * gate
     return _np.linalg.eigvals(rel_op).astype("complex") #since they generally *can* be complex
-Rel_gate_eigenvalues = _gsf.opsfn_factory(rel_gate_eigenvalues)
+Rel_gate_eigenvalues = _modf.opsfn_factory(rel_gate_eigenvalues)
 # init args == (model1, model2, opLabel)
 
 
@@ -832,7 +832,7 @@ def logTiG_and_projections(A, B, mxBasis):
     """
     errgen = _tools.error_generator(A, B, mxBasis, "logTiG")
     return errgen_and_projections(errgen, mxBasis)
-LogTiG_and_projections = _gsf.opsfn_factory(logTiG_and_projections)
+LogTiG_and_projections = _modf.opsfn_factory(logTiG_and_projections)
 # init args == (model1, model2, opLabel)
 
 def logGTi_and_projections(A, B, mxBasis):
@@ -843,7 +843,7 @@ def logGTi_and_projections(A, B, mxBasis):
     """
     errgen = _tools.error_generator(A, B, mxBasis, "logGTi")
     return errgen_and_projections(errgen, mxBasis)
-LogGTi_and_projections = _gsf.opsfn_factory(logGTi_and_projections)
+LogGTi_and_projections = _modf.opsfn_factory(logGTi_and_projections)
 # init args == (model1, model2, opLabel)
 
 def logGmlogT_and_projections(A, B, mxBasis):
@@ -854,7 +854,7 @@ def logGmlogT_and_projections(A, B, mxBasis):
     """
     errgen = _tools.error_generator(A, B, mxBasis, "logG-logT")
     return errgen_and_projections(errgen, mxBasis)
-LogGmlogT_and_projections = _gsf.opsfn_factory(logGmlogT_and_projections)
+LogGmlogT_and_projections = _modf.opsfn_factory(logGmlogT_and_projections)
 # init args == (model1, model2, opLabel)
 
 def robust_logGTi_and_projections(modelA, modelB, syntheticIdleStrs):
@@ -1001,7 +1001,7 @@ def robust_logGTi_and_projections(modelA, modelB, syntheticIdleStrs):
     return ret
     
 
-Robust_LogGTi_and_projections = _gsf.modelfn_factory(robust_logGTi_and_projections)
+Robust_LogGTi_and_projections = _modf.modelfn_factory(robust_logGTi_and_projections)
 # init args == (modelA, modelB, syntheticIdleStrs)
 
 
@@ -1073,7 +1073,7 @@ def general_decomposition(modelA, modelB):
             decomp[str(gl) + "," + str(gl_other) + " axis angle"] = angle
 
     return decomp
-General_decomposition = _gsf.modelfn_factory(general_decomposition)
+General_decomposition = _modf.modelfn_factory(general_decomposition)
 # init args == (modelA, modelB)
 
 
@@ -1082,7 +1082,7 @@ def average_gateset_infidelity(modelA, modelB):
     # B is target model usually but must be "modelB" b/c of decorator coding...
     from ..extras.rb import theory as _rbtheory
     return _rbtheory.gateset_infidelity(modelA,modelB)
-Average_gateset_infidelity = _gsf.modelfn_factory(average_gateset_infidelity)
+Average_gateset_infidelity = _modf.modelfn_factory(average_gateset_infidelity)
 # init args == (modelA, modelB)
 
 
@@ -1092,7 +1092,7 @@ def predicted_rb_number(modelA, modelB):
     """
     from ..extras.rb import theory as _rbtheory
     return _rbtheory.predicted_RB_number(modelA, modelB)
-Predicted_rb_number = _gsf.modelfn_factory(predicted_rb_number)
+Predicted_rb_number = _modf.modelfn_factory(predicted_rb_number)
 # init args == (modelA, modelB)
 
 
@@ -1101,7 +1101,7 @@ def vec_fidelity(A, B, mxBasis):
     rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
     rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
     return _tools.fidelity(rhoMx1, rhoMx2)
-Vec_fidelity = _gsf.vecsfn_factory(vec_fidelity)
+Vec_fidelity = _modf.vecsfn_factory(vec_fidelity)
 # init args == (model1, model2, label, typ)
 
 
@@ -1110,7 +1110,7 @@ def vec_infidelity(A, B, mxBasis):
     rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
     rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
     return 1 - _tools.fidelity(rhoMx1, rhoMx2)
-Vec_infidelity = _gsf.vecsfn_factory(vec_infidelity)
+Vec_infidelity = _modf.vecsfn_factory(vec_infidelity)
 # init args == (model1, model2, label, typ)
 
 
@@ -1119,20 +1119,20 @@ def vec_tr_diff(A, B, mxBasis): # assume vary model1, model2 fixed
     rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
     rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
     return _tools.tracedist(rhoMx1, rhoMx2)
-Vec_tr_diff = _gsf.vecsfn_factory(vec_tr_diff)
+Vec_tr_diff = _modf.vecsfn_factory(vec_tr_diff)
 # init args == (model1, model2, label, typ)
 
 def vec_as_stdmx(vec, mxBasis):
     """ SPAM vectors as a standard density matrix """
     return _tools.vec_to_stdmx(vec, mxBasis)
-Vec_as_stdmx = _gsf.vecfn_factory(vec_as_stdmx)
+Vec_as_stdmx = _modf.vecfn_factory(vec_as_stdmx)
 # init args == (model, label, typ)
 
 def vec_as_stdmx_eigenvalues(vec, mxBasis):
     """ Eigenvalues of the density matrix corresponding to a SPAM vector """
     mx = _tools.vec_to_stdmx(vec, mxBasis)
     return _np.linalg.eigvals(mx)
-Vec_as_stdmx_eigenvalues = _gsf.vecfn_factory(vec_as_stdmx_eigenvalues)
+Vec_as_stdmx_eigenvalues = _modf.vecfn_factory(vec_as_stdmx_eigenvalues)
 # init args == (model, label, typ)
 
 
@@ -1226,7 +1226,7 @@ def evaluate_opfn_by_name(name, model, targetModel, opLabelOrString,
     opLabelOrString : str or Circuit or tuple
         The operation label or sequence of labels to compare.  If a sequence
         of labels is given, then the "virtual gate" computed by taking the
-        product of the specified gate matries is compared.
+        product of the specified gate matrices is compared.
 
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region  used to compute error
@@ -1241,42 +1241,42 @@ def evaluate_opfn_by_name(name, model, targetModel, opLabelOrString,
     
     if name == "inf":
         fn = Entanglement_infidelity if b else \
-             Gatestring_entanglement_infidelity
+             Circuit_entanglement_infidelity
     elif name == "agi":
         fn = Avg_gate_infidelity if b else \
-             Gatestring_avg_gate_infidelity
+             Circuit_avg_gate_infidelity
     elif name == "trace":
         fn = Jt_diff if b else \
-             Gatestring_jt_diff
+             Circuit_jt_diff
     elif name == "diamond":
         fn = Half_diamond_norm if b else \
-             Gatestring_half_diamond_norm
+             Circuit_half_diamond_norm
     elif name == "nuinf":
         fn = Nonunitary_entanglement_infidelity if b else \
-             Gatestring_nonunitary_entanglement_infidelity
+             Circuit_nonunitary_entanglement_infidelity
     elif name == "nuagi":
         fn = Nonunitary_avg_gate_infidelity if b else \
-             Gatestring_nonunitary_avg_gate_infidelity
+             Circuit_nonunitary_avg_gate_infidelity
     elif name == "evinf":
         fn = Eigenvalue_entanglement_infidelity if b else \
-             Gatestring_eigenvalue_entanglement_infidelity
+             Circuit_eigenvalue_entanglement_infidelity
     elif name == "evagi":
         fn = Eigenvalue_avg_gate_infidelity if b else \
-             Gatestring_eigenvalue_avg_gate_infidelity
+             Circuit_eigenvalue_avg_gate_infidelity
     elif name == "evnuinf":
         fn = Eigenvalue_nonunitary_entanglement_infidelity if b else \
-             Gatestring_eigenvalue_nonunitary_entanglement_infidelity
+             Circuit_eigenvalue_nonunitary_entanglement_infidelity
     elif name == "evnuagi":
         fn = Eigenvalue_nonunitary_avg_gate_infidelity if b else \
-             Gatestring_eigenvalue_nonunitary_avg_gate_infidelity
+             Circuit_eigenvalue_nonunitary_avg_gate_infidelity
     elif name == "evdiamond":
         fn = Eigenvalue_diamondnorm if b else \
-             Gatestring_eigenvalue_diamondnorm
+             Circuit_eigenvalue_diamondnorm
     elif name == "evnudiamond":
         fn = Eigenvalue_nonunitary_diamondnorm if b else \
-             Gatestring_eigenvalue_nonunitary_diamondnorm
+             Circuit_eigenvalue_nonunitary_diamondnorm
     elif name == "frob":
         fn = Fro_diff if b else \
-             Gatestring_fro_diff
+             Circuit_fro_diff
 
     return evaluate( fn(model, targetModel, gl), confidenceRegionInfo)

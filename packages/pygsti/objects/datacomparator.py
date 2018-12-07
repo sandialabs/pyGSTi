@@ -321,11 +321,11 @@ class DataComparator():
             raise ValueError("The `dataset_list_or_multidataset` must be a list of DataSets of a MultiDataSet!")
                 
         if op_exclusions is not None:
-            gatestrings_exc_temp = []
+            circuits_exc_temp = []
             for circuit in circuits:
                 if is_circuit_allowed_by_exclusion(op_exclusions,circuit):
-                    gatestrings_exc_temp.append(circuit)
-            circuits = list(gatestrings_exc_temp)
+                    circuits_exc_temp.append(circuit)
+            circuits = list(circuits_exc_temp)
             
         if op_inclusions is not None:
             circuits_inc_temp = []
@@ -863,7 +863,7 @@ class DataComparator():
         assert(self.aggregate_nsigma_threshold is not None), "This has not yet been calculated! Run the .implement() method first!"
         return self.aggregate_nsigma_threshold
 
-    def get_worst_gatestrings(self, number):
+    def get_worst_circuits(self, number):
         """
         Returns the "worst" circuits that have the smallest p-values.
 

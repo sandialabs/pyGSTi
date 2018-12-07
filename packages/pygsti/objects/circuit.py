@@ -2247,7 +2247,7 @@ class CompressedCircuit(object):
             takes more time but could result in better compressing.
         """
         if not isinstance(circuit, Circuit):
-            raise ValueError("CompressedGateStrings can only be created from existing Circuit objects")
+            raise ValueError("CompressedCircuits can only be created from existing Circuit objects")
         self._tup = CompressedCircuit.compress_op_label_tuple(
             circuit.tup, minLenToCompress, maxPeriodToLookFor)
         self._str = circuit.str

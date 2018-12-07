@@ -37,17 +37,17 @@ class DirectXTestCase(BaseTestCase):
     def test_direct_core(self):
         mdl = directx.model_with_lgst_circuit_estimates(
             self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt, includeTargetOps=True,
-            gateStringLabels=None, svdTruncateTo=4, verbosity=10)
+            circuitLabels=None, svdTruncateTo=4, verbosity=10)
 
         mdl = directx.model_with_lgst_circuit_estimates(
             self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt, includeTargetOps=False,
-            gateStringLabels=[L('G0'),L('G1'),L('G2'),L('G3'),L('G4'),L('G5')], svdTruncateTo=4, verbosity=10)
+            circuitLabels=[L('G0'),L('G1'),L('G2'),L('G3'),L('G4'),L('G5')], svdTruncateTo=4, verbosity=10)
         self.assertEqual(set(mdl.operations.keys()), set([L('G0'),L('G1'),L('G2'),L('G3'),L('G4'),L('G5')]))
 
         aliases = {'Gy2': ('Gy',)}
         mdl = directx.model_with_lgst_circuit_estimates(
             [pygsti.obj.Circuit(('Gy2',))], self.ds, self.prepStrs, self.effectStrs, self.tgt, includeTargetOps=True,
-            gateStringLabels=None, svdTruncateTo=4, verbosity=10, opLabelAliases=aliases)
+            circuitLabels=None, svdTruncateTo=4, verbosity=10, opLabelAliases=aliases)
 
 
 

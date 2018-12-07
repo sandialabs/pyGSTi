@@ -184,7 +184,7 @@ def load_model(filename):
     """
     return _stdinput.read_model(filename)
 
-def load_gatestring_dict(filename):
+def load_circuit_dict(filename):
     """
     Load a operation sequence dictionary from a file, formatted
     using the standard text-format.

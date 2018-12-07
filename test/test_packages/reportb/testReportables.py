@@ -56,7 +56,7 @@ class TestReportables(BaseTestCase):
 
 
         gatesetfn_factories = ( # model, circuit
-            rptbl.Gatestring_eigenvalues,
+            rptbl.Circuit_eigenvalues,
         )
         for gsf_factory in gatesetfn_factories:
             gsf = gsf_factory(gs1,opstr)
@@ -64,20 +64,20 @@ class TestReportables(BaseTestCase):
 
 
         gatesetfn_factories = ( # modelA, modelB, circuit
-            rptbl.Rel_gatestring_eigenvalues,
-            rptbl.Gatestring_fro_diff ,
-            rptbl.Gatestring_entanglement_infidelity,
-            rptbl.Gatestring_avg_gate_infidelity,
-            rptbl.Gatestring_jt_diff,
-            rptbl.Gatestring_half_diamond_norm,
-            rptbl.Gatestring_nonunitary_entanglement_infidelity,
-            rptbl.Gatestring_nonunitary_avg_gate_infidelity,
-            rptbl.Gatestring_eigenvalue_entanglement_infidelity,
-            rptbl.Gatestring_eigenvalue_avg_gate_infidelity,
-            rptbl.Gatestring_eigenvalue_nonunitary_entanglement_infidelity,
-            rptbl.Gatestring_eigenvalue_nonunitary_avg_gate_infidelity,
-            rptbl.Gatestring_eigenvalue_diamondnorm,
-            rptbl.Gatestring_eigenvalue_nonunitary_diamondnorm,
+            rptbl.Rel_circuit_eigenvalues,
+            rptbl.Circuit_fro_diff ,
+            rptbl.Circuit_entanglement_infidelity,
+            rptbl.Circuit_avg_gate_infidelity,
+            rptbl.Circuit_jt_diff,
+            rptbl.Circuit_half_diamond_norm,
+            rptbl.Circuit_nonunitary_entanglement_infidelity,
+            rptbl.Circuit_nonunitary_avg_gate_infidelity,
+            rptbl.Circuit_eigenvalue_entanglement_infidelity,
+            rptbl.Circuit_eigenvalue_avg_gate_infidelity,
+            rptbl.Circuit_eigenvalue_nonunitary_entanglement_infidelity,
+            rptbl.Circuit_eigenvalue_nonunitary_avg_gate_infidelity,
+            rptbl.Circuit_eigenvalue_diamondnorm,
+            rptbl.Circuit_eigenvalue_nonunitary_diamondnorm,
         )
         for gsf_factory in gatesetfn_factories:
             gsf = gsf_factory(gs1,gs2,opstr)
@@ -119,7 +119,7 @@ class TestReportables(BaseTestCase):
             rptbl.Eigenvalue_diamondnorm, 
             rptbl.Eigenvalue_nonunitary_diamondnorm, 
             rptbl.Avg_gate_infidelity, 
-            rptbl.Gateset_gateset_angles_btwn_axes, 
+            rptbl.Model_model_angles_btwn_axes, 
             rptbl.Rel_eigvals, 
             rptbl.Rel_logTiG_eigvals, 
             rptbl.Rel_logGTi_eigvals, 
@@ -183,7 +183,7 @@ class TestReportables(BaseTestCase):
         fn.evaluate(gs1)
         fn.evaluate_nearby(gs1)        
         
-        fn = rptbl.Gatestring_half_diamond_norm(gs1,gs2,opstr)
+        fn = rptbl.Circuit_half_diamond_norm(gs1,gs2,opstr)
         fn.evaluate(gs1)
         fn.evaluate_nearby(gs1)
 

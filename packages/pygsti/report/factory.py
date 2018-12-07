@@ -906,7 +906,7 @@ def create_standard_report(results, filename, title="auto",
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'),
            virtual_ops=germs)
     #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri(1), display=('rel','log-rel'))
-    addqty(4,'bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
+    addqty(4,'bestGatesetVsTargetTable', ws.ModelVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
     addqty(4,'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
                                         display=('inf','agi','trace','diamond','nuinf','nuagi'))
     addqty(3,'bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(0),
@@ -964,11 +964,11 @@ def create_standard_report(results, filename, title="auto",
     gsL = switchBd.gsL
     gsL_modvi = switchBd.gsL_modvi
     gssAllL = switchBd.gssAllL
-    addqty(2,'fiducialListTable', ws.GatestringTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
-    addqty(2,'prepStrListTable', ws.GatestringTable, prepStrs,"Preparation Fiducials")
-    addqty(2,'effectStrListTable', ws.GatestringTable, effectStrs,"Measurement Fiducials")
+    addqty(2,'fiducialListTable', ws.CircuitTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
+    addqty(2,'prepStrListTable', ws.CircuitTable, prepStrs,"Preparation Fiducials")
+    addqty(2,'effectStrListTable', ws.CircuitTable, effectStrs,"Measurement Fiducials")
     addqty(1,'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
-    addqty(2,'germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
+    addqty(2,'germList2ColTable', ws.CircuitTable, germs, "Germ", nCols=2)
     addqty(4,'progressTable', ws.FitComparisonTable,
            Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
 
@@ -1484,7 +1484,7 @@ def create_nqnoise_report(results, filename, title="auto",
     #X        display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'),
     #X        virtual_ops=germs)
     #X #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri(1), display=('rel','log-rel'))
-    #X addqty(4,'bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
+    #X addqty(4,'bestGatesetVsTargetTable', ws.ModelVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
     #X addqty(4,'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
     #X                                     display=('inf','agi','trace','diamond','nuinf','nuagi'))
     #X addqty(3,'bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(0),
@@ -1542,11 +1542,11 @@ def create_nqnoise_report(results, filename, title="auto",
     gsL = switchBd.gsL
     gsL_modvi = switchBd.gsL_modvi
     gssAllL = switchBd.gssAllL
-    #X addqty(2,'fiducialListTable', ws.GatestringTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
-    #X addqty(2,'prepStrListTable', ws.GatestringTable, prepStrs,"Preparation Fiducials")
-    #X addqty(2,'effectStrListTable', ws.GatestringTable, effectStrs,"Measurement Fiducials")
+    #X addqty(2,'fiducialListTable', ws.CircuitTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
+    #X addqty(2,'prepStrListTable', ws.CircuitTable, prepStrs,"Preparation Fiducials")
+    #X addqty(2,'effectStrListTable', ws.CircuitTable, effectStrs,"Measurement Fiducials")
     #X addqty(1,'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
-    addqty(2,'germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
+    addqty(2,'germList2ColTable', ws.CircuitTable, germs, "Germ", nCols=2)
     addqty(4,'progressTable', ws.FitComparisonTable,
            Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
 

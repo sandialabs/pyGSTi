@@ -1,4 +1,4 @@
-""" Defines the GatesetObject class, which represents Model members """
+""" Defines the ModelChild and ModelMember classes, which represent Model members """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation

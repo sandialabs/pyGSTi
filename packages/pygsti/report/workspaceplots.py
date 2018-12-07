@@ -1486,7 +1486,7 @@ class ColorBoxPlot(WorkspacePlot):
             within the chi^2 or logl functions.
 
         directGSTmodels : dict, optional
-            A dictionary of "direct" Gatesets used when displaying certain plot
+            A dictionary of "direct" Models used when displaying certain plot
             types.  Keys are operation sequences and values are corresponding gate
             sets (see `plottype` above).        
 
@@ -2631,7 +2631,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
             ws, self._create, Xs, Ys, gssByYthenX, modelByYthenX,
             datasetByYthenX, objective, Xlabel, Ylabel, scale, comm)
         
-    def _create(self, Xs, Ys, gssByYX, gatesetByYX, datasetByYX, objective,
+    def _create(self, Xs, Ys, gssByYX, modelByYX, datasetByYX, objective,
                     Xlabel, Ylabel, scale, comm):
 
         xs = list(range(len(Xs)))
@@ -2650,7 +2650,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
         for iY,Y in enumerate(Ys):
             for iX,X in enumerate(Xs):
                 dataset = datasetByYX[iY][iX]
-                mdl = gatesetByYX[iY][iX]
+                mdl = modelByYX[iY][iX]
                 gss = gssByYX[iY][iX]
                 
                 if dataset is None or gss is None or mdl is None:

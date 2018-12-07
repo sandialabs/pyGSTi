@@ -246,7 +246,7 @@ class SpamParametersTable(WorkspaceTable):
             spamDotProdsQty = _ev( _reportables.Spam_dotprods(model), cri)
             DPs, DPEBs      = spamDotProdsQty.get_value_and_err_bar()
             assert(DPs.shape[1] == len(effectLbls)), \
-                "Gatesets must have the same number of POVMs & effects"
+                "Models must have the same number of POVMs & effects"
 
             formatters      = [ 'Rho' ] + [ 'Normal' ]*len(effectLbls) #for rows below
 
@@ -519,7 +519,7 @@ class ChoiTable(WorkspaceTable):
         return table
 
 
-class GatesetVsTargetTable(WorkspaceTable):
+class ModelVsTargetTable(WorkspaceTable):
     """ Table comparing a Model (as a whole) to a target """
     def __init__(self, ws, model, targetModel, clifford_compilation, confidenceRegionInfo=None):
         """
@@ -544,7 +544,7 @@ class GatesetVsTargetTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(GatesetVsTargetTable,self).__init__(ws, self._create, model,
+        super(ModelVsTargetTable,self).__init__(ws, self._create, model,
                                                   targetModel, clifford_compilation,
                                                   confidenceRegionInfo)
 
@@ -1275,7 +1275,7 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
         colHeadings = ('LinearOperator', "Angle between|rotation axes")
         formatters  = (None,'Conversion')
 
-        anglesList = [_ev(_reportables.Gateset_gateset_angles_btwn_axes(
+        anglesList = [_ev(_reportables.Model_model_angles_btwn_axes(
             model, targetModel, gl), confidenceRegionInfo) for gl in opLabels]
 
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
@@ -1656,7 +1656,7 @@ class GateEigenvalueTable(WorkspaceTable):
             #tStart = _time.time() #DEBUG
             fn = _reportables.Gate_eigenvalues if \
                 isinstance(gl,_objs.Label) or _tools.isstr(gl) else \
-                _reportables.Gatestring_eigenvalues
+                _reportables.Circuit_eigenvalues
             evals = _ev(fn(model,gl), confidenceRegionInfo)
             #tm = _time.time() - tStart #DEBUG
             #if tm > 0.01: print("DB: LinearOperator eigenvalues in %gs" % tm) #DEBUG
@@ -1678,7 +1678,7 @@ class GateEigenvalueTable(WorkspaceTable):
                     if isinstance(gl,_objs.Label) or _tools.isstr(gl):
                         rel_evals = _ev(_reportables.Rel_gate_eigenvalues(model, targetModel, gl), confidenceRegionInfo)
                     else:
-                        rel_evals = _ev(_reportables.Rel_gatestring_eigenvalues(model, targetModel, gl), confidenceRegionInfo)
+                        rel_evals = _ev(_reportables.Rel_circuit_eigenvalues(model, targetModel, gl), confidenceRegionInfo)
 
                 # permute target eigenvalues according to min-weight matching
                 _, pairs = _tools.minweight_match( evals.get_value(), target_evals, lambda x,y: abs(x-y) )
@@ -1739,7 +1739,7 @@ class GateEigenvalueTable(WorkspaceTable):
                     if targetModel is not None:
                         fn = _reportables.Eigenvalue_diamondnorm if \
                             isinstance(gl,_objs.Label) or _tools.isstr(gl) else \
-                             _reportables.Gatestring_eigenvalue_diamondnorm
+                             _reportables.Circuit_eigenvalue_diamondnorm
                         gidm = _ev(fn(model, targetModel, gl), confidenceRegionInfo)
                         row_data.append( gidm )
                         row_formatters.append('Normal')
@@ -1748,7 +1748,7 @@ class GateEigenvalueTable(WorkspaceTable):
                     if targetModel is not None:
                         fn = _reportables.Eigenvalue_entanglement_infidelity if \
                             isinstance(gl,_objs.Label) or _tools.isstr(gl) else \
-                            _reportables.Gatestring_eigenvalue_entanglement_infidelity
+                            _reportables.Circuit_eigenvalue_entanglement_infidelity
                         giinf = _ev(fn(model, targetModel, gl), confidenceRegionInfo)
                         row_data.append( giinf )
                         row_formatters.append('Normal')
@@ -1927,7 +1927,7 @@ class FitComparisonTable(WorkspaceTable):
         return table
 
 
-class GatestringTable(WorkspaceTable):
+class CircuitTable(WorkspaceTable):
     """ Table which simply displays list(s) of operation sequences """
     def __init__(self, ws, gsLists, titles, nCols=1, commonTitle=None):
         """
@@ -1954,8 +1954,8 @@ class GatestringTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(GatestringTable,self).__init__(ws, self._create, gsLists, titles,
-                                             nCols, commonTitle)
+        super(CircuitTable,self).__init__(ws, self._create, gsLists, titles,
+                                          nCols, commonTitle)
 
 
     def _create(self, gsLists, titles, nCols, commonTitle):
@@ -2098,7 +2098,7 @@ class GatesSingleMetricTable(WorkspaceTable):
             colHeadings = ("",) + tuple(titles)
 
         nCols = len(colHeadings)
-        formatters = [None]*nCols #[None] + ['GatesetType']*(nCols-1)
+        formatters = [None]*nCols #[None] + ['ModelType']*(nCols-1)
 
         #latex_head =  "\\begin{tabular}[l]{%s}\n\hline\n" % ("|c" * nCols + "|")
         #latex_head += "\\multirow{2}{*}{LinearOperator} & " + \
@@ -2160,7 +2160,7 @@ class GatesSingleMetricTable(WorkspaceTable):
 class StandardErrgenTable(WorkspaceTable):
     """ A table showing what the standard error generators' superoperator
         matrices look like."""
-    def __init__(self, ws, gateset_dim, projection_type,
+    def __init__(self, ws, model_dim, projection_type,
                  projection_basis):
         """
         Create a table of the "standard" gate error generators, such as those
@@ -2169,7 +2169,7 @@ class StandardErrgenTable(WorkspaceTable):
 
         Parameters
         ----------
-        gateset_dim : int
+        model_dim : int
             The dimension of the model, which equals the number of
             rows (or columns) in a operation matrix (e.g., 4 for a single qubit).
 
@@ -2190,14 +2190,14 @@ class StandardErrgenTable(WorkspaceTable):
         ReportTable
         """
         super(StandardErrgenTable,self).__init__(
-            ws, self._create, gateset_dim, projection_type,
+            ws, self._create, model_dim, projection_type,
             projection_basis)
 
 
-    def _create(self,  gateset_dim, projection_type,
+    def _create(self,  model_dim, projection_type,
                 projection_basis):
 
-        d2 = gateset_dim # number of projections == dim of gate
+        d2 = model_dim # number of projections == dim of gate
         d = int(_np.sqrt(d2)) # dim of density matrix
         nQubits = _np.log2(d)
 

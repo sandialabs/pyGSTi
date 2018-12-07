@@ -233,7 +233,7 @@ class CircuitStructure(object):
     def plaquette_rows_cols(self):
         """
         Return the number of rows and columns contained in each plaquette of
-        this GateStringStructure.
+        this CircuitStructure.
 
         Returns
         -------
@@ -371,7 +371,7 @@ class LsGermsStructure(CircuitStructure):
         """
 
         missing_list = []
-        from ..construction import circuitconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
+        from ..construction import circuitconstruction as _gstrc #maybe move used routines to a circuittools.py?
 
         if fidpairs is None:
             fidpairs = list(_itertools.product(range(len(self.prepStrs)),
@@ -426,7 +426,7 @@ class LsGermsStructure(CircuitStructure):
             A list of elements in `gsList` which were not found in `dsfilter`
             and therefore not added.
         """
-        from ..construction import circuitconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
+        from ..construction import circuitconstruction as _gstrc #maybe move used routines to a circuittools.py?
 
         missing_list = []
         for opstr in gsList:
@@ -685,7 +685,7 @@ class LsGermsSerialStructure(CircuitStructure):
         """
 
         missing_list = []
-        from ..construction import circuitconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
+        from ..construction import circuitconstruction as _gstrc #maybe move used routines to a circuittools.py?
 
         if dsfilter:
             inds_to_remove = []
@@ -737,7 +737,7 @@ class LsGermsSerialStructure(CircuitStructure):
             A list of elements in `gsList` which were not found in `dsfilter`
             and therefore not added.
         """
-        from ..construction import circuitconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
+        from ..construction import circuitconstruction as _gstrc #maybe move used routines to a circuittools.py?
 
         missing_list = []
         for opstr in gsList:

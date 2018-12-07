@@ -868,11 +868,11 @@ class DataSet(object):
 
         # if "keepseparate" mode, add tag onto end of circuit
         if circuit in self.cirIndex and self.collisionAction == "keepseparate":
-            i=0; tagged_gateString = circuit
-            while tagged_gateString in self.cirIndex:
-                i+=1; tagged_gateString = circuit + _cir.Circuit(("#%d" % i,))
+            i=0; tagged_circuit = circuit
+            while tagged_circuit in self.cirIndex:
+                i+=1; tagged_circuit = circuit + _cir.Circuit(("#%d" % i,))
             #add data for a new (duplicate) circuit
-            circuit = tagged_gateString
+            circuit = tagged_circuit
 
         return circuit
 

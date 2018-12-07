@@ -599,8 +599,8 @@ def exact_RB_ASPs(mdl, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0
         if group_twirled is True:  
             extended_rho = _np.dot(R,extended_rho)
     else:
-        full_gateset = _cnst.build_explicit_alias_model(mdl,compilation)
-        R_fullgroup = R_matrix(full_gateset,group)
+        full_model = _cnst.build_explicit_alias_model(mdl,compilation)
+        R_fullgroup = R_matrix(full_model,group)
         extended_E = group_dim*_np.dot(extended_E, R_fullgroup)
         if group_twirled is True:        
             extended_rho = _np.dot(R_fullgroup, extended_rho)

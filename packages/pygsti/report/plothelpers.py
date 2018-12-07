@@ -719,7 +719,7 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, returnAll=False,
     model : Model
         The model (model).
 
-    gss : GateStringStructure
+    gss : CircuitStructure
         A operation sequence structure whose `.allstrs` member contains a list of
         `Circuits` specifiying the sequences used to compare the data and
         model.  Its `.aliases` member optionally specifies operation label aliases

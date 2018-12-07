@@ -33,7 +33,7 @@ def _get_cachefile_names(std_module, param_type, sim_type, py_version):
     else:
         raise ValueError("No cache files used for param-type=%s" % param_type)
 
-def _make_HScache_for_std_gateset(std_module, termOrder, maxLength, json_too=False, comm=None):
+def _make_HScache_for_std_model(std_module, termOrder, maxLength, json_too=False, comm=None):
     """ 
     A utility routine to for creating the term-based cache files for a standard module
     """

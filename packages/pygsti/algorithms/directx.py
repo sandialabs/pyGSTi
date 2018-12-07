@@ -16,14 +16,14 @@ from .  import core         as _core
 def model_with_lgst_circuit_estimates(
         circuitsToEstimate, dataset, prepStrs, effectStrs,
         targetModel, includeTargetOps=True, opLabelAliases=None, 
-        guessModelForGauge=None, gateStringLabels=None, svdTruncateTo=None,
+        guessModelForGauge=None, circuitLabels=None, svdTruncateTo=None,
         verbosity=0 ):
     """
     Constructs a model that contains LGST estimates for circuitsToEstimate.
 
     For each operation sequence s in circuitsToEstimate, the constructed model
     contains the LGST estimate for s as separate gate, labeled either by
-    the corresponding element of gateStringLabels or by the tuple of s itself.
+    the corresponding element of circuitLabels or by the tuple of s itself.
 
     Parameters
     ----------
@@ -59,11 +59,11 @@ def model_with_lgst_circuit_estimates(
         matrices would match, i.e. the gauge would be the same as
         the model supplied. Defaults to the targetModel.
 
-    gateStringLabels : list of strings, optional
+    circuitLabels : list of strings, optional
         A list of labels in one-to-one correspondence with the
         operation sequence in circuitsToEstimate.  These labels are
         the keys to access the operation matrices in the returned
-        Model, i.e. op_matrix = returned_gateset[op_label]
+        Model, i.e. op_matrix = returned_model[op_label]
 
     svdTruncateTo : int, optional
         The Hilbert space dimension to truncate the operation matrices to using
@@ -85,9 +85,9 @@ def model_with_lgst_circuit_estimates(
     else: aliases = opLabelAliases.copy()
     
     #Add operation sequences to estimate as aliases
-    if gateStringLabels is not None:
-        assert(len(gateStringLabels) == len(circuitsToEstimate))
-        for opLabel,opStr in zip(gateStringLabels,circuitsToEstimate):
+    if circuitLabels is not None:
+        assert(len(circuitLabels) == len(circuitsToEstimate))
+        for opLabel,opStr in zip(circuitLabels,circuitsToEstimate):
             aliases[opLabel] = _tools.find_replace_tuple(opStr,opLabelAliases)
             opLabels.append(opLabel)
     else:
@@ -119,7 +119,7 @@ def direct_lgst_model(circuitToEstimate, circuitLabel, dataset,
 
     circuitLabel : string
         The label for the estimate of circuitToEstimate.
-        i.e. op_matrix = returned_gateset[op_label]
+        i.e. op_matrix = returned_model[op_label]
 
     dataset : DataSet
         The data to use for LGST
@@ -243,7 +243,7 @@ def direct_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
 
     circuitLabel : string
         The label for the estimate of circuitToEstimate.
-        i.e. op_matrix = returned_gateset[op_label]
+        i.e. op_matrix = returned_mode[op_label]
 
     dataset : DataSet
         The data to use for LGST
@@ -400,7 +400,7 @@ def direct_mlgst_model( circuitToEstimate, circuitLabel, dataset,
 
     circuitLabel : string
         The label for the estimate of circuitToEstimate.
-        i.e. op_matrix = returned_gateset[op_label]
+        i.e. op_matrix = returned_model[op_label]
 
     dataset : DataSet
         The data to use for LGST
@@ -547,7 +547,7 @@ def focused_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
 
     circuitLabel : string
         The label for the estimate of circuitToEstimate.
-        i.e. op_matrix = returned_gateset[op_label]
+        i.e. op_matrix = returned_model[op_label]
 
     dataset : DataSet
         The data to use for LGST

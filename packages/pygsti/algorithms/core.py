@@ -30,7 +30,7 @@ FLOATSIZE = 8 #TODO: better way?
 # 1) Need to use Jamiol. Isomorphism to contract to CPTP or even gauge optimize to CPTP
 #       since we need to know a Choi matrix basis to perform the Jamiol. isomorphism
 # 2) Need pauilVector <=> matrix in contractToValidSpam
-# 3) use Jamiol. Iso in print_gateset_info(...)
+# 3) use Jamiol. Iso in print_model_info(...)
 
 ###################################################################################
 #                 Linear Inversion GST (LGST)
@@ -624,10 +624,10 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
         circuitsToUseInEstimation = [ opstr.tup for opstr in circuitsToUseInEstimation ]
 
     #Setup and solve a least-squares problem where each element of each
-    # (lgst_estimated_process - process_estimate_using_current_gateset)  difference is a least-squares
-    # term and the optimization is over the elements of the "current_gateset".  Note that:
+    # (lgst_estimated_process - process_estimate_using_current_model)  difference is a least-squares
+    # term and the optimization is over the elements of the "current_model".  Note that:
     #   lgst_estimated_process = LGST estimate for a operation sequence in circuitsToUseInEstimation
-    #   process_estimate_using_current_gateset = process mx you get from multiplying together the operation matrices of the current model
+    #   process_estimate_using_current_model = process mx you get from multiplying together the operation matrices of the current model
 
     #Step 1: get the lgst estimates for each of the "operation sequences to use in estimation" list
     evTree,_,_ = mdl.bulk_evaltree(circuitsToUseInEstimation)

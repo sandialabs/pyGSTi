@@ -722,7 +722,7 @@ def twirled_deriv(model, circuit, eps=1e-6):
     Returns
     -------
     numpy array
-      An array of shape (op_dim^2, num_gateset_params)
+      An array of shape (op_dim^2, num_model_params)
     """
     prod = model.product(circuit)
 
@@ -767,7 +767,7 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
     Returns
     -------
     numpy array
-        An array of shape (num_compiled_gate_strings, op_dim^2, num_gateset_params)
+        An array of shape (num_compiled_gate_strings, op_dim^2, num_model_params)
     """
     if len(model.preps) > 0 or len(model.povms) > 0:
         model = removeSPAMVectors(model)

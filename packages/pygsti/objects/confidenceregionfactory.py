@@ -157,7 +157,7 @@ class ConfidenceRegionFactory(object):
             return False
 
         
-    def get_gateset(self):
+    def get_model(self):
         """
         Retrieve the associated model.
 
@@ -402,7 +402,7 @@ class ConfidenceRegionFactory(object):
             }
 
         #Count everything as non-gauge? TODO BETTER
-        self.nNonGaugeParams = self.get_gateset().num_params()
+        self.nNonGaugeParams = self.get_model().num_params()
         self.nGaugeParams = 0
 
 
@@ -886,7 +886,7 @@ class ConfidenceRegionFactoryView(object):
             raise NotImplementedError("Can't handle complex-valued functions yet")
 
         if hasattr(f0,'shape') and len(f0.shape) > 2:
-            raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfGateset: %d" % len(f0.shape))
+            raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfModel: %d" % len(f0.shape))
               #May not be needed here, but gives uniformity with Hessian case
 
         #massage gradF, which has shape (nParams,) + f0.shape
@@ -971,7 +971,7 @@ class ConfidenceRegionFactoryView(object):
                             df[i,j] = _np.sqrt( abs( _np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF[i,j].real))) ) \
                                 + 1j * _np.sqrt( abs( _np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF[i,j].imag))) )
                 else:
-                    raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfGateset: %d" % fDims)
+                    raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfModel: %d" % fDims)
 
             else: #assume real -- so really don't need conjugate calls below
                 if fDims == 0: #same as float case above
@@ -992,7 +992,7 @@ class ConfidenceRegionFactoryView(object):
                             gradFdag = _np.conjugate(_np.transpose(gradF[i,j]))
                             df[i,j] = _np.sqrt( abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF[i,j]))) )
                 else:
-                    raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfGateset: %d" % fDims)
+                    raise ValueError("Unsupported number of dimensions returned by fnOfOp or fnOfModel: %d" % fDims)
 
         printer.log("df = %s" % df)
 

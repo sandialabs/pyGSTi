@@ -387,7 +387,6 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
     PhiFunErrorArray = _np.zeros([jMax,log2kMax+1],dtype='object')
 
     for j in range(jMax):
-    #    simDS = _dsc.generate_fake_data(gateset3,alphaCosStrList+alphaSinStrList+epsilonCosStrList+epsilonSinStrList+thetaCosStrList+epsilonSinStrList,
         simDS = _dsc.generate_fake_data(
             simModel, alphaCosStrList+alphaSinStrList+epsilonCosStrList+
             epsilonSinStrList+thetaCosStrList+thetaSinStrList,

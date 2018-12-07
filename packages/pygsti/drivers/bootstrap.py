@@ -391,7 +391,7 @@ def mdl_mean(gsFunc, gsEnsemble, axis=None, **kwargs):
 #Note: for metrics that evaluate model with scalar for each gate, use axis=0
 # argument to above functions
 
-def to_mean_gateset(gsList,target_gs):
+def to_mean_model(gsList,target_gs):
     """ 
     Return the :class:`Model` constructed from the mean parameter
     vector of the models in `gsList`, that is, the mean of the
@@ -418,7 +418,7 @@ def to_mean_gateset(gsList,target_gs):
     output_gs.from_vector(_np.mean(gsVecArray))
     return output_gs
 
-def to_std_gateset(gsList,target_gs,ddof=1):
+def to_std_model(gsList,target_gs,ddof=1):
     """ 
     Return the :class:`Model` constructed from the standard-deviation
     parameter vector of the models in `gsList`, that is, the standard-
@@ -448,7 +448,7 @@ def to_std_gateset(gsList,target_gs,ddof=1):
     output_gs.from_vector(_np.std(gsVecArray,ddof=ddof))
     return output_gs
 
-def to_rms_gateset(gsList,target_gs):
+def to_rms_model(gsList,target_gs):
     """ 
     Return the :class:`Model` constructed from the root-mean-squared
     parameter vector of the models in `gsList`, that is, the RMS

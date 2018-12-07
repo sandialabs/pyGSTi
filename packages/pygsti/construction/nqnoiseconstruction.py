@@ -2522,7 +2522,7 @@ def stdmodule_to_smqmodule(std_module):
                                                 s,find_replace_strs,sslbls))
 
     out_module['find_replace_gatelabels'] = find_replace_labels
-    out_module['find_replace_gatestrings'] = find_replace_strs
+    out_module['find_replace_circuits'] = find_replace_strs
     out_module['upgrade_dataset'] = upgrade_dataset
         
     

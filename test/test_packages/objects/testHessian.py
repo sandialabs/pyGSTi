@@ -3,7 +3,7 @@ import warnings
 import pygsti
 from pygsti.construction import std1Q_XYI as stdxyi
 from pygsti.construction import std1Q_XY as stdxy
-from pygsti.objects import gatesetfunction as gsf
+from pygsti.objects import modelfunction as gsf
 from pygsti.objects.mapforwardsim import MapForwardSimulator
 from pygsti.objects import Label as L
 
@@ -173,7 +173,7 @@ class TestHessianMethods(BaseTestCase):
         self.assertTrue( cfctry.has_hessian() )
         self.assertFalse( cfctry.can_construct_views() ) # b/c hessian isn't projected yet...
 
-        mdl_dummy = cfctry.get_gateset() # test method
+        mdl_dummy = cfctry.get_model() # test method
         s = pickle.dumps(cfctry) # test pickle
         pickle.loads(s)
 
@@ -217,7 +217,7 @@ class TestHessianMethods(BaseTestCase):
         #self.assertTrue( cfctryLR.can_construct_views() )         
         ci_linresponse = cfctryLR.view( 95.0, 'normal', None)
         
-        mdl_dummy = cfctryLR.get_gateset() # test method
+        mdl_dummy = cfctryLR.get_model() # test method
         s = pickle.dumps(cfctryLR) # test pickle
         pickle.loads(s)
 

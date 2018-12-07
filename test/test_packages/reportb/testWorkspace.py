@@ -225,8 +225,8 @@ class TestWorkspace(ReportBaseCase):
 
         prepStrs = self.results.circuit_lists['prep fiducials']
         effectStrs = self.results.circuit_lists['effect fiducials']
-        tbls.append( w.GatestringTable((prepStrs,effectStrs),
-                                       ["Prep.","Measure"], commonTitle="Fiducials"))
+        tbls.append( w.CircuitTable((prepStrs,effectStrs),
+                                    ["Prep.","Measure"], commonTitle="Fiducials"))
 
         metric_abbrevs = ["evinf", "evagi","evnuinf","evnuagi","evdiamond",
                           "evnudiamond", "inf","agi","trace","diamond","nuinf","nuagi",

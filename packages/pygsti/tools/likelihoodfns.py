@@ -170,7 +170,7 @@ def logl_terms(model, dataset, circuit_list=None,
             totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[opStr].total
             countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
-        #could add to cache, but we don't have option of gateStringWeights
+        #could add to cache, but we don't have option of circuitWeights
         # here yet, so let's be conservative and not do this:
         #if evaltree_cache is not None:
         #    evaltree_cache['cntVecMx'] = countVecMx
@@ -466,7 +466,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
         dprobs_factor = _np.where( countVecMx == 0, 0.0, dprobs_factor )
         jac = dprobs * dprobs_factor[:,None] # (KM,N) * (KM,1)   (N = dim of vectorized model)
 
-    # jac[iSpamLabel,iCircuit,iGateSetParam] contains all d(logl)/d(gatesetParam) contributions
+    # jac[iSpamLabel,iCircuit,iModelParam] contains all d(logl)/d(modelParam) contributions
     return _np.sum(jac, axis=0) # sum over spam label and operation sequence dimensions
 
 
@@ -617,8 +617,8 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
             dprobs12 *= dprobs12_coeffs[:,None,None]
             hessian = dprobs12; hessian += hprobs
 
-            # hessian[iSpamLabel,iCircuit,iGateSetParam1,iGateSetParams2] contains all
-            #  d2(logl)/d(gatesetParam1)d(gatesetParam2) contributions
+            # hessian[iSpamLabel,iCircuit,iModelParam1,iModelParams2] contains all
+            #  d2(logl)/d(modelParam1)d(modelParam2) contributions
             return _np.sum(hessian, axis=0)
               # sum over spam label and operation sequence dimensions (operation sequences in evalSubTree)
               # adds current subtree contribution for (N,N')-sized block of Hessian
@@ -679,9 +679,9 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
     cntVecMx_all = _np.empty( nEls,'d')
     totalCntVec_all = _np.empty(nEls, 'd')
 
-    ds_subtree_gatestring_list = _lt.find_replace_tuple_list(
+    ds_subtree_circuit_list = _lt.find_replace_tuple_list(
         circuit_list, opLabelAliases)
-    for (i,opStr) in enumerate(ds_subtree_gatestring_list):
+    for (i,opStr) in enumerate(ds_subtree_circuit_list):
         cnts = dataset[opStr].counts
         totalCntVec_all[ lookup[i] ] = sum(cnts.values()) #dataset[opStr].total
         cntVecMx_all[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
@@ -1077,7 +1077,7 @@ def logl_max_terms(model, dataset, circuit_list=None,
             totalCntVec[ lookup[i] ] = sum(cnts.values()) #dataset[opStr].total
             countVecMx[ lookup[i] ] = [ cnts.get(x,0) for x in outcomes_lookup[i] ]
 
-        #could add to cache, but we don't have option of gateStringWeights
+        #could add to cache, but we don't have option of circuitWeights
         # here yet, so let's be conservative and not do this:
         #if evaltree_cache is not None:
         #    evaltree_cache['cntVecMx'] = countVecMx
@@ -1193,7 +1193,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
     Returns
     -------
     twoDeltaLogL : float
-        2*(loglikelihood(maximal_model,data) - loglikelihood(gateset_model,data))
+        2*(loglikelihood(maximal_model,data) - loglikelihood(model,data))
 
     Nsigma, pvalue : float
         Only returned when `dof_calc_method` is not None.

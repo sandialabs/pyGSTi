@@ -618,9 +618,9 @@ class TestDriversMethods(DriversTestCase):
         pygsti.drivers.mdl_mean(gsFn, bootgs_p)
         #pygsti.drivers.to_vector(bootgs_p[0]) #removed
 
-        pygsti.drivers.to_mean_gateset(bootgs_p, tp_target)
-        pygsti.drivers.to_std_gateset(bootgs_p, tp_target)
-        pygsti.drivers.to_rms_gateset(bootgs_p, tp_target)
+        pygsti.drivers.to_mean_model(bootgs_p, tp_target)
+        pygsti.drivers.to_std_model(bootgs_p, tp_target)
+        pygsti.drivers.to_rms_model(bootgs_p, tp_target)
 
         #Removed (unused)
         #pygsti.drivers.gateset_jtracedist(bootgs_p[0], tp_target)

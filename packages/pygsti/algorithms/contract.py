@@ -72,31 +72,31 @@ def contract(model, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirectCP
 
     if toWhat == 'CPTP':
         if useDirectCP:
-            _,contractedGateset = _contractToCP_direct(model, printer, TPalso=True, maxiter=maxiter)
+            _,contractedModel = _contractToCP_direct(model, printer, TPalso=True, maxiter=maxiter)
         else:
-            _,contractedGateset = _contractToTP(model,verbosity)
-            _,contractedGateset = _contractToCP(contractedGateset, printer, method, maxiter, tol)
+            _,contractedModel = _contractToTP(model,verbosity)
+            _,contractedModel = _contractToCP(contractedModel, printer, method, maxiter, tol)
     elif toWhat == 'XPTP':
         if dataset is None: raise ValueError("dataset must be given to contract to " + toWhat)
-        _,contractedGateset = _contractToTP(model,verbosity)
-        _,contractedGateset = _contractToXP(contractedGateset, dataset,verbosity, method, maxiter, tol)
+        _,contractedModel = _contractToTP(model,verbosity)
+        _,contractedModel = _contractToXP(contractedModel, dataset,verbosity, method, maxiter, tol)
     elif toWhat == 'CP':
         if useDirectCP:
-            _,contractedGateset = _contractToCP_direct(model, printer, TPalso=False, maxiter=maxiter)
+            _,contractedModel = _contractToCP_direct(model, printer, TPalso=False, maxiter=maxiter)
         else:
-            _,contractedGateset = _contractToCP(model, printer, method, maxiter, tol)
+            _,contractedModel = _contractToCP(model, printer, method, maxiter, tol)
     elif toWhat == 'TP':
-        _,contractedGateset = _contractToTP(model,verbosity)
+        _,contractedModel = _contractToTP(model,verbosity)
     elif toWhat == 'XP':
         if dataset is None: raise ValueError("dataset must be given to contract to " + toWhat)
-        _,contractedGateset = _contractToXP(model,dataset,verbosity,method,maxiter,tol)
+        _,contractedModel = _contractToXP(model,dataset,verbosity,method,maxiter,tol)
     elif toWhat == 'vSPAM':
-        contractedGateset = _contractToValidSPAM(model, printer)
+        contractedModel = _contractToValidSPAM(model, printer)
     elif toWhat == 'nothing':
-        contractedGateset = model.copy()
+        contractedModel = model.copy()
     else: raise ValueError("Invalid contract argument: %s" % toWhat)
 
-    return contractedGateset
+    return contractedModel
 
 
 #modifies gates only (not rhoVecs or EVecs = SPAM)

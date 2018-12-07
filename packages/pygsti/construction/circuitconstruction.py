@@ -336,7 +336,7 @@ def list_all_circuits_without_powers_and_cycles(opLabels, maxLength):
         A list of the operation (gate) labels to form operation sequences from.
 
     maxLength : int
-        The maximum length strings to return.  Gatestrings from length 1
+        The maximum length strings to return.  Circuits from length 1
         to `maxLength` will be returned.
 
     Returns

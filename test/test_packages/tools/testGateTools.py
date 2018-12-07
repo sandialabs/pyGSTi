@@ -201,19 +201,19 @@ class GateBaseTestCase(BaseTestCase):
                                               other_mode="all", sparse=False)
                 
 
-    def test_project_gateset(self):
+    def test_project_model(self):
         projectionTypes=('H','S','H+S','LND', 'LNDF')
         target_model = std2Q_XXYYII.target_model.copy()
         mdl = target_model.depolarize(op_noise=0.01)
 
         for genType in ("logG-logT", "logTiG", "logGTi"):
-            proj_gateset, Np_dict = optools.project_gateset(
+            proj_model, Np_dict = optools.project_model(
                 mdl, target_model, projectionTypes, genType)
 
         with self.assertRaises(ValueError):
             mdl_target_gm = std2Q_XXYYII.target_model.copy()
             mdl_target_gm.basis = pygsti.obj.Basis("gm",4)
-            optools.project_gateset(
+            optools.project_model(
                 mdl, mdl_target_gm, projectionTypes, genType) # basis mismatch
 
 

@@ -253,7 +253,7 @@ class Model(object):
                 obj.from_vector(self._paramvec[obj.gpindices])
 
     def _print_gpindices(self):
-        print("PRINTING GATESET GPINDICES!!!")
+        print("PRINTING MODEL GPINDICES!!!")
         for lbl,obj in self._iter_parameterized_objs():
             print("LABEL ",lbl)
             obj._print_gpindices()
@@ -670,7 +670,7 @@ class Model(object):
                             (spamtup,i) for i,spamtup in enumerate(spamtuples) ] )
 
                         for ist,out_tup in enumerate(outcome_tuples): # ist = spamtuple index
-                            elIndsToOutcomes[(s,ist)] = out_tup # element index is given by (parent_gatestring, spamtuple_index) tuple
+                            elIndsToOutcomes[(s,ist)] = out_tup # element index is given by (parent_circuit, spamtuple_index) tuple
                               # Note: works even if `i` already exists - doesn't reorder keys then
 
                     raw_spamTuples_dict[s] = spamtup_dict
@@ -1216,11 +1216,11 @@ class Model(object):
 
         toCircuit = lambda x : x if isinstance(x,_cir.Circuit) else _cir.Circuit(x)
         circuit_list = list(map(toCircuit,circuit_list)) # make sure compile_circuits is given Circuits
-        compiled_gatestrings, elIndices, outcomes, nEls = \
+        compiled_circuits, elIndices, outcomes, nEls = \
                             self.compile_circuits(circuit_list, dataset)
 
         evalTree = self._calc().construct_evaltree()
-        evalTree.initialize(compiled_gatestrings, numSubtreeComms)
+        evalTree.initialize(compiled_circuits, numSubtreeComms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
                     (len(circuit_list),_time.time()-tm)); tm = _time.time()
