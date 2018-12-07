@@ -868,10 +868,10 @@ def read_model(filename):
 
         #Preps
         if cur_typ == "PREP":
-            mdl.preps[cur_label] = _objs.FullyParameterizedSPAMVec(
+            mdl.preps[cur_label] = _objs.FullSPAMVec(
                 get_liouville_mx(obj))
         elif cur_typ == "TP-PREP":
-            mdl.preps[cur_label] = _objs.TPParameterizedSPAMVec(
+            mdl.preps[cur_label] = _objs.TPSPAMVec(
                 get_liouville_mx(obj))
         elif cur_typ == "CPTP-PREP":
             props = obj['properties']
@@ -880,10 +880,10 @@ def read_model(filename):
             nQubits = _np.log2(qty.size)/2.0
             bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-            errorMap = _objs.LindbladParameterizedOp.from_operation_matrix(
+            errorMap = _objs.LindbladDenseOp.from_operation_matrix(
                 qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis) #unitary postfactor = Id
             pureVec = _objs.StaticSPAMVec( _np.transpose(_evalRowList( props["PureVec"], bComplex=False )))
-            mdl.preps[cur_label] = _objs.LindbladParameterizedSPAMVec(pureVec,errorMap,"prep")
+            mdl.preps[cur_label] = _objs.LindbladSPAMVec(pureVec,errorMap,"prep")
         elif cur_typ == "STATIC-PREP":
             mdl.preps[cur_label] = _objs.StaticSPAMVec(get_liouville_mx(obj))
 
@@ -893,13 +893,13 @@ def read_model(filename):
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 if sub_typ == "EFFECT":
-                    Evec = _objs.FullyParameterizedSPAMVec(get_liouville_mx(sub_obj))
+                    Evec = _objs.FullSPAMVec(get_liouville_mx(sub_obj))
                 elif sub_typ == "TP-EFFECT":
-                    Evec = _objs.TPParameterizedSPAMVec(get_liouville_mx(sub_obj))
+                    Evec = _objs.TPSPAMVec(get_liouville_mx(sub_obj))
                 elif sub_typ == "STATIC-EFFECT":
                     Evec = _objs.StaticSPAMVec(get_liouville_mx(sub_obj))
                 #elif sub_typ == "CPTP-EFFECT":
-                #    Evec = _objs.LindbladParameterizedSPAMVec.from_spam_vector(qty,qty,"effect")
+                #    Evec = _objs.LindbladSPAMVec.from_spam_vector(qty,qty,"effect")
                 effects.append( (sub_obj['label'],Evec) )
 
             if cur_typ == "POVM":
@@ -914,17 +914,17 @@ def read_model(filename):
                 nQubits = _np.log2(qty.size)/2.0
                 bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
                 proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-                errorMap = _objs.LindbladParameterizedOp.from_operation_matrix(
+                errorMap = _objs.LindbladDenseOp.from_operation_matrix(
                     qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis) #unitary postfactor = Id
                 base_povm = _objs.UnconstrainedPOVM(effects) # could try to detect a ComputationalBasisPOVM in FUTURE
                 mdl.povms[cur_label] = _objs.LindbladParameterizedPOVM(errorMap, base_povm)
             else: assert(False), "Logic error!"
             
         elif cur_typ == "GATE":
-            mdl.operations[cur_label] = _objs.FullyParameterizedOp(
+            mdl.operations[cur_label] = _objs.FullDenseOp(
                 get_liouville_mx(obj))
         elif cur_typ == "TP-GATE":
-            mdl.operations[cur_label] = _objs.TPParameterizedOp(
+            mdl.operations[cur_label] = _objs.TPDenseOp(
                 get_liouville_mx(obj))
         elif cur_typ == "CPTP-GATE":
             qty = get_liouville_mx(obj)
@@ -935,11 +935,11 @@ def read_model(filename):
             nQubits = _np.log2(qty.shape[0])/2.0
             bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-            mdl.operations[cur_label] = _objs.LindbladParameterizedOp.from_operation_matrix(
+            mdl.operations[cur_label] = _objs.LindbladDenseOp.from_operation_matrix(
                 qty, unitary_post, proj_basis, proj_basis, truncate=False, mxBasis=basis)
 
         elif cur_typ == "STATIC-GATE":
-            mdl.operations[cur_label] = _objs.StaticOp(get_liouville_mx(obj))
+            mdl.operations[cur_label] = _objs.StaticDenseOp(get_liouville_mx(obj))
 
 
         elif cur_typ in ("Instrument","TP-Instrument"):
@@ -947,7 +947,7 @@ def read_model(filename):
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 qty = get_liouville_mx(sub_obj)
-                mxOrOp = _objs.StaticOp(qty) if cur_typ == "STATIC-IGATE" \
+                mxOrOp = _objs.StaticDenseOp(qty) if cur_typ == "STATIC-IGATE" \
                        else qty #just add numpy array `qty` to matrices list
                                 # and it will be made into a fully-param gate.
                 matrices.append( (sub_obj['label'],mxOrOp) )

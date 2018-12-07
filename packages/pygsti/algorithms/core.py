@@ -202,7 +202,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
         else:
             #Just a normal gae
             assert(len(X_ps) == 1); X_p = X_ps[0] # shape (nESpecs, nRhoSpecs)
-            lgstModel.operations[opLabel] = _objs.FullyParameterizedOp(_np.dot(invABMat_p,X_p)) # shape (trunc,trunc)
+            lgstModel.operations[opLabel] = _objs.FullDenseOp(_np.dot(invABMat_p,X_p)) # shape (trunc,trunc)
 
 
         #print "DEBUG: X(%s) = \n" % opLabel,X

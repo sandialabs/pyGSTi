@@ -93,7 +93,7 @@ rpeconfig_GxPi2_GyPi2_00 = _rpeconfig(rpeconfig_GxPi2_GyPi2_00_dict)
 #            rhoExpressions=["0"], EExpressions=["1"], 
 #            spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
 #
-#        outputModel.set_gate('Gy',_objs.FullyParameterizedOp(
+#        outputModel.set_gate('Gy',_objs.FullDenseOp(
 #                _np.dot( _np.dot(_np.linalg.inv(modelAux1['Gz']),
 #                               outputModel['Gy']),modelAux1['Gz'])) )
 #    

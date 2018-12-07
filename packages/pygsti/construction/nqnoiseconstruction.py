@@ -1361,7 +1361,7 @@ def reps_for_synthetic_idle(model, germStr, nqubits, core_qubits):
     # Note: only works with one level of embedding...
     def extract_gate(g):
         """ Get the gate action as a dense gate on core_qubits """
-        if isinstance(g, _objs.EmbeddedOpMap):
+        if isinstance(g, _objs.EmbeddedOp):
             assert(len(g.stateSpaceLabels.labels) == 1) # 1 tensor product block
             assert(len(g.stateSpaceLabels.labels[0]) == nqubits) # expected qubit count
             qubit_labels = g.stateSpaceLabels.labels[0]
@@ -1380,10 +1380,10 @@ def reps_for_synthetic_idle(model, germStr, nqubits, core_qubits):
                 # embedded gate acts on entire core-qubit space:
                 return g.embedded_op
             else:                
-                return _objs.EmbeddedOp(ssl, g.targetLabels, g.embedded_op)
+                return _objs.EmbeddedDenseOp(ssl, g.targetLabels, g.embedded_op)
         
-        elif isinstance(g, _objs.ComposedOpMap):
-            return _objs.ComposedOp([extract_gate(f) for f in g.factorops])
+        elif isinstance(g, _objs.ComposedOp):
+            return _objs.ComposedDenseOp([extract_gate(f) for f in g.factorops])
         else:
             raise ValueError("Cannot extract core contrib from %s" % str(type(g)))
         

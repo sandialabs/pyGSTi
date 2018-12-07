@@ -15,7 +15,7 @@ Gi_mx = np.array( [[1.0,   0,    0,    0],
                    [0,  0.99,    0,    0],
                    [0,     0, 0.98,    0],
                    [0,     0,    0, 0.97]], 'd')
-#g0.set_gate("Gi", pygsti.objects.FullyParameterizedOp( Gi_mx ))
+#g0.set_gate("Gi", pygsti.objects.FullDenseOp( Gi_mx ))
 #g0 = g0.kick(0.01, seed=1211)
 
 ggi = pygsti.objects.GaugeInvGateSet()

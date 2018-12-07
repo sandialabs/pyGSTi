@@ -590,7 +590,7 @@ def focused_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
         opLabelAliases=opLabelAliases,
         verbosity=verbosity)
 
-    focused_lsgst.operations[circuitLabel] = _objs.FullyParameterizedOp(
+    focused_lsgst.operations[circuitLabel] = _objs.FullDenseOp(
             focused_lsgst.product(circuitToEstimate)) #add desired string as a separate labeled gate
     return focused_lsgst
 

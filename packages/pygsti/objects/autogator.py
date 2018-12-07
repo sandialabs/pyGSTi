@@ -95,7 +95,7 @@ class SimpleCompositionAutoGator(AutoGator):
         LinearOperator
         """
         dense = bool(self.parent._sim_type == "matrix") # whether dense matrix gates should be created
-        Composed = _op.ComposedOp if dense else _op.ComposedOpMap
+        Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         #print("DB: SimpleCompositionAutoGator building gate %s for %s" %
         #      (('matrix' if dense else 'map'), str(oplabel)) )
         if isinstance(oplabel, _label.LabelTupTup):
@@ -126,7 +126,7 @@ class SharedIdleAutoGator(AutoGator):
     This autogator assumes a that the exisitng gates have a
     certain structure - that contained in the Model given by
     :function:`build_nqnoise_model`.  In particular, it assumes
-    each non-idle gate is a ComposedOpMap of the form
+    each non-idle gate is a ComposedOp of the form
     `Composed([fullTargetOp,fullIdleErr,fullLocalErr])`, and that
     parallel gates should be combined by composing the target ops
     and local errors but keeping just a single idle error (which
@@ -162,8 +162,8 @@ class SharedIdleAutoGator(AutoGator):
         LinearOperator
         """
         dense = bool(self.parent._sim_type == "matrix") # whether dense matrix gates should be created
-        Composed = _op.ComposedOp if dense else _op.ComposedOpMap
-        Lindblad = _op.LindbladParameterizedOp if dense else _op.LindbladParameterizedOpMap
+        Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
+        Lindblad = _op.LindbladDenseOp if dense else _op.LindbladOp
         Sum = _op.ComposedErrorgen
         #print("DB: SharedIdleAutoGator building gate %s for %s w/comp-type %s" %
         #      (('matrix' if dense else 'map'), str(oplabel), self.errcomp_type) )

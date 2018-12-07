@@ -2147,7 +2147,7 @@ def lindblad_projections_to_paramvals(hamProjs, otherProjs, param_mode="cptp",
     to that for (real) parameter values correspond to projections for a valid
     CPTP gate (e.g. by parameterizing the Cholesky decomposition of `otherProjs`
     instead of otherProjs itself).  This function is closely related to
-    implementation details of the LindbladParameterizedOpMap class.
+    implementation details of the LindbladOp class.
 
     Parameters
     ----------

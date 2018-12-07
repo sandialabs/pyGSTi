@@ -311,26 +311,26 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
             prepPure = _sv.ComputationalSPAMVec([0]*nQubits, evotype)
             prepNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type,
                                                       parameterization, errcomp_type, verbosity)
-            self.prep_blks['rho0'] = _sv.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep")
+            self.prep_blks['rho0'] = _sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")
     
             povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type, 
                                                       parameterization, errcomp_type, verbosity)
             self.povm_blks['Mdefault'] = _povm.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
 
-        Composed = _op.ComposedOp if sim_type == "matrix" else _op.ComposedOpMap
+        Composed = _op.ComposedDenseOp if sim_type == "matrix" else _op.ComposedOp
         primitive_ops = []
 
         for gateName, gate in gatedict.items():
             if ensure_composed_gates and independent_gates == False \
                and not isinstance(gate,Composed):
-                #Make a single ComposedOp *here*, which is used
+                #Make a single ComposedDenseOp *here*, which is used
                 # in all the embeddings for different target qubits
                 gate = Composed([gate]) # to make adding more factors easy
                 self.operation_blks[_Lbl(gateName+"_gate")] = cgate
                 
             if not isinstance(gate, _op.LinearOperator):
                 try:
-                    gate = _op.convert(_op.StaticOp(gate), parameterization, "pp")
+                    gate = _op.convert(_op.StaticDenseOp(gate), parameterization, "pp")
                 except Exception as e:
                     if on_construction_error == 'warn':
                         _warnings.warn("Failed to create %s gate %s. Dropping it." %
@@ -358,7 +358,7 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
                 
             for inds in availList:
                 if ensure_composed_gates and independent_gates:
-                    #Make a single ComposedOp *here*, for *only this* embedding
+                    #Make a single ComposedDenseOp *here*, for *only this* embedding
                     cgate = Composed([gate]) # to make adding more factors easy
                     self.operation_blks[_Lbl(gateName+"_gate",inds)] = cgate
                 else:
@@ -370,9 +370,9 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
                     if inds == tuple(qubit_labels):
                         embedded_op = cgate
                     elif sim_type == "matrix":
-                        embedded_op = _op.EmbeddedOp(self.stateSpaceLabels, inds, cgate)
+                        embedded_op = _op.EmbeddedDenseOp(self.stateSpaceLabels, inds, cgate)
                     else: # sim_type == "map" or sim_type.startswidth("termorder"):
-                        embedded_op = _op.EmbeddedOpMap(self.stateSpaceLabels, inds, cgate)
+                        embedded_op = _op.EmbeddedOp(self.stateSpaceLabels, inds, cgate)
                     self.operation_blks[_Lbl(gateName,inds)] = embedded_op
                     primitive_ops.append(_Lbl(gateName,inds))
 
@@ -396,7 +396,7 @@ class SimpleCompLayerLizard(_mdl.ImplicitLayerLizard):
         return self.effect_blks[layerlbl] # effect_blks are full effect ops
     def get_operation(self,layerlbl):
         dense = bool(self.model._sim_type == "matrix") # whether dense matrix gates should be created
-        Composed = _op.ComposedOp if dense else _op.ComposedOpMap
+        Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
 
         if len(components) == 1:

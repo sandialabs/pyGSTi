@@ -47,7 +47,7 @@ def optimize_operation(opToOptimize, targetOp):
       the resulting operation matrix is as close as possible to
       targetOp's matrix.
 
-    This is trivial for the case of FullyParameterizedOp
+    This is trivial for the case of FullDenseOp
       instances, but for other types of parameterization
       this involves an iterative optimization over all the
       parameters of opToOptimize.
@@ -66,10 +66,10 @@ def optimize_operation(opToOptimize, targetOp):
     """
 
     #TODO: cleanup this code:
-    if isinstance(opToOptimize, StaticOp):
+    if isinstance(opToOptimize, StaticDenseOp):
         return #nothing to optimize
 
-    if isinstance(opToOptimize, FullyParameterizedOp):
+    if isinstance(opToOptimize, FullDenseOp):
         if(targetOp.dim != opToOptimize.dim): #special case: gates can have different overall dimension
             opToOptimize.dim = targetOp.dim   #  this is a HACK to allow model selection code to work correctly
         opToOptimize.set_value(targetOp)     #just copy entire overall matrix since fully parameterized
@@ -133,17 +133,17 @@ def compose(op1, op2, basis, parameterization="auto"):
     # TP => Full
 
     if parameterization == "auto":
-        if any([isinstance(g, FullyParameterizedOp) for g in (op1,op2)]):
+        if any([isinstance(g, FullDenseOp) for g in (op1,op2)]):
             paramType = "full"
-        elif any([isinstance(g, TPParameterizedOp) for g in (op1,op2)]):
+        elif any([isinstance(g, TPDenseOp) for g in (op1,op2)]):
             paramType = "TP" #update to "full" below if TP-conversion
                              #not possible?
-        elif any([isinstance(g, LinearlyParameterizedOp)
+        elif any([isinstance(g, LinearlyParamDenseOp)
                   for g in (op1,op2)]):
             paramType = "linear"
         else:
-            assert( isinstance(op1, StaticOp)
-                    and isinstance(op2, StaticOp) )
+            assert( isinstance(op1, StaticDenseOp)
+                    and isinstance(op2, StaticDenseOp) )
             paramType = "static"
     else:
         paramType = parameterization #user-specified final parameterization
@@ -186,47 +186,47 @@ def convert(gate, toType, basis, extra=None):
        object from the gate object passed as input.
     """
     if toType == "full":
-        if isinstance(gate, FullyParameterizedOp):
+        if isinstance(gate, FullDenseOp):
             return gate #no conversion necessary
         else:
-            ret = FullyParameterizedOp( gate.todense() )
+            ret = FullDenseOp( gate.todense() )
             return ret
 
     elif toType == "TP":
-        if isinstance(gate, TPParameterizedOp):
+        if isinstance(gate, TPDenseOp):
             return gate #no conversion necessary
         else:
-            return TPParameterizedOp( gate.todense() )
+            return TPDenseOp( gate.todense() )
               # above will raise ValueError if conversion cannot be done
 
     elif toType == "linear":
-        if isinstance(gate, LinearlyParameterizedOp):
+        if isinstance(gate, LinearlyParamDenseOp):
             return gate #no conversion necessary
-        elif isinstance(gate, StaticOp):
+        elif isinstance(gate, StaticDenseOp):
             real = _np.isclose(_np.linalg.norm( gate.imag ),0)
-            return LinearlyParameterizedOp(gate.todense(), _np.array([]), {}, real)
+            return LinearlyParamDenseOp(gate.todense(), _np.array([]), {}, real)
         else:
-            raise ValueError("Cannot convert type %s to LinearlyParameterizedOp"
+            raise ValueError("Cannot convert type %s to LinearlyParamDenseOp"
                              % type(gate))
         
     elif toType == "static":
-        if isinstance(gate, StaticOp):
+        if isinstance(gate, StaticDenseOp):
             return gate #no conversion necessary
         else:
-            return StaticOp( gate )
+            return StaticDenseOp( gate )
 
     elif toType == "static unitary":
         op_std = _bt.change_basis(gate, basis, 'std')
         unitary = _gt.process_mx_to_unitary(op_std)
-        return StaticOp(unitary, "statevec")
+        return StaticDenseOp(unitary, "statevec")
 
     elif _gt.is_valid_lindblad_paramtype(toType):
         # e.g. "H+S terms","H+S clifford terms"
 
         _,evotype = _gt.split_lindblad_paramtype(toType)
-        LindbladOpType = LindbladParameterizedOpMap \
+        LindbladOpType = LindbladOp \
                            if evotype in ("svterm","cterm") else \
-                              LindbladParameterizedOp
+                              LindbladDenseOp
 
         nQubits = _np.log2(gate.dim)/2.0
         bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
@@ -475,13 +475,13 @@ class LinearOperator(_modelmember.ModelMember):
 
     def residuals(self, otherOp, transform=None, inv_transform=None):
         """
-        The per-element difference between this `MatrixOperator` and `otherOp`,
+        The per-element difference between this `DenseOperator` and `otherOp`,
         possibly after transforming this gate as 
         `G => inv_transform * G * transform`.
 
         Parameters
         ----------
-        otherOp : MatrixOperator
+        otherOp : DenseOperator
             The gate to compare against.
 
         transform, inv_transform : numpy.ndarray, optional
@@ -623,12 +623,12 @@ class LinearOperator(_modelmember.ModelMember):
 
         Parameters
         ----------
-        otherOp : MatrixOperator
+        otherOp : DenseOperator
             The gate to compose to the right of this one.
 
         Returns
         -------
-        MatrixOperator
+        DenseOperator
         """
         cpy = self.copy()
         cpy.set_value( _np.dot( self.todense(), otherOp.todense()) )
@@ -641,7 +641,7 @@ class LinearOperator(_modelmember.ModelMember):
         derivatives of the flattened operation matrix with respect to a
         single gate parameter.  Thus, each column is of length
         op_dim^2 and there is one column per gate parameter. An
-        empty 2D array in the StaticOp case (num_params == 0).
+        empty 2D array in the StaticDenseOp case (num_params == 0).
 
         Returns
         -------
@@ -752,17 +752,17 @@ class LinearOperator(_modelmember.ModelMember):
 
 
         
-#class MapOp(LinearOperator):
+#class MapOperator(LinearOperator):
 #    def __init__(self, dim, evotype):
 #        """ Initialize a new LinearOperator """
-#        super(MapOp, self).__init__(dim, evotype)
+#        super(MapOperator, self).__init__(dim, evotype)
 #
 #    #Maybe add an as_sparse_mx function and compute
 #    # metrics using this?
 #    #And perhaps a sparse-mode finite-difference deriv_wrt_params?
 
     
-class MatrixOperator(LinearOperator):
+class DenseOperator(LinearOperator):
     """
     Excapulates a parameterization of a operation matrix.  This class is the
     common base class for all specific parameterizations of a gate.
@@ -771,9 +771,9 @@ class MatrixOperator(LinearOperator):
     def __init__(self, mx, evotype):
         """ Initialize a new LinearOperator """
         self.base = mx
-        super(MatrixOperator, self).__init__(self.base.shape[0], evotype)
+        super(DenseOperator, self).__init__(self.base.shape[0], evotype)
         assert(evotype in ("densitymx","statevec")), \
-            "Invalid evotype for a MatrixOperator: %s" % evotype
+            "Invalid evotype for a DenseOperator: %s" % evotype
         
     def deriv_wrt_params(self, wrtFilter=None):
         """
@@ -781,7 +781,7 @@ class MatrixOperator(LinearOperator):
         derivatives of the flattened operation matrix with respect to a
         single gate parameter.  Thus, each column is of length
         op_dim^2 and there is one column per gate parameter. An
-        empty 2D array in the StaticOp case (num_params == 0).
+        empty 2D array in the StaticDenseOp case (num_params == 0).
 
         Returns
         -------
@@ -873,7 +873,7 @@ class MatrixOperator(LinearOperator):
 
 
 
-class StaticOp(MatrixOperator):
+class StaticDenseOp(DenseOperator):
     """
     Encapsulates a operation matrix that is completely fixed, or "static", meaning
       that is contains no parameters.
@@ -881,7 +881,7 @@ class StaticOp(MatrixOperator):
 
     def __init__(self, M, evotype="auto"):
         """
-        Initialize a StaticOp object.
+        Initialize a StaticDenseOp object.
 
         Parameters
         ----------
@@ -894,8 +894,8 @@ class StaticOp(MatrixOperator):
             evotype = "statevec" if _np.iscomplexobj(M) else "densitymx"
         assert(evotype in ("statevec","densitymx")), \
             "Invalid evolution type '%s' for %s" % (evotype,self.__class__.__name__)
-        MatrixOperator.__init__(self, M, evotype)
-        #(default MatrixOperator/LinearOperator methods implement an object with no parameters)
+        DenseOperator.__init__(self, M, evotype)
+        #(default DenseOperator/LinearOperator methods implement an object with no parameters)
 
         #if self._evotype == "svterm": # then we need to extract unitary
         #    op_std = _bt.change_basis(gate, basis, 'std')
@@ -904,24 +904,24 @@ class StaticOp(MatrixOperator):
     def compose(self, otherOp):
         """
         Create and return a new gate that is the composition of this gate
-        followed by otherOp, which *must be another StaticOp*.
+        followed by otherOp, which *must be another StaticDenseOp*.
         (For more general compositions between different types of gates, use
         the module-level compose function.)  The returned gate's matrix is
         equal to dot(this, otherOp).
 
         Parameters
         ----------
-        otherOp : StaticOp
+        otherOp : StaticDenseOp
             The gate to compose to the right of this one.
 
         Returns
         -------
-        StaticOp
+        StaticDenseOp
         """
-        return StaticOp(_np.dot( self.base, otherOp.base), self._evotype)
+        return StaticDenseOp(_np.dot( self.base, otherOp.base), self._evotype)
         
 
-class FullyParameterizedOp(MatrixOperator):
+class FullDenseOp(DenseOperator):
     """
     Encapsulates a operation matrix that is fully parameterized, that is,
       each element of the operation matrix is an independent parameter.
@@ -929,7 +929,7 @@ class FullyParameterizedOp(MatrixOperator):
 
     def __init__(self, M, evotype="auto"):
         """
-        Initialize a FullyParameterizedOp object.
+        Initialize a FullDenseOp object.
 
         Parameters
         ----------
@@ -942,7 +942,7 @@ class FullyParameterizedOp(MatrixOperator):
             evotype = "statevec" if _np.iscomplexobj(M) else "densitymx"
         assert(evotype in ("statevec","densitymx")), \
             "Invalid evolution type '%s' for %s" % (evotype,self.__class__.__name__)
-        MatrixOperator.__init__(self,M,evotype)
+        DenseOperator.__init__(self,M,evotype)
 
         
     def set_value(self, M):
@@ -1056,7 +1056,7 @@ class FullyParameterizedOp(MatrixOperator):
         return False
 
 
-class TPParameterizedOp(MatrixOperator):
+class TPDenseOp(DenseOperator):
     """
     Encapsulates a operation matrix that is fully parameterized except for
     the first row, which is frozen to be [1 0 ... 0] so that the action
@@ -1066,7 +1066,7 @@ class TPParameterizedOp(MatrixOperator):
 
     def __init__(self, M):
         """
-        Initialize a TPParameterizedOp object.
+        Initialize a TPDenseOp object.
 
         Parameters
         ----------
@@ -1076,12 +1076,12 @@ class TPParameterizedOp(MatrixOperator):
         """
         #LinearOperator.__init__(self, LinearOperator.convert_to_matrix(M))
         mx = LinearOperator.convert_to_matrix(M)
-        assert(_np.isrealobj(mx)),"TPParameterizedOp must have *real* values!"
+        assert(_np.isrealobj(mx)),"TPDenseOp must have *real* values!"
         if not (_np.isclose(mx[0,0], 1.0) and \
                 _np.allclose(mx[0,1:], 0.0)):
-            raise ValueError("Cannot create TPParameterizedOp: " +
+            raise ValueError("Cannot create TPDenseOp: " +
                              "invalid form for 1st row!")
-        MatrixOperator.__init__(self, _ProtectedArray(
+        DenseOperator.__init__(self, _ProtectedArray(
             mx, indicesToProtect=(0, slice(None,None,None))), "densitymx")
                 
 
@@ -1106,7 +1106,7 @@ class TPParameterizedOp(MatrixOperator):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim,self.dim))
         if not (_np.isclose(mx[0,0], 1.0) and _np.allclose(mx[0,1:], 0.0)):
-            raise ValueError("Cannot set TPParameterizedOp: " +
+            raise ValueError("Cannot set TPDenseOp: " +
                              "invalid form for 1st row!" )
             #For further debugging:  + "\n".join([str(e) for e in mx[0,:]])
         self.base[1:,:] = mx[1:,:]
@@ -1193,7 +1193,7 @@ class TPParameterizedOp(MatrixOperator):
 
 class LinearlyParameterizedElementTerm(object):
     """
-    Encapsulates a single term within a LinearlyParameterizedOp.
+    Encapsulates a single term within a LinearlyParamDenseOp.
     """
     def __init__(self, coeff=1.0, paramIndices=[]):
         """
@@ -1216,7 +1216,7 @@ class LinearlyParameterizedElementTerm(object):
         return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices[:])
 
 
-class LinearlyParameterizedOp(MatrixOperator):
+class LinearlyParamDenseOp(DenseOperator):
     """
     Encapsulates a operation matrix that is parameterized such that each
     element of the operation matrix depends only linearly on any parameter.
@@ -1225,7 +1225,7 @@ class LinearlyParameterizedOp(MatrixOperator):
     def __init__(self, baseMatrix, parameterArray, parameterToBaseIndicesMap,
                  leftTransform=None, rightTransform=None, real=False, evotype="auto"):
         """
-        Initialize a LinearlyParameterizedOp object.
+        Initialize a LinearlyParamDenseOp object.
 
         Parameters
         ----------
@@ -1290,7 +1290,7 @@ class LinearlyParameterizedOp(MatrixOperator):
         assert(evotype in ("densitymx","statevec")), \
             "Invalid evolution type '%s' for %s" % (evotype,self.__class__.__name__)
 
-        MatrixOperator.__init__(self, mx, evotype)
+        DenseOperator.__init__(self, mx, evotype)
         self._construct_matrix() # construct base from the parameters
 
         
@@ -1409,21 +1409,21 @@ class LinearlyParameterizedOp(MatrixOperator):
     def compose(self, otherOp):
         """
         Create and return a new gate that is the composition of this gate
-        followed by otherOp, which *must be another LinearlyParameterizedOp*.
+        followed by otherOp, which *must be another LinearlyParamDenseOp*.
         (For more general compositions between different types of gates, use
         the module-level compose function.)  The returned gate's matrix is
         equal to dot(this, otherOp).
 
         Parameters
         ----------
-        otherOp : LinearlyParameterizedOp
+        otherOp : LinearlyParamDenseOp
             The gate to compose to the right of this one.
 
         Returns
         -------
-        LinearlyParameterizedOp
+        LinearlyParamDenseOp
         """
-        assert( isinstance(otherOp, LinearlyParameterizedOp) )
+        assert( isinstance(otherOp, LinearlyParamDenseOp) )
 
         ### Implementation Notes ###
         #
@@ -1454,7 +1454,7 @@ class LinearlyParameterizedOp(MatrixOperator):
         W = _np.dot(self.rightTrans, otherOp.leftTrans)
         baseMx = _np.dot(self.baseMatrix, _np.dot(W, otherOp.baseMatrix)) # aWb above
         paramArray = _np.concatenate( (self.parameterArray, otherOp.parameterArray), axis=0)
-        composedOp = LinearlyParameterizedOp(baseMx, paramArray, {},
+        composedOp = LinearlyParamDenseOp(baseMx, paramArray, {},
                                                  self.leftTrans, otherOp.rightTrans,
                                                  self.enforceReal and otherOp.enforceReal,
                                                  self._evotype)
@@ -1509,7 +1509,7 @@ class LinearlyParameterizedOp(MatrixOperator):
 
 
 
-class EigenvalueParameterizedOp(MatrixOperator):
+class EigenvalueParamDenseOp(DenseOperator):
     """
     Encapsulates a real operation matrix that is parameterized only by its
     eigenvalues, which are assumed to be either real or to occur in
@@ -1520,7 +1520,7 @@ class EigenvalueParameterizedOp(MatrixOperator):
     def __init__(self, matrix, includeOffDiagsInDegen2Blocks=False,
                  TPconstrainedAndUnital=False):
         """
-        Initialize an EigenvalueParameterizedOp object.
+        Initialize an EigenvalueParamDenseOp object.
 
         Parameters
         ----------
@@ -1749,7 +1749,7 @@ class EigenvalueParameterizedOp(MatrixOperator):
         #Finish LinearOperator construction
         mx = _np.empty( matrix.shape, "d" )
         mx.flags.writeable = False # only _construct_matrix can change array
-        MatrixOperator.__init__(self, mx, "densitymx")
+        DenseOperator.__init__(self, mx, "densitymx")
         self._construct_matrix() # construct base from the parameters
 
 
@@ -1838,7 +1838,7 @@ class EigenvalueParameterizedOp(MatrixOperator):
                 dMx[i,j] = prefactor
             tmp = _np.dot(self.B, _np.dot(dMx, self.Bi))
             if _np.linalg.norm(tmp.imag) >= IMAG_TOL: #just a warning until we figure this out.
-                print("EigenvalueParameterizedOp deriv_wrt_params WARNING:" + 
+                print("EigenvalueParamDenseOp deriv_wrt_params WARNING:" + 
                       " Imag part = ",_np.linalg.norm(tmp.imag)," pdesc = ",pdesc) # pragma: no cover
             #assert(_np.linalg.norm(tmp.imag) < IMAG_TOL), \
             #       "Imaginary mag = %g!" % _np.linalg.norm(tmp.imag)
@@ -1863,7 +1863,7 @@ class EigenvalueParameterizedOp(MatrixOperator):
         return False
         
 
-class LindbladParameterizedOpMap(LinearOperator):
+class LindbladOp(LinearOperator):
     """
     A gate parameterized by the coefficients of Lindblad-like terms, which are
     exponentiated to give the gate action.
@@ -1872,7 +1872,7 @@ class LindbladParameterizedOpMap(LinearOperator):
     @classmethod 
     def decomp_paramtype(cls, paramType):
         """
-        A utility method for creating LindbladParameterizedOpMap objects.
+        A utility method for creating LindbladOp objects.
 
         Decomposes a high-level parameter-type `paramType` (e.g. `"H+S terms"`
         into a "base" type (specifies parameterization without evolution type,
@@ -1883,7 +1883,7 @@ class LindbladParameterizedOpMap(LinearOperator):
         are converted to/from parameters - are derived.
 
         The "non-Hamiltonian mode" describes which non-Hamiltonian Lindblad
-        coefficients are stored in a LindbladParameterizedOpMap, and is one
+        coefficients are stored in a LindbladOp, and is one
         of `"diagonal"` (only the diagonal elements of the full coefficient 
         matrix as a 1D array), `"diag_affine"` (a 2-by-d array of the diagonal
         coefficients on top of the affine projections), or `"all"` (the entire
@@ -1942,19 +1942,19 @@ class LindbladParameterizedOpMap(LinearOperator):
     def from_operation_obj(cls, gate, paramType="GLND", unitary_postfactor=None,
                       proj_basis="pp", mxBasis="pp", truncate=True, lazy=False):
         """
-        Creates a LindbladParameterizedOpMap from an existing LinearOperator object and
+        Creates a LindbladOp from an existing LinearOperator object and
         some additional information.  
 
         This function is different from `from_operation_matrix` in that it assumes
         that `gate` is a :class:`LinearOperator`-derived object, and if `lazy=True` and 
-        if `gate` is already a matching LindbladParameterizedOpMap, it is
+        if `gate` is already a matching LindbladOp, it is
         returned directly.  This routine is primarily used in gate conversion
         functions, where conversion is desired only when necessary.
 
         Parameters
         ----------
         gate : LinearOperator
-            The gate object to "convert" to a `LindbladParameterizedOpMap`.
+            The gate object to "convert" to a `LindbladOp`.
 
         paramType : str
             The high-level "parameter type" of the gate to create.  This 
@@ -1988,20 +1988,20 @@ class LindbladParameterizedOpMap(LinearOperator):
             be realized by the specified set of Lindblad projections.
             
         lazy : bool, optional
-            If True, then if `gate` is already a LindbladParameterizedOpMap
+            If True, then if `gate` is already a LindbladOp
             with the requested details (given by the other arguments), then
             `gate` is returned directly and no conversion/copying is performed.
             If False, then a new gate object is always created and returned.
 
         Returns
         -------
-        LindbladParameterizedOpMap
+        LindbladOp
         """
         RANK_TOL = 1e-6
 
         if unitary_postfactor is None:
             #Try to obtain unitary_post by getting the closest unitary
-            if isinstance(gate, LindbladParameterizedOp):
+            if isinstance(gate, LindbladDenseOp):
                 unitary_postfactor = gate.unitary_postfactor
             elif isinstance(gate, LinearOperator) and gate._evotype == "densitymx": 
                 J = _jt.fast_jamiolkowski_iso_std(gate.todense(), mxBasis) #Choi mx basis doesn't matter
@@ -2028,7 +2028,7 @@ class LindbladParameterizedOpMap(LinearOperator):
             if a is None or b is None: return False
             return _mt.safenorm(a-b) < 1e-6 # what about possibility of Clifford gates?
         
-        if isinstance(gate, LindbladParameterizedOpMap) and \
+        if isinstance(gate, LindbladOp) and \
            normeq(gate.unitary_postfactor,unitary_postfactor) and \
            isinstance(gate.errorgen, LindbladErrorgen) \
            and beq(ham_basis,gate.errorgen.ham_basis) and beq(nonham_basis,gate.errorgen.other_basis) \
@@ -2114,7 +2114,7 @@ class LindbladParameterizedOpMap(LinearOperator):
 
         Returns
         -------
-        LindbladParameterizedOpMap        
+        LindbladOp        
         """
         
         #Compute a (errgen, unitaryPostfactor) pair from the given
@@ -2374,9 +2374,9 @@ class LindbladParameterizedOpMap(LinearOperator):
         """
         Return this gate as a dense matrix.
         """
-        if self.sparse_expm: raise NotImplementedError("todense() not implemented for sparse-expm-mode LindbladParameterizedOpMap objects")
+        if self.sparse_expm: raise NotImplementedError("todense() not implemented for sparse-expm-mode LindbladOp objects")
         if self._evotype in ("svterm","cterm"): 
-            raise NotImplementedError("todense() not implemented for term-based LindbladParameterizedOpMap objects")
+            raise NotImplementedError("todense() not implemented for term-based LindbladOp objects")
 
         if self.unitary_postfactor is not None:
             dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
@@ -2389,7 +2389,7 @@ class LindbladParameterizedOpMap(LinearOperator):
         """
         Return the gate as a sparse matrix.
         """
-        _warnings.warn(("Constructing the sparse matrix of a LindbladParameterizedOp."
+        _warnings.warn(("Constructing the sparse matrix of a LindbladDenseOp."
                         "  Usually this is *NOT* a sparse matrix (the exponential of a"
                         " sparse matrix isn't generally sparse)!"))
         if self.sparse_expm:
@@ -2478,9 +2478,9 @@ class LindbladParameterizedOpMap(LinearOperator):
             elif self._evotype == "cterm": tt = "clifford"
             else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
 
-            assert(self.gpindices is not None),"LindbladParameterizedOpMap must be added to a Model before use!"
+            assert(self.gpindices is not None),"LindbladOp must be added to a Model before use!"
             assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
-              # for now - until StaticOp and CliffordOp can init themselves from a *sparse* matrix
+              # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
             postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.unitary_postfactor,
                                          self.unitary_postfactor, tt) 
             #Note: for now, *all* of an error generator's terms are considered 0-th order,
@@ -2581,10 +2581,10 @@ class LindbladParameterizedOpMap(LinearOperator):
 
         #TODO: move this function to errorgen?
         if not isinstance(self.errorgen, LindbladErrorgen):
-            raise NotImplementedError(("Can only set the value of a LindbladParameterizedOp that "
+            raise NotImplementedError(("Can only set the value of a LindbladDenseOp that "
                                        "contains a single LindbladErrorgen error generator"))
 
-        tOp = LindbladParameterizedOpMap.from_operation_matrix(
+        tOp = LindbladOp.from_operation_matrix(
             M,self.unitary_postfactor,
             self.errorgen.ham_basis, self.errorgen.other_basis,
             self.errorgen.param_mode,self.errorgen.nonham_mode,
@@ -2630,13 +2630,13 @@ class LindbladParameterizedOpMap(LinearOperator):
 
             #CHECK WITH OLD (passes) TODO move to unit tests?
             #tMx = _np.dot(Uinv,_np.dot(self.base, U)) #Move above for checking
-            #tOp = LindbladParameterizedOp(tMx,self.unitary_postfactor,
+            #tOp = LindbladDenseOp(tMx,self.unitary_postfactor,
             #                                self.ham_basis, self.other_basis,
             #                                self.cptp,self.nonham_diagonal_only,
             #                                True, self.matrix_basis)
             #assert(_np.linalg.norm(tOp.paramvals - self.paramvals) < 1e-6)
         else:
-            raise ValueError("Invalid transform for this LindbladParameterizedOp: type %s"
+            raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
                              % str(type(S)))
 
     def spam_transform(self, S, typ):
@@ -2685,7 +2685,7 @@ class LindbladParameterizedOpMap(LinearOperator):
             ## checked when truncate == False.  I'm not sure why this occurs,
             ## since a true unitary should map CPTP -> CPTP...
         else:
-            raise ValueError("Invalid transform for this LindbladParameterizedOp: type %s"
+            raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
                              % str(type(S)))
 
         
@@ -2695,7 +2695,7 @@ class LindbladParameterizedOpMap(LinearOperator):
         return s
 
 
-class LindbladParameterizedOp(LindbladParameterizedOpMap,MatrixOperator):
+class LindbladDenseOp(LindbladOp,DenseOperator):
     """
     Encapsulates a operation matrix that is parameterized by a Lindblad-form
     expression, such that each parameter multiplies a particular term in
@@ -2775,20 +2775,20 @@ class LindbladParameterizedOp(LindbladParameterizedOpMap,MatrixOperator):
             For more options, see :class:`LindbladParameterizedMap`.
         """
         assert(errorgen._evotype == "densitymx"), \
-            "LindbladParameterizedOp objects can only be used for the 'densitymx' evolution type"
+            "LindbladDenseOp objects can only be used for the 'densitymx' evolution type"
             #Note: cannot remove the evotype argument b/c we need to maintain the same __init__
-            # signature as LindbladParameterizedOpMap so its @classmethods will work on us.
+            # signature as LindbladOp so its @classmethods will work on us.
 
         # sparse_expm mode must be an arguement to mirror the call
-        # signature of LindbladParameterizedOpMap
+        # signature of LindbladOp
         assert(not sparse_expm), \
-            "LindbladParameterizedOp objects must have `sparse_expm=False`!"
+            "LindbladDenseOp objects must have `sparse_expm=False`!"
         
         #Start with base class construction
-        LindbladParameterizedOpMap.__init__(
+        LindbladOp.__init__(
             self, unitaryPostfactor, errorgen, sparse_expm=False) # (sets self.dim and self.base)
 
-        MatrixOperator.__init__(self, self.base, "densitymx")
+        DenseOperator.__init__(self, self.base, "densitymx")
             
 
     def _prepare_for_torep(self): 
@@ -2799,7 +2799,7 @@ class LindbladParameterizedOp(LindbladParameterizedOpMap,MatrixOperator):
         # LindbladParmaeterizedGateMap's version, which just constructs
         # self.err_gen & self.exp_err_gen, to constructing the entire
         # final matrix.
-        LindbladParameterizedOpMap._prepare_for_torep(self) #constructs self.exp_err_gen b/c *not sparse*
+        LindbladOp._prepare_for_torep(self) #constructs self.exp_err_gen b/c *not sparse*
         matrix = self.todense()  # dot(exp_err_gen, unitary_postfactor)
 
         assert(_np.linalg.norm(matrix.imag) < IMAG_TOL)
@@ -2840,10 +2840,10 @@ class LindbladParameterizedOp(LindbladParameterizedOpMap,MatrixOperator):
         -------
         OpRep
         """
-        #Implement this b/c some ambiguity since both LindbladParameterizedOp
-        # and MatrixOperator implement torep() - and we want to use the MatrixOperator one.
+        #Implement this b/c some ambiguity since both LindbladDenseOp
+        # and DenseOperator implement torep() - and we want to use the DenseOperator one.
         if self._evotype == "densitymx":
-            return MatrixOperator.torep(self)
+            return DenseOperator.torep(self)
         else:
             raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
                              (self._evotype, self.__class__.__name__))
@@ -3101,7 +3101,7 @@ def _dexpX(X,dX,expX=None,postfactor=None):
 
 
 
-class TPInstrumentOp(MatrixOperator):
+class TPInstrumentOp(DenseOperator):
     """
     A partial implementation of :class:`LinearOperator` which encapsulates an element of a
     :class:`TPInstrument`.  Instances rely on their parent being a 
@@ -3127,7 +3127,7 @@ class TPInstrumentOp(MatrixOperator):
         """
         self.param_ops = param_ops
         self.index = index
-        MatrixOperator.__init__(self, _np.identity(param_ops[0].dim,'d'),
+        DenseOperator.__init__(self, _np.identity(param_ops[0].dim,'d'),
                             "densitymx") #Note: sets self.gpindices; TP assumed real
         self._construct_matrix()
 
@@ -3170,7 +3170,7 @@ class TPInstrumentOp(MatrixOperator):
         derivatives of the flattened operation matrix with respect to a
         single gate parameter.  Thus, each column is of length
         op_dim^2 and there is one column per gate parameter. An
-        empty 2D array in the StaticOp case (num_params == 0).
+        empty 2D array in the StaticDenseOp case (num_params == 0).
 
         Returns
         -------
@@ -3271,7 +3271,7 @@ class TPInstrumentOp(MatrixOperator):
         self._construct_matrix()
 
 
-class ComposedOpMap(LinearOperator):
+class ComposedOp(LinearOperator):
     """
     A gate map that is the composition of a number of map-like factors (possibly
     other `LinearOperator`s)
@@ -3279,7 +3279,7 @@ class ComposedOpMap(LinearOperator):
     
     def __init__(self, ops_to_compose, dim="auto", evotype="auto"):
         """
-        Creates a new ComposedOpMap.
+        Creates a new ComposedOp.
 
         Parameters
         ----------
@@ -3472,19 +3472,19 @@ class ComposedOpMap(LinearOperator):
         return s
 
     
-class ComposedOp(ComposedOpMap,MatrixOperator):
+class ComposedDenseOp(ComposedOp,DenseOperator):
     """
     A gate that is the composition of a number of matrix factors (possibly other gates).
     """
     
     def __init__(self, ops_to_compose, dim="auto", evotype="auto"):
         """
-        Creates a new ComposedOp.
+        Creates a new ComposedDenseOp.
 
         Parameters
         ----------
         ops_to_compose : list
-            A list of 2D numpy arrays (matrices) and/or `MatrixOperator`-derived
+            A list of 2D numpy arrays (matrices) and/or `DenseOperator`-derived
             objects that are composed to form this gate.  Elements are composed
             with vectors  in  *left-to-right* ordering, maintaining the same
             convention as operation sequences in pyGSTi.  Note that this is
@@ -3500,8 +3500,8 @@ class ComposedOp(ComposedOpMap,MatrixOperator):
             the evolution type of `ops_to_compose[0]` *if* there's at least
             one gate being composed.
         """
-        ComposedOpMap.__init__(self, ops_to_compose, dim, evotype) #sets self.dim & self._evotype
-        MatrixOperator.__init__(self, _np.identity(self.dim), self._evotype) #type doesn't matter here - just a dummy
+        ComposedOp.__init__(self, ops_to_compose, dim, evotype) #sets self.dim & self._evotype
+        DenseOperator.__init__(self, _np.identity(self.dim), self._evotype) #type doesn't matter here - just a dummy
         self._construct_matrix()
 
 
@@ -3521,8 +3521,8 @@ class ComposedOp(ComposedOpMap,MatrixOperator):
         -------
         OpRep
         """
-        # implement this so we're sure to use MatrixOperator version
-        return MatrixOperator.torep(self)
+        # implement this so we're sure to use DenseOperator version
+        return DenseOperator.torep(self)
 
     def from_vector(self, v):
         """
@@ -3538,7 +3538,7 @@ class ComposedOp(ComposedOpMap,MatrixOperator):
         -------
         None
         """
-        ComposedOpMap.from_vector(self, v)
+        ComposedOp.from_vector(self, v)
         self._construct_matrix()
 
 
@@ -3602,16 +3602,16 @@ class ComposedOp(ComposedOpMap,MatrixOperator):
             
 
 
-class EmbeddedOpMap(LinearOperator):
+class EmbeddedOp(LinearOperator):
     """
     A gate map containing a single lower (or equal) dimensional gate within it.
-    An EmbeddedOpMap acts as the identity on all of its domain except the 
+    An EmbeddedOp acts as the identity on all of its domain except the 
     subspace of its contained gate, where it acts as the contained gate does.
     """
     
     def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None): # TODO: remove basisdim as arg
         """
-        Initialize an EmbeddedOpMap object.
+        Initialize an EmbeddedOp object.
 
         Parameters
         ----------
@@ -3632,7 +3632,7 @@ class EmbeddedOpMap(LinearOperator):
 
         gate_to_embed : LinearOperator
             The gate object that is to be contained within this gate, and
-            that specifies the only non-trivial action of the EmbeddedOpMap.
+            that specifies the only non-trivial action of the EmbeddedOp.
 
         basisdim : Dim, optional
             Specifies the basis dimension for the *entire* density-matrix
@@ -4003,7 +4003,7 @@ class EmbeddedOpMap(LinearOperator):
         """
         # I think we could do this but extracting the approprate parts of the
         # S and Sinv matrices... but haven't needed it yet.
-        raise NotImplementedError("Cannot transform an EmbeddedOp yet...")
+        raise NotImplementedError("Cannot transform an EmbeddedDenseOp yet...")
 
     
     def depolarize(self, amount):
@@ -4068,21 +4068,21 @@ class EmbeddedOpMap(LinearOperator):
     #def compose(self, otherOp):
     #    """
     #    Create and return a new gate that is the composition of this gate
-    #    followed by otherOp, which *must be another EmbeddedOp*.
+    #    followed by otherOp, which *must be another EmbeddedDenseOp*.
     #    (For more general compositions between different types of gates, use
     #    the module-level compose function.)  The returned gate's matrix is
     #    equal to dot(this, otherOp).
     #
     #    Parameters
     #    ----------
-    #    otherOp : EmbeddedOp
+    #    otherOp : EmbeddedDenseOp
     #        The gate to compose to the right of this one.
     #
     #    Returns
     #    -------
-    #    EmbeddedOp
+    #    EmbeddedDenseOp
     #    """
-    #    raise NotImplementedError("Can't compose an EmbeddedOp yet")
+    #    raise NotImplementedError("Can't compose an EmbeddedDenseOp yet")
 
     def has_nonzero_hessian(self):
         """ 
@@ -4107,15 +4107,15 @@ class EmbeddedOpMap(LinearOperator):
 
     
 
-class EmbeddedOp(EmbeddedOpMap, MatrixOperator):
+class EmbeddedDenseOp(EmbeddedOp, DenseOperator):
     """
     A gate containing a single lower (or equal) dimensional gate within it.
-    An EmbeddedOp acts as the identity on all of its domain except the 
+    An EmbeddedDenseOp acts as the identity on all of its domain except the 
     subspace of its contained gate, where it acts as the contained gate does.
     """
     def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None):
         """
-        Initialize a EmbeddedOp object.
+        Initialize a EmbeddedDenseOp object.
 
         Parameters
         ----------
@@ -4134,9 +4134,9 @@ class EmbeddedOp(EmbeddedOpMap, MatrixOperator):
             portions of the state space acted on by `gate_to_embed` (the
             "contained" gate).
 
-        gate_to_embed : MatrixOperator
+        gate_to_embed : DenseOperator
             The gate object that is to be contained within this gate, and
-            that specifies the only non-trivial action of the EmbeddedOp.
+            that specifies the only non-trivial action of the EmbeddedDenseOp.
 
         basisdim : Dim, optional
             Specifies the basis dimension for the *entire* density-matrix
@@ -4144,9 +4144,9 @@ class EmbeddedOp(EmbeddedOpMap, MatrixOperator):
             same dimension and direct-sum structure given by the
             `stateSpaceLabels`.  If None, then this dimension is assumed.
         """
-        EmbeddedOpMap.__init__(self, stateSpaceLabels, targetLabels,
+        EmbeddedOp.__init__(self, stateSpaceLabels, targetLabels,
                                  gate_to_embed, basisdim) # sets self.dim & self._evotype
-        MatrixOperator.__init__(self, _np.identity(self.dim), self._evotype) # type irrelevant - just a dummy
+        DenseOperator.__init__(self, _np.identity(self.dim), self._evotype) # type irrelevant - just a dummy
         self._construct_matrix()
 
     def _construct_matrix(self):
@@ -4165,8 +4165,8 @@ class EmbeddedOp(EmbeddedOpMap, MatrixOperator):
         -------
         OpRep
         """
-        # implement this so we're sure to use MatrixOperator version
-        return MatrixOperator.torep(self)
+        # implement this so we're sure to use DenseOperator version
+        return DenseOperator.torep(self)
 
 
     def from_vector(self, v):
@@ -4183,7 +4183,7 @@ class EmbeddedOp(EmbeddedOpMap, MatrixOperator):
         -------
         None
         """
-        EmbeddedOpMap.from_vector(self, v)
+        EmbeddedOp.from_vector(self, v)
         self._construct_matrix()
         self.dirty = True
 
@@ -4200,7 +4200,7 @@ class EmbeddedOp(EmbeddedOpMap, MatrixOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        # Note: this function exploits knowledge of EmbeddedOpMap internals!!
+        # Note: this function exploits knowledge of EmbeddedOp internals!!
         embedded_deriv = self.embedded_op.deriv_wrt_params(wrtFilter)
         derivMx = _np.zeros((self.dim**2,self.num_params()),embedded_deriv.dtype)
         M = self.embedded_op.dim
@@ -4220,9 +4220,9 @@ class EmbeddedOp(EmbeddedOpMap, MatrixOperator):
         """
         Depolarize this gate by the given `amount`.
 
-        See :method:`EmbeddedOpMap.depolarize`.
+        See :method:`EmbeddedOp.depolarize`.
         """
-        EmbeddedOpMap.depolarize(self, amount)
+        EmbeddedOp.depolarize(self, amount)
         self._construct_matrix()
 
 
@@ -4230,9 +4230,9 @@ class EmbeddedOp(EmbeddedOpMap, MatrixOperator):
         """
         Rotate this gate by the given `amount`.
 
-        See :method:`EmbeddedOpMap.rotate`.
+        See :method:`EmbeddedOp.rotate`.
         """
-        EmbeddedOpMap.rotate(self, amount, mxBasis)
+        EmbeddedOp.rotate(self, amount, mxBasis)
         self._construct_matrix()
 
 
@@ -4325,10 +4325,10 @@ class CliffordOp(LinearOperator):
 # - Note: if/when terms return a *polynomial* coefficient the poly's 'variables' should
 #    reference the *global* Model-level parameters, not just the local gate ones.
 # - create an EmbeddedTermGate class to handle embeddings, which holds a
-#    LindbladParameterizedOp (or other in the future?) and essentially wraps it's
-#    terms in EmbeddedOpMap or EmbeddedClifford objects.
+#    LindbladDenseOp (or other in the future?) and essentially wraps it's
+#    terms in EmbeddedOp or EmbeddedClifford objects.
 # - similarly create an ComposedTermGate class...
-# - so LindbladParameterizedOp doesn't need to deal w/"kite-structure" bases of terms;
+# - so LindbladDenseOp doesn't need to deal w/"kite-structure" bases of terms;
 #    leave this to some higher level constructor which can create compositions
 #    of multiple LindbladParameterizedGates based on kite structure (one per kite block).
 
@@ -4659,7 +4659,7 @@ class ComposedErrorgen(LinearOperator):
 # --> we embed error generators by tensoring with I's on non-target sectors.
 #  (identical to how be embed gates)
 
-class EmbeddedErrorgen(EmbeddedOpMap):
+class EmbeddedErrorgen(EmbeddedOp):
     """
     An error generator containing a single lower (or equal) dimensional gate within it.
     An EmbeddedErrorGen acts as the null map (zero) on all of its domain except the 
@@ -4698,7 +4698,7 @@ class EmbeddedErrorgen(EmbeddedOpMap):
             same dimension and direct-sum structure given by the
             `stateSpaceLabels`.  If None, then this dimension is assumed.
         """
-        EmbeddedOpMap.__init__(self, stateSpaceLabels, targetLabels, errgen_to_embed, basisdim)
+        EmbeddedOp.__init__(self, stateSpaceLabels, targetLabels, errgen_to_embed, basisdim)
 
         # set "API" error-generator members (to interface properly w/other objects)
         # FUTURE: create a base class that defines this interface (maybe w/properties?)
@@ -4735,9 +4735,9 @@ class EmbeddedErrorgen(EmbeddedOpMap):
 
     def _embed_basis_mx(self, mx):
         """ Take a dense or sparse basis matrix and embed it. """
-        mxAsGate = StaticOp(mx) if isinstance(mx,_np.ndarray) \
-            else StaticOp(mx.todense()) #assume mx is a sparse matrix
-        return EmbeddedOpMap(self.stateSpaceLabels, self.targetLabels,
+        mxAsGate = StaticDenseOp(mx) if isinstance(mx,_np.ndarray) \
+            else StaticDenseOp(mx.todense()) #assume mx is a sparse matrix
+        return EmbeddedOp(self.stateSpaceLabels, self.targetLabels,
                                mxAsGate).tosparse() # always convert to *sparse* basis els
 
 
@@ -4755,7 +4755,7 @@ class EmbeddedErrorgen(EmbeddedOpMap):
         -------
         None
         """
-        EmbeddedOpMap.from_vector(self, v) 
+        EmbeddedOp.from_vector(self, v) 
         #OLD TODO REMOVE
         #if self._evotype == "densitymx":
         #    self._construct_errgen_matrix()        
@@ -4870,7 +4870,7 @@ class LindbladErrorgen(LinearOperator):
 
         Returns
         -------
-        LindbladParameterizedOpMap                
+        LindbladOp                
         """
 
         d2 = errgen.shape[0]
@@ -5459,7 +5459,7 @@ class LindbladErrorgen(LinearOperator):
         """
         Return the error generator as a sparse matrix.
         """
-        _warnings.warn(("Constructing the sparse matrix of a LindbladParameterizedOp."
+        _warnings.warn(("Constructing the sparse matrix of a LindbladDenseOp."
                         "  Usually this is *NOT* a sparse matrix (the exponential of a"
                         " sparse matrix isn't generally sparse)!"))
         if self.sparse:
@@ -5680,7 +5680,7 @@ class LindbladErrorgen(LinearOperator):
             ## checked when truncate == False.  I'm not sure why this occurs,
             ## since a true unitary should map CPTP -> CPTP...
         else:
-            raise ValueError("Invalid transform for this LindbladParameterizedOp: type %s"
+            raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
                              % str(type(S)))
 
 

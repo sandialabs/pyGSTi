@@ -405,7 +405,7 @@ class ExplicitOpModel_Calc(object):
                                        "parameters for Models with non-dense "
                                        "member representations"))
         
-        #if any([not isinstance(gate,_op.MatrixOperator) for gate in self.operations.values()]) or \
+        #if any([not isinstance(gate,_op.DenseOperator) for gate in self.operations.values()]) or \
         #   any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.preps.values()]) or \
         #   any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.effects.values()]):
         #    raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
@@ -469,7 +469,7 @@ class ExplicitOpModel_Calc(object):
                     gsDeriv_effects[lbl] = -_np.dot(EVec.T, unitMx).T
 
                 for lbl,gate in self_operations.items():
-                    #if isinstance(gate,_op.MatrixOperator):
+                    #if isinstance(gate,_op.DenseOperator):
                     mdlDeriv_ops[lbl] = _np.dot(unitMx,gate) - \
                                          _np.dot(gate,unitMx)
                     #else:

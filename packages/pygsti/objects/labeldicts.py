@@ -202,7 +202,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             obj = _sv.StaticSPAMVec(value)
             obj = _sv.convert(obj, self.default_param, basis)
         elif self.flags['cast_to_type'] == "operation":
-            obj = _op.StaticOp(value)
+            obj = _op.StaticDenseOp(value)
             obj = _op.convert(obj, self.default_param, basis)
         return obj
 

@@ -142,8 +142,8 @@ def do_model_test(modelFilenameOrObj,
     mdl_lsgst_list = [ the_model ]*len(maxLengths)
 
     #    #Starting Point - compute on rank 0 and distribute
-    #LGSTcompatibleOps = all([(isinstance(g,_objs.FullyParameterizedOp) or
-    #                            isinstance(g,_objs.TPParameterizedOp))
+    #LGSTcompatibleOps = all([(isinstance(g,_objs.FullDenseOp) or
+    #                            isinstance(g,_objs.TPDenseOp))
     #                           for g in target_model.operations.values()])
     #if isinstance(lsgstLists[0],_objs.LsGermsStructure) and LGSTcompatibleOps:
     #    startingPt = advancedOptions.get('starting point',"LGST")
@@ -595,8 +595,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
 
     #Starting Point - compute on rank 0 and distribute
     if isinstance(target_model, _objs.ExplicitOpModel):
-        LGSTcompatibleOps = all([(isinstance(g,_objs.FullyParameterizedOp) or
-                                  isinstance(g,_objs.TPParameterizedOp))
+        LGSTcompatibleOps = all([(isinstance(g,_objs.FullDenseOp) or
+                                  isinstance(g,_objs.TPDenseOp))
                                  for g in target_model.operations.values()])
     else:
         LGSTcompatibleOps = False
@@ -1227,8 +1227,8 @@ def _get_lsgst_lists(dschk, target_model, prepStrs, effectStrs, germs,
 
     #Update: now always include LGST strings unless advanced options says otherwise
     #Get starting point (so we know whether to include LGST strings)
-    #LGSTcompatibleOps = all([(isinstance(g,_objs.FullyParameterizedOp) or
-    #                            isinstance(g,_objs.TPParameterizedOp))
+    #LGSTcompatibleOps = all([(isinstance(g,_objs.FullDenseOp) or
+    #                            isinstance(g,_objs.TPDenseOp))
     #                           for g in target_model.operations.values()])
     #if  LGSTcompatibleOps:
     #    startingPt = advancedOptions.get('starting point',"LGST")

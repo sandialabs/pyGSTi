@@ -42,7 +42,7 @@ def optimize_spamvec(vecToOptimize, targetVec):
       the resulting SPAM vector is as close as possible to
       targetVec.
 
-    This is trivial for the case of FullyParameterizedSPAMVec
+    This is trivial for the case of FullSPAMVec
       instances, but for other types of parameterization
       this involves an iterative optimization over all the
       parameters of vecToOptimize.
@@ -64,7 +64,7 @@ def optimize_spamvec(vecToOptimize, targetVec):
     if isinstance(vecToOptimize, StaticSPAMVec):
         return #nothing to optimize
 
-    if isinstance(vecToOptimize, FullyParameterizedSPAMVec):
+    if isinstance(vecToOptimize, FullSPAMVec):
         if(targetVec.dim != vecToOptimize.dim): #special case: gates can have different overall dimension
             vecToOptimize.dim = targetVec.dim   #  this is a HACK to allow model selection code to work correctly
         vecToOptimize.set_value(targetVec)     #just copy entire overall matrix since fully parameterized
@@ -116,23 +116,23 @@ def convert(spamvec, toType, basis, extra=None):
        object from the object passed as input.
     """
     if toType == "full":
-        if isinstance(spamvec, FullyParameterizedSPAMVec):
+        if isinstance(spamvec, FullSPAMVec):
             return spamvec #no conversion necessary
         else:
-            return FullyParameterizedSPAMVec( spamvec.todense() )
+            return FullSPAMVec( spamvec.todense() )
 
     elif toType == "TP":
-        if isinstance(spamvec, TPParameterizedSPAMVec):
+        if isinstance(spamvec, TPSPAMVec):
             return spamvec #no conversion necessary
         else:
-            return TPParameterizedSPAMVec( spamvec.todense() )
+            return TPSPAMVec( spamvec.todense() )
               # above will raise ValueError if conversion cannot be done
 
     elif toType == "TrueCPTP": # a non-lindbladian CPTP spamvec that hasn't worked well...
-        if isinstance(spamvec, CPTPParameterizedSPAMVec):
+        if isinstance(spamvec, CPTPSPAMVec):
             return spamvec #no conversion necessary
         else:
-            return CPTPParameterizedSPAMVec( spamvec, basis )
+            return CPTPSPAMVec( spamvec, basis )
               # above will raise ValueError if conversion cannot be done
 
     elif toType == "static":
@@ -158,7 +158,7 @@ def convert(spamvec, toType, basis, extra=None):
         bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
         proj_basis = "pp" if (basis == "pp" or bQubits) else basis
 
-        return LindbladParameterizedSPAMVec.from_spamvec_obj(
+        return LindbladSPAMVec.from_spamvec_obj(
             spamvec, "prep", toType, None, proj_basis, basis,
             truncate=True, lazy=True)
 
@@ -177,7 +177,7 @@ def _convert_to_lindblad_base(vec, typ, new_evotype, mxBasis="pp"):
     """ 
     Attempts to convert `vec` to a static (0 params) SPAMVec with 
     evoution type `new_evotype`.  Used to convert spam vecs to
-    being LindbladParameterizedSPAMVec objects.
+    being LindbladSPAMVec objects.
     """
     if vec._evotype == new_evotype and vec.num_params() == 0:
         return vec #no conversion necessary
@@ -834,7 +834,7 @@ class StaticSPAMVec(DenseSPAMVec):
 
 
 
-class FullyParameterizedSPAMVec(DenseSPAMVec):
+class FullSPAMVec(DenseSPAMVec):
     """
     Encapsulates a SPAM vector that is fully parameterized, that is,
       each element of the SPAM vector is an independent parameter.
@@ -842,7 +842,7 @@ class FullyParameterizedSPAMVec(DenseSPAMVec):
 
     def __init__(self, vec, evotype="auto"):
         """
-        Initialize a FullyParameterizedSPAMVec object.
+        Initialize a FullSPAMVec object.
 
         Parameters
         ----------
@@ -965,7 +965,7 @@ class FullyParameterizedSPAMVec(DenseSPAMVec):
 
     
 
-class TPParameterizedSPAMVec(DenseSPAMVec):
+class TPSPAMVec(DenseSPAMVec):
     """
     Encapsulates a SPAM vector that is fully parameterized except for the first
     element, which is frozen to be 1/(d**0.25).  This is so that, when the SPAM
@@ -983,7 +983,7 @@ class TPParameterizedSPAMVec(DenseSPAMVec):
     # alpha = 1/sqrt(d) = 1/(len(vec)**0.25).
     def __init__(self, vec):
         """
-        Initialize a TPParameterizedSPAMVec object.
+        Initialize a TPSPAMVec object.
 
         Parameters
         ----------
@@ -994,7 +994,7 @@ class TPParameterizedSPAMVec(DenseSPAMVec):
         vector = SPAMVec.convert_to_vector(vec)
         firstEl =  len(vector)**-0.25
         if not _np.isclose(vector[0,0], firstEl):
-            raise ValueError("Cannot create TPParameterizedSPAMVec: " +
+            raise ValueError("Cannot create TPSPAMVec: " +
                              "first element must equal %g!" % firstEl)
         DenseSPAMVec.__init__(self, _ProtectedArray(
             vector, indicesToProtect=(0,0)), "densitymx")
@@ -1020,7 +1020,7 @@ class TPParameterizedSPAMVec(DenseSPAMVec):
         if(vec.size != self.dim):
             raise ValueError("Argument must be length %d" % self.dim)
         if not _np.isclose(vec[0,0], firstEl):
-            raise ValueError("Cannot create TPParameterizedSPAMVec: " +
+            raise ValueError("Cannot create TPSPAMVec: " +
                              "first element must equal %g!" % firstEl)
         self.base[1:,:] = vec[1:,:]
         self.dirty = True
@@ -1127,7 +1127,7 @@ class ComplementSPAMVec(DenseSPAMVec):
             subtracted from `identity` to compute the final value of this 
             "complement" SPAM vector.
         """
-        self.identity = FullyParameterizedSPAMVec(
+        self.identity = FullSPAMVec(
             SPAMVec.convert_to_vector(identity) ) #so easy to transform
                                          # or depolarize by parent POVM
         
@@ -1229,7 +1229,7 @@ class ComplementSPAMVec(DenseSPAMVec):
 
 
 
-class CPTPParameterizedSPAMVec(DenseSPAMVec):
+class CPTPSPAMVec(DenseSPAMVec):
     """
     Encapsulates a SPAM vector that is parameterized through the Cholesky
     decomposition of it's standard-basis representation as a density matrix
@@ -1241,7 +1241,7 @@ class CPTPParameterizedSPAMVec(DenseSPAMVec):
 
     def __init__(self, vec, basis, truncate=False):
         """
-        Initialize a CPTPParameterizedSPAMVec object.
+        Initialize a CPTPSPAMVec object.
 
         Parameters
         ----------
@@ -1379,7 +1379,7 @@ class CPTPParameterizedSPAMVec(DenseSPAMVec):
             self.dirty = True
         except AssertionError as e:
             raise ValueError("Error initializing the parameters of this " +
-                         " CPTPParameterizedSPAMVec object: " + str(e))
+                         " CPTPSPAMVec object: " + str(e))
         
     def num_params(self):
         """
@@ -1522,7 +1522,7 @@ class CPTPParameterizedSPAMVec(DenseSPAMVec):
         numpy array
             Hessian with shape (dimension, num_params1, num_params2)
         """
-        raise NotImplementedError("TODO: add hessian computation for CPTPParameterizedSPAMVec")
+        raise NotImplementedError("TODO: add hessian computation for CPTPSPAMVec")
     
     
 
@@ -1756,7 +1756,7 @@ class TensorProdSPAMVec(SPAMVec):
         elif self._evotype == "cterm": tt = "clifford"
         else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
         
-        from .operation import EmbeddedOpMap as _EmbeddedGateMap
+        from .operation import EmbeddedOp as _EmbeddedGateMap
         terms = []
         fnq = [ int(round(_np.log2(f.dim)))//2 for f in self.factors ] # num of qubits per factor
           # assumes density matrix evolution
@@ -2146,7 +2146,7 @@ class PureStateSPAMVec(SPAMVec):
         return s
 
 
-class LindbladParameterizedSPAMVec(SPAMVec):
+class LindbladSPAMVec(SPAMVec):
     """ A Lindblad-parameterized SPAMVec (that is also expandable into terms)"""
 
     @classmethod
@@ -2154,12 +2154,12 @@ class LindbladParameterizedSPAMVec(SPAMVec):
                          proj_basis="pp", mxBasis="pp", truncate=True,
                          lazy=False):
         """
-        Creates a LindbladParameterizedSPAMVec from an existing SPAMVec object
+        Creates a LindbladSPAMVec from an existing SPAMVec object
         and some additional information.  
 
         This function is different from `from_spam_vector` in that it assumes
         that `spamvec` is a :class:`SPAMVec`-derived object, and if `lazy=True`
-        and if `spamvec` is already a matching LindbladParameterizedSPAMVec, it
+        and if `spamvec` is already a matching LindbladSPAMVec, it
         is returned directly.  This routine is primarily used in spam vector
         conversion functions, where conversion is desired only when necessary.
 
@@ -2167,7 +2167,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         ----------
         spamvec : SPAMVec
             The spam vector object to "convert" to a 
-            `LindbladParameterizedSPAMVec`.
+            `LindbladSPAMVec`.
 
         typ : {"prep","effect"}
             Whether this is a state preparation or POVM effect vector.
@@ -2181,7 +2181,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         purevec : numpy array or SPAMVec object, optional
             A SPAM vector which represents a pure-state, taken as the "ideal"
             reference state when constructing the error generator of the
-            returned `LindbladParameterizedSPAMVec`.  Note that this vector
+            returned `LindbladSPAMVec`.  Note that this vector
             still acts on density matrices (if it's a SPAMVec it should have 
             a "densitymx", "svterm", or "cterm" evolution type, and if it's
             a numpy array it should have the same dimension as `spamvec`).
@@ -2206,14 +2206,14 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             be realized by the specified set of Lindblad projections.
             
         lazy : bool, optional
-            If True, then if `spamvec` is already a LindbladParameterizedSPAMVec
+            If True, then if `spamvec` is already a LindbladSPAMVec
             with the requested details (given by the other arguments), then
             `spamvec` is returned directly and no conversion/copying is
             performed. If False, then a new object is always returned.
 
         Returns
         -------
-        LindbladParameterizedSPAMVec
+        LindbladSPAMVec
         """
 
         if not isinstance(spamvec, SPAMVec):
@@ -2226,7 +2226,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             purevec = StaticSPAMVec(purevec) #assume spamvec is just a vector
 
         #Break paramType in to a "base" type and an evotype
-        from .operation import LindbladParameterizedOpMap as _LPGMap
+        from .operation import LindbladOp as _LPGMap
         bTyp, evotype, nonham_mode, param_mode = _LPGMap.decomp_paramtype(paramType)
 
         ham_basis = proj_basis if (("H+" in bTyp) or bTyp in ("CPTP","GLND")) else None
@@ -2243,7 +2243,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             if a is None or b is None: return False
             return _mt.safenorm(a-b) < 1e-6 # what about possibility of Clifford gates?                
 
-        if isinstance(spamvec, LindbladParameterizedSPAMVec) \
+        if isinstance(spamvec, LindbladSPAMVec) \
            and spamvec._evotype == evotype and spamvec.typ == typ \
            and beq(ham_basis,spamvec.error_map.ham_basis) and beq(nonham_basis,spamvec.error_map.other_basis) \
            and param_mode==spamvec.error_map.param_mode and nonham_mode==spamvec.error_map.nonham_mode \
@@ -2276,7 +2276,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         spamVec : SPAMVec
             the SPAM vector to initialize from.  The error generator that
             tranforms `pureVec` into `spamVec` forms the parameterization
-            of the returned LindbladParameterizedSPAMVec.
+            of the returned LindbladSPAMVec.
             
         pureVec : numpy array or SPAMVec
             An array or SPAMVec in the *full* density-matrix space (this
@@ -2334,7 +2334,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
         Returns
         -------
-        LindbladParameterizedSPAMVec
+        LindbladSPAMVec
         """
         #Compute a (errgen, pureVec) pair from the given
         # (spamVec, pureVec) pair.
@@ -2373,8 +2373,8 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         assert(pureVec._evotype == evotype), "`pureVec` must have evotype == '%s'" % evotype
 
         from .operation import LindbladErrorgen as _LErrorgen
-        from .operation import LindbladParameterizedOpMap as _LPGMap
-        from .operation import LindbladParameterizedOp as _LPOp
+        from .operation import LindbladOp as _LPGMap
+        from .operation import LindbladDenseOp as _LPOp
 
         errgen = _LErrorgen.from_error_generator(errgen, ham_basis,
                                                  nonham_basis, param_mode, nonham_mode,
@@ -2459,10 +2459,10 @@ class LindbladParameterizedSPAMVec(SPAMVec):
     #
     #    Returns
     #    -------
-    #    LindbladParameterizedSPAMVec
+    #    LindbladSPAMVec
     #    """
-    #    from .operation import LindbladParameterizedOpMap as _LPGMap
-    #    from .operation import LindbladParameterizedOp as _LPOp
+    #    from .operation import LindbladOp as _LPGMap
+    #    from .operation import LindbladDenseOp as _LPOp
     #    errcls = _LPOp if (pureVec.dim <= 64 and evotype == "densitymx") else _LPGMap
     #    errmap = errcls.from_error_generator(
     #        None, errgen, ham_basis, nonham_basis, param_mode,
@@ -2541,14 +2541,14 @@ class LindbladParameterizedSPAMVec(SPAMVec):
 
         Returns
         -------
-        LindbladParameterizedOpMap                
+        LindbladOp                
         """
         #Need a dimension for error map construction (basisdict could be completely empty)
         if not isinstance(pureVec, SPAMVec):
             pureVec = StaticSPAMVec(pureVec, evotype) #assume spamvec is just a vector
         d2 = pureVec.dim
 
-        from .operation import LindbladParameterizedOpMap as _LPGMap
+        from .operation import LindbladOp as _LPGMap
         errmap = _LPGMap(d2, Ltermdict, basisdict, param_mode, nonham_mode,
                          truncate, mxBasis, evotype)
         return cls(pureVec, errmap, typ)
@@ -2556,10 +2556,10 @@ class LindbladParameterizedSPAMVec(SPAMVec):
     
     def __init__(self, pureVec, errormap, typ):
         """
-        Initialize a LindbladParameterizedSPAMVec object.
+        Initialize a LindbladSPAMVec object.
 
         Essentially a pure state preparation or projection that is followed
-        or preceded by, respectively, the action of LindbladParameterizedOp.
+        or preceded by, respectively, the action of LindbladDenseOp.
 
         Parameters
         ----------
@@ -2572,17 +2572,17 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             (This argument is *not* copied if it is a SPAMVec.  A numpy array
              is converted to a new StaticSPAMVec.)
 
-        errormap : MapOp
+        errormap : MapOperator
             The error generator action and parameterization, encapsulated in
-            a gate object.  Usually a :class:`LindbladParameterizedOpMap`
-            or :class:`ComposedOpMap` object.  (This argument is *not* copied,
+            a gate object.  Usually a :class:`LindbladOp`
+            or :class:`ComposedOp` object.  (This argument is *not* copied,
             to allow LindbladParameterizedSPAMVecs to share error generator
             parameters with other gates and spam vectors.)
 
         typ : {"prep","effect"}
             Whether this is a state preparation or POVM effect vector.
         """
-        from .operation import LindbladParameterizedOpMap as _LPGMap
+        from .operation import LindbladOp as _LPGMap
         evotype = errormap._evotype
         assert(evotype in ("densitymx","svterm","cterm")), \
             "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
@@ -2728,7 +2728,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
             if self._evotype == "svterm": tt = "dense"
             elif self._evotype == "cterm": tt = "clifford"
             else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
-            assert(self.gpindices is not None),"LindbladParameterizedSPAMVec must be added to a Model before use!"
+            assert(self.gpindices is not None),"LindbladSPAMVec must be added to a Model before use!"
 
             state_terms = self.state_vec.get_order_terms(0); assert(len(state_terms) == 1)
             stateTerm = state_terms[0]
@@ -2875,7 +2875,7 @@ class LindbladParameterizedSPAMVec(SPAMVec):
         typ : { 'prep', 'effect' }
             Which type of SPAM vector is being transformed (see above).
         """
-        #Defer everything to LindbladParameterizedOpMap's
+        #Defer everything to LindbladOp's
         # `spam_tranform` function, which applies either 
         # error_map -> inv(S) * error_map ("prep" case) OR
         # error_map -> error_map * S      ("effect" case)

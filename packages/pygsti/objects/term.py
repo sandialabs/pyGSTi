@@ -117,9 +117,9 @@ def embed_term(term, stateSpaceLabels, targetLabels, basisdim=None): #TODO: REMO
     """
     from . import operation as _op
     ret = RankOneTerm(term.coeff, None, None, term.typ)
-    ret.pre_ops = [ _op.EmbeddedOpMap(stateSpaceLabels, targetLabels, op, basisdim)
+    ret.pre_ops = [ _op.EmbeddedOp(stateSpaceLabels, targetLabels, op, basisdim)
                     for op in term.pre_ops ]
-    ret.post_ops = [ _op.EmbeddedOpMap(stateSpaceLabels, targetLabels, op, basisdim)
+    ret.post_ops = [ _op.EmbeddedOp(stateSpaceLabels, targetLabels, op, basisdim)
                      for op in term.post_ops ]
     return ret
 
@@ -202,7 +202,7 @@ class RankOneTerm(object):
             if not isinstance(pre_op,_mm.ModelMember):
                 try:
                     if typ == "dense":
-                        pre_op = _op.StaticOp(pre_op)
+                        pre_op = _op.StaticDenseOp(pre_op)
                     elif typ == "clifford":
                         pre_op = _op.CliffordOp(pre_op)
                     else: assert(False), "Invalid `typ` argument: %s" % typ
@@ -215,7 +215,7 @@ class RankOneTerm(object):
             if not isinstance(post_op,_mm.ModelMember):
                 try:
                     if typ == "dense":
-                        post_op = _op.StaticOp(post_op)
+                        post_op = _op.StaticDenseOp(post_op)
                     elif typ == "clifford":
                         post_op = _op.CliffordOp(post_op)
                     else: assert(False), "Invalid `typ` argument: %s" % typ

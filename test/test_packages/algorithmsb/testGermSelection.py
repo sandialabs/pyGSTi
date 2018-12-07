@@ -280,7 +280,7 @@ class GermSelectionTestCase(AlgorithmTestCase):
         gs3.set_all_parameterizations("full")
         gs4.set_all_parameterizations("full")
         gs3.operations['Gi2'] = np.identity(4,'d') #adds non-gauge params but not gauge params
-        gs4.operations['Gi2'] = pygsti.obj.StaticOp(np.identity(4,'d')) # keeps param counts the same but adds gate
+        gs4.operations['Gi2'] = pygsti.obj.StaticDenseOp(np.identity(4,'d')) # keeps param counts the same but adds gate
 
         with self.assertRaises(ValueError):
             germsel.get_model_params([gs1,gs2]) # different number of gauge params

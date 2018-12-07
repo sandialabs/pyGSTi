@@ -140,7 +140,7 @@ class TestGateSetMethods(GateSetTestCase):
 
         Gi_test_matrix = np.random.random( (4,4) )
         Gi_test_matrix[0,:] = [1,0,0,0] # so TP mode works
-        Gi_test = pygsti.objects.FullyParameterizedOp( Gi_test_matrix  )
+        Gi_test = pygsti.objects.FullDenseOp( Gi_test_matrix  )
         print("POINT 1")
         try:
             mdl["Gi"] = Gi_test_matrix #set operation matrix
@@ -1134,7 +1134,7 @@ class TestGateSetMethods(GateSetTestCase):
         #    self.model.setdefault('Gx',np.zeros((4,4),'d'))
 
         with self.assertRaises(ValueError):
-            self.model['Gbad'] = pygsti.obj.FullyParameterizedOp(np.zeros((5,5),'d')) #wrong gate dimension
+            self.model['Gbad'] = pygsti.obj.FullDenseOp(np.zeros((5,5),'d')) #wrong gate dimension
 
         mdl_multispam = self.model.copy()
         mdl_multispam.preps['rho1'] = mdl_multispam.preps['rho0'].copy()
@@ -1222,7 +1222,7 @@ class TestGateSetMethods(GateSetTestCase):
 
         #Lots of things that derived classes implement
         #with self.assertRaises(NotImplementedError):
-        #    rawCalc._buildup_dPG() # b/c gates are not MatrixOperator-derived (they're strings in fact!)
+        #    rawCalc._buildup_dPG() # b/c gates are not DenseOperator-derived (they're strings in fact!)
 
         #Now fwdsim doesn't contain product fns?
         #with self.assertRaises(NotImplementedError):
@@ -1404,16 +1404,16 @@ class TestGateSetMethods(GateSetTestCase):
         #Test instrument construction with elements whose gpindices are already initialized.
         # Since this isn't allowed currently (a future functionality), we need to do some hacking
         mdl = self.model.copy()
-        mdl.operations['Gnew1'] = pygsti.obj.FullyParameterizedOp( np.identity(4,'d') )
+        mdl.operations['Gnew1'] = pygsti.obj.FullDenseOp( np.identity(4,'d') )
         del mdl.operations['Gnew1']
 
         v = mdl.to_vector()
         Np = mdl.num_params()
-        gate_with_gpindices = pygsti.obj.FullyParameterizedOp( np.identity(4,'d') )
+        gate_with_gpindices = pygsti.obj.FullDenseOp( np.identity(4,'d') )
         gate_with_gpindices[0,:] = v[0:4]
         gate_with_gpindices.set_gpindices(np.concatenate( (np.arange(0,4), np.arange(Np,Np+12)) ), mdl) #manually set gpindices
         mdl.operations['Gnew2'] = gate_with_gpindices
-        mdl.operations['Gnew3'] = pygsti.obj.FullyParameterizedOp( np.identity(4,'d') )
+        mdl.operations['Gnew3'] = pygsti.obj.FullDenseOp( np.identity(4,'d') )
         del mdl.operations['Gnew3'] #this causes update of Gnew2 indices
         del mdl.operations['Gnew2']
 

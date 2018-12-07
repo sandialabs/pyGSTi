@@ -180,7 +180,7 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
         #Process "auto" sim_type
         _,evotype = _gt.split_lindblad_paramtype(parameterization)
           #FUTURE: should probabal make extracting evotype from a parameterization name a
-          # function somewhere - maybe a classmethod of LindbladParameterizedOp?
+          # function somewhere - maybe a classmethod of LindbladDenseOp?
         assert(evotype in ("densitymx","svterm","cterm")), "State-vector evolution types not allowed."
         if sim_type == "auto":
             if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
@@ -265,15 +265,15 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
         #basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse)
         basisAllQ_dim = _Dim(2**qubitGraph.nqubits)
 
-        EmbeddedOp = _op.EmbeddedOp if sim_type == "matrix" else _op.EmbeddedOpMap
-        StaticOp = _get_Static_factory(sim_type, parameterization) # always a *gate*
+        EmbeddedDenseOp = _op.EmbeddedDenseOp if sim_type == "matrix" else _op.EmbeddedOp
+        StaticDenseOp = _get_Static_factory(sim_type, parameterization) # always a *gate*
 
         for gn, (gate,availList) in oneQ_gates_and_avail.items():
             for (i,) in availList: # so 'i' is target qubit label
                 #Target operations
                 printer.log("Creating 1Q %s gate on qubit %s!!" % (gn,str(i)))
-                self.operation_blks[_Lbl(gn,i)] = EmbeddedOp(
-                    ssAllQ, [i], StaticOp(gate,"pp"), basisAllQ_dim)
+                self.operation_blks[_Lbl(gn,i)] = EmbeddedDenseOp(
+                    ssAllQ, [i], StaticDenseOp(gate,"pp"), basisAllQ_dim)
                 primitive_ops.append(_Lbl(gn,i))
                         
                 self.operation_blks[_Lbl('CloudNoise_'+gn,i)] = _build_nqn_cloud_noise(
@@ -293,8 +293,8 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
         for gn, (gate,availList) in twoQ_gates_and_avail.items():
             for (i,j) in availList: # so 'i' and 'j' are target qubit labels
                 printer.log("Creating %s gate between qubits %s and %s!!" % (gn,str(i),str(j)))
-                self.operation_blks[_Lbl(gn,(i,j))] = EmbeddedOp(
-                    ssAllQ, [i,j], StaticOp(gate,"pp"), basisAllQ_dim)
+                self.operation_blks[_Lbl(gn,(i,j))] = EmbeddedDenseOp(
+                    ssAllQ, [i,j], StaticDenseOp(gate,"pp"), basisAllQ_dim)
                 self.operation_blks[_Lbl('CloudNoise_'+gn,(i,j))] = _build_nqn_cloud_noise(
                     (i,j), qubitGraph, weight_maxhops_tuples_2Q,
                     errcomp_type=errcomp_type, sparse=sparse, sim_type=sim_type,
@@ -362,7 +362,7 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
     
             prepPure = _sv.ComputationalSPAMVec([0]*nQubits,evotype)
             prepNoiseMap = _build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer-1)
-            self.prep_blks[_Lbl('rho0')] = _sv.LindbladParameterizedSPAMVec(prepPure, prepNoiseMap, "prep")
+            self.prep_blks[_Lbl('rho0')] = _sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")
     
             povmNoiseMap = _build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer-1)
             self.povm_blks[_Lbl('Mdefault')] = _povm.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
@@ -387,11 +387,11 @@ def _get_Lindblad_factory(sim_type, parameterization, errcomp_type):
     _,evotype = _gt.split_lindblad_paramtype(parameterization)
     if errcomp_type == "gates":
         if evotype ==  "densitymx":
-            cls = _op.LindbladParameterizedOp if sim_type == "matrix" \
-                  else _op.LindbladParameterizedOpMap
+            cls = _op.LindbladDenseOp if sim_type == "matrix" \
+                  else _op.LindbladOp
         elif evotype in ("svterm","cterm"):
             assert(sim_type.startswith("termorder"))        
-            cls = _op.LindbladParameterizedOpMap
+            cls = _op.LindbladOp
         else:
             raise ValueError("Cannot create Lindblad gate factory for ",sim_type, parameterization)
 
@@ -416,7 +416,7 @@ def _get_Lindblad_factory(sim_type, parameterization, errcomp_type):
                 if parameterization == "CPTP": p = "GLND"
                 elif "S" in parameterization: p = parameterization.replace("S","s")
                 elif "D" in parameterization: p = parameterization.replace("D","d")
-            _,evotype,nonham_mode,param_mode = _op.LindbladParameterizedOpMap.decomp_paramtype(p)
+            _,evotype,nonham_mode,param_mode = _op.LindbladOp.decomp_paramtype(p)
             return _op.LindbladErrorgen.from_error_generator(errorGen, proj_basis, proj_basis, 
                                                                param_mode, nonham_mode, mxBasis,
                                                                truncate=True, evotype=evotype)
@@ -432,16 +432,16 @@ def _get_Static_factory(sim_type, parameterization):
     _,evotype = _gt.split_lindblad_paramtype(parameterization)
     if evotype == "densitymx":
         if sim_type == "matrix":
-            return lambda g,b: _op.StaticOp(g)
+            return lambda g,b: _op.StaticDenseOp(g)
         elif sim_type == "map":
-            return lambda g,b: _op.StaticOp(g) # TODO: create StaticGateMap?
+            return lambda g,b: _op.StaticDenseOp(g) # TODO: create StaticGateMap?
 
     elif evotype in ("svterm", "cterm"):
         assert(sim_type.startswith("termorder"))
         def _f(opMatrix, mxBasis="pp"):
-            return _op.LindbladParameterizedOpMap.from_operation_matrix(
+            return _op.LindbladOp.from_operation_matrix(
                 None, opMatrix, None, None, mxBasis=mxBasis, evotype=evotype)
-                # a LindbladParameterizedOp with None as ham_basis and nonham_basis => no parameters
+                # a LindbladDenseOp with None as ham_basis and nonham_basis => no parameters
               
         return _f
     raise ValueError("Cannot create Static gate factory for ",sim_type, parameterization)
@@ -470,7 +470,7 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
     sim_type : {"matrix","map","termorder:<N>"}
         The type of forward simulation (probability computation) being used by 
         the model this gate is destined for.  This affects what type of 
-        gate objects (e.g. `ComposedOp` vs `ComposedOpMap`) are created.
+        gate objects (e.g. `ComposedDenseOp` vs `ComposedOp`) are created.
     
     parameterization : str
         The type of parameterizaton for the constructed gate. E.g. "H+S",
@@ -495,11 +495,11 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
 
     if errcomp_type == "gates":
         if sim_type == "matrix": 
+            Composed = _op.ComposedDenseOp
+            Embedded = _op.EmbeddedDenseOp
+        else:
             Composed = _op.ComposedOp
             Embedded = _op.EmbeddedOp
-        else:
-            Composed = _op.ComposedOpMap
-            Embedded = _op.EmbeddedOpMap
     elif errcomp_type == "errorgens":
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
@@ -555,8 +555,8 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
         return Composed(termops)
     elif errcomp_type == "errorgens":
         errgen = Composed(termops)
-        LindbladOp = _op.LindbladParameterizedOp if sim_type == "matrix" \
-            else _op.LindbladParameterizedOpMap
+        LindbladOp = _op.LindbladDenseOp if sim_type == "matrix" \
+            else _op.LindbladOp
         return LindbladOp(None, errgen, sparse)
     else: assert(False)
 
@@ -614,7 +614,7 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
     sim_type : {"matrix","map","termorder:<N>"}
         The type of forward simulation (probability computation) being used by 
         the model this gate is destined for.  This affects what type of 
-        gate objects (e.g. `ComposedOp` vs `ComposedOpMap`) are created.
+        gate objects (e.g. `ComposedDenseOp` vs `ComposedOp`) are created.
     
     parameterization : str
         The type of parameterizaton for the constructed gate. E.g. "H+S",
@@ -628,20 +628,20 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
     LinearOperator
     """
     if sim_type == "matrix": 
-        ComposedOp = _op.ComposedOp
-        EmbeddedOp = _op.EmbeddedOp
+        ComposedDenseOp = _op.ComposedDenseOp
+        EmbeddedDenseOp = _op.EmbeddedDenseOp
     else:
-        ComposedOp = _op.ComposedOpMap
-        EmbeddedOp = _op.EmbeddedOpMap
+        ComposedDenseOp = _op.ComposedOp
+        EmbeddedDenseOp = _op.EmbeddedOp
 
     if errcomp_type == "gates":
-        Composed = ComposedOp
-        Embedded = EmbeddedOp
+        Composed = ComposedDenseOp
+        Embedded = EmbeddedDenseOp
     elif errcomp_type == "errorgens":
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-    StaticOp = _get_Static_factory(sim_type, parameterization) # always a *gate*
+    StaticDenseOp = _get_Static_factory(sim_type, parameterization) # always a *gate*
     Lindblad = _get_Lindblad_factory(sim_type, parameterization, errcomp_type)
       #constructs a gate or errorgen based on value of errcomp_type
     
@@ -711,8 +711,8 @@ class CloudNoiseLayerLizard(_mdl.ImplicitLayerLizard):
         errcomp_type = self.model._lizardArgs['errcomp_type']
         sparse_expm = self.model._lizardArgs['sparse_expm']
         
-        Composed = _op.ComposedOp if dense else _op.ComposedOpMap
-        Lindblad = _op.LindbladParameterizedOp if dense else _op.LindbladParameterizedOpMap
+        Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
+        Lindblad = _op.LindbladDenseOp if dense else _op.LindbladOp
         Sum = _op.ComposedErrorgen
         #print("DB: CloudNoiseLayerLizard building gate %s for %s w/comp-type %s" %
         #      (('matrix' if dense else 'map'), str(oplabel), self.errcomp_type) )

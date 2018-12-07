@@ -196,7 +196,7 @@ def set_idle_errors(nQubits, model, errdict, rand_default=None,
     #assumes Implicit model w/'globalIdle' as a composed gate...
     for i,factor in enumerate(model.operation_blks['globalIdle'].factorops): # each factor applies to some set of the qubits (of size 1 to the max-error-weight)
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
-        assert(isinstance(factor, _objs.EmbeddedOpMap)), "Expected Gi to be a composition of embedded gates!"
+        assert(isinstance(factor, _objs.EmbeddedOp)), "Expected Gi to be a composition of embedded gates!"
         sub_v = v[factor.gpindices]
         bsH = factor.embedded_op.errorgen.ham_basis_size
         bsO = factor.embedded_op.errorgen.other_basis_size
@@ -296,7 +296,7 @@ def predicted_intrinsic_rates(nQubits, maxweight, model,
 
     for i,factor in enumerate(model.operation_blks['globalIdle'].factorops):
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
-        assert(isinstance(factor, _objs.EmbeddedOpMap)), "Expected Gi to be a composition of embedded gates!"
+        assert(isinstance(factor, _objs.EmbeddedOp)), "Expected Gi to be a composition of embedded gates!"
         sub_v = v[factor.gpindices]
         bsH = factor.embedded_op.errorgen.ham_basis_size
         bsO = factor.embedded_op.errorgen.other_basis_size

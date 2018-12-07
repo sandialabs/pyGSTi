@@ -91,7 +91,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
             items = []
             for k,v in matrix_list:
                 gate = v if isinstance(v, _op.LinearOperator) else \
-                       _op.FullyParameterizedOp(v)
+                       _op.FullDenseOp(v)
 
                 if evotype is None: evotype = gate._evotype
                 else: assert(evotype == gate._evotype), \
@@ -397,13 +397,13 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
                 raise ValueError("Invalid `op_matrices` arg of type %s" % type(op_matrices))
 
             # Create gate objects that are used to parameterize this instrument
-            MT = _op.TPParameterizedOp( sum([v for k,v in matrix_list]) )
+            MT = _op.TPDenseOp( sum([v for k,v in matrix_list]) )
             MT.set_gpindices( slice(0, MT.num_params()), self)
             self.param_ops.append( MT )
 
             dim = MT.dim; off = MT.num_params()
             for k,v in matrix_list[:-1]:
-                Di = _op.FullyParameterizedOp(v-MT)
+                Di = _op.FullDenseOp(v-MT)
                 Di.set_gpindices( slice(off, off+Di.num_params()), self )
                 assert(Di.dim == dim)
                 self.param_ops.append( Di ); off += Di.num_params()

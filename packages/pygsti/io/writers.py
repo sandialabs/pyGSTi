@@ -270,10 +270,10 @@ def write_model(mdl,filename,title=None):
 
         for prepLabel,rhoVec in mdl.preps.items():
             props = None
-            if isinstance(rhoVec, _objs.FullyParameterizedSPAMVec): typ = "PREP"
-            elif isinstance(rhoVec, _objs.TPParameterizedSPAMVec): typ = "TP-PREP"
+            if isinstance(rhoVec, _objs.FullSPAMVec): typ = "PREP"
+            elif isinstance(rhoVec, _objs.TPSPAMVec): typ = "TP-PREP"
             elif isinstance(rhoVec, _objs.StaticSPAMVec): typ = "STATIC-PREP"
-            elif isinstance(rhoVec, _objs.LindbladParameterizedSPAMVec):
+            elif isinstance(rhoVec, _objs.LindbladSPAMVec):
                 typ = "CPTP-PREP"
                 props = [ ("PureVec", rhoVec.state_vec.todense()),
                           ("ErrgenMx", rhoVec.error_map.todense()) ]
@@ -310,9 +310,9 @@ def write_model(mdl,filename,title=None):
                     writeprop(output, lbl, val)
 
             for ELabel,EVec in povm_to_write.items():
-                if isinstance(EVec, _objs.FullyParameterizedSPAMVec): typ = "EFFECT"
+                if isinstance(EVec, _objs.FullSPAMVec): typ = "EFFECT"
                 elif isinstance(EVec, _objs.ComplementSPAMVec): typ = "EFFECT" # ok
-                elif isinstance(EVec, _objs.TPParameterizedSPAMVec): typ = "TP-EFFECT"
+                elif isinstance(EVec, _objs.TPSPAMVec): typ = "TP-EFFECT"
                 elif isinstance(EVec, _objs.StaticSPAMVec): typ = "STATIC-EFFECT"
                 else:
                     _warnings.warn(
@@ -327,10 +327,10 @@ def write_model(mdl,filename,title=None):
 
         for label,gate in mdl.operations.items():
             props = None
-            if isinstance(gate, _objs.FullyParameterizedOp): typ = "GATE"
-            elif isinstance(gate, _objs.TPParameterizedOp): typ = "TP-GATE"
-            elif isinstance(gate, _objs.StaticOp): typ = "STATIC-GATE"
-            elif isinstance(gate, _objs.LindbladParameterizedOp):
+            if isinstance(gate, _objs.FullDenseOp): typ = "GATE"
+            elif isinstance(gate, _objs.TPDenseOp): typ = "TP-GATE"
+            elif isinstance(gate, _objs.StaticDenseOp): typ = "STATIC-GATE"
+            elif isinstance(gate, _objs.LindbladDenseOp):
                 typ = "CPTP-GATE"
                 props = [ ("LiouvilleMx", gate.todense()) ]
                 if gate.unitary_postfactor is not None:
@@ -363,9 +363,9 @@ def write_model(mdl,filename,title=None):
             output.write(typ + ": " + str(instLabel) + '\n\n')
 
             for label,gate in inst.items():
-                if isinstance(gate, _objs.FullyParameterizedOp): typ = "IGATE"
+                if isinstance(gate, _objs.FullDenseOp): typ = "IGATE"
                 elif isinstance(gate, _objs.TPInstrumentOp): typ = "IGATE" # ok b/c instrument itself is marked as TP
-                elif isinstance(gate, _objs.StaticOp): typ = "STATIC-IGATE"
+                elif isinstance(gate, _objs.StaticDenseOp): typ = "STATIC-IGATE"
                 else:
                     _warnings.warn(
                         ("Non-standard gate of type {typ} cannot be described by"

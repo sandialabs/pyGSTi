@@ -55,9 +55,9 @@ class SPAMVecTestCase(BaseTestCase):
         v = np.ones((4,1),'d')
         v_tp = np.zeros((4,1),'d'); v_tp[0] = 1.0/np.sqrt(2); v_tp[3] = 1.0/np.sqrt(2) - 0.05
         v_id = np.zeros((4,1),'d'); v_id[0] = 1.0/np.sqrt(2)
-        povm = pygsti.obj.UnconstrainedPOVM( [('0',pygsti.obj.FullyParameterizedSPAMVec(v))] )
-        tppovm = pygsti.obj.TPPOVM( [('0',pygsti.obj.FullyParameterizedSPAMVec(v)),
-                                     ('1',pygsti.obj.FullyParameterizedSPAMVec(v_id-v))] )
+        povm = pygsti.obj.UnconstrainedPOVM( [('0',pygsti.obj.FullSPAMVec(v))] )
+        tppovm = pygsti.obj.TPPOVM( [('0',pygsti.obj.FullSPAMVec(v)),
+                                     ('1',pygsti.obj.FullSPAMVec(v_id-v))] )
         compSV = tppovm['1'] #complement POVM
         self.assertTrue(isinstance(compSV,pygsti.obj.ComplementSPAMVec))
 
@@ -65,20 +65,20 @@ class SPAMVecTestCase(BaseTestCase):
         dummyGS.povms['Mtest'] = povm # so to/from vector work w/tensor prod of povm in tests below
         assert(povm.gpindices is not None)
         
-        vecs = [ pygsti.obj.FullyParameterizedSPAMVec(v),
-                 pygsti.obj.TPParameterizedSPAMVec(v_tp),
-                 pygsti.obj.CPTPParameterizedSPAMVec(v_tp, "pp"),
+        vecs = [ pygsti.obj.FullSPAMVec(v),
+                 pygsti.obj.TPSPAMVec(v_tp),
+                 pygsti.obj.CPTPSPAMVec(v_tp, "pp"),
                  pygsti.obj.StaticSPAMVec(v),
                  compSV,
-                 pygsti.obj.TensorProdSPAMVec("prep", [pygsti.obj.FullyParameterizedSPAMVec(v),
-                                                       pygsti.obj.FullyParameterizedSPAMVec(v)]),
+                 pygsti.obj.TensorProdSPAMVec("prep", [pygsti.obj.FullSPAMVec(v),
+                                                       pygsti.obj.FullSPAMVec(v)]),
                  pygsti.obj.TensorProdSPAMVec("effect", [povm], ['0'])
                 ]
 
         with self.assertRaises(ValueError):
             pygsti.obj.TensorProdSPAMVec("foobar",
-                                         [pygsti.obj.FullyParameterizedSPAMVec(v),
-                                          pygsti.obj.FullyParameterizedSPAMVec(v)])
+                                         [pygsti.obj.FullSPAMVec(v),
+                                          pygsti.obj.FullSPAMVec(v)])
 
         for sv in vecs:
             print("Testing %s spam vec -------------- " % type(sv))
@@ -162,7 +162,7 @@ class SPAMVecTestCase(BaseTestCase):
 
     def test_convert(self):
         v_tp = np.zeros((4,1),'d'); v_tp[0] = 1.0/np.sqrt(2); v_tp[3] = 1.0/np.sqrt(2) - 0.05
-        s = pygsti.obj.FullyParameterizedSPAMVec(v_tp)
+        s = pygsti.obj.FullSPAMVec(v_tp)
 
         for toType in ("full","TP","static"):
             s2 = pygsti.objects.spamvec.convert(s, toType, "pp")
@@ -174,7 +174,7 @@ class SPAMVecTestCase(BaseTestCase):
 
     def test_cptp_spamvec(self):
 
-        vec = pygsti.obj.CPTPParameterizedSPAMVec([1/np.sqrt(2),0,0,1/np.sqrt(2) - 0.1], "pp")
+        vec = pygsti.obj.CPTPSPAMVec([1/np.sqrt(2),0,0,1/np.sqrt(2) - 0.1], "pp")
         print(vec)
         print(vec.base.shape)
 
@@ -352,7 +352,7 @@ class SPAMVecTestCase(BaseTestCase):
         #Only works with Python replib (only there is todense implemented)
         #cv = pygsti.obj.ComputationalSPAMVec([0,1,1],'densitymx')
         #v = pygsti.construction.basis_build_vector("3", pygsti.obj.Basis("pp",2**3))
-        #s = pygsti.obj.FullyParameterizedSPAMVec(v)
+        #s = pygsti.obj.FullSPAMVec(v)
         #assert(np.linalg.norm(cv.torep("effect").todense(np.empty(cv.dim,'d'))-v.flat) < 1e-6)
         #
         #cv = pygsti.obj.ComputationalSPAMVec([0,1,0,1],'densitymx')

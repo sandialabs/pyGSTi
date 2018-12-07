@@ -2,7 +2,7 @@ import unittest
 import pygsti
 import numpy as np
 
-from  pygsti.objects import FullyParameterizedOp
+from  pygsti.objects import FullDenseOp
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -10,7 +10,7 @@ class FullyParameterizedGateTestCase(BaseTestCase):
 
     def setUp(self):
         super(FullyParameterizedGateTestCase, self).setUp()
-        self.gate = FullyParameterizedOp([[0,0],[0,0]])
+        self.gate = FullDenseOp([[0,0],[0,0]])
 
 
     def test_bad(self):

@@ -107,7 +107,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         
     ## GST using "full" (non-embedded/composed) gates
     # All of these calcs use dense matrices; While sparse operation matrices (as Maps) could be used,
-    # they'd need to enter as a sparse basis to a LindbladParameterizedOp (maybe add this later?)
+    # they'd need to enter as a sparse basis to a LindbladDenseOp (maybe add this later?)
     
     def test_stdgst_matrix(self):
         # Using matrix-based calculations
@@ -427,9 +427,9 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #Create a model with unitary gates and state vectors (instead of the usual superoperators and density mxs)
         mdl = pygsti.obj.ExplicitOpModel(sim_type="matrix")
-        mdl.operations['Gi'] = pygsti.obj.StaticOp( np.identity(2,'complex') )
-        mdl.operations['Gx'] = pygsti.obj.StaticOp(Uop(np.pi/2 * sigmax))
-        mdl.operations['Gy'] = pygsti.obj.StaticOp(Uop(np.pi/2 * sigmay))
+        mdl.operations['Gi'] = pygsti.obj.StaticDenseOp( np.identity(2,'complex') )
+        mdl.operations['Gx'] = pygsti.obj.StaticDenseOp(Uop(np.pi/2 * sigmax))
+        mdl.operations['Gy'] = pygsti.obj.StaticDenseOp(Uop(np.pi/2 * sigmay))
         mdl.preps['rho0'] = pygsti.obj.StaticSPAMVec( [1,0], 'statevec')
         mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM(
             {'0': pygsti.obj.StaticSPAMVec( [1,0], 'statevec'),

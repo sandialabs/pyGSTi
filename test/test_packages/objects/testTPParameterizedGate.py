@@ -2,7 +2,7 @@ import unittest
 import pygsti
 import numpy as np
 
-from  pygsti.objects import TPParameterizedOp
+from  pygsti.objects import TPDenseOp
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -10,11 +10,11 @@ class TPParameterizedGateTestCase(BaseTestCase):
 
     def setUp(self):
         super(TPParameterizedGateTestCase, self).setUp()
-        self.gate = TPParameterizedOp([[1,0], [0,0]])
+        self.gate = TPDenseOp([[1,0], [0,0]])
 
     def test_bad_first_row(self):
         with self.assertRaises(ValueError):
-            gate = TPParameterizedOp([[0,0], [0,0]])
+            gate = TPDenseOp([[0,0], [0,0]])
 
     def test_bad(self):
         gate = self.gate.copy()

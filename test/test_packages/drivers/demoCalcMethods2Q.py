@@ -84,7 +84,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
     ## GST using "full" (non-embedded/composed) gates
     # All of these calcs use dense matrices; While sparse operation matrices (as Maps) could be used,
-    # they'd need to enter as a sparse basis to a LindbladParameterizedOp (maybe add this later?)
+    # they'd need to enter as a sparse basis to a LindbladDenseOp (maybe add this later?)
     
     def test_stdgst_matrix(self):
         # Using matrix-based calculations

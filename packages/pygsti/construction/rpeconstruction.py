@@ -74,7 +74,7 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
             effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
             spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
-        outputModel.operations['Gx'] = _objs.FullyParameterizedOp(
+        outputModel.operations['Gx'] = _objs.FullDenseOp(
             _np.dot( _np.dot(_np.linalg.inv(modelAux1.operations['Gy']),
                              outputModel.operations['Gx']),modelAux1.operations['Gy']))
 
@@ -365,7 +365,7 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
                                        effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
                                        spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
-    simModel.operations['Gx'] =  _objs.FullyParameterizedOp(
+    simModel.operations['Gx'] =  _objs.FullDenseOp(
         _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations['Gy']),simModel.operations['Gx']),
                 modelAux1.operations['Gy']))
 

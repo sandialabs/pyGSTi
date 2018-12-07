@@ -7,8 +7,8 @@ import scipy.sparse as sps
         
 from pygsti.construction import std1Q_XYI
 from pygsti.construction import std2Q_XYICNOT
-from pygsti.objects import LindbladParameterizedOp, ComposedOp, EmbeddedOp, StaticOp
-from pygsti.objects import LindbladParameterizedOpMap
+from pygsti.objects import LindbladDenseOp, ComposedDenseOp, EmbeddedDenseOp, StaticDenseOp
+from pygsti.objects import LindbladOp
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -26,24 +26,24 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         
         nQubits = 3 # say
         Id_1Q = np.identity(4**1,'d')
-        idleErr0 = LindbladParameterizedOp.from_operation_matrix(Id_1Q) # 1-qubit error generator
-        idleErr1 = LindbladParameterizedOp.from_operation_matrix(Id_1Q) # allow different "idle" 
-        idleErr2 = LindbladParameterizedOp.from_operation_matrix(Id_1Q) # 1Q errors on each qubit
+        idleErr0 = LindbladDenseOp.from_operation_matrix(Id_1Q) # 1-qubit error generator
+        idleErr1 = LindbladDenseOp.from_operation_matrix(Id_1Q) # allow different "idle" 
+        idleErr2 = LindbladDenseOp.from_operation_matrix(Id_1Q) # 1Q errors on each qubit
         # so far no gpindices have been set...
         
         ss3Q = [('Q0','Q1','Q2')] #3Q state space
         basis3Q = pygsti.objects.Basis('pp', 2**nQubits) #3Q basis
-        Giii = ComposedOp([ EmbeddedOp(ss3Q, ('Q0',), idleErr0),
-                              EmbeddedOp(ss3Q, ('Q1',), idleErr1),
-                              EmbeddedOp(ss3Q, ('Q2',), idleErr2)
+        Giii = ComposedDenseOp([ EmbeddedDenseOp(ss3Q, ('Q0',), idleErr0),
+                              EmbeddedDenseOp(ss3Q, ('Q1',), idleErr1),
+                              EmbeddedDenseOp(ss3Q, ('Q2',), idleErr2)
                             ])
         
-        targetGx = StaticOp(gs1Q.operations['Gx'])
-        Gxii_xErr = LindbladParameterizedOp.from_operation_matrix(Id_1Q) 
-        Gxii_xGate = ComposedOp( [targetGx, idleErr0, Gxii_xErr])
-        Gxii = ComposedOp([ EmbeddedOp(ss3Q, ('Q0',), Gxii_xGate),
-                              EmbeddedOp(ss3Q, ('Q1',), idleErr1),
-                              EmbeddedOp(ss3Q, ('Q2',), idleErr2)
+        targetGx = StaticDenseOp(gs1Q.operations['Gx'])
+        Gxii_xErr = LindbladDenseOp.from_operation_matrix(Id_1Q) 
+        Gxii_xGate = ComposedDenseOp( [targetGx, idleErr0, Gxii_xErr])
+        Gxii = ComposedDenseOp([ EmbeddedDenseOp(ss3Q, ('Q0',), Gxii_xGate),
+                              EmbeddedDenseOp(ss3Q, ('Q1',), idleErr1),
+                              EmbeddedDenseOp(ss3Q, ('Q2',), idleErr2)
                             ])
         
         def printInfo():
@@ -126,10 +126,10 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         
         print("\nGate Test:")
         SparseId = sps.identity(4**2,'d','csr')
-        gate = LindbladParameterizedOp.from_operation_matrix( np.identity(4**2,'d') )
+        gate = LindbladDenseOp.from_operation_matrix( np.identity(4**2,'d') )
         print("gate Errgen type (should be dense):",type(gate.errorgen.err_gen_mx))
         self.assertIsInstance(gate.errorgen.err_gen_mx, np.ndarray)
-        sparseOp = LindbladParameterizedOpMap.from_operation_matrix( SparseId )
+        sparseOp = LindbladOp.from_operation_matrix( SparseId )
         print("spareGate Errgen type (should be sparse):",type(sparseOp.errorgen.err_gen_mx))
         self.assertIsInstance(sparseOp.errorgen.err_gen_mx, sps.csr_matrix)
         self.assertArraysAlmostEqual(gate.errorgen.err_gen_mx,sparseOp.errorgen.err_gen_mx.toarray())
@@ -139,8 +139,8 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         noisyG.depolarize(0.9)
         Sparse_noisyG = sps.csr_matrix(noisyG,dtype='d')
         Sparse_perfectG = sps.csr_matrix(perfectG,dtype='d')
-        op2 = LindbladParameterizedOp.from_operation_matrix( noisyG, perfectG )
-        sparseGate2 = LindbladParameterizedOpMap.from_operation_matrix( Sparse_noisyG, Sparse_perfectG )
+        op2 = LindbladDenseOp.from_operation_matrix( noisyG, perfectG )
+        sparseGate2 = LindbladOp.from_operation_matrix( Sparse_noisyG, Sparse_perfectG )
         print("spareGate2 Errgen type (should be sparse):",type(sparseGate2.errorgen.err_gen_mx))
         self.assertIsInstance(sparseGate2.errorgen.err_gen_mx, sps.csr_matrix)
         #print("errgen = \n"); pygsti.tools.print_mx(op2.err_gen,width=4,prec=1)

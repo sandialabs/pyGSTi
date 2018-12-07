@@ -243,7 +243,7 @@ class NQubitTestCase(BaseTestCase):
         print("Post adding noise:"); print(povm)
     
         mdl = pygsti.obj.ExplicitOpModel()
-        prepFactors = [ pygsti.obj.TPParameterizedSPAMVec(pygsti.construction.basis_build_vector("0", basis1Q))
+        prepFactors = [ pygsti.obj.TPSPAMVec(pygsti.construction.basis_build_vector("0", basis1Q))
                         for i in range(nQubits)]
         mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep',prepFactors)
         # OR one big prep: mdl.preps['rho0'] = pygsti.construction.basis_build_vector("0", basisNQ)

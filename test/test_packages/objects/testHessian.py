@@ -68,7 +68,7 @@ class TestHessianMethods(BaseTestCase):
 
         #XYI Model: SP0=False
         tst = stdxyi.target_model.copy()
-        tst.preps['rho0'] = pygsti.obj.TPParameterizedSPAMVec(tst.preps['rho0'])
+        tst.preps['rho0'] = pygsti.obj.TPSPAMVec(tst.preps['rho0'])
         n = tst.num_params()
         self.assertEqual(n,59) # 3*16 + 2*4 + 3 = 59
 
@@ -76,9 +76,9 @@ class TestHessianMethods(BaseTestCase):
         self.assertEqual(n,44) # 15 gauge params (minus one b/c can't change rho?)
 
         #XYI Model: G0=SP0=False
-        tst.operations['Gi'] = pygsti.obj.TPParameterizedOp(tst.operations['Gi'])
-        tst.operations['Gx'] = pygsti.obj.TPParameterizedOp(tst.operations['Gx'])
-        tst.operations['Gy'] = pygsti.obj.TPParameterizedOp(tst.operations['Gy'])
+        tst.operations['Gi'] = pygsti.obj.TPDenseOp(tst.operations['Gi'])
+        tst.operations['Gx'] = pygsti.obj.TPDenseOp(tst.operations['Gx'])
+        tst.operations['Gy'] = pygsti.obj.TPDenseOp(tst.operations['Gy'])
         n = tst.num_params()
         self.assertEqual(n,47) # 3*12 + 2*4 + 3 = 47
 

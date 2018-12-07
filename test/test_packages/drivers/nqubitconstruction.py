@@ -316,7 +316,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         
     #SPAM
     basis1Q = pygsti.obj.Basis("pp",2)
-    prepFactors = [ pygsti.obj.TPParameterizedSPAMVec(pygsti.construction.basis_build_vector("0", basis1Q))
+    prepFactors = [ pygsti.obj.TPSPAMVec(pygsti.construction.basis_build_vector("0", basis1Q))
                     for i in range(nQubits)]
     if prepNoise is not None:
         if isinstance(prepNoise,tuple): # use as (seed, strength)
@@ -351,13 +351,13 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
     assert(maxWeight <= 2), "Only `maxWeight` equal to 0, 1, or 2 is supported"
 
     if sparse:
-        Lindblad = _objs.LindbladParameterizedOpMap
-        Composed = _objs.ComposedOpMap
-        Embedded = _objs.EmbeddedOpMap
-    else:
-        Lindblad = _objs.LindbladParameterizedOp
+        Lindblad = _objs.LindbladOp
         Composed = _objs.ComposedOp
         Embedded = _objs.EmbeddedOp
+    else:
+        Lindblad = _objs.LindbladDenseOp
+        Composed = _objs.ComposedDenseOp
+        Embedded = _objs.EmbeddedDenseOp
     
     printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
     printer.log("*** Creating global idle ***")
@@ -439,10 +439,10 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #    basisAllQ = pygsti.objects.Basis('pp', 2**qubitGraph.nQubits)
 #    
 #    if mode == "no-embedding":     
-#        fullTargetOp = EmbeddedOp(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
+#        fullTargetOp = EmbeddedDenseOp(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
 #                                    targetOp, basisAllQ) 
-#        fullTargetOp = StaticOp( fullTargetOp ) #Make static
-#        fullLocalErr = LindbladParameterizedOp(fullTargetOp, fullTargetOp,
+#        fullTargetOp = StaticDenseOp( fullTargetOp ) #Make static
+#        fullLocalErr = LindbladDenseOp(fullTargetOp, fullTargetOp,
 #                         ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
 #                         nonham_diagonal_only=True, truncate=True, mxBasis=basisAllQ)
 #          # gate on full qubit space that accounts for error on the "local qubits", that is,
@@ -453,12 +453,12 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #        
 #        ssLocQ = ['Q%d'%i for i in range(nPossible)]
 #        basisLocQ = pygsti.objects.Basis('pp', 2**nPossible)
-#        locTargetOp = StaticOp( EmbeddedOp(ssLocQ, ['Q%d'%i for i in loc_target_inds],
+#        locTargetOp = StaticDenseOp( EmbeddedDenseOp(ssLocQ, ['Q%d'%i for i in loc_target_inds],
 #                                    targetOp, basisLocQ) )
-#        localErr = LindbladParameterizedOp(locTargetOp, locTargetOp,
+#        localErr = LindbladDenseOp(locTargetOp, locTargetOp,
 #                         ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
 #                         nonham_diagonal_only=True, truncate=True, mxBasis=basisLocQ)
-#        fullLocalErr = EmbeddedOp(ssAllQ, ['Q%d'%i for i in possible_err_qubit_inds],
+#        fullLocalErr = EmbeddedDenseOp(ssAllQ, ['Q%d'%i for i in possible_err_qubit_inds],
 #                                   localErr, basisAllQ)
 #    else:
 #        raise ValueError("Invalid Mode: %s" % mode)
@@ -480,7 +480,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
     
     where `idle_noise` is given by the `idle_noise` parameter and loc_noise is given
     by the other params.  loc_noise can be implemented either by 
-    a single embedded LindbladParameterizedOp with all relevant error generators,
+    a single embedded LindbladDenseOp with all relevant error generators,
     or as a composition of embedded-single-error-term gates (see param `loc_noise_type`)
     
     Parameters
@@ -490,22 +490,22 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
         either given as an existing gate (on all qubits) or a boolean indicating
         whether a composition of weight-1 noise terms (separately on all the qubits),
         is created.  If `apply_idle_noise_to == "nonlocal"` then `idle_noise` is *only*
-        applied to the non-local qubits and `idle_noise` must be a ComposedOp or
+        applied to the non-local qubits and `idle_noise` must be a ComposedDenseOp or
         ComposedMap with nQubits terms so that individual terms for each qubit can
         be extracted as needed.
 
     TODO   
     """
     if sparse:
-        Lindblad = _objs.LindbladParameterizedOpMap
-        Composed = _objs.ComposedOpMap
-        Embedded = _objs.EmbeddedOpMap
-        Static = _objs.StaticOp # TODO: create StaticGateMap
-    else:
-        Lindblad = _objs.LindbladParameterizedOp
+        Lindblad = _objs.LindbladOp
         Composed = _objs.ComposedOp
         Embedded = _objs.EmbeddedOp
-        Static = _objs.StaticOp
+        Static = _objs.StaticDenseOp # TODO: create StaticGateMap
+    else:
+        Lindblad = _objs.LindbladDenseOp
+        Composed = _objs.ComposedDenseOp
+        Embedded = _objs.EmbeddedDenseOp
+        Static = _objs.StaticDenseOp
     
     printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
     printer.log("*** Creating composed gate ***")

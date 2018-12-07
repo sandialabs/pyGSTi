@@ -358,7 +358,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, opExpr, basis="gm"):
     #Change from std (mx unit) basis to another if requested
     opMxInFinalBasis = _bt.change_basis(opInReducedStdBasis, "std", basis, stateSpaceDims)
     
-    return _op.FullyParameterizedOp(opMxInFinalBasis)
+    return _op.FullDenseOp(opMxInFinalBasis)
 
 def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization="full", unitaryEmbedding=False):
     """
@@ -406,18 +406,18 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
     parameterization : {"full","TP","static","linear","linearTP"}, optional
         How to parameterize the resulting gate.
 
-        - "full" = return a FullyParameterizedOp.
-        - "TP" = return a TPParameterizedOp.
-        - "static" = return a StaticOp.
-        - "linear" = if possible, return a LinearlyParameterizedOp that
+        - "full" = return a FullDenseOp.
+        - "TP" = return a TPDenseOp.
+        - "static" = return a StaticDenseOp.
+        - "linear" = if possible, return a LinearlyParamDenseOp that
           parameterizes only the pieces explicitly present in opExpr.
-        - "linearTP" = if possible, return a LinearlyParameterizedOp that
+        - "linearTP" = if possible, return a LinearlyParamDenseOp that
           parameterizes only the TP pieces explicitly present in opExpr.
 
     unitaryEmbedding : bool, optional
         An interal switch determining how the gate is constructed.  Should have
         no bearing on the output except in determining how to parameterize a
-        non-FullyParameterizedOp.  It's best to leave this to False unless
+        non-FullDenseOp.  It's best to leave this to False unless
         you really know what you're doing.  Currently, only works for
         parameterization == 'full'.
 
@@ -505,7 +505,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
             raise ValueError("Unitary embedding is only implemented for parmeterization='full'")
 
         finalOpInFinalBasis = _bt.change_basis(finalGateInStdBasis, "std", basis.name, blockDims)
-        return _op.FullyParameterizedOp(finalOpInFinalBasis)
+        return _op.FullDenseOp(finalOpInFinalBasis)
 
 
     def embed_operation(opmx, labels, indicesToParameterize="all"):
@@ -627,19 +627,19 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
         finalOpInFinalBasis = _np.dot(full_ppToFinal,
                                         _np.dot( finalOp, full_finalToPP))
         if parameterization == "full":
-            return _op.FullyParameterizedOp(
+            return _op.FullDenseOp(
                 _np.real(finalOpInFinalBasis)
                 if finalBasis.real else finalOpInFinalBasis, "densitymx" )
 
         if parameterization == "static":
-            return _op.StaticOp(
+            return _op.StaticDenseOp(
                 _np.real(finalOpInFinalBasis)
                 if finalBasis.real else finalOpInFinalBasis, "densitymx" )
 
         if parameterization == "TP":
             if not finalBasis.real:
                 raise ValueError("TP gates must be real. Failed to build gate!") # pragma: no cover
-            return _op.TPParameterizedOp(_np.real(finalOpInFinalBasis))
+            return _op.TPDenseOp(_np.real(finalOpInFinalBasis))
 
         elif parameterization in ("linear","linearTP"):
             #OLD (INCORRECT) -- but could give this as paramArray if gave zeros as base matrix instead of finalOp
@@ -653,7 +653,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
             else:
                 paramArray = _np.zeros(len(indicesToParameterize), 'd' )
 
-            return _op.LinearlyParameterizedOp(
+            return _op.LinearlyParamDenseOp(
                 finalOp, paramArray, parameterToBaseIndicesMap,
                 full_ppToFinal, full_finalToPP, finalBasis.real )
 
@@ -804,7 +804,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
                                                              _Basis('std', blockDims))
 
             opMxInFinalBasis = _bt.change_basis(opTermInReducedStdBasis, "std", basis.name, blockDims)
-            opTermInFinalBasis = _op.FullyParameterizedOp(opMxInFinalBasis)
+            opTermInFinalBasis = _op.FullDenseOp(opMxInFinalBasis)
 
         else: raise ValueError("Invalid gate name: %s" % opName)
         

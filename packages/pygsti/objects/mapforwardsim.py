@@ -32,8 +32,8 @@ CLIFFORD = 2
 
 
 #TODO:
-# LinearOperator -> MatrixOperator
-# New "LinearOperator" base class, new "MapOp" class
+# LinearOperator -> DenseOperator
+# New "LinearOperator" base class, new "MapOperator" class
 class MapForwardSimulator(ForwardSimulator):
     """
     Encapsulates a calculation tool used by model objects to perform product

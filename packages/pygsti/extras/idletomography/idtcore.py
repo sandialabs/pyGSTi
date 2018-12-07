@@ -558,7 +558,7 @@ def determine_paulidicts(model):
         
     if isinstance(prep, _objs.ComputationalSPAMVec):
         if any([b!=0 for b in prep._zvals]): return None
-    elif isinstance(prep, _objs.LindbladParameterizedSPAMVec):
+    elif isinstance(prep, _objs.LindbladSPAMVec):
         if isinstance(prep.state_vec, _objs.ComputationalSPAMVec):
             if any([b!=0 for b in prep.state_vec._zvals]): return None
         if any([abs(v)>1e-6 for v in prep.to_vector()]): return None
@@ -571,19 +571,19 @@ def determine_paulidicts(model):
     def extract_action(g, cur_sslbls, ql):
         """ Note: assumes cur_sslbs is just a list of labels (of first "sector"
             of a real StateSpaceLabels struct) """
-        if isinstance(g,_objs.ComposedOpMap):
+        if isinstance(g,_objs.ComposedOp):
             action = _np.identity(4,'d')
             for fg in g.factorops:
                 action = _np.dot(extract_action(fg,cur_sslbls,ql), action)
             return action
 
-        if isinstance(g,_objs.EmbeddedOpMap):
+        if isinstance(g,_objs.EmbeddedOp):
             #Note: an embedded gate need not use the *same* state space labels as the model
             lbls = [ cur_sslbls[g.stateSpaceLabels.labels[0].index(locLbl)] for locLbl in g.targetLabels] 
               # TODO: add to StateSpaceLabels functionality to make sure two are compatible, and to translate between them, & make sub-labels?
             return extract_action(g.embedded_op, lbls, ql)
 
-        # StaticOp, LindbladParameterizedOp, other gates...
+        # StaticDenseOp, LindbladDenseOp, other gates...
         if len(cur_sslbls) == 1 and cur_sslbls[0] == ql:
             mx = g.todense()
             assert(mx.shape == (4,4))

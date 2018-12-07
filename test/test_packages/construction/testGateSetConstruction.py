@@ -686,7 +686,7 @@ GAUGEGROUP: Full
             self.assertEqual(gate.get_dimension(), 4)
 
             M = np.asarray(gate) #gate as a matrix
-            if isinstance(gate, (pygsti.obj.LinearlyParameterizedOp,pygsti.obj.StaticOp)):
+            if isinstance(gate, (pygsti.obj.LinearlyParamDenseOp,pygsti.obj.StaticDenseOp)):
                 with self.assertRaises(ValueError):
                     gate.set_value(M)
             else:
@@ -701,8 +701,8 @@ GAUGEGROUP: Full
             #test results?
 
             T = pygsti.obj.FullGaugeGroupElement(np.identity(4,'d'))
-            if type(gate) in (pygsti.obj.LinearlyParameterizedOp,
-                              pygsti.obj.StaticOp):
+            if type(gate) in (pygsti.obj.LinearlyParamDenseOp,
+                              pygsti.obj.StaticDenseOp):
                 with self.assertRaises(ValueError):
                     gate_copy.transform(T)
             else:
@@ -759,70 +759,70 @@ GAUGEGROUP: Full
         #Test compositions (and conversions)
         c = pygsti.obj.compose(gate_full, gate_full, "gm", "full")
         self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_full) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
         c = pygsti.obj.compose(gate_full, gate_tp, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_tp) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
         c = pygsti.obj.compose(gate_full, gate_static, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_static) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
         c = pygsti.obj.compose(gate_full, gate_linear, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_linear) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
 
         c = pygsti.obj.compose(gate_linear, gate_full, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_full) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
         c = pygsti.obj.compose(gate_linear, gate_tp, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_tp) )
-        self.assertEqual(type(c), pygsti.obj.TPParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.TPDenseOp)
 
         c = pygsti.obj.compose(gate_linear, gate_static, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_static) )
-        self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.LinearlyParamDenseOp)
 
         c = pygsti.obj.compose(gate_linear, gate_linear, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_linear) )
-        self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.LinearlyParamDenseOp)
 
 
         c = pygsti.obj.compose(gate_tp, gate_full, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_full) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
         c = pygsti.obj.compose(gate_tp, gate_tp, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_tp) )
-        self.assertEqual(type(c), pygsti.obj.TPParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.TPDenseOp)
 
         c = pygsti.obj.compose(gate_tp, gate_static, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_static) )
-        self.assertEqual(type(c), pygsti.obj.TPParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.TPDenseOp)
 
         c = pygsti.obj.compose(gate_tp, gate_linear, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_linear) )
-        self.assertEqual(type(c), pygsti.obj.TPParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.TPDenseOp)
 
 
         c = pygsti.obj.compose(gate_static, gate_full, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_full) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
         c = pygsti.obj.compose(gate_static, gate_tp, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_tp) )
-        self.assertEqual(type(c), pygsti.obj.TPParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.TPDenseOp)
 
         c = pygsti.obj.compose(gate_static, gate_static, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_static) )
-        self.assertEqual(type(c), pygsti.obj.StaticOp)
+        self.assertEqual(type(c), pygsti.obj.StaticDenseOp)
 
         c = pygsti.obj.compose(gate_static, gate_linear, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_linear) )
-        self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedOp)
+        self.assertEqual(type(c), pygsti.obj.LinearlyParamDenseOp)
 
         #Test specific conversions that don't get tested by compose
         conv = pygsti.obj.operation.convert(gate_tp, "full", "gm")
@@ -948,7 +948,7 @@ GAUGEGROUP: Full
 
 
         #Full from scratch
-        gate_full_B = pygsti.obj.FullyParameterizedOp([[1,0],[0,1]])
+        gate_full_B = pygsti.obj.FullDenseOp([[1,0],[0,1]])
 
         numParams = gate_full_B.num_params()
         v = gate_full_B.to_vector()
@@ -960,10 +960,10 @@ GAUGEGROUP: Full
         baseMx = np.zeros( (2,2) )
         paramArray = np.array( [1.0,1.0] )
         parameterToBaseIndicesMap = { 0: [(0,0)], 1: [(1,1)] } #parameterize only the diagonal els
-        gate_linear_B = pygsti.obj.LinearlyParameterizedOp(baseMx, paramArray,
+        gate_linear_B = pygsti.obj.LinearlyParamDenseOp(baseMx, paramArray,
                                                              parameterToBaseIndicesMap, real=True)
         with self.assertRaises(AssertionError):
-            pygsti.obj.LinearlyParameterizedOp(baseMx, np.array( [1.0+1j, 1.0] ),
+            pygsti.obj.LinearlyParamDenseOp(baseMx, np.array( [1.0+1j, 1.0] ),
                                                  parameterToBaseIndicesMap, real=True) #must be real
 
         numParams = gate_linear_B.num_params()
@@ -973,16 +973,16 @@ GAUGEGROUP: Full
 
 
     def test_spamvec_object(self):
-        full_spamvec = pygsti.obj.FullyParameterizedSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
-        tp_spamvec = pygsti.obj.TPParameterizedSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
+        full_spamvec = pygsti.obj.FullSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
+        tp_spamvec = pygsti.obj.TPSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
         static_spamvec = pygsti.obj.StaticSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
         spamvec_objs = [full_spamvec, tp_spamvec, static_spamvec]
 
         with self.assertRaises(ValueError):
-            pygsti.obj.FullyParameterizedSPAMVec([[ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ],[0,0,0,0]] )
+            pygsti.obj.FullSPAMVec([[ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ],[0,0,0,0]] )
             # 2nd dimension must == 1
         with self.assertRaises(ValueError):
-            pygsti.obj.TPParameterizedSPAMVec([ 1.0, 0, 0, 0 ])
+            pygsti.obj.TPSPAMVec([ 1.0, 0, 0, 0 ])
             # incorrect initial element for TP!
         with self.assertRaises(ValueError):
             tp_spamvec.set_value([1.0 ,0, 0, 0])

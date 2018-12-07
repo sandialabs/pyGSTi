@@ -52,7 +52,7 @@ class InstrumentTestCase(BaseTestCase):
         #Test instrument construction with elements whose gpindices are already initialized.
         # Since this isn't allowed currently (a future functionality), we need to do some hacking
         E = self.target_model.povms['Mdefault']['0']
-        InstEl = pygsti.obj.FullyParameterizedOp( np.dot(E,E.T) )
+        InstEl = pygsti.obj.FullDenseOp( np.dot(E,E.T) )
         InstEl2 = InstEl.copy()
         nParams = InstEl.num_params() # should be 16
         

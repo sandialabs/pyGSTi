@@ -269,7 +269,7 @@ def _contractToCP_direct(model,verbosity,TPalso=False,maxiter=100000,tol=1e-8):
             it += 1
             if it > maxiter: break
 
-        mdl.operations[opLabel] = _objs.FullyParameterizedOp( new_op )
+        mdl.operations[opLabel] = _objs.FullDenseOp( new_op )
 
         if it > maxiter:
             printer.warning("Max iterations exceeded in contract_to_cp_direct")

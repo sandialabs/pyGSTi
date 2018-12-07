@@ -1927,9 +1927,9 @@ class ExplicitOpModel(Model):
             return opVal # if gate operates on full dimension, no need to embed.
 
         if self._sim_type == "matrix":
-            return _op.EmbeddedOp(self.stateSpaceLabels, opTargetLabels, opVal)
+            return _op.EmbeddedDenseOp(self.stateSpaceLabels, opTargetLabels, opVal)
         elif self._sim_type in ("map","termorder"):
-            return _op.EmbeddedOpMap(self.stateSpaceLabels, opTargetLabels, opVal)
+            return _op.EmbeddedOp(self.stateSpaceLabels, opTargetLabels, opVal)
         else:
             assert(False), "Invalid Model sim type == %s" % str(self._sim_type)
 
@@ -3084,7 +3084,7 @@ class ExplicitOpModel(Model):
             randOp = _gt.unitary_to_process_mx(randUnitary) #in std basis
             randOp = _bt.change_basis(randOp, "std", self.basis)
 
-            mdl_randomized.operations[opLabel] = _op.FullyParameterizedOp(
+            mdl_randomized.operations[opLabel] = _op.FullDenseOp(
                             _np.dot(randOp,gate))
 
         #Note: this function does NOT randomize instruments
@@ -3129,7 +3129,7 @@ class ExplicitOpModel(Model):
         for lbl,rhoVec in self.preps.items():
             assert( len(rhoVec) == curDim )
             new_model.preps[lbl] = \
-                _sv.FullyParameterizedSPAMVec(_np.concatenate( (rhoVec, vec_zeroPad) ))
+                _sv.FullSPAMVec(_np.concatenate( (rhoVec, vec_zeroPad) ))
 
         for lbl,povm in self.povms.items():
             assert( povm.dim == curDim )
@@ -3147,7 +3147,7 @@ class ExplicitOpModel(Model):
             newOp = _np.zeros( (newDimension,newDimension) )
             newOp[ 0:curDim, 0:curDim ] = gate[:,:]
             for i in range(curDim,newDimension): newOp[i,i] = 1.0
-            new_model.operations[opLabel] = _op.FullyParameterizedOp(newOp)
+            new_model.operations[opLabel] = _op.FullDenseOp(newOp)
 
         for instLabel,inst in self.instruments.items():
             inst_ops = []
@@ -3155,7 +3155,7 @@ class ExplicitOpModel(Model):
                 newOp = _np.zeros( (newDimension,newDimension) )
                 newOp[ 0:curDim, 0:curDim ] = gate[:,:]
                 for i in range(curDim,newDimension): newOp[i,i] = 1.0
-                inst_ops.append( (outcomeLbl,_op.FullyParameterizedOp(newOp)) )
+                inst_ops.append( (outcomeLbl,_op.FullDenseOp(newOp)) )
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
 
         return new_model
@@ -3192,7 +3192,7 @@ class ExplicitOpModel(Model):
         for lbl,rhoVec in self.preps.items():
             assert( len(rhoVec) == curDim )
             new_model.preps[lbl] = \
-                _sv.FullyParameterizedSPAMVec(rhoVec[0:newDimension,:])
+                _sv.FullSPAMVec(rhoVec[0:newDimension,:])
 
         for lbl,povm in self.povms.items():
             assert( povm.dim == curDim )
@@ -3209,14 +3209,14 @@ class ExplicitOpModel(Model):
             assert( gate.shape == (curDim,curDim) )
             newOp = _np.zeros( (newDimension,newDimension) )
             newOp[ :, : ] = gate[0:newDimension,0:newDimension]
-            new_model.operations[opLabel] = _op.FullyParameterizedOp(newOp)
+            new_model.operations[opLabel] = _op.FullDenseOp(newOp)
 
         for instLabel,inst in self.instruments.items():
             inst_ops = []
             for outcomeLbl,gate in inst.items():
                 newOp = _np.zeros( (newDimension,newDimension) )
                 newOp[ :, : ] = gate[0:newDimension,0:newDimension]
-                inst_ops.append( (outcomeLbl,_op.FullyParameterizedOp(newOp)) )
+                inst_ops.append( (outcomeLbl,_op.FullDenseOp(newOp)) )
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
 
         return new_model
@@ -3249,7 +3249,7 @@ class ExplicitOpModel(Model):
         rndm = _np.random.RandomState(seed)
         for opLabel,gate in self.operations.items():
             delta = absmag * 2.0*(rndm.random_sample(gate.shape)-0.5) + bias
-            kicked_gs.operations[opLabel] = _op.FullyParameterizedOp(
+            kicked_gs.operations[opLabel] = _op.FullDenseOp(
                                             kicked_gs.operations[opLabel] + delta )
 
         #Note: does not alter intruments!
@@ -3288,7 +3288,7 @@ class ExplicitOpModel(Model):
         for gl,gate in self.operations.items():
             if (gfilter is not None) and (gl not in gfilter): continue
 
-            if isinstance(gate, _op.EmbeddedOpMap):
+            if isinstance(gate, _op.EmbeddedOp):
                 assert(isinstance(gate.embedded_op, _op.CliffordOp)), \
                     "EmbeddedClifforGate contains a non-CliffordOp!"
                 lbl = gl.name # strip state space labels off since this is a
@@ -3626,7 +3626,7 @@ class ImplicitOpModel(Model):
             gate = self.operation_blks[gl]
             if (gfilter is not None) and (gl not in gfilter): continue
 
-            if isinstance(gate, _op.EmbeddedOpMap):
+            if isinstance(gate, _op.EmbeddedOp):
                 assert(isinstance(gate.embedded_op, _op.CliffordOp)), \
                     "EmbeddedClifforGate contains a non-CliffordOp!"
                 lbl = gl.name # strip state space labels off since this is a

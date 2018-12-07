@@ -122,8 +122,8 @@ def convert(povm, toType, basis, extra=None):
             base_povm = UnconstrainedPOVM(base_items)
 
         # purevecs = extra if (extra is not None) else None # UNUSED
-        cls = _op.LindbladParameterizedOp if (povm.dim <= 64 and evotype == "densitymx") \
-              else _op.LindbladParameterizedOpMap
+        cls = _op.LindbladDenseOp if (povm.dim <= 64 and evotype == "densitymx") \
+              else _op.LindbladOp
         povmNoiseMap = cls.from_operation_obj(_np.identity(povm.dim,'d'), toType,
                                          None, proj_basis, basis, truncate=True)
         return LindbladParameterizedPOVM(povmNoiseMap, base_povm, basis)
@@ -320,7 +320,7 @@ class _BasePOVM(POVM):
         for k,v in items:
             if k == self.complement_label: continue
             effect = v if isinstance(v,_sv.SPAMVec) else \
-                     _sv.FullyParameterizedSPAMVec(v)
+                     _sv.FullSPAMVec(v)
             
             if evotype is None: evotype = effect._evotype
             else: assert(evotype == effect._evotype), \
@@ -393,7 +393,7 @@ class _BasePOVM(POVM):
         if key == self.complement_label:
             raise KeyError("Cannot directly assign the complement effect vector!")
         value = value.copy() if isinstance(value,_sv.SPAMVec) else \
-                _sv.FullyParameterizedSPAMVec(value)
+                _sv.FullSPAMVec(value)
         _collections.OrderedDict.__setitem__(self, key, value)
         self._reset_member_gpindices()
         self._rebuild_complement()
@@ -953,10 +953,10 @@ class LindbladParameterizedPOVM(POVM):
 
         Parameters
         ----------
-        errormap : MapOp
+        errormap : MapOperator
             The error generator action and parameterization, encapsulated in
-            a gate object.  Usually a :class:`LindbladParameterizedOpMap`
-            or :class:`ComposedOpMap` object.  (This argument is *not* copied,
+            a gate object.  Usually a :class:`LindbladOp`
+            or :class:`ComposedOp` object.  (This argument is *not* copied,
             to allow LindbladParameterizedSPAMVecs to share error generator
             parameters with other gates and spam vectors.)
 
@@ -978,7 +978,7 @@ class LindbladParameterizedPOVM(POVM):
         dim = self.error_map.dim
         
         if mxBasis is None:
-            if isinstance(errormap, _op.LindbladParameterizedOpMap):
+            if isinstance(errormap, _op.LindbladOp):
                 mxBasis = errormap.errorgen.matrix_basis
             else:
                 raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"
@@ -1033,7 +1033,7 @@ class LindbladParameterizedPOVM(POVM):
         elif key in self: # calls __contains__ to efficiently check for membership
             #create effect vector now that it's been requested (lazy creation)
             pureVec = self.base_povm[key]
-            effect = _sv.LindbladParameterizedSPAMVec(pureVec, self.error_map,"effect")
+            effect = _sv.LindbladSPAMVec(pureVec, self.error_map,"effect")
             effect.set_gpindices(self.error_map.gpindices, self.parent)
               # initialize gpindices of "child" effect (should be in compile_effects?)
             _collections.OrderedDict.__setitem__(self,key,effect)

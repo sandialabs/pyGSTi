@@ -217,7 +217,7 @@ class FullGaugeGroup(OpGaugeGroup):
         might gauge-transform.
         """
         from . import operation as _op #b/c operation.py imports gaugegroup
-        gate = _op.FullyParameterizedOp(_np.identity(dim,'d'))
+        gate = _op.FullDenseOp(_np.identity(dim,'d'))
         OpGaugeGroup.__init__(self, gate, FullGaugeGroupElement, "Full")
 
 class FullGaugeGroupElement(OpGaugeGroupElement):
@@ -243,7 +243,7 @@ class TPGaugeGroup(OpGaugeGroup):
         might gauge-transform.
         """
         from . import operation as _op #b/c operation.py imports gaugegroup
-        gate = _op.TPParameterizedOp(_np.identity(dim,'d'))
+        gate = _op.TPDenseOp(_np.identity(dim,'d'))
         OpGaugeGroup.__init__(self, gate, TPGaugeGroupElement, "TP")
 
 class TPGaugeGroupElement(OpGaugeGroupElement):
@@ -281,7 +281,7 @@ class DiagGaugeGroup(OpGaugeGroup):
         baseMx = _np.identity(dim,'d')
         parameterArray = _np.zeros(dim, 'd')
         parameterToBaseIndicesMap = { i: [(i,i)] for i in range(dim) }
-        gate = _op.LinearlyParameterizedOp(baseMx, parameterArray,
+        gate = _op.LinearlyParamDenseOp(baseMx, parameterArray,
                                                parameterToBaseIndicesMap,
                                                ltrans, rtrans, real=True)
         OpGaugeGroup.__init__(self, gate, DiagGaugeGroupElement, "Diagonal")
@@ -314,7 +314,7 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         baseMx = _np.identity(dim,'d')
         parameterArray = _np.zeros(dim-1, 'd')
         parameterToBaseIndicesMap = { i: [(i+1,i+1)] for i in range(dim-1) }
-        gate = _op.LinearlyParameterizedOp(baseMx, parameterArray,
+        gate = _op.LinearlyParamDenseOp(baseMx, parameterArray,
                                                parameterToBaseIndicesMap,
                                                ltrans, rtrans, real=True)
         OpGaugeGroup.__init__(self, gate, TPDiagGaugeGroupElement, "TP Diagonal")
@@ -343,7 +343,7 @@ class UnitaryGaugeGroup(OpGaugeGroup):
         might gauge-transform.
         """
         from . import operation as _op #b/c operation.py imports gaugegroup
-        gate = _op.LindbladParameterizedOp.from_operation_matrix(
+        gate = _op.LindbladDenseOp.from_operation_matrix(
             None, _np.identity(dim,'d'), ham_basis=basis, nonham_basis=None,
             param_mode="cptp", mxBasis=basis)
         OpGaugeGroup.__init__(self, gate, UnitaryGaugeGroupElement, "Unitary")
@@ -379,7 +379,7 @@ class SpamGaugeGroup(OpGaugeGroup):
         parameterArray = _np.zeros(2, 'd')
         parameterToBaseIndicesMap = { 0: [(0,0)],
                                       1: [(i,i) for i in range(1,dim)] }
-        gate = _op.LinearlyParameterizedOp(baseMx, parameterArray,
+        gate = _op.LinearlyParamDenseOp(baseMx, parameterArray,
                                                parameterToBaseIndicesMap,
                                                ltrans, rtrans, real=True)
         OpGaugeGroup.__init__(self, gate, SpamGaugeGroupElement, "Spam")
@@ -412,7 +412,7 @@ class TPSpamGaugeGroup(OpGaugeGroup):
         baseMx = _np.identity(dim,'d')
         parameterArray = _np.zeros(1, 'd')
         parameterToBaseIndicesMap = { 0: [(i,i) for i in range(1,dim)] }
-        gate = _op.LinearlyParameterizedOp(baseMx, parameterArray,
+        gate = _op.LinearlyParamDenseOp(baseMx, parameterArray,
                                                parameterToBaseIndicesMap,
                                                ltrans, rtrans, real=True)
         OpGaugeGroup.__init__(self, gate, TPSpamGaugeGroupElement, "TP Spam")

@@ -368,7 +368,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetModel, prepStrs, effectStrs,
             gsGerm = targetModel.copy()
             gsGerm.set_all_parameterizations("static")
             germMx = gsGerm.product(germ)
-            gsGerm.operations["Ggerm"] = _objs.EigenvalueParameterizedOp(
+            gsGerm.operations["Ggerm"] = _objs.EigenvalueParamDenseOp(
                                                    germMx, True, constrainToTP)
 
             printer.show_progress(i, len(germList), 

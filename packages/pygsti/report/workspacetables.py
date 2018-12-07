@@ -347,12 +347,12 @@ class GatesTable(WorkspaceTable):
 
             if confidenceRegionInfo is not None:
                 intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(gl)[:,None]
-                if isinstance(models[-1].operations[gl], _objs.FullyParameterizedOp):
+                if isinstance(models[-1].operations[gl], _objs.FullDenseOp):
                     #then we know how to reshape into a matrix
                     op_dim   = models[-1].get_dimension()
                     basis = models[-1].basis
                     intervalMx = intervalVec.reshape(op_dim,op_dim)
-                elif isinstance(models[-1].operations[gl], _objs.TPParameterizedOp):
+                elif isinstance(models[-1].operations[gl], _objs.TPDenseOp):
                     #then we know how to reshape into a matrix
                     op_dim   = models[-1].get_dimension()
                     basis = models[-1].basis
@@ -1018,9 +1018,9 @@ class NQubitErrgenTable(WorkspaceTable):
     Table displaying the error rates (coefficients of error generators) of a
     Model's gates.  The gates are assumed to have a particular structure.
 
-    Specifically, gates must be :class:`LindbladParameterizedOpMap` or
-    :class:`StaticOp` objects wrapped within :class:`EmbeddedOpMap` and/or 
-    :class:`ComposedOpMap` objects (this is consistent with the operation
+    Specifically, gates must be :class:`LindbladOp` or
+    :class:`StaticDenseOp` objects wrapped within :class:`EmbeddedOp` and/or 
+    :class:`ComposedOp` objects (this is consistent with the operation
     blocks of a :class:`CloudNoiseModel`).  As such, error rates
     are read directly from the gate objects rather than being computed by
     projecting dense gate representations onto a "basis" of fixed error
@@ -1034,9 +1034,9 @@ class NQubitErrgenTable(WorkspaceTable):
         Create a table listing the error rates of the gates in `model`.
 
         The gates in `model` are assumed to have a particular structure,
-        namely: they must be :class:`LindbladParameterizedOpMap` or
-        :class:`StaticOp` objects wrapped within :class:`EmbeddedOpMap`
-        and/or :class:`ComposedOpMap` objects.  
+        namely: they must be :class:`LindbladOp` or
+        :class:`StaticDenseOp` objects wrapped within :class:`EmbeddedOp`
+        and/or :class:`ComposedOp` objects.  
 
         Error rates are organized by order of composition and which qubits
         the corresponding error generators act upon.
@@ -1122,14 +1122,14 @@ class NQubitErrgenTable(WorkspaceTable):
 
         pre_rows = []; displayed_params = set()
         def process_gate(lbl, gate, comppos_prefix, sslbls):
-            if isinstance(gate,_objs.ComposedOpMap):
+            if isinstance(gate,_objs.ComposedOp):
                 for i,fgate in enumerate(gate.factorops):
                     process_gate(lbl,fgate, comppos_prefix + (i,), sslbls)
-            elif isinstance(gate,_objs.EmbeddedOpMap):
+            elif isinstance(gate,_objs.EmbeddedOp):
                 process_gate(lbl,gate.embedded_op, comppos_prefix, gate.targetLabels)
-            elif isinstance(gate,_objs.StaticOp):
+            elif isinstance(gate,_objs.StaticDenseOp):
                 pass # no error coefficients associated w/static gates
-            elif isinstance(gate,_objs.LindbladParameterizedOpMap):
+            elif isinstance(gate,_objs.LindbladOp):
 
                 # Only display coeffs for gates that correspond to *new*
                 # (not yet displayed) parameters.
@@ -2367,8 +2367,8 @@ class MetadataTable(WorkspaceTable):
         if isinstance(self,_objs.ExplicitOpModel):
             for lbl,vec in model.preps.items():
                 if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
-                elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
-                elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+                elif isinstance(vec, _objs.FullSPAMVec): paramTyp = "full"
+                elif isinstance(vec, _objs.TPSPAMVec): paramTyp = "TP"
                 elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
                 else: paramTyp = "unknown" # pragma: no cover
                 table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
@@ -2382,19 +2382,19 @@ class MetadataTable(WorkspaceTable):
     
                 for lbl,vec in povm.items():
                     if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
-                    elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
-                    elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+                    elif isinstance(vec, _objs.FullSPAMVec): paramTyp = "full"
+                    elif isinstance(vec, _objs.TPSPAMVec): paramTyp = "TP"
                     elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
                     else: paramTyp = "unknown" # pragma: no cover
                     table.addrow(("> " + lbl + " parameterization", paramTyp), (None,'Verbatim'))
     
             for gl,gate in model.operations.items():
-                if isinstance(gate, _objs.StaticOp): paramTyp = "static"
-                elif isinstance(gate, _objs.FullyParameterizedOp): paramTyp = "full"
-                elif isinstance(gate, _objs.TPParameterizedOp): paramTyp = "TP"
-                elif isinstance(gate, _objs.LinearlyParameterizedOp): paramTyp = "linear"
-                elif isinstance(gate, _objs.EigenvalueParameterizedOp): paramTyp = "eigenvalue"
-                elif isinstance(gate, _objs.LindbladParameterizedOp):
+                if isinstance(gate, _objs.StaticDenseOp): paramTyp = "static"
+                elif isinstance(gate, _objs.FullDenseOp): paramTyp = "full"
+                elif isinstance(gate, _objs.TPDenseOp): paramTyp = "TP"
+                elif isinstance(gate, _objs.LinearlyParamDenseOp): paramTyp = "linear"
+                elif isinstance(gate, _objs.EigenvalueParamDenseOp): paramTyp = "eigenvalue"
+                elif isinstance(gate, _objs.LindbladDenseOp):
                     paramTyp = "Lindblad"
                     if gate.errorgen.param_mode == "cptp": paramTyp += " CPTP "
                     paramTyp += "(%d, %d params)" % (gate.errorgen.ham_basis_size, gate.errorgen.other_basis_size)

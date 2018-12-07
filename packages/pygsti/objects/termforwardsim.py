@@ -137,7 +137,7 @@ class TermForwardSimulator(ForwardSimulator):
     def propagate_state(self, rho, factors, adjoint=False):
         # TODO UPDATE
         """ 
-        State propagation by MapOp objects which have 'acton'
+        State propagation by MapOperator objects which have 'acton'
         methods.  This function could easily be overridden to 
         perform some more sophisticated state propagation
         (i.e. Monte Carlo) in the future.
