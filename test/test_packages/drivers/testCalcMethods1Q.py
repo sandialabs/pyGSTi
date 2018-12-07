@@ -42,7 +42,7 @@ class CalcMethods1QTestCase(BaseTestCase):
             std.target_model, std.prepStrs, std.effectStrs, std.germs, cls.maxLengths)
 
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate) (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
             ds = pygsti.construction.generate_fake_data(cls.mdl_datagen, cls.listOfExperiments,
                                                         nSamples=1000, sampleError="multinomial", seed=1234)
             ds.save(compare_files + "/calcMethods1Q.dataset%s" % cls.versionsuffix)
@@ -78,7 +78,7 @@ class CalcMethods1QTestCase(BaseTestCase):
             cls.redmod_germs, cls.redmod_maxLs)
 
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate) (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
             redmod_ds = pygsti.construction.generate_fake_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
             redmod_ds.save(compare_files + "/calcMethods1Q_redmod.dataset%s" % cls.versionsuffix)
 

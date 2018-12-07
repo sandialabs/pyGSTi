@@ -32,16 +32,17 @@ class AlgorithmsBase(BaseTestCase):
             self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
 
         ## RUN BELOW LINES to create analysis dataset (SAVE)
-        expList = pygsti.construction.make_lsgst_experiment_list(
-            self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
-        ds = pygsti.construction.generate_fake_data(self.datagen_gateset, expList,
-           nSamples=10000, sampleError='binomial', seed=100)
-        ds.save(compare_files + "/analysis.dataset%s" % self.versionsuffix)
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
+            expList = pygsti.construction.make_lsgst_experiment_list(
+                self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
+            ds = pygsti.construction.generate_fake_data(self.datagen_gateset, expList,
+                                                        nSamples=10000, sampleError='binomial', seed=100)
+            ds.save(compare_files + "/analysis.dataset%s" % self.versionsuffix)
 
         self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
 
         ## RUN BELOW LINES to create LGST analysis dataset (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
             ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
                                                              nSamples=10000,sampleError='binomial', seed=100)
             ds_lgst.save(compare_files + "/analysis_lgst.dataset%s" % self.versionsuffix)

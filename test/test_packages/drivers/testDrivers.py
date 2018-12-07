@@ -34,7 +34,7 @@ class DriversTestCase(BaseTestCase):
             truncScheme='length as exponent' )
 
         ## RUN BELOW LINES TO GENERATE SAVED DATASETS
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
             datagen_gateset = self.model.depolarize(op_noise=0.05, spam_noise=0.1)
             datagen_gateset2 = self.model.depolarize(op_noise=0.1, spam_noise=0.03).rotate((0.05,0.13,0.02))
             ds = pygsti.construction.generate_fake_data(

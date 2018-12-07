@@ -30,8 +30,6 @@ def get_fileroot(nQubits, maxMaxLen, errMag, spamMag, nSamples, simtype, idleErr
 def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001), spamMag=0,
                               nSamplesList=(100,'inf'), simtype="map"):
     
-    prepNoise = (456,spamMag) if spamMag > 0 else None
-    povmNoise = (789,spamMag) if spamMag > 0 else None
     base_param = []
     if hamiltonian: base_param.append('H')
     if stochastic: base_param.append('S')
@@ -41,12 +39,10 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
     
     gateset_idleInFids = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
                                       sim_type=simtype, parameterization=parameterization,
-                                      gateNoise=None, prepNoise=prepNoise, povmNoise=povmNoise,
-                                      addIdleNoiseToAllGates=True)
+                                      roughNoise=None, addIdleNoiseToAllGates=True)
     gateset_noIdleInFids = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
                                       sim_type=simtype, parameterization=parameterization,
-                                      gateNoise=None, prepNoise=prepNoise, povmNoise=povmNoise,
-                                      addIdleNoiseToAllGates=False)
+                                      roughNoise=None, addIdleNoiseToAllGates=False)
     
     listOfExperiments = idt.make_idle_tomography_list(nQubits, maxLengths, (prepDict,measDict), maxweight=min(2,nQubits),
                     include_hamiltonian=hamiltonian, include_stochastic=stochastic, include_affine=affine)
@@ -261,17 +257,18 @@ class IDTTestCase(BaseTestCase):
         maxLengths = [1,2,4]
         
         ## ----- Generate n-qubit operation sequences -----
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
             c = {} #Uncomment to re-generate cache SAVE
         else:
             c = pickle.load(open(compare_files+"/idt_nQsequenceCache%s.pkl" % self.versionsuffix,'rb'))
         
         t = time.time()
-        gss = pygsti.construction.create_nqubit_sequences(nQubits, maxLengths, 'line', [(0,1)], maxIdleWeight=2,
-                                                          idleOnly=False, paramroot="H+S", cache=c, verbosity=3)
+        gss = pygsti.construction.create_XYCNOT_cloudnoise_sequences(
+            nQubits, maxLengths, 'line', [(0,1)], maxIdleWeight=2,
+            idleOnly=False, paramroot="H+S", cache=c, verbosity=3)
         gss_strs = gss.allstrs
         print("%.1fs" % (time.time()-t))
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"):
             pickle.dump(c, open(compare_files+"/idt_nQsequenceCache%s.pkl" % self.versionsuffix,'wb'))
               #Uncomment to re-generate cache
 
@@ -298,7 +295,7 @@ class IDTTestCase(BaseTestCase):
         #Note: generate data with affine errors too (H+S+A used below)
         mdl_datagen = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
                                                                sim_type="map", parameterization="H+S+A",
-                                                               gateNoise=(1234,0.001), prepNoise=(1234,0.001), povmNoise=(1234,0.001))
+                                                               roughNoise=(1234,0.001))
         #This *only* (re)sets Gi errors...
         idt.set_idle_errors(nQubits, mdl_datagen, {}, rand_default=0.001,
                   hamiltonian=True, stochastic=True, affine=True) # no seed? FUTURE?

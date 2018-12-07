@@ -49,7 +49,7 @@ class ReportBaseCase(BaseTestCase):
             cls.versionsuffix = "v3" #Python 3
         
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET (SAVE)
-        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
             ds = pygsti.construction.generate_fake_data(datagen_gateset, cls.lsgstStrings[-1], nSamples=1000,
                                                         sampleError='binomial', seed=100)
             ds.save(compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
