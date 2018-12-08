@@ -1201,18 +1201,21 @@ class TestGateSetMethods(GateSetTestCase):
 
     def test_load_old_gateset(self):
         vs = "v2" if self.versionsuffix == "" else "v3"
-        pygsti.obj.results.enable_old_python_results_unpickling()
-        with open(compare_files + "/pygsti0.9.3.model.pkl.%s" % vs,'rb') as f:
+        #pygsti.obj.results.enable_old_python_results_unpickling()
+        pygsti.io.enable_old_object_unpickling()
+        with open(compare_files + "/pygsti0.9.6.gateset.pkl.%s" % vs,'rb') as f:
             mdl = pickle.load(f)
-        pygsti.obj.results.disable_old_python_results_unpickling()
+        #pygsti.obj.results.disable_old_python_results_unpickling()
+        pygsti.io.disable_old_object_unpickling()
         with open(temp_files + "/repickle_old_gateset.pkl.%s" % vs,'wb') as f:
             pickle.dump(mdl, f)
 
+        #OLD: we don't do this anymore (_calcClass has been removed)
         #also test automatic setting of _calcClass
-        mdl = self.model.copy()
-        del mdl._calcClass
-        c = mdl._calc() #automatically sets _calcClass
-        self.assertTrue(hasattr(mdl,'_calcClass'))
+        #mdl = self.model.copy()
+        #del mdl._calcClass
+        #c = mdl._calc() #automatically sets _calcClass
+        #self.assertTrue(hasattr(mdl,'_calcClass'))
 
 
     def test_base_fwdsim(self):

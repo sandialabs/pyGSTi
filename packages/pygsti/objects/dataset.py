@@ -18,6 +18,7 @@ import pickle as _pickle
 import copy as _copy
 import warnings as _warnings
 import bisect as _bisect
+import sys as _sys
 
 from collections import OrderedDict as _OrderedDict
 from collections import defaultdict as _DefaultDict
@@ -1607,13 +1608,20 @@ class DataSet(object):
         return toPickle
 
     def __setstate__(self, state_dict):
-        cirIndexKeys = [ cgstr.expand() for cgstr in state_dict['cirIndexKeys'] ]
-        cirIndex = _OrderedDict( list(zip( cirIndexKeys, state_dict['cirIndexVals'])) )
         bStatic = state_dict['bStatic']
+        
+        if "gsIndexKeys" in state_dict:
+            _warnings.warn("Unpickling a deprecated-format DataSet.  Please re-save/pickle asap.")
+            cirIndexKeys = [ cgstr.expand() for cgstr in state_dict['gsIndexKeys'] ]
+            cirIndex = _OrderedDict( list(zip( cirIndexKeys, state_dict['gsIndexVals'])) )
+        else:
+            cirIndexKeys = [ cgstr.expand() for cgstr in state_dict['cirIndexKeys'] ]
+            cirIndex = _OrderedDict( list(zip( cirIndexKeys, state_dict['cirIndexVals'])) )
+
 
         if "slIndex" in state_dict:
             #print("DB: UNPICKLING AN OLD DATASET"); print("Keys = ",state_dict.keys())
-            _warnings.warn("Unpickling a deprecated-format DataSet.  Please re-save/pickle asap.")
+            _warnings.warn("Unpickling a *very* deprecated-format DataSet.  Please re-save/pickle asap.")
 
             #Turn spam labels into outcome labels
             self.cirIndex = _OrderedDict()
@@ -1740,9 +1748,27 @@ class DataSet(object):
             f = fileOrFilename
 
         state_dict = _pickle.load(f)
+
+        if "gsIndexKeys" in state_dict:
+            _warnings.warn("Loading a deprecated-format DataSet.  Please re-save asap.")
+            state_dict['cirIndexKeys'] = state_dict['gsIndexKeys']
+            state_dict['cirIndexVals'] = state_dict['gsIndexVals']
+            del state_dict['gsIndexKeys']
+            del state_dict['gsIndexVals']
+
+            if _sys.version_info < (3, 0): #for backward compatibility, needed for Python2 only
+                new_aux_info = _DefaultDict(dict)  # where GateStrings don't get up-converted to Circuits b/c __new__ isn't called
+                for gstr,val in state_dict['auxInfo'].items():
+                    new_aux_info[ _cir.Circuit(gstr._tup, stringrep=gstr._str) ] = val
+                state_dict['auxInfo'] = new_aux_info
+        
         def expand(x): #to be backward compatible
             """ Expand a compressed operation sequence """
             if isinstance(x,_cir.CompressedCircuit): return x.expand()
+            elif hasattr(x,'__class__') and x.__class__.__name__ == "dummy_CompressedGateString":
+                return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x._tup), stringrep=x.str)
+                  #for backward compatibility, needed for Python2 only, which doesn't call __new__ when
+                  # unpickling protocol=0 (the default) info.
             else:
                 _warnings.warn("Deprecated dataset format.  Please re-save " +
                                "this dataset soon to avoid future incompatibility.")

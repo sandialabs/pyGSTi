@@ -780,7 +780,10 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, returnAll=False,
                             comm=comm, smartc=smartc)
         fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
         if(logL_upperbound < logl):
-            raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
+            if _np.isclose(logL_upperbound,logl):
+                logl = logl_upperbound; fitQty = 0.0
+            else:
+                raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
 
     ds_gstrs = _tools.find_replace_tuple_list(gstrs, gss.aliases)
 

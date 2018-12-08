@@ -2140,47 +2140,62 @@ class ExplicitOpModel(Model):
     #    #Returns self.__dict__ by default, which is fine
 
     def __setstate__(self, stateDict):
+        
+        if "gates" in stateDict:
+            #Unpickling an OLD-version Model (or GateSet)
+            _warnings.warn("Unpickling deprecated-format ExplicitOpModel (GateSet).  Please re-save/pickle asap.")
+            self.operations = stateDict['gates']
+            del stateDict['gates']
+            del stateDict['_autogator']
+            del stateDict['auto_idle_gatename']
+
         if "effects" in stateDict:
-            #unpickling an OLD-version Model - like a re-__init__
-            #print("DB: UNPICKLING AN OLD GATESET"); print("Keys = ",stateDict.keys())
-            default_param = "full"
-            self.preps = _ld.OrderedMemberDict(self, default_param, "rho", "spamvec")
-            self.povms = _ld.OrderedMemberDict(self, default_param, "M", "povm")
-            self.effects_prefix = 'E'
-            self.operations = _ld.OrderedMemberDict(self, default_param, "G", "gate")
-            self.instruments = _ld.OrderedMemberDict(self, default_param, "I", "instrument")
-            self._paramvec = _np.zeros(0, 'd')
-            self._rebuild_paramvec()
+            raise ValueError(("This model (GateSet) object is too old to unpickle - "
+                              "try using pyGSTi v0.9.6 to upgrade it to a version "
+                              "that this version can upgrade to the current version."))
 
-            self._dim = stateDict['_dim']
-            self._calcClass = stateDict.get('_calcClass',_matrixfwdsim.MatrixForwardSimulator)
-            self._evotype = "densitymx"
-            self.basis = stateDict.get('basis', _Basis('unknown', None))
-            if self.basis.name == "unknown" and '_basisNameAndDim' in stateDict:
-                self.basis = _Basis(stateDict['_basisNameAndDim'][0],
-                                    stateDict['_basisNameAndDim'][1])
-
-            self._default_gauge_group = stateDict['_default_gauge_group']
-
-            assert(len(stateDict['preps']) <= 1), "Cannot convert Models with multiple preps!"
-            for lbl,gate in stateDict['gates'].items(): self.operations[lbl] = gate
-            for lbl,vec in stateDict['preps'].items(): self.preps[lbl] = vec
-
-            effect_vecs = []; remL = stateDict['_remainderlabel']
-            comp_lbl = None
-            for sl,(prepLbl,ELbl) in stateDict['spamdefs'].items():
-                assert((prepLbl,ELbl) != (remL,remL)), "Cannot convert sum-to-one spamlabel!"
-                if ELbl == remL:  comp_lbl = str(sl)
-                else: effect_vecs.append( (str(sl), stateDict['effects'][ELbl]) )
-            if comp_lbl is not None:
-                comp_vec = stateDict['_povm_identity'] - sum([v for sl,v in effect_vecs])
-                effect_vecs.append( (comp_lbl, comp_vec) )
-                self.povms['Mdefault'] = _povm.TPPOVM(effect_vecs)
-            else:
-                self.povms['Mdefault'] = _povm.UnconstrainedPOVM(effect_vecs)
-
-        else:
-            self.__dict__.update(stateDict)
+        #TODO REMOVE
+        #if "effects" in stateDict: #
+        #    #unpickling an OLD-version Model - like a re-__init__
+        #    #print("DB: UNPICKLING AN OLD GATESET"); print("Keys = ",stateDict.keys())
+        #    default_param = "full"
+        #    self.preps = _ld.OrderedMemberDict(self, default_param, "rho", "spamvec")
+        #    self.povms = _ld.OrderedMemberDict(self, default_param, "M", "povm")
+        #    self.effects_prefix = 'E'
+        #    self.operations = _ld.OrderedMemberDict(self, default_param, "G", "gate")
+        #    self.instruments = _ld.OrderedMemberDict(self, default_param, "I", "instrument")
+        #    self._paramvec = _np.zeros(0, 'd')
+        #    self._rebuild_paramvec()
+        #
+        #    self._dim = stateDict['_dim']
+        #    self._calcClass = stateDict.get('_calcClass',_matrixfwdsim.MatrixForwardSimulator)
+        #    self._evotype = "densitymx"
+        #    self.basis = stateDict.get('basis', _Basis('unknown', None))
+        #    if self.basis.name == "unknown" and '_basisNameAndDim' in stateDict:
+        #        self.basis = _Basis(stateDict['_basisNameAndDim'][0],
+        #                            stateDict['_basisNameAndDim'][1])
+        #
+        #    self._default_gauge_group = stateDict['_default_gauge_group']
+        #
+        #    assert(len(stateDict['preps']) <= 1), "Cannot convert Models with multiple preps!"
+        #    for lbl,gate in stateDict['gates'].items(): self.operations[lbl] = gate
+        #    for lbl,vec in stateDict['preps'].items(): self.preps[lbl] = vec
+        #
+        #    effect_vecs = []; remL = stateDict['_remainderlabel']
+        #    comp_lbl = None
+        #    for sl,(prepLbl,ELbl) in stateDict['spamdefs'].items():
+        #        assert((prepLbl,ELbl) != (remL,remL)), "Cannot convert sum-to-one spamlabel!"
+        #        if ELbl == remL:  comp_lbl = str(sl)
+        #        else: effect_vecs.append( (str(sl), stateDict['effects'][ELbl]) )
+        #    if comp_lbl is not None:
+        #        comp_vec = stateDict['_povm_identity'] - sum([v for sl,v in effect_vecs])
+        #        effect_vecs.append( (comp_lbl, comp_vec) )
+        #        self.povms['Mdefault'] = _povm.TPPOVM(effect_vecs)
+        #    else:
+        #        self.povms['Mdefault'] = _povm.UnconstrainedPOVM(effect_vecs)
+        #
+        #else:
+        self.__dict__.update(stateDict)
 
         if 'uuid' not in stateDict:
             self.uuid = _uuid.uuid4() #create a new uuid

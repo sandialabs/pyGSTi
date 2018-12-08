@@ -87,9 +87,11 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             Used by pickle and other serializations to initialize elements.
         """
         #** Note: if change __init__ signature, update __reduce__ below
+        if _compat.isstr(flags): # for backward compatibility
+            flags = {'cast_to_type': ("operation" if flags == "gate" else flags) }
         
         # Note: we *don't* want to be calling parent's "rebuild" function here,
-        # when we're creating a new list, as this behavior is only intented for
+        # when we're creating a new list, as this behavior is only intended for
         # explicit insertions.  Since calling the base class __init__ will
         # call this class's __setitem__ we set parent to None for this step.
         self.parent = None # so __init__ below doesn't call _rebuild_paramvec

@@ -2258,10 +2258,14 @@ class CompressedCircuit(object):
 
     def __setstate__(self, state_dict):
         for k, v in state_dict.items():
-            if k == 'tup':                    # backwards compatibility
+            if k == 'tup':                    
                 self._tup = state_dict['tup'] # backwards compatibility
+            elif k == 'str':
+                self._str = state_dict['str'] # backwards compatibility
             else:
                 self.__dict__[k] = v
+        if 'line_labels' not in state_dict:
+            self.line_labels = ('*',)
 
     def expand(self):
         """
