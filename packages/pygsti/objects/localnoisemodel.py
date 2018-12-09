@@ -370,9 +370,9 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
                     if inds == tuple(qubit_labels):
                         embedded_op = cgate
                     elif sim_type == "matrix":
-                        embedded_op = _op.EmbeddedDenseOp(self.stateSpaceLabels, inds, cgate)
+                        embedded_op = _op.EmbeddedDenseOp(self.state_space_labels, inds, cgate)
                     else: # sim_type == "map" or sim_type.startswidth("termorder"):
-                        embedded_op = _op.EmbeddedOp(self.stateSpaceLabels, inds, cgate)
+                        embedded_op = _op.EmbeddedOp(self.state_space_labels, inds, cgate)
                     self.operation_blks[_Lbl(gateName,inds)] = embedded_op
                     primitive_ops.append(_Lbl(gateName,inds))
 

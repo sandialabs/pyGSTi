@@ -3641,14 +3641,14 @@ class EmbeddedOp(LinearOperator):
             `stateSpaceLabels`.  If None, then this dimension is assumed.
         """
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
-        self.stateSpaceLabels = _StateSpaceLabels(stateSpaceLabels)
+        self.state_space_labels = _StateSpaceLabels(stateSpaceLabels)
         self.targetLabels = targetLabels
         self.embedded_op = gate_to_embed
         self.basisdim = basisdim
 
         labels = targetLabels
 
-        blockDims = self.stateSpaceLabels.dim.blockDims
+        blockDims = self.state_space_labels.dim.blockDims
         if basisdim: 
             if blockDims != basisdim.blockDims:
                 raise ValueError("State labels %s for tensor product blocks have dimensions %s != given dimensions %s" \
@@ -3659,20 +3659,20 @@ class EmbeddedOp(LinearOperator):
 
         evotype = gate_to_embed._evotype
         if evotype in ("densitymx","statevec"):
-            iTensorProdBlks = [ self.stateSpaceLabels.tpb_index[label] for label in labels ]
+            iTensorProdBlks = [ self.state_space_labels.tpb_index[label] for label in labels ]
               # index of tensor product block (of state space) a bit label is part of
             if len(set(iTensorProdBlks)) != 1:
                 raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" + \
                                  " same tensor-product-block of the state space -- checked previously") # pragma: no cover
         
             iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
-            tensorProdBlkLabels = self.stateSpaceLabels.labels[iTensorProdBlk]
+            tensorProdBlkLabels = self.state_space_labels.labels[iTensorProdBlk]
             basisInds = [] # list of possible *density-matrix-space* indices of each component of the tensor product block
             for l in tensorProdBlkLabels:
                 if evotype == "densitymx":
-                    basisInds.append( list(range(self.stateSpaceLabels.labeldims[l]**2)) ) # e.g. [0,1,2,3] for qubits (I, X, Y, Z)
+                    basisInds.append( list(range(self.state_space_labels.labeldims[l]**2)) ) # e.g. [0,1,2,3] for qubits (I, X, Y, Z)
                 else: # evotype == "statevec"
-                    basisInds.append( list(range(self.stateSpaceLabels.labeldims[l])) ) # e.g. [0,1] for qubits (std *complex* basis)
+                    basisInds.append( list(range(self.state_space_labels.labeldims[l])) ) # e.g. [0,1] for qubits (std *complex* basis)
 
             self.numBasisEls = _np.array(list(map(len,basisInds)),_np.int64)
             self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one
@@ -3688,9 +3688,9 @@ class EmbeddedOp(LinearOperator):
             for l in labels:
                 self.divisors.append(divisor)
                 if evotype == "densitymx":
-                    divisor *= self.stateSpaceLabels.labeldims[l]**2 # e.g. 4 for qubits
+                    divisor *= self.state_space_labels.labeldims[l]**2 # e.g. 4 for qubits
                 else: # evotype == "statevec"
-                    divisor *= self.stateSpaceLabels.labeldims[l] # e.g. 2 for qubits
+                    divisor *= self.state_space_labels.labeldims[l] # e.g. 2 for qubits
     
             # multipliers to go from per-label indices to tensor-product-block index
             # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
@@ -3727,8 +3727,8 @@ class EmbeddedOp(LinearOperator):
         if evotype == "stabilizer":
             # assert that all state space labels == qubits, since we only know
             # how to embed cliffords on qubits...
-            assert(len(self.stateSpaceLabels.labels) == 1 and
-                   all([ld == 2 for ld in self.stateSpaceLabels.labeldims.values()])), \
+            assert(len(self.state_space_labels.labels) == 1 and
+                   all([ld == 2 for ld in self.state_space_labels.labeldims.values()])), \
                    "All state space labels must correspond to *qubits*"
             if isinstance(self.embedded_op, CliffordOp):
                 assert(len(targetLabels) == len(self.embedded_op.svector) // 2), \
@@ -3736,7 +3736,7 @@ class EmbeddedOp(LinearOperator):
 
             #Cache info to speedup representation's acton(...) methods:
             # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
-            qubitLabels = self.stateSpaceLabels.labels[0] 
+            qubitLabels = self.state_space_labels.labels[0] 
             self.qubit_indices =  _np.array([ qubitLabels.index(targetLbl)
                                               for targetLbl in self.targetLabels ], _np.int64)
         else:
@@ -3778,7 +3778,7 @@ class EmbeddedOp(LinearOperator):
         # We need to override this method so that embedded gate has its
         # parent reset correctly.
         cls = self.__class__ # so that this method works for derived classes too
-        copyOfMe = cls(self.stateSpaceLabels, self.targetLabels,
+        copyOfMe = cls(self.state_space_labels, self.targetLabels,
                        self.embedded_op.copy(parent), self.basisdim)
         return self._copy_gpindices(copyOfMe, parent)
         
@@ -3851,9 +3851,9 @@ class EmbeddedOp(LinearOperator):
             raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
                              (self._evotype, self.__class__.__name__))
 
-        nBlocks = len(self.stateSpaceLabels.labels)
+        nBlocks = len(self.state_space_labels.labels)
         iActiveBlock = self.iTensorProdBlk
-        nComponents = len(self.stateSpaceLabels.labels[iActiveBlock])
+        nComponents = len(self.state_space_labels.labels[iActiveBlock])
         embeddedDim = self.embedded_op.dim
         _, _, blockDims = self.basisdim # dmDim, opDim, blockDims
         
@@ -3891,7 +3891,7 @@ class EmbeddedOp(LinearOperator):
         #def tosymplectic(self):
         #    #Embed gate's symplectic rep in larger "full" symplectic rep
         #    #Note: (qubit) labels are in first (and only) tensor-product-block
-        #    qubitLabels = self.stateSpaceLabels.labels[0]
+        #    qubitLabels = self.state_space_labels.labels[0]
         #    smatrix, svector = _symp.embed_clifford(self.embedded_op.smatrix,
         #                                            self.embedded_op.svector,
         #                                            self.qubit_indices,len(qubitLabels))        
@@ -3934,7 +3934,7 @@ class EmbeddedOp(LinearOperator):
         list
             A list of :class:`RankOneTerm` objects.
         """
-        return [ _term.embed_term(t, self.stateSpaceLabels,
+        return [ _term.embed_term(t, self.state_space_labels,
                                   self.targetLabels, self.basisdim)
                  for t in self.embedded_op.get_order_terms(order) ]
 
@@ -4099,7 +4099,7 @@ class EmbeddedOp(LinearOperator):
 
     def __str__(self):
         """ Return string representation """
-        s = "Embedded gate with full dimension %d and state space %s\n" % (self.dim,self.stateSpaceLabels)
+        s = "Embedded gate with full dimension %d and state space %s\n" % (self.dim,self.state_space_labels)
         s += " that embeds the following %d-dimensional gate into acting on the %s space\n" \
              % (self.embedded_op.dim, str(self.targetLabels))
         s += str(self.embedded_op)
@@ -4709,7 +4709,7 @@ class EmbeddedErrorgen(EmbeddedOp):
         if _compat.isstr(embedded_matrix_basis):
             self.matrix_basis = embedded_matrix_basis
         else: # assume a Basis object
-            my_basis_dim = self.stateSpaceLabels.dim.dmDim # density matrix dimension
+            my_basis_dim = self.state_space_labels.dim.dmDim # density matrix dimension
             self.matrix_basis = _Basis(embedded_matrix_basis.name, my_basis_dim)
 
             #OLD: constructs a subset of this errorgen's full mxbasis, but not the whole thing:
@@ -4737,7 +4737,7 @@ class EmbeddedErrorgen(EmbeddedOp):
         """ Take a dense or sparse basis matrix and embed it. """
         mxAsGate = StaticDenseOp(mx) if isinstance(mx,_np.ndarray) \
             else StaticDenseOp(mx.todense()) #assume mx is a sparse matrix
-        return EmbeddedOp(self.stateSpaceLabels, self.targetLabels,
+        return EmbeddedOp(self.state_space_labels, self.targetLabels,
                                mxAsGate).tosparse() # always convert to *sparse* basis els
 
 
@@ -4787,7 +4787,7 @@ class EmbeddedErrorgen(EmbeddedOp):
 
     def __str__(self):
         """ Return string representation """
-        s = "Embedded error generator with full dimension %d and state space %s\n" % (self.dim,self.stateSpaceLabels)
+        s = "Embedded error generator with full dimension %d and state space %s\n" % (self.dim,self.state_space_labels)
         s += " that embeds the following %d-dimensional gate into acting on the %s space\n" \
              % (self.embedded_op.dim, str(self.targetLabels))
         s += str(self.embedded_op)

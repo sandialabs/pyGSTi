@@ -1362,9 +1362,9 @@ def reps_for_synthetic_idle(model, germStr, nqubits, core_qubits):
     def extract_gate(g):
         """ Get the gate action as a dense gate on core_qubits """
         if isinstance(g, _objs.EmbeddedOp):
-            assert(len(g.stateSpaceLabels.labels) == 1) # 1 tensor product block
-            assert(len(g.stateSpaceLabels.labels[0]) == nqubits) # expected qubit count
-            qubit_labels = g.stateSpaceLabels.labels[0]
+            assert(len(g.state_space_labels.labels) == 1) # 1 tensor product block
+            assert(len(g.state_space_labels.labels[0]) == nqubits) # expected qubit count
+            qubit_labels = g.state_space_labels.labels[0]
             
             # for now - assume we know the form of qubit_labels
             assert(list(qubit_labels) == [('Q%d'%i) for i in range(nqubits)] or 

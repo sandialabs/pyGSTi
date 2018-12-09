@@ -184,7 +184,7 @@ class CompilationLibrary(_collections.OrderedDict):
             opstr = list( map(to_real_label, template_to_use) )
             #REMOVE 'I's
             return _Circuit(layer_labels=opstr,
-                            line_labels=self.model.stateSpaceLabels.labels[0])
+                            line_labels=self.model.state_space_labels.labels[0])
         else:
             raise CompilationError("Cannot locally compile %s" % str(oplabel))
 
@@ -449,7 +449,7 @@ class CompilationLibrary(_collections.OrderedDict):
         None
         """
         nQ = int(round(_np.log2(self.model.dim))) # assumes *unitary* mode (OK?)
-        qubit_labels = self.model.stateSpaceLabels.labels[0]
+        qubit_labels = self.model.state_space_labels.labels[0]
         d = { qlbl: i for i,qlbl in enumerate(qubit_labels) }
         assert(len(qubit_labels) == nQ),"Number of qubit labels is inconsistent with Model dimension!"
         
@@ -599,7 +599,7 @@ class CompilationLibrary(_collections.OrderedDict):
         
         # Convert the operationlist to a circuit.
         circuit = _Circuit(layer_labels=cnot_circuit,
-                           line_labels=self.model.stateSpaceLabels.labels[0],
+                           line_labels=self.model.state_space_labels.labels[0],
                            editable=True)
 
         ## Change into the native gates, using the compilation for CNOTs between
@@ -615,8 +615,8 @@ class CompilationLibrary(_collections.OrderedDict):
             
             # Construct the symplectic rep of CNOT between this pair of qubits, to compare to s.
             nQ = int(round(_np.log2(self.model.dim))) # assumes *unitary* mode (OK?)
-            iq1 = self.model.stateSpaceLabels.labels[0].index(q1) # assumes single tensor-prod term
-            iq2 = self.model.stateSpaceLabels.labels[0].index(q2) # assumes single tensor-prod term
+            iq1 = self.model.state_space_labels.labels[0].index(q1) # assumes single tensor-prod term
+            iq2 = self.model.state_space_labels.labels[0].index(q2) # assumes single tensor-prod term
             s_cnot, p_cnot = _symp.symplectic_rep_of_clifford_layer(_Label('CNOT',(iq1,iq2)),nQ)
     
             assert(_np.array_equal(s,s_cnot)), "Compilation has failed!"

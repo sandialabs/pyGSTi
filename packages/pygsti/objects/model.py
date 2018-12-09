@@ -63,13 +63,12 @@ class Model(object):
         #Operator dimension of this Model (None => unset, to be determined)
         self._dim = None
         self._evotype = evotype
-        self.stateSpaceLabels = None #lbls
 
         #Name and dimension (or list of dims) of the *basis*
         # that the gates and SPAM vectors are expressed in.  This
         # is for interpretational purposes only, and is reset often
         # (for instance, when reading Model params from a vector)
-        self.reset_basis()
+        self.reset_basis() # sets self.basis and self.state_space_labels
 
         if sim_type != "auto":
             self.set_simtype(sim_type)
@@ -82,6 +81,7 @@ class Model(object):
         self._paramvec = _np.zeros(0, 'd')
         self._rebuild_paramvec()
         self._chlp = compiler_helper
+        self._paramlbls = None # a placeholder for FUTURE functionality
 
         self.uuid = _uuid.uuid4() # a Model's uuid is like a persistent id(), useful for hashing
         super(Model, self).__init__()
@@ -123,7 +123,7 @@ class Model(object):
         these quantities to "unkown" and None, respectively.
         """
         self.basis = _Basis('unknown', None)
-        self.stateSpaceLabels = None
+        self.state_space_labels = None
 
 
 
@@ -176,9 +176,9 @@ class Model(object):
         None
         """
         if isinstance(lbls, _ld.StateSpaceLabels):
-            self.stateSpaceLabels = lbls
+            self.state_space_labels = lbls
         else:
-            self.stateSpaceLabels = _ld.StateSpaceLabels(lbls)
+            self.state_space_labels = _ld.StateSpaceLabels(lbls)
 
             
     ####################################################
@@ -1898,7 +1898,7 @@ class ExplicitOpModel(Model):
         """
         Called by OrderedMemberDict._auto_embed to create an embedded-gate
         object that embeds `opVal` into the sub-space of
-        `self.stateSpaceLabels` given by `opTargetLabels`.
+        `self.state_space_labels` given by `opTargetLabels`.
 
         Parameters
         ----------
@@ -1920,16 +1920,16 @@ class ExplicitOpModel(Model):
         """
         if self.dim is None:
             raise ValueError("Must set model dimension before adding auto-embedded gates.")
-        if self.stateSpaceLabels is None:
-            raise ValueError("Must set model.stateSpaceLabels before adding auto-embedded gates.")
+        if self.state_space_labels is None:
+            raise ValueError("Must set model.state_space_labels before adding auto-embedded gates.")
 
         if opVal.dim == self.dim and not force:
             return opVal # if gate operates on full dimension, no need to embed.
 
         if self._sim_type == "matrix":
-            return _op.EmbeddedDenseOp(self.stateSpaceLabels, opTargetLabels, opVal)
+            return _op.EmbeddedDenseOp(self.state_space_labels, opTargetLabels, opVal)
         elif self._sim_type in ("map","termorder"):
-            return _op.EmbeddedOp(self.stateSpaceLabels, opTargetLabels, opVal)
+            return _op.EmbeddedOp(self.state_space_labels, opTargetLabels, opVal)
         else:
             assert(False), "Invalid Model sim type == %s" % str(self._sim_type)
 
@@ -2145,9 +2145,13 @@ class ExplicitOpModel(Model):
             #Unpickling an OLD-version Model (or GateSet)
             _warnings.warn("Unpickling deprecated-format ExplicitOpModel (GateSet).  Please re-save/pickle asap.")
             self.operations = stateDict['gates']
+            self.state_space_labels = stateDict['stateSpaceLabels']
+            self._paramlbls = None
+            self._chlp = MemberDictCompilerHelper(stateDict['preps'], stateDict['povms'], stateDict['instruments'])
             del stateDict['gates']
             del stateDict['_autogator']
             del stateDict['auto_idle_gatename']
+            del stateDict['stateSpaceLabels']
 
         if "effects" in stateDict:
             raise ValueError(("This model (GateSet) object is too old to unpickle - "

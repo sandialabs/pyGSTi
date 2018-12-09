@@ -68,6 +68,7 @@ class ModelMember(ModelChild):
         self.dim = dim
         self._evotype = evotype
         self._gpindices = gpindices
+        self._gplabels = None # a placeholder for FUTURE features
         self.dirty = False # True when there's any *possibility* that this
                            # gate's parameters have been changed since the
                            # last setting of dirty=False

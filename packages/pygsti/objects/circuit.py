@@ -2168,9 +2168,9 @@ class Circuit(object):
         results = model.probs(self)
 
         # Mapping from the state-space labels of the model to their indices.
-        # (e.g. if model.stateSpaceLabels is [('Qa','Qb')] then sslInds['Qb'] = 1
+        # (e.g. if model.state_space_labels is [('Qa','Qb')] then sslInds['Qb'] = 1
         # (and 'Qb' may be a circuit line label)
-        sslInds = { sslbl:i for i,sslbl in enumerate(model.stateSpaceLabels.labels[0]) }
+        sslInds = { sslbl:i for i,sslbl in enumerate(model.state_space_labels.labels[0]) }
           # Note: we ignore all but the first tensor product block of the state space.
         
         def process_outcome(outcome):

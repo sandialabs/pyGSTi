@@ -91,6 +91,7 @@ def enable_old_object_unpickling():
     spamvec.CPTPParameterizedSPAMVec = _objs.CPTPSPAMVec
     spamvec.TPParameterizedSPAMVec = _objs.TPSPAMVec
 
+    #Don't need class logic here b/c we just store the class itself in a model object:
     gatematrixcalc = _ModuleType("gatematrixcalc")
     gatematrixcalc.GateMatrixCalc = _objs.matrixforwardsim.MatrixForwardSimulator # dummy_GateMatrixCalc
     _sys.modules['pygsti.objects.gatematrixcalc'] = gatematrixcalc
