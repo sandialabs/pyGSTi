@@ -5,11 +5,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """
-Variables for working with the a qutrit gate set containing Idle, X(pi/2) and Y(pi/2) and Molmer-Sorenson gates.
+Variables for working with the a qutrit model containing Idle, X(pi/2) and Y(pi/2) and Molmer-Sorenson gates.
 """
 
-from . import gatestringconstruction as _strc
-from . import gatesetconstruction as _setc
+from . import circuitconstruction as _strc
+from . import modelconstruction as _setc
 from . import qutrit as _qutrit
 from collections import OrderedDict as _OrderedDict
 from numpy import pi as _pi
@@ -17,16 +17,16 @@ from numpy import pi as _pi
 description = "Idle, symmetric X(pi/2), symmetric Y(pi/2), and Molmer-Sorenson gates"
 
 gates = ['Gi','Gx','Gy','Gm']
-prepStrs = _strc.gatestring_list([
+prepStrs = _strc.circuit_list([
     (), ('Gx',), ('Gy',), ('Gm',),
     ('Gx','Gx'), ('Gm','Gx'), ('Gm','Gy'),
     ('Gy','Gy','Gy'),('Gx','Gx','Gx') ])
 
-effectStrs = _strc.gatestring_list([
+effectStrs = _strc.circuit_list([
     (),('Gx',),('Gy',), ('Gm',),
     ('Gx','Gx'),('Gy','Gm'),('Gx','Gm') ])
 
-germs = _strc.gatestring_list([
+germs = _strc.circuit_list([
     ('Gi',),
     ('Gy',),
     ('Gx',),
@@ -98,7 +98,7 @@ germs = _strc.gatestring_list([
     ('Gm', 'Gy', 'Gx', 'Gm', 'Gm', 'Gy') ])
 
 
-germs_lite = _strc.gatestring_list([
+germs_lite = _strc.circuit_list([
     ('Gi',),
     ('Gy',),
     ('Gx',),
@@ -132,7 +132,7 @@ germs_lite = _strc.gatestring_list([
     ('Gx', 'Gm', 'Gm') ])
 
 
-legacy_germs = _strc.gatestring_list([
+legacy_germs = _strc.circuit_list([
     ('Gi',),
     ('Gx',),
     ('Gy',),
@@ -198,7 +198,7 @@ legacy_germs = _strc.gatestring_list([
 
 #Missing GxGxGy (compared to non-legacy), which is needed to contain
 # all of the std1Q_XYI `germs_lite` germs.
-legacy_germs_lite = _strc.gatestring_list([
+legacy_germs_lite = _strc.circuit_list([
     ('Gi',),
     ('Gy',),
     ('Gx',),
@@ -231,11 +231,11 @@ legacy_germs_lite = _strc.gatestring_list([
     ('Gx', 'Gm', 'Gm') ])
 
 
-#Construct a target gateset: Identity, sym X(pi/2), sym Y(pi/2), Molmer-Sorenson
-gs_target = _qutrit.make_qutrit_gateset(errorScale=0, Xangle=_pi/2, Yangle=_pi/2,
+#Construct a target model: Identity, sym X(pi/2), sym Y(pi/2), Molmer-Sorenson
+target_model = _qutrit.make_qutrit_model(errorScale=0, Xangle=_pi/2, Yangle=_pi/2,
                                        MSglobal=_pi/2, MSlocal=0, basis="qt")
 
-legacy_gs_target = _qutrit.make_qutrit_gateset(errorScale=0, Xangle=-_pi/2, Yangle=_pi/2,
+legacy_gs_target = _qutrit.make_qutrit_model(errorScale=0, Xangle=-_pi/2, Yangle=_pi/2,
                                        MSglobal=-_pi/2, MSlocal=0, basis="qt")
   #Note: negative signs from weird/incorrect conventions
 

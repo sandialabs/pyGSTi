@@ -413,7 +413,7 @@ def do_grasp(elements, greedyScoreFn, rclFn, localScoreFn, getNeighborsFn,
 
     Returns
     -------
-    list of GateString
+    list of Circuits
         The best germ set from all locally-optimal germ sets constructed.
 
     """

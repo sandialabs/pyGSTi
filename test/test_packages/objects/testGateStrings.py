@@ -8,13 +8,13 @@ from pygsti.construction import std1Q_XYI as std
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-class GateStringTestCase(BaseTestCase):
+class CircuitTestCase(BaseTestCase):
 
     def setUp(self):
-        super(GateStringTestCase, self).setUp()
+        super(CircuitTestCase, self).setUp()
 
     def test_structure(self):
-        raw_gss = pygsti.objects.GatestringStructure() #base class that doens't implmenet much
+        raw_gss = pygsti.objects.CircuitStructure() #base class that doens't implmenet much
 
         with self.assertRaises(NotImplementedError):
             raw_gss.xvals()

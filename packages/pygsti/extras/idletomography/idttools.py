@@ -155,20 +155,19 @@ def nontrivial_paulis(wt):
         ret.append( tup )
     return ret
 
-def set_Gi_errors(nQubits, gateset, errdict, rand_default=None,
+def set_idle_errors(nQubits, model, errdict, rand_default=None,
                   hamiltonian=True, stochastic=True, affine=True):
     """ 
-    Set specific or random error terms (typically for a data-generating gateset)
-    within a `gateset` created by `build_nqnoise_gateset`.
+    Set specific or random error terms (typically for a data-generating model)
+    within a noise model (a :class:`CloudNoiseModel` object).
 
     Parameters
     ----------
     nQubits : int
         The number of qubits.
 
-    gateset : GateSet
-        The gate set, created by `build_nqnoise_gateset`, to set the "Gi"-gate
-        errors of.
+    model : CloudNoiseModel
+        The model, to set the idle errors of.
         
     errdict : dict
         A dictionary of errors to include.  Keys are `"S(<>)"`, `"H(<>)"`, and
@@ -183,8 +182,8 @@ def set_Gi_errors(nQubits, gateset, errdict, rand_default=None,
         enough to provide values for all unspecified rates.
 
     hamiltonian, stochastic, affine : bool, optional
-        Whether `gateset` includes Hamiltonian, Stochastic, and/or Affine
-        errors (e.g. if the gate set was built with "H+S" parameterization,
+        Whether `model` includes Hamiltonian, Stochastic, and/or Affine
+        errors (e.g. if the model was built with "H+S" parameterization,
         then only `hamiltonian` and `stochastic` should be set to True).
 
     Returns
@@ -193,13 +192,14 @@ def set_Gi_errors(nQubits, gateset, errdict, rand_default=None,
         The random rates the were used.
     """
     rand_rates = []; i_rand_default = 0
-    v = gateset.to_vector()
-    for i,factor in enumerate(gateset.gates['Gi'].factorgates): # each factor applies to some set of the qubits (of size 1 to the max-error-weight)
+    v = model.to_vector()
+    #assumes Implicit model w/'globalIdle' as a composed gate...
+    for i,factor in enumerate(model.operation_blks['globalIdle'].factorops): # each factor applies to some set of the qubits (of size 1 to the max-error-weight)
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
-        assert(isinstance(factor, _objs.EmbeddedGateMap)), "Expected Gi to be a composition of embedded gates!"
+        assert(isinstance(factor, _objs.EmbeddedOp)), "Expected Gi to be a composition of embedded gates!"
         sub_v = v[factor.gpindices]
-        bsH = factor.embedded_gate.errorgen.ham_basis_size
-        bsO = factor.embedded_gate.errorgen.other_basis_size
+        bsH = factor.embedded_op.errorgen.ham_basis_size
+        bsO = factor.embedded_op.errorgen.other_basis_size
         if hamiltonian: hamiltonian_sub_v = sub_v[0:bsH-1] # -1s b/c bsH, bsO include identity in basis
         if stochastic:  stochastic_sub_v = sub_v[bsH-1:bsH-1+bsO-1]
         if affine:      affine_sub_v = sub_v[bsH-1+bsO-1:bsH-1+2*(bsO-1)]
@@ -247,14 +247,14 @@ def set_Gi_errors(nQubits, gateset, errdict, rand_default=None,
             if stochastic: stochastic_sub_v[k] = _np.sqrt(Srate) # b/c param gets squared
             if affine: affine_sub_v[k] = Arate
             
-    gateset.from_vector(v)
+    model.from_vector(v)
     return _np.array(rand_rates,'d') # the random rates that were chosen (to keep track of them for later)
 
 
-def predicted_intrinsic_rates(nQubits, maxweight, gateset,
+def predicted_intrinsic_rates(nQubits, maxweight, model,
                               hamiltonian=True, stochastic=True, affine=True):
     """
-    Get the exact intrinsic rates that would be produced by simulating `gateset`
+    Get the exact intrinsic rates that would be produced by simulating `model`
     (for comparison with idle tomography results).
 
     Parameters
@@ -265,13 +265,12 @@ def predicted_intrinsic_rates(nQubits, maxweight, gateset,
     maxweight : int, optional
         The maximum weight of errors to consider.
 
-    gateset : GateSet
-        The gate set, created by `build_nqnoise_gateset`, to extract intrinsic
-        error rates from.
+    model : CloudNoiseModel
+        The model to extract intrinsic error rates from.
 
     hamiltonian, stochastic, affine : bool, optional
-        Whether `gateset` includes Hamiltonian, Stochastic, and/or Affine
-        errors (e.g. if the gate set was built with "H+S" parameterization,
+        Whether `model` includes Hamiltonian, Stochastic, and/or Affine
+        errors (e.g. if the model was built with "H+S" parameterization,
         then only `hamiltonian` and `stochastic` should be set to True).
 
     Returns
@@ -281,7 +280,7 @@ def predicted_intrinsic_rates(nQubits, maxweight, gateset,
         `stochastic` or `affine` is set to False.
     """
     error_labels = [str(pauliOp.rep) for pauliOp in allerrors(nQubits, maxweight)]
-    v = gateset.to_vector()
+    v = model.to_vector()
     
     if hamiltonian:
         ham_intrinsic_rates = _np.zeros(len(error_labels),'d')
@@ -295,12 +294,12 @@ def predicted_intrinsic_rates(nQubits, maxweight, gateset,
         aff_intrinsic_rates = _np.zeros(len(error_labels),'d')
     else: aff_intrinsic_rates = None
 
-    for i,factor in enumerate(gateset.gates['Gi'].factorgates):
+    for i,factor in enumerate(model.operation_blks['globalIdle'].factorops):
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
-        assert(isinstance(factor, _objs.EmbeddedGateMap)), "Expected Gi to be a composition of embedded gates!"
+        assert(isinstance(factor, _objs.EmbeddedOp)), "Expected Gi to be a composition of embedded gates!"
         sub_v = v[factor.gpindices]
-        bsH = factor.embedded_gate.errorgen.ham_basis_size
-        bsO = factor.embedded_gate.errorgen.other_basis_size
+        bsH = factor.embedded_op.errorgen.ham_basis_size
+        bsO = factor.embedded_op.errorgen.other_basis_size
         if hamiltonian: hamiltonian_sub_v = sub_v[0:bsH-1] # -1s b/c bsH, bsO include identity in basis
         if stochastic:  stochastic_sub_v = sub_v[bsH-1:bsH-1+bsO-1]
         if affine:      affine_sub_v = sub_v[bsH-1+bsO-1:bsH-1+2*(bsO-1)]
@@ -342,17 +341,17 @@ def predicted_intrinsic_rates(nQubits, maxweight, gateset,
     return ham_intrinsic_rates, sto_intrinsic_rates, aff_intrinsic_rates
 
 
-def predicted_observable_rates(idtresults, typ, nQubits, maxweight, gateset):
+def predicted_observable_rates(idtresults, typ, nQubits, maxweight, model):
     """
     Get the exact observable rates that would be produced by simulating
-    `gateset` (for comparison with idle tomography results).
+    `model` (for comparison with idle tomography results).
 
     Parameters
     ----------
     idtresults : IdleTomographyResults
         The idle tomography results object used to determing which observable
         rates should be computed, and the provider of the Jacobian relating
-        the intrinsic rates internal to `gateset` to these observable rates.
+        the intrinsic rates internal to `model` to these observable rates.
 
     typ : {"samebasis","diffbasis"}
         The type of observable rates to predict and return.
@@ -363,9 +362,8 @@ def predicted_observable_rates(idtresults, typ, nQubits, maxweight, gateset):
     maxweight : int
         The maximum weight of errors to consider.
 
-    gateset : GateSet
-        The gate set, created by `build_nqnoise_gateset`, to extract
-        error rates from.
+    model : CloudNoiseModel
+        The noise model to extract error rates from.
 
     Returns
     -------
@@ -391,7 +389,7 @@ def predicted_observable_rates(idtresults, typ, nQubits, maxweight, gateset):
                     # compute intrinsic (wait for jac row to check length)
                     affine = bool(len(Jrow) == 2*Ne) # affine included?
                     _, sto_intrinsic_rates, aff_intrinsic_rates = \
-                        predicted_intrinsic_rates(nQubits, maxweight, gateset, False, True, affine)
+                        predicted_intrinsic_rates(nQubits, maxweight, model, False, True, affine)
                     intrinsic = _np.concatenate([sto_intrinsic_rates,aff_intrinsic_rates]) \
                      
                 predicted_rate = _np.dot(Jrow,intrinsic)
@@ -412,7 +410,7 @@ def predicted_observable_rates(idtresults, typ, nQubits, maxweight, gateset):
                     # compute intrinsic (wait for jac row to check for affine)
                     affine = bool('affine jacobian row' in info_dict)
                     ham_intrinsic_rates, _, aff_intrinsic_rates = \
-                        predicted_intrinsic_rates(nQubits, maxweight, gateset, True, False, affine)
+                        predicted_intrinsic_rates(nQubits, maxweight, model, True, False, affine)
 
                 predicted_rate = _np.dot(Jrow,ham_intrinsic_rates)
                 if 'affine jacobian row' in info_dict:

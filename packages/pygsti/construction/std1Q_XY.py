@@ -5,23 +5,23 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """
-Variables for working with the a gate set containing X(pi/2) and Y(pi/2) gates.
+Variables for working with the a model containing X(pi/2) and Y(pi/2) gates.
 """
 
 import sys as _sys
-from . import gatestringconstruction as _strc
-from . import gatesetconstruction as _setc
+from . import circuitconstruction as _strc
+from . import modelconstruction as _setc
 from . import stdtarget as _stdtarget
 from collections import OrderedDict as _OrderedDict
 
 description = "X(pi/2) and Y(pi/2) gates"
 
 gates = ['Gx','Gy']
-fiducials = _strc.gatestring_list( [ (), ('Gx',), ('Gy',), ('Gx','Gx'),
+fiducials = _strc.circuit_list( [ (), ('Gx',), ('Gy',), ('Gx','Gx'),
                                      ('Gx','Gx','Gx'), ('Gy','Gy','Gy') ] ) # for 1Q MUB
 prepStrs = effectStrs = fiducials
 
-germs = _strc.gatestring_list(
+germs = _strc.circuit_list(
     [ ('Gx',),
       ('Gy',),
       ('Gx','Gy',),
@@ -30,28 +30,28 @@ germs = _strc.gatestring_list(
       ('Gx','Gx','Gy','Gx','Gy','Gy',)])
 germs_lite = germs[0:4]
 
-#Construct a target gateset:  X(pi/2), Y(pi/2)
-gs_target = _setc.build_gateset([2],[('Q0',)], ['Gx','Gy'],
+#Construct a target model:  X(pi/2), Y(pi/2)
+target_model = _setc.build_explicit_model([2],[('Q0',)], ['Gx','Gy'],
                                 [ "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
-_gscache = { ("full","auto"): gs_target }
+_gscache = { ("full","auto"): target_model }
 def copy_target(parameterization_type="full", sim_type="auto"):
     """ 
-    Returns a copy of the target gateset in the given parameterization.
+    Returns a copy of the target model in the given parameterization.
 
     Parameters
     ----------
     parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
         The gate and SPAM vector parameterization type. See 
-        :function:`GateSet.set_all_parameterizations` for all allowed values.
+        :function:`Model.set_all_parameterizations` for all allowed values.
         
     sim_type : {"auto", "matrix", "map", "termorder:X" }
-        The simulator type to be used for gate set calculations (leave as
+        The simulator type to be used for model calculations (leave as
         "auto" if you're not sure what this is).
     
     Returns
     -------
-    GateSet
+    Model
     """
     return _stdtarget._copy_target(_sys.modules[__name__],parameterization_type,
                                    sim_type, _gscache)

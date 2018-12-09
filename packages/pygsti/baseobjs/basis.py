@@ -56,8 +56,8 @@ class Basis(object):
       - The elements of each basis are normalized so that Tr(Bi Bj) = delta_ij
       - since density matrices are Hermitian and all Gell-Mann and Pauli-product matrices are Hermitian too,
         gate parameterization by Gell-Mann or Pauli-product matrices have *real* coefficients, whereas
-        in the standard basis gate matrices can have complex elements but these elements are additionally
-        constrained.  This makes gate matrix parameterization and optimization much more convenient
+        in the standard basis operation matrices can have complex elements but these elements are additionally
+        constrained.  This makes operation matrix parameterization and optimization much more convenient
         in the "gm" or "pp" bases.
     '''
     DefaultInfo = dict()
@@ -158,7 +158,7 @@ class Basis(object):
         return len(self._matrices)
 
     def __eq__(self, other):
-        if self.sparse and self.dim.gateDim > 16:
+        if self.sparse and self.dim.opDim > 16:
             return False # to expensive to compare sparse matrices
         
         otherIsBasis = isinstance(other, Basis)
@@ -312,7 +312,7 @@ class Basis(object):
         -------
         numpy array
         '''
-        # Dim: dmDim 5 gateDim 5 blockDims [1, 1, 1, 1, 1] embedDim 25
+        # Dim: dmDim 5 opDim 5 blockDims [1, 1, 1, 1, 1] embedDim 25
         assert(not self.sparse), "get_expand_mx not implemented for sparse mode"
         x = sum(len(mxs) for mxs in self._blockMatrices)
         y = sum(mxs[0].shape[0] for mxs in self._blockMatrices) ** 2
@@ -345,9 +345,9 @@ class Basis(object):
         numpy array
         '''
         if self.sparse:
-            toStd = _sps.lil_matrix((self.dim.gateDim, self.dim.gateDim), dtype='complex' )
+            toStd = _sps.lil_matrix((self.dim.opDim, self.dim.opDim), dtype='complex' )
         else:
-            toStd = _np.zeros((self.dim.gateDim, self.dim.gateDim), 'complex' )
+            toStd = _np.zeros((self.dim.opDim, self.dim.opDim), 'complex' )
             
         #Since a multi-block basis is just the direct sum of the individual block bases,
         # transform mx is just the transfrom matrices of the individual blocks along the
@@ -363,7 +363,7 @@ class Basis(object):
                 else:
                     toStd[start:start+l,start+j] = mx.flatten()
             start += l 
-        assert(start == self.dim.gateDim)
+        assert(start == self.dim.opDim)
         if self.sparse: toStd = toStd.tocsr()
         return toStd
 
@@ -648,7 +648,7 @@ def basis_element_labels(basis, dimOrBlockDims=None):
     Parameters
     ----------
     basis : {'std', 'gm', 'pp', 'qt'}
-        Which basis the gateset is represented in.  Allowed
+        Which basis the model is represented in.  Allowed
         options are Matrix-unit (std), Gell-Mann (gm),
         Pauli-product (pp) and Qutrit (qt).  If the basis is
         not known, then an empty list is returned.

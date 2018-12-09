@@ -12,8 +12,8 @@ import numbers as _numbers
 import warnings as _warnings
 
 from . import spamvec as _sv
-from . import gate as _gate
-from . import gatesetmember as _gm
+from . import operation as _op
+from . import modelmember as _gm
 from ..tools import compattools as _compat
 from ..baseobjs import Dim as _Dim
 from ..baseobjs import Label as _Label
@@ -33,7 +33,7 @@ class PrefixOrderedDict(_collections.OrderedDict):
 
     def __setitem__(self, key, val):
         """ Assumes key is a Label object """
-        if not key.has_prefix(self._prefix):
+        if not (self._prefix is None or key.has_prefix(self._prefix)):
             raise KeyError("All keys must be strings, " +
                            "beginning with the prefix '%s'" % self._prefix)
         super(PrefixOrderedDict,self).__setitem__(key, val)
@@ -46,29 +46,29 @@ class PrefixOrderedDict(_collections.OrderedDict):
 
     """ 
     An ordered dictionary whose keys must begin with a given prefix,
-    and which holds Gate objects.  This class ensures that every value is a
-    :class:`Gate`-derived object by converting any non-`Gate` values into
-    `Gate`s upon assignment and raising an error if this is not possible.
+    and which holds LinearOperator objects.  This class ensures that every value is a
+    :class:`LinearOperator`-derived object by converting any non-`LinearOperator` values into
+    `LinearOperator`s upon assignment and raising an error if this is not possible.
     """
 
     
 
-class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
+class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
     """ 
     An ordered dictionary whose keys must begin with a given prefix.
 
-    This class also ensure that every value is an object of the appropriate GateSet
-    member type (e.g. :class:`SPAMVec`- or :class:`Gate`-derived object) by converting any
+    This class also ensure that every value is an object of the appropriate Model
+    member type (e.g. :class:`SPAMVec`- or :class:`LinearOperator`-derived object) by converting any
     values into that type upon assignment and raising an error if this is not possible.
     """
-    def __init__(self, parent, default_param, prefix, typ, items=[]):
+    def __init__(self, parent, default_param, prefix, flags, items=[]):
         """
         Creates a new OrderedMemberDict.
 
         Parameters
         ----------
-        parent : GateSet
-            The parent gate set, needed to obtain the dimension and handle
+        parent : Model
+            The parent model, needed to obtain the dimension and handle
             updates to parameters.
         
         default_param : {"TP","full",...}
@@ -78,7 +78,8 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         prefix : str
             The required prefix of all keys (which must be strings).
 
-        typ : {"gate","spamvec","povm","instrument"}
+        TODO: docstring : flags
+        typ : {"operation","spamvec","povm","instrument"}
             The type of objects that this dictionary holds.  This is 
             needed for automatic object creation and for validation. 
 
@@ -86,17 +87,22 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             Used by pickle and other serializations to initialize elements.
         """
         #** Note: if change __init__ signature, update __reduce__ below
+        if _compat.isstr(flags): # for backward compatibility
+            flags = {'cast_to_type': ("operation" if flags == "gate" else flags) }
         
         # Note: we *don't* want to be calling parent's "rebuild" function here,
-        # when we're creating a new list, as this behavior is only intented for
+        # when we're creating a new list, as this behavior is only intended for
         # explicit insertions.  Since calling the base class __init__ will
         # call this class's __setitem__ we set parent to None for this step.
         self.parent = None # so __init__ below doesn't call _rebuild_paramvec
         self.default_param = default_param  # "TP", "full", "static", "clifford",...
-        self.typ = typ
-
+        self.flags = { 'auto_embed': flags.get('auto_embed',False),
+                       'match_parent_dim':  flags.get('match_parent_dim',False),
+                       'match_parent_evotype': flags.get('match_parent_evotype',False),
+                       'cast_to_type': flags.get('cast_to_type',None)
+                       }
         PrefixOrderedDict.__init__(self, prefix, items)
-        _gm.GateSetChild.__init__(self, parent) # set's self.parent
+        _gm.ModelChild.__init__(self, parent) # set's self.parent
 
         #Set parent our elements, now that the list has been initialized
         # (done for un-pickling b/c reduce => __init__ is called to construct
@@ -107,11 +113,12 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             
 
     def _check_dim(self, obj):
-        if isinstance(obj, _gm.GateSetMember):
+        if not self.flags['match_parent_dim']: return # no check
+        if isinstance(obj, _gm.ModelMember):
             dim = obj.dim
-        elif self.typ == "spamvec":
+        elif self.flags['cast_to_type'] == "spamvec":
             dim = len(obj)
-        elif self.typ == "gate":
+        elif self.flags['cast_to_type'] == "operation":
             try:
                 d1 = len(obj)
                 d2 = len(obj[0]) #pylint: disable=unused-variable
@@ -130,17 +137,18 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
                 self.parent.set_simtype("auto") # run deferred auto-simtype now that _dim is set
         elif self.parent.dim != dim:
             raise ValueError("Cannot add object with dimension " +
-                             "%s to gateset of dimension %d"
+                             "%s to model of dimension %d"
                              % (dim,self.parent.dim))
 
 
     def _check_evotype(self, evotype):
+        if not self.flags['match_parent_evotype']: return # no check
         if self.parent is None: return
         if self.parent._evotype is None:
             self.parent._evotype = evotype
         elif self.parent._evotype != evotype:
             raise ValueError(("Cannot add an object with evolution type"
-                              " '%s' to a gateset with one of '%s'") %
+                              " '%s' to a model with one of '%s'") %
                              (evotype,self.parent._evotype))
 
     def __contains__(self, key):
@@ -156,18 +164,20 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
     
 
     def _auto_embed(self, key_label, value):
+        if not self.flags['auto_embed']: return value # no auto-embedding
         if self.parent is not None and key_label.sslbls is not None:
-            if self.typ == "gate":
-                return self.parent._embedGate(key_label.sslbls, self.cast_to_obj(value))
+            if self.flags['cast_to_type'] == "operation":
+                return self.parent._embedOperation(key_label.sslbls, self.cast_to_obj(value))
             else:
-                raise NotImplementedError("Cannot auto-embed objects other than gates yet.")
+                raise NotImplementedError("Cannot auto-embed objects other than opeations yet (not %s)."
+                                          % self.flags['cast_to_type'])
         else:
             return value
 
     def cast_to_obj(self, value):
         """
         Creates an object from `value` with a type given by the the
-        default parameterization if it isn't a :class:`GateSetMember`.
+        default parameterization if it isn't a :class:`ModelMember`.
 
         Parameters
         ----------
@@ -177,11 +187,14 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         -------
         object
         """
-        if isinstance(value, _gm.GateSetMember): return value
+        if isinstance(value, _gm.ModelMember): return value
+        if self.flags['cast_to_type'] is None:
+            raise ValueError("Can only assign `ModelMember` objects as values (not %s)."
+                             % str(type(value)))
 
         basis = self.parent.basis if self.parent else None
         obj = None; 
-        if self.typ == "spamvec":
+        if self.flags['cast_to_type'] == "spamvec":
             # not needed anymore (spam vecs can be lindblad types now ) TODO REMOVE
             #typ = self.default_param
             #rtyp = "TP" if typ in ("CPTP","H+S","S") else typ 
@@ -190,9 +203,9 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
 
             obj = _sv.StaticSPAMVec(value)
             obj = _sv.convert(obj, self.default_param, basis)
-        elif self.typ == "gate":
-            obj = _gate.StaticGate(value)
-            obj = _gate.convert(obj, self.default_param, basis)
+        elif self.flags['cast_to_type'] == "operation":
+            obj = _op.StaticDenseOp(value)
+            obj = _op.convert(obj, self.default_param, basis)
         return obj
 
 
@@ -201,9 +214,9 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         value = self._auto_embed(key,value) # automatically create an embedded gate if needed
         self._check_dim(value)
 
-        if isinstance(value, _gm.GateSetMember):  #if we're given an object, just replace
+        if isinstance(value, _gm.ModelMember):  #if we're given an object, just replace
             #When self has a valid parent (as it usually does, except when first initializing)
-            # we copy and reset the gpindices & parent of GateSetMember values which either:
+            # we copy and reset the gpindices & parent of ModelMember values which either:
             # 1) belong to a different parent (indices would be inapplicable if they exist)
             # 2) have indices but no parent (indices are inapplicable to us)
             # Note that we don't copy and reset the case when a value's parent and gpindices
@@ -231,7 +244,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             # removed from the parent, allowing it to reset (to None)
             # its parent link if there are no more references to it.
             if existing is not None and value is not existing:
-                assert(existing.parent is self.parent), "GateSet object not setup correctly"
+                assert(existing.parent is self.parent), "Model object not setup correctly"
                 existing.unlink_parent()
 
         elif key in self: #if a object already exists...
@@ -239,7 +252,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             super(OrderedMemberDict,self).__getitem__(key).set_value(value)
 
         else:
-            #otherwise, we've been given a non-GateSetMember-object that doesn't
+            #otherwise, we've been given a non-ModelMember-object that doesn't
             # exist yet, so use default creation flags to make one:
             obj = self.cast_to_obj(value)
 
@@ -251,7 +264,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             super(OrderedMemberDict,self).__setitem__(key, obj)
 
             
-        #rebuild GateSet's parameter vector (params may need to be added)
+        #rebuild Model's parameter vector (params may need to be added)
         if self.parent is not None:
             #print("DEBUG: rebuilding paramvec after inserting ", key, " : ", list(self.keys()))
             self.parent._update_paramvec( super(OrderedMemberDict,self).__getitem__(key) )
@@ -271,8 +284,8 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
 
         Parameters
         ----------
-        parent : GateSet
-            The new parent GateSet, if one exists.  Typically, when copying
+        parent : Model
+            The new parent Model, if one exists.  Typically, when copying
             an OrderedMemberDict you want to reset the parent.
 
         Returns
@@ -280,14 +293,14 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         OrderedMemberDict
         """
         return OrderedMemberDict(parent, self.default_param,
-                                 self._prefix, self.typ,
+                                 self._prefix, self.flags,
                                  [(lbl,val.copy(parent)) for lbl,val in self.items()])
     
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
-        # circular pickling of GateSets.  Must set parent separately.
+        # circular pickling of Models.  Must set parent separately.
         return (OrderedMemberDict,
-                (None, self.default_param, self._prefix, self.typ, list(self.items())), None)
+                (None, self.default_param, self._prefix, self.flags, list(self.items())), None)
 
     def __pygsti_reduce__(self):
         return self.__reduce__()

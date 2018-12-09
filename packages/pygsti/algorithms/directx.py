@@ -1,4 +1,4 @@
-""" Functions for generating Direct-(LGST, MC2GST, MLGST) gatesets """
+""" Functions for generating Direct-(LGST, MC2GST, MLGST) models """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -13,183 +13,183 @@ from .. import objects      as _objs
 from .  import core         as _core
 
 
-def gateset_with_lgst_gatestring_estimates(
-        gateStringsToEstimate, dataset, prepStrs, effectStrs,
-        targetGateset, includeTargetGates=True, gateLabelAliases=None, 
-        guessGatesetForGauge=None, gateStringLabels=None, svdTruncateTo=None,
+def model_with_lgst_circuit_estimates(
+        circuitsToEstimate, dataset, prepStrs, effectStrs,
+        targetModel, includeTargetOps=True, opLabelAliases=None, 
+        guessModelForGauge=None, circuitLabels=None, svdTruncateTo=None,
         verbosity=0 ):
     """
-    Constructs a gateset that contains LGST estimates for gateStringsToEstimate.
+    Constructs a model that contains LGST estimates for circuitsToEstimate.
 
-    For each gate string s in gateStringsToEstimate, the constructed gateset
+    For each operation sequence s in circuitsToEstimate, the constructed model
     contains the LGST estimate for s as separate gate, labeled either by
-    the corresponding element of gateStringLabels or by the tuple of s itself.
+    the corresponding element of circuitLabels or by the tuple of s itself.
 
     Parameters
     ----------
-    gateStringsToEstimate : list of GateStrings or tuples
-        The gate strings to estimate using LGST
+    circuitsToEstimate : list of Circuits or tuples
+        The operation sequences to estimate using LGST
 
     dataset : DataSet
         The data to use for LGST
 
-    prepStrs,effectStrs : list of GateStrings
-        Fiducial GateString lists used to construct a informationally complete
+    prepStrs,effectStrs : list of Circuits
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
-    targetGateset : GateSet
-        A gateset used by LGST to specify which gate labels should be estimated,
+    targetModel : Model
+        A model used by LGST to specify which operation labels should be estimated,
         a guess for which gauge these estimates should be returned in, and 
-        used to compile gate sequences.
+        used to compile operation sequences.
 
-    includeTargetGates : bool, optional
-        If True, the gate labels in targetGateset will be included in the
-        returned gate set.
+    includeTargetOps : bool, optional
+        If True, the operation labels in targetModel will be included in the
+        returned model.
 
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
+    opLabelAliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    guessGatesetForGauge : GateSet, optional
-        A gateset used to compute a gauge transformation that is applied to
+    guessModelForGauge : Model, optional
+        A model used to compute a gauge transformation that is applied to
         the LGST estimates.  This gauge transformation is computed such that
-        if the estimated gates matched the gateset given, then the gate
+        if the estimated gates matched the model given, then the gate
         matrices would match, i.e. the gauge would be the same as
-        the gateset supplied. Defaults to the targetGateset.
+        the model supplied. Defaults to the targetModel.
 
-    gateStringLabels : list of strings, optional
+    circuitLabels : list of strings, optional
         A list of labels in one-to-one correspondence with the
-        gate string in gateStringsToEstimate.  These labels are
-        the keys to access the gate matrices in the returned
-        GateSet, i.e. gate_matrix = returned_gateset[gate_label]
+        operation sequence in circuitsToEstimate.  These labels are
+        the keys to access the operation matrices in the returned
+        Model, i.e. op_matrix = returned_model[op_label]
 
     svdTruncateTo : int, optional
-        The Hilbert space dimension to truncate the gate matrices to using
+        The Hilbert space dimension to truncate the operation matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
         the I_tildle LGST matrix. Zero means no truncation.
-        Defaults to dimension of `targetGateset`.
+        Defaults to dimension of `targetModel`.
 
     verbosity : int, optional
         Verbosity value to send to do_lgst(...) call.
 
     Returns
     -------
-    Gateset
-        A gateset containing LGST estimates for all the requested
-        gate strings and possibly the gates in targetGateset.
+    Model
+        A model containing LGST estimates for all the requested
+        operation sequences and possibly the gates in targetModel.
     """
-    gateLabels = [] #list of gate labels for LGST to estimate
-    if gateLabelAliases is None: aliases = { }
-    else: aliases = gateLabelAliases.copy()
+    opLabels = [] #list of operation labels for LGST to estimate
+    if opLabelAliases is None: aliases = { }
+    else: aliases = opLabelAliases.copy()
     
-    #Add gate strings to estimate as aliases
-    if gateStringLabels is not None:
-        assert(len(gateStringLabels) == len(gateStringsToEstimate))
-        for gateLabel,gateStr in zip(gateStringLabels,gateStringsToEstimate):
-            aliases[gateLabel] = _tools.find_replace_tuple(gateStr,gateLabelAliases)
-            gateLabels.append(gateLabel)
+    #Add operation sequences to estimate as aliases
+    if circuitLabels is not None:
+        assert(len(circuitLabels) == len(circuitsToEstimate))
+        for opLabel,opStr in zip(circuitLabels,circuitsToEstimate):
+            aliases[opLabel] = _tools.find_replace_tuple(opStr,opLabelAliases)
+            opLabels.append(opLabel)
     else:
-        for gateStr in gateStringsToEstimate:
-            newLabel = 'G'+'.'.join(map(str,tuple(gateStr)))
-            aliases[newLabel] = _tools.find_replace_tuple(gateStr,gateLabelAliases) #use gatestring tuple as label
-            gateLabels.append(newLabel)
+        for opStr in circuitsToEstimate:
+            newLabel = 'G'+'.'.join(map(str,tuple(opStr)))
+            aliases[newLabel] = _tools.find_replace_tuple(opStr,opLabelAliases) #use circuit tuple as label
+            opLabels.append(newLabel)
 
-    #Add target gateset labels (not aliased) if requested
-    if includeTargetGates and targetGateset is not None:
-        for targetGateLabel in targetGateset.gates:
-            if targetGateLabel not in gateLabels: #very unlikely that this is false
-                gateLabels.append(targetGateLabel)
+    #Add target model labels (not aliased) if requested
+    if includeTargetOps and targetModel is not None:
+        for targetOpLabel in targetModel.operations:
+            if targetOpLabel not in opLabels: #very unlikely that this is false
+                opLabels.append(targetOpLabel)
 
-    return _core.do_lgst( dataset, prepStrs, effectStrs, targetGateset,
-                          gateLabels, aliases, guessGatesetForGauge,
+    return _core.do_lgst( dataset, prepStrs, effectStrs, targetModel,
+                          opLabels, aliases, guessModelForGauge,
                           svdTruncateTo, verbosity )
 
-def direct_lgst_gateset(gateStringToEstimate, gateStringLabel, dataset,
-                        prepStrs, effectStrs, targetGateset,
-                        gateLabelAliases=None, svdTruncateTo=None, verbosity=0):
+def direct_lgst_model(circuitToEstimate, circuitLabel, dataset,
+                        prepStrs, effectStrs, targetModel,
+                        opLabelAliases=None, svdTruncateTo=None, verbosity=0):
     """
-    Constructs a gateset of LGST estimates for target gates and gateStringToEstimate.
+    Constructs a model of LGST estimates for target gates and circuitToEstimate.
 
     Parameters
     ----------
-    gateStringToEstimate : GateString or tuple
-        The single gate string to estimate using LGST
+    circuitToEstimate : Circuit or tuple
+        The single operation sequence to estimate using LGST
 
-    gateStringLabel : string
-        The label for the estimate of gateStringToEstimate.
-        i.e. gate_matrix = returned_gateset[gate_label]
+    circuitLabel : string
+        The label for the estimate of circuitToEstimate.
+        i.e. op_matrix = returned_model[op_label]
 
     dataset : DataSet
         The data to use for LGST
 
-    prepStrs,effectStrs : list of GateStrings
-        Fiducial GateString lists used to construct a informationally complete
+    prepStrs,effectStrs : list of Circuits
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
-    targetGateset : GateSet
-        The target gate set used by LGST to extract gate labels and an initial gauge
+    targetModel : Model
+        The target model used by LGST to extract operation labels and an initial gauge
 
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
+    opLabelAliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     svdTruncateTo : int, optional
-        The Hilbert space dimension to truncate the gate matrices to using
+        The Hilbert space dimension to truncate the operation matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
         the I_tildle LGST matrix.  Zero means no truncation.
-        Defaults to dimension of `targetGateset`.
+        Defaults to dimension of `targetModel`.
 
     verbosity : int, optional
         Verbosity value to send to do_lgst(...) call.
 
     Returns
     -------
-    Gateset
-        A gateset containing LGST estimates of gateStringToEstimate
-        and the gates of targetGateset.
+    Model
+        A model containing LGST estimates of circuitToEstimate
+        and the gates of targetModel.
     """
-    return gateset_with_lgst_gatestring_estimates(
-        [gateStringToEstimate], dataset, prepStrs, effectStrs, targetGateset,
-        True, gateLabelAliases, None, [gateStringLabel], svdTruncateTo,
+    return model_with_lgst_circuit_estimates(
+        [circuitToEstimate], dataset, prepStrs, effectStrs, targetModel,
+        True, opLabelAliases, None, [circuitLabel], svdTruncateTo,
         verbosity )
 
 
-def direct_lgst_gatesets(gateStrings, dataset, prepStrs, effectStrs, targetGateset,
-                         gateLabelAliases=None, svdTruncateTo=None, verbosity=0):
+def direct_lgst_models(circuits, dataset, prepStrs, effectStrs, targetModel,
+                         opLabelAliases=None, svdTruncateTo=None, verbosity=0):
     """
-    Constructs a dictionary with keys == gate strings and values == Direct-LGST GateSets.
+    Constructs a dictionary with keys == operation sequences and values == Direct-LGST Models.
 
     Parameters
     ----------
-    gateStrings : list of GateString or tuple objects
-        The gate strings to estimate using LGST.  The elements of this list
+    circuits : list of Circuit or tuple objects
+        The operation sequences to estimate using LGST.  The elements of this list
         are the keys of the returned dictionary.
 
     dataset : DataSet
         The data to use for all LGST estimates.
 
-    prepStrs,effectStrs : list of GateStrings
-        Fiducial GateString lists used to construct a informationally complete
+    prepStrs,effectStrs : list of Circuits
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
-    targetGateset : GateSet
-        The target gate set used by LGST to extract gate labels and an initial gauge
+    targetModel : Model
+        The target model used by LGST to extract operation labels and an initial gauge
 
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
+    opLabelAliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     svdTruncateTo : int, optional
-        The Hilbert space dimension to truncate the gate matrices to using
+        The Hilbert space dimension to truncate the operation matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
         the I_tildle LGST matrix. Zero means no truncation.
-        Defaults to dimension of `targetGateset`.
+        Defaults to dimension of `targetModel`.
 
     verbosity : int, optional
         Verbosity value to send to do_lgst(...) call.
@@ -197,157 +197,157 @@ def direct_lgst_gatesets(gateStrings, dataset, prepStrs, effectStrs, targetGates
     Returns
     -------
     dict
-        A dictionary that relates each gate string of gateStrings to a
-        GateSet containing the LGST estimate of that gate string stored under
-        the gate label "GsigmaLbl", along with LGST estimates of the gates in
-        targetGateset.
+        A dictionary that relates each operation sequence of circuits to a
+        Model containing the LGST estimate of that operation sequence stored under
+        the operation label "GsigmaLbl", along with LGST estimates of the gates in
+        targetModel.
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
-    directLGSTgatesets = {}
+    directLGSTmodels = {}
     printer.log("--- Direct LGST precomputation ---")
     with printer.progress_logging(1):
-        for i,sigma in enumerate(gateStrings):
-            printer.show_progress(i, len(gateStrings), prefix="--- Computing gateset for string -", suffix='---' )
-            directLGSTgatesets[sigma] = direct_lgst_gateset(
-                sigma, "GsigmaLbl", dataset, prepStrs, effectStrs, targetGateset,
-                gateLabelAliases, svdTruncateTo, verbosity)
-    return directLGSTgatesets
+        for i,sigma in enumerate(circuits):
+            printer.show_progress(i, len(circuits), prefix="--- Computing model for string -", suffix='---' )
+            directLGSTmodels[sigma] = direct_lgst_model(
+                sigma, "GsigmaLbl", dataset, prepStrs, effectStrs, targetModel,
+                opLabelAliases, svdTruncateTo, verbosity)
+    return directLGSTmodels
 
 
 
-def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset,
-                           prepStrs, effectStrs, targetGateset,
-                           gateLabelAliases=None, svdTruncateTo=None,
+def direct_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
+                           prepStrs, effectStrs, targetModel,
+                           opLabelAliases=None, svdTruncateTo=None,
                            minProbClipForWeighting=1e-4,
                            probClipInterval=(-1e6,1e6), verbosity=0 ):
     """
-    Constructs a gateset of LSGST estimates for target gates and gateStringToEstimate.
+    Constructs a model of LSGST estimates for target gates and circuitToEstimate.
 
-    Starting with a Direct-LGST estimate for gateStringToEstimate, runs LSGST
-    using the same strings that LGST would have used to estimate gateStringToEstimate
+    Starting with a Direct-LGST estimate for circuitToEstimate, runs LSGST
+    using the same strings that LGST would have used to estimate circuitToEstimate
     and each of the target gates.  That is, LSGST is run with strings of the form:
 
     1. prepStr
     2. effectStr
     3. prepStr + effectStr
     4. prepStr + singleGate + effectStr
-    5. prepStr + gateStringToEstimate + effectStr
+    5. prepStr + circuitToEstimate + effectStr
 
-    and the resulting Gateset estimate is returned.
+    and the resulting Model estimate is returned.
 
     Parameters
     ----------
-    gateStringToEstimate : GateString or tuple
-        The single gate string to estimate using LSGST
+    circuitToEstimate : Circuit or tuple
+        The single operation sequence to estimate using LSGST
 
-    gateStringLabel : string
-        The label for the estimate of gateStringToEstimate.
-        i.e. gate_matrix = returned_gateset[gate_label]
+    circuitLabel : string
+        The label for the estimate of circuitToEstimate.
+        i.e. op_matrix = returned_mode[op_label]
 
     dataset : DataSet
         The data to use for LGST
 
-    prepStrs,effectStrs : list of GateStrings
-        Fiducial GateString lists used to construct a informationally complete
+    prepStrs,effectStrs : list of Circuits
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
-    targetGateset : GateSet
-        The target gate set used by LGST to extract gate labels and an initial gauge
+    targetModel : Model
+        The target model used by LGST to extract operation labels and an initial gauge
 
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
+    opLabelAliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     svdTruncateTo : int, optional
-        The Hilbert space dimension to truncate the gate matrices to using
+        The Hilbert space dimension to truncate the operation matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
         the I_tildle LGST matrix. Zero means no truncation.
-        Defaults to dimension of `targetGateset`.
+        Defaults to dimension of `targetModel`.
 
     minProbClipForWeighting : float, optional
         defines the clipping interval for the statistical weight used
         within the chi^2 function (see chi2fn).
 
     probClipInterval : 2-tuple, optional
-        (min,max) to clip probabilities to within GateSet probability
-        computation routines (see GateSet.bulk_fill_probs)
+        (min,max) to clip probabilities to within Model probability
+        computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
         Verbosity value to send to do_lgst(...) and do_mc2gst(...) calls.
 
     Returns
     -------
-    Gateset
-        A gateset containing LSGST estimates of gateStringToEstimate
-        and the gates of targetGateset.
+    Model
+        A model containing LSGST estimates of circuitToEstimate
+        and the gates of targetModel.
     """
-    direct_lgst = gateset_with_lgst_gatestring_estimates(
-        [gateStringToEstimate], dataset, prepStrs, effectStrs, targetGateset,
-        True, gateLabelAliases, None, [gateStringLabel], svdTruncateTo, verbosity)
+    direct_lgst = model_with_lgst_circuit_estimates(
+        [circuitToEstimate], dataset, prepStrs, effectStrs, targetModel,
+        True, opLabelAliases, None, [circuitLabel], svdTruncateTo, verbosity)
 
     # LEXICOGRAPHICAL VS MATRIX ORDER
-    gatestrings = prepStrs + effectStrs + [ prepStr + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
-    for gateLabel in direct_lgst.gates:
-        gatestrings.extend( [ prepStr + _objs.GateString( (gateLabel,), bCheck=False) + effectStr
+    circuits = prepStrs + effectStrs + [ prepStr + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
+    for opLabel in direct_lgst.operations:
+        circuits.extend( [ prepStr + _objs.Circuit( (opLabel,) ) + effectStr
                               for prepStr in prepStrs for effectStr in effectStrs ] )
 
-    aliases = {} if (gateLabelAliases is None) else gateLabelAliases.copy()
-    aliases[gateStringLabel] = _tools.find_replace_tuple(gateStringToEstimate,gateLabelAliases)
+    aliases = {} if (opLabelAliases is None) else opLabelAliases.copy()
+    aliases[circuitLabel] = _tools.find_replace_tuple(circuitToEstimate,opLabelAliases)
     
     _, direct_lsgst = _core.do_mc2gst(
-        dataset, direct_lgst, gatestrings,
+        dataset, direct_lgst, circuits,
         minProbClipForWeighting=minProbClipForWeighting,
         probClipInterval=probClipInterval, verbosity=verbosity,
-        gateLabelAliases=aliases )
+        opLabelAliases=aliases )
 
     return direct_lsgst
 
 
-def direct_mc2gst_gatesets(gateStrings, dataset, prepStrs, effectStrs,
-                           targetGateset, gateLabelAliases=None,
+def direct_mc2gst_models(circuits, dataset, prepStrs, effectStrs,
+                           targetModel, opLabelAliases=None,
                            svdTruncateTo=None, minProbClipForWeighting=1e-4,
                            probClipInterval=(-1e6,1e6), verbosity=0):
     """
-    Constructs a dictionary with keys == gate strings and values == Direct-LSGST GateSets.
+    Constructs a dictionary with keys == operation sequences and values == Direct-LSGST Models.
 
     Parameters
     ----------
-    gateStrings : list of GateString or tuple objects
-        The gate strings to estimate using LSGST.  The elements of this list
+    circuits : list of Circuit or tuple objects
+        The operation sequences to estimate using LSGST.  The elements of this list
         are the keys of the returned dictionary.
 
     dataset : DataSet
         The data to use for all LGST and LSGST estimates.
 
-    prepStrs,effectStrs : list of GateStrings
-        Fiducial GateString lists used to construct a informationally complete
+    prepStrs,effectStrs : list of Circuits
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
-    targetGateset : GateSet
-        The target gate set used by LGST to extract gate labels and an initial gauge
+    targetModel : Model
+        The target model used by LGST to extract operation labels and an initial gauge
 
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
+    opLabelAliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     svdTruncateTo : int, optional
-        The Hilbert space dimension to truncate the gate matrices to using
+        The Hilbert space dimension to truncate the operation matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
         the I_tildle LGST matrix. Zero means no truncation.
-        Defaults to dimension of `targetGateset`.
+        Defaults to dimension of `targetModel`.
 
     minProbClipForWeighting : float, optional
         defines the clipping interval for the statistical weight used
         within the chi^2 function (see chi2fn).
 
     probClipInterval : 2-tuple, optional
-        (min,max) to clip probabilities to within GateSet probability
-        computation routines (see GateSet.bulk_fill_probs)
+        (min,max) to clip probabilities to within Model probability
+        computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
         Verbosity value to send to do_lgst(...) and do_mc2gst(...) calls.
@@ -355,153 +355,153 @@ def direct_mc2gst_gatesets(gateStrings, dataset, prepStrs, effectStrs,
     Returns
     -------
     dict
-        A dictionary that relates each gate string of gateStrings to a
-        GateSet containing the LSGST estimate of that gate string stored under
-        the gate label "GsigmaLbl", along with LSGST estimates of the gates in
-        targetGateset.
+        A dictionary that relates each operation sequence of circuits to a
+        Model containing the LSGST estimate of that operation sequence stored under
+        the operation label "GsigmaLbl", along with LSGST estimates of the gates in
+        targetModel.
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
-    directLSGSTgatesets = {}
+    directLSGSTmodels = {}
     printer.log("--- Direct LSGST precomputation ---")
     with printer.progress_logging(1):
-        for i,sigma in enumerate(gateStrings):
-            printer.show_progress(i, len(gateStrings), prefix="--- Computing gateset for string-", suffix='---')
-            directLSGSTgatesets[sigma] = direct_mc2gst_gateset(
-                sigma, "GsigmaLbl", dataset, prepStrs, effectStrs, targetGateset,
-                gateLabelAliases, svdTruncateTo, minProbClipForWeighting,
+        for i,sigma in enumerate(circuits):
+            printer.show_progress(i, len(circuits), prefix="--- Computing model for string-", suffix='---')
+            directLSGSTmodels[sigma] = direct_mc2gst_model(
+                sigma, "GsigmaLbl", dataset, prepStrs, effectStrs, targetModel,
+                opLabelAliases, svdTruncateTo, minProbClipForWeighting,
                 probClipInterval, verbosity)
             
-    return directLSGSTgatesets
+    return directLSGSTmodels
 
 
-def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset,
-                          prepStrs, effectStrs, targetGateset,
-                          gateLabelAliases=None, svdTruncateTo=None, minProbClip=1e-6,
+def direct_mlgst_model( circuitToEstimate, circuitLabel, dataset,
+                          prepStrs, effectStrs, targetModel,
+                          opLabelAliases=None, svdTruncateTo=None, minProbClip=1e-6,
                           probClipInterval=(-1e6,1e6), verbosity=0 ):
     """
-    Constructs a gateset of MLEGST estimates for target gates and gateStringToEstimate.
+    Constructs a model of MLEGST estimates for target gates and circuitToEstimate.
 
-    Starting with a Direct-LGST estimate for gateStringToEstimate, runs MLEGST
-    using the same strings that LGST would have used to estimate gateStringToEstimate
+    Starting with a Direct-LGST estimate for circuitToEstimate, runs MLEGST
+    using the same strings that LGST would have used to estimate circuitToEstimate
     and each of the target gates.  That is, MLEGST is run with strings of the form:
 
     1. prepStr
     2. effectStr
     3. prepStr + effectStr
     4. prepStr + singleGate + effectStr
-    5. prepStr + gateStringToEstimate + effectStr
+    5. prepStr + circuitToEstimate + effectStr
 
-    and the resulting Gateset estimate is returned.
+    and the resulting Model estimate is returned.
 
     Parameters
     ----------
-    gateStringToEstimate : GateString or tuple
-        The single gate string to estimate using LSGST
+    circuitToEstimate : Circuit or tuple
+        The single operation sequence to estimate using LSGST
 
-    gateStringLabel : string
-        The label for the estimate of gateStringToEstimate.
-        i.e. gate_matrix = returned_gateset[gate_label]
+    circuitLabel : string
+        The label for the estimate of circuitToEstimate.
+        i.e. op_matrix = returned_model[op_label]
 
     dataset : DataSet
         The data to use for LGST
 
-    prepStrs,effectStrs : list of GateStrings
-        Fiducial GateString lists used to construct a informationally complete
+    prepStrs,effectStrs : list of Circuits
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
-    targetGateset : GateSet
-        The target gate set used by LGST to extract gate labels and an initial gauge
+    targetModel : Model
+        The target model used by LGST to extract operation labels and an initial gauge
 
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
+    opLabelAliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     svdTruncateTo : int, optional
-        The Hilbert space dimension to truncate the gate matrices to using
+        The Hilbert space dimension to truncate the operation matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
         the I_tildle LGST matrix. Zero means no truncation.
-        Defaults to dimension of `targetGateset`.
+        Defaults to dimension of `targetModel`.
 
     minProbClip : float, optional
         defines the minimum probability "patch point" used
         within the logl function.
 
     probClipInterval : 2-tuple, optional
-        (min,max) to clip probabilities to within GateSet probability
-        computation routines (see GateSet.bulk_fill_probs)
+        (min,max) to clip probabilities to within Model probability
+        computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
         Verbosity value to send to do_lgst(...) and do_mlgst(...) calls.
 
     Returns
     -------
-    Gateset
-        A gateset containing MLEGST estimates of gateStringToEstimate
-        and the gates of targetGateset.
+    Model
+        A model containing MLEGST estimates of circuitToEstimate
+        and the gates of targetModel.
     """
-    direct_lgst = gateset_with_lgst_gatestring_estimates(
-        [gateStringToEstimate], dataset, prepStrs, effectStrs, targetGateset,
-        True, gateLabelAliases, None, [gateStringLabel], svdTruncateTo, verbosity)
+    direct_lgst = model_with_lgst_circuit_estimates(
+        [circuitToEstimate], dataset, prepStrs, effectStrs, targetModel,
+        True, opLabelAliases, None, [circuitLabel], svdTruncateTo, verbosity)
 
     # LEXICOGRAPHICAL VS MATRIX ORDER
-    gatestrings = prepStrs + effectStrs + [ prepStr + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
-    for gateLabel in direct_lgst.gates:
-        gatestrings.extend( [ prepStr + _objs.GateString( (gateLabel,), bCheck=False) + effectStr
+    circuits = prepStrs + effectStrs + [ prepStr + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
+    for opLabel in direct_lgst.operations:
+        circuits.extend( [ prepStr + _objs.Circuit( (opLabel,) ) + effectStr
                               for prepStr in prepStrs for effectStr in effectStrs ] )
 
-    aliases = {} if (gateLabelAliases is None) else gateLabelAliases.copy()
-    aliases[gateStringLabel] = _tools.find_replace_tuple(gateStringToEstimate,gateLabelAliases)
+    aliases = {} if (opLabelAliases is None) else opLabelAliases.copy()
+    aliases[circuitLabel] = _tools.find_replace_tuple(circuitToEstimate,opLabelAliases)
 
     _, direct_mlegst = _core.do_mlgst(
-        dataset, direct_lgst, gatestrings, minProbClip=minProbClip,
+        dataset, direct_lgst, circuits, minProbClip=minProbClip,
         probClipInterval=probClipInterval, verbosity=verbosity,
-        gateLabelAliases=aliases )
+        opLabelAliases=aliases )
     return direct_mlegst
 
 
-def direct_mlgst_gatesets(gateStrings, dataset, prepStrs, effectStrs, targetGateset,
-                          gateLabelAliases=None, svdTruncateTo=None, minProbClip=1e-6,
+def direct_mlgst_models(circuits, dataset, prepStrs, effectStrs, targetModel,
+                          opLabelAliases=None, svdTruncateTo=None, minProbClip=1e-6,
                           probClipInterval=(-1e6,1e6), verbosity=0):
     """
-    Constructs a dictionary with keys == gate strings and values == Direct-MLEGST GateSets.
+    Constructs a dictionary with keys == operation sequences and values == Direct-MLEGST Models.
 
     Parameters
     ----------
-    gateStrings : list of GateString or tuple objects
-        The gate strings to estimate using MLEGST.  The elements of this list
+    circuits : list of Circuit or tuple objects
+        The operation sequences to estimate using MLEGST.  The elements of this list
         are the keys of the returned dictionary.
 
     dataset : DataSet
         The data to use for all LGST and LSGST estimates.
 
-    prepStrs,effectStrs : list of GateStrings
-        Fiducial GateString lists used to construct a informationally complete
+    prepStrs,effectStrs : list of Circuits
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
-    targetGateset : GateSet
-        The target gate set used by LGST to extract gate labels and an initial gauge
+    targetModel : Model
+        The target model used by LGST to extract operation labels and an initial gauge
 
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
+    opLabelAliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     svdTruncateTo : int, optional
-        The Hilbert space dimension to truncate the gate matrices to using
+        The Hilbert space dimension to truncate the operation matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
         the I_tildle LGST matrix. Zero means no truncation.
-        Defaults to dimension of `targetGateset`.
+        Defaults to dimension of `targetModel`.
 
     minProbClip : float, optional
         defines the minimum probability "patch point" used
         within the logl function.
 
     probClipInterval : 2-tuple, optional
-        (min,max) to clip probabilities to within GateSet probability
-        computation routines (see GateSet.bulk_fill_probs)
+        (min,max) to clip probabilities to within Model probability
+        computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
         Verbosity value to send to do_lgst(...) and do_mlgst(...) calls.
@@ -509,128 +509,128 @@ def direct_mlgst_gatesets(gateStrings, dataset, prepStrs, effectStrs, targetGate
     Returns
     -------
     dict
-        A dictionary that relates each gate string of gateStrings to a
-        GateSet containing the MLEGST estimate of that gate string stored under
-        the gate label "GsigmaLbl", along with MLEGST estimates of the gates in
-        targetGateset.
+        A dictionary that relates each operation sequence of circuits to a
+        Model containing the MLEGST estimate of that operation sequence stored under
+        the operation label "GsigmaLbl", along with MLEGST estimates of the gates in
+        targetModel.
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
-    directMLEGSTgatesets = {}
+    directMLEGSTmodels = {}
     printer.log("--- Direct MLEGST precomputation ---")
     with printer.progress_logging(1):
-        for i,sigma in enumerate(gateStrings):
-            printer.show_progress(i, len(gateStrings), prefix="--- Computing gateset for string ", suffix="---")
-            directMLEGSTgatesets[sigma] = direct_mlgst_gateset(
-                sigma, "GsigmaLbl", dataset, prepStrs, effectStrs, targetGateset,
-                gateLabelAliases, svdTruncateTo, minProbClip,
+        for i,sigma in enumerate(circuits):
+            printer.show_progress(i, len(circuits), prefix="--- Computing model for string ", suffix="---")
+            directMLEGSTmodels[sigma] = direct_mlgst_model(
+                sigma, "GsigmaLbl", dataset, prepStrs, effectStrs, targetModel,
+                opLabelAliases, svdTruncateTo, minProbClip,
                 probClipInterval, verbosity)
             
-    return directMLEGSTgatesets
+    return directMLEGSTmodels
 
 
-def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset,
-                            prepStrs, effectStrs, startGateset,
-                            gateLabelAliases=None, minProbClipForWeighting=1e-4,
+def focused_mc2gst_model( circuitToEstimate, circuitLabel, dataset,
+                            prepStrs, effectStrs, startModel,
+                            opLabelAliases=None, minProbClipForWeighting=1e-4,
                             probClipInterval=(-1e6,1e6), verbosity=0 ):
     """
-    Constructs a gateset containing a single LSGST estimate of gateStringToEstimate.
+    Constructs a model containing a single LSGST estimate of circuitToEstimate.
 
-    Starting with startGateset, run LSGST with the same gate strings that LGST
-    would use to estimate gateStringToEstimate.  That is, LSGST is run with
-    strings of the form:  prepStr + gateStringToEstimate + effectStr
-    and return the resulting Gateset.
+    Starting with startModel, run LSGST with the same operation sequences that LGST
+    would use to estimate circuitToEstimate.  That is, LSGST is run with
+    strings of the form:  prepStr + circuitToEstimate + effectStr
+    and return the resulting Model.
 
     Parameters
     ----------
-    gateStringToEstimate : GateString or tuple
-        The single gate string to estimate using LSGST
+    circuitToEstimate : Circuit or tuple
+        The single operation sequence to estimate using LSGST
 
-    gateStringLabel : string
-        The label for the estimate of gateStringToEstimate.
-        i.e. gate_matrix = returned_gateset[gate_label]
+    circuitLabel : string
+        The label for the estimate of circuitToEstimate.
+        i.e. op_matrix = returned_model[op_label]
 
     dataset : DataSet
         The data to use for LGST
 
-    prepStrs,effectStrs : list of GateStrings
-        Fiducial GateString lists used to construct a informationally complete
+    prepStrs,effectStrs : list of Circuits
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
-    startGateset : GateSet
-        The gate set to seed LSGST with. Often times obtained via LGST.
+    startModel : Model
+        The model to seed LSGST with. Often times obtained via LGST.
 
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
+    opLabelAliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     minProbClipForWeighting : float, optional
         defines the clipping interval for the statistical weight used
         within the chi^2 function (see chi2fn).
 
     probClipInterval : 2-tuple, optional
-        (min,max) to clip probabilities to within GateSet probability
-        computation routines (see GateSet.bulk_fill_probs)
+        (min,max) to clip probabilities to within Model probability
+        computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
         Verbosity value to send do_mc2gst(...) call.
 
     Returns
     -------
-    Gateset
-        A gateset containing LSGST estimate of gateStringToEstimate.
+    Model
+        A model containing LSGST estimate of circuitToEstimate.
     """
-    gatestrings = [ prepStr + gateStringToEstimate + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
+    circuits = [ prepStr + circuitToEstimate + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
 
     _, focused_lsgst = _core.do_mc2gst(
-        dataset, startGateset, gatestrings,
+        dataset, startModel, circuits,
         minProbClipForWeighting=minProbClipForWeighting,
         probClipInterval=probClipInterval,
-        gateLabelAliases=gateLabelAliases,
+        opLabelAliases=opLabelAliases,
         verbosity=verbosity)
 
-    focused_lsgst.gates[gateStringLabel] = _objs.FullyParameterizedGate(
-            focused_lsgst.product(gateStringToEstimate)) #add desired string as a separate labeled gate
+    focused_lsgst.operations[circuitLabel] = _objs.FullDenseOp(
+            focused_lsgst.product(circuitToEstimate)) #add desired string as a separate labeled gate
     return focused_lsgst
 
 
-def focused_mc2gst_gatesets(gateStrings, dataset, prepStrs, effectStrs,
-                            startGateset, gateLabelAliases=None,
+def focused_mc2gst_models(circuits, dataset, prepStrs, effectStrs,
+                            startModel, opLabelAliases=None,
                             minProbClipForWeighting=1e-4,
                             probClipInterval=(-1e6,1e6), verbosity=0):
     """
-    Constructs a dictionary with keys == gate strings and values == Focused-LSGST GateSets.
+    Constructs a dictionary with keys == operation sequences and values == Focused-LSGST Models.
 
     Parameters
     ----------
-    gateStrings : list of GateString or tuple objects
-        The gate strings to estimate using LSGST.  The elements of this list
+    circuits : list of Circuit or tuple objects
+        The operation sequences to estimate using LSGST.  The elements of this list
         are the keys of the returned dictionary.
 
     dataset : DataSet
         The data to use for all LGST and LSGST estimates.
 
-    prepStrs,effectStrs : list of GateStrings
-        Fiducial GateString lists used to construct a informationally complete
+    prepStrs,effectStrs : list of Circuits
+        Fiducial Circuit lists used to construct a informationally complete
         preparation and measurement.
 
-    startGateset : GateSet
-        The gate set to seed LSGST with. Often times obtained via LGST.
+    startModel : Model
+        The model to seed LSGST with. Often times obtained via LGST.
 
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
+    opLabelAliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     minProbClipForWeighting : float, optional
         defines the clipping interval for the statistical weight used
         within the chi^2 function (see chi2fn).
 
     probClipInterval : 2-tuple, optional
-        (min,max) to clip probabilities to within GateSet probability
-        computation routines (see GateSet.bulk_fill_probs)
+        (min,max) to clip probabilities to within Model probability
+        computation routines (see Model.bulk_fill_probs)
 
     verbosity : int, optional
         Verbosity value to send to do_mc2gst(...) call.
@@ -638,18 +638,18 @@ def focused_mc2gst_gatesets(gateStrings, dataset, prepStrs, effectStrs,
     Returns
     -------
     dict
-        A dictionary that relates each gate string of gateStrings to a
-        GateSet containing the LSGST estimate of that gate string stored under
-        the gate label "GsigmaLbl".
+        A dictionary that relates each operation sequence of circuits to a
+        Model containing the LSGST estimate of that operation sequence stored under
+        the operation label "GsigmaLbl".
     """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
-    focusedLSGSTgatesets = {}
+    focusedLSGSTmodels = {}
     printer.log("--- Focused LSGST precomputation ---")
     with printer.progress_logging(1):
-        for i,sigma in enumerate(gateStrings):
-            printer.show_progress(i, len(gateStrings), prefix="--- Computing gateset for string", suffix='---')
-            focusedLSGSTgatesets[sigma] = focused_mc2gst_gateset(
-                sigma, "GsigmaLbl", dataset, prepStrs, effectStrs, startGateset,
-                gateLabelAliases, minProbClipForWeighting, probClipInterval, verbosity)
-    return focusedLSGSTgatesets
+        for i,sigma in enumerate(circuits):
+            printer.show_progress(i, len(circuits), prefix="--- Computing model for string", suffix='---')
+            focusedLSGSTmodels[sigma] = focused_mc2gst_model(
+                sigma, "GsigmaLbl", dataset, prepStrs, effectStrs, startModel,
+                opLabelAliases, minProbClipForWeighting, probClipInterval, verbosity)
+    return focusedLSGSTmodels

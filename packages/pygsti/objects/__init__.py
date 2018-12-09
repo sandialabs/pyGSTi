@@ -1,4 +1,4 @@
-""" Gate Set Tomography Objects Python Package """
+""" LinearOperator Set Tomography Objects Python Package """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -16,34 +16,34 @@ from .evaltree import EvalTree
 from .matrixevaltree import MatrixEvalTree
 from .mapevaltree import MapEvalTree
 from .termevaltree import TermEvalTree
-from .gate import Gate
-from .gate import GateMatrix
-from .gate import LinearlyParameterizedGate
-from .gate import FullyParameterizedGate
-from .gate import TPParameterizedGate
-from .gate import StaticGate
-from .gate import EigenvalueParameterizedGate
-from .gate import LindbladParameterizedGate
-from .gate import LindbladParameterizedGateMap
-from .gate import TPInstrumentGate
-from .gate import EmbeddedGateMap
-from .gate import EmbeddedGate
-from .gate import ComposedGateMap
-from .gate import ComposedGate
-from .gate import CliffordGate
-from .gate import LindbladErrorgen
-from .gate import ComposedErrorgen
-from .gate import EmbeddedErrorgen
+from .operation import LinearOperator
+from .operation import DenseOperator
+from .operation import LinearlyParamDenseOp
+from .operation import FullDenseOp
+from .operation import TPDenseOp
+from .operation import StaticDenseOp
+from .operation import EigenvalueParamDenseOp
+from .operation import LindbladDenseOp
+from .operation import LindbladOp
+from .operation import TPInstrumentOp
+from .operation import EmbeddedOp
+from .operation import EmbeddedDenseOp
+from .operation import ComposedOp
+from .operation import ComposedDenseOp
+from .operation import CliffordOp
+from .operation import LindbladErrorgen
+from .operation import ComposedErrorgen
+from .operation import EmbeddedErrorgen
 from .spamvec import SPAMVec
 from .spamvec import DenseSPAMVec
-from .spamvec import FullyParameterizedSPAMVec
-from .spamvec import TPParameterizedSPAMVec
-from .spamvec import CPTPParameterizedSPAMVec
+from .spamvec import FullSPAMVec
+from .spamvec import TPSPAMVec
+from .spamvec import CPTPSPAMVec
 from .spamvec import ComplementSPAMVec
 from .spamvec import StaticSPAMVec
 from .spamvec import TensorProdSPAMVec
 from .spamvec import PureStateSPAMVec
-from .spamvec import LindbladParameterizedSPAMVec
+from .spamvec import LindbladSPAMVec
 from .spamvec import ComputationalSPAMVec
 from .povm import POVM
 from .povm import TPPOVM
@@ -54,12 +54,14 @@ from .povm import LindbladParameterizedPOVM
 from .instrument import Instrument
 from .instrument import TPInstrument
 
-from .gateset import GateSet
-from .gatestring import GateString
-from .gatestring import WeightedGateString
-from .gatestringstructure import GatestringStructure
-from .gatestringstructure import LsGermsStructure
-from .gatestringstructure import LsGermsSerialStructure
+from .model import Model
+from .model import ExplicitOpModel
+from .model import ImplicitOpModel
+from .localnoisemodel import LocalNoiseModel
+from .cloudnoisemodel import CloudNoiseModel
+from .circuitstructure import CircuitStructure
+from .circuitstructure import LsGermsStructure
+from .circuitstructure import LsGermsSerialStructure
 from .circuit import Circuit
 from .multidataset import MultiDataSet
 from .datacomparator import DataComparator
@@ -82,7 +84,7 @@ from .labeldicts import StateSpaceLabels
 from .results import Results
 
 #Functions
-from .gate import compose, optimize_gate, finite_difference_deriv_wrt_params
+from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params
 
 #Important Base Objects
 from ..baseobjs import VerbosityPrinter, Profiler, SmartCache, Basis, Label

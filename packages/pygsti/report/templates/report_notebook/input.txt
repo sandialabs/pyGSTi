@@ -11,13 +11,13 @@ ws.SpamTable(gs_target, None, 'boxes', includeHSVec=False)
 ### Fiducial sequences.
 A list of the preparation and measurement "fiducial" gate sequences.
 @@code
-ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
+ws.CircuitTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
 
 @@markdown
 ### Germ sequences.
 A list of the "germ" gate sequences.
 @@code
-ws.GatestringTable(germs, "Germ", nCols=2)
+ws.CircuitTable(germs, "Germ", nCols=2)
 
 @@markdown
 ### General dataset properties.

@@ -83,7 +83,7 @@ def intersect(s1, s2):
     return slice(start, stop, s1.step)
 
 
-def indices(s):
+def indices(s,n=None):
     """
     Returns a list of the indices specified by slice `s`.
 
@@ -92,15 +92,35 @@ def indices(s):
     s : slice
       The slice to operate upon.
 
+    n : int, optional
+      The number of elements in the array being indexed,
+      used for computing *negative* start/stop points.
+
     Returns
     -------
     list of ints
     """
-    if s.start is None or s.stop is None:
+    if s.start is None and s.stop is None:
         return []
+
+    if s.start is None:
+        start = 0
+    elif s.start < 0:
+        assert(n is not None), "Must supply `n` to obtain indices of a slice with negative start point!"
+        start = n + s.start
+    else: start = s.start
+
+    if s.stop is None:
+        assert(n is not None), "Must supply `n` to obtain indices of a slice with unspecified stop point!"
+        stop = n
+    elif s.stop < 0:
+        assert(n is not None), "Must supply `n` to obtain indices of a slice with negative stop point!"
+        stop = n + s.stop
+    else: stop = s.stop
+    
     if s.step is None:
-        return list(range(s.start,s.stop))
-    return list(range(s.start,s.stop,s.step))
+        return list(range(start,stop))
+    return list(range(start,stop,s.step))
 
 def list_to_slice(lst, array_ok=False, require_contiguous=True):
     """

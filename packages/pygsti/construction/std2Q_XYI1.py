@@ -5,12 +5,12 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """
-Variables for working with the a gate set containing Idle, X(pi/2) and Y(pi/2) gates.
+Variables for working with the a model containing Idle, X(pi/2) and Y(pi/2) gates.
 """
 
 import sys as _sys
-from . import gatestringconstruction as _strc
-from . import gatesetconstruction as _setc
+from . import circuitconstruction as _strc
+from . import modelconstruction as _setc
 from . import stdtarget as _stdtarget
 from collections import OrderedDict as _OrderedDict
 
@@ -18,38 +18,38 @@ from collections import OrderedDict as _OrderedDict
 description = "Idle, X(pi/2), and Y(pi/2) gates"
 
 gates = ['Gii','Gxi','Gyi']
-fiducials = _strc.gatestring_list( [ (), ('Gxi',), ('Gyi',), ('Gxi','Gxi') ] )
+fiducials = _strc.circuit_list( [ (), ('Gxi',), ('Gyi',), ('Gxi','Gxi') ] )
 #                                     ('Gxi','Gxi','Gxi'), ('Gyi','Gyi','Gyi') ] ) # for 1Q MUB
 prepStrs = effectStrs = fiducials
 
-germs = _strc.gatestring_list( [('Gii',), ('Gxi',), ('Gyi',), ('Gxi', 'Gyi'),
+germs = _strc.circuit_list( [('Gii',), ('Gxi',), ('Gyi',), ('Gxi', 'Gyi'),
                                 ('Gxi', 'Gyi', 'Gii'), ('Gxi', 'Gii', 'Gyi'), ('Gxi', 'Gii', 'Gii'), ('Gyi', 'Gii', 'Gii'),
                                   ('Gxi', 'Gxi', 'Gii', 'Gyi'), ('Gxi', 'Gyi', 'Gyi', 'Gii'),
                                   ('Gxi', 'Gxi', 'Gyi', 'Gxi', 'Gyi', 'Gyi')] )
 
-#Construct a target gateset: Identity, X(pi/2), Y(pi/2)
-gs_target = _setc.build_gateset([2],[('Q0',)], ['Gii','Gxi','Gyi'],
+#Construct a target model: Identity, X(pi/2), Y(pi/2)
+target_model = _setc.build_explicit_model([2],[('Q0',)], ['Gii','Gxi','Gyi'],
                                 [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                 effectLabels=['00','01','10','11'], effectExpressions=["0","1","2","3"])
 
-_gscache = { ("full","auto"): gs_target }
+_gscache = { ("full","auto"): target_model }
 def copy_target(parameterization_type="full", sim_type="auto"):
     """ 
-    Returns a copy of the target gateset in the given parameterization.
+    Returns a copy of the target model in the given parameterization.
 
     Parameters
     ----------
     parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
         The gate and SPAM vector parameterization type. See 
-        :function:`GateSet.set_all_parameterizations` for all allowed values.
+        :function:`Model.set_all_parameterizations` for all allowed values.
         
     sim_type : {"auto", "matrix", "map", "termorder:X" }
-        The simulator type to be used for gate set calculations (leave as
+        The simulator type to be used for model calculations (leave as
         "auto" if you're not sure what this is).
     
     Returns
     -------
-    GateSet
+    Model
     """
     return _stdtarget._copy_target(_sys.modules[__name__],parameterization_type,
                                    sim_type, _gscache)

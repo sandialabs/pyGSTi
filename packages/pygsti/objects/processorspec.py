@@ -11,13 +11,17 @@ import itertools as _itertools
 import collections as _collections
 import warnings as _warnings
 
+from .localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
 from .qubitgraph import QubitGraph as _QubitGraph
 from ..baseobjs import Label as _Label
-from ..tools import gatetools as _gt
+from ..tools import optools as _gt
 from ..tools import internalgates as _itgs
 from ..tools import symplectic as _symp
+
+IDENT='I' # internal 1Q-identity-gate name used for compilation
+  # MUST be the same as in compilationlibrary.py
 
 class ProcessorSpec(object):
     """
@@ -81,7 +85,7 @@ class ProcessorSpec(object):
         construct_models : tuple, optional
             Standard model for the gates to add. 
                 - If 'target' is in the tuple, "target" process matrices corresponding to ideal gates are added. 
-                - If 'clifford' is in the tuple, the Clifford gates in the gateset are represented in their efficient-in-n 
+                - If 'clifford' is in the tuple, the Clifford gates in the model are represented in their efficient-in-n 
                 symplectic form (these are reps. of perfect gates).
 
         construct_clifford_compilations : dict, optional
@@ -98,7 +102,6 @@ class ProcessorSpec(object):
         ProcessorSpec
         """
         assert(type(nQubits) is int), "The number of qubits, n, should be an integer!"
-        from .. import construction as _cnst
 
         #Store inputs for adding models later
         self.number_of_qubits = nQubits
@@ -116,17 +119,6 @@ class ProcessorSpec(object):
             except:
                 raise ValueError(str(gname)+" is not a valid 'standard' gate name, so should not be an element of `gate_names`!")
 
-        # Records the name of the identity gate, if there is one, as this is useful information to have to hand. If there
-        # isn't one we use the default 'I' label.
-        self.identity = None
-        for gn in self.root_gate_names:
-            if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'I'):
-                self.identity = gn
-                break
-        if self.identity is None:
-            _warnings.warn(("There is no identity gate in the gateset! This may cause some unusual behave with, e.g., circuit compilers."))
-            self.identity = 'I'
-
         # If no qubit labels are provided it defaults to integers from 0 to nQubits-1.    
         if qubit_labels is None:
             self.qubit_labels = list(range(nQubits)) 
@@ -140,15 +132,15 @@ class ProcessorSpec(object):
         # Compilations are stored here.
         self.compilations = _collections.OrderedDict()
 
-        # The connectivity graph of the device, for the "clifford" gateset (future: perhaps this should not only be for
-        # Clifford gates, or there should be a qubitgraph for each gateset.)
+        # The connectivity graph of the device, for the "clifford" model (future: perhaps this should not only be for
+        # Clifford gates, or there should be a qubitgraph for each model.)
         self.qubitgraph = None
 
         # Holds a dictionary with keys that are 1Q gatename pairs (gn1, gn2), with a value gn3 that is the 1Q that
         # these gates combine to when gn1 is applied first and then gn2. There is no key for a pair if they don't
-        # combine to a 1Q gate in the gateset.
+        # combine to a 1Q gate in the model.
         self.oneQgate_relations = {}
-        # A dict from a gatename to the gatename of the inverse gate, if it is in the gateset.
+        # A dict from a gatename to the gatename of the inverse gate, if it is in the model.
         self.gate_inverse = {}
 
         # Add initial models
@@ -158,7 +150,7 @@ class ProcessorSpec(object):
         # If we construct a Clifford model, we do add various things that are Clifford-specific.
         if 'clifford' in construct_models:
             # Add compilations for the "basic" Clifford gates specified, which are used for, e.g., Clifford compiler algorithms.
-            # We only do this if there is a 'clifford' gateset, as these are Clifford compilations.
+            # We only do this if there is a 'clifford' model, as these are Clifford compilations.
             for ctype in list(construct_clifford_compilations.keys()):
                 
                 # We construct the requested Pauli-equivalent compilations.
@@ -201,30 +193,30 @@ class ProcessorSpec(object):
             # Generates the QubitGraph for the multi-qubit Clifford gates. If there are multi-qubit gates which are not Clifford gates
             # then these are not counted as "connections".
             connectivity = _np.zeros((self.number_of_qubits,self.number_of_qubits),dtype=bool)
-            for gatelabel in self.models['clifford'].gates:
+            for oplabel in self.models['clifford'].get_primitive_op_labels():
                 # This treats non-entangling 2-qubit gates as making qubits connected. Stopping that is
                 # something we may need to do at some point.
-                if gatelabel.number_of_qubits is None: continue # skip "global" gates in connectivity consideration?
-                if gatelabel.number_of_qubits > 1:
-                    for p in _itertools.permutations(gatelabel.qubits, 2):
+                if oplabel.number_of_qubits is None: continue # skip "global" gates in connectivity consideration?
+                if oplabel.number_of_qubits > 1:
+                    for p in _itertools.permutations(oplabel.qubits, 2):
                         connectivity[self.qubit_labels.index(p[0]),self.qubit_labels.index(p[1])] = True
             
             self.qubitgraph = _QubitGraph(self.qubit_labels, connectivity)
 
         #future : store this in a less clumsy way.
         if 'clifford' in self.models:
-            # Compute the gate labels that act on an entire set of qubits
-            self.clifford_gates_on_qubits =  _collections.defaultdict(list)
-            for gl in self.models['clifford'].gates:
+            # Compute the operation labels that act on an entire set of qubits
+            self.clifford_ops_on_qubits =  _collections.defaultdict(list)
+            for gl in self.models['clifford'].get_primitive_op_labels():
                 if gl.qubits is None: continue # skip "global" gates (?)
                 for p in _itertools.permutations(gl.qubits):
-                    self.clifford_gates_on_qubits[p].append(gl)
+                    self.clifford_ops_on_qubits[p].append(gl)
         else:
-            self.clifford_gates_on_qubits = None
+            self.clifford_ops_on_qubits = None
                                   
         # Adds in the 1-qubit gate algebra
         self.add_oneQgate_relations()
-        # Records the inverses of gates that have an inverse in the gateset (only compares to gates of the same dimension)
+        # Records the inverses of gates that have an inverse in the model (only compares to gates of the same dimension)
         self.add_multiqubit_inversion_relations()
 
         return # done with __init__(...)
@@ -236,33 +228,35 @@ class ProcessorSpec(object):
         if model_name = 'target_name';  Target Clifford gates, represented in their efficient-in-n 
         symplectic form, are added if model_name = 'clifford'.
         """
-        from .. import construction as _cnst
         if model_name == 'clifford':
             assert(parameterization in ('auto','clifford')), "Clifford model must use 'clifford' parameterizations"
             assert(sim_type in ('auto','map')), "Clifford model must use 'map' simulation type"
-            model = _cnst.build_nqubit_standard_gateset(
-                self.number_of_qubits, self.root_gate_names,
-                self.nonstd_gate_unitaries, self.availability, self.qubit_labels,
-                parameterization='clifford', sim_type=sim_type,
-                on_construction_error='warn') # *drop* gates that aren't cliffords
+            model = _LocalNoiseModel.build_standard(self.number_of_qubits, self.root_gate_names,
+                                                    self.nonstd_gate_unitaries, self.availability,
+                                                    self.qubit_labels,  parameterization='clifford',
+                                                    sim_type=sim_type, on_construction_error='warn', # *drop* gates that aren't cliffords
+                                                    independent_gates=False, ensure_composed_gates=False) # change these? add `geometry`?
+
 
         elif model_name in ('target','Target','static','TP','full'):
             param = model_name if (parameterization == 'auto') \
                     else parameterization
             if param in ('target','Target'): param = 'static' # special case for 'target' model
-            
-            model = _cnst.build_nqubit_standard_gateset(
+
+            model = _LocalNoiseModel.build_standard(
                 self.number_of_qubits, self.root_gate_names,
-                self.nonstd_gate_unitaries, self.availability, self.qubit_labels,
-                param, sim_type)
+                self.nonstd_gate_unitaries, self.availability,
+                self.qubit_labels, parameterization=param, sim_type=sim_type,
+                independent_gates=False, ensure_composed_gates=False) # change these? add `geometry`?
             
         else: # unknown model name, so require parameterization
             if parameterization == 'auto':
                 raise ValueError("Non-std model name '%s' means you must specify `parameterization` argument!" % model_name)
-            model = _cnst.build_nqubit_standard_gateset(
+            model = _LocalNoiseModel.build_standard(
                 self.number_of_qubits, self.root_gate_names,
-                self.nonstd_gate_unitaries, self.availability, self.qubit_labels,
-                parameterization, sim_type)
+                self.nonstd_gate_unitaries, self.availability,
+                self.qubit_labels, parameterization=parameterization, sim_type=sim_type,
+                independent_gates=False, ensure_composed_gates=False) # change these? add `geometry`?
             
         self.models[model_name] = model
                   
@@ -321,11 +315,7 @@ class ProcessorSpec(object):
         if 'clifford' not in self.models:
             raise ValueError("Cannot create standard compilations without a 'clifford' model!")
         # Creates an empty library to fill
-        if self.identity is not None:
-            identity = self.identity
-        else:
-            identity = 'I'
-        library = _CompilationLibrary(self.models['clifford'], compile_type, identity=identity) 
+        library = _CompilationLibrary(self.models['clifford'], compile_type)
 
         # 1-qubit gate compilations. These must be complied "locally" - i.e., out of native gates which act only
         # on the target qubit of the gate being compiled, and they are stored in the compilation library.
@@ -344,7 +334,7 @@ class ProcessorSpec(object):
         # on the Hadamard gate -- if this is possible. If we don't do this, we resort to random compilations, which might not
         # give the "expected" compilations (even if the alternatives might be just as good).
         if 'CNOT' in twoQgates:     
-            # Look to see if we have a CNOT gate in the gateset (with any name).
+            # Look to see if we have a CNOT gate in the model (with any name).
             cnot_name = None
             for gn in self.root_gate_names:
                 if _itgs.is_gate_this_standard_unitary(self.root_gate_unitaries[gn],'CNOT'):
@@ -372,7 +362,7 @@ class ProcessorSpec(object):
                 if H_name is not None:
                     library.templates['CNOT'].append((_Label(H_name, 0),_Label(H_name, 1),_Label(cnot_name, (1, 0)), _Label(H_name, 0),_Label( H_name, 1)))
 
-            # If CNOT isn't available, look to see if we have CPHASE gate in the gateset (with any name). If we do *and* we have 
+            # If CNOT isn't available, look to see if we have CPHASE gate in the model (with any name). If we do *and* we have 
             # Hadamards, we add the obvious construction of CNOT from CPHASE and Hadamards as a template
             else:
                 cphase_name = None
@@ -384,11 +374,13 @@ class ProcessorSpec(object):
                 # If we find CPHASE, and we have a Hadamard-like gate, we add used them to add a CNOT compilation template.
                 if H_name is not None:
                     if cphase_name is not None:
-                        # We need the identity gate for these templates
-                        if self.identity is not None:
-                            # Add it with CPHASE in both directions, in case the CPHASES have been specified as being available in only one direction
-                            library.templates['CNOT'] = [(_Label(self.identity, 0),_Label(H_name, 1),_Label(cphase_name, (0, 1)), _Label(self.identity, 0),_Label(H_name, 1))]
-                            library.templates['CNOT'].append((_Label(self.identity, 0),_Label(H_name, 1),_Label(cphase_name, (1,0)), _Label(self.identity, 0),_Label(H_name, 1)))
+                        # Note: we need the identity gate for these templates, which we put explicitly
+                        # in template layers and which all models should be able to deal with (as the
+                        # lack of labels in a layer).
+
+                        # Add it with CPHASE in both directions, in case the CPHASES have been specified as being available in only one direction
+                        library.templates['CNOT'] = [(_Label(IDENT, 0),_Label(H_name, 1),_Label(cphase_name, (0, 1)), _Label(IDENT, 0),_Label(H_name, 1))]
+                        library.templates['CNOT'].append((_Label(IDENT, 0),_Label(H_name, 1),_Label(cphase_name, (1,0)), _Label(IDENT, 0),_Label(H_name, 1)))
       
         # After adding default templates, we know generate compilations for CNOTs between all connected pairs. If the default templates were not
         # relevant or aren't relevant for some qubits, this will generate new templates by brute force.
@@ -421,42 +413,46 @@ class ProcessorSpec(object):
         Records the basic pair-wise relationships relationships between the gates.
 
         1. It multiplies all possible combinations of two 1-qubit gates together, from
-        the full gateset available to in this device. If the two gates multiple to
+        the full model available to in this device. If the two gates multiple to
         another 1-qubit gate from this set of gates this is recorded in the dictionary 
         self.oneQgate_relations. If the 1-qubit gate with name `name1` followed by the 
         1-qubit gate with name `name2` multiple (up to phase) to the gate with `name3`, 
         then self.oneQgate_relations[`name1`,`name2`] = `name3`.
 
-        2. If the inverse of any 1-qubit gate is contained in the gateset, this is
+        2. If the inverse of any 1-qubit gate is contained in the model, this is
         recorded in the dictionary self.gate_inverse.
 
         Returns
         -------
         None
         """
-        for gname1 in self.root_gate_names:
+        Id = _np.identity(4,float)
+        nontrivial_gname_pauligate_pairs = []
+        for gname in self.root_gate_names:
             # We convert to process matrices, to avoid global phase problems.
-            u1 = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname1])
-            if _np.shape(u1) == (4,4):
-                for gname2 in self.root_gate_names:
-                    u2 =  _gt.unitary_to_pauligate(self.root_gate_unitaries[gname2])
-                    if _np.shape(u2) == (4,4):
-                        ucombined = _np.dot(u2,u1)
-                        for gname3 in self.root_gate_names:
-                            u3 = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname3])
-                            if _np.shape(u3) == (4,4):
-                                if _np.allclose(u3,ucombined):
-                                    # If ucombined is u3, add to the inversion relation.
-                                    self.oneQgate_relations[gname1,gname2] = gname3
+            u = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname])
+            if u.shape == (4,4):
+                assert(not _np.allclose(u,Id)), "Identity should *not* be included in root gate names!"
+                nontrivial_gname_pauligate_pairs.append( (gname,u) )
+        
+        for gname1,u1 in nontrivial_gname_pauligate_pairs:
+            for gname2,u2 in nontrivial_gname_pauligate_pairs:
+                ucombined = _np.dot(u2,u1)
+                for gname3,u3 in nontrivial_gname_pauligate_pairs:
+                    if _np.allclose(u3,ucombined):
+                        # If ucombined is u3, add the gate composition relation.
+                        self.oneQgate_relations[gname1,gname2] = gname3 # != Id (asserted above)
+                    if _np.allclose(ucombined,Id):
                         # If ucombined is the identity, add the inversion relation.
-                        if _np.allclose(ucombined,_np.identity(4,float)):
-                                self.gate_inverse[gname1] = gname2
-                                self.gate_inverse[gname2] = gname1
+                        self.gate_inverse[gname1] = gname2
+                        self.gate_inverse[gname2] = gname1
+                        self.oneQgate_relations[gname1,gname2] = None
+                          # special 1Q gate relation where result is the identity (~no gates)
 
     def add_multiqubit_inversion_relations(self):
         """
         Finds whether any of the multi-qubit gates in this device also have their
-        inverse in the gateset, and if so stores this is in the dictionary
+        inverse in the model, and if so stores this is in the dictionary
         self.gate_inverse. That is, if the unitaries for the  multi-qubit gate with
         name `name1` followed by the multi-qubit gate (of the same dimension) with 
         name `name2` multiple (up to phase) to the identity, then

@@ -63,13 +63,13 @@ class TestDataSetMethods(BaseTestCase):
         # Invoke the DataSet constructor other ways
         gstrs = [ ('Gx',), ('Gx','Gy'), ('Gy',) ]
         gstrInds = collections.OrderedDict( [ (('Gx',),0),  (('Gx','Gy'),1), (('Gy',),2) ] )
-        gstrInds_static = collections.OrderedDict( [ (pygsti.obj.GateString(('Gx',)),slice(0,2)),
-                                                     (pygsti.obj.GateString(('Gx','Gy')),slice(2,4)),
-                                                     (pygsti.obj.GateString(('Gy',)),slice(4,6)) ] )
+        gstrInds_static = collections.OrderedDict( [ (pygsti.obj.Circuit(('Gx',)),slice(0,2)),
+                                                     (pygsti.obj.Circuit(('Gx','Gy')),slice(2,4)),
+                                                     (pygsti.obj.Circuit(('Gy',)),slice(4,6)) ] )
         olInds = collections.OrderedDict( [ ('0',0),  ('1',1) ] )
 
         oli = np.array([0,1],'i')
-        oli_static = np.array( [0,1]*3, 'd' ) # 3 gate strings * 2 outcome labels each
+        oli_static = np.array( [0,1]*3, 'd' ) # 3 operation sequences * 2 outcome labels each
         time_static = np.zeros( (6,), 'd' )
         reps_static = 10*np.ones( (6,), 'd' )
 
@@ -78,12 +78,12 @@ class TestDataSetMethods(BaseTestCase):
         reps_nonstc = [ 10*np.ones(2,'i'), 10*np.ones(2,'i'), 10*np.ones(2,'i') ]
 
         ds2 = pygsti.objects.DataSet(oli_nonstc, time_nonstc, reps_nonstc,
-                                     gateStrings=gstrs, outcomeLabels=['0','1'])
+                                     circuits=gstrs, outcomeLabels=['0','1'])
         ds3 = pygsti.objects.DataSet(oli_nonstc[:], time_nonstc[:], reps_nonstc[:],
-                                     gateStringIndices=gstrInds, outcomeLabelIndices=olInds)
+                                     circuitIndices=gstrInds, outcomeLabelIndices=olInds)
         ds4 = pygsti.objects.DataSet(oli_static, time_static, reps_static,
-                                     gateStringIndices=gstrInds_static, outcomeLabels=['0','1'], bStatic=True)
-        ds5 = pygsti.objects.DataSet(oli_nonstc, time_nonstc, reps_nonstc, gateStrings=gstrs,
+                                     circuitIndices=gstrInds_static, outcomeLabels=['0','1'], bStatic=True)
+        ds5 = pygsti.objects.DataSet(oli_nonstc, time_nonstc, reps_nonstc, circuits=gstrs,
                                      outcomeLabels=['0','1'], bStatic=False)
         ds6 = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         ds6.done_adding_data() #ds6 = empty dataset
@@ -94,13 +94,13 @@ class TestDataSetMethods(BaseTestCase):
             ds4.add_counts_from_dataset(ds) #can't add to static DataSet
 
         with self.assertRaises(AssertionError):
-            pygsti.objects.DataSet(gateStrings=gstrs) #no spam labels specified
+            pygsti.objects.DataSet(circuits=gstrs) #no spam labels specified
         with self.assertRaises(ValueError):
             pygsti.objects.DataSet(oli_static, time_static, reps_static,
                                    outcomeLabels=['0','1'], bStatic=True)
-              #must specify gateLabels (or indices) when creating static DataSet
+              #must specify opLabels (or indices) when creating static DataSet
         with self.assertRaises(ValueError):
-            pygsti.objects.DataSet(gateStrings=gstrs, outcomeLabels=['0','1'], bStatic=True)
+            pygsti.objects.DataSet(circuits=gstrs, outcomeLabels=['0','1'], bStatic=True)
               #must specify counts when creating static DataSet
 
         #Test has_key methods
@@ -109,15 +109,15 @@ class TestDataSetMethods(BaseTestCase):
 
         #Test indexing methods
         cnt = 0
-        for gstr in ds:
+        for opstr in ds:
 
-            if gstr in ds:
-                if gstr in ds:
+            if opstr in ds:
+                if opstr in ds:
                     pass
-                if pygsti.obj.GateString(gstr) in ds:
+                if pygsti.obj.Circuit(opstr) in ds:
                     pass
 
-            dsRow = ds[gstr]
+            dsRow = ds[opstr]
             allLabels = list(dsRow.counts.keys())
             counts = dsRow.counts
             for spamLabel in counts:
@@ -138,7 +138,7 @@ class TestDataSetMethods(BaseTestCase):
         ds4.get_degrees_of_freedom()
 
         #String Manipulation
-        dsWritable.process_gate_strings( lambda s: pygsti.construction.manipulate_gatestring(s, [( ('Gx',), ('Gy',))]) )
+        dsWritable.process_op_strings( lambda s: pygsti.construction.manipulate_circuit(s, [( ('Gx',), ('Gy',))]) )
         test_cntDict = dsWritable[('Gy',)].as_dict()
 
         #Test truncation
@@ -204,7 +204,7 @@ Gx^4 20 80
             output.write(dataset_txt)
         ds = pygsti.io.load_dataset(temp_files + "/TinyDataset.txt")
         self.assertEqual(ds[()][('0',)], 0)
-        print(ds.gsIndex.keys())
+        print(ds.cirIndex.keys())
         print(ds.has_key(('Gx','Gy')))
         print(('Gx','Gy') in ds.keys())
         self.assertEqual(ds[('Gx','Gy')][('1',)], 60)
@@ -224,45 +224,47 @@ Gx^4 0.2 100
 
     def test_generate_fake_data(self):
 
-        gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy','Gz'],
+        model = pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gy','Gz'],
                                                      [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"])
 
-        depol_gateset = gateset.depolarize(gate_noise=0.1,spam_noise=0)
+        depol_gateset = model.depolarize(op_noise=0.1,spam_noise=0)
 
-        fids  = pygsti.construction.gatestring_list( [ (), ('Gx',), ('Gy'), ('Gx','Gx') ] )
-        germs = pygsti.construction.gatestring_list( [ ('Gi',), ('Gx',), ('Gy'), ('Gi','Gi','Gi')] )
-        gateStrings = pygsti.construction.create_gatestring_list(
+        fids  = pygsti.construction.circuit_list( [ (), ('Gx',), ('Gy'), ('Gx','Gx') ] )
+        germs = pygsti.construction.circuit_list( [ ('Gi',), ('Gx',), ('Gy'), ('Gi','Gi','Gi')] )
+        circuits = pygsti.construction.create_circuit_list(
             "f0+T(germ,N)+f1", f0=fids, f1=fids, germ=germs, N=3,
             T=pygsti.construction.repeat_with_max_length,
             order=["germ","f0","f1"])
-        pygsti.remove_duplicates_in_place(gateStrings)
+        pygsti.remove_duplicates_in_place(circuits)
 
-        ds_none = pygsti.construction.generate_fake_data(depol_gateset, gateStrings,
+        ds_none = pygsti.construction.generate_fake_data(depol_gateset, circuits,
                                                         nSamples=1000, sampleError='none')
-        ds_round = pygsti.construction.generate_fake_data(depol_gateset, gateStrings,
+        ds_round = pygsti.construction.generate_fake_data(depol_gateset, circuits,
                                                           nSamples=1000, sampleError='round')
-        ds_binom = pygsti.construction.generate_fake_data(depol_gateset, gateStrings, nSamples=1000,
+        ds_binom = pygsti.construction.generate_fake_data(depol_gateset, circuits, nSamples=1000,
                                                           sampleError='binomial', seed=100)
-        ds_multi = pygsti.construction.generate_fake_data(depol_gateset, gateStrings,
+        ds_multi = pygsti.construction.generate_fake_data(depol_gateset, circuits,
                                                           nSamples=1000, sampleError='multinomial', seed=100)
-        ds_otherds = pygsti.construction.generate_fake_data(ds_none, gateStrings,
+        ds_otherds = pygsti.construction.generate_fake_data(ds_none, circuits,
                                                              nSamples=None, sampleError='none')
 
-        weightedStrings = [ pygsti.obj.WeightedGateString( gs.tup, weight=1.0 ) for gs in gateStrings ]
-        ds_fromwts = pygsti.construction.generate_fake_data(depol_gateset, weightedStrings,
-                                                            nSamples=1000, sampleError='none')
+        #Removed weighted gate strings
+        #weightedStrings = [ pygsti.obj.WeightedOpString( mdl.tup, weight=1.0 ) for mdl in circuits ]
+        #ds_fromwts = pygsti.construction.generate_fake_data(depol_gateset, weightedStrings,
+        #                                                    nSamples=1000, sampleError='none')
 
         with self.assertRaises(ValueError):
-            pygsti.construction.generate_fake_data(depol_gateset, weightedStrings,
+            pygsti.construction.generate_fake_data(depol_gateset, circuits,
                                                    nSamples=1000, sampleError='FooBar') #invalid sampleError
 
 
 
         # TO SEED SAVED FILE, RUN BELOW LINES:
-        #pygsti.io.write_dataset(compare_files + "/Fake_Dataset_none.txt", ds_none,  gateStrings)
-        #pygsti.io.write_dataset(compare_files + "/Fake_Dataset_round.txt", ds_round, gateStrings)
-        #pygsti.io.write_dataset(compare_files + "/Fake_Dataset_binom.txt", ds_binom, gateStrings)
-        #pygsti.io.write_dataset(compare_files + "/Fake_Dataset_multi.txt", ds_multi, gateStrings)
+        if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
+            pygsti.io.write_dataset(compare_files + "/Fake_Dataset_none.txt", ds_none,  circuits)
+            pygsti.io.write_dataset(compare_files + "/Fake_Dataset_round.txt", ds_round, circuits)
+            pygsti.io.write_dataset(compare_files + "/Fake_Dataset_binom.txt", ds_binom, circuits)
+            pygsti.io.write_dataset(compare_files + "/Fake_Dataset_multi.txt", ds_multi, circuits)
 
         bDeepTesting = bool( 'PYGSTI_DEEP_TESTING' in os.environ and
                              os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true") )
@@ -297,9 +299,9 @@ Gx^4 0.2 100
         basis = pygsti.get_max_gram_basis( ('Gx','Gy'), ds)
         self.assertEqual(basis, [ ('Gx',), ('Gy',) ] )
 
-        gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gx','Gy'],
+        model = pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gx','Gy'],
                                                      [ "X(pi/4,Q0)", "Y(pi/4,Q0)"])
-        rank, evals, tgt_evals = pygsti.max_gram_rank_and_evals(ds, gateset)
+        rank, evals, tgt_evals = pygsti.max_gram_rank_and_evals(ds, model)
         self.assertEqual(rank, 1)
 
 
@@ -327,16 +329,16 @@ Gx^4 20 80 0.2 100
         with self.assertRaises(ValueError):
             pygsti.io.load_multidataset(temp_files + "/BadTinyMultiDataset.txt")
 
-        gstrInds = collections.OrderedDict( [ (pygsti.obj.GateString(('Gx',)),slice(0,2)),
-                                              (pygsti.obj.GateString(('Gx','Gy')),slice(2,4)),
-                                              (pygsti.obj.GateString(('Gy',)),slice(4,6)) ] )
+        gstrInds = collections.OrderedDict( [ (pygsti.obj.Circuit(('Gx',)),slice(0,2)),
+                                              (pygsti.obj.Circuit(('Gx','Gy')),slice(2,4)),
+                                              (pygsti.obj.Circuit(('Gy',)),slice(4,6)) ] )
         olInds = collections.OrderedDict( [ ('0',0),  ('1',1) ] )
 
-        ds1_oli = np.array( [0,1]*3, 'i' ) # 3 gate strings * 2 outcome labels
+        ds1_oli = np.array( [0,1]*3, 'i' ) # 3 operation sequences * 2 outcome labels
         ds1_time = np.zeros(6,'d')
         ds1_rep = 10*np.ones(6,'i')
 
-        ds2_oli = np.array( [0,1]*3, 'i' ) # 3 gate strings * 2 outcome labels
+        ds2_oli = np.array( [0,1]*3, 'i' ) # 3 operation sequences * 2 outcome labels
         ds2_time = np.zeros(6,'d')
         ds2_rep = 5*np.ones(6,'i')
 
@@ -344,23 +346,23 @@ Gx^4 20 80 0.2 100
         mds_time = collections.OrderedDict( [ ('ds1', ds1_time), ('ds2', ds2_time) ] )
         mds_rep = collections.OrderedDict( [ ('ds1', ds1_rep), ('ds2', ds2_rep) ] )
 
-        mds2 = pygsti.objects.MultiDataSet(mds_oli, mds_time, mds_rep, gateStringIndices=gstrInds,
+        mds2 = pygsti.objects.MultiDataSet(mds_oli, mds_time, mds_rep, circuitIndices=gstrInds,
                                            outcomeLabels=['0','1'])
-        mds3 = pygsti.objects.MultiDataSet(mds_oli, mds_time, mds_rep, gateStringIndices=gstrInds,
+        mds3 = pygsti.objects.MultiDataSet(mds_oli, mds_time, mds_rep, circuitIndices=gstrInds,
                                            outcomeLabelIndices=olInds)
         mds4 = pygsti.objects.MultiDataSet(outcomeLabels=['0','1'])
         mds5 = pygsti.objects.MultiDataSet()
 
         #Create a multidataset with time dependence and no rep counts
-        ds1_oli = np.array( [0,1]*3, 'i' ) # 3 gate strings * 2 outcome labels
+        ds1_oli = np.array( [0,1]*3, 'i' ) # 3 operation sequences * 2 outcome labels
         ds1_time = np.array(np.arange(0,6),'d')
 
-        ds2_oli = np.array( [0,1]*3, 'i' ) # 3 gate strings * 2 outcome labels
+        ds2_oli = np.array( [0,1]*3, 'i' ) # 3 operation sequences * 2 outcome labels
         ds2_time = np.array(np.arange(2,8),'d')
 
         mds_oli = collections.OrderedDict( [ ('ds1', ds1_oli), ('ds2', ds2_oli) ] )
         mds_time = collections.OrderedDict( [ ('ds1', ds1_time), ('ds2', ds2_time) ] )
-        mdsNoReps = pygsti.objects.MultiDataSet(mds_oli, mds_time, None, gateStringIndices=gstrInds,
+        mdsNoReps = pygsti.objects.MultiDataSet(mds_oli, mds_time, None, circuitIndices=gstrInds,
                                                 outcomeLabels=['0','1'])
 
 
@@ -382,7 +384,7 @@ Gx^4 20 80 0.2 100
         ds2.add_count_dict( ('Gx','Gx','Gx','Gx'), {'0': 10, 'foobar':90} )
         ds2.done_adding_data()
 
-        ds3 = pygsti.objects.DataSet(outcomeLabels=['0','1']) #different gate strings
+        ds3 = pygsti.objects.DataSet(outcomeLabels=['0','1']) #different operation sequences
         ds3.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
         ds3.done_adding_data()
 
@@ -493,15 +495,15 @@ Gx^4 20 80 0.2 100
 
 
         #Create a non-static already initialized dataset
-        gatestrings = pygsti.construction.gatestring_list([('Gx',), ('Gy','Gx')])
-        gatestringIndices = collections.OrderedDict([ (gs,i) for i,gs in enumerate(gatestrings)])
+        circuits = pygsti.construction.circuit_list([('Gx',), ('Gy','Gx')])
+        gatestringIndices = collections.OrderedDict([ (mdl,i) for i,mdl in enumerate(circuits)])
         oliData = [ np.array([0,1,0]), np.array([1,1,0]) ]
         timeData = [ np.array([1.0,2.0,3.0]), np.array([4.0,5.0,6.0]) ]
         repData = [ np.array([1,1,1]), np.array([2,2,2]) ]
-        ds = pygsti.objects.DataSet(oliData, timeData, repData, gatestrings, None,
+        ds = pygsti.objects.DataSet(oliData, timeData, repData, circuits, None,
                                       ['0','1'], None,  bStatic=False)
         ds = pygsti.objects.DataSet(oliData, timeData, repData, None, gatestringIndices,
-                                      None, oli, bStatic=False) #provide gate string & spam label index dicts instead of lists
+                                      None, oli, bStatic=False) #provide operation sequence & spam label index dicts instead of lists
         ds = pygsti.objects.DataSet(oliData, timeData, None, None, gatestringIndices,
                                       None, oli) #no rep data is OK - just assumes 1; bStatic=False is default
 
@@ -512,10 +514,10 @@ Gx^4 20 80 0.2 100
 
         #Create an static already initialized dataset
         ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
-        GS = pygsti.objects.GateString #no auto-convert to GateStrings when using gateStringIndices
+        CIR = pygsti.objects.Circuit #no auto-convert to Circuits when using circuitIndices
         gatestringIndices = collections.OrderedDict([ #always need this when creating a static dataset
-            ( GS(('Gx',)) , slice(0,3) ),                 # (now a dict of *slices* into flattened 1D 
-            ( GS(('Gy','Gx')), slice(3,6) ) ])            #  data arrays)
+            ( CIR(('Gx',)) , slice(0,3) ),                 # (now a dict of *slices* into flattened 1D 
+            ( CIR(('Gy','Gx')), slice(3,6) ) ])            #  data arrays)
         oliData = np.array([0,1,0,1,1,0])
         timeData = np.array([1.0,2.0,3.0,4.0,5.0,6.0]) 
         repData = np.array([1,1,1,2,2,2])
@@ -527,11 +529,11 @@ Gx^4 20 80 0.2 100
                                       None, oli, bStatic=True) #no rep data is OK - just assumes 1
 
         with self.assertRaises(ValueError):
-            pygsti.objects.DataSet(oliData, timeData, repData, gatestrings, None,
+            pygsti.objects.DataSet(oliData, timeData, repData, circuits, None,
                                      ['0','1'], None,  bStatic=True) # NEEDS gatestringIndices b/c static
 
         with self.assertRaises(ValueError):
-            pygsti.objects.DataSet(gateStringIndices=gatestringIndices,
+            pygsti.objects.DataSet(circuitIndices=gatestringIndices,
                                      outcomeLabelIndices=oli, bStatic=True) #must specify data when creating a static dataset
             
         #with self.assertRaises(ValueError):
@@ -545,31 +547,31 @@ Gx^4 20 80 0.2 100
     def test_tddataset_methods(self):
         # Create a dataset from scratch
 
-        def printInfo(ds, gstr):
-            print( "*** %s info ***" % str(gstr))
-            print( ds[gstr] )
-            print( ds[gstr].oli )
-            print( ds[gstr].time )
-            print( ds[gstr].reps )
-            print( ds[gstr].outcomes )
-            print( ds[gstr].get_expanded_ol() )
-            print( ds[gstr].get_expanded_oli() )
-            print( ds[gstr].get_expanded_times() )
-            print( ds[gstr].counts )
-            print( ds[gstr].fractions )
-            print( ds[gstr].total )
-            print( ds[gstr].fraction('0') )
-            print( "[0] (int) = ",ds[gstr][0] ) # integer index
-            print( "[0.0] (float) = ",ds[gstr][0.0] ) # time index
-            print( "['0'] (str) = ",ds[gstr]['0'] ) # outcome-label index
-            print( "[('0',)] (tuple) = ",ds[gstr][('0',)] ) # outcome-label index            
-            print( "at time 0 = ", ds[gstr].counts_at_time(0.0) )
-            all_times, _ = ds[gstr].timeseries('all')
-            print( "series('all') = ", ds[gstr].timeseries('all') )
-            print( "series('0') = ",ds[gstr].timeseries('0') )
-            print( "series('1') = ",ds[gstr].timeseries('1') )            
-            print( "series('0',alltimes) = ",ds[gstr].timeseries('0', all_times) )
-            print( len(ds[gstr]) )
+        def printInfo(ds, opstr):
+            print( "*** %s info ***" % str(opstr))
+            print( ds[opstr] )
+            print( ds[opstr].oli )
+            print( ds[opstr].time )
+            print( ds[opstr].reps )
+            print( ds[opstr].outcomes )
+            print( ds[opstr].get_expanded_ol() )
+            print( ds[opstr].get_expanded_oli() )
+            print( ds[opstr].get_expanded_times() )
+            print( ds[opstr].counts )
+            print( ds[opstr].fractions )
+            print( ds[opstr].total )
+            print( ds[opstr].fraction('0') )
+            print( "[0] (int) = ",ds[opstr][0] ) # integer index
+            print( "[0.0] (float) = ",ds[opstr][0.0] ) # time index
+            print( "['0'] (str) = ",ds[opstr]['0'] ) # outcome-label index
+            print( "[('0',)] (tuple) = ",ds[opstr][('0',)] ) # outcome-label index            
+            print( "at time 0 = ", ds[opstr].counts_at_time(0.0) )
+            all_times, _ = ds[opstr].timeseries('all')
+            print( "series('all') = ", ds[opstr].timeseries('all') )
+            print( "series('0') = ",ds[opstr].timeseries('0') )
+            print( "series('1') = ",ds[opstr].timeseries('1') )            
+            print( "series('0',alltimes) = ",ds[opstr].timeseries('0', all_times) )
+            print( len(ds[opstr]) )
             print("\n")
         
         ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
@@ -646,18 +648,18 @@ Gx^4 20 80 0.2 100
 
 
         #test iteration
-        for gstr,dsRow in ds.items():
-            print(gstr, dsRow)
-            dsRow2 = ds[gstr]
+        for opstr,dsRow in ds.items():
+            print(opstr, dsRow)
+            dsRow2 = ds[opstr]
             spamLblIndex, timestamp, reps = dsRow[0] #can index as 3-array
             for spamLblIndex, timestamp, reps in dsRow: # or iterate over
                 print(spamLblIndex, timestamp, reps)
         for dsRow in ds.values():
             print(dsRow)
 
-        for gstr,dsRow in dsNoReps.items():
-            print(gstr, dsRow)
-            dsRow2 = dsNoReps[gstr]
+        for opstr,dsRow in dsNoReps.items():
+            print(opstr, dsRow)
+            dsRow2 = dsNoReps[opstr]
             spamLblIndex, timestamp, reps = dsRow[0] #can index as 3-array
             for spamLblIndex, timestamp, reps in dsRow: # or iterate over
                 print(spamLblIndex, timestamp, reps)                
@@ -780,9 +782,11 @@ Gy 11001100
     def test_load_old_dataset(self):
         vs = "v2" if self.versionsuffix == "" else "v3"
         #pygsti.obj.results.enable_old_python_results_unpickling()
-        with open(compare_files + "/pygsti0.9.3.dataset.pkl.%s" % vs,'rb') as f:
+        pygsti.io.enable_old_object_unpickling()
+        with open(compare_files + "/pygsti0.9.6.dataset.pkl.%s" % vs,'rb') as f:
             ds = pickle.load(f)
         #pygsti.obj.results.disable_old_python_results_unpickling()
+        pygsti.io.disable_old_object_unpickling()
         with open(temp_files + "/repickle_old_dataset.pkl.%s" % vs,'wb') as f:
             pickle.dump(ds, f)
 
@@ -811,20 +815,20 @@ Gx^4 20 80
 
 #OLD
 #    def test_intermediate_measurements(self):
-#        gs = std.gs_target.depolarize(gate_noise=0.05, spam_noise=0.1)
-#        E = gs.povms['Mdefault']['0']
-#        Erem = gs.povms['Mdefault']['1']
-#        gs.gates['Gmz_0'] = np.dot(E,E.T)
-#        gs.gates['Gmz_1'] = np.dot(Erem,Erem.T)
-#        #print(gs['Gmz_0'] + gs['Gmz_1'])
+#        mdl = std.target_model.depolarize(op_noise=0.05, spam_noise=0.1)
+#        E = mdl.povms['Mdefault']['0']
+#        Erem = mdl.povms['Mdefault']['1']
+#        mdl.operations['Gmz_0'] = np.dot(E,E.T)
+#        mdl.operations['Gmz_1'] = np.dot(Erem,Erem.T)
+#        #print(mdl['Gmz_0'] + mdl['Gmz_1'])
 #
-#        gatestring_list = pygsti.construction.gatestring_list([ 
+#        circuit_list = pygsti.construction.circuit_list([ 
 #            (),
 #            ('Zmeas',),
 #            ('Gx','Zmeas') 
 #        ])
 #        
-#        ds_gen = pygsti.construction.generate_fake_data(gs, gatestring_list, nSamples=100,
+#        ds_gen = pygsti.construction.generate_fake_data(mdl, circuit_list, nSamples=100,
 #                                                        sampleError="multinomial", seed=0,
 #                                                        measurementGates={'Zmeas': ['Gmz_0', 'Gmz_1']})
 #        #Test copy operations

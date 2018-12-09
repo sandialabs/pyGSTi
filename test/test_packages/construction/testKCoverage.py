@@ -4,7 +4,7 @@ import numpy as np
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-# This class is for unifying some gatesets that get used in this file and in testGateSets2.py
+# This class is for unifying some models that get used in this file and in testGateSets2.py
 class KCoverageTestCase(BaseTestCase):
 
     def setUp(self):

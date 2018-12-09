@@ -15,15 +15,15 @@ from . import grasp as _grasp
 from . import scoring as _scoring
 
 
-def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
-                       gatesToOmit=None, forceEmpty=True, maxFidLength=2,
+def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
+                       opsToOmit=None, forceEmpty=True, maxFidLength=2,
                        algorithm='grasp', algorithm_kwargs=None, verbosity=1):
-    """Generate prep and measurement fiducials for a given target gateset.
+    """Generate prep and measurement fiducials for a given target model.
 
     Parameters
     ----------
-    gs_target : GateSet
-        The gateset you are aiming to implement.
+    target_model : Model
+        The model you are aiming to implement.
 
     omitIdentity : bool, optional
         Whether to remove the identity gate from the set of gates with which
@@ -37,8 +37,8 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
         will be removed from the list of gates from which to construct
         fiducials if `omitIdentity` is ``True``.
 
-    gatesToOmit : list of string, optional
-        List of strings identifying gates in the gateset that should not be
+    opsToOmit : list of string, optional
+        List of strings identifying gates in the model that should not be
         used in fiducials. Oftentimes this will include the identity gate, and
         may also include entangling gates if their fidelity is anticipated to
         be much worse than that of single-system gates.
@@ -49,7 +49,7 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
 
     maxFidLength : int, optional
         The maximum number of gates to include in a fiducial. The default is
-        not guaranteed to work for arbitrary gatesets (particularly for quantum
+        not guaranteed to work for arbitrary models (particularly for quantum
         systems larger than a single qubit).
 
     algorithm : {'slack', 'grasp'}, optional
@@ -71,28 +71,28 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
 
     Returns
     -------
-    prepFidList : list of GateString
-        A list containing the gate sequences for the prep fiducials.
+    prepFidList : list of Circuits
+        A list containing the operation sequences for the prep fiducials.
 
-    measFidList : list of GateString
-        A list containing the gate sequences for the measurement fiducials.
+    measFidList : list of Circuits
+        A list containing the operation sequences for the measurement fiducials.
 
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
-    if gatesToOmit is None:
-        gatesToOmit = []
+    if opsToOmit is None:
+        opsToOmit = []
 
-    fidGates = [gate for gate in gs_target.gates if gate not in gatesToOmit]
+    fidOps = [gate for gate in target_model.operations if gate not in opsToOmit]
 
     if omitIdentity:
         # we assume identity gate is always the identity mx regardless of basis
-        Identity = _np.identity(gs_target.get_dimension(), 'd')
+        Identity = _np.identity(target_model.get_dimension(), 'd')
         
-        for gate in fidGates:
-            if frobeniusdist2(gs_target.gates[gate], Identity) < eqThresh:
-                fidGates.remove(gate)
+        for gate in fidOps:
+            if frobeniusdist2(target_model.operations[gate], Identity) < eqThresh:
+                fidOps.remove(gate)
 
-    availableFidList = _constr.list_all_gatestrings(fidGates, 0, maxFidLength)
+    availableFidList = _constr.list_all_circuits(fidOps, 0, maxFidLength)
 
     if algorithm_kwargs is None:
         # Avoid danger of using empty dict for default value.
@@ -114,24 +114,24 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
 
-        prepFidList = optimize_integer_fiducials_slack(gateset=gs_target,
+        prepFidList = optimize_integer_fiducials_slack(model=target_model,
                                                        prepOrMeas='prep',
                                                        **algorithm_kwargs)
         if prepFidList is not None:
             prepScore = compute_composite_fiducial_score(
-                gs_target, prepFidList, 'prep',
+                target_model, prepFidList, 'prep',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Preparation fiducials:', 1)
             printer.log(str([str(fid) for fid in prepFidList]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
 
             
-        measFidList = optimize_integer_fiducials_slack(gateset=gs_target,
+        measFidList = optimize_integer_fiducials_slack(model=target_model,
                                                        prepOrMeas='meas',
                                                        **algorithm_kwargs)
         if measFidList is not None:
             measScore = compute_composite_fiducial_score(
-                gs_target, measFidList, 'meas',
+                target_model, measFidList, 'meas',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Measurement fiducials:', 1)
             printer.log(str([str(fid) for fid in measFidList]), 1)
@@ -142,7 +142,7 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
         default_kwargs = {
             'fidsList': availableFidList,
             'alpha': 0.1,   # No real reason for setting this value of alpha.
-            'gatePenalty': 0.1,
+            'opPenalty': 0.1,
             'verbosity': max(0, verbosity - 1),
             'forceEmpty': forceEmpty,
             'scoreFunc': 'all',
@@ -152,39 +152,39 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
 
-        prepFidList = grasp_fiducial_optimization(gateset=gs_target,
+        prepFidList = grasp_fiducial_optimization(model=target_model,
                                                   prepOrMeas='prep',
                                                   **algorithm_kwargs)
 
         if algorithm_kwargs['returnAll'] and prepFidList[0] is not None:
             prepScore = compute_composite_fiducial_score(
-                gs_target, prepFidList[0], 'prep',
+                target_model, prepFidList[0], 'prep',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Preparation fiducials:', 1)
             printer.log(str([str(fid) for fid in prepFidList[0]]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
         elif not algorithm_kwargs['returnAll'] and prepFidList is not None:
             prepScore = compute_composite_fiducial_score(
-                gs_target, prepFidList, 'prep',
+                target_model, prepFidList, 'prep',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Preparation fiducials:', 1)
             printer.log(str([str(fid) for fid in prepFidList]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
 
-        measFidList = grasp_fiducial_optimization(gateset=gs_target,
+        measFidList = grasp_fiducial_optimization(model=target_model,
                                                   prepOrMeas='meas',
                                                   **algorithm_kwargs)
 
         if algorithm_kwargs['returnAll'] and measFidList[0] is not None:
             measScore = compute_composite_fiducial_score(
-                gs_target, measFidList[0], 'meas',
+                target_model, measFidList[0], 'meas',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Measurement fiducials:', 1)
             printer.log(str([str(fid) for fid in measFidList[0]]), 1)
             printer.log('Score: {}'.format(measScore.minor), 1)
         elif not algorithm_kwargs['returnAll'] and measFidList is not None:
             measScore = compute_composite_fiducial_score(
-                gs_target, measFidList, 'meas',
+                target_model, measFidList, 'meas',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Measurement fiducials:', 1)
             printer.log(str([str(fid) for fid in measFidList]), 1)
@@ -224,88 +224,88 @@ def xor(*args):
     output = sum(bool(x) for x in args) == 1
     return output
 
-def make_prep_mxs(gs, prepFidList):
-    """Make a list of matrices for the gate set preparation operations.
+def make_prep_mxs(mdl, prepFidList):
+    """Make a list of matrices for the model preparation operations.
 
     Makes a list of matrices, where each matrix corresponds to a single
-    preparation operation in the gate set, and the column of each matrix is a
+    preparation operation in the model, and the column of each matrix is a
     fiducial acting on that state preparation.
 
     Parameters
     ----------
-    gs : GateSet
-        The gate set (associates gate matrices with gate labels).
+    mdl : Model
+        The model (associates operation matrices with operation labels).
 
-    prepFidList : list of GateStrings
-        List of fiducial gate sequences for preparation.
+    prepFidList : list of Circuits
+        List of fiducial operation sequences for preparation.
 
     Returns
     ----------
     outputMatList : list of arrays
         List of arrays, where each array corresponds to one preparation in the
-        gate set, and each column therein corresponds to a single fiducial.
+        model, and each column therein corresponds to a single fiducial.
 
     """
 
-    dimRho = gs.get_dimension()
-    #numRho = len(gs.preps)
+    dimRho = mdl.get_dimension()
+    #numRho = len(mdl.preps)
     numFid = len(prepFidList)
     outputMatList = []
-    for rho in list(gs.preps.values()):
+    for rho in list(mdl.preps.values()):
         outputMat = _np.zeros([dimRho, numFid], float)
         for i,prepFid in enumerate(prepFidList):
-            outputMat[:, i] = _np.dot(gs.product(prepFid), rho)[:,0]
+            outputMat[:, i] = _np.dot(mdl.product(prepFid), rho)[:,0]
         outputMatList.append(outputMat)
     return outputMatList
 
-def make_meas_mxs(gs, prepMeasList):
-    """Make a list of matrices for the gate set measurement operations.
+def make_meas_mxs(mdl, prepMeasList):
+    """Make a list of matrices for the model measurement operations.
 
     Makes a list of matrices, where each matrix corresponds to a single
-    measurement effect in the gate set, and the column of each matrix is the
+    measurement effect in the model, and the column of each matrix is the
     transpose of the measurement effect acting on a fiducial.
 
     Parameters
     ----------
-    gs : GateSet
-        The gate set (associates gate matrices with gate labels).
+    mdl : Model
+        The model (associates operation matrices with operation labels).
 
-    measFidList : list of GateStrings
-        List of fiducial gate sequences for measurement.
+    measFidList : list of Circuits
+        List of fiducial operation sequences for measurement.
 
     Returns
     ----------
     outputMatList : list of arrays
         List of arrays, where each array corresponds to one measurement in the
-        gate set, and each column therein corresponds to a single fiducial.
+        model, and each column therein corresponds to a single fiducial.
 
     """
 
-    dimE = gs.get_dimension()
+    dimE = mdl.get_dimension()
     numFid = len(prepMeasList)
     outputMatList = []
-    for povm in gs.povms.values():
+    for povm in mdl.povms.values():
         for E in povm.values():
             if isinstance(E, _objs.ComplementSPAMVec): continue # complement is dependent on others
             outputMat = _np.zeros([dimE, numFid], float)
             for i,measFid in enumerate(prepMeasList):
-                outputMat[:, i] = _np.dot(E.T, gs.product(measFid))[0,:]
+                outputMat[:, i] = _np.dot(E.T, mdl.product(measFid))[0,:]
             outputMatList.append(outputMat)
     return outputMatList
 
 
-def compute_composite_fiducial_score(gateset, fidList, prepOrMeas, scoreFunc='all',
-                                     threshold=1e6, returnAll=False, gatePenalty=0.0,
+def compute_composite_fiducial_score(model, fidList, prepOrMeas, scoreFunc='all',
+                                     threshold=1e6, returnAll=False, opPenalty=0.0,
                                      l1Penalty=0.0):
     """Compute a composite score for a fiducial list.
 
     Parameters
     ----------
-    gateset : GateSet
-        The gate set (associates gate matrices with gate labels).
+    model : Model
+        The model (associates operation matrices with operation labels).
 
-    fidList : list of GateStrings
-        List of fiducial gate sequences to test.
+    fidList : list of Circuits
+        List of fiducial operation sequences to test.
 
     prepOrMeas : string ("prep" or "meas")
         Are we testing preparation or measurement fiducials?
@@ -335,7 +335,7 @@ def compute_composite_fiducial_score(gateset, fidList, prepOrMeas, scoreFunc='al
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
 
-    gatePenalty : float, optional (defailt is 0.0)
+    opPenalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
         fiducials that is added to ``score.minor``.
 
@@ -349,11 +349,11 @@ def compute_composite_fiducial_score(gateset, fidList, prepOrMeas, scoreFunc='al
         matrix.
 
     """
-    # dimRho = gateset.get_dimension()
+    # dimRho = model.get_dimension()
     if prepOrMeas == 'prep':
-        fidArrayList = make_prep_mxs(gateset, fidList)
+        fidArrayList = make_prep_mxs(model, fidList)
     elif prepOrMeas == 'meas':
-        fidArrayList = make_meas_mxs(gateset, fidList)
+        fidArrayList = make_meas_mxs(model, fidList)
     else:
         raise ValueError('Invalid value "{}" for prepOrMeas (must be "prep" '
                          'or "meas")!'.format(prepOrMeas))
@@ -375,25 +375,25 @@ def compute_composite_fiducial_score(gateset, fidList, prepOrMeas, scoreFunc='al
 
     nonzero_score += l1Penalty * len(fidList)
 
-    nonzero_score += gatePenalty * sum([len(fiducial) for fiducial in fidList])
+    nonzero_score += opPenalty * sum([len(fiducial) for fiducial in fidList])
 
     score = _scoring.CompositeScore(-N_nonzero, nonzero_score, N_nonzero)
 
     return (score, spectrum) if returnAll else score
 
 
-def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
+def test_fiducial_list(model, fidList, prepOrMeas, scoreFunc='all',
                        returnAll=False, threshold=1e6, l1Penalty=0.0,
-                       gatePenalty=0.0):
+                       opPenalty=0.0):
     """Tests a prep or measure fiducial list for informational completeness.
 
     Parameters
     ----------
-    gateset : GateSet
-        The gate set (associates gate matrices with gate labels).
+    model : Model
+        The model (associates operation matrices with operation labels).
 
-    fidList : list of GateStrings
-        List of fiducial gate sequences to test.
+    fidList : list of Circuits
+        List of fiducial operation sequences to test.
 
     prepOrMeas : string ("prep" or "meas")
         Are we testing preparation or measurement fiducials?
@@ -426,7 +426,7 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
 
-    gatePenalty : float, optional (defailt is 0.0)
+    opPenalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
         fiducials that is added to ``score.minor``.
 
@@ -434,7 +434,7 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
     -------
     testResult : bool
         Whether or not the specified fiducial list is informationally complete
-        for the provided gate set, to within the tolerance specified by
+        for the provided model, to within the tolerance specified by
         threshold.
 
     spectrum : array, optional
@@ -447,9 +447,9 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
     """
 
     score, spectrum = compute_composite_fiducial_score(
-        gateset, fidList, prepOrMeas, scoreFunc=scoreFunc,
+        model, fidList, prepOrMeas, scoreFunc=scoreFunc,
         threshold=threshold, returnAll=True, l1Penalty=l1Penalty,
-        gatePenalty=gatePenalty)
+        opPenalty=opPenalty)
 
     if score.N < len(spectrum):
         testResult = False
@@ -525,7 +525,7 @@ def build_bitvec_mx(n, k):
 
     return bitVecMx
 
-def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
+def optimize_integer_fiducials_slack(model, fidList, prepOrMeas=None,
                                      initialWeights=None, scoreFunc='all',
                                      maxIter=100, fixedSlack=None,
                                      slackFrac=None, returnAll=False,
@@ -544,11 +544,11 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
 
     Parameters
     ----------
-    gateset : GateSet
-        The gate set (associates gate matrices with gate labels).
+    model : Model
+        The model (associates operation matrices with operation labels).
 
-    fidList : list of GateStrings
-        List of all fiducials gate sequences to consider.
+    fidList : list of Circuits
+        List of all fiducials operation sequences to consider.
 
     initialWeights : list-like
         List or array of either booleans or (0 or 1) integers specifying which
@@ -591,11 +591,11 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
         string as a fiducial.
 
         IMPORTANT:  This only works if the first element of fidList is the
-        empty gate string.
+        empty operation sequence.
 
     forceEmptyScore : float, optional (default is 1e100)
         When forceEmpty is True, what score to assign any fiducial set that
-        does not contain the empty gate string as a fiducial.
+        does not contain the empty operation sequence as a fiducial.
 
     forceMin : bool, optional (default is False)
         If True, forces fiducial selection to choose a fiducial set that is *at
@@ -640,7 +640,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
         raise ValueError("One and only one of fixedSlack or slackFrac should "
                          "be specified!")
 
-    initial_test = test_fiducial_list(gateset, fidList, prepOrMeas,
+    initial_test = test_fiducial_list(model, fidList, prepOrMeas,
                                       scoreFunc=scoreFunc, returnAll=True,
                                       threshold=threshold)
     if initial_test[0]:
@@ -656,7 +656,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
 
     nFids = len(fidList)
 
-    dimRho = gateset.get_dimension()
+    dimRho = model.get_dimension()
 
     printer.log("Starting fiducial set optimization. Lower score is better.",
                 1)
@@ -665,9 +665,9 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
 
     #fidLengths = _np.array( list(map(len,fidList)), _np.int64)
     if prepOrMeas == 'prep':
-        fidArrayList = make_prep_mxs(gateset, fidList)
+        fidArrayList = make_prep_mxs(model, fidList)
     elif prepOrMeas == 'meas':
-        fidArrayList = make_meas_mxs(gateset, fidList)
+        fidArrayList = make_meas_mxs(model, fidList)
     else:
         raise ValueError('prepOrMeas must be specified!') # pragma: no cover
           # unreachable given check within test_fiducial_list above
@@ -725,7 +725,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
         for weights in bitVecMat:
             temp_score = compute_score(weights, cache_score=True)
             # If scores are within machine precision, we want the fiducial set
-            # that requires fewer total button gate operations.
+            # that requires fewer total button operations.
             if abs(temp_score - best_score) < 1e-8:
 #                print "Within machine precision!"
                 bestFidList = []
@@ -847,7 +847,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
         if val == 1:
             goodFidList.append(fidList[index])
 
-    # final_test = test_fiducial_list(gateset, goodFidList, prepOrMeas,
+    # final_test = test_fiducial_list(model, goodFidList, prepOrMeas,
     #                                 scoreFunc=scoreFunc, returnAll=True,
     #                                 threshold=threshold)
     if initial_test[0]:
@@ -861,8 +861,8 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
         return goodFidList
 
 
-def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
-                                iterations=5, scoreFunc='all', gatePenalty=0.0,
+def grasp_fiducial_optimization(model, fidsList, prepOrMeas, alpha,
+                                iterations=5, scoreFunc='all', opPenalty=0.0,
                                 l1Penalty=0.0, returnAll=False,
                                 forceEmpty=True, threshold=1e6, seed=None,
                                 verbosity=0):
@@ -875,7 +875,7 @@ def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
         raise ValueError("'{}' is an invalid value for prepOrMeas (must be "
                          "'prep' or 'meas')!".format(prepOrMeas))
 
-    initial_test = test_fiducial_list(gateset, fidsList, prepOrMeas,
+    initial_test = test_fiducial_list(model, fidsList, prepOrMeas,
                                       scoreFunc=scoreFunc, returnAll=False,
                                       threshold=threshold)
     if initial_test:
@@ -900,11 +900,11 @@ def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
     # Dict of keyword arguments passed to compute_score_non_AC that don't
     # change from call to call
     compute_kwargs = {
-        'gateset': gateset,
+        'model': model,
         'prepOrMeas': prepOrMeas,
         'scoreFunc': scoreFunc,
         'threshold': threshold,
-        'gatePenalty': gatePenalty,
+        'opPenalty': opPenalty,
         'returnAll': False,
         'l1Penalty': 0.0,
         }
@@ -918,7 +918,7 @@ def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
     finalScoreFn = lambda fidList: compute_composite_fiducial_score(
         fidList=fidList, **final_compute_kwargs)
 
-    dimRho = gateset.get_dimension()
+    dimRho = model.get_dimension()
     feasibleThreshold=_scoring.CompositeScore(-dimRho, threshold, dimRho)
 
     rclFn = lambda x: _scoring.composite_rcl_fn(x, alpha)

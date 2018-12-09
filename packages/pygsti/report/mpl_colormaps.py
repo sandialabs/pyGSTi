@@ -532,10 +532,10 @@ def special_keyplot(pygsti_fig, save_to, fontsize):
         axes.set_ylabel( ylabel, fontsize=(fontsize+4) )
 
     #Copied from generate_boxplot
-    def _val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
+    def _val_filter(vals):  #filter to latex-ify operation sequences.  Later add filter as a possible parameter
         formatted_vals = []
         for val in vals:
-            if type(val) in (tuple,_objs.GateString) and all([type(el) == str for el in val]):
+            if type(val) in (tuple,_objs.Circuit) and all([type(el) == str for el in val]):
                 if len(val) == 0:
                     formatted_vals.append(r"$\{\}$")
                 else:

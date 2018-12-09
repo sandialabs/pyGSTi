@@ -4,9 +4,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for creating RPE GateSets and GateString lists """
+""" Functions for creating RPE Models and Circuit lists """
 import numpy as _np
-from . import gatesetconstruction as _setc
+from . import modelconstruction as _setc
 from . import datasetconstruction as _dsc
 
 from .. import objects as _objs
@@ -16,8 +16,8 @@ from .. import tools as _tools
 def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
                                    gateDepol=None, withId=True):
     """
-    Make a gateset for simulating RPE, paramaterized by rotation angles.  Note
-    that the output gateset also has thetaTrue, alphaTrue, and epsilonTrue
+    Make a model for simulating RPE, paramaterized by rotation angles.  Note
+    that the output model also has thetaTrue, alphaTrue, and epsilonTrue
     added attributes.
 
     Parameters
@@ -46,20 +46,20 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
 
     Returns
     -------
-    GateSet
-        The desired gateset for RPE; gateset also has attributes thetaTrue,
+    Model
+        The desired model for RPE; model also has attributes thetaTrue,
         alphaTrue, and epsilonTrue, automatically extracted.
     """
 
     if withId:
-        outputGateset = _setc.build_gateset(
+        outputModel = _setc.build_explicit_model(
             [2], [('Q0',)],['Gi','Gx','Gz'],
             [ "I(Q0)", "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=["0"],
             effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
             spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
     else:
-        outputGateset = _setc.build_gateset(
+        outputModel = _setc.build_explicit_model(
             [2], [('Q0',)],['Gx','Gz'],
             [ "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=["0"],
@@ -67,35 +67,35 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
             spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
     if Yrot != 0:
-        gatesetAux1 = _setc.build_gateset(
+        modelAux1 = _setc.build_explicit_model(
             [2], [('Q0',)],['Gi','Gy','Gz'],
             [ "I(Q0)", "Y(%s,Q0)" % Yrot, "Z(pi/2,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
             effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
             spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
-        outputGateset.gates['Gx'] = _objs.FullyParameterizedGate(
-            _np.dot( _np.dot(_np.linalg.inv(gatesetAux1.gates['Gy']),
-                             outputGateset.gates['Gx']),gatesetAux1.gates['Gy']))
+        outputModel.operations['Gx'] = _objs.FullDenseOp(
+            _np.dot( _np.dot(_np.linalg.inv(modelAux1.operations['Gy']),
+                             outputModel.operations['Gx']),modelAux1.operations['Gy']))
 
-    outputGateset = outputGateset.depolarize(gate_noise=gateDepol,
+    outputModel = outputModel.depolarize(op_noise=gateDepol,
                                              spam_noise=SPAMdepol)
 
-    thetaTrue = _tools.rpe.extract_theta(outputGateset)
-    outputGateset.thetaTrue = thetaTrue
+    thetaTrue = _tools.rpe.extract_theta(outputModel)
+    outputModel.thetaTrue = thetaTrue
 
-    outputGateset.alphaTrue = _tools.rpe.extract_alpha(outputGateset)
-    outputGateset.alphaTrue = alphaTrue
+    outputModel.alphaTrue = _tools.rpe.extract_alpha(outputModel)
+    outputModel.alphaTrue = alphaTrue
 
-    outputGateset.epsilonTrue = _tools.rpe.extract_epsilon(outputGateset)
-    outputGateset.epsilonTrue = epsilonTrue
+    outputModel.epsilonTrue = _tools.rpe.extract_epsilon(outputModel)
+    outputModel.epsilonTrue = epsilonTrue
 
-    return outputGateset
+    return outputModel
 
 def make_rpe_alpha_str_lists_gx_gz(kList):
     """
-    Make alpha cosine and sine gatestring lists for (approx) X pi/4 and Z pi/2
-    gates. These gate strings are used to estimate alpha (Z rotation angle).
+    Make alpha cosine and sine circuit lists for (approx) X pi/4 and Z pi/2
+    gates. These operation sequences are used to estimate alpha (Z rotation angle).
 
     Parameters
     ----------
@@ -105,38 +105,38 @@ def make_rpe_alpha_str_lists_gx_gz(kList):
 
     Returns
     -------
-    cosStrList : list of GateStrings
+    cosStrList : list of Circuits
         The list of "cosine strings" to be used for alpha estimation.
-    sinStrList : list of GateStrings
+    sinStrList : list of Circuits
         The list of "sine strings" to be used for alpha estimation.
     """
     cosStrList = []
     sinStrList = []
     for k in kList:
-        cosStrList += [ _objs.GateString(('Gi','Gx','Gx','Gz')+
+        cosStrList += [ _objs.Circuit(('Gi','Gx','Gx','Gz')+
                                          ('Gz',)*k +
                                          ('Gz','Gz','Gz','Gx','Gx'),
                                          'GiGxGxGzGz^'+str(k)+'GzGzGzGxGx')]
 
-        sinStrList += [ _objs.GateString(('Gx','Gx','Gz','Gz')+
+        sinStrList += [ _objs.Circuit(('Gx','Gx','Gz','Gz')+
                                          ('Gz',)*k +
                                          ('Gz','Gz','Gz','Gx','Gx'),
                                          'GxGxGzGzGz^'+str(k)+'GzGzGzGxGx')]
 
         #From RPEToolsNewNew.py
-        ##cosStrList += [_objs.GateString(('Gi','Gx','Gx')+
+        ##cosStrList += [_objs.Circuit(('Gi','Gx','Gx')+
         ##                                ('Gz',)*k +
         ##                                ('Gx','Gx'),
         ##                                'GiGxGxGz^'+str(k)+'GxGx')]
         #
         #
-        #cosStrList += [_objs.GateString(('Gx','Gx')+
+        #cosStrList += [_objs.Circuit(('Gx','Gx')+
         #                                ('Gz',)*k +
         #                                ('Gx','Gx'),
         #                                'GxGxGz^'+str(k)+'GxGx')]
         #
         #
-        #sinStrList += [_objs.GateString(('Gx','Gx')+
+        #sinStrList += [_objs.Circuit(('Gx','Gx')+
         #                                ('Gz',)*k +
         #                                ('Gz','Gx','Gx'),
         #                                'GxGxGz^'+str(k)+'GzGxGx')]
@@ -145,8 +145,8 @@ def make_rpe_alpha_str_lists_gx_gz(kList):
 
 def make_rpe_epsilon_str_lists_gx_gz(kList):
     """
-    Make epsilon cosine and sine gatestring lists for (approx) X pi/4 and
-    Z pi/2 gates. These gate strings are used to estimate epsilon (X rotation
+    Make epsilon cosine and sine circuit lists for (approx) X pi/4 and
+    Z pi/2 gates. These operation sequences are used to estimate epsilon (X rotation
     angle).
 
     Parameters
@@ -157,37 +157,37 @@ def make_rpe_epsilon_str_lists_gx_gz(kList):
 
     Returns
     -------
-    epsilonCosStrList : list of GateStrings
+    epsilonCosStrList : list of Circuits
         The list of "cosine strings" to be used for epsilon estimation.
-    epsilonSinStrList : list of GateStrings
+    epsilonSinStrList : list of Circuits
         The list of "sine strings" to be used for epsilon estimation.
     """
     epsilonCosStrList = []
     epsilonSinStrList = []
 
     for k in kList:
-        epsilonCosStrList += [_objs.GateString(('Gx',)*k+
+        epsilonCosStrList += [_objs.Circuit(('Gx',)*k+
                                                ('Gx',)*4,
                                                'Gx^'+str(k)+'GxGxGxGx')]
 
-        epsilonSinStrList += [_objs.GateString(('Gx','Gx','Gz','Gz')+
+        epsilonSinStrList += [_objs.Circuit(('Gx','Gx','Gz','Gz')+
                                                ('Gx',)*k+
                                                ('Gx',)*4,
                                                'GxGxGzGzGx^'+str(k)+'GxGxGxGx')]
 
         #From RPEToolsNewNew.py
-        #epsilonCosStrList += [_objs.GateString(('Gx',)*k,
+        #epsilonCosStrList += [_objs.Circuit(('Gx',)*k,
         #                                       'Gx^'+str(k))]
         #
-        #epsilonSinStrList += [_objs.GateString(('Gx','Gx')+('Gx',)*k,
+        #epsilonSinStrList += [_objs.Circuit(('Gx','Gx')+('Gx',)*k,
         #                                       'GxGxGx^'+str(k))]
 
     return epsilonCosStrList, epsilonSinStrList
 
 def make_rpe_theta_str_lists_gx_gz(kList):
     """
-    Make theta cosine and sine gatestring lists for (approx) X pi/4 and Z pi/2
-    gates. These gate strings are used to estimate theta (X-Z axes angle).
+    Make theta cosine and sine circuit lists for (approx) X pi/4 and Z pi/2
+    gates. These operation sequences are used to estimate theta (X-Z axes angle).
 
     Parameters
     ----------
@@ -197,31 +197,31 @@ def make_rpe_theta_str_lists_gx_gz(kList):
 
     Returns
     -------
-    thetaCosStrList : list of GateStrings
+    thetaCosStrList : list of Circuits
         The list of "cosine strings" to be used for theta estimation.
-    thetaSinStrList : list of GateStrings
+    thetaSinStrList : list of Circuits
         The list of "sine strings" to be used for theta estimation.
     """
     thetaCosStrList = []
     thetaSinStrList = []
 
     for k in kList:
-        thetaCosStrList += [_objs.GateString(
+        thetaCosStrList += [_objs.Circuit(
                 ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k+
                 ('Gx',)*4, '(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k)+'GxGxGxGx')]
 
-        thetaSinStrList += [_objs.GateString(
+        thetaSinStrList += [_objs.Circuit(
                 ('Gx','Gx','Gz','Gz')+
                 ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k+
                 ('Gx',)*4,
                 '(GxGxGzGz)(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k)+'GxGxGxGx')]
 
         #From RPEToolsNewNew.py
-        #thetaCosStrList += [_objs.GateString(
+        #thetaCosStrList += [_objs.Circuit(
         #       ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k,
         #       '(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k))]
         #
-        #thetaSinStrList += [_objs.GateString(
+        #thetaSinStrList += [_objs.Circuit(
         #       ('Gx','Gx')+
         #       ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k,
         #       'GxGx(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k))]
@@ -230,7 +230,7 @@ def make_rpe_theta_str_lists_gx_gz(kList):
 
 def make_rpe_string_list_d(log2kMax):
     """
-    Generates a dictionary that contains gate strings for all RPE cosine and
+    Generates a dictionary that contains operation sequences for all RPE cosine and
     sine experiments for all three angles.
 
     Parameters
@@ -241,23 +241,23 @@ def make_rpe_string_list_d(log2kMax):
     Returns
     -------
     totalStrListD : dict
-        A dictionary containing all gate strings for all sine and cosine
+        A dictionary containing all operation sequences for all sine and cosine
         experiments for alpha, epsilon, and theta.
         The keys of the returned dictionary are:
 
-        - 'alpha','cos' : List of gate strings for cosine experiments used
+        - 'alpha','cos' : List of operation sequences for cosine experiments used
           to determine alpha.
-        - 'alpha','sin' : List of gate strings for sine experiments used to
+        - 'alpha','sin' : List of operation sequences for sine experiments used to
           determine alpha.
-        - 'epsilon','cos' : List of gate strings for cosine experiments used to
+        - 'epsilon','cos' : List of operation sequences for cosine experiments used to
            determine epsilon.
-        - 'epsilon','sin' : List of gate strings for sine experiments used to
+        - 'epsilon','sin' : List of operation sequences for sine experiments used to
           determine epsilon.
-        - 'theta','cos' : List of gate strings for cosine experiments used to
+        - 'theta','cos' : List of operation sequences for cosine experiments used to
           determine theta.
-        - 'theta','sin' : List of gate strings for sine experiments used to
+        - 'theta','sin' : List of operation sequences for sine experiments used to
           determine theta.
-        - 'totalStrList' : All above gate strings combined into one list;
+        - 'totalStrList' : All above operation sequences combined into one list;
           duplicates removed.
     """
     kList = [2**k for k in range(log2kMax+1)]
@@ -277,33 +277,33 @@ def make_rpe_string_list_d(log2kMax):
     stringListD['totalStrList'] = totalStrList
     return stringListD
 
-def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomial',seed=None):
+def make_rpe_data_set(modelOrDataset,stringListD,nSamples,sampleError='binomial',seed=None):
     """
-    Generate a fake RPE DataSet using the probabilities obtained from a gateset.
+    Generate a fake RPE DataSet using the probabilities obtained from a model.
     Is a thin wrapper for pygsti.construction.generate_fake_data, changing
-    default behavior of sampleError, and taking a dictionary of gate strings
+    default behavior of sampleError, and taking a dictionary of operation sequences
     as input.
 
     Parameters
     ----------
-    gatesetOrDataset : GateSet or DataSet object
-        If a GateSet, the gate set whose probabilities generate the data.
+    modelOrDataset : Model or DataSet object
+        If a Model, the model whose probabilities generate the data.
         If a DataSet, the data set whose frequencies generate the data.
 
-    stringListD : Dictionary of list of (tuples or GateStrings)
-        Each tuple or GateString contains gate labels and
+    stringListD : Dictionary of list of (tuples or Circuits)
+        Each tuple or Circuit contains operation labels and
         specifies a gate sequence whose counts are included
         in the returned DataSet.  The dictionary must have the key
         'totalStrList'; easiest if this dictionary is generated by
         make_rpe_string_list_d.
 
     nSamples : int or list of ints or None
-        The simulated number of samples for each gate string.  This only
+        The simulated number of samples for each operation sequence.  This only
         has effect when  sampleError == "binomial" or "multinomial".  If
-        an integer, all gate strings have this number of total samples. If
+        an integer, all operation sequences have this number of total samples. If
         a list, integer elements specify the number of samples for the
-        corresponding gate string.  If None, then gatesetOrDataset must be
-        a DataSet, and total counts are taken from it (on a per-gatestring
+        corresponding operation sequence.  If None, then modelOrDataset must be
+        a DataSet, and total counts are taken from it (on a per-circuit
         basis).
 
     sampleError : string, optional
@@ -316,10 +316,10 @@ def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomia
           integer.
         - "binomial" - the number of counts is taken from a binomial
           distribution. Distribution has parameters p = probability of the
-          gate string and n = number of samples.  This can only be used when
-          there are exactly two SPAM labels in gatesetOrDataset.
+          operation sequence and n = number of samples.  This can only be used when
+          there are exactly two SPAM labels in modelOrDataset.
         - "multinomial" - counts are taken from a multinomial distribution.
-          Distribution has parameters p_k = probability of the gate string
+          Distribution has parameters p_k = probability of the operation sequence
           using the k-th SPAM label and n = number of samples.  This should not
           be used for RPE.
 
@@ -330,9 +330,9 @@ def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomia
     Returns
     -------
     DataSet
-       A static data set filled with counts for the specified gate strings.
+       A static data set filled with counts for the specified operation sequences.
     """
-    return _dsc.generate_fake_data(gatesetOrDataset,
+    return _dsc.generate_fake_data(modelOrDataset,
                                    stringListD['totalStrList'],
                                    nSamples,sampleError=sampleError,seed=seed)
 
@@ -352,28 +352,28 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
     #percentAlphaError = 100*_np.abs((_np.pi/2-alphaTrue)/alphaTrue)
     #percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilonTrue)/epsilonTrue)
 
-    simGateset = _setc.build_gateset( [2], [('Q0',)],['Gi','Gx','Gz'],
+    simModel = _setc.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gz'],
                                       [ "I(Q0)", "X("+str(epsilonTrue)+",Q0)", "Z("+str(alphaTrue)+",Q0)"],
                                       prepLabels=["rho0"], prepExpressions=["0"],
                                       effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
                                       spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
 
-    gatesetAux1 = _setc.build_gateset( [2], [('Q0',)],['Gi','Gy','Gz'],
+    modelAux1 = _setc.build_explicit_model( [2], [('Q0',)],['Gi','Gy','Gz'],
                                        [ "I(Q0)", "Y("+str(Yrot)+",Q0)", "Z(pi/2,Q0)"],
                                        prepLabels=["rho0"], prepExpressions=["0"],
                                        effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
                                        spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
-    simGateset.gates['Gx'] =  _objs.FullyParameterizedGate(
-        _np.dot(_np.dot(_np.linalg.inv(gatesetAux1.gates['Gy']),simGateset.gates['Gx']),
-                gatesetAux1.gates['Gy']))
+    simModel.operations['Gx'] =  _objs.FullDenseOp(
+        _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations['Gy']),simModel.operations['Gx']),
+                modelAux1.operations['Gy']))
 
-    simGateset = simGateset.depolarize(spam_noise=SPAMdepol)
+    simModel = simModel.depolarize(spam_noise=SPAMdepol)
 
-    thetaTrue = _tools.rpe.extract_theta(simGateset)
+    thetaTrue = _tools.rpe.extract_theta(simModel)
 
-    #SPAMerror = _np.dot(simGateset.effects['E0'].T,simGateset.preps['rho0'])[0,0]
+    #SPAMerror = _np.dot(simModel.effects['E0'].T,simModel.preps['rho0'])[0,0]
 
     jMax = runs
 
@@ -387,9 +387,8 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
     PhiFunErrorArray = _np.zeros([jMax,log2kMax+1],dtype='object')
 
     for j in range(jMax):
-    #    simDS = _dsc.generate_fake_data(gateset3,alphaCosStrList+alphaSinStrList+epsilonCosStrList+epsilonSinStrList+thetaCosStrList+epsilonSinStrList,
         simDS = _dsc.generate_fake_data(
-            simGateset, alphaCosStrList+alphaSinStrList+epsilonCosStrList+
+            simModel, alphaCosStrList+alphaSinStrList+epsilonCosStrList+
             epsilonSinStrList+thetaCosStrList+thetaSinStrList,
             N,sampleError='binomial',seed=j)
         alphaErrorList = []
@@ -483,20 +482,20 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
 #    outputDict['Yrot'] = Yrot
 #    outputDict['SPAMdepol'] = SPAMdepol#Input value to depolarize SPAM by
 #    outputDict['SPAMerror'] = SPAMerror#<<E|rho>>
-#    outputDict['gs'] = simGateset
+#    outputDict['mdl'] = simModel
 #    outputDict['N'] = N
 
     return outputDict
 
 
 
-#def make_rpe_data_set(inputGateset, log2kMax, N, seed = None, returnStringListDict = False):
+#def make_rpe_data_set(inputModel, log2kMax, N, seed = None, returnStringListDict = False):
 #    """
 #    Generate a fake RPE dataset.  At present, only works for kList of form [1,2,4,...,2**log2kMax]
 #
 #    Parameters
 #    ----------
-#    inputGateset : The gateset used to generate the data.
+#    inputModel : The model used to generate the data.
 #    log2kMax : Maximum number of times to repeat an RPE "germ"
 #    N : Number of clicks per experiment.
 #    seed : Used to seed numpy's random number generator.  Default is None.
@@ -507,7 +506,7 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
 #    simDS
 #        The simulated dataset containing the RPE experiments.
 #    stringListD
-#        Dictionary of gate string lists for sin and cos experiments; is not returned by default.
+#        Dictionary of operation sequence lists for sin and cos experiments; is not returned by default.
 #    """
 #    kList = [2**k for k in range(log2kMax+1)]
 #    alphaCosStrList, alphaSinStrList = make_alpha_str_lists_gx_gz(kList)
@@ -515,7 +514,7 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
 #    thetaCosStrList, thetaSinStrList = make_theta_str_lists_gx_gz(kList)
 #    totalStrList = alphaCosStrList + alphaSinStrList + epsilonCosStrList + epsilonSinStrList + thetaCosStrList + thetaSinStrList
 #    totalStrList = _tools.remove_duplicates(totalStrList)#This step is probably superfluous.
-#    simDS = _dsc.generate_fake_data(inputGateset,totalStrList,N,sampleError='binomial',seed=seed)
+#    simDS = _dsc.generate_fake_data(inputModel,totalStrList,N,sampleError='binomial',seed=seed)
 #    if returnStringListDict:
 #        stringListD = {}
 #        stringListD['alpha','cos'] = alphaCosStrList

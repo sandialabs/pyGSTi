@@ -153,25 +153,25 @@ def llr_to_signed_nsigma(llrval, dof):
     """
     return (llrval - dof) / _np.sqrt(2*dof)
 
-def is_gatestring_allowed_by_exclusion(gate_exclusions, gatestring):
+def is_circuit_allowed_by_exclusion(op_exclusions, circuit):
     """
-    Returns True if `gatestring` does not contain any gates from `gate_exclusions`.
+    Returns True if `circuit` does not contain any gates from `op_exclusions`.
     Otherwise, returns False.
     """
-    for gate in gate_exclusions:
-        if gate in gatestring:
+    for gate in op_exclusions:
+        if gate in circuit:
             return False
     return True
 
-def is_gatestring_allowed_by_inclusion(gate_inclusions,gatestring):
+def is_circuit_allowed_by_inclusion(op_inclusions,circuit):
     """
-    Returns True if `gatestring` contains *any* of the gates from `gate_inclusions`.
-    Otherwise, returns False. The exception is the empty gatestring, which always 
+    Returns True if `circuit` contains *any* of the gates from `op_inclusions`.
+    Otherwise, returns False. The exception is the empty circuit, which always 
     returns True.
     """
-    if len(gatestring) == 0: return True # always include the empty string
-    for gate in gate_inclusions:
-        if gate in gatestring:
+    if len(circuit) == 0: return True # always include the empty string
+    for gate in op_inclusions:
+        if gate in circuit:
             return True
     return False
 
@@ -250,8 +250,8 @@ class DataComparator():
           the level of statistical significance at which any context dependence is detected.
 
     """
-    def __init__(self, dataset_list_or_multidataset, gatestrings = 'all',
-                 gate_exclusions = None, gate_inclusions = None, DS_names = None):
+    def __init__(self, dataset_list_or_multidataset, circuits = 'all',
+                 op_exclusions = None, op_inclusions = None, DS_names = None):
         """
         Initializes a DataComparator object.
 
@@ -260,25 +260,25 @@ class DataComparator():
         dataset_list_multidataset : List of DataSets or MultiDataSet
             Either a list of DataSets, containing two or more sets of data to compare,
             or a MultiDataSet object, containing two or more sets of data to compare. Note
-            that these DataSets should contain data for the same set of GateStrings (although
-            if there are additional GateStrings these can be ignored using the parameters below).
+            that these DataSets should contain data for the same set of Circuits (although
+            if there are additional Circuits these can be ignored using the parameters below).
             This object is then intended to be used test to see if the results are indicative 
-            that the outcome probabilities for these GateStrings has changed between the "contexts" that 
+            that the outcome probabilities for these Circuits has changed between the "contexts" that 
             the data was obtained in.
 
-        gatestrings : 'all' or list of GateStrings, optional (default is 'all')
-            If 'all' the comparison is implemented for all GateStrings in the DataSets. Otherwise,
-            this should be a list containing all the GateStrings to implement the comparison for (although
-            note that some of these GateStrings may be ignored with non-default options for the next two
+        circuits : 'all' or list of Circuits, optional (default is 'all')
+            If 'all' the comparison is implemented for all Circuits in the DataSets. Otherwise,
+            this should be a list containing all the Circuits to implement the comparison for (although
+            note that some of these Circuits may be ignored with non-default options for the next two
             inputs).
 
-        gate_exclusions : None or list of gates, optional (default is None)
-            If not None, all GateStrings containing *any* of the gates in this list are discarded,
+        op_exclusions : None or list of gates, optional (default is None)
+            If not None, all Circuits containing *any* of the gates in this list are discarded,
             and no comparison will be made for those strings.
 
-        gate_exclusions : None or list of gates, optional (default is None)
-            If not None, a GateString will be dropped from the list to implement the comparisons for
-            if it doesn't include *some* gate from this list (or is the empty gatestring). 
+        op_exclusions : None or list of gates, optional (default is None)
+            If not None, a Circuit will be dropped from the list to implement the comparisons for
+            if it doesn't include *some* gate from this list (or is the empty circuit). 
 
         DS_names : None or list, optional (default is None)
             If `dataset_list_multidataset` is a list of DataSets, this can be used to specify names
@@ -293,8 +293,8 @@ class DataComparator():
             if len(DS_names) != len(dataset_list_or_multidataset):
                 raise ValueError('Length of provided DS_names list must equal length of dataset_list_or_multidataset.')
         
-        if isinstance(gatestrings,str):
-            assert(gatestrings == 'all'), "If gatestrings is a string it must be 'all'!"
+        if isinstance(circuits,str):
+            assert(circuits == 'all'), "If circuits is a string it must be 'all'!"
 
         if isinstance(dataset_list_or_multidataset,list):
             dsList = dataset_list_or_multidataset    
@@ -303,36 +303,36 @@ class DataComparator():
             DS_names = list(range(len(dataset_list_or_multidataset)))
             if not _np.all(olIndexListBool):
                 raise ValueError('Outcomes labels and order must be the same across datasets.')
-            if gatestrings == 'all':
-                gatestringList = dsList[0].keys()
-                gatestringsListBool = [ds.keys()==gatestringList for ds in dsList]
-                if not _np.all(gatestringsListBool):
-                    raise ValueError('If gatestrings="all" is used, then datasets must contain identical gatestrings. (They do not.)')
-                gatestrings = gatestringList
+            if circuits == 'all':
+                circuitList = dsList[0].keys()
+                circuitsListBool = [ds.keys()==circuitList for ds in dsList]
+                if not _np.all(circuitsListBool):
+                    raise ValueError('If circuits="all" is used, then datasets must contain identical circuits. (They do not.)')
+                circuits = circuitList
 
         elif isinstance(dataset_list_or_multidataset,_MultiDataSet):
             dsList = [dataset_list_or_multidataset[key] for key in dataset_list_or_multidataset.keys()]
-            if gatestrings == 'all':
-                gatestrings = dsList[0].keys()
+            if circuits == 'all':
+                circuits = dsList[0].keys()
             if DS_names is None:
                 DS_names = list(dataset_list_or_multidataset.keys())
 
         else:
             raise ValueError("The `dataset_list_or_multidataset` must be a list of DataSets of a MultiDataSet!")
                 
-        if gate_exclusions is not None:
-            gatestrings_exc_temp = []
-            for gatestring in gatestrings:
-                if is_gatestring_allowed_by_exclusion(gate_exclusions,gatestring):
-                    gatestrings_exc_temp.append(gatestring)
-            gatestrings = list(gatestrings_exc_temp)
+        if op_exclusions is not None:
+            circuits_exc_temp = []
+            for circuit in circuits:
+                if is_circuit_allowed_by_exclusion(op_exclusions,circuit):
+                    circuits_exc_temp.append(circuit)
+            circuits = list(circuits_exc_temp)
             
-        if gate_inclusions is not None:
-            gatestrings_inc_temp = []
-            for gatestring in gatestrings:
-                if is_gatestring_allowed_by_inclusion(gate_inclusions,gatestring):
-                    gatestrings_inc_temp.append(gatestring)
-            gatestrings = list(gatestrings_inc_temp)
+        if op_inclusions is not None:
+            circuits_inc_temp = []
+            for circuit in circuits:
+                if is_circuit_allowed_by_inclusion(op_inclusions,circuit):
+                    circuits_inc_temp.append(circuit)
+            circuits = list(circuits_inc_temp)
             
         llrs = {}
         pVals = {}
@@ -343,15 +343,15 @@ class DataComparator():
         if len(dataset_list_or_multidataset) == 2:
             tvds = {}
         
-        for gatestring in gatestrings:
-            datalineList = [ds[gatestring] for ds in dsList]
+        for circuit in circuits:
+            datalineList = [ds[circuit] for ds in dsList]
             nListList = _np.array([list(dataline.allcounts.values()) for dataline in datalineList])
             total_counts.append(_np.sum(nListList))
-            llrs[gatestring] = loglikelihoodRatio(nListList)
-            jsds[gatestring] = JensenShannonDivergence(nListList)
-            pVals[gatestring] =  pval(llrs[gatestring],dof)
+            llrs[circuit] = loglikelihoodRatio(nListList)
+            jsds[circuit] = JensenShannonDivergence(nListList)
+            pVals[circuit] =  pval(llrs[circuit],dof)
             if len(dataset_list_or_multidataset) == 2:
-                tvds[gatestring] = tvd(nListList) 
+                tvds[circuit] = tvd(nListList) 
 
         self.dataset_list_or_multidataset = dataset_list_or_multidataset
         self.pVals = pVals
@@ -361,8 +361,8 @@ class DataComparator():
         self.jsds = jsds
         if len(dataset_list_or_multidataset) == 2:
             self.tvds = tvds
-        self.gate_exclusions = gate_exclusions
-        self.gate_inclusions = gate_inclusions
+        self.op_exclusions = op_exclusions
+        self.op_inclusions = op_inclusions
         self.pVals0 = str(len(self.pVals)-_np.count_nonzero(list(self.pVals.values())))
         self.dof = dof
         self.num_strs = len(self.pVals)
@@ -494,11 +494,11 @@ class DataComparator():
         if verbosity >= 2:
             print("Implementing {0:.2f}% significance statistical hypothesis testing...".format(self.significance*100),end='')
 
-        gatestrings = tuple(self.pVals.keys())
-        hypotheses = ('aggregate', gatestrings)
+        circuits = tuple(self.pVals.keys())
+        hypotheses = ('aggregate', circuits)
         weighting = {}
         weighting['aggregate'] = aggregate_test_weighting
-        weighting[gatestrings] = 1 - aggregate_test_weighting
+        weighting[circuits] = 1 - aggregate_test_weighting
         
         if pass_alpha: passing_graph = 'Holms'
         else: passing_graph = 'none'
@@ -520,7 +520,7 @@ class DataComparator():
             self.aggregate_nsigma_threshold = llr_to_signed_nsigma(self.aggregate_llr_threshold, self.num_strs*self.dof)
             self.aggregate_pVal_threshold = aggregate_test_weighting*significance
 
-        self.pVal_pseudothreshold = hypotest.pvalue_pseudothreshold[gatestrings]
+        self.pVal_pseudothreshold = hypotest.pvalue_pseudothreshold[circuits]
         self.llr_pseudothreshold = compute_llr_threshold(self.pVal_pseudothreshold,self.dof)
 
         if self.fixed_totalcount_data:
@@ -533,9 +533,9 @@ class DataComparator():
 
         if len(self.dataset_list_or_multidataset) == 2:
             sstvds = {}
-            for gs in list(self.llrs.keys()):
-                if self.results.hypothesis_rejected[gs]:               
-                    sstvds[gs] = self.tvds[gs]
+            for opstr in list(self.llrs.keys()):
+                if self.results.hypothesis_rejected[opstr]:               
+                    sstvds[opstr] = self.tvds[opstr]
             self.sstvds = sstvds
 
         if verbosity >= 2:
@@ -560,68 +560,68 @@ class DataComparator():
         
         return
 
-    def get_TVD(self, gatestring):
+    def get_TVD(self, circuit):
         """
-        Returns the observed total variation distacnce (TVD) for the specified gatestring.
+        Returns the observed total variation distacnce (TVD) for the specified circuit.
         This is only possible if the comparison is between two sets of data. See Eq. (19) 
         in "Probing context-dependent errors in quantum processors", by Rudinger et al. for the 
         definition of this observed TVD.
 
-        This is a quantification for the "amount" of context dependence for this gatestring (see also,
+        This is a quantification for the "amount" of context dependence for this circuit (see also,
         get_JSD(), get_SSTVD() and get_SSJSD()).
 
         Parameters
         ----------
-        gatestring : GateString
-            The gatestring to return the TVD of.
+        circuit : Circuit
+            The circuit to return the TVD of.
 
         Returns
         -------
         float
-            The TVD for the specified gatestring.
+            The TVD for the specified circuit.
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
         except: raise ValueError("The TVD is only defined for comparisons between two datasets!")  
 
-        return self.tvds[gatestring]
+        return self.tvds[circuit]
 
-    def get_SSTVD(self, gatestring):
+    def get_SSTVD(self, circuit):
         """
         Returns the "statistically significant total variation distacnce" (SSTVD) for the specified 
-        gatestring. This is only possible if the comparison is between two sets of data. The SSTVD
-        is None if the gatestring has not been found to have statistically significant variation.
+        circuit. This is only possible if the comparison is between two sets of data. The SSTVD
+        is None if the circuit has not been found to have statistically significant variation.
         Otherwise it is equal to the observed TVD. See Eq. (20) and surrounding discussion in 
         "Probing context-dependent errors in quantum processors", by Rudinger et al., for more information.
         
-        This is a quantification for the "amount" of context dependence for this gatestring (see also,
+        This is a quantification for the "amount" of context dependence for this circuit (see also,
         get_JSD(), get_TVD() and get_SSJSD()).
 
         Parameters
         ----------
-        gatestring : GateString
-            The gatestring to return the SSTVD of.
+        circuit : Circuit
+            The circuit to return the SSTVD of.
 
         Returns
         -------
         float
-            The SSTVD for the specified gatestring.
+            The SSTVD for the specified circuit.
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
         except: raise ValueError("Can only compute TVD between two datasets.")  
         assert(self.sstvds is not None), "The SSTVDS have not been calculated! Run the .implement() method first!"
 
-        return self.sstvds.get(gatestring, None)
+        return self.sstvds.get(circuit, None)
 
     def get_maximum_SSTVD(self):
         """
-        Returns the maximum, over gatestrings, of the "statistically significant total variation distance" 
+        Returns the maximum, over circuits, of the "statistically significant total variation distance" 
         (SSTVD). This is only possible if the comparison is between two sets of data. See the .get_SSTVD()
         method for information on SSTVD.
 
         Returns
         -------
         float
-            The gatestring associated with the maximum SSTVD, and the SSTVD of that gatestring.
+            The circuit associated with the maximum SSTVD, and the SSTVD of that circuit.
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
         except: raise ValueError("Can only compute TVD between two datasets.")  
@@ -636,21 +636,21 @@ class DataComparator():
             
             return max_sstvd_gs, max_sstvd
 
-    def get_pvalue(self, gatestring):
+    def get_pvalue(self, circuit):
         """
-        Returns the pvalue for the log-likelihood ratio test for the specified gatestring.
+        Returns the pvalue for the log-likelihood ratio test for the specified circuit.
   
         Parameters
         ----------
-        gatestring : GateString
-            The gatestring to return the p-value of.
+        circuit : Circuit
+            The circuit to return the p-value of.
 
        Returns
         -------
         float
-            The p-value of the specified gatestring.        
+            The p-value of the specified circuit.        
         """
-        return self.pVals[gatestring]
+        return self.pVals[circuit]
 
     def get_pvalue_pseudothreshold(self):
         """
@@ -668,23 +668,23 @@ class DataComparator():
         assert(self.pVal_pseudothreshold is not None), "This has not yet been calculated! Run the .implement() method first!"
         return self.pVal_pseudothreshold
 
-    def get_LLR(self, gatestring):
+    def get_LLR(self, circuit):
         """
-        Returns the log-likelihood ratio (LLR) for the input gatestring.
+        Returns the log-likelihood ratio (LLR) for the input circuit.
         This is the quantity defined in Eq (4) of "Probing context-dependent 
         errors in quantum processors", by Rudinger et al.
         
         Parameters
         ----------
-        gatestring : GateString
-            The gatestring to return the LLR of.
+        circuit : Circuit
+            The circuit to return the LLR of.
 
         Returns
         -------
         float
-            The LLR of the specified gatestring.
+            The LLR of the specified circuit.
         """
-        return self.llrs[gatestring]
+        return self.llrs[circuit]
 
     def get_LLR_pseudothreshold(self):
         """
@@ -701,28 +701,28 @@ class DataComparator():
         assert(self.llr_pseudothreshold is not None), "This has not yet been calculated! Run the .implement() method first!"
         return self.llr_pseudothreshold
 
-    def get_JSD(self, gatestring):
+    def get_JSD(self, circuit):
         """
         Returns the observed Jensen-Shannon divergence (JSD) between "contexts" for
-        the specified gatestring. The JSD is a rescaling of the LLR, given by dividing
+        the specified circuit. The JSD is a rescaling of the LLR, given by dividing
         the LLR by 2*N where N is the total number of counts (summed over contexts) for 
-        this gatestring. This quantity is given by Eq (15) in  "Probing context-dependent 
+        this circuit. This quantity is given by Eq (15) in  "Probing context-dependent 
         errors in quantum processors", Rudinger et al.
 
-        This is a quantification for the "amount" of context dependence for this gatestring (see also,
+        This is a quantification for the "amount" of context dependence for this circuit (see also,
         get_TVD(), get_SSTVD() and get_SSJSD()).
 
         Parameters
         ----------
-        gatestring : GateString
-            The gatestring to return the JSD of
+        circuit : Circuit
+            The circuit to return the JSD of
 
         Returns
         -------
         float
-            The JSD of the specified gatestring.
+            The JSD of the specified circuit.
         """
-        return self.jsds[gatestring]
+        return self.jsds[circuit]
 
     def get_JSD_pseudothreshold(self):
         """
@@ -737,36 +737,36 @@ class DataComparator():
         Returns
         -------
         float
-            The pseudo-threshold for the JSD of a gatestring, if well-defined.
+            The pseudo-threshold for the JSD of a circuit, if well-defined.
         """
         assert(self.fixed_totalcount_data), "The JSD only has a pseudo-threshold when there is the same number of total counts per sequence!"
         assert(self.jsd_pseudothreshold is not None), "This has not yet been calculated! Run the .implement() method first!"
         return self.jsd_pseudothreshold
 
-    def get_SSJSD(self, gatestring):
+    def get_SSJSD(self, circuit):
         """
         Returns the "statistically significanet Jensen-Shannon divergence" (SSJSD) between "contexts" for
-        the specified gatestring. This is the JSD of the gatestring (see .get_JSD()), if the gatestring 
+        the specified circuit. This is the JSD of the circuit (see .get_JSD()), if the circuit 
         has been found to be context dependent, and otherwise it is None. This quantity is the JSD version 
         of the SSTVD given in Eq. (20) of "Probing context-dependent errors in quantum processors", by Rudinger 
         et al.
 
-        This is a quantification for the "amount" of context dependence for this gatestring (see also,
+        This is a quantification for the "amount" of context dependence for this circuit (see also,
         get_TVD(), get_SSTVD() and get_SSJSD()).
 
         Parameters
         ----------
-        gatestring : GateString
-            The gatestring to return the JSD of
+        circuit : Circuit
+            The circuit to return the JSD of
 
         Returns
         -------
         float
-            The JSD of the specified gatestring.
+            The JSD of the specified circuit.
         """
         assert(self.llr_pseudothreshold is not None), "The hypothsis testing has not been implemented yet! Run the .implement() method first!"
-        if self.results.hypothesis_rejected[gatestring]:               
-            return self.jsds[gatestring]
+        if self.results.hypothesis_rejected[circuit]:               
+            return self.jsds[circuit]
         else:
             return None
 
@@ -863,19 +863,19 @@ class DataComparator():
         assert(self.aggregate_nsigma_threshold is not None), "This has not yet been calculated! Run the .implement() method first!"
         return self.aggregate_nsigma_threshold
 
-    def get_worst_gatestrings(self, number):
+    def get_worst_circuits(self, number):
         """
-        Returns the "worst" gatestrings that have the smallest p-values.
+        Returns the "worst" circuits that have the smallest p-values.
 
         Parmeters
         ---------
         number : int
-            The number of gatestrings to return.
+            The number of circuits to return.
 
         Returns
         -------
         List
-            A list of tuples containing the worst `number` gatestrings along
+            A list of tuples containing the worst `number` circuits along
             with the correpsonding p-values.
         """
         worst_strings = sorted(self.pVals.items(), key=lambda kv: kv[1])[:number]
@@ -898,13 +898,13 @@ class DataComparator():
     #     elif isinstance(self.dataset_list_or_multidataset,_MultiDataSet):
     #         dsList = [self.dataset_list_or_multidataset[key].copy() for key in self.dataset_list_or_multidataset.keys()]
     #     for violator_loc in single_thresh_violator_locs:
-    #         gatestring = self.llrVals_and_strings[violator_loc][0]
+    #         circuit = self.llrVals_and_strings[violator_loc][0]
     #         llr = self.llrVals_and_strings[violator_loc][1]
-    #         datalineList = [ds[gatestring] for ds in dsList]
+    #         datalineList = [ds[circuit] for ds in dsList]
     #         nListList = _np.array([list(dataline.allcounts.values()) for dataline in datalineList],'d')
-    #         self.alpha_dict[gatestring] = target_score / llr
-    #         print('Rescaling counts for string '+str(gatestring)+' by '+str(self.alpha_dict[gatestring]))
-    #         print('|target score - new score| = '+str(loglikelihoodRatioObj(self.alpha_dict[gatestring],nListList,target_score)))
+    #         self.alpha_dict[circuit] = target_score / llr
+    #         print('Rescaling counts for string '+str(circuit)+' by '+str(self.alpha_dict[circuit]))
+    #         print('|target score - new score| = '+str(loglikelihoodRatioObj(self.alpha_dict[circuit],nListList,target_score)))
     #         for ds in dsList:
-    #             ds[gatestring].scale(self.alpha_dict[gatestring])
+    #             ds[circuit].scale(self.alpha_dict[circuit])
     #     self.rectified_datasets = dsList

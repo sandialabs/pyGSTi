@@ -13,8 +13,8 @@ class JamiolkowskiTestCase(unittest.TestCase):
         self.old = os.getcwd()
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
 
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
+        #Set Model objects to "strict" mode for testing
+        pygsti.objects.ExplicitOpModel._strict = True
 
 
         # density matrix == 3x3 block diagonal matrix: a 2x2 block followed by a 1x1 block
@@ -28,7 +28,7 @@ class JamiolkowskiTestCase(unittest.TestCase):
         self.stateSpaceLabels = [('Qhappy',),('Lsad',)]
 
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
-        self.testGate = pygsti.construction.build_gate(self.stateSpaceDims, self.stateSpaceLabels, "LX(pi,0,2)", "std")
+        self.testGate = pygsti.construction.build_operation(self.stateSpaceDims, self.stateSpaceLabels, "LX(pi,0,2)", "std")
         self.testGateGM_mx = bt.change_basis(self.testGate, self.stdSmall, self.gmSmall)
         self.expTestGate_mx = bt.flexible_change_basis(self.testGate, self.stdSmall, self.std)
         self.expTestGateGM_mx = bt.change_basis(self.expTestGate_mx, self.std, self.gm)
@@ -38,9 +38,9 @@ class JamiolkowskiTestCase(unittest.TestCase):
 
     def checkBasis(self, cmb):
         #Op with Jamio map on gate in std and gm bases
-        Jmx1 = pygsti.jamiolkowski_iso(self.testGate, gateMxBasis=self.stdSmall,
+        Jmx1 = pygsti.jamiolkowski_iso(self.testGate, opMxBasis=self.stdSmall,
                                        choiMxBasis=cmb)
-        Jmx2 = pygsti.jamiolkowski_iso(self.testGateGM_mx, gateMxBasis=self.gmSmall,
+        Jmx2 = pygsti.jamiolkowski_iso(self.testGateGM_mx, opMxBasis=self.gmSmall,
                                        choiMxBasis=cmb)
 
         #Make sure these yield the same trace == 1 matrix
@@ -48,21 +48,21 @@ class JamiolkowskiTestCase(unittest.TestCase):
         self.assertAlmostEqual(np.trace(Jmx1), 1.0)
 
         #Op on expanded gate in std and gm bases
-        JmxExp1 = pygsti.jamiolkowski_iso(self.expTestGate_mx,gateMxBasis=self.std,choiMxBasis=cmb)
-        JmxExp2 = pygsti.jamiolkowski_iso(self.expTestGateGM_mx,gateMxBasis=self.gm,choiMxBasis=cmb)
+        JmxExp1 = pygsti.jamiolkowski_iso(self.expTestGate_mx,opMxBasis=self.std,choiMxBasis=cmb)
+        JmxExp2 = pygsti.jamiolkowski_iso(self.expTestGateGM_mx,opMxBasis=self.gm,choiMxBasis=cmb)
 
         #Make sure these are the same as operating on the contracted basis
         self.assertArraysAlmostEqual(Jmx1,JmxExp1)
         self.assertArraysAlmostEqual(Jmx1,JmxExp2)
 
-        #Reverse transform should yield back the gate matrix
+        #Reverse transform should yield back the operation matrix
         revTestGate_mx = pygsti.jamiolkowski_iso_inv(Jmx1,choiMxBasis=cmb,
-                                                                   gateMxBasis=self.gmSmall)
+                                                                   opMxBasis=self.gmSmall)
         self.assertArraysAlmostEqual(revTestGate_mx, self.testGateGM_mx)
 
         #Reverse transform without specifying stateSpaceDims, then contraction, should yield same result
         revExpTestGate_mx = pygsti.jamiolkowski_iso_inv(Jmx1,choiMxBasis=cmb,
-                                                                      gateMxBasis=self.std)
+                                                                      opMxBasis=self.std)
         self.assertArraysAlmostEqual( bt.resize_std_mx(revExpTestGate_mx, 'contract', self.std, self.stdSmall),
                                       self.testGate)
 
@@ -160,12 +160,12 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
             pygsti.jamiolkowski_iso_inv(choiStd, std, "foobar") #invalid gate basis
         '''
 
-        sumOfNeg  = pygsti.sum_of_negative_choi_evals(std1Q.gs_target)
-        sumOfNegWt= pygsti.sum_of_negative_choi_evals(std1Q.gs_target, {'Gx': 1.0, 'Gy': 0.5} )
-        sumsOfNeg = pygsti.sums_of_negative_choi_evals(std1Q.gs_target)
-        magsOfNeg = pygsti.mags_of_negative_choi_evals(std1Q.gs_target)
+        sumOfNeg  = pygsti.sum_of_negative_choi_evals(std1Q.target_model)
+        sumOfNegWt= pygsti.sum_of_negative_choi_evals(std1Q.target_model, {'Gx': 1.0, 'Gy': 0.5} )
+        sumsOfNeg = pygsti.sums_of_negative_choi_evals(std1Q.target_model)
+        magsOfNeg = pygsti.mags_of_negative_choi_evals(std1Q.target_model)
         self.assertAlmostEqual(sumOfNeg, 0.0)
-        self.assertArraysAlmostEqual(sumsOfNeg, np.zeros(3,'d')) # 3 gates in std.gs_target
+        self.assertArraysAlmostEqual(sumsOfNeg, np.zeros(3,'d')) # 3 gates in std.target_model
         self.assertArraysAlmostEqual(magsOfNeg, np.zeros(12,'d')) # 3 gates * 4 evals each = 12
 
 if __name__ == "__main__":

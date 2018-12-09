@@ -13,7 +13,7 @@ import numpy as _np
 from .. import tools as _tools
 from .. import objects as _objs
 
-def write_empty_dataset(filename, gatestring_list,
+def write_empty_dataset(filename, circuit_list,
                         headerString='## Columns = 1 frequency, count total', numZeroCols=None,
                         appendWeightsColumn=False):
     """
@@ -24,15 +24,15 @@ def write_empty_dataset(filename, gatestring_list,
     filename : string
         The filename to write.
 
-    gatestring_list : list of GateStrings
-        List of gate strings to write, each to be followed by numZeroCols zeros.
+    circuit_list : list of Circuits
+        List of operation sequences to write, each to be followed by numZeroCols zeros.
 
     headerString : string, optional
         Header string for the file; should start with a pound (#) or double-pound (##)
         so it is treated as a commend or directive, respectively.
 
     numZeroCols : int, optional
-        The number of zero columns to place after each gate string.  If None,
+        The number of zero columns to place after each operation sequence.  If None,
         then headerString must begin with "## Columns = " and number of zero
         columns will be inferred.
 
@@ -41,8 +41,8 @@ def write_empty_dataset(filename, gatestring_list,
 
     """
 
-    if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
-        raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+    if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
+        raise ValueError("Argument circuit_list must be a list of Circuit objects!")
 
     if numZeroCols is None: #TODO: cleaner way to extract number of columns from headerString?
         if headerString.startswith('## Columns = '):
@@ -53,8 +53,8 @@ def write_empty_dataset(filename, gatestring_list,
     with open(filename, 'w') as output:
         zeroCols = "  ".join( ['0']*numZeroCols )
         output.write(headerString + '\n')
-        for gateString in gatestring_list: #gateString should be a GateString object here
-            output.write(gateString.str + "  " + zeroCols + (("  %f" % gateString.weight) if appendWeightsColumn else "") + '\n')
+        for circuit in circuit_list: #circuit should be a Circuit object here
+            output.write(circuit.str + "  " + zeroCols + (("  %f" % circuit.weight) if appendWeightsColumn else "") + '\n')
 
             
 def _outcome_to_str(x):
@@ -62,7 +62,7 @@ def _outcome_to_str(x):
     else: return ":".join([str(i) for i in x])
 
     
-def write_dataset(filename, dataset, gatestring_list=None,
+def write_dataset(filename, dataset, circuit_list=None,
                   outcomeLabelOrder=None, fixedColumnMode=True):
     """
     Write a text-formatted dataset file.
@@ -75,9 +75,9 @@ def write_dataset(filename, dataset, gatestring_list=None,
     dataset : DataSet
         The data set from which counts are obtained.
 
-    gatestring_list : list of GateStrings, optional
-        The list of gate strings to include in the written dataset.
-        If None, all gate strings are output.
+    circuit_list : list of Circuits, optional
+        The list of operation sequences to include in the written dataset.
+        If None, all operation sequences are output.
 
     outcomeLabelOrder : list, optional
         A list of the outcome labels in dataset which specifies
@@ -90,11 +90,11 @@ def write_dataset(filename, dataset, gatestring_list=None,
         each row's counts are written in an expanded form that includes the
         outcome labels (each "count" has the format <outcomeLabel>:<count>).
     """
-    if gatestring_list is not None:
-        if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
-            raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+    if circuit_list is not None:
+        if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
+            raise ValueError("Argument circuit_list must be a list of Circuit objects!")
     else:
-        gatestring_list = list(dataset.keys())
+        circuit_list = list(dataset.keys())
 
     if outcomeLabelOrder is not None: #convert to tuples if needed
         outcomeLabelOrder = [ (ol,) if _tools.isstr(ol) else ol
@@ -120,18 +120,18 @@ def write_dataset(filename, dataset, gatestring_list=None,
                                                        for ol in outcomeLabels ]) + '\n'
     with open(filename, 'w') as output:
         output.write(headerString)
-        for gateString in gatestring_list: #gateString should be a GateString object here
-            dataRow = dataset[gateString.tup]
+        for circuit in circuit_list: #circuit should be a Circuit object here
+            dataRow = dataset[circuit.tup]
             counts = dataRow.counts
 
             if fixedColumnMode:
                 #output '--' for outcome labels that aren't present in this row
-                output.write(gateString.str + "  " +
+                output.write(circuit.str + "  " +
                              "  ".join( [(("%g" % counts[ol]) if (ol in counts) else '--')
                                          for ol in outcomeLabels] ))
             else: # use expanded label:count format
                 output.write(
-                    gateString.str + "  " +
+                    circuit.str + "  " +
                     "  ".join( [("%s:%g" % (_outcome_to_str(ol),counts[ol]))
                                 for ol in outcomeLabels if ol in counts] ))
 
@@ -141,7 +141,7 @@ def write_dataset(filename, dataset, gatestring_list=None,
             output.write('\n') # finish the line
                 
 
-def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabelOrder=None):
+def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOrder=None):
     """
     Write a text-formatted multi-dataset file.
 
@@ -153,20 +153,20 @@ def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabe
     multidataset : MultiDataSet
         The multi data set from which counts are obtained.
 
-    gatestring_list : list of GateStrings
-        The list of gate strings to include in the written dataset.
-        If None, all gate strings are output.
+    circuit_list : list of Circuits
+        The list of operation sequences to include in the written dataset.
+        If None, all operation sequences are output.
 
     outcomeLabelOrder : list, optional
         A list of the SPAM labels in multidataset which specifies
         the column order in the output file.
     """
 
-    if gatestring_list is not None:
-        if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
-            raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+    if circuit_list is not None:
+        if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
+            raise ValueError("Argument circuit_list must be a list of Circuit objects!")
     else:
-        gatestring_list = list(multidataset.gsIndex.keys()) #TODO: make access function for gatestrings?
+        circuit_list = list(multidataset.cirIndex.keys()) #TODO: make access function for circuits?
 
     if outcomeLabelOrder is not None: #convert to tuples if needed
         outcomeLabelOrder = [ (ol,) if _tools.isstr(ol) else ol
@@ -195,48 +195,48 @@ def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabe
 
     with open(filename, 'w') as output:
         output.write(headerString + '\n')
-        for gateString in gatestring_list: #gateString should be a GateString object here
-            gs = gateString.tup #gatestring tuple
-            cnts = [multidataset[dsl][gs].counts.get(ol,'--') for dsl in dsLabels for ol in outcomeLabels]
-            output.write(gateString.str + "  " + "  ".join( [ (("%g" % cnt) if (cnt != '--') else cnt)
+        for circuit in circuit_list: #circuit should be a Circuit object here
+            opstr = circuit.tup #circuit tuple
+            cnts = [multidataset[dsl][opstr].counts.get(ol,'--') for dsl in dsLabels for ol in outcomeLabels]
+            output.write(circuit.str + "  " + "  ".join( [ (("%g" % cnt) if (cnt != '--') else cnt)
                                                               for cnt in cnts] ) + '\n')
 
-def write_gatestring_list(filename, gatestring_list, header=None):
+def write_circuit_list(filename, circuit_list, header=None):
     """
-    Write a text-formatted gate string list file.
+    Write a text-formatted operation sequence list file.
 
     Parameters
     ----------
     filename : string
         The filename to write.
 
-    gatestring_list : list of GateStrings
-        The list of gate strings to include in the written dataset.
+    circuit_list : list of Circuits
+        The list of operation sequences to include in the written dataset.
 
     header : string, optional
         Header line (first line of file).  Prepended with a pound sign (#), so no
         need to include one.
 
     """
-    if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
-        raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+    if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
+        raise ValueError("Argument circuit_list must be a list of Circuit objects!")
 
     with open(filename, 'w') as output:
         if header is not None:
             output.write("# %s" % header + '\n')
 
-        for gateString in gatestring_list:
-            output.write(gateString.str + '\n')
+        for circuit in circuit_list:
+            output.write(circuit.str + '\n')
 
 
-def write_gateset(gs,filename,title=None):
+def write_model(mdl,filename,title=None):
     """
-    Write a text-formatted gate set file.
+    Write a text-formatted model file.
 
     Parameters
     ----------
-    gs : GateSet
-        The gate set to write to file.
+    mdl : Model
+        The model to write to file.
 
     filename : string
         The filename to write.
@@ -268,19 +268,19 @@ def write_gateset(gs,filename,title=None):
             output.write("# %s" % title + '\n')
         output.write('\n')
 
-        for prepLabel,rhoVec in gs.preps.items():
+        for prepLabel,rhoVec in mdl.preps.items():
             props = None
-            if isinstance(rhoVec, _objs.FullyParameterizedSPAMVec): typ = "PREP"
-            elif isinstance(rhoVec, _objs.TPParameterizedSPAMVec): typ = "TP-PREP"
+            if isinstance(rhoVec, _objs.FullSPAMVec): typ = "PREP"
+            elif isinstance(rhoVec, _objs.TPSPAMVec): typ = "TP-PREP"
             elif isinstance(rhoVec, _objs.StaticSPAMVec): typ = "STATIC-PREP"
-            elif isinstance(rhoVec, _objs.LindbladParameterizedSPAMVec):
+            elif isinstance(rhoVec, _objs.LindbladSPAMVec):
                 typ = "CPTP-PREP"
                 props = [ ("PureVec", rhoVec.state_vec.todense()),
                           ("ErrgenMx", rhoVec.error_map.todense()) ]
             else:
                 _warnings.warn(
                     ("Non-standard prep of type {typ} cannot be described by"
-                     "text format gate set files.  It will be read in as a"
+                     "text format model files.  It will be read in as a"
                      "fully parameterized spam vector").format(typ=str(type(rhoVec))))
                 typ = "PREP"
 
@@ -289,7 +289,7 @@ def write_gateset(gs,filename,title=None):
             for lbl,val in props:
                 writeprop(output, lbl, val)
 
-        for povmLabel,povm in gs.povms.items():
+        for povmLabel,povm in mdl.povms.items():
             props = None; povm_to_write = povm
             if isinstance(povm, _objs.UnconstrainedPOVM): povmType = "POVM"
             elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
@@ -300,7 +300,7 @@ def write_gateset(gs,filename,title=None):
             else:
                 _warnings.warn(
                     ("Non-standard POVM of type {typ} cannot be described by"
-                     "text format gate set files.  It will be read in as a"
+                     "text format model files.  It will be read in as a"
                      "standard POVM").format(typ=str(type(povm))))
                 povmType = "POVM"
                 
@@ -310,14 +310,14 @@ def write_gateset(gs,filename,title=None):
                     writeprop(output, lbl, val)
 
             for ELabel,EVec in povm_to_write.items():
-                if isinstance(EVec, _objs.FullyParameterizedSPAMVec): typ = "EFFECT"
+                if isinstance(EVec, _objs.FullSPAMVec): typ = "EFFECT"
                 elif isinstance(EVec, _objs.ComplementSPAMVec): typ = "EFFECT" # ok
-                elif isinstance(EVec, _objs.TPParameterizedSPAMVec): typ = "TP-EFFECT"
+                elif isinstance(EVec, _objs.TPSPAMVec): typ = "TP-EFFECT"
                 elif isinstance(EVec, _objs.StaticSPAMVec): typ = "STATIC-EFFECT"
                 else:
                     _warnings.warn(
                         ("Non-standard effect of type {typ} cannot be described by"
-                         "text format gate set files.  It will be read in as a"
+                         "text format model files.  It will be read in as a"
                          "fully parameterized spam vector").format(typ=str(type(EVec))))
                     typ = "EFFECT"
                 output.write("%s: %s\n" % (typ,ELabel))
@@ -325,23 +325,23 @@ def write_gateset(gs,filename,title=None):
                 
             output.write("END POVM\n\n")
 
-        for label,gate in gs.gates.items():
+        for label,gate in mdl.operations.items():
             props = None
-            if isinstance(gate, _objs.FullyParameterizedGate): typ = "GATE"
-            elif isinstance(gate, _objs.TPParameterizedGate): typ = "TP-GATE"
-            elif isinstance(gate, _objs.StaticGate): typ = "STATIC-GATE"
-            elif isinstance(gate, _objs.LindbladParameterizedGate):
+            if isinstance(gate, _objs.FullDenseOp): typ = "GATE"
+            elif isinstance(gate, _objs.TPDenseOp): typ = "TP-GATE"
+            elif isinstance(gate, _objs.StaticDenseOp): typ = "STATIC-GATE"
+            elif isinstance(gate, _objs.LindbladDenseOp):
                 typ = "CPTP-GATE"
                 props = [ ("LiouvilleMx", gate.todense()) ]
                 if gate.unitary_postfactor is not None:
                     upost = gate.unitary_postfactor.todense() \
-                            if isinstance(gate.unitary_postfactor,_objs.Gate) \
+                            if isinstance(gate.unitary_postfactor,_objs.LinearOperator) \
                             else gate.unitary_postfactor
                     props.append( ("RefLiouvilleMx", upost) )
             else:
                 _warnings.warn(
                     ("Non-standard gate of type {typ} cannot be described by"
-                     "text format gate set files.  It will be read in as a"
+                     "text format model files.  It will be read in as a"
                      "fully parameterized gate").format(typ=str(type(gate))))
                 typ = "GATE"
 
@@ -351,43 +351,43 @@ def write_gateset(gs,filename,title=None):
                 writeprop(output, lbl, val)
 
 
-        for instLabel,inst in gs.instruments.items():
+        for instLabel,inst in mdl.instruments.items():
             if isinstance(inst, _objs.Instrument): typ = "Instrument" 
             elif isinstance(inst, _objs.TPInstrument): typ = "TP-Instrument"
             else:
                 _warnings.warn(
                     ("Non-standard Instrument of type {typ} cannot be described by"
-                     "text format gate set files.  It will be read in as a"
+                     "text format model files.  It will be read in as a"
                      "standard Instrument").format(typ=str(type(inst))))
                 typ = "Instrument"
             output.write(typ + ": " + str(instLabel) + '\n\n')
 
             for label,gate in inst.items():
-                if isinstance(gate, _objs.FullyParameterizedGate): typ = "IGATE"
-                elif isinstance(gate, _objs.TPInstrumentGate): typ = "IGATE" # ok b/c instrument itself is marked as TP
-                elif isinstance(gate, _objs.StaticGate): typ = "STATIC-IGATE"
+                if isinstance(gate, _objs.FullDenseOp): typ = "IGATE"
+                elif isinstance(gate, _objs.TPInstrumentOp): typ = "IGATE" # ok b/c instrument itself is marked as TP
+                elif isinstance(gate, _objs.StaticDenseOp): typ = "STATIC-IGATE"
                 else:
                     _warnings.warn(
                         ("Non-standard gate of type {typ} cannot be described by"
-                         "text format gate set files.  It will be read in as a"
+                         "text format model files.  It will be read in as a"
                          "fully parameterized gate").format(typ=str(type(gate))))
                     typ = "IGATE"
                 output.write(typ + ": " + str(label) + '\n')
                 writeprop(output, "LiouvilleMx", gate.todense())
             output.write("END Instrument\n\n")
 
-        dims = gs.basis.dim.blockDims
+        dims = mdl.basis.dim.blockDims
         if dims is None:
-            output.write("BASIS: %s\n" % gs.basis.name)
+            output.write("BASIS: %s\n" % mdl.basis.name)
         else:
             if type(dims) != int:
                 dimStr = ",".join(map(str,dims))
             else: dimStr = str(dims)
-            output.write("BASIS: %s %s\n" % (gs.basis.name, dimStr))
+            output.write("BASIS: %s %s\n" % (mdl.basis.name, dimStr))
 
-        if isinstance(gs.default_gauge_group, _objs.FullGaugeGroup):
+        if isinstance(mdl.default_gauge_group, _objs.FullGaugeGroup):
             output.write("GAUGEGROUP: Full\n")
-        elif isinstance(gs.default_gauge_group, _objs.TPGaugeGroup):
+        elif isinstance(mdl.default_gauge_group, _objs.TPGaugeGroup):
             output.write("GAUGEGROUP: TP\n")
-        elif isinstance(gs.default_gauge_group, _objs.UnitaryGaugeGroup):
+        elif isinstance(mdl.default_gauge_group, _objs.UnitaryGaugeGroup):
             output.write("GAUGEGROUP: Unitary\n")

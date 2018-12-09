@@ -1,4 +1,4 @@
-""" Gate Set Tomography High-Level Drivers Python Package """
+""" LinearOperator Set Tomography High-Level Drivers Python Package """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation

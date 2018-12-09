@@ -7,7 +7,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 
 from pygsti.construction import std1Q_XY
 from pygsti.construction import std2Q_XYCNOT
-from pygsti.objects.gatemapcalc import GateMapCalc
+from pygsti.objects.mapforwardsim import MapForwardSimulator
 
 class EvalTreeTestCase(BaseTestCase):
 
@@ -31,33 +31,33 @@ class EvalTreeTestCase(BaseTestCase):
         with self.assertRaises(NotImplementedError):
             raw_tree.initialize(None)
         with self.assertRaises(NotImplementedError):
-            raw_tree.generate_gatestring_list()
+            raw_tree.generate_circuit_list()
         with self.assertRaises(NotImplementedError):
             raw_tree.split(None)
 
     def helper_tree(self, TreeClass, b1Q):
         if b1Q:
-            gs_target = std1Q_XY.gs_target
+            target_model = std1Q_XY.target_model
             prepStrs = std1Q_XY.fiducials
             measStrs = std1Q_XY.fiducials
             germs = std1Q_XY.germs
             maxLens = [1,4]
             #maxLens = [1,2,4,8,16,32,64,128,256,512,1024]
         else:
-            gs_target = std2Q_XYCNOT.gs_target
+            target_model = std2Q_XYCNOT.target_model
             prepStrs = std2Q_XYCNOT.prepStrs
             measStrs = std2Q_XYCNOT.effectStrs
             germs = std2Q_XYCNOT.germs
             maxLens = [1,2,4]
     
-        gateLabels = list(gs_target.gates.keys())
+        opLabels = list(target_model.operations.keys())
         strs = pygsti.construction.make_lsgst_experiment_list(
-            gateLabels, prepStrs, measStrs, germs, maxLens, includeLGST=False)
+            opLabels, prepStrs, measStrs, germs, maxLens, includeLGST=False)
         pygsti.tools.remove_duplicates_in_place(strs)
         #print("\n".join(map(str,strs)))
 
         compiled_gatestrings, lookup, outcome_lookup, nEls = \
-                    gs_target.compile_gatestrings(strs)
+                    target_model.compile_circuits(strs)
         self.assertTrue(isinstance(compiled_gatestrings, dict))
 
         t = TreeClass()
@@ -98,20 +98,20 @@ class EvalTreeTestCase(BaseTestCase):
             t.get_min_tree_size() #just make sure it runs...
 
             #REMOVED - this error isn't applicable now, since an eval tree computes the
-            #  distinct gate labels in the gatestrings it's given.
-            ##Creation failure b/c of unknown gate labels (for now just matrix eval tree)
+            #  distinct operation labels in the circuits it's given.
+            ##Creation failure b/c of unknown operation labels (for now just matrix eval tree)
             #with self.assertRaises(AssertionError):
             #    tbad = TreeClass()
-            #    compiled_strs,_,_,_ =gs_target.compile_gatestrings([ (), ('Gnotpresent',)])
+            #    compiled_strs,_,_,_ =target_model.compile_circuits([ (), ('Gnotpresent',)])
             #    tbad.initialize(compiled_strs )
 
         #Split using numSubTrees
-        gsl1 = t.generate_gatestring_list()
+        gsl1 = t.generate_circuit_list()
         lookup2 = t.split(lookup, numSubTrees=5)
-        gsl2 = t.generate_gatestring_list()
+        gsl2 = t.generate_circuit_list()
         self.assertEqual(gsl1,gsl2)
 
-        unpermuted_list = t.generate_gatestring_list(permute=False)
+        unpermuted_list = t.generate_circuit_list(permute=False)
         self.assertTrue(t.is_split())
 
         dummy = np.random.rand(len(gsl1))
@@ -123,7 +123,7 @@ class EvalTreeTestCase(BaseTestCase):
         for i,st in enumerate(subtrees):
             #print("Subtree %d: applies = %d, size = %d" % (i,st.get_num_applies(),len(st)))
             fslc = st.final_slice(t)
-            sub_gsl = st.generate_gatestring_list(permute=False) #permute=False not necessary though, since subtree is not split it's elements are not permuted
+            sub_gsl = st.generate_circuit_list(permute=False) #permute=False not necessary though, since subtree is not split it's elements are not permuted
             self.assertEqual(sub_gsl,unpermuted_list[fslc])
             
 
@@ -133,12 +133,12 @@ class EvalTreeTestCase(BaseTestCase):
         t2 = TreeClass()
         t2.initialize(compiled_gatestrings)
 
-        gsl1 = t.generate_gatestring_list()
+        gsl1 = t.generate_circuit_list()
         lookup2 = t2.split(lookup, maxSubTreeSize=maxSize)
-        gsl2 = t.generate_gatestring_list()
+        gsl2 = t.generate_circuit_list()
         self.assertEqual(gsl1,gsl2)
 
-        unpermuted_list = t2.generate_gatestring_list(permute=False)
+        unpermuted_list = t2.generate_circuit_list(permute=False)
 
         self.assertTrue(t2.is_split())
         
@@ -146,7 +146,7 @@ class EvalTreeTestCase(BaseTestCase):
         for i,st in enumerate(subtrees2):
             #print("Subtree %d: applies = %d, size = %d" % (i,st.get_num_applies(),len(st)))
             fslc = st.final_slice(t2)
-            sub_gsl = st.generate_gatestring_list(permute=False) #permute=False not necessary though, since subtree is not split it's elements are not permuted
+            sub_gsl = st.generate_circuit_list(permute=False) #permute=False not necessary though, since subtree is not split it's elements are not permuted
             self.assertEqual(sub_gsl,unpermuted_list[fslc])
 
             
@@ -169,7 +169,7 @@ class EvalTreeTestCase(BaseTestCase):
                               ('Gx','Gx','Gx'),
                               ('Gx','Gy','Gx')]
             compiled_gatestrings2, lookup2, outcome_lookup2, nEls2 = \
-                        gs_target.compile_gatestrings(strs_with_dups)
+                        target_model.compile_circuits(strs_with_dups)
             tdup = TreeClass()
             tdup.initialize(compiled_gatestrings2)
         
@@ -179,10 +179,10 @@ class EvalTreeTestCase(BaseTestCase):
 
     def test_mapevaltree(self):
         # An additional specific test added from debugging mapevaltree splitting
-        mgateset = pygsti.construction.build_gateset(
+        mgateset = pygsti.construction.build_explicit_model(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
-        mgateset._calcClass = GateMapCalc
+        mgateset._calcClass = MapForwardSimulator
         
         gatestring1 = ('Gx','Gy')
         gatestring2 = ('Gx','Gy','Gy')

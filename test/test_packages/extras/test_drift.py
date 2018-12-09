@@ -21,13 +21,13 @@ class DriftTestCase(BaseTestCase):
         tds = pygsti.io.load_tddataset(compare_files + "/timeseries_data_trunc.txt")
         results_gst = drift.do_basic_drift_characterization(tds)
         results_gst.any_drift_detect()
-        gstr = list(tds.keys())[0]
+        opstr = list(tds.keys())[0]
         
         print(results_gst.global_drift_frequencies)
 
         if bMPL:
             results_gst.plot_power_spectrum(savepath=temp_files+"/driftchar_powspec1.png")
-            results_gst.plot_power_spectrum(sequence=gstr,loc='upper right', 
+            results_gst.plot_power_spectrum(sequence=opstr,loc='upper right', 
                                             savepath=temp_files+"/driftchar_powspec2.png")
 
             # This box constructs some GST objects, needed to create any sort of boxplot with GST data
@@ -38,8 +38,8 @@ class DriftTestCase(BaseTestCase):
         log2maxL = 1 # log2 of the maximum germ power
 
         # Below we use the maxlength, germ and fuducial lists to create the GST structures needed for box plots.
-        fiducials = [pygsti.objects.GateString(None,fs) for fs in fiducial_strs]
-        germs = [pygsti.objects.GateString(None,gs) for gs in germ_strs]
+        fiducials = [pygsti.objects.Circuit(None,stringrep=fs) for fs in fiducial_strs]
+        germs = [pygsti.objects.Circuit(None,stringrep=s) for s in germ_strs]
         max_lengths = [2**i for i in range(0,log2maxL)]
         gssList = pygsti.construction.make_lsgst_structs(std1Q_XYI.gates, fiducials, fiducials, germs, max_lengths)
 
@@ -52,7 +52,7 @@ class DriftTestCase(BaseTestCase):
         if bMPL:
             results_gst.plot_most_drifty_probability(plot_data=True, savepath=temp_files+"/driftchar_probs.png")
 
-            gstrs = [pygsti.objects.GateString(None,'(Gx)^'+str(2**l)) for l in range(0,1)]
+            gstrs = [pygsti.objects.Circuit(None,stringrep='(Gx)^'+str(2**l)) for l in range(0,1)]
             results_gst.plot_multi_estimated_probabilities(gstrs,loc='upper right',
                                                            savepath=temp_files+"/driftchar_multiprobs.png")
 
@@ -64,7 +64,7 @@ class DriftTestCase(BaseTestCase):
         parray_gst = drift.load_bitstring_probabilities(fname,gstrs_to_indices)
         #EGN: Not sure why this final plot line doesn't work -- shape mismatch...
         #if bMPL:
-        #    results_gst.plot_estimated_probability(sequence=pygsti.objects.GateString(None,'Gx(Gx)^1Gx'),plot_data=False,parray=parray_gst)
+        #    results_gst.plot_estimated_probability(sequence=pygsti.objects.Circuit(None,stringrep='Gx(Gx)^1Gx'),plot_data=False,parray=parray_gst)
 
 
     def test_single_sequence_1Q(self):
@@ -84,8 +84,8 @@ class DriftTestCase(BaseTestCase):
         def pt_nodrift(t): return 0.5
         
         # If we want the sequence to have a label, we define a list for this (here, a list of length 1).
-        # The labels can, but need not be, pyGSTi GateString objects.
-        sequences = [pygsti.objects.GateString(None,'Gx(Gi)^64Gx'),]
+        # The labels can, but need not be, pyGSTi Circuit objects.
+        sequences = [pygsti.objects.Circuit(None,stringrep='Gx(Gi)^64Gx'),]
         
         # If we want the outcomes to have labels, we define a list for this.
         outcomes = ['0','1']

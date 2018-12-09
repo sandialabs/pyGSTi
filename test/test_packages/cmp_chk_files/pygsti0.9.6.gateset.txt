@@ -1,0 +1,40 @@
+
+PREP: rho0
+LiouvilleVec
+0.70710678 0 0 0.70710678
+
+POVM: Mdefault
+
+EFFECT: 0
+LiouvilleVec
+0.70710678 0 0 0.70710678
+
+EFFECT: 1
+LiouvilleVec
+0.70710678 0 0 -0.70710678
+
+END POVM
+
+GATE: Gi
+LiouvilleMx
+      1.00000000               0               0               0
+               0      1.00000000               0               0
+               0               0      1.00000000               0
+               0               0               0      1.00000000
+
+GATE: Gx
+LiouvilleMx
+      1.00000000               0               0               0
+               0      1.00000000               0               0
+               0               0               0     -1.00000000
+               0               0      1.00000000               0
+
+GATE: Gy
+LiouvilleMx
+      1.00000000               0               0               0
+               0               0               0      1.00000000
+               0               0      1.00000000               0
+               0     -1.00000000               0               0
+
+BASIS: pp 2
+GAUGEGROUP: Full

@@ -8,7 +8,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 
-from . import gatestring as _gs
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
 from .evaltree import EvalTree
@@ -18,12 +17,12 @@ import time as _time #DEBUG TIMERS
 class MapEvalTree(EvalTree):
     """
     An Evaluation Tree.  Instances of this class specify how to
-      perform bulk GateSet operations.
+      perform bulk Model operations.
 
     EvalTree instances create and store the decomposition of a list
-      of gate strings into a sequence of 2-term products of smaller
+      of operation sequences into a sequence of 2-term products of smaller
       strings.  Ideally, this sequence would prescribe the way to
-      obtain the entire list of gate strings, starting with just the
+      obtain the entire list of operation sequences, starting with just the
       single gates, using the fewest number of multiplications, but
       this optimality is not guaranteed.
     """
@@ -31,16 +30,16 @@ class MapEvalTree(EvalTree):
         """ Create a new, empty, evaluation tree. """
         super(MapEvalTree, self).__init__(items)
 
-    def initialize(self, compiled_gatestring_list, numSubTreeComms=1, maxCacheSize=None):
+    def initialize(self, compiled_circuit_list, numSubTreeComms=1, maxCacheSize=None):
         """
-          Initialize an evaluation tree using a set of gate strings.
+          Initialize an evaluation tree using a set of operation sequences.
           This function must be called before using an EvalTree.
 
           Parameters
           ----------
-          gatestring_list : list of (tuples or GateStrings)
-              A list of tuples of gate labels or GateString
-              objects, specifying the gate strings that
+          circuit_list : list of (tuples or Circuits)
+              A list of tuples of operation labels or Circuit
+              objects, specifying the operation sequences that
               should be present in the evaluation tree.
 
           numSubTreeComms : int, optional
@@ -55,39 +54,39 @@ class MapEvalTree(EvalTree):
         """
         #tStart = _time.time() #DEBUG TIMER
 
-        # gateLabels : A list of all the distinct gate labels found in
-        #              compiled_gatestring_list.  Used in calc classes
+        # opLabels : A list of all the distinct operation labels found in
+        #              compiled_circuit_list.  Used in calc classes
         #              as a convenient precomputed quantity.
-        self.gateLabels = self._get_gateLabels(compiled_gatestring_list)
+        self.opLabels = self._get_opLabels(compiled_circuit_list)
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 
-        gatestring_list = [tuple(gs) for gs in compiled_gatestring_list.keys()]
-        self.compiled_gatestring_spamTuples = list(compiled_gatestring_list.values())
-        self.num_final_els = sum([len(v) for v in self.compiled_gatestring_spamTuples])
-        #self._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
+        circuit_list = [tuple(mdl) for mdl in compiled_circuit_list.keys()]
+        self.compiled_circuit_spamTuples = list(compiled_circuit_list.values())
+        self.num_final_els = sum([len(v) for v in self.compiled_circuit_spamTuples])
+        #self._compute_finalStringToEls() #depends on compiled_circuit_spamTuples
         self.recompute_spamtuple_indices(bLocal=True) # bLocal shouldn't matter here
 
         #Evaluation tree:
         # A list of tuples, where each element contains
-        #  information about evaluating a particular gate string:
+        #  information about evaluating a particular operation sequence:
         #  (iStart, tuple_of_following_gatelabels )
         # and self.eval_order specifies the evaluation order.
         del self[:] #clear self (a list)
 
         #Final Indices
-        # The first len(gatestring_list) elements of the tree correspond
-        # to computing the gate strings requested in gatestring_list.  Doing
+        # The first len(circuit_list) elements of the tree correspond
+        # to computing the operation sequences requested in circuit_list.  Doing
         # this make later extraction much easier (views can be used), but
         # requires a non-linear order of evaluation, held in the eval_order list.
         self.eval_order = []
 
         #initialize self as a list of Nones
-        self.num_final_strs = len(gatestring_list)
+        self.num_final_strs = len(circuit_list)
         self[:] = [None]*self.num_final_strs
 
-        #Sort the gate strings "alphabetically", so that it's trivial to find common prefixes
-        sorted_strs = sorted(list(enumerate(gatestring_list)),key=lambda x: x[1])
+        #Sort the operation sequences "alphabetically", so that it's trivial to find common prefixes
+        sorted_strs = sorted(list(enumerate(circuit_list)),key=lambda x: x[1])
 
         #DEBUG
         #print("SORTED"); print("\n".join(map(str,sorted_strs)))
@@ -95,22 +94,22 @@ class MapEvalTree(EvalTree):
 
         #PASS1: figure out what's worth keeping in the cache:
         curCacheSize = 0
-        cacheIndices = [] #indices into gatestring_list/self of the strings to cache
+        cacheIndices = [] #indices into circuit_list/self of the strings to cache
         dummy_self = [None]*self.num_final_strs; cache_hits = {}
-        for k,(iStr,gateString) in enumerate(sorted_strs):
-            L = len(gateString)
+        for k,(iStr,circuit) in enumerate(sorted_strs):
+            L = len(circuit)
             for i in range(curCacheSize-1,-1,-1): #from curCacheSize-1 -> 0
-                candidate = gatestring_list[ cacheIndices[i] ]
+                candidate = circuit_list[ cacheIndices[i] ]
                 Lc = len(candidate)
-                if L >= Lc > 0 and gateString[0:Lc] == candidate:
+                if L >= Lc > 0 and circuit[0:Lc] == candidate:
                     iStart = i
-                    remaining = gateString[Lc:]
+                    remaining = circuit[Lc:]
                     if iStr in cache_hits: cache_hits[cacheIndices[i]] += 1  #tally cache hit
                     else: cache_hits[cacheIndices[i]] = 1  #TODO: use default dict?
                     break
             else: #no break => no prefix
                 iStart = None
-                remaining = gateString[:]
+                remaining = circuit[:]
 
             cacheIndices.append(iStr)
             iCache = curCacheSize
@@ -119,26 +118,26 @@ class MapEvalTree(EvalTree):
             
         #PASS #2: for real this time: construct tree but only cache items w/hits
         curCacheSize = 0
-        cacheIndices = [] #indices into gatestring_list/self of the strings to cache
+        cacheIndices = [] #indices into circuit_list/self of the strings to cache
           # (store persistently as prefixes of other string -- this need not be all
           #  of the strings in the tree)
 
-        for k,(iStr,gateString) in enumerate(sorted_strs):
-            L = len(gateString)
+        for k,(iStr,circuit) in enumerate(sorted_strs):
+            L = len(circuit)
             
-            #find longest existing prefix for gateString by working backwards
+            #find longest existing prefix for circuit by working backwards
             # and finding the first string that *is* a prefix of this string
             # (this will necessarily be the longest prefix, given the sorting)
             for i in range(curCacheSize-1,-1,-1): #from curCacheSize-1 -> 0
-                candidate = gatestring_list[ cacheIndices[i] ]
+                candidate = circuit_list[ cacheIndices[i] ]
                 Lc = len(candidate)
-                if L >= Lc > 0 and gateString[0:Lc] == candidate: # ">=" allows for duplicates 
+                if L >= Lc > 0 and circuit[0:Lc] == candidate: # ">=" allows for duplicates 
                     iStart = i # NOTE: this is an index into the *cache*, not necessarily self
-                    remaining = gateString[Lc:]
+                    remaining = circuit[Lc:]
                     break
             else: #no break => no prefix
                 iStart = None
-                remaining = gateString[:]
+                remaining = circuit[:]
 
             # if/where this string should get stored in the cache
             if (maxCacheSize is None or curCacheSize < maxCacheSize) and cache_hits.get(iStr,0) > 0:
@@ -156,7 +155,7 @@ class MapEvalTree(EvalTree):
         # some threshold number of elements which share the
         # *same* iStart and the same beginning of the
         # 'remaining' part then add a new "extra" element
-        # (beyond the #gatestrings index) which computes
+        # (beyond the #circuits index) which computes
         # the shared prefix and insert this into the eval
         # order.
 
@@ -166,8 +165,8 @@ class MapEvalTree(EvalTree):
         self.parentIndexMap = None
         self.original_index_lookup = None
         self.subTrees = [] #no subtrees yet
-        assert(self.generate_gatestring_list() == gatestring_list)
-        assert(None not in gatestring_list)
+        assert(self.generate_circuit_list() == circuit_list)
+        assert(None not in circuit_list)
 
 
     def _remove_from_cache(self,indx):
@@ -300,9 +299,9 @@ class MapEvalTree(EvalTree):
         """
         return self.cachesize
 
-    def generate_gatestring_list(self, permute=True):
+    def generate_circuit_list(self, permute=True):
         """
-        Generate a list of the final gate strings this tree evaluates.
+        Generate a list of the final operation sequences this tree evaluates.
 
         This method essentially "runs" the tree and follows its
           prescription for sequentailly building up longer strings
@@ -315,9 +314,9 @@ class MapEvalTree(EvalTree):
         permute : bool, optional
            Whether to permute the returned list of strings into the 
            same order as the original list passed to initialize(...).
-           When False, the computed order of the gate strings is 
+           When False, the computed order of the operation sequences is 
            given, which is matches the order of the results from calls
-           to `GateSet` bulk operations.  Non-trivial permutation
+           to `Model` bulk operations.  Non-trivial permutation
            occurs only when the tree is split (in order to keep 
            each sub-tree result a contiguous slice within the parent
            result).
@@ -325,10 +324,10 @@ class MapEvalTree(EvalTree):
         Returns
         -------
         list of gate-label-tuples
-            A list of the gate strings evaluated by this tree, each
-            specified as a tuple of gate labels.
+            A list of the operation sequences evaluated by this tree, each
+            specified as a tuple of operation labels.
         """
-        gateStrings = [None]*len(self)
+        circuits = [None]*len(self)
 
         cachedStrings = [None]*self.cache_size()
         
@@ -336,24 +335,24 @@ class MapEvalTree(EvalTree):
         for i in self.get_evaluation_order():
             iStart, remainingStr, iCache = self[i]
             if iStart is None:
-                gateStrings[i] = remainingStr
+                circuits[i] = remainingStr
             else:
-                gateStrings[i] = cachedStrings[iStart] + remainingStr
+                circuits[i] = cachedStrings[iStart] + remainingStr
                 
             if iCache is not None:
-                cachedStrings[iCache] = gateStrings[i]
+                cachedStrings[iCache] = circuits[i]
             
         #Permute to get final list:
         nFinal = self.num_final_strings()
         if self.original_index_lookup is not None and permute == True:
-            finalGateStrings = [None]*nFinal
+            finalCircuits = [None]*nFinal
             for iorig,icur in self.original_index_lookup.items():
-                if iorig < nFinal: finalGateStrings[iorig] = gateStrings[icur]
-            assert(None not in finalGateStrings)
-            return finalGateStrings
+                if iorig < nFinal: finalCircuits[iorig] = circuits[icur]
+            assert(None not in finalCircuits)
+            return finalCircuits
         else:
-            assert(None not in gateStrings[0:nFinal])
-            return gateStrings[0:nFinal]
+            assert(None not in circuits[0:nFinal])
+            return circuits[0:nFinal]
 
 
     def get_num_applies(self):
@@ -380,10 +379,10 @@ class MapEvalTree(EvalTree):
         Parameters
         ----------
         elIndicesDict : dict
-            A dictionary whose keys are integer original-gatestring indices
+            A dictionary whose keys are integer original-circuit indices
             and whose values are slices or index arrays of final-element-
             indices (typically this dict is returned by calling
-            :method:`GateSet.compile_gatestrings`).  Since splitting a 
+            :method:`Model.compile_circuits`).  Since splitting a 
             tree often involves permutation of the raw string ordering
             and thereby the element ordering, an updated version of this
             dictionary, with all permutations performed, is returned.
@@ -405,7 +404,7 @@ class MapEvalTree(EvalTree):
         OrderedDict
             A updated version of elIndicesDict
         """
-        #dbList = self.generate_gatestring_list()
+        #dbList = self.generate_circuit_list()
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
 
@@ -633,25 +632,25 @@ class MapEvalTree(EvalTree):
 
             subTree.cachesize = curCacheSize
             subTree.parentIndexMap = parentIndices #parent index of each subtree index
-            subTree.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[k]
+            subTree.compiled_circuit_spamTuples = [ self.compiled_circuit_spamTuples[k]
                                                        for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
-            #subTree._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
+            #subTree._compute_finalStringToEls() #depends on compiled_circuit_spamTuples
             
             final_el_startstops = []; i=0
-            for spamTuples in parentTree.compiled_gatestring_spamTuples:
+            for spamTuples in parentTree.compiled_circuit_spamTuples:
                 final_el_startstops.append( (i,i+len(spamTuples)) )
                 i += len(spamTuples)
             subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
                 [ _np.arange(*final_el_startstops[k])
                   for k in _slct.indices(subTree.myFinalToParentFinalMap) ] )
             #Note: myFinalToParentFinalMap maps only between *final* elements
-            #   (which are what is held in compiled_gatestring_spamTuples)
+            #   (which are what is held in compiled_circuit_spamTuples)
             
-            subTree.num_final_els = sum([len(v) for v in subTree.compiled_gatestring_spamTuples])
+            subTree.num_final_els = sum([len(v) for v in subTree.compiled_circuit_spamTuples])
             subTree.recompute_spamtuple_indices(bLocal=False)
 
             subTree.trim_nonfinal_els()
-            subTree.gateLabels = self._get_gateLabels( subTree.generate_gatestring_list(permute=False) )
+            subTree.opLabels = self._get_opLabels( subTree.generate_circuit_list(permute=False) )
 
             return subTree
     

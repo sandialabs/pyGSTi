@@ -33,7 +33,7 @@ ws.GramMatrixBarPlot(ds, gs_target, 10, strs)
 ### RB error metrics
 Estimates for the error rate that would be obtained using the Randomized Benchmarking (RB) protocol.
 @@code
-ws.GatesetVsTargetTable(gs, gs_target, clifford_compilation, cri)
+ws.ModelVsTargetTable(gs, gs_target, clifford_compilation, cri)
 
 
 @@markdown
