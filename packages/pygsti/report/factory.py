@@ -1916,14 +1916,13 @@ def create_report_notebook(results, filename, title="auto",
         effective_ds, scale_subMxs = estimate.get_effective_dataset(True)
         scaledSubMxsDict = {{'scaling': scale_subMxs, 'scaling.colormap': "revseq"}}
 
-        models   = estimate.models
-        mdl         = models[gopt] #FINAL
-        mdl_final   = models['final iteration estimate'] #ITER
-        target_model  = models['target']
-        gsPerIter  = models['iteration estimates']
+        models       = estimate.models
+        mdl          = models[gopt] #FINAL
+        mdl_final    = models['final iteration estimate'] #ITER
+        target_model = models['target']
+        mdlPerIter   = models['iteration estimates']
 
-        mdl_eigenspace_projected = \
-            pygsti.tools.project_to_target_eigenspace(mdl, target_model)
+        mdl_eigenspace_projected = pygsti.tools.project_to_target_eigenspace(mdl, target_model)
 
         goparams = estimate.goparameters[gopt]
 
@@ -2021,7 +2020,8 @@ def find_std_clifford_compilation(model, verbosity=0):
     import importlib
     for module_name in std_modules:
         mod = importlib.import_module("pygsti.construction." + module_name)
-        if set(mod.target_model.operations.keys()) == set(model.operations.keys()) and \
+        if mod.target_model.dim == model.dim and \
+           set(mod.target_model.operations.keys()) == set(model.operations.keys()) and \
            set(mod.target_model.preps.keys()) == set(model.preps.keys()) and \
            set(mod.target_model.povms.keys()) == set(model.povms.keys()):
             if mod.target_model.frobeniusdist(model) < 1e-6:
