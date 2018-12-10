@@ -131,7 +131,7 @@ Choi_trace = _modf.opfn_factory(choi_trace) # init args == (model, opLabel)
 
 
 class Gate_eigenvalues(_modf.ModelFunction):
-    """LinearOperator eigenvalues"""
+    """Gate eigenvalues"""
     def __init__(self, model, oplabel):
         self.oplabel = oplabel
         _modf.ModelFunction.__init__(self, model, ["gate:" + str(oplabel)])
@@ -199,7 +199,7 @@ class Gate_eigenvalues(_modf.ModelFunction):
 
 
 class Circuit_eigenvalues(_modf.ModelFunction):
-    """LinearOperator sequence eigenvalues"""
+    """Circuit eigenvalues"""
     def __init__(self, model, circuit):
         self.circuit = circuit
         _modf.ModelFunction.__init__(self, model, ["all"])
@@ -1166,7 +1166,7 @@ def info_of_opfn_by_name(name):
         niceName = "Entanglement|Infidelity"
         tooltip = "1.0 - <psi| 1 x Lambda(psi) |psi>"
     elif name == "agi":
-        niceName = "Avg. LinearOperator|Infidelity"
+        niceName = "Avg. Gate|Infidelity"
         tooltip = "d/(d+1) (entanglement infidelity)"
     elif name == "trace":
         niceName = "1/2 Trace|Distance"
@@ -1178,19 +1178,19 @@ def info_of_opfn_by_name(name):
         niceName = "Non-unitary|Ent. Infidelity"
         tooltip = "(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]"
     elif name == "nuagi":
-        niceName = "Non-unitary|Avg. LinearOperator Infidelity"
+        niceName = "Non-unitary|Avg. Gate Infidelity"
         tooltip = "(d-1)/d [1 - sqrt( unitarity(A B^-1) )]"
     elif name == "evinf":
         niceName = "Eigenvalue|Ent. Infidelity"
         tooltip = "min_P 1 - (lambda P lambda^dag)/d^2  [P = permutation, lambda = eigenvalues]"
     elif name == "evagi":
-        niceName = "Eigenvalue|Avg. LinearOperator Infidelity"
+        niceName = "Eigenvalue|Avg. Gate Infidelity"
         tooltip = "min_P (d^2 - lambda P lambda^dag)/d(d+1)  [P = permutation, lambda = eigenvalues]"
     elif name == "evnuinf":
         niceName = "Eigenvalue Non-U.|Ent. Infidelity"
         tooltip = "(d^2-1)/d^2 [1 - sqrt( eigenvalue_unitarity(A B^-1) )]"
     elif name == "evnuagi":
-        niceName = "Eigenvalue Non-U.|Avg. LinearOperator Infidelity"
+        niceName = "Eigenvalue Non-U.|Avg. Gate Infidelity"
         tooltip = "(d-1)/d [1 - sqrt( eigenvalue_unitarity(A B^-1) )]"
     elif name == "evdiamond":
         niceName = "Eigenvalue|1/2 Diamond-Dist"

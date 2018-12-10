@@ -656,7 +656,7 @@ def povm_fidelity(model, targetModel, povmlbl):
     Parameters
     ----------
     model, targetModel : Model
-        LinearOperator sets containing the two POVMs to compare.
+        Models containing the two POVMs to compare.
 
     povmlbl : str
         The POVM label
@@ -677,7 +677,7 @@ def povm_jtracedist(model, targetModel, povmlbl):
     Parameters
     ----------
     model, targetModel : Model
-        LinearOperator sets containing the two POVMs to compare.
+        Models containing the two POVMs to compare.
 
     povmlbl : str
         The POVM label
@@ -698,7 +698,7 @@ def povm_diamonddist(model, targetModel, povmlbl):
     Parameters
     ----------
     model, targetModel : Model
-        LinearOperator sets containing the two POVMs to compare.
+        Models containing the two POVMs to compare.
 
     povmlbl : str
         The POVM label

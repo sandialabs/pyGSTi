@@ -1350,7 +1350,7 @@ def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta): # t == 1.0
 
 def expop_multiply_prep(op, tol=EXPM_DEFAULT_TOL):
     """
-    Returns "prepared" meta-info about LinearOperator op,
+    Returns "prepared" meta-info about operation op,
       which is assumed to be traceless (so no shift is needed).
       Used as input for use with _custom_expm_multiply_simple_core
       or fast C-reps.

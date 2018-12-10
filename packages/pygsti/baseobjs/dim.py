@@ -24,7 +24,7 @@ class Dim(object):
         The (matrix) dimension of the "gate-space" corresponding
         to the density matrix space, equal to the dimension
         of the density matrix space, sum( ith-block_dimension^2 ).
-        LinearOperator matrices are thus opDim x opDim dimensions.
+        operator matrices are thus opDim x opDim dimensions.
     blockDims : list of ints
         Dimensions of the individual matrix-blocks.  The direct sum
         of the matrix spaces (of dim matrix-block-dim^2) forms the

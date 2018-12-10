@@ -39,7 +39,7 @@ FLOATSIZE = 8 #TODO: better way?
 def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAliases={},
             guessModelForGauge=None, svdTruncateTo=None, verbosity=0):
     """
-    Performs Linear-inversion LinearOperator Set Tomography on the dataset.
+    Performs Linear-inversion Gate Set Tomography on the dataset.
 
     Parameters
     ----------
@@ -527,7 +527,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
               svdTruncateTo=None, maxiter=100000, maxfev=None, tol=1e-6,
               regularizeFactor=0, verbosity=0, comm=None, check_jacobian=False):
     """
-    Performs Extended Linear-inversion LinearOperator Set Tomography on the dataset.
+    Performs Extended Linear-inversion Gate Set Tomography on the dataset.
 
     Parameters
     ----------
@@ -791,7 +791,7 @@ def do_iterative_exlgst(
   returnAll=False, circuitSetLabels=None, verbosity=0, comm=None,
   check_jacobian=False):
     """
-    Performs Iterated Extended Linear-inversion LinearOperator Set Tomography on the dataset.
+    Performs Iterated Extended Linear-inversion Gate Set Tomography on the dataset.
 
     Parameters
     ----------
@@ -939,7 +939,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
               distributeMethod = "deriv", profiler=None,
               evaltree_cache=None):
     """
-    Performs Least-Squares LinearOperator Set Tomography on the dataset.
+    Performs Least-Squares Gate Set Tomography on the dataset.
 
     Parameters
     ----------
@@ -1520,7 +1520,7 @@ def do_mc2gst_with_model_selection(
         check=False, check_jacobian=False, circuitWeights=None,
         opLabelAliases=None, memLimit=None, comm=None):
     """
-    Performs Least-Squares LinearOperator Set Tomography on the dataset.
+    Performs Least-Squares Gate Set Tomography on the dataset.
 
     Parameters
     ----------
@@ -1743,7 +1743,7 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
                         memLimit=None, profiler=None, comm=None,
                         distributeMethod = "deriv", evaltree_cache=None):
     """
-    Performs Iterative Minimum Chi^2 LinearOperator Set Tomography on the dataset.
+    Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset.
 
     Parameters
     ----------
@@ -1945,7 +1945,7 @@ def do_iterative_mc2gst_with_model_selection(
         check_jacobian=False, circuitWeightsDict=None,
         opLabelAliases=None, memLimit=None, comm=None):
     """
-    Performs Iterative Minimum Chi^2 LinearOperator Set Tomography on the dataset, and at
+    Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset, and at
     each iteration tests the current model model against model models with
     an increased and/or decreased dimension (model selection).
 
@@ -2127,7 +2127,7 @@ def do_mlgst(dataset, startModel, circuitsToUse,
              evaltree_cache=None):
 
     """
-    Performs Maximum Likelihood Estimation LinearOperator Set Tomography on the dataset.
+    Performs Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
     Parameters
     ----------
@@ -2708,7 +2708,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
                        profiler=None, comm=None, distributeMethod = "deriv",
                        alwaysPerformMLE=False, evaltree_cache=None):
     """
-    Performs Iterative Maximum Likelihood Estimation LinearOperator Set Tomography on the dataset.
+    Performs Iterative Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
     Parameters
     ----------
@@ -3211,7 +3211,7 @@ def find_closest_unitary_opmx(operationMx):
 
     #print "DEBUG: Best fidelity = ",-solution.fun
     #print "DEBUG: Using vector = ", solution.x
-    #print "DEBUG: LinearOperator Mx = \n", operationMx
+    #print "DEBUG: Gate Mx = \n", operationMx
     #print "DEBUG: Chi Mx = \n", _tools.jamiolkowski_iso( operationMx)
     #return -solution.fun, operationMx
     return operationMx

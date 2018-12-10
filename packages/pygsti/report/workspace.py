@@ -279,7 +279,7 @@ class Workspace(object):
         self.NotApplicable = makefactory(NotApplicable)
         
         #Tables
-          # LinearOperator sequences
+          # Circuits
         self.CircuitTable = makefactory(_wt.CircuitTable)
         
           # Spam & Gates
@@ -627,7 +627,7 @@ class Workspace(object):
         #print("DB: switchBdInfo = ", switchBdInfo)
         #print("DB: nonSwitchedArgs = ", nonSwitchedArgs)
 
-        #LinearOperator a list of lists, each list holding all of the relevant switch positions for each board
+        #Create a list of lists, each list holding all of the relevant switch positions for each board
         switch_positions = []
         for isb,sb in enumerate(switchboards):
             info = switchBdInfo[isb]

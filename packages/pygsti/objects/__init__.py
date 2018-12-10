@@ -1,4 +1,4 @@
-""" LinearOperator Set Tomography Objects Python Package """
+""" pyGSTi Objects Python Package """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation

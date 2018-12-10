@@ -525,7 +525,7 @@ class ConfidenceRegionFactory(object):
         level = 95 # or 50, or whatever - the scale factory doesn't matter for the optimization
     
         printer.log('', 3)
-        printer.log("--- Hessian Projector Optimization from separate SPAM and LinearOperator weighting ---", 2, indentOffset=-1)
+        printer.log("--- Hessian Projector Optimization from separate SPAM and Gate weighting ---", 2, indentOffset=-1)
         
         #get gate-intrinsic-error
         proj = model.get_nongauge_projector(itemWeights={'gates':1.0,'spam': 0.0})

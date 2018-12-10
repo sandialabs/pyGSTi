@@ -537,7 +537,7 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
 
     if len(dataset_labels) > 1: # multidataset
         metric_switchBd = ws.Switchboard(
-            ["Metric", "LinearOperator Label"], [metric_names, op_labels],
+            ["Metric", "Operation"], [metric_names, op_labels],
             ["dropdown", "dropdown"], [0,0], show=[True,True] )
         metric_switchBd.add("opLabel",(1,))
         metric_switchBd.add("metric",(0,))

@@ -166,7 +166,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, opExpr, basis="gm"):
     #  each of which is given additional parameters specifying which indices it acts upon
 
 
-    #LinearOperator matrix will be in matrix unit basis, which we order by vectorizing
+    #Operator matrix will be in matrix unit basis, which we order by vectorizing
     # (by concatenating rows) each block of coherent states in the order given.
     dmDim, _ , _ = _Dim(stateSpaceDims)
     fullOpDim = dmDim**2
@@ -362,7 +362,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, opExpr, basis="gm"):
 
 def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization="full", unitaryEmbedding=False):
     """
-    Build a LinearOperator object from an expression.
+    Build an operation object from an expression.
 
     Parameters
     ----------
@@ -528,7 +528,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
         N = len(tensorBlkEls) #size of density matrix space
         assert( N == blockDims[iTensorProdBlk]**2 )
 
-        # LinearOperator matrix approach: insert elements of opmx into map acting on vec(density matrix) space
+        # operator matrix approach: insert elements of opmx into map acting on vec(density matrix) space
         opBlk = _np.identity( N, 'd' ) # matrix operating on vec(tensor product block), (tensor prod blk is a part of the total density mx)
           #Note: because we're in the Pauil-product basis this is a *real* matrix (and opmx should have only real elements and be in the pp basis)
 

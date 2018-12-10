@@ -300,7 +300,7 @@ class LsGermsStructure(CircuitStructure):
             List of measurement fiducial sequences (minor y values)
 
         aliases : dict
-            LinearOperator label aliases to be propagated to all plaquettes.
+            Operation label aliases to be propagated to all plaquettes.
 
         sequenceRules : list, optional
             A list of `(find,replace)` 2-tuples which specify string replacement
@@ -608,7 +608,7 @@ class LsGermsSerialStructure(CircuitStructure):
             These should be the maximum values required for any plaquette.
 
         aliases : dict
-            LinearOperator label aliases to be propagated to all plaquettes.
+            Operation label aliases to be propagated to all plaquettes.
 
         sequenceRules : list, optional
             A list of `(find,replace)` 2-tuples which specify string replacement

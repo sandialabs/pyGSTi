@@ -188,7 +188,7 @@ def do_linear_gst(dataFilenameOrSet, targetModelFilenameOrObj,
                   gaugeOptParams=None, advancedOptions=None, comm=None,
                   memLimit=None, output_pkl=None, verbosity=2):
     """
-    Perform Linear LinearOperator Set Tomography (LGST).
+    Perform Linear Gate Set Tomography (LGST).
 
     This function differs from the lower level :function:`do_lgst` function
     in that it may perform a post-LGST gauge optimization and this routine

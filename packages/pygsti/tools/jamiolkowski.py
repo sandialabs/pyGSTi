@@ -12,7 +12,7 @@ from . import basistools as _bt
 from . import matrixtools as _mt
 
 
-# LinearOperator Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)
+# Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)
 #            vec(rhoS) --> GStd vec(rhoS)           where GS and rhoS are in the std basis, GS = PtoS * G * StoP
 # Choi Mx J:     rho  --> sum_ij Jij Bi rho Bj^dag  where Bi is some basis of mxs for rho-space; independent of basis for rho and Bi
 #           vec(rhoS) --> sum_ij Jij (BSi x BSj^*) vec(rhoS)  where rhoS and BSi's are in std basis
@@ -98,7 +98,7 @@ def jamiolkowski_iso(operationMx, opMxBasis='gm', choiMxBasis='gm'):
     #Note: we need to use the *full* basis of Matrix Unit, Gell-Mann, or Pauli-product matrices when
     # generating the Choi matrix, even when the original operation matrix doesn't include the entire basis.
     # This is because even when the original operation matrix doesn't include a certain basis element (B0 say),
-    # conjugating with this basis element and tracing, i.e. trace(B0^dag * LinearOperator * B0), is not necessarily zero.
+    # conjugating with this basis element and tracing, i.e. trace(B0^dag * Operation * B0), is not necessarily zero.
 
     #get full list of basis matrices (in std basis) -- i.e. we use dmDim 
     BVec = _basis_matrices(choiMxBasis, dmDim)

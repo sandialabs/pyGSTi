@@ -1079,7 +1079,7 @@ class Circuit(object):
             often result in a massive increase in circuit depth.
   
         oneQgate_relations : dict, optional
-            LinearOperator relations for the one-qubit gates in the new gate library, that are used in the  depth compression, to 
+            Gate relations for the one-qubit gates in the new gate library, that are used in the  depth compression, to 
             cancel / combine gates. E.g., one key-value pair might be  ('Gh','Gh') : 'I', to signify that two Hadamards c
             ompose to the idle gate 'Gi'. See the depth_compression() method for more details.
 
@@ -1975,7 +1975,7 @@ class Circuit(object):
             # Go through the (non-self.identity) gates in the layer and convert them to quil
             for gate in layer.components:
                 gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
-                assert(len(gate_qubits) <= 2 or gate.qubits is None), 'LinearOperator on more than 2 qubits given; this is currently not supported!'
+                assert(len(gate_qubits) <= 2 or gate.qubits is None), 'Gate on more than 2 qubits given; this is currently not supported!'
                 
                 
                 # Find the quil for the gate.
