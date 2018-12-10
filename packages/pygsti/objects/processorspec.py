@@ -432,7 +432,8 @@ class ProcessorSpec(object):
             # We convert to process matrices, to avoid global phase problems.
             u = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname])
             if u.shape == (4,4):
-                assert(not _np.allclose(u,Id)), "Identity should *not* be included in root gate names!"
+                #assert(not _np.allclose(u,Id)), "Identity should *not* be included in root gate names!"
+                _warnings.warn("The identity should often *not* be included in the root gate names of a ProcessorSpec.")
                 nontrivial_gname_pauligate_pairs.append( (gname,u) )
         
         for gname1,u1 in nontrivial_gname_pauligate_pairs:
