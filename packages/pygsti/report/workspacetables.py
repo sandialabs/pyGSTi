@@ -91,7 +91,7 @@ class SpamTable(WorkspaceTable):
 
         if includeHSVec:
             model = models[-1] #only show HSVec for last model
-            basisNm    = _tools.basis_longname(model.basis.name)
+            basisNm    = _tools.basis_longname(model.basis)
             colHeadings.append( 'Hilbert-Schmidt vector (%s basis)' % basisNm )
             formatters.append( None )
 
@@ -312,7 +312,7 @@ class GatesTable(WorkspaceTable):
 
         colHeadings = ['LinearOperator']
         for model,title in zip(models,titles):
-            basisLongNm = _tools.basis_longname(model.basis.name)
+            basisLongNm = _tools.basis_longname(model.basis)
             pre = (title+' ' if title else '')
             colHeadings.append('%sSuperoperator (%s basis)' % (pre,basisLongNm))
         formatters = [None]*len(colHeadings)
@@ -451,7 +451,7 @@ class ChoiTable(WorkspaceTable):
         for disp in display:
             if disp == "matrix":
                 for model,title in zip(models,titles):
-                    basisLongNm = _tools.basis_longname(model.basis.name)
+                    basisLongNm = _tools.basis_longname(model.basis)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             elif disp == "eigenvalues":
@@ -464,7 +464,7 @@ class ChoiTable(WorkspaceTable):
                     colHeadings.append('%sEigenvalue Magnitudes' % pre)
             elif disp == "boxplot":
                 for model,title in zip(models,titles):
-                    basisLongNm = _tools.basis_longname(model.basis.name)
+                    basisLongNm = _tools.basis_longname(model.basis)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             else:
@@ -895,8 +895,8 @@ class ErrgenTable(WorkspaceTable):
                         hamProjs, EB = info['hamiltonian projections'].get_value_and_err_bar()
                         m,M = getMinMax(hamProjsM,_np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, hamProjs, basis.name, m, M,
-                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                            self.ws, hamProjs, basis, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T)
                         row_data.append(hamdecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -910,8 +910,8 @@ class ErrgenTable(WorkspaceTable):
                         stoProjs, EB = info['stochastic projections'].get_value_and_err_bar()
                         m,M = getMinMax(stoProjsM,_np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, stoProjs, basis.name, m, M,
-                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                            self.ws, stoProjs, basis, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T)
                         row_data.append(stodecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -924,8 +924,8 @@ class ErrgenTable(WorkspaceTable):
                         affProjs, EB = info['affine projections'].get_value_and_err_bar()
                         m,M = getMinMax(affProjsM,_np.max(_np.abs(affProjs)))
                         affdecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, affProjs, basis.name, m, M,
-                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                            self.ws, affProjs, basis, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T)
                         row_data.append(affdecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -1342,7 +1342,7 @@ class GateDecompTable(WorkspaceTable):
         for gl in opLabels:
             gl = str(gl) # Label -> str for decomp-dict keys
             axis, axisEB = decomp[gl + ' axis'].get_value_and_err_bar()
-            axisFig = _wp.ProjectionsBoxPlot(self.ws, axis, model.basis.name, -1.0,1.0,
+            axisFig = _wp.ProjectionsBoxPlot(self.ws, axis, model.basis, -1.0,1.0,
                                              boxLabels=True, EBmatrix=axisEB)
             decomp[gl + ' hamiltonian eigenvalues'].scale( 1.0/_np.pi ) #scale evals to units of pi
             rowData = [gl, decomp[gl + ' hamiltonian eigenvalues'],
