@@ -91,7 +91,7 @@ class SpamTable(WorkspaceTable):
 
         if includeHSVec:
             model = models[-1] #only show HSVec for last model
-            basisNm    = _tools.basis_longname(model.basis.name)
+            basisNm    = _tools.basis_longname(model.basis)
             colHeadings.append( 'Hilbert-Schmidt vector (%s basis)' % basisNm )
             formatters.append( None )
 
@@ -310,9 +310,9 @@ class GatesTable(WorkspaceTable):
         if titles is None:
             titles = ['']*len(models)
 
-        colHeadings = ['LinearOperator']
+        colHeadings = ['Gate']
         for model,title in zip(models,titles):
-            basisLongNm = _tools.basis_longname(model.basis.name)
+            basisLongNm = _tools.basis_longname(model.basis)
             pre = (title+' ' if title else '')
             colHeadings.append('%sSuperoperator (%s basis)' % (pre,basisLongNm))
         formatters = [None]*len(colHeadings)
@@ -447,11 +447,11 @@ class ChoiTable(WorkspaceTable):
             else:
                 evals = None
             qtysList.append((choiMxs, evals))
-        colHeadings = ['LinearOperator']
+        colHeadings = ['Gate']
         for disp in display:
             if disp == "matrix":
                 for model,title in zip(models,titles):
-                    basisLongNm = _tools.basis_longname(model.basis.name)
+                    basisLongNm = _tools.basis_longname(model.basis)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             elif disp == "eigenvalues":
@@ -464,7 +464,7 @@ class ChoiTable(WorkspaceTable):
                     colHeadings.append('%sEigenvalue Magnitudes' % pre)
             elif disp == "boxplot":
                 for model,title in zip(models,titles):
-                    basisLongNm = _tools.basis_longname(model.basis.name)
+                    basisLongNm = _tools.basis_longname(model.basis)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             else:
@@ -633,8 +633,8 @@ class GatesVsTargetTable(WorkspaceTable):
         opLabels  = model.get_primitive_op_labels() # operation labels
         assert(isinstance(model,_objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
-        colHeadings = ['LinearOperator'] if (virtual_ops is None) else ['LinearOperator or Germ']
-        tooltips    = ['LinearOperator'] if (virtual_ops is None) else ['LinearOperator or Germ']
+        colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
+        tooltips    = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
         for disp in display:
             try:
                 heading, tooltip = _reportables.info_of_opfn_by_name(disp)
@@ -799,7 +799,7 @@ class ErrgenTable(WorkspaceTable):
         elif basis.name == "gm": basisPrefix = "GM "
         elif basis.name == "std": basisPrefix = "Mx unit "
 
-        colHeadings = ['LinearOperator']
+        colHeadings = ['Gate']
 
         for disp in display:
             if disp == "errgen":
@@ -895,8 +895,8 @@ class ErrgenTable(WorkspaceTable):
                         hamProjs, EB = info['hamiltonian projections'].get_value_and_err_bar()
                         m,M = getMinMax(hamProjsM,_np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, hamProjs, basis.name, m, M,
-                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                            self.ws, hamProjs, basis, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T)
                         row_data.append(hamdecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -910,8 +910,8 @@ class ErrgenTable(WorkspaceTable):
                         stoProjs, EB = info['stochastic projections'].get_value_and_err_bar()
                         m,M = getMinMax(stoProjsM,_np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, stoProjs, basis.name, m, M,
-                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                            self.ws, stoProjs, basis, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T)
                         row_data.append(stodecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -924,8 +924,8 @@ class ErrgenTable(WorkspaceTable):
                         affProjs, EB = info['affine projections'].get_value_and_err_bar()
                         m,M = getMinMax(affProjsM,_np.max(_np.abs(affProjs)))
                         affdecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, affProjs, basis.name, m, M,
-                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                            self.ws, affProjs, basis, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T)
                         row_data.append(affdecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -1077,7 +1077,7 @@ class NQubitErrgenTable(WorkspaceTable):
         #elif basis.name == "gm": basisPrefix = "GM "
         #elif basis.name == "std": basisPrefix = "Mx unit "
 
-        colHeadings = ['LinearOperator','Compos','SSLbls']
+        colHeadings = ['Gate','Compos','SSLbls']
 
         for disp in display:
             #if disp == "errgen":
@@ -1272,7 +1272,7 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
 
         opLabels  = model.get_primitive_op_labels()  # operation labels
 
-        colHeadings = ('LinearOperator', "Angle between|rotation axes")
+        colHeadings = ('Gate', "Angle between|rotation axes")
         formatters  = (None,'Conversion')
 
         anglesList = [_ev(_reportables.Model_model_angles_btwn_axes(
@@ -1323,9 +1323,9 @@ class GateDecompTable(WorkspaceTable):
     def _create(self, model, targetModel, confidenceRegionInfo):
         opLabels = model.get_primitive_op_labels() # operation labels
 
-        colHeadings = ('LinearOperator','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') \
+        colHeadings = ('Gate','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') \
                       + tuple( [ "Axis angle w/%s" % str(gl) for gl in opLabels] )
-        tooltips = ('LinearOperator','Hamiltonian Eigenvalues','Rotation angle','Rotation axis',
+        tooltips = ('Gate','Hamiltonian Eigenvalues','Rotation angle','Rotation axis',
                     'Taking the log of a gate may be performed approximately.  This is ' +
                     'error in that estimate, i.e. norm(G - exp(approxLogG)).') + \
                     tuple( [ "Angle between the rotation axis of %s and the gate of the current row"
@@ -1342,7 +1342,7 @@ class GateDecompTable(WorkspaceTable):
         for gl in opLabels:
             gl = str(gl) # Label -> str for decomp-dict keys
             axis, axisEB = decomp[gl + ' axis'].get_value_and_err_bar()
-            axisFig = _wp.ProjectionsBoxPlot(self.ws, axis, model.basis.name, -1.0,1.0,
+            axisFig = _wp.ProjectionsBoxPlot(self.ws, axis, model.basis, -1.0,1.0,
                                              boxLabels=True, EBmatrix=axisEB)
             decomp[gl + ' hamiltonian eigenvalues'].scale( 1.0/_np.pi ) #scale evals to units of pi
             rowData = [gl, decomp[gl + ' hamiltonian eigenvalues'],
@@ -1396,7 +1396,7 @@ class old_GateDecompTable(WorkspaceTable):
     def _create(self, model, confidenceRegionInfo):
 
         opLabels = model.get_primitive_op_labels()  # operation labels
-        colHeadings = ('LinearOperator','Eigenvalues','Fixed pt','Rotn. axis','Diag. decay','Off-diag. decay')
+        colHeadings = ('Gate','Eigenvalues','Fixed pt','Rotn. axis','Diag. decay','Off-diag. decay')
         formatters = [None]*6
         
         assert(isinstance(model,_objs.ExplicitOpModel)), "old_GateDecompTable only works with explicit models"
@@ -1458,13 +1458,13 @@ class old_RotationAxisTable(WorkspaceTable):
         assert(isinstance(model,_objs.ExplicitOpModel)), "old_RotationAxisTable only works with explicit models"
         decomps = [_reportables.decomposition(model.operations[gl]) for gl in opLabels]
 
-        colHeadings = ("LinearOperator","Angle") + tuple( [ "RAAW(%s)" % gl for gl in opLabels] )
+        colHeadings = ("Gate","Angle") + tuple( [ "RAAW(%s)" % gl for gl in opLabels] )
         nCols = len(colHeadings)
         formatters = [None] * nCols
 
         table = "tabular"
         latex_head =  "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * nCols + "|")
-        latex_head += "\\multirow{2}{*}{LinearOperator} & \\multirow{2}{*}{Angle} & " + \
+        latex_head += "\\multirow{2}{*}{Gate} & \\multirow{2}{*}{Angle} & " + \
                       "\\multicolumn{%d}{c|}{Angle between Rotation Axes} \\\\ \cline{3-%d}\n" % (len(opLabels),nCols)
         latex_head += " & & %s \\\\ \hline\n" % (" & ".join(map(str,opLabels)))
     
@@ -1574,7 +1574,7 @@ class GateEigenvalueTable(WorkspaceTable):
         opLabels = model.get_primitive_op_labels()  # operation labels
         assert(isinstance(model,_objs.ExplicitOpModel)), "GateEigenvalueTable only works with explicit models"
         
-        colHeadings = ['LinearOperator'] if (virtual_ops is None) else ['LinearOperator or Germ']
+        colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
         formatters = [None]
         for disp in display:
             if disp == "evals":
@@ -1659,7 +1659,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 _reportables.Circuit_eigenvalues
             evals = _ev(fn(model,gl), confidenceRegionInfo)
             #tm = _time.time() - tStart #DEBUG
-            #if tm > 0.01: print("DB: LinearOperator eigenvalues in %gs" % tm) #DEBUG
+            #if tm > 0.01: print("DB: Gate eigenvalues in %gs" % tm) #DEBUG
 
             evals = evals.reshape(evals.size, 1)
             #OLD: format to 2-columns - but polar plots are big, so just stick to 1col now
@@ -1809,7 +1809,7 @@ class DataSetOverviewTable(WorkspaceTable):
         cntStr = "[%d,%d]" % (minN,maxN) if (minN != maxN) else "%d" % round(minN)
 
         table.addrow(("Number of strings", str(len(dataset))), (None,None))
-        table.addrow(("LinearOperator labels", ", ".join([str(gl) for gl in dataset.get_gate_labels()]) ), (None,None))
+        table.addrow(("Gate labels", ", ".join([str(gl) for gl in dataset.get_gate_labels()]) ), (None,None))
         table.addrow(("Outcome labels",  ", ".join(map(str,dataset.get_outcome_labels())) ), (None,None))
         table.addrow(("Counts per string", cntStr  ), (None,None))
 
@@ -2093,7 +2093,7 @@ class GatesSingleMetricTable(WorkspaceTable):
 
         if rowtitles is None:
             assert(opLabel is None), "`opLabel` must be None when `rowtitles` is"
-            colHeadings = ("LinearOperator",) + tuple(titles)
+            colHeadings = ("Gate",) + tuple(titles)
         else:
             colHeadings = ("",) + tuple(titles)
 
@@ -2101,7 +2101,7 @@ class GatesSingleMetricTable(WorkspaceTable):
         formatters = [None]*nCols #[None] + ['ModelType']*(nCols-1)
 
         #latex_head =  "\\begin{tabular}[l]{%s}\n\hline\n" % ("|c" * nCols + "|")
-        #latex_head += "\\multirow{2}{*}{LinearOperator} & " + \
+        #latex_head += "\\multirow{2}{*}{Gate} & " + \
         #              "\\multicolumn{%d}{c|}{%s} \\\\ \cline{2-%d}\n" % (len(titles),niceNm,nCols)
         #latex_head += " & " + " & ".join([mknice(t) for t in titles]) + "\\\\ \hline\n"
         #

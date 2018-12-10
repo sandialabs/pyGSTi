@@ -131,7 +131,7 @@ Choi_trace = _modf.opfn_factory(choi_trace) # init args == (model, opLabel)
 
 
 class Gate_eigenvalues(_modf.ModelFunction):
-    """LinearOperator eigenvalues"""
+    """Gate eigenvalues"""
     def __init__(self, model, oplabel):
         self.oplabel = oplabel
         _modf.ModelFunction.__init__(self, model, ["gate:" + str(oplabel)])
@@ -199,7 +199,7 @@ class Gate_eigenvalues(_modf.ModelFunction):
 
 
 class Circuit_eigenvalues(_modf.ModelFunction):
-    """LinearOperator sequence eigenvalues"""
+    """Circuit eigenvalues"""
     def __init__(self, model, circuit):
         self.circuit = circuit
         _modf.ModelFunction.__init__(self, model, ["all"])
@@ -798,8 +798,7 @@ def errgen_and_projections(errgen, mxBasis):
     ret['error generator'] = errgen
     proj, scale = \
         _tools.std_errgen_projections( 
-            errgen,"hamiltonian",mxBasis.name,mxBasis,return_scale_fctr=True)
-        # mxBasis.name because projector dim is not the same as gate dim
+            errgen,"hamiltonian",mxBasis,mxBasis,return_scale_fctr=True)
     ret['hamiltonian projections'] = proj
     ret['hamiltonian projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2 \
                                            if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
@@ -807,8 +806,7 @@ def errgen_and_projections(errgen, mxBasis):
       
     proj, scale = \
         _tools.std_errgen_projections( 
-            errgen,"stochastic",mxBasis.name,mxBasis,return_scale_fctr=True)
-        # mxBasis.name because projector dim is not the same as gate dim
+            errgen,"stochastic",mxBasis,mxBasis,return_scale_fctr=True)
     ret['stochastic projections'] = proj
     ret['stochastic projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2 \
                                           if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
@@ -816,8 +814,7 @@ def errgen_and_projections(errgen, mxBasis):
 
     proj, scale = \
         _tools.std_errgen_projections( 
-            errgen,"affine",mxBasis.name,mxBasis,return_scale_fctr=True)
-        # mxBasis.name because projector dim is not the same as gate dim
+            errgen,"affine",mxBasis,mxBasis,return_scale_fctr=True)
     ret['affine projections'] = proj
     ret['affine projection power'] = float(_np.sum(proj**2)/scale**2) / egnorm**2 \
                                      if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
@@ -876,8 +873,8 @@ def robust_logGTi_and_projections(modelA, modelB, syntheticIdleStrs):
     error_labels = []
     for ptype in ("hamiltonian","stochastic","affine"):
         lindbladMxs = _tools.std_error_generators(modelA.dim, ptype,
-                                                  mxBasis.name) # in std basis
-        lindbladMxBasis = _Basis(mxBasis.name, int(round(_np.sqrt(modelA.dim))))
+                                                  mxBasis)
+        lindbladMxBasis = _Basis(mxBasis, int(round(_np.sqrt(modelA.dim))))
         
         lindbladMxs = lindbladMxs[1:] #skip [0] == Identity
         lbls = lindbladMxBasis.labels[1:]
@@ -907,7 +904,7 @@ def robust_logGTi_and_projections(modelA, modelB, syntheticIdleStrs):
         proj = []
         for ptype in ("hamiltonian","stochastic","affine"):
             proj.append( _tools.std_errgen_projections( 
-                errgen,ptype,mxBasis.name,mxBasis)[1:] ) #skip [0] == Identity
+                errgen,ptype,mxBasis,mxBasis)[1:] ) #skip [0] == Identity
         return _np.concatenate( proj )
 
     #def vec_to_projdict(vec):
@@ -1039,7 +1036,7 @@ def general_decomposition(modelA, modelB):
         decomp[gl + ' log inexactness'] = _np.linalg.norm(_spl.expm(logG)-gate)
     
         hamProjs, hamGens = _tools.std_errgen_projections(
-            logG, "hamiltonian", mxBasis.name, mxBasis, return_generators=True)
+            logG, "hamiltonian", mxBasis, mxBasis, return_generators=True)
         norm = _np.linalg.norm(hamProjs)
         decomp[gl + ' axis'] = hamProjs / norm if (norm > 1e-15) else hamProjs
             
@@ -1169,7 +1166,7 @@ def info_of_opfn_by_name(name):
         niceName = "Entanglement|Infidelity"
         tooltip = "1.0 - <psi| 1 x Lambda(psi) |psi>"
     elif name == "agi":
-        niceName = "Avg. LinearOperator|Infidelity"
+        niceName = "Avg. Gate|Infidelity"
         tooltip = "d/(d+1) (entanglement infidelity)"
     elif name == "trace":
         niceName = "1/2 Trace|Distance"
@@ -1181,19 +1178,19 @@ def info_of_opfn_by_name(name):
         niceName = "Non-unitary|Ent. Infidelity"
         tooltip = "(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]"
     elif name == "nuagi":
-        niceName = "Non-unitary|Avg. LinearOperator Infidelity"
+        niceName = "Non-unitary|Avg. Gate Infidelity"
         tooltip = "(d-1)/d [1 - sqrt( unitarity(A B^-1) )]"
     elif name == "evinf":
         niceName = "Eigenvalue|Ent. Infidelity"
         tooltip = "min_P 1 - (lambda P lambda^dag)/d^2  [P = permutation, lambda = eigenvalues]"
     elif name == "evagi":
-        niceName = "Eigenvalue|Avg. LinearOperator Infidelity"
+        niceName = "Eigenvalue|Avg. Gate Infidelity"
         tooltip = "min_P (d^2 - lambda P lambda^dag)/d(d+1)  [P = permutation, lambda = eigenvalues]"
     elif name == "evnuinf":
         niceName = "Eigenvalue Non-U.|Ent. Infidelity"
         tooltip = "(d^2-1)/d^2 [1 - sqrt( eigenvalue_unitarity(A B^-1) )]"
     elif name == "evnuagi":
-        niceName = "Eigenvalue Non-U.|Avg. LinearOperator Infidelity"
+        niceName = "Eigenvalue Non-U.|Avg. Gate Infidelity"
         tooltip = "(d-1)/d [1 - sqrt( eigenvalue_unitarity(A B^-1) )]"
     elif name == "evdiamond":
         niceName = "Eigenvalue|1/2 Diamond-Dist"

@@ -12,21 +12,21 @@ ws.GaugeOptParamsTable(goparams)
 ### SPAM error metrics
 Metrics that quantify errors in the *SPAM operations* -- the estimated initial state preparation[s] and POVM measurement -- with respect to the ideal target operations
 @@code
-ws.SpamVsTargetTable(gs, gs_target, cri)
+ws.SpamVsTargetTable(mdl, target_model, cri)
 
 @@markdown
 ### Individual gate error metrics
 Metrics that quantify errors in each individual estimated logic gate, with respect to the ideal target gates.
 @@code
-ws.GatesVsTargetTable(gs, gs_target, cri, 
+ws.GatesVsTargetTable(mdl, target_model, cri, 
                       display=('inf','agi','trace','diamond','nuinf','nuagi'))
 
 @@markdown
 ### Per-germ error metrics
 Metrics that quantify errors in each germ, with respect to the germ composed from the ideal target gates.
 @@code
-ws.GatesVsTargetTable(gs, gs_target, None, 
-                      display=('inf','trace','nuinf'), virtual_gates=germs)
+ws.GatesVsTargetTable(mdl, target_model, None, 
+                      display=('inf','trace','nuinf'), virtual_ops=germs)
 
 
 
@@ -37,7 +37,7 @@ ws.GatesVsTargetTable(gs, gs_target, None,
 @@markdown
 ### The GST estimate of the SPAM operations. Compares the estimated SPAM operations to those desired for convenience.
 @@code
-ws.SpamTable([gs_target, gs],
+ws.SpamTable([target_model, mdl],
              ['Target','Estimated'],
              'boxes', cri, includeHSVec=False)
 
@@ -45,7 +45,7 @@ ws.SpamTable([gs_target, gs],
 ### The GST estimate of the logic gate operations.
 Compares the *ideal* (generally unitary) logic gates (second column, also in targetGatesetTable) with those *estimated* by GST (third column).  Each gate is represented as a $d^2\times d^2$ *superoperator* that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).  Note that it is impossible to discern even order-1%% deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.
 @@code
-ws.GatesTable([gs_target, gs], ['Target','Estimated'], "boxes", cri)
+ws.GatesTable([target_model, mdl], ['Target','Estimated'], "boxes", cri)
 
 
 
@@ -56,13 +56,13 @@ ws.GatesTable([gs_target, gs], ['Target','Estimated'], "boxes", cri)
 ### Decomposition of estimated gates.
 A rotation axis and angle are extracted from each gate by considering the projection of its logarithm onto a the Pauli Hamiltonian projectors.  The direction and magnitude (up to a conventional constant) give the axis and angle respectively.
 @@code
-ws.GateDecompTable(gs, gs_target, None) #using cri can take a long time
+ws.GateDecompTable(mdl, target_model, None) #using cri can take a long time
 
 @@markdown
 ### Spectra of estimated gates' Choi representation
 The eigenvalues of the Choi representation of each estimated gate.  Magnitudes of *negative* values are plotted using <span style="color:red">red</span> bars. Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP gate model.
 @@code
-ws.ChoiTable(gs, None, cri, display=("barplot",))
+ws.ChoiTable(mdl, None, cri, display=("barplot",))
 
 
 
@@ -74,4 +74,4 @@ ws.ChoiTable(gs, None, cri, display=("barplot",))
 A heat map of the Error Generator for each gate, which is the Lindbladian $\mathbb{L}$ that describes *how* the gate is failing to match the target, along with the result of projecting each generator onto some subspaces of the error generator space.
 @@code
 errgen_type = "logTiG" # or "logGTi" or "logG-logT"
-ws.ErrgenTable(gs, gs_target, cri, ("errgen","H","S","A"), "boxes", errgen_type)
+ws.ErrgenTable(mdl, target_model, cri, ("errgen","H","S","A"), "boxes", errgen_type)

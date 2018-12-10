@@ -1,4 +1,4 @@
-""" LinearOperator string list creation functions using repeated-germs limited by a max-length."""
+""" Circuit list creation functions using repeated-germs limited by a max-length."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -491,7 +491,7 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
     if nest: #then totStrs computation about overcounts -- just take string count of final stage
         totStrs = len(running_gss.allstrs)
 
-    printer.log("--- LinearOperator Sequence Creation ---", 1)
+    printer.log("--- Circuit Creation ---", 1)
     printer.log(" %d sequences created" % totStrs,2)
     if dscheck:
         printer.log(" Dataset has %d entries: %d utilized, %d requested sequences were missing"

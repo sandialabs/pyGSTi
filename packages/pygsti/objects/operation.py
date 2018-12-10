@@ -4875,7 +4875,7 @@ class LindbladErrorgen(LinearOperator):
 
         d2 = errgen.shape[0]
         d = int(round(_np.sqrt(d2)))
-        if d*d != d2: raise ValueError("LinearOperator dim must be a perfect square")
+        if d*d != d2: raise ValueError("Error generator dim must be a perfect square")
         
         #Determine whether we're using sparse bases or not
         sparse = None
@@ -5004,7 +5004,7 @@ class LindbladErrorgen(LinearOperator):
         # Store superop dimension
         d2 = dim
         d = int(round(_np.sqrt(d2)))
-        assert(d*d == d2), "LinearOperator dim must be a perfect square"
+        assert(d*d == d2), "Dimension must be a perfect square"
 
         self.nonham_mode = nonham_mode
         self.param_mode = param_mode
@@ -5088,7 +5088,7 @@ class LindbladErrorgen(LinearOperator):
         
         d2 = self.dim
         d = int(round(_np.sqrt(d2)))
-        assert(d*d == d2), "LinearOperator dim must be a perfect square"
+        assert(d*d == d2), "Errorgen dim must be a perfect square"
 
         # Get basis transfer matrix
         mxBasisToStd = _bt.transform_matrix(self.matrix_basis, "std", d)

@@ -50,6 +50,7 @@ class Model(object):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
 
+    TODO: docstring update - this is an explicit model:
     A Model stores a set of labeled LinearOperator objects and provides dictionary-like
     access to their matrices.  State preparation and POVM effect operations are
     represented as column vectors.
@@ -479,7 +480,7 @@ class Model(object):
         """
         Compiles a list of :class:`Circuit`s.
 
-        LinearOperator strings must be "compiled" before probabilities can be computed for
+        Circuits must be "compiled" before probabilities can be computed for
         them. Each string corresponds to some number of "outcomes", indexed by an
         "outcome label" that is a tuple of POVM-effect or instrument-element
         labels like "0".  Compiling creates maps between operation sequences and their
@@ -1975,7 +1976,7 @@ class ExplicitOpModel(Model):
 
     def __setitem__(self, label, value):
         """
-        Set a LinearOperator or SPAM vector associated with a given label.
+        Set an operator or SPAM vector associated with a given label.
 
         Parameters
         ----------
@@ -2005,7 +2006,7 @@ class ExplicitOpModel(Model):
 
     def __getitem__(self, label):
         """
-        Get a LinearOperator or SPAM vector associated with a given label.
+        Get an operation or SPAM vector associated with a given label.
 
         Parameters
         ----------
@@ -2360,7 +2361,7 @@ class ExplicitOpModel(Model):
         """
         Compute the product of a specified sequence of operation labels.
 
-        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
+        Note: Operator matrices are multiplied in the reversed order of the tuple. That is,
         the first element of circuit can be thought of as the first gate operation
         performed, which is on the far right of the product of matrices.
 

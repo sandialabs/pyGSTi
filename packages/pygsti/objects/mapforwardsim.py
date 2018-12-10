@@ -31,9 +31,6 @@ UNITARY  = 1
 CLIFFORD = 2
 
 
-#TODO:
-# LinearOperator -> DenseOperator
-# New "LinearOperator" base class, new "MapOperator" class
 class MapForwardSimulator(ForwardSimulator):
     """
     Encapsulates a calculation tool used by model objects to perform product

@@ -1079,7 +1079,7 @@ class Circuit(object):
             often result in a massive increase in circuit depth.
   
         oneQgate_relations : dict, optional
-            LinearOperator relations for the one-qubit gates in the new gate library, that are used in the  depth compression, to 
+            Gate relations for the one-qubit gates in the new gate library, that are used in the  depth compression, to 
             cancel / combine gates. E.g., one key-value pair might be  ('Gh','Gh') : 'I', to signify that two Hadamards c
             ompose to the idle gate 'Gi'. See the depth_compression() method for more details.
 
@@ -1938,7 +1938,7 @@ class Circuit(object):
         str
             A quil string.
         """
-        raise NotImplementedError("TODO: need to upgrade this method")
+
         # create standard conversations.
         if gatename_conversion is None:
             gatename_conversion = _itgs.get_standard_gatenames_quil_conversions()
@@ -1973,9 +1973,9 @@ class Circuit(object):
             qubits_used = []
             
             # Go through the (non-self.identity) gates in the layer and convert them to quil
-            for gate in layer:
+            for gate in layer.components:
                 gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
-                assert(len(gate_qubits) <= 2 or gate.qubits is None), 'LinearOperator on more than 2 qubits given; this is currently not supported!'
+                assert(len(gate_qubits) <= 2 or gate.qubits is None), 'Gate on more than 2 qubits given; this is currently not supported!'
                 
                 
                 # Find the quil for the gate.
@@ -2053,7 +2053,7 @@ class Circuit(object):
         str
             An openqasm string.
         """
-        raise NotImplementedError("TODO: need to upgrade this method")
+
         # create standard conversations.
         if gatename_conversion is None:
             gatename_conversion = _itgs.get_standard_gatenames_openqasm_conversions()
@@ -2091,7 +2091,7 @@ class Circuit(object):
             qubits_used = []
             
             # Go through the (non-self.identity) gates in the layer and convert them to openqasm
-            for gate in layer:
+            for gate in layer.components:
                 gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
                 assert(len(gate_qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
                 

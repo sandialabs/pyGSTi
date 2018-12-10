@@ -162,7 +162,7 @@ class Results(object):
                               "*before* adding estimates"))
 
         if 'iteration' not in self.circuit_structs:
-            raise ValueError(("LinearOperator sequences must be initialized"
+            raise ValueError(("Circuits must be initialized"
                               "*before* adding estimates"))
 
         assert(results.dataset is self.dataset), "DataSet inconsistency: cannot import estimates!"
@@ -268,7 +268,7 @@ class Results(object):
                               "*before* adding estimates"))
 
         if 'iteration' not in self.circuit_structs:
-            raise ValueError(("LinearOperator sequences must be initialized"
+            raise ValueError(("Circuits must be initialized"
                               "*before* adding estimates"))
 
 

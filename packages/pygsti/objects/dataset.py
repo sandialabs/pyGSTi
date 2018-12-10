@@ -1235,7 +1235,7 @@ class DataSet(object):
 
                 if circuit not in self.cirIndex:
                     if missingAction == "raise":
-                        raise KeyError(("LinearOperator string %s was not found in "
+                        raise KeyError(("Circuit %s was not found in "
                                         "dataset being truncated and "
                                         "`missingAction` == 'raise'") % str(circuit))
                     elif missingAction == "warn":
@@ -1266,7 +1266,7 @@ class DataSet(object):
                     trunc_dataset.add_raw_series_data( circuit, [ self.ol[i] for i in self.oliData[ circuitIndx ] ],
                                                    self.timeData[ circuitIndx ].copy(), repData) #Copy operation so truncated dataset can be modified
                 elif missingAction == "raise":
-                    raise KeyError(("LinearOperator string %s was not found in "
+                    raise KeyError(("Circuit %s was not found in "
                                     "dataset being truncated and "
                                     "`missingAction` == 'raise'") % str(circuit))
                 elif missingAction == "warn":
@@ -1440,7 +1440,7 @@ class DataSet(object):
                 if opstr in self.auxInfo:
                     auxkeys_to_remove.append(opstr)
             elif missingAction == "raise":
-                raise KeyError(("LinearOperator string %s does not exist and therefore "
+                raise KeyError(("Circuit %s does not exist and therefore "
                                 "cannot be removed when `missingAction` == "
                                 "'raise'") % str(opstr))
             elif missingAction == "warn":
