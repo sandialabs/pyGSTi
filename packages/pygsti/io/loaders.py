@@ -202,7 +202,7 @@ def load_circuit_dict(filename):
     std = _stdinput.StdInputParser()
     return std.parse_dictfile(filename)
 
-def load_circuit_list(filename, readRawStrings=False):
+def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_lines=None):
     """
     Load a operation sequence list from a file, formatted
     using the standard text-format.
@@ -215,6 +215,8 @@ def load_circuit_list(filename, readRawStrings=False):
     readRawStrings : boolean
         If True, operation sequences are not converted
         to tuples of operation labels.
+
+    TODO: docstring line_labels, num_lines - see Circuit constructor
 
     Returns
     -------
@@ -230,4 +232,4 @@ def load_circuit_list(filename, readRawStrings=False):
         return rawList
     else:
         std = _stdinput.StdInputParser()
-        return std.parse_stringfile(filename)
+        return std.parse_stringfile(filename, line_labels, num_lines)

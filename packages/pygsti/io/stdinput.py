@@ -173,7 +173,7 @@ class StdInputParser(object):
         circuitTuple = self._string_parser.parse(circuitStr)
         return circuitLabel, circuitTuple, circuitStr
 
-    def parse_stringfile(self, filename):
+    def parse_stringfile(self, filename, line_labels="auto", num_lines=None):
         """
         Parse a circuit list file.
 
@@ -181,6 +181,8 @@ class StdInputParser(object):
         ----------
         filename : string
             The file to parse.
+
+        TODO: docstring line_labels, num_lines - see Circuit constructor
 
         Returns
         -------
@@ -192,7 +194,8 @@ class StdInputParser(object):
             for line in stringfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] =='#': continue
-                circuit_list.append( _objs.Circuit(self.parse_circuit(line), stringrep=line) )
+                circuit_list.append( _objs.Circuit(self.parse_circuit(line), stringrep=line,
+                                                   line_labels=line_labels, num_lines=num_lines) )
         return circuit_list
 
     def parse_dictfile(self, filename):
