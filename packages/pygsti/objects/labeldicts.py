@@ -416,6 +416,8 @@ class StateSpaceLabels(object):
 
         #Allow initialization via another StateSpaceLabels object
         if isinstance(labelList, StateSpaceLabels):
+            dims = [ tuple((labelList.labeldims[lbl] for lbl in tpbLbls))
+                     for tpbLbls in labelList.labels ]
             labelList = labelList.labels
 
         #Step1: convert labelList (and dims, if given) to a list of 
@@ -459,7 +461,7 @@ class StateSpaceLabels(object):
         else:
             for tpbLabels,tpbDims in zip(self.labels,dims):
                 for lbl,dim in zip(tpbLabels,tpbDims):
-                    assert(isinstance(lbl,_numbers.Integral)), "Dimensions must be integers!"
+                    assert(isinstance(dim,_numbers.Integral)), "Dimensions must be integers!"
                     self.labeldims[lbl] = dim
 
         # Store the starting index (within the density matrix / state vec) of
@@ -472,6 +474,52 @@ class StateSpaceLabels(object):
             self.tpb_index.update( { lbl: iTPB for lbl in tpbLabels } )
 
         self.dim = _Dim(tpb_dims) #Note: access tensor-prod-block dims via self.dim.blockDims
+
+    def num_tensor_prod_blocks(self):
+        """
+        Get the number of tensor-product blocks which are direct-summed
+        to get the final state space.
+
+        Returns
+        -------
+        int
+        """
+        return len(self.labels)
+
+    def tensor_product_block_labels(self, iTPB):
+        """
+        Get the labels for the `iTBP`-th tensor-product block.
+
+        Parameters
+        ----------
+        iTPD : int
+           The index of the tensor product block whose state-space
+           labels you wish to retrieve.
+
+        Returns
+        -------
+        tuple
+        """
+        return self.labels[iTPB]
+
+    def tensor_product_block_dims(self, iTPB):
+        """
+        Get the dimension corresponding to each label in the
+        `iTBP`-th tensor-product block.  The dimension of the 
+        entire block is the product of these.
+
+        Parameters
+        ----------
+        iTPD : int
+           The index of the tensor product block whose state-space
+           dimensions you wish to retrieve.
+
+        Returns
+        -------
+        tuple
+        """
+        return tuple((self.labeldims[lbl] for lbl in self.labels[iTPB]))
+
 
     def product_dim(self, labels):
         """
