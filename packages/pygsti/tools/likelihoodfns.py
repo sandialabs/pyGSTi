@@ -1083,7 +1083,7 @@ def logl_max_terms(model, dataset, circuit_list=None,
         #    evaltree_cache['cntVecMx'] = countVecMx
         #    evaltree_cache['totalCntVec'] = totalCntVec
 
-        
+    countVecMx = countVecMx.clip(min=0.0) # fix roundoff errors giving small negative counts ~ -1e-16, etc.
     freqs = countVecMx / totalCntVec
     freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
 

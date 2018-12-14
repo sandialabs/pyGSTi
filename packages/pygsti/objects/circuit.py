@@ -605,12 +605,13 @@ class Circuit(object):
             new_layer = []
             for l in self._layer_components(i): # loop over labels in this layer
                 sslbls = _sslbls_of_nested_lists_of_simple_labels(l)
-                if len(sslbls.intersection(lines)) == 0:
+                if sslbls is None or len(set(sslbls).intersection(lines)) == 0:
                     new_layer.append(l)
-                elif not delete_straddlers and not sslbls.issubset(lines):
+                elif not delete_straddlers and not set(sslbls).issubset(lines):
                     raise ValueError(("Cannot remove a block that is straddled by "
                                       "%s when `delete_straddlers` == False!") % _Label(l))
             self._labels[i] = new_layer
+        self.line_labels = tuple([x for x in self.line_labels if x not in lines])
 
     def __getitem__(self, key):
         layers,lines = self._proc_key_arg(key)
