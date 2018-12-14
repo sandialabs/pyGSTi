@@ -214,7 +214,7 @@ class InstrumentTestCase(BaseTestCase):
     def testBasicGatesetOps(self):
         # This test was made from a debug script used to get the code working
         model = pygsti.construction.build_explicit_model(
-            [2], [('Q0',)],['Gi','Gx','Gy'],
+            [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
         #    prepLabels=["rho0"], prepExpressions=["0"],
         #    effectLabels=["0","1"], effectExpressions=["0","complement"])

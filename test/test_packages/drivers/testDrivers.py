@@ -264,7 +264,7 @@ class TestDriversMethods(DriversTestCase):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
         ts = "whole germ powers"
 
-        target_model = pygsti.construction.build_explicit_model([2],[('Q0',)], ['Gi','Gx','Gy'],
+        target_model = pygsti.construction.build_explicit_model([('Q0',)], ['Gi','Gx','Gy'],
                                                       [ "D(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                                       parameterization="linear")
 

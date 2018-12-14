@@ -17,12 +17,12 @@ class GateTestCase(BaseTestCase):
 
     def test_lpg_deriv(self):
         mdl_target_lp = pc.build_explicit_model(
-            [2], [('Q0',)],['Gi','Gx'], [ "D(Q0)","X(pi/2,Q0)" ],
+            [('Q0',)],['Gi','Gx'], [ "D(Q0)","X(pi/2,Q0)" ],
             basis="pp", parameterization="linear" )
 
     
         mdl_target_lp2 = pc.build_explicit_model(
-            [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'], 
+            [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'], 
             [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
             basis="pp", parameterization="linearTP" )
 

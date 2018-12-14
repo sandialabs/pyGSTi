@@ -205,7 +205,7 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
         #    eExprs.append( str(i) )    
         #Qlbls = tuple( ['Q%d' % i for i in range(nQubits)] )
         #mdl = pygsti.construction.build_explicit_model(
-        #    [2**nQubits], [Qlbls], [], [], 
+        #    [Qlbls], [], [], 
         #    effectLabels=eLbls, effectExpressions=eExprs)
     
         if isinstance(geometry, _qgraph.QubitGraph):

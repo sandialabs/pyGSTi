@@ -36,7 +36,7 @@ legacy_germs = _strc.circuit_list(
      ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')] )
 
 #Construct a target model: Identity, X(pi/2), Y(pi/2)
-target_model = _setc.build_explicit_model([2],[('Q0',)], ['Gi','Gx','Gy'],
+target_model = _setc.build_explicit_model([('Q0',)], ['Gi','Gx','Gy'],
                                 [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
 _gscache = { ("full","auto"): target_model }

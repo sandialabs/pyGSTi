@@ -257,7 +257,7 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.MetadataTable(gsTP, params) )
 
         weirdGS = pygsti.construction.build_explicit_model(
-            [4], [('Q0','Q1')],['Gi'], ["I(Q0)"])
+            [('Q0','Q1')],['Gi'], ["I(Q0)"])
         #weirdGS.preps['rho1'] = pygsti.obj.ComplementSPAMVec(weirdGS.preps['rho0'],[]) #num_params not implemented!
         weirdGS.povms['Mtensor'] = pygsti.obj.TensorProdPOVM([self.mdl.povms['Mdefault'],self.mdl.povms['Mdefault']])
         tbls.append( w.MetadataTable(weirdGS, params) )
