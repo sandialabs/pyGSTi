@@ -90,6 +90,14 @@ class Model(object):
     ##########################################
     ## Get/Set methods
     ##########################################
+
+    @property
+    def simtype(self):
+        return self._sim_type
+
+    @property
+    def evotype(self):
+        return self._evotype
     
     def set_simtype(self, sim_type, calc_cache=None):
         #Calculator selection based on simulation type
@@ -3055,7 +3063,8 @@ class ExplicitOpModel(Model):
 
 
     def randomize_with_unitary(self, scale, seed=None, randState=None):
-        """Create a new model with random unitary perturbations.
+        """
+        Create a new model with random unitary perturbations.
 
         Apply a random unitary to each element of a model, and return the
         result, without modifying the original (this) model. This method
