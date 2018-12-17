@@ -19,7 +19,7 @@ ws.GatesVsTargetTable(mdl, target_model, cri,
 ### Eigenvalues of estimated gates: 
 The spectrum (Eigenvalues column) of each estimated gate.  It also breaks out the real and imaginary parts of each eigenvalue, and it compares the estimated eigenvalues to those of the ideal target gates in several useful ways.
 @@code
-ws.GateEigenvalueTable(mdl, target_mdl, cri,
+ws.GateEigenvalueTable(mdl, target_model, cri,
                        display=('evals','target','absdiff-evals',
                        'infdiff-evals','log-evals','absdiff-log-evals'))
 
