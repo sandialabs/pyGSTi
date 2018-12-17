@@ -179,8 +179,6 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
 
         #Process "auto" sim_type
         _,evotype = _gt.split_lindblad_paramtype(parameterization)
-          #FUTURE: should probabal make extracting evotype from a parameterization name a
-          # function somewhere - maybe a classmethod of LindbladDenseOp?
         assert(evotype in ("densitymx","svterm","cterm")), "State-vector evolution types not allowed."
         if sim_type == "auto":
             if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
@@ -188,9 +186,8 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
         assert(sim_type in ("matrix","map") or sim_type.startswith("termorder"))
 
         lizardArgs = {'add_idle_noise': addIdleNoiseToAllGates , 'errcomp_type': errcomp_type, 'sparse_expm': sparse }
-        super(CloudNoiseModel,self).__init__({}, CloudNoiseLayerLizard, lizardArgs, sim_type=sim_type)
-        self.set_state_space_labels(self.qubit_labels)
-        self.dim = 4**nQubits
+        super(CloudNoiseModel,self).__init__(self.qubit_labels, "pp", {}, CloudNoiseLayerLizard,
+                                             lizardArgs, sim_type=sim_type, evotype=evotype)
 
         printer = _VerbosityPrinter.build_printer(verbosity)
         geometry_name = "custom" if isinstance(geometry, _qgraph.QubitGraph) else geometry

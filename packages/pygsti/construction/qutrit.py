@@ -181,7 +181,8 @@ def make_qutrit_model(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
     E1final = change_basis(_np.reshape(E1,(9,1)), "std", basis)
     E2final = change_basis(_np.reshape(E2,(9,1)), "std", basis)
 
-    qutritMDL = _objs.ExplicitOpModel()
+    sslbls = _objs.StateSpaceLabels(['QT'],[3])
+    qutritMDL = _objs.ExplicitOpModel(sslbls, Basis(basis,3))
     qutritMDL.preps['rho0'] = rho0final
     qutritMDL.povms['Mdefault'] = _objs.UnconstrainedPOVM([('0bright',E0final),
                                                           ('1bright',E1final),
@@ -190,7 +191,6 @@ def make_qutrit_model(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
     qutritMDL.operations['Gx'] = _objs.FullDenseOp(arrType(gateXSOfinal))
     qutritMDL.operations['Gy'] = _objs.FullDenseOp(arrType(gateYSOfinal))
     qutritMDL.operations['Gm'] = _objs.FullDenseOp(arrType(gateMSOfinal))
-    qutritMDL.basis = Basis(basis,3)
     qutritMDL.default_gauge_group = _objs.gaugegroup.FullGaugeGroup(qutritMDL.dim)
     
     return qutritMDL

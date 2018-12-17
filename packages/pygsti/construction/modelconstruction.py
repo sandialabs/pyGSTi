@@ -906,12 +906,12 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
     Model
         The created model.
     """
-    dmDim, _, blockDims = basis.dim #don't need opDim
+    dmDim = basis.dim.dmDim
     defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
     stateSpaceLabels = _ld.StateSpaceLabels(stateSpaceLabels)
-    ret = _mdl.ExplicitOpModel(default_param=defP)
+
+    ret = _mdl.ExplicitOpModel(stateSpaceLabels, basis.copy(), default_param=defP)
                  #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
-    ret.set_state_space_labels(stateSpaceLabels)
 
     for label,rhoExpr in zip(prepLabels, prepExpressions):
         ret.preps[label] = basis_build_vector(rhoExpr, basis)
@@ -948,12 +948,6 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
         ret.operations[opLabel] = basis_build_operation(stateSpaceLabels,
                                           opExpr, basis, parameterization)
 
-    if len(blockDims) == 1:
-        basisDims = blockDims[0]
-    else:
-        basisDims = blockDims 
-
-    ret.basis = _Basis(basis, basisDims)
 
     if parameterization == "full":
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.dim)

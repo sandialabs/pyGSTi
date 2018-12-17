@@ -131,10 +131,11 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             raise ValueError("Cannot obtain dimension!")
 
         if self.parent is None: return
-        if self.parent.dim is None:
-            self.parent._dim = dim
-            if self.parent._sim_type == "auto":
-                self.parent.set_simtype("auto") # run deferred auto-simtype now that _dim is set
+        #TODO REMOVE # Model dim is set at creation time now (w/state space lbls)
+        #if self.parent.dim is None: 
+        #    self.parent._dim = dim
+        #    if self.parent._sim_type == "auto":
+        #        self.parent.set_simtype("auto") # run deferred auto-simtype now that _dim is set
         elif self.parent.dim != dim:
             raise ValueError("Cannot add object with dimension " +
                              "%s to model of dimension %d"
@@ -144,8 +145,9 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
     def _check_evotype(self, evotype):
         if not self.flags['match_parent_evotype']: return # no check
         if self.parent is None: return
-        if self.parent._evotype is None:
-            self.parent._evotype = evotype
+        #TODO REMOVE # Model evotype is set at creation time now
+        #if self.parent._evotype is None:
+        #    self.parent._evotype = evotype
         elif self.parent._evotype != evotype:
             raise ValueError(("Cannot add an object with evolution type"
                               " '%s' to a model with one of '%s'") %
@@ -538,6 +540,11 @@ class StateSpaceLabels(object):
         return int( _np.product([self.labeldims[l] for l in labels]) )
 
     def __str__(self):
-        if len(self.labels) == 0: return "(Null state space)"
-        elif len(self.labels) == 1: return str(self.labels[0])
-        else: return str(self.labels)
+        if len(self.labels) == 0: return "ZeroDimSpace"
+        return ' + '.join(
+            [ '*'.join(["%s(%d)" % (lbl,self.labeldims[lbl]) for lbl in tpb])
+              for tpb in self.labels ] )
+
+    def __repr__(self):
+        return "StateSpaceLabels[" + str(self) + "]"
+    

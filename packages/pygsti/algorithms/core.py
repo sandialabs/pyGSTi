@@ -134,8 +134,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     if guessModelForGauge is None:
         guessModelForGauge = targetModel
 
-    lgstModel = _objs.ExplicitOpModel()
-    lgstModel.state_space_labels = targetModel.state_space_labels
+    lgstModel = _objs.ExplicitOpModel(targetModel.state_space_labels, targetModel.basis)
 
     # the dimensions of the LGST matrices, called (nESpecs, nRhoSpecs),
     # are determined by the number of outcomes obtained by compiling the

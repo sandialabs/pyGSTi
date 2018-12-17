@@ -273,9 +273,8 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
                 sim_type = "map" # use map as default for stabilizer-type evolutions
             else: assert(False) # should be unreachable
 
-        super(LocalNoiseModel,self).__init__({}, SimpleCompLayerLizard, {}, sim_type=sim_type, evotype=evotype)
-        self.dim = 4**nQubits if evotype in ("densitymx","svterm","cterm") else 2**nQubits
-        self.set_state_space_labels(qubit_labels)
+        super(LocalNoiseModel,self).__init__(qubit_labels, "pp", {}, SimpleCompLayerLizard, {},
+                                             sim_type=sim_type, evotype=evotype)
     
         if parameterization in ("TP","full"): # then make tensor-product spam
             prep_factors = []; povm_factors = []

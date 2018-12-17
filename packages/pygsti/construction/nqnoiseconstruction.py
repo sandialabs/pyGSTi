@@ -2530,11 +2530,10 @@ def stdmodule_to_smqmodule(std_module):
     out_module['gates'] = [ find_replace_labels.get(nm,nm) for nm in std_module.gates ]
     
     #Target model (update labels)
-    new_gs_target = _objs.ExplicitOpModel()
+    new_gs_target = _objs.ExplicitOpModel(sslbls, std_module.target_model.basis.copy())
     new_gs_target._evotype = std_module.target_model._evotype
     new_gs_target._default_gauge_group = std_module.target_model._default_gauge_group
-    new_gs_target.basis = std_module.target_model.basis.copy()
-    new_gs_target.set_state_space_labels( sslbls )
+
     for lbl,obj in std_module.target_model.preps.items():
         new_lbl = find_replace_labels.get(lbl,lbl)
         new_gs_target.preps[new_lbl] = obj.copy()

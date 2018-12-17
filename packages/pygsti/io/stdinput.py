@@ -694,14 +694,14 @@ def read_model(filename):
     """
     basis = 'pp' #default basis to load as
 
-    mdl = _objs.ExplicitOpModel()
     spam_vecs = _OrderedDict();
     spam_labels = _OrderedDict(); remainder_spam_label = ""
     identity_vec = _np.transpose( _np.array( [ _np.sqrt(2.0), 0,0,0] ) )  #default = 1-QUBIT identity vector
 
     basis_abbrev = "pp" #default assumed basis
-    basis_dims = None
+    basis_dim = None
     gaugegroup_name = None
+    state_space_labels = None
 
     #First try to find basis:
     with open(filename) as inputfile:
@@ -713,22 +713,46 @@ def read_model(filename):
                 basis_abbrev = parts[0]
                 if len(parts) > 1:
                     basis_dims = list(map(int, "".join(parts[1:]).split(",")))
-                    if len(basis_dims) == 1: basis_dims = basis_dims[0]
+                    assert(len(basis_dims) == 1), "Multiple basis dims is no longer supported!"
+                    basis_dim = basis_dims[0]
                 else:
-                    basis_dims = None
+                    basis_dim = None
             elif line.startswith("GAUGEGROUP:"):
                 gaugegroup_name = line[len("GAUGEGROUP:"):].strip()
                 if gaugegroup_name not in ("Full","TP","Unitary"):
                     _warnings.warn(("Unknown GAUGEGROUP name %s.  Default gauge"
                                     "group will be set to None") % gaugegroup_name)
+            elif line.startswith("STATESPACE:"):
+                tpbs_lbls = []; tpbs_dims = []
+                tensor_prod_blk_strs = line[len("STATESPACE:"):].split("+")
+                for tpb_str in tensor_prod_blk_strs:
+                    tpb_lbls = []; tpb_dims = []
+                    for lbl_and_dim in tpb_str.split("*"):
+                        start = lbl_and_dim.index('(')
+                        end = lbl_and_dim.rindex(')')
+                        lbl,dim = lbl_and_dim[:start], lbl_and_dim[start+1:end]
+                        tpb_lbls.append(lbl.strip())
+                        tpb_dims.append(int(dim.strip()))
+                    tpbs_lbls.append( tuple(tpb_lbls) )
+                    tpbs_dims.append( tuple(tpb_dims) )
+                state_space_labels = _objs.StateSpaceLabels(tpbs_lbls, tpbs_dims)
 
-    if basis_dims is not None:
+    if basis_dim is not None:
         # then specfy a dimensionful basis at the outset
         basis = _objs.Basis(basis_abbrev, basis_dims)
     else:
-        # otherwise we'll try to infer one at the end (and add_current routine
-        # uses basis in a way that can infer a dimension)
-        basis = basis_abbrev
+        # otherwise we'll try to infer one from state space labels
+        if state_space_labels is not None:
+            basis = _objs.Basis(basis_abbrev, state_space_labels.dim)
+        else:
+            raise ValueError("Cannot infer basis dimension!")
+
+    if state_space_labels is None:
+        assert(basis_dim is not None) # b/c of logic above
+        state_space_labels = _objs.StateSpaceLabels(['*'], [basis_dim])
+          # special '*' state space label w/entire dimension inferred from BASIS line
+        
+    mdl = _objs.ExplicitOpModel(state_space_labels, basis)
 
     state = "look for label or property"
     cur_obj = None
@@ -764,7 +788,10 @@ def read_model(filename):
                 assert(cur_property == ""), "Logic error!"
                 
                 parts = line.split(':')
-                if len(parts) == 2: # then this is a '<type>: <label>' line => new cur_obj
+                if any([line.startswith(pre) for pre in ("BASIS","GAUGEGROUP","STATESPACE")]):
+                    pass #handled above
+
+                elif len(parts) == 2: # then this is a '<type>: <label>' line => new cur_obj
                     typ = parts[0].strip()
                     label = parts[1].strip()
 
@@ -775,11 +802,8 @@ def read_model(filename):
                         else:
                             top_level_objs.append(cur_obj)
                         cur_obj = None
-                        
-                    if typ in ("BASIS","GAUGEGROUP"):
-                        pass #handled above
                     
-                    elif typ in ("POVM","TP-POVM","CPTP-POVM","Instrument","TP-Instrument"):
+                    if typ in ("POVM","TP-POVM","CPTP-POVM","Instrument","TP-Instrument"):
                         # a group type - so create a new *group* object
                         assert(cur_group_obj is None), "Group label encountered before ENDing prior group:\n%s" % line
                         cur_group_obj = {'label': label, 'type': typ, 'properties': {}, 'objects': [] }
@@ -962,22 +986,6 @@ def read_model(filename):
             else: assert(False), "Logic error!"
         else:
             raise ValueError("Unknown type: %s!" % cur_typ)
-
-
-            
-    #Try to infer basis dimension if none is given
-    if basis_dims is None:
-        if mdl.get_dimension() is not None:
-            basis_dims = int(round(_np.sqrt(mdl.get_dimension())))
-        elif len(spam_vecs) > 0:
-            basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
-        else:
-            raise ValueError("Cannot infer basis dimension!")
-
-        #Set basis (only needed if we didn't set it above)
-        mdl.basis = _objs.Basis(basis_abbrev, basis_dims)
-    else:
-        mdl.basis = basis # already created a Basis obj above
 
     #Add default gauge group -- the full group because
     # we add FullyParameterizedGates above.

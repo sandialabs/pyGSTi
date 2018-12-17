@@ -59,25 +59,15 @@ class Model(object):
     #Whether to perform extra parameter-vector integrity checks
     _pcheck = False
 
-    def __init__(self, compiler_helper, sim_type="auto", evotype=None):
+    def __init__(self, state_space_labels, basis, evotype, compiler_helper, sim_type="auto"):
+        """ TODO: docstring """
 
-        #Operator dimension of this Model (None => unset, to be determined)
-        self._dim = None
         self._evotype = evotype
+        self.set_state_space(state_space_labels, basis)
+          #sets self._state_space_labels, self._basis, self._dim
 
-        #Name and dimension (or list of dims) of the *basis*
-        # that the gates and SPAM vectors are expressed in.  This
-        # is for interpretational purposes only, and is reset often
-        # (for instance, when reading Model params from a vector)
-        self.reset_basis() # sets self.basis and self.state_space_labels
-
-        if sim_type != "auto":
-            self.set_simtype(sim_type)
-        else:
-            #defer setting sim_type until _dim is set (via _check_dim in labeldicts.py)
-            self._calcClass = None
-            self._sim_type = sim_type # ("auto")
-            self._sim_args = []
+        self.set_simtype(sim_type)
+          #sets self._calcClass, self._sim_type, self._sim_args
 
         self._paramvec = _np.zeros(0, 'd')
         self._rebuild_paramvec()
@@ -98,6 +88,22 @@ class Model(object):
     @property
     def evotype(self):
         return self._evotype
+
+    @property
+    def state_space_labels(self):
+        return self._state_space_labels
+
+    @property
+    def basis(self):
+        return self._basis
+
+    @basis.setter
+    def basis(self, basis):
+        if isinstance(basis, _Basis):
+            assert(basis.dim == self.state_space_labels.dim)
+            self._basis = basis
+        else: #create a basis with the proper dimension
+            self._basis = _Basis(basis, self.state_space_labels.dim)
     
     def set_simtype(self, sim_type, calc_cache=None):
         #Calculator selection based on simulation type
@@ -128,13 +134,43 @@ class Model(object):
 
     def reset_basis(self):
         """
-        "Forgets" the basis name and dimension by setting
-        these quantities to "unkown" and None, respectively.
+        "Forgets" the basis, so that
+        self.basis becomes a dummy Basis w/name "unknown".
         """
-        self.basis = _Basis('unknown', None)
-        self.state_space_labels = None
+        self._basis = _Basis('unknown', None)
 
+    def set_state_space(self, lbls, basis="pp"):
+        """
+        Sets labels for the components of the Hilbert space upon which 
+        the gates of this Model act.
 
+        Parameters
+        ----------
+        lbls : list or tuple or StateSpaceLabels object
+            A list of state-space labels (can be strings or integers), e.g.
+            `['Q0','Q1']` or a :class:`StateSpaceLabels` object.
+
+        basis : Basis or str
+            A :class:`Basis` object or a basis name (like `"pp"`), specifying
+            the basis used to interpret the operators in this Model.  If a
+            `Basis` object, then its dimensions must match those of `lbls`.
+        
+        Returns
+        -------
+        None
+        """
+        if isinstance(lbls, _ld.StateSpaceLabels):
+            self._state_space_labels = lbls
+        else:
+            self._state_space_labels = _ld.StateSpaceLabels(lbls)
+        self.basis = basis # invokes basis setter to set self._basis
+
+        #Operator dimension of this Model
+        if self._evotype in ("densitymx","svterm","cterm"):
+            self._dim = self.state_space_labels.dim.opDim
+        else:
+            self._dim = self.state_space_labels.dim.dmDim #operator dim for *state* vectors
+            # FUTURE: have a Basis for state *vectors*?
 
     @property
     def dim(self):
@@ -149,11 +185,6 @@ class Model(object):
         """
         return self._dim
 
-    @dim.setter
-    def dim(self, val):
-        self._dim = val
-        if self._sim_type == "auto":
-            self.set_simtype("auto") # run deferred auto-simtype now that _dim is set
 
     def get_dimension(self):
         """
@@ -169,25 +200,6 @@ class Model(object):
         return self._dim
 
 
-    def set_state_space_labels(self, lbls):
-        """
-        Sets labels for the components of the Hilbert space upon which 
-        the gates of this Model act.
-
-        Parameters
-        ----------
-        lbls : list or tuple or StateSpaceLabels object
-            A list of state-space labels (can be strings or integers), e.g.
-            `['Q0','Q1']` or a :class:`StateSpaceLabels` object.
-        
-        Returns
-        -------
-        None
-        """
-        if isinstance(lbls, _ld.StateSpaceLabels):
-            self.state_space_labels = lbls
-        else:
-            self.state_space_labels = _ld.StateSpaceLabels(lbls)
 
             
     ####################################################
@@ -1751,15 +1763,18 @@ class ExplicitOpModel(Model):
     #Whether access to gates & spam vecs via Model indexing is allowed
     _strict = False
 
-    def __init__(self, default_param="full",
+    def __init__(self, state_space_labels, basis="pp", default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 povm_prefix="M", instrument_prefix="I", sim_type="auto"):
+                 povm_prefix="M", instrument_prefix="I", sim_type="auto",
+                 evotype="densitymx"):
                  #REMOVE auto_idle_name=None):
         """
         Initialize a model.
 
         Parameters
         ----------
+        TODO: docstring - add state_space_labels, basis, evotype
+
         default_param : {"full", "TP", "CPTP", etc.}, optional
             Specifies the default gate and SPAM vector parameterization type.
             Can be any value allowed by :method:`set_all_parameterizations`,
@@ -1810,7 +1825,7 @@ class ExplicitOpModel(Model):
         self._default_gauge_group = None
 
         chelper = MemberDictCompilerHelper(self.preps, self.povms, self.instruments)
-        super(ExplicitOpModel, self).__init__(chelper, sim_type)
+        super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, chelper, sim_type)
 
 
     def get_primitive_prep_labels(self):
@@ -2154,7 +2169,7 @@ class ExplicitOpModel(Model):
             #Unpickling an OLD-version Model (or GateSet)
             _warnings.warn("Unpickling deprecated-format ExplicitOpModel (GateSet).  Please re-save/pickle asap.")
             self.operations = stateDict['gates']
-            self.state_space_labels = stateDict['stateSpaceLabels']
+            self._state_space_labels = stateDict['stateSpaceLabels']
             self._paramlbls = None
             self._chlp = MemberDictCompilerHelper(stateDict['preps'], stateDict['povms'], stateDict['instruments'])
             del stateDict['gates']
@@ -2166,6 +2181,12 @@ class ExplicitOpModel(Model):
             raise ValueError(("This model (GateSet) object is too old to unpickle - "
                               "try using pyGSTi v0.9.6 to upgrade it to a version "
                               "that this version can upgrade to the current version."))
+
+        #Backward compatibility:
+        if 'basis' in stateDict:
+            stateDict['_basis'] = stateDict['basis']; del stateDict['basis']
+        if 'state_space_labels' in stateDict:
+            stateDict['_state_space_labels'] = stateDict['state_space_labels']; del stateDict['_state_space_labels']
 
         #TODO REMOVE
         #if "effects" in stateDict: #
@@ -3507,9 +3528,10 @@ class ImplicitOpModel(Model):
         
     """
 
-    def __init__(self, primitive_labels=None, layer_lizard_class=ImplicitLayerLizard,
+    def __init__(self, state_space_labels, basis="pp", primitive_labels=None, layer_lizard_class=ImplicitLayerLizard,
                  layer_lizard_args=(), compiler_helper_class=None,
-                 sim_type="auto", evotype=None):
+                 sim_type="auto", evotype="densitymx"):
+        """ TODO: docstring - add state_space_labels, basis, evotype """
 
         flags = { 'auto_embed': False, 'match_parent_dim': False,
                   'match_parent_evotype': True, 'cast_to_type': None }
@@ -3534,7 +3556,8 @@ class ImplicitOpModel(Model):
             # labels found in the circuits this model can simulate.
         self.compiler_helper_class = compiler_helper_class
         compiler_helper = compiler_helper_class(self)
-        super(ImplicitOpModel, self).__init__(compiler_helper, sim_type, evotype)
+        super(ImplicitOpModel, self).__init__(state_space_labels, basis, evotype,
+                                              compiler_helper, sim_type)
 
 
     def get_primitive_prep_labels(self):
