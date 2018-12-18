@@ -196,13 +196,13 @@ class StdInputParser(object):
             for line in stringfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] =='#': continue
-                layer_lbls, circuit_str, line_lbls = self.parse_circuit(line)
+                layer_lbls, line_lbls = self.parse_circuit(line)
                 if line_lbls is None:
                     line_lbls = line_labels # default to the passed-in argument
                     nlines = num_lines
                 else: nlines = None # b/c we've got a valid line_lbls
                 
-                circuit_list.append( _objs.Circuit(layer_lbls, stringrep=circuit_str,
+                circuit_list.append( _objs.Circuit(layer_lbls, stringrep=line.strip(),
                                                    line_labels=line_lbls, num_lines=nlines, check=False) )
         return circuit_list
 
