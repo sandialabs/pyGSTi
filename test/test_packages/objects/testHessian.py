@@ -32,14 +32,14 @@ class TestHessianMethods(BaseTestCase):
 
     def test_parameter_counting(self):
         #XY Model: SPAM=True
-        n = stdxy.target_model.num_params()
+        n = stdxy.target_model().num_params()
         self.assertEqual(n,44) # 2*16 + 3*4 = 44
 
-        n = stdxy.target_model.num_nongauge_params()
+        n = stdxy.target_model().num_nongauge_params()
         self.assertEqual(n,28) # full 16 gauge params
 
         #XY Model: SPAM=False
-        tst = stdxy.target_model.copy()
+        tst = stdxy.target_model()
         del tst.preps['rho0']
         del tst.povms['Mdefault']
         n = tst.num_params()
@@ -50,14 +50,14 @@ class TestHessianMethods(BaseTestCase):
 
 
         #XYI Model: SPAM=True
-        n = stdxyi.target_model.num_params()
+        n = stdxyi.target_model().num_params()
         self.assertEqual(n,60) # 3*16 + 3*4 = 60
 
-        n = stdxyi.target_model.num_nongauge_params()
+        n = stdxyi.target_model().num_nongauge_params()
         self.assertEqual(n,44) # full 16 gauge params: SPAM gate + 3 others
 
         #XYI Model: SPAM=False
-        tst = stdxyi.target_model.copy()
+        tst = stdxyi.target_model()
         del tst.preps['rho0']
         del tst.povms['Mdefault']
         n = tst.num_params()
@@ -67,7 +67,7 @@ class TestHessianMethods(BaseTestCase):
         self.assertEqual(n,34) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
         #XYI Model: SP0=False
-        tst = stdxyi.target_model.copy()
+        tst = stdxyi.target_model()
         tst.preps['rho0'] = pygsti.obj.TPSPAMVec(tst.preps['rho0'])
         n = tst.num_params()
         self.assertEqual(n,59) # 3*16 + 2*4 + 3 = 59
@@ -157,7 +157,7 @@ class TestHessianMethods(BaseTestCase):
         res.init_circuits(self.gss)
 
         #Add estimate for hessian-based CI --------------------------------------------------
-        res.add_estimate(stdxyi.target_model.copy(), stdxyi.target_model.copy(),
+        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
                          [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
                          estimate_key="default")
         
@@ -198,7 +198,7 @@ class TestHessianMethods(BaseTestCase):
 
         
         #Add estimate for linresponse-based CI --------------------------------------------------
-        res.add_estimate(stdxyi.target_model.copy(), stdxyi.target_model.copy(),
+        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
                          [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
                          estimate_key="linresponse")
 
@@ -223,7 +223,7 @@ class TestHessianMethods(BaseTestCase):
 
 
         #Add estimate for with bad objective ---------------------------------------------------------
-        res.add_estimate(stdxyi.target_model.copy(), stdxyi.target_model.copy(),
+        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
                          [self.model]*len(self.maxLengthList), parameters={'objective': 'foobar'},
                          estimate_key="foo")
         est = res.estimates['foo']
@@ -372,7 +372,7 @@ class TestHessianMethods(BaseTestCase):
         res = pygsti.obj.Results()
         res.init_dataset(self.ds)
         res.init_circuits(self.gss)
-        res.add_estimate(stdxyi.target_model.copy(), stdxyi.target_model.copy(),
+        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
                          [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
                          estimate_key="default")
         

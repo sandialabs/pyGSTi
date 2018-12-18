@@ -11,24 +11,24 @@ from .algorithmsTestCase import AlgorithmTestCase
 class FiducialPairReductionTestCase(AlgorithmTestCase):
     def test_fiducialPairReduction(self):
         self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
-                       std.target_model, std.fiducials, std.fiducials,
+                       std.target_model(), std.fiducials, std.fiducials,
                        std.germs, testPairList=[(0,0),(0,1),(1,0)], verbosity=4)
 
         suffPairs = self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
-            std.target_model, std.fiducials, std.fiducials, std.germs, verbosity=4)
+            std.target_model(), std.fiducials, std.fiducials, std.germs, verbosity=4)
 
         small_fiducials = pygsti.construction.circuit_list([('Gx',)])
         small_germs = pygsti.construction.circuit_list([('Gx',),('Gy',)])
         self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
-                       std.target_model, small_fiducials, small_fiducials,
+                       std.target_model(), small_fiducials, small_fiducials,
                        small_germs, searchMode="sequential", verbosity=2)
 
         self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
-                       std.target_model, std.fiducials, std.fiducials,
+                       std.target_model(), std.fiducials, std.fiducials,
                        std.germs, searchMode="random", nRandom=3,
                        seed=1234, verbosity=2)
         self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
-                       std.target_model, std.fiducials, std.fiducials,
+                       std.target_model(), std.fiducials, std.fiducials,
                        std.germs, searchMode="random", nRandom=300,
                        seed=1234, verbosity=2)
 
@@ -36,11 +36,11 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
 
     def test_memlimit(self):
         # A very low memlimit
-        pygsti.alg.find_sufficient_fiducial_pairs(std.target_model, std.fiducials, std.fiducials,
+        pygsti.alg.find_sufficient_fiducial_pairs(std.target_model(), std.fiducials, std.fiducials,
                                                   std.germs, testPairList=[(0,0),(0,1),(1,0)],
                                                   verbosity=0, memLimit=8192)
         # A significantly higher one
-        pygsti.alg.find_sufficient_fiducial_pairs(std.target_model, std.fiducials, std.fiducials,
+        pygsti.alg.find_sufficient_fiducial_pairs(std.target_model(), std.fiducials, std.fiducials,
                                                   std.germs, testPairList=[(0,0),(0,1),(1,0)],
                                                   verbosity=0, memLimit=128000)
 
@@ -50,11 +50,11 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
         prepStrs = std.fiducials
         effectStrs = std.fiducials
         germList = std.germs
-        targetModel = std.target_model
+        targetModel = std.target_model()
 
         fidPairs = self.runSilent(
             pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
-                       std.target_model, std.fiducials, std.fiducials,
+                       std.target_model(), std.fiducials, std.fiducials,
                        std.germs, prepovmTuples="first",
                        searchMode="sequential",
                        constrainToTP=True,
@@ -77,7 +77,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
         #test out some additional code paths: mem limit, random mode, & no good pair list
         fidPairs2 = self.runSilent(
             pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
-                       std.target_model, std.fiducials, std.fiducials,
+                       std.target_model(), std.fiducials, std.fiducials,
                        std.germs, prepovmTuples="first",
                        searchMode="random",
                        constrainToTP=True,
@@ -86,7 +86,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
 
         fidPairs3 = self.runSilent( #larger nRandom
             pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
-                       std.target_model, std.fiducials, std.fiducials,
+                       std.target_model(), std.fiducials, std.fiducials,
                        std.germs, prepovmTuples="first",
                        searchMode="random",
                        constrainToTP=True,
@@ -95,7 +95,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
 
         fidPairs3b = self.runSilent( #huge nRandom (should cap to all pairs)
             pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
-                       std.target_model, std.fiducials, std.fiducials,
+                       std.target_model(), std.fiducials, std.fiducials,
                        std.germs, prepovmTuples="first",
                        searchMode="random",
                        constrainToTP=True,
@@ -107,7 +107,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
         with self.assertRaises(ValueError):
             fidPairs4 = self.runSilent( #insufficient fiducials
                 pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
-                std.target_model, insuff_fids, insuff_fids,
+                std.target_model(), insuff_fids, insuff_fids,
                 std.germs, prepovmTuples="first",
                 searchMode="random",
                 constrainToTP=True,
@@ -115,7 +115,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                 memLimit=1024*10)
 
     def test_FPR_test_pairs(self):
-        target_model = std.target_model
+        target_model = std.target_model()
         prep_fiducials = std.fiducials
         meas_fiducials = std.fiducials
         germs = std.germs

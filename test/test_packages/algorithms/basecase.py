@@ -13,7 +13,7 @@ class AlgorithmsBase(BaseTestCase):
     def setUp(self):        
         super(AlgorithmsBase, self).setUp()
 
-        self.model = std.target_model
+        self.model = std.target_model()
         self.datagen_gateset = self.model.depolarize(op_noise=0.05, spam_noise=0.1)
 
         self.fiducials = std.fiducials

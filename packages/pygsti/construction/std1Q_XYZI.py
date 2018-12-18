@@ -32,11 +32,11 @@ germs = _strc.circuit_list(
 germs_lite = germs[0:10]
 
 #Construct a target model: Identity, X(pi/2), Y(pi/2)
-target_model = _setc.build_explicit_model([('Q0',)], ['Gi','Gx','Gy','Gz'],
+_target_model = _setc.build_explicit_model([('Q0',)], ['Gi','Gx','Gy','Gz'],
                                 [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)", "Z(pi/2,Q0)"])
 
-_gscache = { ("full","auto"): target_model }
-def copy_target(parameterization_type="full", sim_type="auto"):
+_gscache = { ("full","auto"): _target_model }
+def target_model(parameterization_type="full", sim_type="auto"):
     """ 
     Returns a copy of the target model in the given parameterization.
 

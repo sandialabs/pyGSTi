@@ -815,7 +815,7 @@ Gx^4 20 80
 
 #OLD
 #    def test_intermediate_measurements(self):
-#        mdl = std.target_model.depolarize(op_noise=0.05, spam_noise=0.1)
+#        mdl = std.target_model().depolarize(op_noise=0.05, spam_noise=0.1)
 #        E = mdl.povms['Mdefault']['0']
 #        Erem = mdl.povms['Mdefault']['1']
 #        mdl.operations['Gmz_0'] = np.dot(E,E.T)

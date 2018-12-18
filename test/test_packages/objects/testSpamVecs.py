@@ -366,7 +366,7 @@ class SPAMVecTestCase(BaseTestCase):
         povm = pygsti.obj.UnconstrainedPOVM(items)
         self.assertEqual(povm.num_params(),0)
 
-        mdl = std1Q_XYI.target_model.copy()
+        mdl = std1Q_XYI.target_model()
         mdl.preps['rho0'] = pygsti.obj.ComputationalSPAMVec([0],'densitymx')
         mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': pygsti.obj.ComputationalSPAMVec([0],'densitymx'),
                                                              '1': pygsti.obj.ComputationalSPAMVec([1],'densitymx')})

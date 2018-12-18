@@ -20,7 +20,7 @@ class AdvancedParameterizationTestCase(BaseTestCase):
 
     def test_composed_embedded_param(self):
         #Test out above cell
-        gs1Q = std1Q_XYI.target_model.copy()
+        gs1Q = std1Q_XYI.target_model()
         
         print("START")
         
@@ -134,8 +134,8 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         self.assertIsInstance(sparseOp.errorgen.err_gen_mx, sps.csr_matrix)
         self.assertArraysAlmostEqual(gate.errorgen.err_gen_mx,sparseOp.errorgen.err_gen_mx.toarray())
         
-        perfectG = std2Q_XYICNOT.target_model.operations['Gix'].copy()
-        noisyG = std2Q_XYICNOT.target_model.operations['Gix'].copy()
+        perfectG = std2Q_XYICNOT.target_model().operations['Gix'].copy()
+        noisyG = std2Q_XYICNOT.target_model().operations['Gix'].copy()
         noisyG.depolarize(0.9)
         Sparse_noisyG = sps.csr_matrix(noisyG,dtype='d')
         Sparse_perfectG = sps.csr_matrix(perfectG,dtype='d')

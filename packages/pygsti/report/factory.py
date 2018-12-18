@@ -2020,11 +2020,12 @@ def find_std_clifford_compilation(model, verbosity=0):
     import importlib
     for module_name in std_modules:
         mod = importlib.import_module("pygsti.construction." + module_name)
-        if mod.target_model.dim == model.dim and \
-           set(mod.target_model.operations.keys()) == set(model.operations.keys()) and \
-           set(mod.target_model.preps.keys()) == set(model.preps.keys()) and \
-           set(mod.target_model.povms.keys()) == set(model.povms.keys()):
-            if mod.target_model.frobeniusdist(model) < 1e-6:
+        target_model = mod.target_model()
+        if target_model.dim == model.dim and \
+           set(target_model.operations.keys()) == set(model.operations.keys()) and \
+           set(target_model.preps.keys()) == set(model.preps.keys()) and \
+           set(target_model.povms.keys()) == set(model.povms.keys()):
+            if target_model.frobeniusdist(model) < 1e-6:
                 if hasattr(mod,"clifford_compilation"):
                     printer.log("Found standard clifford compilation from %s" % module_name)
                     return mod.clifford_compilation

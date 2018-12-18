@@ -23,7 +23,7 @@ class TestRPEMethods(BaseTestCase):
         
         
         #Declare a variety of relevant parameters
-        target_model = Std1Q_XY.target_model.copy()
+        target_model = Std1Q_XY.target_model()
         target_model.set_all_parameterizations('TP')
         maxLengths_1024 = [1,2,4,8,16,32,64,128,256,512,1024]
         

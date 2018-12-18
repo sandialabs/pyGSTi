@@ -27,13 +27,13 @@ class TestReportables(BaseTestCase):
         self.assertTrue( np.isnan(nan_qty.value) )
 
         #deprecated:
-        rptbl.decomposition( std.target_model.operations['Gx'] )
+        rptbl.decomposition( std.target_model().operations['Gx'] )
         rptbl.decomposition( np.zeros( (4,4), 'd') )        
 
     def test_functions(self):
         
-        gs1 = std.target_model.depolarize(op_noise=0.1, spam_noise=0.05)
-        gs2 = std.target_model.copy()
+        gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)
+        gs2 = std.target_model()
         gl = "Gx" # operation label
         opstr = pygsti.obj.Circuit( ('Gx','Gx') )
         syntheticIdles = pygsti.construction.circuit_list( [
@@ -175,8 +175,8 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
 
     def test_nearby_gatesetfns(self):
-        gs1 = std.target_model.depolarize(op_noise=0.1, spam_noise=0.05)
-        gs2 = std.target_model.copy()
+        gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)
+        gs2 = std.target_model()
         opstr = pygsti.obj.Circuit( ('Gx','Gx') )
         
         fn = rptbl.Half_diamond_norm(gs1,gs2,'Gx')
@@ -188,14 +188,14 @@ class TestReportables(BaseTestCase):
         fn.evaluate_nearby(gs1)
 
     def test_closest_unitary(self):
-        gs1 = std.target_model.depolarize(op_noise=0.1, spam_noise=0.05)
-        gs2 = std.target_model.copy()
+        gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)
+        gs2 = std.target_model()
         rptbl.closest_unitary_fidelity(gs1.operations['Gx'], gs2.operations['Gx'], "pp") # op2 is unitary
         rptbl.closest_unitary_fidelity(gs2.operations['Gx'], gs1.operations['Gx'], "pp") # op1 is unitary
 
     def test_general_decomp(self):
-        gs1 = std.target_model.depolarize(op_noise=0.1, spam_noise=0.05)
-        gs2 = std.target_model.copy()
+        gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)
+        gs2 = std.target_model()
         gs1.operations['Gx'] = np.array( [[-1, 0, 0, 0],
                                      [ 0,-1, 0, 0],
                                      [ 0, 0, 1, 0],
@@ -228,10 +228,10 @@ class TestReportables(BaseTestCase):
 #        from pygsti.construction import std1Q_XY as stdXY
 #        with self.assertRaises(ValueError):
 #            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
-#                "Gx fidelity",std.target_model, stdXY.target_model) #Gi missing from 2nd model
+#                "Gx fidelity",std.target_model(), stdXY.target_model()) #Gi missing from 2nd model
 #        with self.assertRaises(ValueError):
 #            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
-#                "Gx fidelity",stdXY.target_model, std.target_model) #Gi missing from 1st model
+#                "Gx fidelity",stdXY.target_model(), std.target_model()) #Gi missing from 1st model
 
 
 

@@ -272,8 +272,8 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     mdl.operations['Gi'] = create_global_idle(qubitGraph, maxIdleWeight, sparse, printer-1)
      
     #1Q gates: X(pi/2) & Y(pi/2) on each qubit
-    Gx = std1Q_XY.target_model.operations['Gx']
-    Gy = std1Q_XY.target_model.operations['Gy'] 
+    Gx = std1Q_XY.target_model().operations['Gx']
+    Gy = std1Q_XY.target_model().operations['Gy'] 
     weight_maxhops_tuples_1Q = [(1,maxhops+extraWeight1Hops)] + \
                                [ (1+x,maxhops) for x in range(1,extraGateWeight+1) ]
     for i in range(nQubits):
@@ -290,7 +290,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
             sparse=sparse, verbosity=printer-1)
         
     #2Q gates: CNOT gates along each graph edge
-    Gcnot = std2Q_XYICNOT.target_model.operations['Gcnot']
+    Gcnot = std2Q_XYICNOT.target_model().operations['Gcnot']
     weight_maxhops_tuples_2Q = [(1,maxhops+extraWeight1Hops),(2,maxhops)] + \
                                [ (2+x,maxhops) for x in range(1,extraGateWeight+1) ]
     for i,j in qubitGraph.edges(): #note: all edges have i<j so "control" of CNOT is always lower index (arbitrary)

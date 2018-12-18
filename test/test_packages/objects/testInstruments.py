@@ -14,7 +14,7 @@ class InstrumentTestCase(BaseTestCase):
 
     def setUp(self):
         #Add an instrument to the standard target model
-        self.target_model = std.target_model.copy()
+        self.target_model = std.target_model()
         E = self.target_model.povms['Mdefault']['0']
         Erem = self.target_model.povms['Mdefault']['1']
         Gmz_plus = np.dot(E,E.T)

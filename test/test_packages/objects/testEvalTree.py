@@ -37,14 +37,14 @@ class EvalTreeTestCase(BaseTestCase):
 
     def helper_tree(self, TreeClass, b1Q):
         if b1Q:
-            target_model = std1Q_XY.target_model
+            target_model = std1Q_XY.target_model()
             prepStrs = std1Q_XY.fiducials
             measStrs = std1Q_XY.fiducials
             germs = std1Q_XY.germs
             maxLens = [1,4]
             #maxLens = [1,2,4,8,16,32,64,128,256,512,1024]
         else:
-            target_model = std2Q_XYCNOT.target_model
+            target_model = std2Q_XYCNOT.target_model()
             prepStrs = std2Q_XYCNOT.prepStrs
             measStrs = std2Q_XYCNOT.effectStrs
             germs = std2Q_XYCNOT.germs

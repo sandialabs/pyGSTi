@@ -36,7 +36,30 @@ expressions = ["I(Q0)","X(pi/2,Q0):Y(pi/2,Q0)","Y(-pi/2,Q0):X(-pi/2,Q0)",
                    "X(pi,Q0):Y(-pi/2,Q0)","Y(pi,Q0):X(pi/2,Q0)","X(pi/2,Q0):Y(-pi/2,Q0):X(pi/2,Q0)",
                    "Y(pi/2,Q0)","Y(pi,Q0):X(-pi/2,Q0)","X(-pi/2,Q0):Y(pi/2,Q0):X(pi/2,Q0)"]
 
-target_model = _setc.build_explicit_model([('Q0',)], gates, expressions)
+_target_model = _setc.build_explicit_model([('Q0',)], gates, expressions)
+
+_gscache = { ("full","auto"): _target_model }
+def target_model(parameterization_type="full", sim_type="auto"):
+    """ 
+    Returns a copy of the target model in the given parameterization.
+
+    Parameters
+    ----------
+    parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
+        The gate and SPAM vector parameterization type. See 
+        :function:`Model.set_all_parameterizations` for all allowed values.
+        
+    sim_type : {"auto", "matrix", "map", "termorder:X" }
+        The simulator type to be used for model calculations (leave as
+        "auto" if you're not sure what this is).
+    
+    Returns
+    -------
+    Model
+    """
+    return _stdtarget._copy_target(_sys.modules[__name__],parameterization_type,
+                                   sim_type, _gscache)
+
 
 clifford_compilation = _OrderedDict()
 clifford_compilation["Gc0"] = ["Gc0",]

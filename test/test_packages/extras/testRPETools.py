@@ -43,8 +43,8 @@ class RPETestCase(BaseTestCase):
 
 
             from pygsti.construction import std1Q_XY as stdXY
-            target = stdXY.target_model.copy()
-            target.operations['Gi'] =  std.target_model.operations['Gi'] #need a Gi gate...
+            target = stdXY.target_model()
+            target.operations['Gi'] =  std.target_model().operations['Gi'] #need a Gi gate...
             stringListD = rpe.make_rpe_angle_string_list_dict(2,rpeconfig_inst)
             mdl_depolXZ = target.depolarize(op_noise=0.1,spam_noise=0.1)
             ds = pygsti.construction.generate_fake_data(mdl_depolXZ, stringListD['totalStrList'],
@@ -58,9 +58,9 @@ class RPETestCase(BaseTestCase):
             tlist = rpe.est_theta_list(ds,stringListD['theta','sin'],stringListD['theta','cos'],
                                        epslist,returnPhiFunList=False, rpeconfig_inst=rpeconfig_inst)
 
-            alpha = rpe.extract_alpha( stdXY.target_model, rpeconfig_inst)
-            eps = rpe.extract_epsilon( stdXY.target_model, rpeconfig_inst)
-            theta = rpe.extract_theta( stdXY.target_model, rpeconfig_inst)
+            alpha = rpe.extract_alpha( stdXY.target_model(), rpeconfig_inst)
+            eps = rpe.extract_epsilon( stdXY.target_model(), rpeconfig_inst)
+            theta = rpe.extract_theta( stdXY.target_model(), rpeconfig_inst)
             rpe.analyze_rpe_data(ds,mdl_depolXZ,stringListD,rpeconfig_inst)
 
 if __name__ == '__main__':

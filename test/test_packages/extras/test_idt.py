@@ -208,12 +208,12 @@ class IDTTestCase(BaseTestCase):
         std = pygsti.construction.stdmodule_to_smqmodule(std)
 
         maxLens = [1,2,4]
-        expList = pygsti.construction.make_lsgst_experiment_list(std.target_model, std.prepStrs,
+        expList = pygsti.construction.make_lsgst_experiment_list(std.target_model(), std.prepStrs,
                                                                  std.effectStrs, std.germs_lite, maxLens)
-        ds = pygsti.construction.generate_fake_data(std.target_model.depolarize(0.01, 0.01),
+        ds = pygsti.construction.generate_fake_data(std.target_model().depolarize(0.01, 0.01),
                                                     expList, 1000, 'multinomial', seed=1234)
 
-        result = pygsti.do_long_sequence_gst(ds, std.target_model, std.prepStrs, std.effectStrs, std.germs_lite, maxLens, verbosity=3)
+        result = pygsti.do_long_sequence_gst(ds, std.target_model(), std.prepStrs, std.effectStrs, std.germs_lite, maxLens, verbosity=3)
 
         #standard report will run idle tomography
         pygsti.report.create_standard_report(result, temp_files + "/gstWithIdleTomogTestReportStd1Q",
@@ -228,19 +228,19 @@ class IDTTestCase(BaseTestCase):
         std = pygsti.construction.stdmodule_to_smqmodule(std)
         
         maxLens = [1,2,4]
-        expList = pygsti.construction.make_lsgst_experiment_list(std2Q.target_model, std2Q.prepStrs,
+        expList = pygsti.construction.make_lsgst_experiment_list(std2Q.target_model(), std2Q.prepStrs,
                                                                  std2Q.effectStrs, std2Q.germs_lite, maxLens)
-        mdl_datagen = std2Q.target_model.depolarize(0.01, 0.01)
+        mdl_datagen = std2Q.target_model().depolarize(0.01, 0.01)
         ds2Q = pygsti.construction.generate_fake_data(mdl_datagen, expList, 1000, 'multinomial', seed=1234)
 
         #Just analyze first qubit (qubit 0)
         ds = pygsti.construction.filter_dataset(ds2Q, (0,))
 
-        start = std.target_model.copy()
+        start = std.target_model()
         start.set_all_parameterizations("TP")
         result = pygsti.do_long_sequence_gst(ds, start, std.prepStrs[0:4], std.effectStrs[0:4],
                                              std.germs_lite, maxLens, verbosity=3, advancedOptions={'objective': 'chi2'})
-        #result = pygsti.do_model_test(start.depolarize(0.009,0.009), ds, std.target_model.copy(), std.prepStrs[0:4],
+        #result = pygsti.do_model_test(start.depolarize(0.009,0.009), ds, std.target_model(), std.prepStrs[0:4],
         #                              std.effectStrs[0:4], std.germs_lite, maxLens)
         pygsti.report.create_standard_report(result, temp_files + "/gstWithIdleTomogTestReportStd1Qfrom2Q",
                                              "Test GST Report w/Idle Tomog.: StdXYI from StdXYICNOT",

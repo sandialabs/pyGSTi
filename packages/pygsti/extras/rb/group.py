@@ -19,7 +19,7 @@ def construct_1Q_Clifford_group():
     """
     Returns the 1 qubit Clifford group as a MatrixGroup object   
     """
-    mdl = std1Q_Cliffords.target_model
+    mdl = std1Q_Cliffords.target_model()
     return  MatrixGroup(mdl.operations.values(),mdl.operations.keys())
 
 class MatrixGroup(object):

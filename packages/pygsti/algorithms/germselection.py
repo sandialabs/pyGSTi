@@ -1382,7 +1382,7 @@ def optimize_integer_germs_slack(modelList, germsList, randomize=True,
         Whether or not the input Model(s) are first subject to unitary
         randomization.  If ``False``, the user should perform the unitary
         randomization themselves.  Note:  If the Model(s) are perfect (e.g.
-        ``std1Q_XYI.target_model``), then the germ selection output should not be
+        ``std1Q_XYI.target_model()``), then the germ selection output should not be
         trusted, due to accidental degeneracies in the Model.  If the
         Model(s) include stochastic (non-unitary) error, then germ selection
         will fail, as we score amplificational completeness in the limit of
@@ -1713,7 +1713,7 @@ def grasp_germ_set_optimization(modelList, germsList, alpha, randomize=True,
         Whether or not the input Model(s) are first subject to unitary
         randomization.  If ``False``, the user should perform the unitary
         randomization themselves.  Note:  If the Model(s) are perfect (e.g.
-        ``std1Q_XYI.target_model``), then the germ selection output should not be
+        ``std1Q_XYI.target_model()``), then the germ selection output should not be
         trusted, due to accidental degeneracies in the Model.  If the
         Model(s) include stochastic (non-unitary) error, then germ selection
         will fail, as we score amplificational completeness in the limit of

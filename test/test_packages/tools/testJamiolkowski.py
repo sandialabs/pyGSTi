@@ -160,12 +160,12 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
             pygsti.jamiolkowski_iso_inv(choiStd, std, "foobar") #invalid gate basis
         '''
 
-        sumOfNeg  = pygsti.sum_of_negative_choi_evals(std1Q.target_model)
-        sumOfNegWt= pygsti.sum_of_negative_choi_evals(std1Q.target_model, {'Gx': 1.0, 'Gy': 0.5} )
-        sumsOfNeg = pygsti.sums_of_negative_choi_evals(std1Q.target_model)
-        magsOfNeg = pygsti.mags_of_negative_choi_evals(std1Q.target_model)
+        sumOfNeg  = pygsti.sum_of_negative_choi_evals(std1Q.target_model())
+        sumOfNegWt= pygsti.sum_of_negative_choi_evals(std1Q.target_model(), {'Gx': 1.0, 'Gy': 0.5} )
+        sumsOfNeg = pygsti.sums_of_negative_choi_evals(std1Q.target_model())
+        magsOfNeg = pygsti.mags_of_negative_choi_evals(std1Q.target_model())
         self.assertAlmostEqual(sumOfNeg, 0.0)
-        self.assertArraysAlmostEqual(sumsOfNeg, np.zeros(3,'d')) # 3 gates in std.target_model
+        self.assertArraysAlmostEqual(sumsOfNeg, np.zeros(3,'d')) # 3 gates in std.target_model()
         self.assertArraysAlmostEqual(magsOfNeg, np.zeros(12,'d')) # 3 gates * 4 evals each = 12
 
 if __name__ == "__main__":

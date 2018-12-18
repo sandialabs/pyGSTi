@@ -37,9 +37,9 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #Standard GST dataset
         cls.maxLengths = [1,2,4]
-        cls.mdl_datagen = std.target_model.depolarize(op_noise=0.1, spam_noise=0.001)
+        cls.mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.001)
         cls.listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
-            std.target_model, std.prepStrs, std.effectStrs, std.germs, cls.maxLengths)
+            std.target_model(), std.prepStrs, std.effectStrs, std.germs, cls.maxLengths)
 
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate) (SAVE)
         if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"): # "v2" to only gen version-dep files
@@ -111,7 +111,7 @@ class CalcMethods1QTestCase(BaseTestCase):
     
     def test_stdgst_matrix(self):
         # Using matrix-based calculations
-        target_model = std.target_model.copy()
+        target_model = std.target_model()
         target_model.set_all_parameterizations("CPTP")
         target_model.set_simtype('matrix') # the default for 1Q, so we could remove this line
         results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
@@ -144,7 +144,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
     def test_stdgst_map(self):
         # Using map-based calculation
-        target_model = std.target_model.copy()
+        target_model = std.target_model()
         target_model.set_all_parameterizations("CPTP")
         target_model.set_simtype('map')
         results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
@@ -165,7 +165,7 @@ class CalcMethods1QTestCase(BaseTestCase):
     def test_stdgst_terms(self):
         # Using term-based (path integral) calculation
         # This performs a map-based unitary evolution along each path. 
-        target_model = std.target_model.copy()
+        target_model = std.target_model()
         target_model.set_all_parameterizations("H+S terms")
         target_model.set_simtype('termorder:1') # this is the default set by set_all_parameterizations above
         results = pygsti.do_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
@@ -377,12 +377,12 @@ class CalcMethods1QTestCase(BaseTestCase):
         # The probability calculations can be done in a matrix- or map-based way.
 
         #Using simple "std" models (which are all density-matrix/superop type)
-        mdl = std.target_model.copy()
+        mdl = std.target_model()
         probs1 = mdl.probs(self.circuit1)
         #self.circuit1.simulate(mdl) # calls probs - same as above line
         print(probs1)
 
-        gs2 = std.target_model.copy()
+        gs2 = std.target_model()
         gs2.set_simtype("map")
         probs1 = gs2.probs(self.circuit1)
         #self.circuit1.simulate(gs2) # calls probs - same as above line
@@ -471,7 +471,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         # ### Density-matrix simulation (of superoperator gates) using map/matrix-based terms calcs
         # In this mode, "term calcs" use many state-vector propagation paths to simulate density
         # matrix propagation up to some desired order (in the assumed-to-be-small error rates).
-        mdl = std.target_model.copy()
+        mdl = std.target_model()
         mdl.set_simtype('termorder:1') # 1st-order in error rates
         mdl.set_all_parameterizations("H+S terms")
 
@@ -526,14 +526,14 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         maxLengths = [1,2,4]
         listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
-            stdChk.target_model, stdChk.prepStrs, stdChk.effectStrs, stdChk.germs, maxLengths)
+            stdChk.target_model(), stdChk.prepStrs, stdChk.effectStrs, stdChk.germs, maxLengths)
         #listOfExperiments = pygsti.construction.circuit_list([ ('Gcnot','Gxi') ])
         #listOfExperiments = pygsti.construction.circuit_list([ ('Gxi','Gcphase','Gxi','Gix') ])
 
-        mdl_normal = stdChk.target_model.copy()
-        mdl_clifford = stdChk.target_model.copy()
+        mdl_normal = stdChk.target_model()
+        mdl_clifford = stdChk.target_model()
         #print(mdl_clifford['Gcnot'])
-        self.assertTrue(stdChk.target_model._evotype == "densitymx")
+        self.assertTrue(stdChk.target_model()._evotype == "densitymx")
         mdl_clifford.set_all_parameterizations('static unitary') # reduces dim...
         self.assertTrue(mdl_clifford._evotype == "statevec")
         mdl_clifford.set_all_parameterizations('clifford')

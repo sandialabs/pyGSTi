@@ -61,10 +61,10 @@ def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
 
 def runOneQubit(obj, ds, lsgstStrings, comm=None, distributeMethod="circuits"):
     #specs = pygsti.construction.build_spam_specs(
-    #    std.fiducials, prep_labels=std.target_model.get_prep_labels(),
-    #    effect_labels=std.target_model.get_effect_labels())
+    #    std.fiducials, prep_labels=std.target_model().get_prep_labels(),
+    #    effect_labels=std.target_model().get_effect_labels())
 
-    return runAnalysis(obj, ds, std.fiducials, std.fiducials, std.target_model,
+    return runAnalysis(obj, ds, std.fiducials, std.fiducials, std.target_model(),
                         lsgstStrings, comm=comm,
                         distributeMethod=distributeMethod)
 
@@ -74,22 +74,22 @@ def create_fake_dataset(comm):
     maxLengths = [1,2,4,8,16]
     nSamples = 1000
     #specs = pygsti.construction.build_spam_specs(
-    #    std.fiducials, prep_labels=std.target_model.get_prep_labels(),
-    #    effect_labels=std.target_model.get_effect_labels())
+    #    std.fiducials, prep_labels=std.target_model().get_prep_labels(),
+    #    effect_labels=std.target_model().get_effect_labels())
     #rhoStrs, EStrs = pygsti.construction.get_spam_strs(specs)
 
     rhoStrs = EStrs = std.fiducials
     lgstStrings = pygsti.construction.list_lgst_circuits(
-        rhoStrs, EStrs, list(std.target_model.operations.keys()))
+        rhoStrs, EStrs, list(std.target_model().operations.keys()))
     lsgstStrings = pygsti.construction.make_lsgst_lists(
-            list(std.target_model.operations.keys()), rhoStrs, EStrs,
+            list(std.target_model().operations.keys()), rhoStrs, EStrs,
             std.germs, maxLengths, fidPairList )
 
     lsgstStringsToUse = lsgstStrings
     allRequiredStrs = pygsti.remove_duplicates(lgstStrings + lsgstStrings[-1])
 
     if comm is None or comm.Get_rank() == 0:
-        mdl_dataGen = std.target_model.depolarize(op_noise=0.1)
+        mdl_dataGen = std.target_model().depolarize(op_noise=0.1)
         dsFake = pygsti.construction.generate_fake_data(
             mdl_dataGen, allRequiredStrs, nSamples, sampleError="multinomial",
             seed=1234)
@@ -107,7 +107,7 @@ def create_fake_dataset(comm):
 def test_MPI_products(comm):
 
     #Create some model
-    mdl = std.target_model.copy()
+    mdl = std.target_model()
 
     #Remove spam elements so product calculations have element indices <=> product indices
     del mdl.preps['rho0']
@@ -118,7 +118,7 @@ def test_MPI_products(comm):
     #Get some operation sequences
     maxLengths = [1,2,4,8]
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        list(std.target_model.operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
+        list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
     split_tree = tree.copy()
     split_lookup = split_tree.split(lookup,numSubTrees=g_numSubTrees)
@@ -206,13 +206,13 @@ def test_MPI_products(comm):
 #def test_MPI_pr(comm):
 #
 #    #Create some model
-#    mdl = std.target_model.copy()
+#    mdl = std.target_model()
 #    mdl.kick(0.1,seed=1234)
 #
 #    #Get some operation sequences
 #    maxLengths = g_maxLengths
 #    gstrs = pygsti.construction.make_lsgst_experiment_list(
-#        list(std.target_model.operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
+#        list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
 #    tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
 #    split_tree = tree.copy()
 #    lookup = split_tree.split(lookup,numSubTrees=g_numSubTrees)
@@ -279,13 +279,13 @@ def test_MPI_products(comm):
 def test_MPI_probs(comm):
 
     #Create some model
-    mdl = std.target_model.copy()
+    mdl = std.target_model()
     mdl.kick(0.1,seed=1234)
 
     #Get some operation sequences
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        list(std.target_model.operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
+        list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     #tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
     #split_tree = tree.copy()
     #lookup = split_tree.split(lookup, numSubTrees=g_numSubTrees)
@@ -361,13 +361,13 @@ def test_MPI_probs(comm):
 def test_MPI_fills(comm):
 
     #Create some model
-    mdl = std.target_model.copy()
+    mdl = std.target_model()
     mdl.kick(0.1,seed=1234)
 
     #Get some operation sequences
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        list(std.target_model.operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
+        list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
     split_tree = tree.copy()
     split_lookup = split_tree.split(lookup,numSubTrees=g_numSubTrees)
@@ -511,7 +511,7 @@ def test_MPI_compute_cache(comm):
     from pygsti.construction import std1Q_XY #nice b/c only 2 gates
 
     #Create some model
-    mdl = std.target_model.copy()
+    mdl = std.target_model()
     mdl.kick(0.1,seed=1234)
 
     #Get some operation sequences
@@ -549,7 +549,7 @@ def test_MPI_by_block(comm):
 
     #Create some model
     if comm is None or comm.Get_rank() == 0:
-        mdl = std.target_model.copy()
+        mdl = std.target_model()
         mdl.kick(0.1,seed=1234)
         mdl = comm.bcast(mdl, root=0)
     else:
@@ -558,7 +558,7 @@ def test_MPI_by_block(comm):
     #Get some operation sequences
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        list(std.target_model.operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
+        list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     tree,lookup,outcome_lookkup = mdl.bulk_evaltree(gstrs)
     #split_tree = tree.copy()
     #split_lookup = split_tree.split(lookup,numSubTrees=g_numSubTrees)
@@ -721,13 +721,13 @@ def test_MPI_gatestrings_chi2(comm):
 @mpitest(4)
 def test_MPI_gaugeopt(comm):
     #Gauge Opt to Target
-    mdl_other = std.target_model.depolarize(op_noise=0.01, spam_noise=0.01)
+    mdl_other = std.target_model().depolarize(op_noise=0.01, spam_noise=0.01)
     mdl_other['Gx'].rotate( (0,0,0.01) )
     mdl_other['Gy'].rotate( (0,0,0.01) )
-    mdl_gopt = pygsti.gaugeopt_to_target(mdl_other, std.target_model, verbosity=10, comm=comm)
+    mdl_gopt = pygsti.gaugeopt_to_target(mdl_other, std.target_model(), verbosity=10, comm=comm)
 
     #use a method that isn't parallelized with non-None comm (warning is given)
-    mdl_gopt_slow = pygsti.gaugeopt_to_target(mdl_other, std.target_model, verbosity=10, method="BFGS", comm=comm)
+    mdl_gopt_slow = pygsti.gaugeopt_to_target(mdl_other, std.target_model(), verbosity=10, method="BFGS", comm=comm)
 
 
 @mpitest(4)
@@ -755,7 +755,7 @@ def test_MPI_gatestrings_logl(comm):
 @mpitest(4)
 def test_MPI_mlgst_forcefn(comm):
     fiducials = std.fiducials
-    target_model = std.target_model
+    target_model = std.target_model()
     lgstStrings = pygsti.construction.list_lgst_circuits(fiducials, fiducials,
                                                              list(target_model.operations.keys()))
     #Create dataset on root proc
@@ -804,7 +804,7 @@ def test_MPI_derivcols(comm):
 @mpitest(4)
 def test_run1Q_end2end(comm):
     from pygsti.construction import std1Q_XYI
-    target_model = std1Q_XYI.target_model
+    target_model = std1Q_XYI.target_model()
     fiducials = std1Q_XYI.fiducials
     germs = std1Q_XYI.germs
     maxLengths = [1,2,4]
@@ -838,14 +838,14 @@ def test_run1Q_end2end(comm):
 def test_MPI_germsel(comm):
     if comm is None or comm.Get_rank() == 0:
         gatesetNeighborhood = pygsti.alg.randomize_model_list(
-            [std.target_model], randomizationStrength=1e-3,
+            [std.target_model()], randomizationStrength=1e-3,
             numCopies=3, seed=2018)
         comm.bcast(gatesetNeighborhood, root=0)
     else:
         gatesetNeighborhood = comm.bcast(None, root=0)
 
     max_length   = 6
-    gates        = std.target_model.operations.keys()
+    gates        = std.target_model().operations.keys()
     superGermSet = pygsti.construction.list_all_circuits_without_powers_and_cycles(gates, max_length)
 
     #germs = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
