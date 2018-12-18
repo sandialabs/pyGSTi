@@ -122,7 +122,7 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
                 target_model, prepFidList, 'prep',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Preparation fiducials:', 1)
-            printer.log(str([str(fid) for fid in prepFidList]), 1)
+            printer.log(str([fid.str for fid in prepFidList]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
 
             
@@ -134,7 +134,7 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
                 target_model, measFidList, 'meas',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Measurement fiducials:', 1)
-            printer.log(str([str(fid) for fid in measFidList]), 1)
+            printer.log(str([fid.str for fid in measFidList]), 1)
             printer.log('Score: {}'.format(measScore.minor), 1)
 
     elif algorithm == 'grasp':
@@ -161,14 +161,14 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
                 target_model, prepFidList[0], 'prep',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Preparation fiducials:', 1)
-            printer.log(str([str(fid) for fid in prepFidList[0]]), 1)
+            printer.log(str([fid.str for fid in prepFidList[0]]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
         elif not algorithm_kwargs['returnAll'] and prepFidList is not None:
             prepScore = compute_composite_fiducial_score(
                 target_model, prepFidList, 'prep',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Preparation fiducials:', 1)
-            printer.log(str([str(fid) for fid in prepFidList]), 1)
+            printer.log(str([fid.str for fid in prepFidList]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
 
         measFidList = grasp_fiducial_optimization(model=target_model,
@@ -180,14 +180,14 @@ def generate_fiducials(target_model, omitIdentity=True, eqThresh=1e-6,
                 target_model, measFidList[0], 'meas',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Measurement fiducials:', 1)
-            printer.log(str([str(fid) for fid in measFidList[0]]), 1)
+            printer.log(str([fid.str for fid in measFidList[0]]), 1)
             printer.log('Score: {}'.format(measScore.minor), 1)
         elif not algorithm_kwargs['returnAll'] and measFidList is not None:
             measScore = compute_composite_fiducial_score(
                 target_model, measFidList, 'meas',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Measurement fiducials:', 1)
-            printer.log(str([str(fid) for fid in measFidList]), 1)
+            printer.log(str([fid.str for fid in measFidList]), 1)
             printer.log('Score: {}'.format(measScore.minor), 1)
 
     else:

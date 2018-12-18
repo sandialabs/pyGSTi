@@ -171,7 +171,7 @@ def generate_germs(target_model, randomize=True, randomizationStrength=1e-2,
                 germList, neighborhood=modelList,
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Constructed germ set:', 1)
-            printer.log(str([str(germ) for germ in germList]), 1)
+            printer.log(str([germ.str for germ in germList]), 1)
             printer.log('Score: {}'.format(germsetScore), 1)
     elif algorithm == 'grasp':
         printer.log('Using GRASP algorithm.', 1)
@@ -198,12 +198,12 @@ def generate_germs(target_model, randomize=True, randomizationStrength=1e-2,
             germsetScore = calculate_germset_score(
                 germList[0], neighborhood=modelList,
                 scoreFunc=algorithm_kwargs['scoreFunc'])
-            printer.log(str([str(germ) for germ in germList[0]]), 1)
+            printer.log(str([germ.str for germ in germList[0]]), 1)
             printer.log('Score: {}'.format(germsetScore))
         elif not algorithm_kwargs['returnAll'] and germList is not None:
             germsetScore = calculate_germset_score(germList,
                                                    neighborhood=modelList)
-            printer.log(str([str(germ) for germ in germList]), 1)
+            printer.log(str([germ.str for germ in germList]), 1)
             printer.log('Score: {}'.format(germsetScore), 1)
     elif algorithm == 'slack':
         printer.log('Using slack algorithm.', 1)
@@ -230,7 +230,7 @@ def generate_germs(target_model, randomize=True, randomizationStrength=1e-2,
                 germList, neighborhood=modelList,
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Constructed germ set:', 1)
-            printer.log(str([str(germ) for germ in germList]), 1)
+            printer.log(str([germ.str for germ in germList]), 1)
             printer.log('Score: {}'.format(germsetScore), 1)
     else:
         raise ValueError("'{}' is not a valid algorithm "
@@ -1230,7 +1230,7 @@ def build_up_breadth(modelList, germsList, randomize=True,
             for i,goodGermIdx in enumerate(loc_Indices):
                 printer.show_progress(i, len(loc_Indices), 
                                       prefix="Initial germ set computation",
-                                      suffix=str(germsList[goodGermIdx]))
+                                      suffix=germsList[goodGermIdx].str)
                 #print("DB: Rank%d computing initial index %d" % (comm.Get_rank(),goodGermIdx))
 
                 for k,model in enumerate(modelList):
@@ -1281,7 +1281,7 @@ def build_up_breadth(modelList, germsList, randomize=True,
             for i,candidateGermIdx in enumerate(loc_candidateIndices):
                 printer.show_progress(i, len(loc_candidateIndices), 
                                       prefix="Inner iter over candidate germs",
-                                      suffix=str(germsList[candidateGermIdx]))
+                                      suffix=germsList[candidateGermIdx].str)
 
                 #print("DB: Rank%d computing index %d" % (comm.Get_rank(),candidateGermIdx))
                 worstScore = _scoring.CompositeScore(-1.0e100,0,None) # worst of all models
@@ -1345,7 +1345,7 @@ def build_up_breadth(modelList, germsList, randomize=True,
             bestDDDs[k] = None
 
             printer.log("Added %s to final germs (%s)" % 
-                    (str(germsList[iBestCandidateGerm]), str(bestGermScore)), 3)
+                    (germsList[iBestCandidateGerm].str, str(bestGermScore)), 3)
 
     return goodGerms
 
