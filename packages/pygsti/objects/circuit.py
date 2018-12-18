@@ -72,10 +72,14 @@ def _accumulate_explicit_sslbls(obj):
             ret.update( _accumulate_explicit_sslbls(lbl) )
     return ret
 
-def _opSeqToStr(seq):
+def _opSeqToStr(seq, line_labels):
     if len(seq) == 0: return "{}" #special case of empty operation sequence
-    return ''.join(map(str,seq))
+    if line_labels is None or line_labels == ('*',):
+        return ''.join(map(str,seq))
+    else:
+        return ''.join(map(str,seq)) + "@(" + ','.join(map(str,line_labels)) + ")"
 
+    
 
 
     
@@ -92,7 +96,7 @@ class Circuit(object):
     called so that the Circuit is properly hash-able.
     """   
     def __init__(self, layer_labels=(), line_labels='auto', num_lines=None, editable=False,
-                 stringrep=None, check=False):
+                 stringrep=None, check=True):
         """
         Creates a new Circuit object, encapsulating a quantum circuit.
 
@@ -151,7 +155,7 @@ class Circuit(object):
         if stringrep is not None and (layer_labels is None or check==True):
             cparser = _CircuitParser()
             cparser.lookup = None #lookup - functionality removed as it wasn't used
-            chk = cparser.parse(stringrep) # tuple of Labels
+            chk,chk_labels = cparser.parse(stringrep) # tuple of Labels
             if layer_labels is None:
                 layer_labels = chk
             else: # check == True
@@ -160,6 +164,15 @@ class Circuit(object):
                                       " `layer_labels` and `stringrep` do not match: %s != %s\n"
                                       "(set `layer_labels` to None to infer it from `stringrep`)")
                                      % (layer_labels,stringrep))
+            if chk_labels is not None:
+                if line_labels == 'auto':
+                    line_labels = chk_labels
+                elif tuple(line_labels) != chk_labels:
+                    raise ValueError(("Error intializing Circuit: "
+                                      " `line_labels` and `stringrep` do not match: %s != %s (from %s)\n"
+                                      "(set `line_labels` to None to infer it from `stringrep`)")
+                                     % (line_labels,chk_labels,stringrep))
+                
         if layer_labels is None:
             raise ValueError("Must specify `stringrep` when `layer_labels` is None")
                 
@@ -213,13 +226,26 @@ class Circuit(object):
     def str(self):
         """ The Python string representation of this Circuit."""
         if self._str is None:
-            self._str = _opSeqToStr(self._labels) # lazy generation
+            self._str = _opSeqToStr(self._labels, self.line_labels) # lazy generation
         return self._str
+
 
     @str.setter
     def str(self, value):
         """ The Python string representation of this Circuit."""
         assert(not self._static),"Cannot edit a read-only circuit!"
+        cparser = _CircuitParser()
+        chk,chk_labels = cparser.parse(value)
+
+        if not all([my_layer in (chk_lbl,[chk_lbl]) for chk_lbl,my_layer in zip(chk,self._labels)]):
+            raise ValueError(("Cannot set .str to %s because it doesn't"
+                              " evaluate to %s (this circuit)") %
+                             (value, self.str))
+        if chk_labels is not None:
+            if tuple(self.line_labels) != chk_labels:
+                raise ValueError(("Cannot set .str to %s because line labels evaluate to"
+                                  " %s which is != this circuit's line labels (%s).") %
+                                 (value, chk_labels, str(self.line_labels)))
         self._str = value
 
     def __hash__(self):
@@ -247,14 +273,14 @@ class Circuit(object):
         editable = not self._static or not x._static
         added_labels = tuple([ l for l in x.line_labels if l not in self.line_labels ])
         return Circuit(self.tup + x.tup, self.line_labels + added_labels,
-                       None, editable, s)
+                       None, editable, s, check=False)
 
     def __mul__(self,x):
         assert( (_compat.isint(x) or _np.issubdtype(x,int)) and x >= 0)
         if x > 1: s = "(%s)^%d" % (self.str,x)
         elif x == 1: s = "(%s)" % self.str
         else: s = "{}"
-        return Circuit(self.tup * x, self.line_labels, None, not self._static, s)
+        return Circuit(self.tup * x, self.line_labels, None, not self._static, s, check=False)
 
     def __pow__(self,x): #same as __mul__()
         return self.__mul__(x)
@@ -292,7 +318,7 @@ class Circuit(object):
         Circuit
         """
         if editable == "auto": editable = not self._static
-        return Circuit( self.tup, self.line_labels, None, editable)
+        return Circuit(self.tup, self.line_labels, None, editable, self._str, False)
                      
     def clear(self):
         """
