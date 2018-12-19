@@ -1097,9 +1097,10 @@ def build_explicit_alias_model(mdl_primitives, alias_dict):
 
 def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries={}, availability={}, 
                                     qubit_labels=None, geometry="line", parameterization='static',
-                                    evotype="auto", sim_type="auto", on_construction_error='raise'):
+                                    evotype="auto", sim_type="auto", on_construction_error='raise',
+                                    independent_gates=False, ensure_composed_gates=False):
     """
-    TODO: docstring - add geometry
+    TODO: docstring - add geometry, independent_gates, ensure_composed_gates
     Creates a "standard" n-qubit model, usually of ideal gates.
 
     The returned model is "standard", in that the following standard gate
@@ -1176,8 +1177,8 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries={
     """
     return _LocalNoiseModel.build_standard(nQubits, gate_names, nonstd_gate_unitaries, availability,
                                            qubit_labels, geometry, parameterization, evotype,
-                                           sim_type, on_construction_error, independent_gates=False,
-                                           ensure_composed_gates=False)
+                                           sim_type, on_construction_error, independent_gates,
+                                           ensure_composed_gates)
 
 
 ###SCRATCH

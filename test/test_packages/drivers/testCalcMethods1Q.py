@@ -391,11 +391,11 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #Using n-qubit models
         mdl = pygsti.construction.build_standard_localnoise_model(
-            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], sim_type="matrix")
+            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], sim_type="matrix", ensure_composed_gates=False)
         probs1 = mdl.probs(self.circuit3)
 
         mdl = pygsti.construction.build_standard_localnoise_model(
-            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], sim_type="map")
+            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], sim_type="map", ensure_composed_gates=False)
         probs2 = mdl.probs(self.circuit3)
 
         expected = { ('000',): 0.0,
@@ -447,10 +447,10 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #Using n-qubit models
         mdl = pygsti.construction.build_standard_localnoise_model(
-            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], evotype="statevec", sim_type="matrix")
+            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], evotype="statevec", sim_type="matrix", ensure_composed_gates=False)
         probs1 = mdl.probs(self.circuit3)
         mdl = pygsti.construction.build_standard_localnoise_model(
-            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'],  evotype="statevec", sim_type="map")
+            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'],  evotype="statevec", sim_type="map", ensure_composed_gates=False)
         probs2 = mdl.probs(self.circuit3)
 
         expected = { ('000',): 0.0,
@@ -483,7 +483,8 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #Using n-qubit models ("H+S terms" parameterization constructs embedded/composed gates containing LindbladTermGates, etc.)
         mdl = pygsti.construction.build_standard_localnoise_model(
-            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], sim_type="termorder:1", parameterization="H+S terms")
+            self.csim_nQubits, ['Gi','Gxpi','Gypi','Gcnot'], sim_type="termorder:1",
+            parameterization="H+S terms", ensure_composed_gates=False)
         probs1 = mdl.probs(self.circuit3)
         probs2 = self.circuit3.simulate(mdl) # calls probs - same as above line
         print(probs1)
@@ -508,7 +509,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         c3 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
 
         mdl = pygsti.construction.build_standard_localnoise_model(
-            1, ['Gi','Gx','Gy'], parameterization="clifford")
+            1, ['Gi','Gx','Gy'], parameterization="clifford", ensure_composed_gates=False)
 
         probs0 = mdl.probs(c0)
         probs1 = mdl.probs(c1)
@@ -558,7 +559,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         c3 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
         
         mdl = pygsti.construction.build_standard_localnoise_model(
-            1, ['Gi','Gx','Gy'], sim_type="termorder:1", parameterization="H+S clifford terms")
+            1, ['Gi','Gx','Gy'], sim_type="termorder:1", parameterization="H+S clifford terms", ensure_composed_gates=False)
 
         print("DB: ",mdl.dim)
         probs0 = mdl.probs(c0)
