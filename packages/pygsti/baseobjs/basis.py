@@ -256,8 +256,10 @@ class Basis(object):
         return self.matrices[index]
 
     def __len__(self):
-        #OLD: return len(self.matrices)
-        return sum([ bd**2 for bd in self.dim.blockDims])
+        if self._matrices is not None:
+            return len(self.matrices) # if we have actual matrices, we may have a *subset* of a basis
+        else: 
+            return sum([ bd**2 for bd in self.dim.blockDims])
 
     def __eq__(self, other):
         if self.sparse and self.dim.opDim > 16:
