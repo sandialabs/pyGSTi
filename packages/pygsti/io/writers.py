@@ -293,7 +293,7 @@ def write_model(mdl,filename,title=None):
             props = None; povm_to_write = povm
             if isinstance(povm, _objs.UnconstrainedPOVM): povmType = "POVM"
             elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
-            elif isinstance(povm, _objs.LindbladParameterizedPOVM):
+            elif isinstance(povm, _objs.LindbladPOVM):
                 povmType = "CPTP-POVM"
                 props = [ ("ErrgenMx", povm.error_map.todense()) ]
                 povm_to_write = povm.base_povm

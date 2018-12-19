@@ -362,7 +362,7 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
             self.prep_blks[_Lbl('rho0')] = _sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")
     
             povmNoiseMap = _build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer-1)
-            self.povm_blks[_Lbl('Mdefault')] = _povm.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
+            self.povm_blks[_Lbl('Mdefault')] = _povm.LindbladPOVM(povmNoiseMap, None, "pp")
     
         else:
             raise ValueError("Invalid `spamtype` argument: %s" % spamtype)

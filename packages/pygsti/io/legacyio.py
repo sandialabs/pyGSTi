@@ -91,6 +91,9 @@ def enable_old_object_unpickling():
     spamvec.CPTPParameterizedSPAMVec = _objs.CPTPSPAMVec
     spamvec.TPParameterizedSPAMVec = _objs.TPSPAMVec
 
+    spamvec = _sys.modules['pygsti.objects.povm']
+    povm.LindbladParameterizedPOVM = _objs.LindbladPOVM
+
     #Don't need class logic here b/c we just store the class itself in a model object:
     gatematrixcalc = _ModuleType("gatematrixcalc")
     gatematrixcalc.GateMatrixCalc = _objs.matrixforwardsim.MatrixForwardSimulator # dummy_GateMatrixCalc
@@ -122,6 +125,9 @@ def disable_old_object_unpickling():
     del _sys.modules['pygsti.objects.spamvec'].FullyParameterizedSPAMVec
     del _sys.modules['pygsti.objects.spamvec'].CPTPParameterizedSPAMVec
     del _sys.modules['pygsti.objects.spamvec'].TPParameterizedSPAMVec
+
+    del _sys.modules['pygsti.objects.povm'].LindbladParameterizedPOVM
+
 
     delattr(_objs.Circuit,'__setstate__')
     delattr(_objs.LindbladDenseOp,'__setstate__')

@@ -956,7 +956,7 @@ def read_model(filename):
                 errorMap = _objs.LindbladDenseOp.from_operation_matrix(
                     qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis) #unitary postfactor = Id
                 base_povm = _objs.UnconstrainedPOVM(effects) # could try to detect a ComputationalBasisPOVM in FUTURE
-                mdl.povms[cur_label] = _objs.LindbladParameterizedPOVM(errorMap, base_povm)
+                mdl.povms[cur_label] = _objs.LindbladPOVM(errorMap, base_povm)
             else: assert(False), "Logic error!"
             
         elif cur_typ == "GATE":

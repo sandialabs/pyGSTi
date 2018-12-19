@@ -50,7 +50,7 @@ from .povm import TPPOVM
 from .povm import UnconstrainedPOVM
 from .povm import TensorProdPOVM
 from .povm import ComputationalBasisPOVM
-from .povm import LindbladParameterizedPOVM
+from .povm import LindbladPOVM
 from .instrument import Instrument
 from .instrument import TPInstrument
 

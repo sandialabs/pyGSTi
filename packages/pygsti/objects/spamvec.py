@@ -2576,7 +2576,7 @@ class LindbladSPAMVec(SPAMVec):
             The error generator action and parameterization, encapsulated in
             a gate object.  Usually a :class:`LindbladOp`
             or :class:`ComposedOp` object.  (This argument is *not* copied,
-            to allow LindbladParameterizedSPAMVecs to share error generator
+            to allow LindbladSPAMVecs to share error generator
             parameters with other gates and spam vectors.)
 
         typ : {"prep","effect"}

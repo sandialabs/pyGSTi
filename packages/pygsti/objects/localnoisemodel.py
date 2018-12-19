@@ -314,7 +314,7 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
     
             povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type, 
                                                       parameterization, errcomp_type, verbosity)
-            self.povm_blks['Mdefault'] = _povm.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
+            self.povm_blks['Mdefault'] = _povm.LindbladPOVM(povmNoiseMap, None, "pp")
 
         Composed = _op.ComposedDenseOp if sim_type == "matrix" else _op.ComposedOp
         primitive_ops = []

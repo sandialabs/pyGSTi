@@ -2772,7 +2772,7 @@ class LindbladDenseOp(LindbladOp,DenseOperator):
         evotype : {"densitymx"}
             The evolution type of the gate being constructed.  Currently,
             only `"densitymx"` (Lioville density-matrix vector) is supported.
-            For more options, see :class:`LindbladParameterizedMap`.
+            For more options, see :class:`LindbladOp`.
         """
         assert(errorgen._evotype == "densitymx"), \
             "LindbladDenseOp objects can only be used for the 'densitymx' evolution type"
@@ -4330,7 +4330,7 @@ class CliffordOp(LinearOperator):
 # - similarly create an ComposedTermGate class...
 # - so LindbladDenseOp doesn't need to deal w/"kite-structure" bases of terms;
 #    leave this to some higher level constructor which can create compositions
-#    of multiple LindbladParameterizedGates based on kite structure (one per kite block).
+#    of multiple LindbladOps based on kite structure (one per kite block).
 
 
 
