@@ -404,7 +404,7 @@ class Model(object):
         return self._paramvec
 
 
-    def from_vector(self, v, reset_basis=True):
+    def from_vector(self, v, reset_basis=False):
         """
         The inverse of to_vector.  Loads values of gates and rho and E vecs from
         from the vector `v`.  Note that `v` does not specify the number of
@@ -421,7 +421,7 @@ class Model(object):
             obj.dirty = False #object is known to be consistent with _paramvec
 
         if reset_basis:
-            self.reset_basis() #HERE
+            self.reset_basis() 
             # assume the vector we're loading isn't producing gates & vectors in
             # a known basis.
         if Model._pcheck: self._check_paramvec()
@@ -3166,7 +3166,10 @@ class ExplicitOpModel(Model):
         curDim = self.get_dimension()
         assert(newDimension > curDim)
 
-        new_model = ExplicitOpModel("full", self.preps._prefix, self.effects_prefix,
+        #For now, just create a dumb default state space labels and basis for the new model:
+        sslbls = [('L%d'%i,) for i in range(newDimension)] # interpret as independent classical levels
+        dumb_basis = _Basis('gm',[1]*newDimension) # act on diagonal density mx to get appropriate
+        new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                               self.operations._prefix, self.povms._prefix,
                               self.instruments._prefix, self._sim_type)
         #new_model._dim = newDimension # dim will be set when elements are added
@@ -3232,7 +3235,10 @@ class ExplicitOpModel(Model):
         curDim = self.get_dimension()
         assert(newDimension < curDim)
 
-        new_model = ExplicitOpModel("full", self.preps._prefix, self.effects_prefix,
+        #For now, just create a dumb default state space labels and basis for the new model:
+        sslbls = [('L%d'%i,) for i in range(newDimension)] # interpret as independent classical levels
+        dumb_basis = _Basis('gm',[1]*newDimension) # act on diagonal density mx to get appropriate
+        new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                               self.operations._prefix, self.povms._prefix,
                               self.instruments._prefix, self._sim_type)
         #new_model._dim = newDimension # dim will be set when elements are added

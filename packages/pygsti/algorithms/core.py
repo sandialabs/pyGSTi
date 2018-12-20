@@ -134,8 +134,6 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     if guessModelForGauge is None:
         guessModelForGauge = targetModel
 
-    lgstModel = _objs.ExplicitOpModel(targetModel.state_space_labels, targetModel.basis)
-
     # the dimensions of the LGST matrices, called (nESpecs, nRhoSpecs),
     # are determined by the number of outcomes obtained by compiling the
     # all prepStr * effectStr sequences:
@@ -178,6 +176,12 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     assert( _np.linalg.norm( _np.linalg.inv(ABMat_p) - invABMat_p ) < 1e-8 ) #check inverse is correct (TODO: comment out later)
     assert( len( (_np.isnan(invABMat_p)).nonzero()[0] ) == 0 )
 
+    if svdTruncateTo is None or svdTruncateTo == targetModel.dim: #use target sslbls and basis
+        lgstModel = _objs.ExplicitOpModel(targetModel.state_space_labels, targetModel.basis)
+    else: # construct a default basis for the requested dimension 
+        dumb_basis = _objs.Basis('gm',[1]*svdTruncateTo) # - just act on diagonal density mx
+        lgstModel = _objs.ExplicitOpModel([('L%d'%i,) for i in range(svdTruncateTo)], dumb_basis)
+        
     for opLabel in opLabelsToEstimate:
         Xs = _constructXMatrix(prepStrs, effectStrs, targetModel, (opLabel,),
                               dataset, opLabelAliases)  # shape (nVariants, nESpecs, nRhoSpecs)
