@@ -308,8 +308,8 @@ class TestGateStringMethods(BaseTestCase):
 
         
     def test_gatestring_object(self):
-        s1 = pygsti.obj.Circuit( ('Gx','Gx'), "Gx^2" )
-        s2 = pygsti.obj.Circuit( s1, "Gx^2" )
+        s1 = pygsti.obj.Circuit( ('Gx','Gx'), stringrep="Gx^2" )
+        s2 = pygsti.obj.Circuit( s1, stringrep="Gx^2" )
         s3 = s1 + s2
         s4 = s1**3
         s5 = s4

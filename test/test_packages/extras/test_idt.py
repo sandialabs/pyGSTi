@@ -20,6 +20,22 @@ hamiltonian=True
 stochastic=True
 affine=True
 
+#Mimics a function that used to be in pyGSTi, replaced with build_standard_cloudnoise_model
+def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
+                                      maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
+                                      extraWeight1Hops=0, extraGateWeight=0, sparse=False,
+                                      roughNoise=None, sim_type="matrix", parameterization="H+S",
+                                      spamtype="lindblad", addIdleNoiseToAllGates=True,
+                                      errcomp_type="gates", return_clouds=False, verbosity=0):
+    availability = {}; nonstd_gate_unitaries = {}
+    if cnot_edges is not None: availability['Gcnot'] = cnot_edges
+    return pygsti.construction.build_standard_cloudnoise_model(
+        nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability,
+        None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
+        extraWeight1Hops, extraGateWeight, sparse,
+        roughNoise, sim_type, parameterization,
+        spamtype, addIdleNoiseToAllGates,
+        errcomp_type, return_clouds, verbosity)
 
 def get_fileroot(nQubits, maxMaxLen, errMag, spamMag, nSamples, simtype, idleErrorInFiducials):
     return temp_files + "/idletomog_%dQ_maxLen%d_errMag%.5f_spamMag%.5f_%s_%s_%s" % \
@@ -37,10 +53,10 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
     base_param = '+'.join(base_param)
     parameterization = base_param+" terms" if simtype.startswith('termorder') else base_param # "H+S+A"
     
-    gateset_idleInFids = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
+    gateset_idleInFids = build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
                                       sim_type=simtype, parameterization=parameterization,
                                       roughNoise=None, addIdleNoiseToAllGates=True)
-    gateset_noIdleInFids = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
+    gateset_noIdleInFids = build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
                                       sim_type=simtype, parameterization=parameterization,
                                       roughNoise=None, addIdleNoiseToAllGates=False)
     
@@ -289,11 +305,11 @@ class IDTTestCase(BaseTestCase):
         self.assertEqual(len(plaq.fidpairs), 16) # (will need to change this if use H+S+A above)
 
         # ---- Create some fake data ----
-        target_model = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
+        target_model = build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
                                                               sim_type="map", parameterization="H+S")
 
         #Note: generate data with affine errors too (H+S+A used below)
-        mdl_datagen = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
+        mdl_datagen = build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
                                                                sim_type="map", parameterization="H+S+A",
                                                                roughNoise=(1234,0.001))
         #This *only* (re)sets Gi errors...
@@ -336,8 +352,8 @@ class IDTTestCase(BaseTestCase):
         expected_measDict = { 'X': ('Gy',)*3, 'Y': ('Gx',), 'Z': (),
                               '-X': ('Gy',), '-Y': ('Gx',)*3, '-Z': ('Gx','Gx')}
 
-        target_model = pygsti.construction.build_XYCNOT_cloudnoise_model(3, "line", [(0,1)], 2, 1,
-                                                      sim_type="map", parameterization="H+S+A")
+        target_model = build_XYCNOT_cloudnoise_model(3, "line", [(0,1)], 2, 1,
+                                                     sim_type="map", parameterization="H+S+A")
         prepDict, measDict = idt.determine_paulidicts(target_model)
         self.assertEqual(prepDict, expected_prepDict)
         self.assertEqual(measDict, expected_measDict)

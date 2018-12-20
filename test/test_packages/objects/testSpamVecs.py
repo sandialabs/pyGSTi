@@ -61,7 +61,7 @@ class SPAMVecTestCase(BaseTestCase):
         compSV = tppovm['1'] #complement POVM
         self.assertTrue(isinstance(compSV,pygsti.obj.ComplementSPAMVec))
 
-        dummyGS = pygsti.objects.ExplicitOpModel()
+        dummyGS = pygsti.objects.ExplicitOpModel(['Q0'])
         dummyGS.povms['Mtest'] = povm # so to/from vector work w/tensor prod of povm in tests below
         assert(povm.gpindices is not None)
         

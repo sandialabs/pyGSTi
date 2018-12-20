@@ -63,7 +63,7 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         print("PREGAME")
         printInfo()
         print("BEGIN")
-        mdl_constructed = pygsti.obj.ExplicitOpModel()
+        mdl_constructed = pygsti.obj.ExplicitOpModel(['Q0','Q1','Q2'])
         print("Model id = ",id(mdl_constructed))
         print("INSERT1: Giii indices = ", Giii.gpindices, " parent = ", Giii.parent)
         mdl_constructed.operations['Giii'] = Giii # will set gpindices of Giii, which will set those of 
