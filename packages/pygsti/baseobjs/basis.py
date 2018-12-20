@@ -185,17 +185,23 @@ class Basis(object):
                     "Dimension mismatch in basis construction: %s != %s" % (str(dims),str(blockDims))
             self.dim = Dim(blockDims)
 
-            if labels is None:
-                try:
-                    self._labels = basis_element_labels(self.name, self.dim.blockDims)
-                except NotImplementedError:
-                    self._labels = []
-                    for i, block in enumerate(self._blockMatrices):
-                        for j in range(len(block)):
-                            self._labels.append('M({})[{}]'.format(
-                                self.name,
-                                '{},{}'.format(i, j)
-                            ))
+        if labels is None:
+            try:
+                self._labels = basis_element_labels(self.name, self.dim.blockDims)
+            except NotImplementedError:
+                self._labels = []
+                for i, blockDim in enumerate(self.dim.blockDims):
+                    for j in range(blockDim):
+                        self._labels.append('M({})[{}]'.format(
+                            self.name,
+                            '{},{}'.format(i, j)
+                        ))
+        else:
+            if len(labels) == len(self): # len(self) gives num matrices if available, otherwise d2
+                self._labels = tuple(labels)
+            else:
+                raise ValueError("Basis initialization error: expected a list of %d labels but got: %s"
+                                 % (len(self), str(labels)))
             
         #Set self.real, self.longname w/defaults if they haven't been set yet
         def get_info(attr, default):
