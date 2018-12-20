@@ -126,14 +126,16 @@ def nparams_XYCNOT_cloudnoise_model(nQubits, geometry="line", maxIdleWeight=1, m
     return nParams, sum(nParams.values())
 
 
-def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
-                                  maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                                  extraWeight1Hops=0, extraGateWeight=0, sparse=False,
-                                  roughNoise=None, sim_type="matrix", parameterization="H+S",
-                                  spamtype="lindblad", addIdleNoiseToAllGates=True,
-                                  errcomp_type="gates", return_clouds=False, verbosity=0): #, debug=False):
+def build_standard_cloudnoise_model(nQubits, gate_names, nonstd_gate_unitaries={}, availability={},
+                                    qubit_labels=None, geometry="line",
+                                    maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
+                                    extraWeight1Hops=0, extraGateWeight=0, sparse=False,
+                                    roughNoise=None, sim_type="matrix", parameterization="H+S",
+                                    spamtype="lindblad", addIdleNoiseToAllGates=True,
+                                    errcomp_type="gates", return_clouds=False, verbosity=0): #, debug=False):
     """ 
-    TODO: update docstring - roughNoise in ptic
+    TODO: update docstring - roughNoise in ptic; add gate_names -> qubit_labels like build_standard_localnoise_model;
+    #                        remove cnot_edges
     Create a noisy n-qubit model using a low-weight and geometrically local
     error model with a common "global idle" operation.
 
@@ -240,23 +242,12 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
     -------
     Model
     """
-    from pygsti.construction import std1Q_XY # the base model for 1Q gates
-    from pygsti.construction import std2Q_XYICNOT # the base model for 2Q (CNOT) gate
-
-    tgt1Q = std1Q_XY.target_model()
-    tgt2Q = std2Q_XYICNOT.target_model()
-    Gx = tgt1Q.operations['Gx']
-    Gy = tgt1Q.operations['Gy']
-    Gcnot = tgt2Q.operations['Gcnot']
-    gatedict = _collections.OrderedDict([('Gx',Gx),('Gy',Gy),('Gcnot',Gcnot)])
-    availability = {}
-    if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-
-    mdl = _CloudNoiseModel(nQubits, gatedict, availability, None, geometry,
-                           maxIdleWeight, maxSpamWeight, maxhops,
-                           extraWeight1Hops, extraGateWeight, sparse,
-                           sim_type, parameterization, spamtype, 
-                           addIdleNoiseToAllGates, errcomp_type, verbosity)
+    mdl = _CloudNoiseModel.build_standard(nQubits, gate_names, nonstd_gate_unitaries, availability,
+                                          qubit_labels, geometry,
+                                          maxIdleWeight, maxSpamWeight, maxhops,
+                                          extraWeight1Hops, extraGateWeight, sparse,
+                                          sim_type, parameterization, spamtype, 
+                                          addIdleNoiseToAllGates, errcomp_type, verbosity)
 
     #Insert noise on everything using roughNoise (really shouldn't be used!)
     if roughNoise is not None:
