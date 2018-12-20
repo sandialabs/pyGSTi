@@ -172,8 +172,8 @@ class StdInputParser(object):
             raise ValueError("'{}' is not a valid dictline".format(s))
         circuitLabel = match.group(1)
         circuitStr = s[match.end():]
-        circuitTuple = self._circuit_parser.parse(circuitStr)
-        return circuitLabel, circuitTuple, circuitStr
+        circuitTuple,circuitLineLabels = self._circuit_parser.parse(circuitStr)
+        return circuitLabel, circuitTuple, circuitStr, circuitLineLabels
 
     def parse_stringfile(self, filename, line_labels="auto", num_lines=None):
         """
@@ -225,8 +225,9 @@ class StdInputParser(object):
             for line in dictfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] =='#': continue
-                label, tup, s = self.parse_dictline(line)
-                lookupDict[ label ] = _objs.Circuit(tup, stringrep=s, check=False)
+                label, tup, s, lineLbls = self.parse_dictline(line)
+                if lineLbls is None: lineLbls = "auto"
+                lookupDict[ label ] = _objs.Circuit(tup, stringrep=s, line_labels=lineLbls, check=False)
         return lookupDict
 
     def parse_datafile(self, filename, showProgress=True,

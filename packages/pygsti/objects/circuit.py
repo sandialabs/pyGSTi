@@ -229,6 +229,12 @@ class Circuit(object):
             self._str = _opSeqToStr(self._labels, self.line_labels) # lazy generation
         return self._str
 
+    def _labels_lines_str(self):
+        if '@' in self.str:
+            return self.str.split('@')
+        else:
+            return self.str, None
+
 
     @str.setter
     def str(self, value):
@@ -267,19 +273,30 @@ class Circuit(object):
             raise ValueError("Can only add Circuits objects to other Circuit objects")
         if self.str is None or x.str is None:
             s = None
-        elif self.str != "{}":
-            s = (self.str + x._str) if x.str != "{}" else self.str
-        else: s = x.str
+        else:
+            mystr,_ = self._labels_lines_str()
+            xstr,_   = x._labels_lines_str()
+            
+            if mystr != "{}":
+                s = (mystr + xstr) if xstr != "{}" else mystr
+            else: s = xstr
+            
         editable = not self._static or not x._static
         added_labels = tuple([ l for l in x.line_labels if l not in self.line_labels ])
-        return Circuit(self.tup + x.tup, self.line_labels + added_labels,
+        new_line_labels = self.line_labels + added_labels
+        if new_line_labels != ('*',):
+            s += "@(" + ','.join(map(str,new_line_labels)) + ")" # matches to _opSeqToStr in circuit.py!
+        return Circuit(self.tup + x.tup, new_line_labels,
                        None, editable, s, check=False)
 
     def __mul__(self,x):
         assert( (_compat.isint(x) or _np.issubdtype(x,int)) and x >= 0)
-        if x > 1: s = "(%s)^%d" % (self.str,x)
-        elif x == 1: s = "(%s)" % self.str
+        mystr,mylines = self._labels_lines_str()
+        if x > 1: s = "(%s)^%d" % (mystr,x)
+        elif x == 1: s = "(%s)" % mystr
         else: s = "{}"
+        if mylines is not None:
+            s += "@" + mylines # add line labels
         return Circuit(self.tup * x, self.line_labels, None, not self._static, s, check=False)
 
     def __pow__(self,x): #same as __mul__()
