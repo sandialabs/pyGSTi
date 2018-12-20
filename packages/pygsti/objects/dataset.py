@@ -830,7 +830,8 @@ class DataSet(object):
         return opLabels
 
 
-    def get_degrees_of_freedom(self, circuitList=None):
+    def get_degrees_of_freedom(self, circuitList=None, method="all_outcomes-1",
+                               aggregate_times=True):
         """
         Returns the number of independent degrees of freedom in the data for
         the operation sequences in `circuitList`.
@@ -841,6 +842,25 @@ class DataSet(object):
             The list of operation sequences to count degrees of freedom for.  If `None`
             then all of the `DataSet`'s strings are used.
 
+        method : {'all_outcomes-1', 'present_outcomes-1'}
+            How the degrees of freedom should be computed. 'all_outcomes-1' takes
+            the number of circuits and multiplies this by the *total* number of outcomes
+            (the length of what is returned by `get_outcome_labels()`) minus one.  
+            'present_outcomes-1' counts on a per-circuit basis the number of
+            present (usually = non-zero) outcomes recorded minus one.  For timestamped
+            data, see `aggreate_times` below.
+
+        aggregate_times : bool, optional
+            Whether counts that occur at different times should be tallied separately.
+            If True, then even when counts occur at different times degrees of freedom
+            are tallied on a per-circuit basis.  If False, then counts occuring at 
+            distinct times are treated as independent of those an any other time, and
+            are tallied separately.  So, for example, if `aggregate_times` is False and
+            a data row has 0- and 1-counts of 45 & 55 at time=0 and 42 and 58 at time=1
+            this row would contribute *2* degrees of freedom, not 1.  It can sometimes be
+            useful to set this to False when the `DataSet` holds coarse-grained data, but
+            usually you want this to be left as True (especially for time-series data).
+
         Returns
         -------
         int
@@ -849,17 +869,21 @@ class DataSet(object):
             circuitList = list(self.keys())
 
         nDOF = 0
+        Nout = len(self.olIndex)
         for opstr in circuitList:
             dsRow = self[opstr]
             cur_t = dsRow.time[0]
             cur_outcomes = set() # holds *distinct* outcomes at current time
             for ol,t,rep in dsRow:
-                if t == cur_t: cur_outcomes.add(ol)
+                if aggregate_times or t == cur_t:
+                    cur_outcomes.add(ol)
                 else:
                     #assume final outcome at each time is constrained
-                    nDOF += len(cur_outcomes)-1; cur_outcomes = set()
+                    nOutcomes = Nout if method == 'all_outcomes-1' else len(cur_outcomes)
+                    nDOF += nOutcomes-1; cur_outcomes = set()
                     cur_t = t
-            nDOF += len(cur_outcomes)-1; #last time stamp
+            nOutcomes = Nout if method == 'all_outcomes-1' else len(cur_outcomes)
+            nDOF += nOutcomes-1; #last time stamp
         return nDOF
 
 

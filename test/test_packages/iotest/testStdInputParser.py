@@ -49,8 +49,9 @@ class TestStdInputParser(BaseTestCase):
         #print "String Tests:"
         for s,expected in string_tests:
             #print "%s ==> " % s, result
-            result = std.parse_circuit(s, lookup=lkup)
+            result,line_labels = std.parse_circuit(s, lookup=lkup)
             self.assertEqual(result, expected)
+            self.assertEqual(line_labels, None)
 
         with self.assertRaises(ValueError):
             std.parse_circuit("FooBar")
@@ -81,11 +82,11 @@ class TestStdInputParser(BaseTestCase):
 
         std = pygsti.io.StdInputParser()
 
-        self.assertEqual( std.parse_dataline(dataline_tests[0]), (('G1', 'G2', 'G3'), 'G1G2G3', [0.1, 100.0]))
-        self.assertEqual( std.parse_dataline(dataline_tests[1]), (('G1', 'G2', 'G3'), 'G1 G2 G3', [0.798, 100.0]))
-        self.assertEqual( std.parse_dataline(dataline_tests[2]), (('G1', 'G2', 'G3', 'G2', 'G3', 'G4'), 'G1 (G2 G3)^2 G4', [1.0, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[0]), (('G1', 'G2', 'G3'), 'G1G2G3', None, [0.1, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[1]), (('G1', 'G2', 'G3'), 'G1 G2 G3', None, [0.798, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[2]), (('G1', 'G2', 'G3', 'G2', 'G3', 'G4'), 'G1 (G2 G3)^2 G4', None, [1.0, 100.0]))
         self.assertEqual( std.parse_dataline("G1G2G3 0.1 100 2.0", expectedCounts=2),
-                          (('G1', 'G2', 'G3'), 'G1G2G3', [0.1, 100.0])) #extra col ignored
+                          (('G1', 'G2', 'G3'), 'G1G2G3', None, [0.1, 100.0])) #extra col ignored
 
         with self.assertRaises(ValueError):
             std.parse_dataline("G1G2G3  1.0", expectedCounts=2) #too few cols == error
@@ -93,8 +94,8 @@ class TestStdInputParser(BaseTestCase):
             std.parse_dataline("1.0 2.0") #just data cols (no circuit col!)
 
 
-        self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3'))
-        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', ('G1', 'G2', 'G1', 'G2', 'G1', 'G2'), '(G1G2)^3'))
+        self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None))
+        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', ('G1', 'G2', 'G1', 'G2', 'G1', 'G2'), '(G1G2)^3', None))
 
         #print "Dataline Tests:"
         #for dl in dataline_tests:
@@ -424,6 +425,8 @@ LiouvilleMx
 0 0 0 1
 0 0 1 0
 0 -1 0 0
+
+BASIS: pp 2
 """
 
         gatesetfile_test2 = \
@@ -486,6 +489,7 @@ DensityMx
 0 1 0
 0 0 1
 
+BASIS: pp 2
 """
 
         gatesetfile_test5 = \
@@ -496,6 +500,7 @@ GATE: G1
 UnitaryMx
  1/sqrt(2)   -1j/sqrt(2)
 
+BASIS: pp 2
 """
 
         gatesetfile_test6 = \
@@ -507,6 +512,7 @@ UnitaryMxExp
 0           -1j*pi/4.0 0.0
 1j*pi/4.0  0           0.0
 
+BASIS: pp 2
 """
 
         gatesetfile_test7 = \
@@ -517,6 +523,7 @@ FooBar
 0   1
 1   0
 
+BASIS: pp 2
 """
 
         gatesetfile_test8 = \
@@ -644,7 +651,7 @@ LiouvilleMx
 
 END Instrument
 
-BASIS: pp
+BASIS: pp 2
 GAUGEGROUP: full
 
 POVM: Mdefault
@@ -664,6 +671,7 @@ UnitaryMx
  1 0
  0 1
 
+BASIS: pp 2
 GAUGEGROUP: Foobar
 """
 
@@ -676,12 +684,12 @@ UnitaryMx
  1 0
  0 1
 
-BASIS: pp
+BASIS: pp 2
 GAUGEGROUP: full
 """
 
         gatesetfile_test13 = \
-"""# Cannot infer basis dimension
+"""# No basis dimension
 BASIS: pp
 """
 
@@ -741,7 +749,7 @@ BASIS: pp
             pygsti.io.read_model(temp_files + "/sip_test.gateset7")
 
         gs8 = pygsti.io.read_model(temp_files + "/sip_test.gateset8")
-        gs9 = pygsti.io.read_model(temp_files + "/sip_test.gateset9")
+        #gs9 = pygsti.io.read_model(temp_files + "/sip_test.gateset9") # to test inferred basis dim, which isn't supported anymore (12/20/18)
         gs10 = pygsti.io.read_model(temp_files + "/sip_test.gateset10")
 
         self.assertWarns(pygsti.io.read_model, temp_files + "/sip_test.gateset11") #invalid gauge group = warning

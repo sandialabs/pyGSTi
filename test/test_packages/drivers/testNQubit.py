@@ -11,6 +11,22 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 
 #from .nqubitconstruction import *
 
+#Mimics a function that used to be in pyGSTi, replaced with build_standard_cloudnoise_model
+def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
+                                      maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
+                                      extraWeight1Hops=0, extraGateWeight=0, sparse=False,
+                                      roughNoise=None, sim_type="matrix", parameterization="H+S",
+                                      spamtype="lindblad", addIdleNoiseToAllGates=True,
+                                      errcomp_type="gates", return_clouds=False, verbosity=0):
+    availability = {}; nonstd_gate_unitaries = {}
+    if cnot_edges is not None: availability['Gcnot'] = cnot_edges
+    return pc.build_standard_cloudnoise_model(nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability,
+                                              None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
+                                              extraWeight1Hops, extraGateWeight, sparse,
+                                              roughNoise, sim_type, parameterization,
+                                              spamtype, addIdleNoiseToAllGates,
+                                              errcomp_type, return_clouds, verbosity)
+
 
 class NQubitTestCase(BaseTestCase):
 
@@ -19,13 +35,13 @@ class NQubitTestCase(BaseTestCase):
 
     def test_construction(self):
         print("TEST1")
-        mdl_test = pygsti.construction.build_XYCNOT_cloudnoise_model(
+        mdl_test = build_XYCNOT_cloudnoise_model(
             nQubits=1, geometry="line", maxIdleWeight=1, maxhops=0, verbosity=10)
         print("TEST2")
-        mdl_test = pygsti.construction.build_XYCNOT_cloudnoise_model(
+        mdl_test = build_XYCNOT_cloudnoise_model(
             nQubits=2, geometry="line", maxIdleWeight=1, maxhops=0, verbosity=10)
         print("TEST3")
-        mdl_test = pygsti.construction.build_XYCNOT_cloudnoise_model(
+        mdl_test = build_XYCNOT_cloudnoise_model(
             nQubits=3, geometry="line", maxIdleWeight=1, maxhops=1,
             extraWeight1Hops=0, extraGateWeight=1, sparse=True, sim_type="map", verbosity=10)
         #                                    roughNoise=(1234,0.1))
@@ -38,7 +54,7 @@ class NQubitTestCase(BaseTestCase):
         maxLengths = [1,2]
         cnot_edges = [(i,i+1) for i in range(nQubits-1)] #only single direction
 
-        mdl_datagen = pc.build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
+        mdl_datagen = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                       extraWeight1Hops=0, extraGateWeight=0, sparse=True, verbosity=1,
                                       sim_type="map", parameterization="H+S",
                                       roughNoise=(1234,0.01))
@@ -65,10 +81,10 @@ class NQubitTestCase(BaseTestCase):
         maxLengths = [1,2]
         cnot_edges = []
 
-        mdl_datagen = pc.build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=1, maxhops=0,
-                                      extraWeight1Hops=0, extraGateWeight=0, sparse=True, verbosity=1,
-                                      sim_type="map", parameterization="H+S",
-                                      roughNoise=(1234,0.01))
+        mdl_datagen = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=1, maxhops=0,
+                                                    extraWeight1Hops=0, extraGateWeight=0, sparse=True, verbosity=1,
+                                                    sim_type="map", parameterization="H+S",
+                                                    roughNoise=(1234,0.01))
 
         cache = {}
         gss = pygsti.construction.create_XYCNOT_cloudnoise_sequences(
@@ -117,9 +133,9 @@ class NQubitTestCase(BaseTestCase):
         #    lsgstLists.append(lst[:]) # append *running* list
         lsgstLists = gss # can just use gss as input to pygsti.do_long_sequence_gst_base
             
-        mdl_to_optimize = pc.build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
-                                                  extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
-                                                  sim_type="map", parameterization="H+S", sparse=True)
+        mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
+                                                         extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
+                                                         sim_type="map", parameterization="H+S", sparse=True)
         results = pygsti.do_long_sequence_gst_base(ds, mdl_to_optimize,
                                                    lsgstLists, gaugeOptParams=False,
                                                    advancedOptions={'tolerance': 1e-2}, verbosity=4)
@@ -144,7 +160,7 @@ class NQubitTestCase(BaseTestCase):
         #    lsgstLists.append(lst[:]) # append *running* list
         lsgstLists = gss # can just use gss as input to pygsti.do_long_sequence_gst_base
 
-        mdl_to_optimize = pc.build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
+        mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                   extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
                                                   sim_type="termorder:1", parameterization="H+S terms", sparse=False)
 
@@ -168,7 +184,7 @@ class NQubitTestCase(BaseTestCase):
 
         nQubits = 3
         print("Constructing Target LinearOperator Set")
-        target_model = pygsti.construction.build_XYCNOT_cloudnoise_model(
+        target_model = build_XYCNOT_cloudnoise_model(
             nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
             extraWeight1Hops=0, extraGateWeight=1, sparse=True, sim_type="map",verbosity=1)
         #print("nElements test = ",target_model.num_elements())
@@ -176,7 +192,7 @@ class NQubitTestCase(BaseTestCase):
         #print("nNonGaugeParams test = ",target_model.num_nongauge_params())
         
         print("Constructing Datagen LinearOperator Set")
-        mdl_datagen = pygsti.construction.build_XYCNOT_cloudnoise_model(
+        mdl_datagen = build_XYCNOT_cloudnoise_model(
             nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
             extraWeight1Hops=0, extraGateWeight=1, sparse=True, verbosity=1,
             roughNoise=(1234,0.1), sim_type="map")
@@ -242,7 +258,7 @@ class NQubitTestCase(BaseTestCase):
         povm.from_vector(v)
         print("Post adding noise:"); print(povm)
     
-        mdl = pygsti.obj.ExplicitOpModel()
+        mdl = pygsti.obj.ExplicitOpModel(['Q0','Q1','Q2'])
         prepFactors = [ pygsti.obj.TPSPAMVec(pygsti.construction.basis_build_vector("0", basis1Q))
                         for i in range(nQubits)]
         mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep',prepFactors)

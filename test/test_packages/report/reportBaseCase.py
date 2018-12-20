@@ -25,7 +25,7 @@ class ReportBaseCase(BaseTestCase):
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
         os.chdir('..') # The test_packages directory
 
-        targetModel = std.target_model
+        targetModel = std.target_model()
         datagen_gateset = targetModel.depolarize(op_noise=0.05, spam_noise=0.1)
         datagen_gateset2 = targetModel.depolarize(op_noise=0.1, spam_noise=0.05).rotate((0.15,-0.03,0.03))
 
@@ -148,7 +148,7 @@ class ReportBaseCase(BaseTestCase):
 
         cls = self.__class__
 
-        self.targetModel = std.target_model.copy()
+        self.targetModel = std.target_model()
         self.fiducials = std.fiducials[:]
         self.germs = std.germs[:]
         self.opLabels = std.gates

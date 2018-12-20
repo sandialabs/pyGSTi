@@ -103,7 +103,7 @@ def convert(povm, toType, basis, extra=None):
 
     elif _gt.is_valid_lindblad_paramtype(toType):
 
-        # A LindbladParameterizedPOVM needs a *static* base/reference POVM
+        # A LindbladPOVM needs a *static* base/reference POVM
         #  with the appropriate evotype.  If we can convert `povm` to such a
         #  thing we win.  (the error generator is initialized as just the identity below)
 
@@ -126,7 +126,7 @@ def convert(povm, toType, basis, extra=None):
               else _op.LindbladOp
         povmNoiseMap = cls.from_operation_obj(_np.identity(povm.dim,'d'), toType,
                                          None, proj_basis, basis, truncate=True)
-        return LindbladParameterizedPOVM(povmNoiseMap, base_povm, basis)
+        return LindbladPOVM(povmNoiseMap, base_povm, basis)
 
     
     elif toType == "clifford":
@@ -942,14 +942,14 @@ class ComputationalBasisPOVM(POVM):
 
 
 
-class LindbladParameterizedPOVM(POVM):
+class LindbladPOVM(POVM):
     """ 
     A POVM that is effectively a *single* Lindblad-parameterized gate
     followed by a computational-basis POVM.
     """
     def __init__(self, errormap, povm=None, mxBasis=None):
         """
-        Creates a new LindbladParameterizedPOVM object.
+        Creates a new LindbladPOVM object.
 
         Parameters
         ----------
@@ -957,13 +957,13 @@ class LindbladParameterizedPOVM(POVM):
             The error generator action and parameterization, encapsulated in
             a gate object.  Usually a :class:`LindbladOp`
             or :class:`ComposedOp` object.  (This argument is *not* copied,
-            to allow LindbladParameterizedSPAMVecs to share error generator
+            to allow LindbladSPAMVecs to share error generator
             parameters with other gates and spam vectors.)
 
         povm : POVM, optional
             A sub-POVM which supplies the set of "reference" effect vectors
             that `errormap` acts on to produce the final effect vectors of
-            this LindbladParameterizedPOVM.  This POVM must be *static* 
+            this LindbladPOVM.  This POVM must be *static* 
             (have zero parameters) and its evolution type must match that of
             `errormap`.  If None, then a :class:`ComputationalBasisPOVM` is 
             used on the number of qubits appropriate to `errormap`'s dimension.
@@ -1002,7 +1002,7 @@ class LindbladParameterizedPOVM(POVM):
         self.base_povm = povm
             
         items = [] # init as empty (lazy creation of members)
-        super(LindbladParameterizedPOVM, self).__init__(dim, evotype, items)
+        super(LindbladPOVM, self).__init__(dim, evotype, items)
 
     def __contains__(self, key):
         """ For lazy creation of effect vectors """
@@ -1043,7 +1043,7 @@ class LindbladParameterizedPOVM(POVM):
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
-        return (LindbladParameterizedPOVM, (self.error_map.copy(), self.base_povm.copy(), self.matrix_basis),
+        return (LindbladPOVM, (self.error_map.copy(), self.base_povm.copy(), self.matrix_basis),
                 {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
 
     def allocate_gpindices(self, startingIndex, parent):

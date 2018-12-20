@@ -15,9 +15,9 @@ class DataComparatorTestCase(BaseTestCase):
 
     def test_data_comparison(self):
         #Let's make our underlying model have a little bit of random unitary noise.
-        mdl_exp_0 = std1Q_XYI.target_model.copy()
+        mdl_exp_0 = std1Q_XYI.target_model()
         mdl_exp_0 = mdl_exp_0.randomize_with_unitary(.01,seed=0)
-        mdl_exp_1 = std1Q_XYI.target_model.copy()
+        mdl_exp_1 = std1Q_XYI.target_model()
         mdl_exp_1 = mdl_exp_0.randomize_with_unitary(.01,seed=1234)
         germs = std1Q_XYI.germs
         fiducials = std1Q_XYI.fiducials
@@ -51,7 +51,7 @@ class DataComparatorTestCase(BaseTestCase):
         #Let's run the comparator.
         comparator_0_1.implement(significance=0.05)
 
-        mdl_exp_1 = std1Q_XYI.target_model.copy()
+        mdl_exp_1 = std1Q_XYI.target_model()
         mdl_exp_1 = mdl_exp_1.randomize_with_unitary(.01,seed=1)
         DS_2 = pygsti.construction.generate_fake_data(mdl_exp_1,gate_sequences,N,'binomial',seed=30)
         
@@ -86,7 +86,7 @@ class DataComparatorTestCase(BaseTestCase):
         #                                target_score='dof') #also use a low confidence_level to ensure "violator" cases get run
 
     def test_inclusion_exclusion(self):
-        mdl_exp_0 = std1Q_XYI.target_model.copy()
+        mdl_exp_0 = std1Q_XYI.target_model()
         mdl_exp_0 = mdl_exp_0.randomize_with_unitary(.01,seed=0)
         germs = std1Q_XYI.germs
         fiducials = std1Q_XYI.fiducials
@@ -107,7 +107,7 @@ class DataComparatorTestCase(BaseTestCase):
 
 
     def test_multidataset(self):
-        mdl_exp_0 = std1Q_XYI.target_model.copy()
+        mdl_exp_0 = std1Q_XYI.target_model()
         mdl_exp_0 = mdl_exp_0.randomize_with_unitary(.01,seed=0)
         germs = std1Q_XYI.germs
         fiducials = std1Q_XYI.fiducials

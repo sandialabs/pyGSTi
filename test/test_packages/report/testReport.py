@@ -51,8 +51,8 @@ class TestReport(ReportBaseCase):
             pygsti.report.create_standard_report(self.results,temp_files + "/XXX.pdf")
 
     def test_std_clifford_comp(self):
-        self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(std.target_model,3) is not None)
-        nonStdGS = std.target_model.rotate((0.15,-0.03,0.03))
+        self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(std.target_model(),3) is not None)
+        nonStdGS = std.target_model().rotate((0.15,-0.03,0.03))
         self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(nonStdGS) is None)
         
 
@@ -120,9 +120,9 @@ class TestReport(ReportBaseCase):
         vs = self.versionsuffix
 
         #Also test adding a model-test estimate to this report
-        mdl_guess = std.target_model.depolarize(op_noise=0.07,spam_noise=0.03)
+        mdl_guess = std.target_model().depolarize(op_noise=0.07,spam_noise=0.03)
         results = self.results_logL.copy()
-        results.add_model_test(std.target_model, mdl_guess, estimate_key='Test', gauge_opt_keys="auto")
+        results.add_model_test(std.target_model(), mdl_guess, estimate_key='Test', gauge_opt_keys="auto")
 
         
         #Note: this report will have (un-combined) Robust estimates too
@@ -171,7 +171,7 @@ class TestReport(ReportBaseCase):
 
     def test_inline_template(self):
         #Generate some results (quickly)
-        mdl_tgt = std.target_model.copy()
+        mdl_tgt = std.target_model()
         mdl_datagen = mdl_tgt.depolarize(op_noise=0.01,spam_noise=0.01)
         circuits = pygsti.construction.make_lsgst_experiment_list(
             mdl_tgt, std.fiducials, std.fiducials, std.germs,[1])
@@ -405,10 +405,10 @@ class TestReport(ReportBaseCase):
 #        from pygsti.construction import std1Q_XY as stdXY
 #        with self.assertRaises(ValueError):
 #            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
-#                "Gx fidelity",std.target_model, stdXY.target_model) #Gi missing from 2nd model
+#                "Gx fidelity",std.target_model(), stdXY.target_model()) #Gi missing from 2nd model
 #        with self.assertRaises(ValueError):
 #            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
-#                "Gx fidelity",stdXY.target_model, std.target_model) #Gi missing from 1st model
+#                "Gx fidelity",stdXY.target_model(), std.target_model()) #Gi missing from 1st model
 
 
 

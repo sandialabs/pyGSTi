@@ -374,7 +374,7 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
     basis = Basis(basis, dim)
     ret = _np.zeros( (dim, dim), 'complex' )
-    for i, mx in enumerate(basis._matrices):
+    for i, mx in enumerate(basis.matrices):
         if keep_complex:
             ret += v[i]*mx
         else:
@@ -408,11 +408,11 @@ def stdmx_to_vec(m, basis):
     dim = m.shape[0]
     basis = Basis(basis, dim)
     v = _np.empty((dim**2,1))
-    for i, mx in enumerate(basis._matrices):
+    for i, mx in enumerate(basis.matrices):
         if basis.real:
             v[i,0] = _np.real(_mt.trace(_np.dot(mx,m)))
         else:
-            v[i,0] = _mt.trace(_np.dot(mx,m))
+            v[i,0] = _np.real_if_close(_mt.trace(_np.dot(mx,m)))
     return v
 
 stdmx_to_ppvec  = partial(stdmx_to_vec, basis='pp')

@@ -29,9 +29,9 @@ sys.modules['pygsti.objects'].ObjDerivedFromStdType = ObjDerivedFromStdType
 class CodecsTestCase(BaseTestCase):
 
     def setUp(self):
-        std.target_model._check_paramvec()
+        std.target_model()._check_paramvec()
         super(CodecsTestCase, self).setUp()
-        self.model = std.target_model
+        self.model = std.target_model()
         
         self.germs = pygsti.construction.circuit_list( [('Gx',), ('Gy',) ] ) #abridged for speed
         self.fiducials = std.fiducials
@@ -57,7 +57,7 @@ class CodecsTestCase(BaseTestCase):
         self.mdl_withInst.instruments['Iztp'] = pygsti.obj.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         
         self.results = self.runSilent(pygsti.do_long_sequence_gst,
-                                     self.ds, std.target_model, self.fiducials, self.fiducials,
+                                     self.ds, std.target_model(), self.fiducials, self.fiducials,
                                      self.germs, self.maxLens)
         
         #make a confidence region factory
@@ -70,7 +70,7 @@ class CodecsTestCase(BaseTestCase):
         self.ws = pygsti.report.create_standard_report(self.results, None, 
                                                        title="GST Codec TEST Report",
                                                        confidenceLevel=95)
-        std.target_model._check_paramvec()
+        std.target_model()._check_paramvec()
         
         #create miscellaneous other objects
         self.miscObjects = []
@@ -118,14 +118,14 @@ class TestCodecs(CodecsTestCase):
         self.assertAlmostEqual(self.datagen_gateset.frobeniusdist(x),0)
 
         # Results (containing confidence region)
-        std.target_model._check_paramvec()
-        print("target_model = ",id(std.target_model))
-        print("rho0 parent = ",id(std.target_model.preps['rho0'].parent))
+        std.target_model()._check_paramvec()
+        print("target_model = ",id(std.target_model()))
+        print("rho0 parent = ",id(std.target_model().preps['rho0'].parent))
         with open(temp_files + "/results.json",'w') as f:
             json.dump(self.results, f)
-        print("mdl_target2 = ",id(std.target_model))
-        print("rho0 parent2 = ",id(std.target_model.preps['rho0'].parent))
-        std.target_model._check_paramvec()            
+        print("mdl_target2 = ",id(std.target_model()))
+        print("rho0 parent2 = ",id(std.target_model().preps['rho0'].parent))
+        std.target_model()._check_paramvec()            
         with open(temp_files + "/results.json",'r') as f:
             x = json.load(f)
         self.assertEqual(list(x.estimates.keys()), list(self.results.estimates.keys()))

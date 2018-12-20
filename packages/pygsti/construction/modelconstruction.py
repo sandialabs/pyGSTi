@@ -366,7 +366,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
 
     Parameters
     ----------
-    stateSpaceLabels : a list of tuples
+    stateSpaceLabels : list of tuples or StateSpaceLabels
         Each tuple corresponds to a block of a density matrix in the standard
         basis (and therefore a component of the direct-sum density matrix
         space). Elements of a tuple are user-defined labels beginning with "L"
@@ -518,7 +518,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
                              " same tensor-product-block of the state space -- checked previously")
 
         iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
-        tensorProdBlkLabels = stateSpaceLabels[iTensorProdBlk]
+        tensorProdBlkLabels = sslbls.labels[iTensorProdBlk]
         basisInds = [] # list of possible *density-matrix-space* indices of each component of the tensor product block
         for l in tensorProdBlkLabels:
             basisInds.append( list(range(sslbls.labeldims[l]**2)) ) # e.g. [0,1,2,3] for qubits (I, X, Y, Z)
@@ -663,6 +663,14 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
                              "%s (must by 'full', 'TP', 'static', 'linear' or 'linearTP')"
                              % parameterization)
 
+    def to_label(lbl):
+        """ Convert integer-strings to integers in state space label """
+        try: return int(lbl)
+        except: return lbl.strip()
+            
+    def to_labels(lbls):
+        """ Convert integer-strings to integers in state space labels """
+        return [ to_label(lbl) for lbl in lbls ]
 
     # ----------------------------------------------------------------------------------------------------------------------------------------
     # -- End Helper Functions ----------------------------------------------------------------------------------------------------------------
@@ -684,7 +692,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
         args = argsStr.split(',')
 
         if opName == "I":
-            labels = args # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
+            labels = to_labels(args) # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
             stateSpaceDim = sslbls.product_dim(labels)
 
             if unitaryEmbedding:
@@ -695,7 +703,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
                 opTermInFinalBasis = embed_operation(pp_opMx, tuple(labels), defaultI2P) # pp_opMx assumed to be in the Pauli-product basis
 
         elif opName == "D":  #like 'I', but only parameterize the diagonal elements - so can be a depolarization-type map
-            labels = args # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
+            labels = to_labels(args) # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
             stateSpaceDim = sslbls.product_dim(labels)
 
             if unitaryEmbedding or parameterization not in ("linear","linearTP"):
@@ -712,7 +720,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
         elif opName in ('X','Y','Z'): #single-qubit gate names
             assert(len(args) == 2) # theta, qubit-index
             theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-            label = args[1].strip()
+            label = to_label(args[1])
             assert(sslbls.labeldims[label] == 2), "%s gate must act on qubits!" % opName
 
             if opName == 'X': ex = -1j * theta*_bt.sigmax/2
@@ -734,7 +742,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
             sxCoeff = eval( args[1], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
             syCoeff = eval( args[2], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
             szCoeff = eval( args[3], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
-            label = args[4].strip()
+            label = to_label(args[4])
             assert(sslbls.labeldims[label] == 2), "%s gate must act on qubits!" % opName
 
             ex = -1j * theta * ( sxCoeff * _bt.sigmax/2. + syCoeff * _bt.sigmay/2. + szCoeff * _bt.sigmaz/2.)
@@ -752,7 +760,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
             if opName in ('CX','CY','CZ'):
                 assert(len(args) == 3) # theta, qubit-label1, qubit-label2
                 theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-                label1 = args[1].strip(); label2 = args[2].strip()
+                label1 = to_label(args[1]); label2 = to_label(args[2])
 
                 if opName == 'CX': ex = -1j * theta*_bt.sigmax/2
                 elif opName == 'CY': ex = -1j * theta*_bt.sigmay/2
@@ -761,7 +769,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
                 
             else: # opName in ('CNOT','CPHASE')
                 assert(len(args) == 2) # qubit-label1, qubit-label2
-                label1 = args[0].strip(); label2 = args[1].strip()
+                label1 = to_label(args[0]); label2 = to_label(args[1])
 
                 if opName == 'CNOT':
                     Utarget = _np.array( [[0, 1],
@@ -827,7 +835,7 @@ def build_operation(stateSpaceDims, stateSpaceLabels, opExpr, basis="gm", parame
 def basis_build_explicit_model(stateSpaceLabels, basis,
                         opLabels, opExpressions,
                         prepLabels=('rho0',), prepExpressions=('0',),
-                        effectLabels='standard', effectExpressions='labels',
+                        effectLabels='standard', effectExpressions='standard',
                         povmLabels='Mdefault', parameterization="full"):
     """
     Build a new Model given lists of operation labels and expressions.
@@ -872,15 +880,17 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
         (outcome) labels for the single POVM.  If `povmLabels` is a tuple, 
         then `effectLabels` must be a list of lists of effect labels, each
         list corresponding to a POVM.  If set to the special string `"standard"`
-        then the labels `"0"`, `"1"`, ... `"<dim>"` are used, where `<dim>`
-        is the dimension of the state space.
+        then the length-n binary strings are used when the state space consists
+        of n qubits (e.g. `"000"`, `"001"`, ... `"111"` for 3 qubits) and
+        the labels `"0"`, `"1"`, ... `"<dim>"` are used, where `<dim>`
+        is the dimension of the state space, in all non-qubit cases.
 
     effectExpressions : list, optional
         A list or list-of-lists of (string) vector expressions for each POVM
         effect vector (see documentation for :meth:`build_vector`).  Expressions
         correspond to labels in `effectLabels`.  If set to the special string
-        `"labels"`, then the values of `effectLabels` are also used as 
-        expressions (which works well for integer-as-a-string labels).
+        `"standard"`, then the expressions `"0"`, `"1"`, ... `"<dim>"` are used,
+        where `<dim>` is the dimension of the state space.
 
     povmLabels : list or string, optional
         A list of POVM labels, or a single (string) label.  In the latter case,
@@ -896,9 +906,11 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
     Model
         The created model.
     """
-    dmDim, _, blockDims = basis.dim #don't need opDim
+    dmDim = basis.dim.dmDim
     defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
-    ret = _mdl.ExplicitOpModel(default_param=defP)
+    stateSpaceLabels = _ld.StateSpaceLabels(stateSpaceLabels)
+
+    ret = _mdl.ExplicitOpModel(stateSpaceLabels, basis.copy(), default_param=defP)
                  #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
 
     for label,rhoExpr in zip(prepLabels, prepExpressions):
@@ -914,28 +926,29 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
         effects = []
         
         if ELbls == "standard":
-            ELbls = list(map(str,range(dmDim))) #standard labels
-        if EExprs == "labels":
-            EExprs = ELbls #use labels as expressions
+            if stateSpaceLabels.num_tensor_prod_blocks() == 1 and \
+               all([ ldim==2 for ldim in stateSpaceLabels.tensor_product_block_dims(0)]):
+                # a single tensor product block comprised of qubits: '000', '001', etc.
+                nQubits = len(stateSpaceLabels.tensor_product_block_dims(0))
+                ELbls = [ ''.join(t) for t in _itertools.product(('0','1'),repeat=nQubits)]
+            else:
+                ELbls = list(map(str,range(dmDim))) #standard = 0,1,...,dmDim
+        if EExprs == "standard":
+            EExprs = list(map(str,range(dmDim))) #standard = 0,1,...,dmDim
 
         for label,EExpr in zip(ELbls,EExprs):
             effects.append( (label,basis_build_vector(EExpr, basis)) )
 
-        if defP == "TP":
-            ret.povms[povmLbl] = _povm.TPPOVM(effects)
-        else:
-            ret.povms[povmLbl] = _povm.UnconstrainedPOVM(effects)
+        if len(effects) > 0: # don't add POVMs with 0 effects
+            if defP == "TP":
+                ret.povms[povmLbl] = _povm.TPPOVM(effects)
+            else:
+                ret.povms[povmLbl] = _povm.UnconstrainedPOVM(effects)
 
     for (opLabel,opExpr) in zip(opLabels, opExpressions):
         ret.operations[opLabel] = basis_build_operation(stateSpaceLabels,
                                           opExpr, basis, parameterization)
 
-    if len(blockDims) == 1:
-        basisDims = blockDims[0]
-    else:
-        basisDims = blockDims 
-
-    ret.basis = _Basis(basis, basisDims)
 
     if parameterization == "full":
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.dim)
@@ -946,22 +959,16 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
 
     return ret
 
-def build_explicit_model(stateSpaceDims, stateSpaceLabels,
-                  opLabels, opExpressions,
-                  prepLabels=('rho0',), prepExpressions=('0',),
-                  effectLabels='standard', effectExpressions='labels',
-                  povmLabels='Mdefault', basis="auto", parameterization="full"):
+def build_explicit_model(stateSpaceLabels,
+                         opLabels, opExpressions,
+                         prepLabels=('rho0',), prepExpressions=('0',),
+                         effectLabels='standard', effectExpressions='standard',
+                         povmLabels='Mdefault', basis="auto", parameterization="full"):
     """
     Build a new Model given lists of labels and expressions.
 
     Parameters
     ----------
-    stateSpaceDims : list of ints
-       Dimensions specifying the structure of the density-matrix space.
-        Elements correspond to block dimensions of an allowed density matrix in
-        the standard basis, and the density-matrix space is the direct sum of
-        linear spaces of dimension block-dimension^2.
-
     stateSpaceLabels : a list of tuples
         Each tuple corresponds to a block of a density matrix in the standard
         basis (and therefore a component of the direct-sum density matrix
@@ -995,15 +1002,17 @@ def build_explicit_model(stateSpaceDims, stateSpaceLabels,
         (outcome) labels for the single POVM.  If `povmLabels` is a tuple, 
         then `effectLabels` must be a list of lists of effect labels, each
         list corresponding to a POVM.  If set to the special string `"standard"`
-        then the labels `"0"`, `"1"`, ... `"<dim>"` are used, where `<dim>`
-        is the dimension of the state space.
+        then the length-n binary strings are used when the state space consists
+        of n qubits (e.g. `"000"`, `"001"`, ... `"111"` for 3 qubits) and
+        the labels `"0"`, `"1"`, ... `"<dim>"` are used, where `<dim>`
+        is the dimension of the state space, in all non-qubit cases.
 
     effectExpressions : list, optional
         A list or list-of-lists of (string) vector expressions for each POVM
         effect vector (see documentation for :meth:`build_vector`).  Expressions
         correspond to labels in `effectLabels`.  If set to the special string
-        `"labels"`, then the values of `effectLabels` are also used as 
-        expressions (which works well for integer-as-a-string labels).
+        `"standard"`, then the expressions `"0"`, `"1"`, ... `"<dim>"` are used,
+        where `<dim>` is the dimension of the state space.
 
     povmLabels : list or string, optional
         A list of POVM labels, or a single (string) label.  In the latter case,
@@ -1033,6 +1042,10 @@ def build_explicit_model(stateSpaceDims, stateSpaceLabels,
     Model
         The created model.
     """
+
+    stateSpaceLabels = _ld.StateSpaceLabels(stateSpaceLabels)
+    stateSpaceDims = stateSpaceLabels.dim.blockDims
+
     if basis == "auto":
         if len(stateSpaceDims) == 1 and \
            _np.isclose(_np.log2(stateSpaceDims[0]),
@@ -1085,9 +1098,10 @@ def build_explicit_alias_model(mdl_primitives, alias_dict):
 
 def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries={}, availability={}, 
                                     qubit_labels=None, geometry="line", parameterization='static',
-                                    evotype="auto", sim_type="auto", on_construction_error='raise'):
+                                    evotype="auto", sim_type="auto", on_construction_error='raise',
+                                    independent_gates=False, ensure_composed_gates=False):
     """
-    TODO: docstring - add geometry
+    TODO: docstring - add geometry, independent_gates, ensure_composed_gates
     Creates a "standard" n-qubit model, usually of ideal gates.
 
     The returned model is "standard", in that the following standard gate
@@ -1164,8 +1178,8 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries={
     """
     return _LocalNoiseModel.build_standard(nQubits, gate_names, nonstd_gate_unitaries, availability,
                                            qubit_labels, geometry, parameterization, evotype,
-                                           sim_type, on_construction_error, independent_gates=False,
-                                           ensure_composed_gates=False)
+                                           sim_type, on_construction_error, independent_gates,
+                                           ensure_composed_gates)
 
 
 ###SCRATCH

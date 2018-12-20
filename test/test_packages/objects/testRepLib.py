@@ -37,7 +37,7 @@ class RepLibTestCase(BaseTestCase):
 
     def testRepLib_map(self):
         #Just test a Model with a "map" simtype to exercise the replib
-        mdl = std.target_model.copy()
+        mdl = std.target_model()
         mdl.set_simtype("map")
 
 

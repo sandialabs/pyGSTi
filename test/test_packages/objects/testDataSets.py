@@ -224,7 +224,7 @@ Gx^4 0.2 100
 
     def test_generate_fake_data(self):
 
-        model = pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gi','Gx','Gy','Gz'],
+        model = pygsti.construction.build_explicit_model([('Q0',)],['Gi','Gx','Gy','Gz'],
                                                      [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"])
 
         depol_gateset = model.depolarize(op_noise=0.1,spam_noise=0)
@@ -299,7 +299,7 @@ Gx^4 0.2 100
         basis = pygsti.get_max_gram_basis( ('Gx','Gy'), ds)
         self.assertEqual(basis, [ ('Gx',), ('Gy',) ] )
 
-        model = pygsti.construction.build_explicit_model( [2], [('Q0',)],['Gx','Gy'],
+        model = pygsti.construction.build_explicit_model([('Q0',)],['Gx','Gy'],
                                                      [ "X(pi/4,Q0)", "Y(pi/4,Q0)"])
         rank, evals, tgt_evals = pygsti.max_gram_rank_and_evals(ds, model)
         self.assertEqual(rank, 1)
@@ -815,7 +815,7 @@ Gx^4 20 80
 
 #OLD
 #    def test_intermediate_measurements(self):
-#        mdl = std.target_model.depolarize(op_noise=0.05, spam_noise=0.1)
+#        mdl = std.target_model().depolarize(op_noise=0.05, spam_noise=0.1)
 #        E = mdl.povms['Mdefault']['0']
 #        Erem = mdl.povms['Mdefault']['1']
 #        mdl.operations['Gmz_0'] = np.dot(E,E.T)

@@ -132,18 +132,18 @@ Gx^4 20 80 0.2 100
 
 
     def test_gateset_file(self):
-        pygsti.io.write_model(std.target_model, temp_files + "/gateset_loadwrite.txt", "My title")
+        pygsti.io.write_model(std.target_model(), temp_files + "/gateset_loadwrite.txt", "My title")
 
-        mdl_no_identity = std.target_model.copy()
+        mdl_no_identity = std.target_model()
         mdl_no_identity.povm_identity = None
         pygsti.io.write_model(mdl_no_identity,
                                 temp_files + "/gateset_noidentity.txt")
 
         mdl = pygsti.io.load_model(temp_files + "/gateset_loadwrite.txt")
-        self.assertAlmostEqual(mdl.frobeniusdist(std.target_model), 0)
+        self.assertAlmostEqual(mdl.frobeniusdist(std.target_model()), 0)
 
         #OLD (remainder model type)
-        #gateset_m1m1 = pygsti.construction.build_explicit_model([2], [('Q0',)],['Gi','Gx','Gy'],
+        #gateset_m1m1 = pygsti.construction.build_explicit_model([('Q0',)],['Gi','Gx','Gy'],
         #                                                 [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
         #                                                 prepLabels=['rho0'], prepExpressions=["0"],
         #                                                 effectLabels=['E0'], effectExpressions=["0"],
@@ -237,7 +237,7 @@ GAUGEGROUP: Full
 
 
     def test_gateset_writeload(self):
-        mdl = std.target_model.copy()
+        mdl = std.target_model()
 
         for param in ('full','TP','CPTP','static'):
             print("Param: ",param)

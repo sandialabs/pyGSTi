@@ -278,7 +278,16 @@ class CircuitParser(object):
 
     def parse(self, code):
         """ Perform lexing and parsing of `code` """
+        #TODO: docstring return value at least
+        if '@' in code: # format:  <string>@<line_labels>
+            code,labels = code.split('@')
+            labels = labels.strip("( )") #remove opening and closing parenthesis
+            process = lambda x: int(x) if x.strip().isdigit() else x.strip()
+            labels = tuple(map(process,labels.split(',')))
+        else:
+            labels = None
+            
         self._lexer.input(code)
         result = self._parser.parse(lexer=self._lexer)
-        return result
+        return result,labels
 

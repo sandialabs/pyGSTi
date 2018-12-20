@@ -197,13 +197,13 @@ legacy_germs = _strc.circuit_list(
 
      
 #Construct the target model
-target_model = _setc.build_explicit_model(
-    [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcphase'],
+_target_model = _setc.build_explicit_model(
+    [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcphase'],
     [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CPHASE(Q0,Q1)" ],
     effectLabels=['00','01','10','11'], effectExpressions=["0","1","2","3"])
 
-_gscache = { ("full","auto"): target_model }
-def copy_target(parameterization_type="full", sim_type="auto"):
+_gscache = { ("full","auto"): _target_model }
+def target_model(parameterization_type="full", sim_type="auto"):
     """ 
     Returns a copy of the target model in the given parameterization.
 
@@ -228,7 +228,7 @@ def copy_target(parameterization_type="full", sim_type="auto"):
 
 #Wrong CPHASE (bad 1Q phase factor)
 legacy_gs_target = _setc.build_explicit_model(
-    [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcphase'],
+    [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcphase'],
     [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CZ(pi,Q0,Q1)" ],
     effectLabels=['00','01','10','11'], effectExpressions=["0","1","2","3"])
 

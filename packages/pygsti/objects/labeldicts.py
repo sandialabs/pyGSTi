@@ -131,10 +131,11 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             raise ValueError("Cannot obtain dimension!")
 
         if self.parent is None: return
-        if self.parent.dim is None:
-            self.parent._dim = dim
-            if self.parent._sim_type == "auto":
-                self.parent.set_simtype("auto") # run deferred auto-simtype now that _dim is set
+        #TODO REMOVE # Model dim is set at creation time now (w/state space lbls)
+        #if self.parent.dim is None: 
+        #    self.parent._dim = dim
+        #    if self.parent._sim_type == "auto":
+        #        self.parent.set_simtype("auto") # run deferred auto-simtype now that _dim is set
         elif self.parent.dim != dim:
             raise ValueError("Cannot add object with dimension " +
                              "%s to model of dimension %d"
@@ -144,8 +145,9 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
     def _check_evotype(self, evotype):
         if not self.flags['match_parent_evotype']: return # no check
         if self.parent is None: return
-        if self.parent._evotype is None:
-            self.parent._evotype = evotype
+        #TODO REMOVE # Model evotype is set at creation time now
+        #if self.parent._evotype is None:
+        #    self.parent._evotype = evotype
         elif self.parent._evotype != evotype:
             raise ValueError(("Cannot add an object with evolution type"
                               " '%s' to a model with one of '%s'") %
@@ -416,6 +418,8 @@ class StateSpaceLabels(object):
 
         #Allow initialization via another StateSpaceLabels object
         if isinstance(labelList, StateSpaceLabels):
+            dims = [ tuple((labelList.labeldims[lbl] for lbl in tpbLbls))
+                     for tpbLbls in labelList.labels ]
             labelList = labelList.labels
 
         #Step1: convert labelList (and dims, if given) to a list of 
@@ -459,7 +463,7 @@ class StateSpaceLabels(object):
         else:
             for tpbLabels,tpbDims in zip(self.labels,dims):
                 for lbl,dim in zip(tpbLabels,tpbDims):
-                    assert(isinstance(lbl,_numbers.Integral)), "Dimensions must be integers!"
+                    assert(isinstance(dim,_numbers.Integral)), "Dimensions must be integers!"
                     self.labeldims[lbl] = dim
 
         # Store the starting index (within the density matrix / state vec) of
@@ -472,6 +476,52 @@ class StateSpaceLabels(object):
             self.tpb_index.update( { lbl: iTPB for lbl in tpbLabels } )
 
         self.dim = _Dim(tpb_dims) #Note: access tensor-prod-block dims via self.dim.blockDims
+
+    def num_tensor_prod_blocks(self):
+        """
+        Get the number of tensor-product blocks which are direct-summed
+        to get the final state space.
+
+        Returns
+        -------
+        int
+        """
+        return len(self.labels)
+
+    def tensor_product_block_labels(self, iTPB):
+        """
+        Get the labels for the `iTBP`-th tensor-product block.
+
+        Parameters
+        ----------
+        iTPD : int
+           The index of the tensor product block whose state-space
+           labels you wish to retrieve.
+
+        Returns
+        -------
+        tuple
+        """
+        return self.labels[iTPB]
+
+    def tensor_product_block_dims(self, iTPB):
+        """
+        Get the dimension corresponding to each label in the
+        `iTBP`-th tensor-product block.  The dimension of the 
+        entire block is the product of these.
+
+        Parameters
+        ----------
+        iTPD : int
+           The index of the tensor product block whose state-space
+           dimensions you wish to retrieve.
+
+        Returns
+        -------
+        tuple
+        """
+        return tuple((self.labeldims[lbl] for lbl in self.labels[iTPB]))
+
 
     def product_dim(self, labels):
         """
@@ -490,6 +540,11 @@ class StateSpaceLabels(object):
         return int( _np.product([self.labeldims[l] for l in labels]) )
 
     def __str__(self):
-        if len(self.labels) == 0: return "(Null state space)"
-        elif len(self.labels) == 1: return str(self.labels[0])
-        else: return str(self.labels)
+        if len(self.labels) == 0: return "ZeroDimSpace"
+        return ' + '.join(
+            [ '*'.join(["%s(%d)" % (lbl,self.labeldims[lbl]) for lbl in tpb])
+              for tpb in self.labels ] )
+
+    def __repr__(self):
+        return "StateSpaceLabels[" + str(self) + "]"
+    

@@ -155,7 +155,7 @@ class QubitGraph(object):
             self._connectivity[j,i] = bool(val)
         else:
             self._connectivity[i,j] = bool(val)
-        self.dirty = True
+        self._dirty = True
 
     def get_node_names(self):
         """ 

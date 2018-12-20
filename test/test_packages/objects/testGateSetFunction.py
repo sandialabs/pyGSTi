@@ -18,7 +18,7 @@ class ModelFunctionTestCase(BaseTestCase):
 
 
     def test_modelfunction(self):
-        mdl = std.target_model.copy()
+        mdl = std.target_model()
         raw_gsf = pygsti.objects.modelfunction.ModelFunction(mdl, "all")
         self.assertTrue(raw_gsf.evaluate(mdl) is None)
 

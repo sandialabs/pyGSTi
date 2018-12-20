@@ -146,7 +146,7 @@ class TestWorkspace(ReportBaseCase):
         gsCPTP = self.tgt.depolarize(0.01,0.01); gsCPTP.set_all_parameterizations("CPTP")
         gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.obj.Basis("gm",2)
         gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.obj.Basis("std",2)
-        gsQT = stdQT_XYIMS.target_model.depolarize(0.01,0.01)
+        gsQT = stdQT_XYIMS.target_model().depolarize(0.01,0.01)
 
         #Construct confidence regions
         def make_cr(mdl):
@@ -197,7 +197,7 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="numbers", genType="logG-logT") )
         tbls.append( w.ErrgenTable(gsGM, self.tgt, cr, display_as="numbers", genType="logGTi") )
         tbls.append( w.ErrgenTable(gsSTD, self.tgt, cr, display_as="numbers", genType="logGTi") )
-        tbls.append( w.ErrgenTable(gsQT, stdQT_XYIMS.target_model, cr, display_as="numbers", genType="logGTi") )
+        tbls.append( w.ErrgenTable(gsQT, stdQT_XYIMS.target_model(), cr, display_as="numbers", genType="logGTi") )
         with self.assertRaises(ValueError):
             w.ErrgenTable(self.mdl, self.tgt, cr, display=('foobar',))
         with self.assertRaises(AssertionError):
@@ -257,7 +257,7 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.MetadataTable(gsTP, params) )
 
         weirdGS = pygsti.construction.build_explicit_model(
-            [4], [('Q0','Q1')],['Gi'], ["I(Q0)"])
+            [('Q0','Q1')],['Gi'], ["I(Q0)"])
         #weirdGS.preps['rho1'] = pygsti.obj.ComplementSPAMVec(weirdGS.preps['rho0'],[]) #num_params not implemented!
         weirdGS.povms['Mtensor'] = pygsti.obj.TensorProdPOVM([self.mdl.povms['Mdefault'],self.mdl.povms['Mdefault']])
         tbls.append( w.MetadataTable(weirdGS, params) )

@@ -174,10 +174,10 @@ class TestGateStringMethods(BaseTestCase):
         # LSGST
         maxLens = [1,2]
         lsgstLists = pygsti.construction.make_lsgst_lists(
-            std1Q_XY.target_model, strs, strs, germs, maxLens, fidPairs=None,
+            std1Q_XY.target_model(), strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers") #also try a Model as first arg
         lsgstStructs = pygsti.construction.make_lsgst_structs(
-            std1Q_XY.target_model, strs, strs, germs, maxLens, fidPairs=None,
+            std1Q_XY.target_model(), strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers") #also try a Model as first arg
         self.assertEqual(set(lsgstLists[-1]), set(lsgstStructs[-1].allstrs))
 
@@ -227,7 +227,7 @@ class TestGateStringMethods(BaseTestCase):
             opLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers")
         lsgstExpListb = pygsti.construction.make_lsgst_experiment_list(
-            std1Q_XY.target_model, strs, strs, germs, maxLens, fidPairs=None,
+            std1Q_XY.target_model(), strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers") # with Model as first arg
 
         with self.assertRaises(ValueError):
@@ -288,7 +288,7 @@ class TestGateStringMethods(BaseTestCase):
             opLabels, germs, maxLens, truncScheme="whole germ powers",
             nest=False, includeLGST=False)
         elgstLists2b = pygsti.construction.make_elgst_lists(
-            std1Q_XY.target_model, germs, maxLens, truncScheme="whole germ powers",
+            std1Q_XY.target_model(), germs, maxLens, truncScheme="whole germ powers",
             nest=False, includeLGST=False) #with a Model as first arg
                 
 
@@ -308,8 +308,8 @@ class TestGateStringMethods(BaseTestCase):
 
         
     def test_gatestring_object(self):
-        s1 = pygsti.obj.Circuit( ('Gx','Gx'), "Gx^2" )
-        s2 = pygsti.obj.Circuit( s1, "Gx^2" )
+        s1 = pygsti.obj.Circuit( ('Gx','Gx'), stringrep="Gx^2" )
+        s2 = pygsti.obj.Circuit( s1, stringrep="Gx^2" )
         s3 = s1 + s2
         s4 = s1**3
         s5 = s4

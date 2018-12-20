@@ -8,7 +8,7 @@ class LogLTestCase(BaseTestCase):
     def test_logl_fn(self):
         ds          = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
         circuits = pygsti.construction.circuit_list( [ ('Gx',), ('Gy',), ('Gx','Gx') ] )
-        #OLD spam_labels = std.target_model.get_spam_labels()
+        #OLD spam_labels = std.target_model().get_spam_labels()
         #OLD pygsti.create_count_vec_dict( spam_labels, ds, circuits )
         model = pygsti.io.load_model(compare_files + "/analysis.model")
 
@@ -51,7 +51,7 @@ class LogLTestCase(BaseTestCase):
 
     def test_no_gatestrings(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
-        model = std.target_model #could use pygsti.io.load_model(compare_files + "/analysis.model"), but then change hardcoded #'s
+        model = std.target_model() #could use pygsti.io.load_model(compare_files + "/analysis.model"), but then change hardcoded #'s
         L1 = pygsti.logl(model, ds,
                          probClipInterval=(-1e6,1e6),
                          poissonPicture=True, check=False)
@@ -103,7 +103,7 @@ class LogLTestCase(BaseTestCase):
 
     def test_forbidden_probablity(self):
         ds   = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
-        prob = pygsti.forbidden_prob(std.target_model, ds)
+        prob = pygsti.forbidden_prob(std.target_model(), ds)
         self.assertAlmostEqual(prob, 1.276825378318927e-13)
 
     def test_hessian_mpi(self):

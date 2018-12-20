@@ -53,10 +53,10 @@ class ResultsEstimateTestCase(BaseTestCase):
 
 
         #add estimates
-        res.add_estimate(std.target_model.copy(), std.target_model.copy(),
+        res.add_estimate(std.target_model(), std.target_model(),
                          [model]*len(maxLengthList), parameters={'objective': 'logl'},
                          estimate_key="default")
-        self.assertWarns(res.add_estimate, std.target_model.copy(), std.target_model.copy(),
+        self.assertWarns(res.add_estimate, std.target_model(), std.target_model(),
                          [model]*len(maxLengthList), parameters={'objective': 'logl'},
                          estimate_key="default") #re-init existing estimate
 
@@ -125,22 +125,22 @@ class ResultsEstimateTestCase(BaseTestCase):
             res2.rename_estimate('foobar','renamed_foobar')
 
         # add estimate from model test
-        mdl_guess = std.target_model.depolarize(op_noise=0.07,spam_noise=0.03)
-        res2.add_model_test(std.target_model, mdl_guess, estimate_key='Test', gauge_opt_keys="auto")
+        mdl_guess = std.target_model().depolarize(op_noise=0.07,spam_noise=0.03)
+        res2.add_model_test(std.target_model(), mdl_guess, estimate_key='Test', gauge_opt_keys="auto")
 
         chi2_res = pygsti.obj.Results()
         chi2_res.init_dataset(ds)        
         chi2_res.init_circuits(gss)
-        chi2_res.add_estimate(std.target_model.copy(), std.target_model.copy(),
+        chi2_res.add_estimate(std.target_model(), std.target_model(),
                          [model]*len(maxLengthList), parameters={'objective': 'chi2'},
                          estimate_key="default")
-        chi2_res.add_model_test(std.target_model, mdl_guess, estimate_key='Test', gauge_opt_keys="auto")
+        chi2_res.add_model_test(std.target_model(), mdl_guess, estimate_key='Test', gauge_opt_keys="auto")
 
         chi2_res.estimates['default'].parameters['objective'] = "foobar" #sets up error below
         chi2_res.estimates['Test'].parameters['objective'] = "foobar"
         print("DB: ",chi2_res.estimates.keys())
         with self.assertRaises(ValueError):
-            chi2_res.add_model_test(std.target_model, mdl_guess,
+            chi2_res.add_model_test(std.target_model(), mdl_guess,
                                     estimate_key='Test', gauge_opt_keys="auto") # invalid "objective"
 
 

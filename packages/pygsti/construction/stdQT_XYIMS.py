@@ -7,9 +7,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """
 Variables for working with the a qutrit model containing Idle, X(pi/2) and Y(pi/2) and Molmer-Sorenson gates.
 """
-
+import sys as _sys
 from . import circuitconstruction as _strc
 from . import modelconstruction as _setc
+from . import stdtarget as _stdtarget
 from . import qutrit as _qutrit
 from collections import OrderedDict as _OrderedDict
 from numpy import pi as _pi
@@ -232,8 +233,31 @@ legacy_germs_lite = _strc.circuit_list([
 
 
 #Construct a target model: Identity, sym X(pi/2), sym Y(pi/2), Molmer-Sorenson
-target_model = _qutrit.make_qutrit_model(errorScale=0, Xangle=_pi/2, Yangle=_pi/2,
+_target_model = _qutrit.make_qutrit_model(errorScale=0, Xangle=_pi/2, Yangle=_pi/2,
                                        MSglobal=_pi/2, MSlocal=0, basis="qt")
+
+_gscache = { ("full","auto"): _target_model }
+def target_model(parameterization_type="full", sim_type="auto"):
+    """ 
+    Returns a copy of the target model in the given parameterization.
+
+    Parameters
+    ----------
+    parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
+        The gate and SPAM vector parameterization type. See 
+        :function:`Model.set_all_parameterizations` for all allowed values.
+        
+    sim_type : {"auto", "matrix", "map", "termorder:X" }
+        The simulator type to be used for model calculations (leave as
+        "auto" if you're not sure what this is).
+    
+    Returns
+    -------
+    Model
+    """
+    return _stdtarget._copy_target(_sys.modules[__name__],parameterization_type,
+                                   sim_type, _gscache)
+
 
 legacy_gs_target = _qutrit.make_qutrit_model(errorScale=0, Xangle=-_pi/2, Yangle=_pi/2,
                                        MSglobal=-_pi/2, MSlocal=0, basis="qt")

@@ -173,7 +173,7 @@ class RBTestCase(BaseTestCase):
         
         # Tests can create the Cliffords model, using std1Q_Cliffords.
         from pygsti.construction import std1Q_Cliffords
-        target_model = std1Q_Cliffords.target_model
+        target_model = std1Q_Cliffords.target_model()
     
         # Tests rb.group. This tests we can successfully construct a MatrixGroup
         clifford_group = rb.group.construct_1Q_Clifford_group()
@@ -212,7 +212,7 @@ class RBTestCase(BaseTestCase):
     
     
         from pygsti.construction import std1Q_XY
-        target_model = std1Q_XY.target_model.copy()
+        target_model = std1Q_XY.target_model()
         mdl = target_model.copy()
     
         Zrot_unitary = np.array([[1.,0.],[0.,np.exp(-1j*0.01)]])
@@ -232,7 +232,7 @@ class RBTestCase(BaseTestCase):
         self.assertLess(np.abs(AEI-r_pred_EI), 10**(-10))
     
         # Test that weighted-infidelities + RB error rates functions working.
-        target_model = std1Q_XY.target_model.copy()
+        target_model = std1Q_XY.target_model()
         mdl = target_model.copy()
     
         depol_strength_X = 1e-3
@@ -269,14 +269,14 @@ class RBTestCase(BaseTestCase):
         # -------------------------------------- #
     
         # Test constructing the R matrix in the simplest case
-        target_model = std1Q_Cliffords.target_model
+        target_model = std1Q_Cliffords.target_model()
         clifford_group = rb.group.construct_1Q_Clifford_group()
         R = rb.theory.R_matrix(target_model, clifford_group, group_to_model=None, weights=None)
     
         # Test constructing the R matrix for a group-subset model with weights
         from pygsti.construction import std1Q_XYI
         clifford_compilation = std1Q_XYI.clifford_compilation
-        target_model = std1Q_XYI.target_model.copy()
+        target_model = std1Q_XYI.target_model()
         group_to_model = {'Gc0':'Gi','Gc16':'Gx','Gc21':'Gy'}
         weights = {'Gi':1.,'Gx':1,'Gy':1}
         clifford_group = rb.group.construct_1Q_Clifford_group()
@@ -295,8 +295,8 @@ class RBTestCase(BaseTestCase):
         self.assertLess(abs(p - (1.0-depol_strength)) ,  10**(-10))
     
         # Tests the exact RB ASPs function on a Clifford model. 
-        target_model = std1Q_Cliffords.target_model
-        mdl = std1Q_Cliffords.target_model.depolarize(depol_strength)
+        target_model = std1Q_Cliffords.target_model()
+        mdl = std1Q_Cliffords.target_model().depolarize(depol_strength)
         m, ASPs = rb.theory.exact_RB_ASPs(mdl, clifford_group, m_max=1000, m_min=0, m_step=100, success_outcomelabel=('0',), 
                                           group_to_model=None, weights=None, compilation=None, 
                                           group_twirled=False)
@@ -308,7 +308,7 @@ class RBTestCase(BaseTestCase):
     
         # Tests the exact RB ASPs function on a subset-of-Cliffords model. 
         clifford_compilation = std1Q_XY.clifford_compilation
-        target_model = std1Q_XY.target_model.copy()
+        target_model = std1Q_XY.target_model()
         group_to_model = {'Gc16':'Gx','Gc21':'Gy'}
         weights = {'Gx':5,'Gy':10}
         m, ASPs = rb.theory.exact_RB_ASPs(target_model, clifford_group, m_max=10, m_min=0, m_step=1, success_outcomelabel=('0',), 
@@ -349,8 +349,8 @@ class RBTestCase(BaseTestCase):
         self.assertTrue((ASPs > 0.98).all())
     
         # Check it works with a Clifford model, and gives plausable output
-        target_model = std1Q_Cliffords.target_model
-        mdl = std1Q_Cliffords.target_model.depolarize(depol_strength)
+        target_model = std1Q_Cliffords.target_model()
+        mdl = std1Q_Cliffords.target_model().depolarize(depol_strength)
         m, ASPs = rb.theory.L_matrix_ASPs(mdl, target_model, m_max=10, m_min=0, m_step=1, success_outcomelabel=('0',),
                           compilation=None, group_twirled=False, weights=None, gauge_optimize=False, 
                           return_error_bounds=False, norm='1to1')
@@ -406,11 +406,11 @@ class RBTestCase(BaseTestCase):
         # automated to run over all the std models that contain a Clifford compilation?
         
         from pygsti.construction import std1Q_Cliffords
-        target_model = std1Q_Cliffords.target_model
+        target_model = std1Q_Cliffords.target_model()
         clifford_group = rb.group.construct_1Q_Clifford_group()
     
         from pygsti.construction import std1Q_XY
-        target_model = std1Q_XY.target_model.copy()
+        target_model = std1Q_XY.target_model()
         clifford_compilation = std1Q_XY.clifford_compilation
         compiled_cliffords = pygsti.construction.build_explicit_alias_model(target_model,clifford_compilation)
     
@@ -418,7 +418,7 @@ class RBTestCase(BaseTestCase):
             self.assertLess(np.sum(abs(compiled_cliffords.operations[key]-clifford_group.get_matrix(key))), 10**(-10))
     
         from pygsti.construction import std1Q_XYI
-        target_model = std1Q_XYI.target_model.copy()
+        target_model = std1Q_XYI.target_model()
         clifford_compilation = std1Q_XYI.clifford_compilation
         compiled_cliffords = pygsti.construction.build_explicit_alias_model(target_model,clifford_compilation)
     

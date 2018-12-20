@@ -608,8 +608,8 @@ if _cvxpy:
             Jt = (JBstd-JAstd).T
             return 0.5*_np.trace( Jt.real * self.W.real + Jt.imag * self.W.imag)
 
-    #def half_diamond_norm(A, B, mxBasis):
-    #    return 0.5 * _tools.diamonddist(A, B, mxBasis)
+    def half_diamond_norm(A, B, mxBasis):
+        return 0.5 * _tools.diamonddist(A, B, mxBasis)
     #Half_diamond_norm = _modf.opsfn_factory(half_diamond_norm)
     ## init args == (model1, model2, opLabel)
 
@@ -668,9 +668,10 @@ def eigenvalue_entanglement_infidelity(A, B, mxBasis):
     d2 = A.shape[0]
     evA = _np.linalg.eigvals(A)
     evB = _np.linalg.eigvals(B)
-    mlPl = _np.sum(_tools.minweight_match(evA,evB, lambda x,y: -_np.abs(_np.conjugate(y)*x),
-                                 return_pairs=False))
-    return 1.0 + mlPl/float(d2)
+    _,pairs = _tools.minweight_match(evA,evB, lambda x,y: abs(x-y),
+                                          return_pairs=True) # just to get pairing
+    mlPl = abs(_np.sum( [ _np.conjugate(evB[j])*evA[i] for i,j in pairs ] ))
+    return 1.0 - mlPl/float(d2)
 Eigenvalue_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_entanglement_infidelity)
 # init args == (model1, model2, opLabel)
 
@@ -680,9 +681,10 @@ def eigenvalue_avg_gate_infidelity(A, B, mxBasis):
     d2 = A.shape[0]; d = int(round(_np.sqrt(d2)))
     evA = _np.linalg.eigvals(A)
     evB = _np.linalg.eigvals(B)
-    mlPl = _np.sum(_tools.minweight_match(evA,evB, lambda x,y: -_np.abs(_np.conjugate(y)*x),
-                                 return_pairs=False))
-    return (d2 + mlPl)/float(d*(d+1))
+    _,pairs = _tools.minweight_match(evA,evB, lambda x,y: abs(x-y),
+                                          return_pairs=True) # just to get pairing
+    mlPl = abs(_np.sum( [ _np.conjugate(evB[j])*evA[i] for i,j in pairs ] ))
+    return (d2 - mlPl)/float(d*(d+1))
 Eigenvalue_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_avg_gate_infidelity)
 # init args == (model1, model2, opLabel)
 
@@ -1182,10 +1184,10 @@ def info_of_opfn_by_name(name):
         tooltip = "(d-1)/d [1 - sqrt( unitarity(A B^-1) )]"
     elif name == "evinf":
         niceName = "Eigenvalue|Ent. Infidelity"
-        tooltip = "min_P 1 - (lambda P lambda^dag)/d^2  [P = permutation, lambda = eigenvalues]"
+        tooltip = "min_P 1 - |lambda_a P lambda_b^dag|/d^2  [P = permutation, (lambda_a,lambda_b) = eigenvalues of A and B]"
     elif name == "evagi":
         niceName = "Eigenvalue|Avg. Gate Infidelity"
-        tooltip = "min_P (d^2 - lambda P lambda^dag)/d(d+1)  [P = permutation, lambda = eigenvalues]"
+        tooltip = "min_P (d^2 - |lambda_a P lambda_b^dag|)/d(d+1)  [P = permutation, (lambda_a,lambda_b) = eigenvalues of A and B]"
     elif name == "evnuinf":
         niceName = "Eigenvalue Non-U.|Ent. Infidelity"
         tooltip = "(d^2-1)/d^2 [1 - sqrt( eigenvalue_unitarity(A B^-1) )]"

@@ -37,14 +37,14 @@ class EvalTreeTestCase(BaseTestCase):
 
     def helper_tree(self, TreeClass, b1Q):
         if b1Q:
-            target_model = std1Q_XY.target_model
+            target_model = std1Q_XY.target_model()
             prepStrs = std1Q_XY.fiducials
             measStrs = std1Q_XY.fiducials
             germs = std1Q_XY.germs
             maxLens = [1,4]
             #maxLens = [1,2,4,8,16,32,64,128,256,512,1024]
         else:
-            target_model = std2Q_XYCNOT.target_model
+            target_model = std2Q_XYCNOT.target_model()
             prepStrs = std2Q_XYCNOT.prepStrs
             measStrs = std2Q_XYCNOT.effectStrs
             germs = std2Q_XYCNOT.germs
@@ -180,7 +180,7 @@ class EvalTreeTestCase(BaseTestCase):
     def test_mapevaltree(self):
         # An additional specific test added from debugging mapevaltree splitting
         mgateset = pygsti.construction.build_explicit_model(
-            [2], [('Q0',)],['Gi','Gx','Gy'],
+            [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
         mgateset._calcClass = MapForwardSimulator
         

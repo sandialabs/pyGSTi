@@ -21,7 +21,7 @@ from . import circuitconstruction as _gstrc
 from pprint import pprint
 
 def generate_fake_data(modelOrDataset, circuit_list, nSamples,
-                       sampleError="none", seed=None, randState=None,
+                       sampleError="multinomial", seed=None, randState=None,
                        aliasDict=None, collisionAction="aggregate",
                        comm=None, memLimit=None):
     """Creates a DataSet using the probabilities obtained from a model.

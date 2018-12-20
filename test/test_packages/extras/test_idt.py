@@ -20,6 +20,22 @@ hamiltonian=True
 stochastic=True
 affine=True
 
+#Mimics a function that used to be in pyGSTi, replaced with build_standard_cloudnoise_model
+def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
+                                      maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
+                                      extraWeight1Hops=0, extraGateWeight=0, sparse=False,
+                                      roughNoise=None, sim_type="matrix", parameterization="H+S",
+                                      spamtype="lindblad", addIdleNoiseToAllGates=True,
+                                      errcomp_type="gates", return_clouds=False, verbosity=0):
+    availability = {}; nonstd_gate_unitaries = {}
+    if cnot_edges is not None: availability['Gcnot'] = cnot_edges
+    return pygsti.construction.build_standard_cloudnoise_model(
+        nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability,
+        None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
+        extraWeight1Hops, extraGateWeight, sparse,
+        roughNoise, sim_type, parameterization,
+        spamtype, addIdleNoiseToAllGates,
+        errcomp_type, return_clouds, verbosity)
 
 def get_fileroot(nQubits, maxMaxLen, errMag, spamMag, nSamples, simtype, idleErrorInFiducials):
     return temp_files + "/idletomog_%dQ_maxLen%d_errMag%.5f_spamMag%.5f_%s_%s_%s" % \
@@ -37,10 +53,10 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
     base_param = '+'.join(base_param)
     parameterization = base_param+" terms" if simtype.startswith('termorder') else base_param # "H+S+A"
     
-    gateset_idleInFids = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
+    gateset_idleInFids = build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
                                       sim_type=simtype, parameterization=parameterization,
                                       roughNoise=None, addIdleNoiseToAllGates=True)
-    gateset_noIdleInFids = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
+    gateset_noIdleInFids = build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
                                       sim_type=simtype, parameterization=parameterization,
                                       roughNoise=None, addIdleNoiseToAllGates=False)
     
@@ -208,12 +224,12 @@ class IDTTestCase(BaseTestCase):
         std = pygsti.construction.stdmodule_to_smqmodule(std)
 
         maxLens = [1,2,4]
-        expList = pygsti.construction.make_lsgst_experiment_list(std.target_model, std.prepStrs,
+        expList = pygsti.construction.make_lsgst_experiment_list(std.target_model(), std.prepStrs,
                                                                  std.effectStrs, std.germs_lite, maxLens)
-        ds = pygsti.construction.generate_fake_data(std.target_model.depolarize(0.01, 0.01),
+        ds = pygsti.construction.generate_fake_data(std.target_model().depolarize(0.01, 0.01),
                                                     expList, 1000, 'multinomial', seed=1234)
 
-        result = pygsti.do_long_sequence_gst(ds, std.target_model, std.prepStrs, std.effectStrs, std.germs_lite, maxLens, verbosity=3)
+        result = pygsti.do_long_sequence_gst(ds, std.target_model(), std.prepStrs, std.effectStrs, std.germs_lite, maxLens, verbosity=3)
 
         #standard report will run idle tomography
         pygsti.report.create_standard_report(result, temp_files + "/gstWithIdleTomogTestReportStd1Q",
@@ -228,19 +244,19 @@ class IDTTestCase(BaseTestCase):
         std = pygsti.construction.stdmodule_to_smqmodule(std)
         
         maxLens = [1,2,4]
-        expList = pygsti.construction.make_lsgst_experiment_list(std2Q.target_model, std2Q.prepStrs,
+        expList = pygsti.construction.make_lsgst_experiment_list(std2Q.target_model(), std2Q.prepStrs,
                                                                  std2Q.effectStrs, std2Q.germs_lite, maxLens)
-        mdl_datagen = std2Q.target_model.depolarize(0.01, 0.01)
+        mdl_datagen = std2Q.target_model().depolarize(0.01, 0.01)
         ds2Q = pygsti.construction.generate_fake_data(mdl_datagen, expList, 1000, 'multinomial', seed=1234)
 
         #Just analyze first qubit (qubit 0)
         ds = pygsti.construction.filter_dataset(ds2Q, (0,))
 
-        start = std.target_model.copy()
+        start = std.target_model()
         start.set_all_parameterizations("TP")
         result = pygsti.do_long_sequence_gst(ds, start, std.prepStrs[0:4], std.effectStrs[0:4],
                                              std.germs_lite, maxLens, verbosity=3, advancedOptions={'objective': 'chi2'})
-        #result = pygsti.do_model_test(start.depolarize(0.009,0.009), ds, std.target_model.copy(), std.prepStrs[0:4],
+        #result = pygsti.do_model_test(start.depolarize(0.009,0.009), ds, std.target_model(), std.prepStrs[0:4],
         #                              std.effectStrs[0:4], std.germs_lite, maxLens)
         pygsti.report.create_standard_report(result, temp_files + "/gstWithIdleTomogTestReportStd1Qfrom2Q",
                                              "Test GST Report w/Idle Tomog.: StdXYI from StdXYICNOT",
@@ -289,11 +305,11 @@ class IDTTestCase(BaseTestCase):
         self.assertEqual(len(plaq.fidpairs), 16) # (will need to change this if use H+S+A above)
 
         # ---- Create some fake data ----
-        target_model = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
+        target_model = build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
                                                               sim_type="map", parameterization="H+S")
 
         #Note: generate data with affine errors too (H+S+A used below)
-        mdl_datagen = pygsti.construction.build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
+        mdl_datagen = build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
                                                                sim_type="map", parameterization="H+S+A",
                                                                roughNoise=(1234,0.001))
         #This *only* (re)sets Gi errors...
@@ -336,8 +352,8 @@ class IDTTestCase(BaseTestCase):
         expected_measDict = { 'X': ('Gy',)*3, 'Y': ('Gx',), 'Z': (),
                               '-X': ('Gy',), '-Y': ('Gx',)*3, '-Z': ('Gx','Gx')}
 
-        target_model = pygsti.construction.build_XYCNOT_cloudnoise_model(3, "line", [(0,1)], 2, 1,
-                                                      sim_type="map", parameterization="H+S+A")
+        target_model = build_XYCNOT_cloudnoise_model(3, "line", [(0,1)], 2, 1,
+                                                     sim_type="map", parameterization="H+S+A")
         prepDict, measDict = idt.determine_paulidicts(target_model)
         self.assertEqual(prepDict, expected_prepDict)
         self.assertEqual(measDict, expected_measDict)

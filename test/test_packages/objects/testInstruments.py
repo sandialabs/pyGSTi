@@ -14,7 +14,7 @@ class InstrumentTestCase(BaseTestCase):
 
     def setUp(self):
         #Add an instrument to the standard target model
-        self.target_model = std.target_model.copy()
+        self.target_model = std.target_model()
         E = self.target_model.povms['Mdefault']['0']
         Erem = self.target_model.povms['Mdefault']['1']
         Gmz_plus = np.dot(E,E.T)
@@ -214,7 +214,7 @@ class InstrumentTestCase(BaseTestCase):
     def testBasicGatesetOps(self):
         # This test was made from a debug script used to get the code working
         model = pygsti.construction.build_explicit_model(
-            [2], [('Q0',)],['Gi','Gx','Gy'],
+            [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
         #    prepLabels=["rho0"], prepExpressions=["0"],
         #    effectLabels=["0","1"], effectExpressions=["0","complement"])

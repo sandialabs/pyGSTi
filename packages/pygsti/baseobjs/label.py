@@ -456,9 +456,9 @@ class LabelTupTup(Label,tuple):
         bool
         """
         if typ == "all":
-            return all([lbl.startswith(prefix) for lbl in self])
+            return all([lbl.has_prefix(prefix) for lbl in self])
         elif typ == "any":
-            return any([lbl.startswith(prefix) for lbl in self])
+            return any([lbl.has_prefix(prefix) for lbl in self])
         else: raise ValueError("Invalid `typ` arg: %s" % str(typ))
 
     

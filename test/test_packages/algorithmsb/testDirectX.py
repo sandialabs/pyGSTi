@@ -13,7 +13,7 @@ class DirectXTestCase(BaseTestCase):
 
     def setUp(self):
         super(DirectXTestCase, self).setUp()
-        self.tgt = std.target_model
+        self.tgt = std.target_model()
         #OLDself.specs = pygsti.construction.build_spam_specs(None, std.prepStrs, std.effectStrs)
         self.prepStrs = std.prepStrs
         self.effectStrs = std.effectStrs

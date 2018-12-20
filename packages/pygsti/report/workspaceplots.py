@@ -362,16 +362,15 @@ def generate_boxplot(subMxs,
         """filter to latex-ify operation sequences.  Later add filter as a possible parameter"""
         formatted_vals = []
         for val in vals:
-            if (isinstance(val,tuple) or isinstance(val,_objs.Circuit)) \
-               and all([_tools.isstr(el) for el in val]):
+            if isinstance(val,_objs.Circuit):
                 if len(val) == 0:
                     #formatted_vals.append(r"$\{\}$")
                     formatted_vals.append(r"{}")
                 else:
                     #formatted_vals.append( "$" + "\\cdot".join([("\\mathrm{%s}" % el) for el in val]) + "$" )
-                    formatted_vals.append(str(val))
+                    formatted_vals.append(val.str)
             else:
-                formatted_vals.append(val)
+                formatted_vals.append(str(val))
         return formatted_vals
 
     def sum_up_mx(mx):
@@ -581,7 +580,7 @@ def circuit_color_boxplot(circuit_structure, subMxs, colormap,
             def hoverLabelFn(val,iy,ix):
                 """ Standard hover labels """
                 if _np.isnan(val): return ""
-                L,germ = xvals[ix],tuple(yvals[iy])
+                L,germ = xvals[ix],yvals[iy]
                 baseStr = g.get_plaquette(L,germ,False).base
                 reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
@@ -589,9 +588,9 @@ def circuit_color_boxplot(circuit_structure, subMxs, colormap,
                     if len(baseStr) == 0:
                         txt = "{}"
                     else:
-                        txt = "(%s)<sup>%d</sup>" % (str(germ),reps)
+                        txt = "(%s)<sup>%d</sup>" % (germ.str,reps)
                 else:
-                    txt = "L: %s<br>germ: %s" % (str(L),str(germ))
+                    txt = "L: %s<br>germ: %s" % (str(L),germ.str)
                 
                 txt += "<br>value: %g" % val
                 for lbl,addl_subMxs in addl_hover_subMxs.items():
@@ -613,13 +612,13 @@ def circuit_color_boxplot(circuit_structure, subMxs, colormap,
                 guess = germ * reps
                 if baseStr == guess:
                     if len(baseStr) == 0:
-                        txt = "%s+{}+%s" % (str(rhofid),str(efid))
+                        txt = "%s+{}+%s" % (rhofid.str,efid.str)
                     else:
                         txt = "%s+(%s)<sup>%d</sup>+%s" % (
-                            str(rhofid),str(germ),reps,str(efid))
+                            rhofid.str,germ.str,reps,efid.str)
                 else:
                     txt = "L: %s<br>germ: %s<br>rho<sub>i</sub>: %s<br>E<sub>i</sub>: %s" \
-                          % (str(L),str(germ),str(rhofid),str(efid))
+                          % (str(L),germ.str,rhofid.str,efid.str)
                 txt += ("<br>value: %g" % val)
                 for lbl,addl_subMxs in addl_hover_subMxs.items():
                     N = len(addl_subMxs[iy][ix]) # flip so original [0,0] el is at top-left (FLIP)
@@ -629,8 +628,8 @@ def circuit_color_boxplot(circuit_structure, subMxs, colormap,
         hoverInfo = hoverLabelFn #generate_boxplot can handle this
         
     return generate_boxplot(subMxs,
-                            list(map(str,g.used_xvals())), list(map(str,g.used_yvals())),
-                            list(map(str,g.minor_xvals())), list(map(str,g.minor_yvals())),
+                            g.used_xvals(), g.used_yvals(),
+                            g.minor_xvals(), g.minor_yvals(),
                             "L","germ","rho","E<sub>i</sub>", colormap,
                             colorbar, boxLabels, prec, hoverInfo,
                             sumUp, invert, scale)  #"$\\rho_i$","$\\E_i$"      
@@ -709,7 +708,7 @@ def circuit_color_scatterplot(circuit_structure, subMxs, colormap,
             def hoverLabelFn(val,iy,ix):
                 """ Standard hover labels """
                 if _np.isnan(val): return ""
-                L,germ = xvals[ix],tuple(yvals[iy])
+                L,germ = xvals[ix],yvals[iy]
                 baseStr = g.get_plaquette(L,germ,False).base
                 reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
@@ -717,9 +716,9 @@ def circuit_color_scatterplot(circuit_structure, subMxs, colormap,
                     if len(baseStr) == 0:
                         txt = "{}"
                     else:
-                        txt = "(%s)<sup>%d</sup>" % (str(germ),reps)
+                        txt = "(%s)<sup>%d</sup>" % (germ.str,reps)
                 else:
-                    txt = "L: %s<br>germ: %s" % (str(L),str(germ))
+                    txt = "L: %s<br>germ: %s" % (str(L),germ.str)
                 
                 txt += "<br>value: %g" % val
                 for lbl,addl_subMxs in addl_hover_subMxs.items():
@@ -738,13 +737,13 @@ def circuit_color_scatterplot(circuit_structure, subMxs, colormap,
                 guess = germ * reps
                 if baseStr == guess:
                     if len(baseStr) == 0:
-                        txt = "%s+{}+%s" % (str(rhofid),str(efid))
+                        txt = "%s+{}+%s" % (rhofid.str,efid.str)
                     else:
                         txt = "%s+(%s)<sup>%d</sup>+%s" % (
-                            str(rhofid),str(germ),reps,str(efid))
+                            rhofid.str,germ.str,reps,efid.str)
                 else:
                     txt = "L: %s<br>germ: %s<br>rho<sub>i</sub>: %s<br>E<sub>i</sub>: %s" \
-                          % (str(L),str(germ),str(rhofid),str(efid))
+                          % (str(L),germ.str,rhofid.str,efid.str)
                 txt += ("<br>value: %g" % val)
                 for lbl,addl_subMxs in addl_hover_subMxs.items():
                     txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][iiy][iix]))
@@ -1322,15 +1321,15 @@ class BoxKeyPlot(WorkspacePlot):
             """filter to latex-ify operation sequences.  Later add filter as a possible parameter"""
             formatted_vals = []
             for val in vals:
-                if isinstance(val, (tuple,_objs.Circuit)) and all([isinstance(el,_objs.Label) for el in val]):
+                if isinstance(val, _objs.Circuit):
                     if len(val) == 0:
                         #formatted_vals.append(r"$\{\}$")
                         formatted_vals.append(r"{}")
                     else:
                         #formatted_vals.append( "$" + "\\cdot".join([("\\mathrm{%s}" % el) for el in val]) + "$" )
-                        formatted_vals.append(str(val))
+                        formatted_vals.append(val.str)
                 else:
-                    formatted_vals.append(val)
+                    formatted_vals.append(str(val))
             return formatted_vals
 
         nX = len(prepStrs)

@@ -19,6 +19,8 @@ from . import spamvec as _sv
 from . import povm as _povm
 from . import qubitgraph as _qgraph
 from ..tools import optools as _gt
+from ..tools import basistools as _bt
+from ..tools import internalgates as _itgs
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
@@ -47,6 +49,179 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
     A noisy n-qubit model using a low-weight and geometrically local
     error model with a common "global idle" operation.  
     """
+
+
+    @classmethod
+    def build_standard(cls, nQubits, gate_names, nonstd_gate_unitaries={}, availability={},
+                       qubit_labels=None, geometry="line",
+                       maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
+                       extraWeight1Hops=0, extraGateWeight=0, sparse=False,
+                       sim_type="matrix", parameterization="H+S",
+                       spamtype="lindblad", addIdleNoiseToAllGates=True,
+                       errcomp_type="gates", verbosity=0):
+        """
+        TODO: update docstring - roughNoise in ptic; add qubit_labels like build_standard_localnoise_model;
+        #                        remove cnot_edges
+
+        Create a noisy n-qubit model using a low-weight and geometrically local
+        error model with a common "global idle" operation.
+    
+        This type of model is generally useful for performing GST on a multi-
+        qubit model, whereas classes like :class:`LocalNoiseModel`
+        are more useful for creating static (non-parameterized) models.        
+
+        The returned model is "standard", in that the following standard gate
+        names may be specified as elements to `gate_names` without the need to
+        supply their corresponding unitaries (as one must when calling
+        the constructor directly):
+    
+        - 'Gi' : the 1Q idle operation
+        - 'Gx','Gy','Gz' : 1Q pi/2 rotations
+        - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
+        - 'Gh' : Hadamard
+        - 'Gp' : phase
+        - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
+    
+        Furthermore, if additional "non-standard" gates are needed,
+        they are specified by their *unitary* gate action, even if
+        the final model propagates density matrices (as opposed
+        to state vectors).
+
+        Parameters
+        ----------
+        nQubits : int
+            The number of qubits
+
+        gate_names : list
+            A list of string-type gate names (e.g. `"Gx"`) either taken from
+            the list of builtin "standard" gate names given above or from the
+            keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
+            gates that are repeatedly embedded (based on `availability`) to form
+            the resulting model.
+    
+        nonstd_gate_unitaries : dict, optional 
+            A dictionary of numpy arrays which specifies the unitary gate action
+            of the gate names given by the dictionary's keys.
+    
+        availability : dict, optional
+            A dictionary whose keys are gate names and whose values are lists of 
+            qubit-label-tuples.  See constructor docstring for more details.
+
+        qubit_labels : TODO docstring
+        
+        geometry : {"line","ring","grid","torus"} or QubitGraph
+            The type of connectivity among the qubits, specifying a
+            graph used to define neighbor relationships.  Alternatively,
+            a :class:`QubitGraph` object with 0-`nQubits-1` node labels
+            may be passed directly.
+    
+        cnot_edges : list, optional
+            A list of 2-tuples of (control,target) qubit indices for each
+            CNOT gate to be included in the returned Model.  If None, then
+            the (directed) edges of the `geometry` graph are used.
+    
+        maxIdleWeight : int, optional
+            The maximum-weight for errors on the global idle gate.
+    
+        maxSpamWeight : int, optional
+            The maximum-weight for SPAM errors when `spamtype == "linblad"`.
+    
+        maxhops : int
+            The locality constraint: for a gate, errors (of weight up to the
+            maximum weight for the gate) are allowed to occur on the gate's
+            target qubits and those reachable by hopping at most `maxhops` times
+            from a target qubit along nearest-neighbor links (defined by the 
+            `geometry`).  
+        
+        extraWeight1Hops : int, optional
+            Additional hops (adds to `maxhops`) for weight-1 errors.  A value > 0
+            can be useful for allowing just weight-1 errors (of which there are 
+            relatively few) to be dispersed farther from a gate's target qubits.
+            For example, a crosstalk-detecting model might use this.
+        
+        extraGateWeight : int, optional
+            Addtional weight, beyond the number of target qubits (taken as a "base
+            weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
+            this equals 1, for instance, then 1-qubit gates can have up to weight-2
+            errors and 2-qubit gates can have up to weight-3 errors.
+    
+        sparse : bool, optional
+            Whether the embedded Lindblad-parameterized gates within the constructed
+            `nQubits`-qubit gates are sparse or not.  (This is determied by whether
+            they are constructed using sparse basis matrices.)  When sparse, these
+            Lindblad gates take up less memory, but their action is slightly slower.
+            Usually it's fine to leave this as the default (False), except when
+            considering particularly high-weight terms (b/c then the Lindblad gates
+            are higher dimensional and sparsity has a significant impact).
+    
+        gateNoise, prepNoise, povmNoise : tuple or numpy.ndarray, optional
+            If not None, noise to place on the gates, the state prep and the povm.
+            This can either be a `(seed,strength)` 2-tuple, or a long enough numpy
+            array (longer than what is needed is OK).  These values specify random
+            `gate.from_vector` initializatin for the gates and random depolarization
+            amounts on the preparation and POVM.
+    
+        sim_type : {"auto","matrix","map","termorder:<N>"}
+            The type of forward simulation (probability computation) to use for the
+            returned :class:`Model`.  That is, how should the model compute
+            operation sequence/circuit probabilities when requested.  `"matrix"` is better
+            for small numbers of qubits, `"map"` is better for larger numbers. The
+            `"termorder"` option is designed for even larger numbers.  Usually,
+            the default of `"auto"` is what you want.
+        
+        parameterization : {"P", "P terms", "P clifford terms"}
+            Where *P* can be any Lindblad parameterization base type (e.g. CPTP,
+            H+S+A, H+S, S, D, etc.) This is the type of parameterizaton to use in
+            the constructed model.  Types without any "terms" suffix perform
+            usual density-matrix evolution to compute circuit probabilities.  The
+            other "terms" options compute probabilities using a path-integral
+            approach designed for larger numbers of qubits (experts only).
+    
+        spamtype : { "static", "lindblad", "tensorproduct" }
+            Specifies how the SPAM elements of the returned `Model` are formed.
+            Static elements are ideal (perfect) operations with no parameters, i.e.
+            no possibility for noise.  Lindblad SPAM operations are the "normal"
+            way to allow SPAM noise, in which case error terms up to weight 
+            `maxSpamWeight` are included.  Tensor-product operations require that
+            the state prep and POVM effects have a tensor-product structure; the
+            "tensorproduct" mode exists for historical reasons and is *deprecated*
+            in favor of `"lindblad"`; use it only if you know what you're doing.
+    
+        addIdleNoiseToAllGates: bool, optional
+            Whether the global idle should be added as a factor following the 
+            ideal action of each of the non-idle gates.
+        
+        verbosity : int, optional
+            An integer >= 0 dictating how must output to send to stdout.
+    
+        Returns TODO: docstring
+        -------
+        Model
+            A model with `"rho0"` prep, `"Mdefault"` POVM, and gates labeled by
+            gate name (keys of `gatedict`) and qubit labels (from within
+            `availability`).  For instance, the operation label for the `"Gx"` gate on
+            qubit 2 might be `Label("Gx",1)`.
+        """
+        std_unitaries = _itgs.get_standard_gatename_unitaries()
+            
+        gatedict = _collections.OrderedDict()
+        for name in gate_names:
+            #TODO REMOVE
+            #if name == "Gi": # special case: Gi as a gate *name* is interpreted as a
+            #    gatedict[name] = "PerfectIdle" # perfect idle operation/placeholder.
+            #    continue
+                
+            U = nonstd_gate_unitaries.get(name, std_unitaries.get(name,None))
+            if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+            gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+              # assume evotype is a densitymx or term type
+
+        return cls(nQubits, gatedict, availability, qubit_labels, geometry,
+                   maxIdleWeight, maxSpamWeight, maxhops,
+                   extraWeight1Hops, extraGateWeight, sparse,
+                   sim_type, parameterization, spamtype, 
+                   addIdleNoiseToAllGates, errcomp_type, verbosity)
+
 
     def __init__(self, nQubits, gatedict, availability=None,
                  qubit_labels=None, geometry="line",
@@ -179,8 +354,6 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
 
         #Process "auto" sim_type
         _,evotype = _gt.split_lindblad_paramtype(parameterization)
-          #FUTURE: should probabal make extracting evotype from a parameterization name a
-          # function somewhere - maybe a classmethod of LindbladDenseOp?
         assert(evotype in ("densitymx","svterm","cterm")), "State-vector evolution types not allowed."
         if sim_type == "auto":
             if evotype in ("svterm", "cterm"): sim_type = "termorder:1"
@@ -188,9 +361,8 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
         assert(sim_type in ("matrix","map") or sim_type.startswith("termorder"))
 
         lizardArgs = {'add_idle_noise': addIdleNoiseToAllGates , 'errcomp_type': errcomp_type, 'sparse_expm': sparse }
-        super(CloudNoiseModel,self).__init__({}, CloudNoiseLayerLizard, lizardArgs, sim_type=sim_type)
-        self.set_state_space_labels(self.qubit_labels)
-        self.dim = 4**nQubits
+        super(CloudNoiseModel,self).__init__(self.qubit_labels, "pp", {}, CloudNoiseLayerLizard,
+                                             lizardArgs, sim_type=sim_type, evotype=evotype)
 
         printer = _VerbosityPrinter.build_printer(verbosity)
         geometry_name = "custom" if isinstance(geometry, _qgraph.QubitGraph) else geometry
@@ -205,7 +377,7 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
         #    eExprs.append( str(i) )    
         #Qlbls = tuple( ['Q%d' % i for i in range(nQubits)] )
         #mdl = pygsti.construction.build_explicit_model(
-        #    [2**nQubits], [Qlbls], [], [], 
+        #    [Qlbls], [], [], 
         #    effectLabels=eLbls, effectExpressions=eExprs)
     
         if isinstance(geometry, _qgraph.QubitGraph):
@@ -365,7 +537,7 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
             self.prep_blks[_Lbl('rho0')] = _sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")
     
             povmNoiseMap = _build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer-1)
-            self.povm_blks[_Lbl('Mdefault')] = _povm.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
+            self.povm_blks[_Lbl('Mdefault')] = _povm.LindbladPOVM(povmNoiseMap, None, "pp")
     
         else:
             raise ValueError("Invalid `spamtype` argument: %s" % spamtype)

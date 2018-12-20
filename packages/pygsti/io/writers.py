@@ -293,7 +293,7 @@ def write_model(mdl,filename,title=None):
             props = None; povm_to_write = povm
             if isinstance(povm, _objs.UnconstrainedPOVM): povmType = "POVM"
             elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
-            elif isinstance(povm, _objs.LindbladParameterizedPOVM):
+            elif isinstance(povm, _objs.LindbladPOVM):
                 povmType = "CPTP-POVM"
                 props = [ ("ErrgenMx", povm.error_map.todense()) ]
                 povm_to_write = povm.base_povm
@@ -376,14 +376,21 @@ def write_model(mdl,filename,title=None):
                 writeprop(output, "LiouvilleMx", gate.todense())
             output.write("END Instrument\n\n")
 
+        if mdl.state_space_labels is not None:
+            output.write("STATESPACE: " + str(mdl.state_space_labels) + "\n")
+              # StateSpaceLabels.__str__ formats the output properly
+
         dims = mdl.basis.dim.blockDims
         if dims is None:
             output.write("BASIS: %s\n" % mdl.basis.name)
         else:
             if type(dims) != int:
-                dimStr = ",".join(map(str,dims))
-            else: dimStr = str(dims)
-            output.write("BASIS: %s %s\n" % (mdl.basis.name, dimStr))
+                assert(mdl.state_space_labels is not None), \
+                    "Must set a Model's state space labels when using fancy a basis!"
+                output.write("BASIS: %s\n" % mdl.basis.name) # don't write the dim - the state space labels will cover this.
+            else:
+                dimStr = str(dims)
+                output.write("BASIS: %s %s\n" % (mdl.basis.name, dimStr))
 
         if isinstance(mdl.default_gauge_group, _objs.FullGaugeGroup):
             output.write("GAUGEGROUP: Full\n")

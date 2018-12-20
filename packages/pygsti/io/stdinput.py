@@ -53,7 +53,7 @@ class StdInputParser(object):
     """
 
     #  Using a single parser. This speeds up parsing, however, it means the parser is NOT reentrant
-    _string_parser = _CircuitParser()
+    _circuit_parser = _CircuitParser()
 
     def __init__(self):
         """ Create a new standard-input parser object """
@@ -77,11 +77,11 @@ class StdInputParser(object):
         tuple of operation labels
             Representing the operation sequence.
         """
-        self._string_parser.lookup = lookup
-        oplabel_tuple = self._string_parser.parse(s)
+        self._circuit_parser.lookup = lookup
+        circuit_tuple, circuit_labels = self._circuit_parser.parse(s)
         # print "DB: result = ",result
         # print "DB: stack = ",self.exprStack
-        return oplabel_tuple
+        return circuit_tuple, circuit_labels
 
     def parse_dataline(self, s, lookup={}, expectedCounts=-1):
         """
@@ -104,9 +104,11 @@ class StdInputParser(object):
         Returns
         -------
         circuitTuple : tuple
-            The operation sequence as a tuple of operation labels.
+            The circuit as a tuple of layer-operation labels.
         circuitStr : string
-            The operation sequence as represented as a string in the dataline
+            The circuit as represented as a string in the dataline (minus any line labels)
+        circuitLabels : tuple
+            A tuple of the circuit's line labels (given after '@' symbol on line)
         counts : list
             List of counts following the operation sequence.
         """
@@ -143,8 +145,8 @@ class StdInputParser(object):
             raise ValueError("No circuit column found -- all columns look like data")
 
         circuitStr = " ".join(parts[0:len(parts)-totalCounts])
-        circuitTuple = self.parse_circuit(circuitStr, lookup)
-        return circuitTuple, circuitStr, counts
+        circuitTuple, circuitLabels = self.parse_circuit(circuitStr, lookup)
+        return circuitTuple, circuitStr, circuitLabels, counts
 
     def parse_dictline(self, s):
         """
@@ -170,8 +172,8 @@ class StdInputParser(object):
             raise ValueError("'{}' is not a valid dictline".format(s))
         circuitLabel = match.group(1)
         circuitStr = s[match.end():]
-        circuitTuple = self._string_parser.parse(circuitStr)
-        return circuitLabel, circuitTuple, circuitStr
+        circuitTuple,circuitLineLabels = self._circuit_parser.parse(circuitStr)
+        return circuitLabel, circuitTuple, circuitStr, circuitLineLabels
 
     def parse_stringfile(self, filename, line_labels="auto", num_lines=None):
         """
@@ -194,8 +196,14 @@ class StdInputParser(object):
             for line in stringfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] =='#': continue
-                circuit_list.append( _objs.Circuit(self.parse_circuit(line), stringrep=line,
-                                                   line_labels=line_labels, num_lines=num_lines) )
+                layer_lbls, line_lbls = self.parse_circuit(line)
+                if line_lbls is None:
+                    line_lbls = line_labels # default to the passed-in argument
+                    nlines = num_lines
+                else: nlines = None # b/c we've got a valid line_lbls
+                
+                circuit_list.append( _objs.Circuit(layer_lbls, stringrep=line.strip(),
+                                                   line_labels=line_lbls, num_lines=nlines, check=False) )
         return circuit_list
 
     def parse_dictfile(self, filename):
@@ -217,8 +225,9 @@ class StdInputParser(object):
             for line in dictfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] =='#': continue
-                label, tup, s = self.parse_dictline(line)
-                lookupDict[ label ] = _objs.Circuit(tup, stringrep=s)
+                label, tup, s, lineLbls = self.parse_dictline(line)
+                if lineLbls is None: lineLbls = "auto"
+                lookupDict[ label ] = _objs.Circuit(tup, stringrep=s, line_labels=lineLbls, check=False)
         return lookupDict
 
     def parse_datafile(self, filename, showProgress=True,
@@ -308,7 +317,7 @@ class StdInputParser(object):
 
                 if len(dataline) == 0: continue
                 try:
-                    circuitTuple, circuitStr, valueList = \
+                    circuitTuple, circuitStr, circuitLbls, valueList = \
                             self.parse_dataline(dataline, lookupDict, nDataCols)
 
                     commentDict = {}
@@ -340,8 +349,9 @@ class StdInputParser(object):
                 if all([ (abs(v) < 1e-9) for v in list(countDict.values())]):
                     warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % circuitStr)
                     continue #skip lines in dataset file with zero counts (no experiments done)
-                opStr = _objs.Circuit(circuitTuple, stringrep=circuitStr) #, lookup=lookupDict)
-                dataset.add_count_dict(opStr, countDict, aux=commentDict)
+                if circuitLbls is None: circuitLbls = "auto" # if line labels weren't given just use defaults
+                circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls, check=False) #, lookup=lookupDict)
+                dataset.add_count_dict(circuit, countDict, aux=commentDict)
 
         if warnings:
             _warnings.warn('\n'.join(warnings)) # to be displayed at end, after potential progress updates
@@ -500,11 +510,13 @@ class StdInputParser(object):
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
                 try:
-                    circuitTuple, circuitStr, valueList = self.parse_dataline(line, lookupDict, nDataCols)
+                    circuitTuple, circuitStr, circuitLbls, valueList = \
+                        self.parse_dataline(line, lookupDict, nDataCols)
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-                opStr = _objs.Circuit(circuitTuple, stringrep=circuitStr) #, lookup=lookupDict)
+                if circuitLbls is None: circuitLbls = "auto" # if line labels aren't given find them automatically
+                opStr = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls, check=False) #, lookup=lookupDict)
                 self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
                 for dsLabel, countDict in dsCountDicts.items():                    
                     datasets[dsLabel].add_count_dict(opStr, countDict)
@@ -655,8 +667,9 @@ class StdInputParser(object):
                     parts = line.split()
                     lastpart = parts[-1]
                     circuitStr = line[:-len(lastpart)].strip()
-                    circuitTuple = self.parse_circuit(circuitStr, lookupDict)
-                    circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr)
+                    circuitTuple, circuitLbls = self.parse_circuit(circuitStr, lookupDict)
+                    if circuitLbls is None: circuitLbls = "auto" # maybe allow a default line_labels to be passed in later?
+                    circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls, check=False)
                     timeSeriesStr = lastpart.strip()
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
@@ -694,14 +707,14 @@ def read_model(filename):
     """
     basis = 'pp' #default basis to load as
 
-    mdl = _objs.ExplicitOpModel()
     spam_vecs = _OrderedDict();
     spam_labels = _OrderedDict(); remainder_spam_label = ""
     identity_vec = _np.transpose( _np.array( [ _np.sqrt(2.0), 0,0,0] ) )  #default = 1-QUBIT identity vector
 
     basis_abbrev = "pp" #default assumed basis
-    basis_dims = None
+    basis_dim = None
     gaugegroup_name = None
+    state_space_labels = None
 
     #First try to find basis:
     with open(filename) as inputfile:
@@ -713,22 +726,46 @@ def read_model(filename):
                 basis_abbrev = parts[0]
                 if len(parts) > 1:
                     basis_dims = list(map(int, "".join(parts[1:]).split(",")))
-                    if len(basis_dims) == 1: basis_dims = basis_dims[0]
+                    assert(len(basis_dims) == 1), "Multiple basis dims is no longer supported!"
+                    basis_dim = basis_dims[0]
                 else:
-                    basis_dims = None
+                    basis_dim = None
             elif line.startswith("GAUGEGROUP:"):
                 gaugegroup_name = line[len("GAUGEGROUP:"):].strip()
                 if gaugegroup_name not in ("Full","TP","Unitary"):
                     _warnings.warn(("Unknown GAUGEGROUP name %s.  Default gauge"
                                     "group will be set to None") % gaugegroup_name)
+            elif line.startswith("STATESPACE:"):
+                tpbs_lbls = []; tpbs_dims = []
+                tensor_prod_blk_strs = line[len("STATESPACE:"):].split("+")
+                for tpb_str in tensor_prod_blk_strs:
+                    tpb_lbls = []; tpb_dims = []
+                    for lbl_and_dim in tpb_str.split("*"):
+                        start = lbl_and_dim.index('(')
+                        end = lbl_and_dim.rindex(')')
+                        lbl,dim = lbl_and_dim[:start], lbl_and_dim[start+1:end]
+                        tpb_lbls.append(lbl.strip())
+                        tpb_dims.append(int(dim.strip()))
+                    tpbs_lbls.append( tuple(tpb_lbls) )
+                    tpbs_dims.append( tuple(tpb_dims) )
+                state_space_labels = _objs.StateSpaceLabels(tpbs_lbls, tpbs_dims)
 
-    if basis_dims is not None:
+    if basis_dim is not None:
         # then specfy a dimensionful basis at the outset
         basis = _objs.Basis(basis_abbrev, basis_dims)
     else:
-        # otherwise we'll try to infer one at the end (and add_current routine
-        # uses basis in a way that can infer a dimension)
-        basis = basis_abbrev
+        # otherwise we'll try to infer one from state space labels
+        if state_space_labels is not None:
+            basis = _objs.Basis(basis_abbrev, state_space_labels.dim)
+        else:
+            raise ValueError("Cannot infer basis dimension!")
+
+    if state_space_labels is None:
+        assert(basis_dim is not None) # b/c of logic above
+        state_space_labels = _objs.StateSpaceLabels(['*'], [basis_dim])
+          # special '*' state space label w/entire dimension inferred from BASIS line
+        
+    mdl = _objs.ExplicitOpModel(state_space_labels, basis)
 
     state = "look for label or property"
     cur_obj = None
@@ -764,7 +801,10 @@ def read_model(filename):
                 assert(cur_property == ""), "Logic error!"
                 
                 parts = line.split(':')
-                if len(parts) == 2: # then this is a '<type>: <label>' line => new cur_obj
+                if any([line.startswith(pre) for pre in ("BASIS","GAUGEGROUP","STATESPACE")]):
+                    pass #handled above
+
+                elif len(parts) == 2: # then this is a '<type>: <label>' line => new cur_obj
                     typ = parts[0].strip()
                     label = parts[1].strip()
 
@@ -775,11 +815,8 @@ def read_model(filename):
                         else:
                             top_level_objs.append(cur_obj)
                         cur_obj = None
-                        
-                    if typ in ("BASIS","GAUGEGROUP"):
-                        pass #handled above
                     
-                    elif typ in ("POVM","TP-POVM","CPTP-POVM","Instrument","TP-Instrument"):
+                    if typ in ("POVM","TP-POVM","CPTP-POVM","Instrument","TP-Instrument"):
                         # a group type - so create a new *group* object
                         assert(cur_group_obj is None), "Group label encountered before ENDing prior group:\n%s" % line
                         cur_group_obj = {'label': label, 'type': typ, 'properties': {}, 'objects': [] }
@@ -920,7 +957,7 @@ def read_model(filename):
                 errorMap = _objs.LindbladDenseOp.from_operation_matrix(
                     qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis) #unitary postfactor = Id
                 base_povm = _objs.UnconstrainedPOVM(effects) # could try to detect a ComputationalBasisPOVM in FUTURE
-                mdl.povms[cur_label] = _objs.LindbladParameterizedPOVM(errorMap, base_povm)
+                mdl.povms[cur_label] = _objs.LindbladPOVM(errorMap, base_povm)
             else: assert(False), "Logic error!"
             
         elif cur_typ == "GATE":
@@ -962,22 +999,6 @@ def read_model(filename):
             else: assert(False), "Logic error!"
         else:
             raise ValueError("Unknown type: %s!" % cur_typ)
-
-
-            
-    #Try to infer basis dimension if none is given
-    if basis_dims is None:
-        if mdl.get_dimension() is not None:
-            basis_dims = int(round(_np.sqrt(mdl.get_dimension())))
-        elif len(spam_vecs) > 0:
-            basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
-        else:
-            raise ValueError("Cannot infer basis dimension!")
-
-        #Set basis (only needed if we didn't set it above)
-        mdl.basis = _objs.Basis(basis_abbrev, basis_dims)
-    else:
-        mdl.basis = basis # already created a Basis obj above
 
     #Add default gauge group -- the full group because
     # we add FullyParameterizedGates above.

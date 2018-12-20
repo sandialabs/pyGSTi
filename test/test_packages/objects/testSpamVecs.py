@@ -61,7 +61,7 @@ class SPAMVecTestCase(BaseTestCase):
         compSV = tppovm['1'] #complement POVM
         self.assertTrue(isinstance(compSV,pygsti.obj.ComplementSPAMVec))
 
-        dummyGS = pygsti.objects.ExplicitOpModel()
+        dummyGS = pygsti.objects.ExplicitOpModel(['Q0'])
         dummyGS.povms['Mtest'] = povm # so to/from vector work w/tensor prod of povm in tests below
         assert(povm.gpindices is not None)
         
@@ -229,7 +229,7 @@ class SPAMVecTestCase(BaseTestCase):
     #TODO
     def test_complement_spamvec(self):
         model = pygsti.construction.build_explicit_model(
-            [2], [('Q0',)],['Gi','Gx','Gy'],
+            [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
 
         E0 = model.povms['Mdefault']['0']
@@ -274,9 +274,9 @@ class SPAMVecTestCase(BaseTestCase):
 
     def test_povms(self):
         model = pygsti.construction.build_explicit_model(
-            [2], [('Q0',)],['Gi'], ["I(Q0)"])
+            [('Q0',)],['Gi'], ["I(Q0)"])
         gateset2Q = pygsti.construction.build_explicit_model(
-            [4], [('Q0','Q1')],['Gi'], ["I(Q0)"])
+            [('Q0','Q1')],['Gi'], ["I(Q0)"])
 
         povm = model.povms['Mdefault'].copy()
         E0 = povm['0']
@@ -366,7 +366,7 @@ class SPAMVecTestCase(BaseTestCase):
         povm = pygsti.obj.UnconstrainedPOVM(items)
         self.assertEqual(povm.num_params(),0)
 
-        mdl = std1Q_XYI.target_model.copy()
+        mdl = std1Q_XYI.target_model()
         mdl.preps['rho0'] = pygsti.obj.ComputationalSPAMVec([0],'densitymx')
         mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': pygsti.obj.ComputationalSPAMVec([0],'densitymx'),
                                                              '1': pygsti.obj.ComputationalSPAMVec([1],'densitymx')})

@@ -17,12 +17,12 @@ class GateTestCase(BaseTestCase):
 
     def test_lpg_deriv(self):
         mdl_target_lp = pc.build_explicit_model(
-            [2], [('Q0',)],['Gi','Gx'], [ "D(Q0)","X(pi/2,Q0)" ],
+            [('Q0',)],['Gi','Gx'], [ "D(Q0)","X(pi/2,Q0)" ],
             basis="pp", parameterization="linear" )
 
     
         mdl_target_lp2 = pc.build_explicit_model(
-            [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'], 
+            [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'], 
             [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
             basis="pp", parameterization="linearTP" )
 
@@ -111,7 +111,7 @@ class GateTestCase(BaseTestCase):
 
         
     def test_gate_methods(self):
-        dummyGS = pygsti.objects.ExplicitOpModel()
+        dummyGS = pygsti.objects.ExplicitOpModel(['Q0'])
         mx = np.identity(4,'d')
         mx2 = np.array([[1,0,0,0],
                         [0,1,0,0],
@@ -285,7 +285,7 @@ class GateTestCase(BaseTestCase):
 
 
     def test_gatemap_methods(self):
-        dummyGS = pygsti.objects.ExplicitOpModel()
+        dummyGS = pygsti.objects.ExplicitOpModel(['Q0'])
         densemx = np.array([[1,0,0,0],
                         [0,1,0,0],
                         [0,0,0,1],
@@ -341,7 +341,7 @@ class GateTestCase(BaseTestCase):
         dummyGS.operations['Gembed'] = embedGate # so to/from vector work in tests below
         gates_to_test.append( dummyGS.operations['Gembed'] )
 
-        dummyGS2 = pygsti.objects.ExplicitOpModel() # b/c will have different dim from dummyGS
+        dummyGS2 = pygsti.objects.ExplicitOpModel([('Q0',),('Q1',)]) # b/c will have different dim from dummyGS
         ppBasis2x2 = pygsti.obj.Basis("pp",(2,2))
         embedGate2 = pygsti.objects.EmbeddedOp( [('Q0',),('Q1',)], ['Q0'], testGate) # 2 blocks
         dummyGS2.operations['Gembed2'] = embedGate2 # so to/from vector work in tests below

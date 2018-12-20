@@ -40,9 +40,9 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
     def build_standard(cls, nQubits, gate_names, nonstd_gate_unitaries={}, availability={}, 
                        qubit_labels=None, geometry="line", parameterization='static',
                        evotype="auto", sim_type="auto", on_construction_error='raise',
-                       independent_gates=False, ensure_composed_gates=True):
+                       independent_gates=False, ensure_composed_gates=False):
         """
-        TODO: docstring - add geometry
+        TODO: docstring - add geometry, independent_gates, ensure_composed_gates
         Creates a "standard" n-qubit model, usually of ideal gates.
     
         The returned model is "standard", in that the following standard gate
@@ -149,7 +149,7 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
     def __init__(self, nQubits, gatedict, availability=None, qubit_labels=None,
                  geometry="line", parameterization='static', evotype="auto",
                  sim_type="auto", on_construction_error='raise',
-                 independent_gates=False, ensure_composed_gates=True):
+                 independent_gates=False, ensure_composed_gates=False):
         """
         Creates a n-qubit model by embedding the *same* gates from `gatedict`
         as requested and creating a perfect 0-prep and z-basis POVM.
@@ -273,9 +273,8 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
                 sim_type = "map" # use map as default for stabilizer-type evolutions
             else: assert(False) # should be unreachable
 
-        super(LocalNoiseModel,self).__init__({}, SimpleCompLayerLizard, {}, sim_type=sim_type, evotype=evotype)
-        self.dim = 4**nQubits if evotype in ("densitymx","svterm","cterm") else 2**nQubits
-        self.set_state_space_labels(qubit_labels)
+        super(LocalNoiseModel,self).__init__(qubit_labels, "pp", {}, SimpleCompLayerLizard, {},
+                                             sim_type=sim_type, evotype=evotype)
     
         if parameterization in ("TP","full"): # then make tensor-product spam
             prep_factors = []; povm_factors = []
@@ -315,19 +314,12 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
     
             povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type, 
                                                       parameterization, errcomp_type, verbosity)
-            self.povm_blks['Mdefault'] = _povm.LindbladParameterizedPOVM(povmNoiseMap, None, "pp")
+            self.povm_blks['Mdefault'] = _povm.LindbladPOVM(povmNoiseMap, None, "pp")
 
         Composed = _op.ComposedDenseOp if sim_type == "matrix" else _op.ComposedOp
         primitive_ops = []
 
         for gateName, gate in gatedict.items():
-            if ensure_composed_gates and independent_gates == False \
-               and not isinstance(gate,Composed):
-                #Make a single ComposedDenseOp *here*, which is used
-                # in all the embeddings for different target qubits
-                gate = Composed([gate]) # to make adding more factors easy
-                self.operation_blks[_Lbl(gateName+"_gate")] = cgate
-                
             if not isinstance(gate, _op.LinearOperator):
                 try:
                     gate = _op.convert(_op.StaticDenseOp(gate), parameterization, "pp")
@@ -337,6 +329,13 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
                                        (parameterization, gateName))
                     if on_construction_error in ('warn','ignore'): continue
                     else: raise e
+
+            if independent_gates == False:
+                if ensure_composed_gates and not isinstance(gate,Composed):
+                    #Make a single ComposedDenseOp *here*, which is used
+                    # in all the embeddings for different target qubits
+                    gate = Composed([gate]) # to make adding more factors easy
+                self.operation_blks[_Lbl(gateName+"_gate")] = gate
     
             gate_nQubits = int(round(_np.log2(gate.dim)/2)) if (evotype in ("densitymx","svterm","cterm")) \
                            else int(round(_np.log2(gate.dim))) # evotype in ("statevec","stabilizer")
@@ -357,22 +356,29 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
             self.availability[gateName] = tuple(availList)
                 
             for inds in availList:
-                if ensure_composed_gates and independent_gates:
-                    #Make a single ComposedDenseOp *here*, for *only this* embedding
-                    cgate = Composed([gate]) # to make adding more factors easy
-                    self.operation_blks[_Lbl(gateName+"_gate",inds)] = cgate
+                if independent_gates:
+                    if ensure_composed_gates:
+                        #Make a single ComposedDenseOp *here*, for *only this* embedding
+                        # Don't copy gate here, as we assume it's ok to be shared when we
+                        #  have independent composed gates
+                        base_gate = Composed([gate]) # to make adding more factors easy                    
+                    elif independent_gates: # want independent params but not a composed gate, so .copy()
+                        base_gate = gate.copy() #so independent parameters
+                        
+                    self.operation_blks[_Lbl(gateName+"_gate",inds)] = base_gate
                 else:
-                    cgate = gate # already a Composed operator (for easy addition of factors)
-                    
+                    base_gate = gate # already a Composed operator (for easy addition
+                                     # of factors) if ensure_composed_gates == True
+                                     
                 try:
                     # Note: can't use automatic-embedding b/c we need to force embedding
                     # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qubits needs to embed)
                     if inds == tuple(qubit_labels):
-                        embedded_op = cgate
+                        embedded_op = base_gate
                     elif sim_type == "matrix":
-                        embedded_op = _op.EmbeddedDenseOp(self.state_space_labels, inds, cgate)
+                        embedded_op = _op.EmbeddedDenseOp(self.state_space_labels, inds, base_gate)
                     else: # sim_type == "map" or sim_type.startswidth("termorder"):
-                        embedded_op = _op.EmbeddedOp(self.state_space_labels, inds, cgate)
+                        embedded_op = _op.EmbeddedOp(self.state_space_labels, inds, base_gate)
                     self.operation_blks[_Lbl(gateName,inds)] = embedded_op
                     primitive_ops.append(_Lbl(gateName,inds))
 

@@ -37,7 +37,7 @@ def _make_HScache_for_std_model(std_module, termOrder, maxLength, json_too=False
     """ 
     A utility routine to for creating the term-based cache files for a standard module
     """
-    target_model = std_module.target_model.copy()
+    target_model = std_module.target_model()
     prep_fiducials = std_module.prepStrs
     effect_fiducials = std_module.effectStrs
     germs = std_module.germs
@@ -283,7 +283,7 @@ def _load_calccache(key_fn, val_fn):
     
 def _copy_target(std_module, param_type, sim_type="auto", gscache=None):
     """ 
-    Returns a copy of `std_module.target_model` in the given parameterization.
+    Returns a copy of `std_module._target_model` in the given parameterization.
 
     Parameters
     ----------
@@ -316,7 +316,7 @@ def _copy_target(std_module, param_type, sim_type="auto", gscache=None):
         if (param_type,sim_type) in gscache:
             return gscache[(param_type,sim_type)].copy()
 
-    mdl = std_module.target_model.copy()
+    mdl = std_module._target_model.copy()
     mdl.set_all_parameterizations(param_type) # automatically sets sim_type
     if param_type == "H+S terms": 
         assert(sim_type == "auto" or sim_type.startswith("termorder:")), "Invalid `sim_type` argument!"

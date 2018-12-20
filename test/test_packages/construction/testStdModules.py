@@ -17,7 +17,7 @@ class StdModuleTestCase(BaseTestCase):
 
         for std in (std1Q_XYI, std2Q_XXYYII, std2Q_XYICNOT):
             newmod = pygsti.construction.stdmodule_to_smqmodule(std)
-            opLabels = list(newmod.target_model.operations.keys())
+            opLabels = list(newmod.target_model().operations.keys())
             germStrs = newmod.germs
 
             for gl in opLabels:

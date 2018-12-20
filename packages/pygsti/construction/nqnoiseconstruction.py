@@ -126,14 +126,16 @@ def nparams_XYCNOT_cloudnoise_model(nQubits, geometry="line", maxIdleWeight=1, m
     return nParams, sum(nParams.values())
 
 
-def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
-                                  maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                                  extraWeight1Hops=0, extraGateWeight=0, sparse=False,
-                                  roughNoise=None, sim_type="matrix", parameterization="H+S",
-                                  spamtype="lindblad", addIdleNoiseToAllGates=True,
-                                  errcomp_type="gates", return_clouds=False, verbosity=0): #, debug=False):
+def build_standard_cloudnoise_model(nQubits, gate_names, nonstd_gate_unitaries={}, availability={},
+                                    qubit_labels=None, geometry="line",
+                                    maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
+                                    extraWeight1Hops=0, extraGateWeight=0, sparse=False,
+                                    roughNoise=None, sim_type="matrix", parameterization="H+S",
+                                    spamtype="lindblad", addIdleNoiseToAllGates=True,
+                                    errcomp_type="gates", return_clouds=False, verbosity=0): #, debug=False):
     """ 
-    TODO: update docstring - roughNoise in ptic
+    TODO: update docstring - roughNoise in ptic; add gate_names -> qubit_labels like build_standard_localnoise_model;
+    #                        remove cnot_edges
     Create a noisy n-qubit model using a low-weight and geometrically local
     error model with a common "global idle" operation.
 
@@ -240,21 +242,12 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
     -------
     Model
     """
-    from pygsti.construction import std1Q_XY # the base model for 1Q gates
-    from pygsti.construction import std2Q_XYICNOT # the base model for 2Q (CNOT) gate
-
-    Gx = std1Q_XY.target_model.operations['Gx']
-    Gy = std1Q_XY.target_model.operations['Gy']
-    Gcnot = std2Q_XYICNOT.target_model.operations['Gcnot']
-    gatedict = _collections.OrderedDict([('Gx',Gx),('Gy',Gy),('Gcnot',Gcnot)])
-    availability = {}
-    if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-
-    mdl = _CloudNoiseModel(nQubits, gatedict, availability, None, geometry,
-                           maxIdleWeight, maxSpamWeight, maxhops,
-                           extraWeight1Hops, extraGateWeight, sparse,
-                           sim_type, parameterization, spamtype, 
-                           addIdleNoiseToAllGates, errcomp_type, verbosity)
+    mdl = _CloudNoiseModel.build_standard(nQubits, gate_names, nonstd_gate_unitaries, availability,
+                                          qubit_labels, geometry,
+                                          maxIdleWeight, maxSpamWeight, maxhops,
+                                          extraWeight1Hops, extraGateWeight, sparse,
+                                          sim_type, parameterization, spamtype, 
+                                          addIdleNoiseToAllGates, errcomp_type, verbosity)
 
     #Insert noise on everything using roughNoise (really shouldn't be used!)
     if roughNoise is not None:
@@ -1478,9 +1471,11 @@ def create_XYCNOT_cloudnoise_sequences(nQubits, maxLengths, geometry, cnot_edges
     from pygsti.construction import std1Q_XY # the base model for 1Q gates
     from pygsti.construction import std2Q_XYICNOT # the base model for 2Q (CNOT) gate
 
-    Gx = std1Q_XY.target_model.operations['Gx']
-    Gy = std1Q_XY.target_model.operations['Gy']
-    Gcnot = std2Q_XYICNOT.target_model.operations['Gcnot']
+    tgt1Q = std1Q_XY.target_model()
+    tgt2Q = std2Q_XYICNOT.target_model()
+    Gx = tgt1Q.operations['Gx']
+    Gy = tgt1Q.operations['Gy']
+    Gcnot = tgt2Q.operations['Gcnot']
     gatedict = _collections.OrderedDict([('Gx',Gx),('Gy',Gy),('Gcnot',Gcnot)])
     availability = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
@@ -2489,7 +2484,8 @@ def stdmodule_to_smqmodule(std_module):
         pass # ok, this is what the rest of the function is for
     
     out_module = {}
-    dim = std_module.target_model.dim
+    std_target_model = std_module.target_model() # could use ._target_model to save a copy
+    dim = std_target_model.dim
     if dim == 4:
         sslbls = [0]
         find_replace_labels = {'Gx': ('Gx',0), 'Gy':('Gy',0),
@@ -2529,25 +2525,52 @@ def stdmodule_to_smqmodule(std_module):
     # gate names
     out_module['gates'] = [ find_replace_labels.get(nm,nm) for nm in std_module.gates ]
     
-    #Target model (update labels)
-    new_gs_target = _objs.ExplicitOpModel()
-    new_gs_target._evotype = std_module.target_model._evotype
-    new_gs_target._default_gauge_group = std_module.target_model._default_gauge_group
-    new_gs_target.basis = std_module.target_model.basis.copy()
-    new_gs_target.set_state_space_labels( sslbls )
-    for lbl,obj in std_module.target_model.preps.items():
+    #Fully-parameterized target model (update labels)
+    new_target_model = _objs.ExplicitOpModel(sslbls, std_target_model.basis.copy())
+    new_target_model._evotype = std_target_model._evotype
+    new_target_model._default_gauge_group = std_target_model._default_gauge_group
+
+    for lbl,obj in std_target_model.preps.items():
         new_lbl = find_replace_labels.get(lbl,lbl)
-        new_gs_target.preps[new_lbl] = obj.copy()
-    for lbl,obj in std_module.target_model.povms.items():
+        new_target_model.preps[new_lbl] = obj.copy()
+    for lbl,obj in std_target_model.povms.items():
         new_lbl = find_replace_labels.get(lbl,lbl)
-        new_gs_target.povms[new_lbl] = obj.copy()
-    for lbl,obj in std_module.target_model.operations.items():
+        new_target_model.povms[new_lbl] = obj.copy()
+    for lbl,obj in std_target_model.operations.items():
         new_lbl = find_replace_labels.get(lbl,lbl)
-        new_gs_target.operations[new_lbl] = obj.copy()
-    for lbl,obj in std_module.target_model.instruments.items():
+        new_target_model.operations[new_lbl] = obj.copy()
+    for lbl,obj in std_target_model.instruments.items():
         new_lbl = find_replace_labels.get(lbl,lbl)
-        new_gs_target.instruments[new_lbl] = obj.copy()
-    out_module['target_model'] = new_gs_target
+        new_target_model.instruments[new_lbl] = obj.copy()
+    out_module['_target_model'] = new_target_model
+
+    # _stdtarget and _gscache need to be *locals* as well so target_model(...) works
+    _stdtarget = importlib.import_module('.stdtarget','pygsti.construction')
+    _gscache = { ("full","auto"): new_target_model }
+    out_module['_stdtarget'] = _stdtarget 
+    out_module['_gscache'] = _gscache
+
+    def target_model(parameterization_type="full", sim_type="auto"):
+        """ 
+        Returns a copy of the target model in the given parameterization.
+    
+        Parameters
+        ----------
+        parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
+            The gate and SPAM vector parameterization type. See 
+            :function:`Model.set_all_parameterizations` for all allowed values.
+            
+        sim_type : {"auto", "matrix", "map", "termorder:X" }
+            The simulator type to be used for model calculations (leave as
+            "auto" if you're not sure what this is).
+        
+        Returns
+        -------
+        Model
+        """
+        return _stdtarget._copy_target(_sys.modules[new_module_name],parameterization_type,
+                                       sim_type, _gscache)
+    out_module['target_model'] = target_model
 
     # circuit lists
     circuitlist_names = ['germs','germs_lite','prepStrs','effectStrs','fiducials']

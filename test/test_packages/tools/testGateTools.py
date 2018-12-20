@@ -90,7 +90,7 @@ class GateBaseTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(processMx, np.identity(4))
 
     def test_err_gen(self):
-        target_model = std2Q_XXYYII.target_model
+        target_model = std2Q_XXYYII.target_model()
         mdl_datagen = target_model.depolarize(op_noise=0.1, spam_noise=0.001)
 
         projectionTypes = ['hamiltonian', 'stochastic', 'affine']
@@ -203,7 +203,7 @@ class GateBaseTestCase(BaseTestCase):
 
     def test_project_model(self):
         projectionTypes=('H','S','H+S','LND', 'LNDF')
-        target_model = std2Q_XXYYII.target_model.copy()
+        target_model = std2Q_XXYYII.target_model()
         mdl = target_model.depolarize(op_noise=0.01)
 
         for genType in ("logG-logT", "logTiG", "logGTi"):
@@ -211,7 +211,7 @@ class GateBaseTestCase(BaseTestCase):
                 mdl, target_model, projectionTypes, genType)
 
         with self.assertRaises(ValueError):
-            mdl_target_gm = std2Q_XXYYII.target_model.copy()
+            mdl_target_gm = std2Q_XXYYII.target_model()
             mdl_target_gm.basis = pygsti.obj.Basis("gm",4)
             optools.project_model(
                 mdl, mdl_target_gm, projectionTypes, genType) # basis mismatch

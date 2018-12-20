@@ -68,10 +68,10 @@ def runOneQubit(comm=None):
 
     maxLengths = [1,2,4,8,16,32,64,128,256,512] #still need to define this manually
     specs = pygsti.construction.build_spam_specs(
-        std.fiducials, prep_labels=std.target_model.get_prep_labels(),
-        effect_labels=std.target_model.get_effect_labels())
+        std.fiducials, prep_labels=std.target_model().get_prep_labels(),
+        effect_labels=std.target_model().get_effect_labels())
 
-    gsets, dsGen = runMC2GSTAnalysis(specs, std.germs, std.target_model,
+    gsets, dsGen = runMC2GSTAnalysis(specs, std.germs, std.target_model(),
                                           1234, maxLengths, nSamples=1000,
                                           comm=comm)
     return gsets
