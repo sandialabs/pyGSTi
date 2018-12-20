@@ -939,10 +939,11 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
         for label,EExpr in zip(ELbls,EExprs):
             effects.append( (label,basis_build_vector(EExpr, basis)) )
 
-        if defP == "TP":
-            ret.povms[povmLbl] = _povm.TPPOVM(effects)
-        else:
-            ret.povms[povmLbl] = _povm.UnconstrainedPOVM(effects)
+        if len(effects) > 0: # don't add POVMs with 0 effects
+            if defP == "TP":
+                ret.povms[povmLbl] = _povm.TPPOVM(effects)
+            else:
+                ret.povms[povmLbl] = _povm.UnconstrainedPOVM(effects)
 
     for (opLabel,opExpr) in zip(opLabels, opExpressions):
         ret.operations[opLabel] = basis_build_operation(stateSpaceLabels,

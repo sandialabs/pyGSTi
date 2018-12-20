@@ -451,10 +451,11 @@ def list_lgst_circuits(prepStrs, effectStrs, opLabelSrc):
     list of Circuit objects
         The list of required operation sequences, without duplicates.
     """
+    tolabel = lambda x: x if isinstance(x,_Lbl) else _Lbl(x)
     if isinstance(opLabelSrc, _Model):
         opLabels = list(opLabelSrc.operations.keys()) + \
                      list(opLabelSrc.instruments.keys())
-    else: opLabels = opLabelSrc
+    else: opLabels = list(map(tolabel,opLabelSrc))
 
     singleOps = [ _cir.Circuit( (gl,), stringrep="(%s)" % str(gl) ) for gl in opLabels ]
     ret = create_circuit_list('eStr','prepStr','prepStr+eStr','prepStr+g+eStr',
