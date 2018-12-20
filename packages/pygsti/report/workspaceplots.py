@@ -580,7 +580,7 @@ def circuit_color_boxplot(circuit_structure, subMxs, colormap,
             def hoverLabelFn(val,iy,ix):
                 """ Standard hover labels """
                 if _np.isnan(val): return ""
-                L,germ = xvals[ix],tuple(yvals[iy])
+                L,germ = xvals[ix],yvals[iy]
                 baseStr = g.get_plaquette(L,germ,False).base
                 reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
@@ -708,7 +708,7 @@ def circuit_color_scatterplot(circuit_structure, subMxs, colormap,
             def hoverLabelFn(val,iy,ix):
                 """ Standard hover labels """
                 if _np.isnan(val): return ""
-                L,germ = xvals[ix],tuple(yvals[iy])
+                L,germ = xvals[ix],yvals[iy]
                 baseStr = g.get_plaquette(L,germ,False).base
                 reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
