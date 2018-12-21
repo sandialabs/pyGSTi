@@ -48,7 +48,6 @@ def enable_old_object_unpickling():
             replacement_obj = _objs.LindbladDenseOp.__new__(_objs.LindbladDenseOp)
             return replacement_obj
     def Lind_setstate(self,state):
-        print("DB LOAD: ",list(state['ham_basis'].__dict__.keys()))
         assert(not state['sparse']), "Can only unpickle old *dense* LindbladParameterizedGate objects"
         g = _objs.LindbladDenseOp.from_operation_matrix(state['base'], state['unitary_postfactor'],
                                                         ham_basis=state['ham_basis'], nonham_basis=state['other_basis'],
