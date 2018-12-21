@@ -548,6 +548,8 @@ def determine_paulidicts(model):
     #TODO: check that basis == "pp" or something similar?
     #Note: this routine just punts if model's operation labels are just strings.
 
+    model._clean_paramvec() # to ensure calls to obj.to_vector work below (setup model paramvec)
+    
     #First, check that spam is prep/meas in Z basis (just check prep for now):
     try:
         prepLbls = list(model.preps.keys())

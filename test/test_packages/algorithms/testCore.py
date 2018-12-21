@@ -139,6 +139,7 @@ class TestCoreMethods(AlgorithmsBase):
         mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         mdl_lgst_go._check_paramvec()
         mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
+        mdl_clgst.to_vector() # to make sure we're in sync
         mdl_clgst._check_paramvec()
         self.model._check_paramvec()
         

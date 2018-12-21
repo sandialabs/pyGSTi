@@ -232,6 +232,7 @@ class InstrumentTestCase(BaseTestCase):
         for param in ("full","TP","CPTP"):
             print(param)
             model.set_all_parameterizations(param)
+            model.to_vector() # builds & cleans paramvec for tests below
             for lbl,obj in model.preps.items():
                 print(lbl,':',obj.gpindices, pygsti.tools.length(obj.gpindices))
             for lbl,obj in model.povms.items():

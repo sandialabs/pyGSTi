@@ -1671,6 +1671,7 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
                                   maxIdleWeight, 0, maxhops, extraWeight1Hops,
                                   extraGateWeight, sparse, verbosity=printer-5,
                                   sim_type="termorder:1", parameterization=ptermstype)
+    idle_model._clean_paramvec() # allocates/updates .gpindices of all blocks
     idle_params = idle_model.operation_blks['globalIdle'].gpindices # these are the params we want to amplify at first...
 
     if maxIdleWeight in cache['Idle gatename fidpair lists']:
@@ -1748,6 +1749,7 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
                                   maxIdleWeight, 0, maxhops, extraWeight1Hops,
                                   extraGateWeight, sparse, verbosity=printer-5,
                                   sim_type="termorder:1", parameterization=ptermstype)
+            sidle_model._clean_paramvec() # allocates/updates .gpindices of all blocks
             idle_params = sidle_model.operation_blks['globalIdle'].gpindices # these are the params we want to amplify...
 
             _, _, idle_gatename_fidpair_lists = find_amped_polys_for_syntheticidle(
@@ -1788,7 +1790,7 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
         # This is fine, but we don't demand that such params be amplified, since they *must* be
         # amplified for another cloud with core exaclty equal to the gate's target qubits (e.g. [0])
         wrtParams = set()
-        Gi_params = set(_slct.as_array(model.operation_blks['globalIdle'].gpindices))
+        Gi_params = set(_slct.as_array(model.operation_blks['globalIdle'].gpindices)) # OK b/c model.num_params() called above
         pure_op_labels = []
         for gl in model.get_primitive_op_labels(): #take this as the set of "base"/"serial" operations
             if gl.sslbls is None: continue # gates that act on everything (usually just the identity Gi gate)
@@ -1979,7 +1981,7 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
                 maxWt = min( (len(core_qubits) + extraGateWeight) + (len(core_qubits) - 1),
                              len(cloud_qubits) ) # gate-error-wt + spreading potential
                 printer.log("%s germ: %s (synthetic idle %s)" %
-                            (germ_type,str(candidate_germ),str(syntheticIdle)),3)
+                            (germ_type,candidate_germ.str,syntheticIdle.str),3)
 
 
                 old_Jrank = Jrank
@@ -2016,7 +2018,7 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
 
                         if effective_reps not in access_fidpairs_cache:
                             printer.log("Finding the fiducial pairs needed to amplify %s^%d (L=%d, effreps=%d)" %
-                                       (str(candidate_germ),reps,L,effective_reps),4)
+                                       (candidate_germ.str,reps,L,effective_reps),4)
                             gatename_fidpair_lists = get_fidpairs_needed_to_access_amped_polys(
                                 cloud_qubits, core_qubits, germPower, amped_polyJ, sidle_gatename_fidpair_lists,
                                 model, singleQfiducials, prepLbl, effectLbls, wrtParams, printer-3)
@@ -2036,7 +2038,7 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
                             access_fidpairs_cache[effective_reps] = gatename_fidpair_lists
                         else:
                             printer.log("Already found fiducial pairs needed to amplify %s^%d (L=%d, effreps=%d)" %
-                                       (str(candidate_germ),reps,L,effective_reps),4)                    
+                                       (candidate_germ.str,reps,L,effective_reps),4)                    
                     
                     if Jrank == Np: # really this will never happen b/c we'll never amplify SPAM and gauge directions...
                         break       # instead exit after we haven't seen a germ that amplifies anything new in a while  
@@ -2063,7 +2065,7 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
         #  cloudbank.
         for template_germ,(germ_order,access_cache) in germ_dict.items():
             
-            printer.log("Tiling for template germ = %s" % str(template_germ), 3)
+            printer.log("Tiling for template germ = %s" % template_germ.str, 3)
             add_germs = True
             for L in maxLengths:
                 reps = _gsc.repeat_count_with_max_length(template_germ,L)

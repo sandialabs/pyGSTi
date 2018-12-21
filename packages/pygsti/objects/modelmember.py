@@ -69,14 +69,24 @@ class ModelMember(ModelChild):
         self._evotype = evotype
         self._gpindices = gpindices
         self._gplabels = None # a placeholder for FUTURE features
-        self.dirty = False # True when there's any *possibility* that this
-                           # gate's parameters have been changed since the
-                           # last setting of dirty=False
+        self._dirty = False # True when there's any *possibility* that this
+                            # gate's parameters have been changed since the
+                            # last setting of dirty=False
         super(ModelMember,self).__init__(parent)
         
     def get_dimension(self):
         """ Return the dimension of this object. """
         return self.dim
+
+    @property
+    def dirty(self):
+        return self._dirty
+
+    @dirty.setter
+    def dirty(self, value):
+        self._dirty = value
+        if value and self.parent: # propagate "True" dirty flag to parent (usually a Model)
+            self.parent.dirty = value
 
     @property
     def gpindices(self):
@@ -161,6 +171,21 @@ class ModelMember(ModelChild):
         if (self.parent is not None) and (self.parent._obj_refcount(self) == 0):
             self._parent = None
 
+    def clear_gpindices(self):
+        """
+        Sets gpindices to None, along with any submembers' gpindices.  This 
+        essentially marks these members for parameter re-allocation (e.g. if
+        the number - not just the value - of parameters they have changes).
+
+        Returns
+        -------
+        None
+        """
+        for subm in self.submembers():
+            subm.clear_gpindices()
+        self._gpindices = None
+
+        
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that

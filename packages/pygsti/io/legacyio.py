@@ -68,6 +68,12 @@ def enable_old_object_unpickling():
             del state['gateDim']
         self.__dict__.update(state)
 
+    def ModelMember_setstate(self,state):
+        if "dirty" in state: # .dirty was replaced with ._dirty
+            state['_dirty'] = state['dirty']
+            del state['dirty']
+        self.__dict__.update(state)
+
         
             
     #Modules
@@ -128,6 +134,7 @@ def enable_old_object_unpickling():
 
     _baseobjs.basis.Basis.__setstate__ = Basis_setstate
     _baseobjs.dim.Dim.__setstate__ = Dim_setstate
+    _objs.modelmember.ModelMember.__setstate__ = ModelMember_setstate
 
 
 def disable_old_object_unpickling():
@@ -151,3 +158,4 @@ def disable_old_object_unpickling():
     delattr(_objs.LindbladDenseOp,'__setstate__')
     delattr(_baseobjs.Basis,'__setstate__')
     delattr(_baseobjs.Dim,'__setstate__')
+    delattr(_objs.modelmember.ModelMember,'__setstate__')

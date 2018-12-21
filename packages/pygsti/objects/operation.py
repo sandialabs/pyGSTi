@@ -3302,7 +3302,7 @@ class ComposedOp(LinearOperator):
         """
         assert(len(ops_to_compose) > 0 or dim != "auto"), \
             "Must compose at least one gate when dim='auto'!"
-        self.factorops = ops_to_compose
+        self.factorops = list(ops_to_compose)
         
         if dim == "auto":
             dim = ops_to_compose[0].dim
@@ -3326,6 +3326,18 @@ class ComposedOp(LinearOperator):
         """
         return self.factorops
 
+    def append(*factorops_to_add):
+        """ TODO: docstring """
+        self.factorops.extend(factorops_to_add)
+        if self.parent: #need to alert parent that *number* (not just value)
+            parent._mark_for_rebuild(self) #  of our params may have changed
+
+    def remove(*factorop_indices):
+        """ TODO: docstring """
+        for i in sorted(factorop_indices, reverse=True):
+            del self.factorops[i]
+        if self.parent: #need to alert parent that *number* (not just value)
+            parent._mark_for_rebuild(self) #  of our params may have changed
 
     def copy(self, parent=None):
         """
@@ -3411,6 +3423,7 @@ class ComposedOp(LinearOperator):
         numpy array
             The gate parameters as a 1D array with length num_params().
         """
+        assert(self.gpindices is not None),"Must set a ComposedOp's .gpindices before calling to_vector"
         v = _np.empty(self.num_params(), 'd')
         for gate in self.factorops:
             factorgate_local_inds = _modelmember._decompose_gpindices(
@@ -3433,6 +3446,7 @@ class ComposedOp(LinearOperator):
         -------
         None
         """
+        assert(self.gpindices is not None),"Must set a ComposedOp's .gpindices before calling from_vector"
         for gate in self.factorops:
             factorgate_local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, gate.gpindices)
@@ -3752,6 +3766,8 @@ class EmbeddedOp(LinearOperator):
         return _modelmember.ModelMember.__getstate__(self)
     
     def __setstate__(self, d):
+        if "dirty" in d: # backward compat: .dirty was replaced with ._dirty in ModelMember
+            d['_dirty'] = d['dirty']; del d['dirty']
         self.__dict__.update(d)
 
 
@@ -4495,6 +4511,18 @@ class ComposedErrorgen(LinearOperator):
         """
         return self.factors
 
+    def append(*factors_to_add):
+        """ TODO: docstring """
+        self.factors.extend(factors_to_add)
+        if self.parent: #need to alert parent that *number* (not just value)
+            parent._mark_for_rebuild(self) #  of our params may have changed
+
+    def remove(*factor_indices):
+        """ TODO: docstring """
+        for i in sorted(factor_indices, reverse=True):
+            del self.factors[i]
+        if self.parent: #need to alert parent that *number* (not just value)
+            parent._mark_for_rebuild(self) #  of our params may have changed
 
     def copy(self, parent=None):
         """
@@ -4585,6 +4613,7 @@ class ComposedErrorgen(LinearOperator):
         numpy array
             The gate parameters as a 1D array with length num_params().
         """
+        assert(self.gpindices is not None),"Must set a ComposedErrorgen's .gpindices before calling to_vector"
         v = _np.empty(self.num_params(), 'd')
         for eg in self.factors:
             factor_local_inds = _modelmember._decompose_gpindices(
@@ -4607,6 +4636,7 @@ class ComposedErrorgen(LinearOperator):
         -------
         None
         """
+        assert(self.gpindices is not None),"Must set a ComposedErrorgen's .gpindices before calling from_vector"
         for eg in self.factors:
             factor_local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, eg.gpindices)
