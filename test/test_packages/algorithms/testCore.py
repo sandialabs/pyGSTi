@@ -135,7 +135,7 @@ class TestCoreMethods(AlgorithmsBase):
 
         assert(pygsti.obj.Model._pcheck)
         mdl_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.model, svdTruncateTo=4, verbosity=0)
-        mdl_lgst._check_paramvec()
+        #mdl_lgst._check_paramvec() #will fail, but OK, since paramvec is computed only when *needed* now
         mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         mdl_lgst_go._check_paramvec()
         mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
