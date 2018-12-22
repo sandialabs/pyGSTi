@@ -630,6 +630,9 @@ class Estimate(object):
             del stateDict['confidence_regions']
             stateDict['confidence_region_factories'] = _collections.OrderedDict()
         if 'meta' not in stateDict: stateDict['meta'] = {}
+        if 'gatesets' in stateDict:
+            stateDict['models'] = stateDict['gatesets']
+            del stateDict['gatesets']
 
         self.__dict__.update(stateDict)
         for crf in self.confidence_region_factories.values():
