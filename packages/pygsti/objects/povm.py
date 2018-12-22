@@ -503,7 +503,7 @@ class _BasePOVM(POVM):
             #Other effects being transformed transforms the complement,
             # so just check that the transform preserves the identity.
             TOL = 1e-6
-            identityVec = self[self.complement_label].identity.todense()
+            identityVec = self[self.complement_label].identity.todense().reshape((-1,1))
             SmxT = _np.transpose(S.get_transform_matrix())
             assert(_np.linalg.norm(identityVec-_np.dot(SmxT,identityVec))<TOL),\
                 ("Cannot transform complement effect in a way that doesn't"
@@ -600,7 +600,7 @@ class TPPOVM(_BasePOVM):
         #add complement effect as a std numpy array - it will get
         # re-created correctly by __init__ w/preserve_sum == True
         effects.append( (self.complement_label,
-                         self[self.complement_label].todense()))
+                         self[self.complement_label].todense().reshape((-1,1)) ))
             
         return (TPPOVM, (effects,), {'_gpindices': self._gpindices} )
 
