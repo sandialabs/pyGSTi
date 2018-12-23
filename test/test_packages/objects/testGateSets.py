@@ -69,8 +69,12 @@ class TestGateSetMethods(GateSetTestCase):
         gates = pickle.loads(p)
         self.assertEqual(list(gates.keys()), list(self.model.operations.keys()))
 
+        self.model._clean_paramvec()
+        print("BEFORE: ",self.model.dirty, self.model.povms['Mdefault'].dirty)
         p = pickle.dumps(self.model)
         g = pickle.loads(p)
+        print("AFTER ",g.dirty, g.povms['Mdefault'].dirty)
+        g._clean_paramvec()
         self.assertAlmostEqual(self.model.frobeniusdist(g), 0.0)
 
     def test_counting(self):
@@ -313,9 +317,10 @@ class TestGateSetMethods(GateSetTestCase):
                                             self.model.preps['rho0']))))
         p2 = self.model.probs(circuit)[('0',)]
         self.assertSingleElemArrayAlmostEqual(p1, p2)
-        
+
         gateset_with_nan = self.model.copy()
         gateset_with_nan['rho0'][:] = np.nan
+        gateset_with_nan.to_vector()
         self.assertWarns(gateset_with_nan.probs,circuit)
         self.assertWarns(gateset_with_nan.probs,circuit*5) # long circuit: warning uses elipsis
 

@@ -132,9 +132,10 @@ def build_standard_cloudnoise_model(nQubits, gate_names, nonstd_gate_unitaries={
                                     extraWeight1Hops=0, extraGateWeight=0, sparse=False,
                                     roughNoise=None, sim_type="matrix", parameterization="H+S",
                                     spamtype="lindblad", addIdleNoiseToAllGates=True,
-                                    errcomp_type="gates", return_clouds=False, verbosity=0): #, debug=False):
+                                    errcomp_type="gates", independent_clouds=True,
+                                    return_clouds=False, verbosity=0): #, debug=False):
     """ 
-    TODO: update docstring - roughNoise in ptic; add gate_names -> qubit_labels like build_standard_localnoise_model;
+    TODO: update docstring - roughNoise in ptic; add gate_names -> qubit_labels like build_standard_localnoise_model; indpendent_clouds
     #                        remove cnot_edges
     Create a noisy n-qubit model using a low-weight and geometrically local
     error model with a common "global idle" operation.
@@ -247,7 +248,8 @@ def build_standard_cloudnoise_model(nQubits, gate_names, nonstd_gate_unitaries={
                                           maxIdleWeight, maxSpamWeight, maxhops,
                                           extraWeight1Hops, extraGateWeight, sparse,
                                           sim_type, parameterization, spamtype, 
-                                          addIdleNoiseToAllGates, errcomp_type, verbosity)
+                                          addIdleNoiseToAllGates, errcomp_type,
+                                          independent_clouds, verbosity)
 
     #Insert noise on everything using roughNoise (really shouldn't be used!)
     if roughNoise is not None:
@@ -1385,7 +1387,7 @@ def reps_for_synthetic_idle(model, germStr, nqubits, core_qubits):
     core_gates = {}
     for gl in germStr:
         if gl not in core_gates:
-            core_gates[gl] = extract_gate(model.operation_blks[gl])
+            core_gates[gl] = extract_gate(model.operation_blks['layers'][gl])
         product = _np.dot(core_gates[gl], product)
     
     # Then just do matrix products until we hit the identity (or a large order)
@@ -1643,7 +1645,7 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
                              sim_type="termorder:1", parameterization=ptermstype)
     clouds = model.get_clouds()
     #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
-    #print("DB: GATES = ",model.operation_blks.keys())
+    #print("DB: GATES = ",model.operation_blks['layers'].keys())
     #print("DB: CLOUDS = ",clouds)
 
     # clouds is a list of (core_qubits,cloud_qubits) tuples, giving the
@@ -1671,7 +1673,8 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
                                   maxIdleWeight, 0, maxhops, extraWeight1Hops,
                                   extraGateWeight, sparse, verbosity=printer-5,
                                   sim_type="termorder:1", parameterization=ptermstype)
-    idle_params = idle_model.operation_blks['globalIdle'].gpindices # these are the params we want to amplify at first...
+    idle_model._clean_paramvec() # allocates/updates .gpindices of all blocks
+    idle_params = idle_model.operation_blks['layers']['globalIdle'].gpindices # these are the params we want to amplify at first...
 
     if maxIdleWeight in cache['Idle gatename fidpair lists']:
         printer.log("Getting cached sequences needed for max-weight=%d errors on the idle gate" % maxIdleWeight)
@@ -1748,7 +1751,8 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
                                   maxIdleWeight, 0, maxhops, extraWeight1Hops,
                                   extraGateWeight, sparse, verbosity=printer-5,
                                   sim_type="termorder:1", parameterization=ptermstype)
-            idle_params = sidle_model.operation_blks['globalIdle'].gpindices # these are the params we want to amplify...
+            sidle_model._clean_paramvec() # allocates/updates .gpindices of all blocks
+            idle_params = sidle_model.operation_blks['layers']['globalIdle'].gpindices # these are the params we want to amplify...
 
             _, _, idle_gatename_fidpair_lists = find_amped_polys_for_syntheticidle(
                 list(range(maxSyntheticIdleWt)), idleOpStr, sidle_model,
@@ -1758,8 +1762,9 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
             cache['Idle gatename fidpair lists'][maxSyntheticIdleWt] = idle_gatename_fidpair_lists        
         
     #Look for and add additional germs to amplify the *rest* of the model's parameters
-    Gi_nparams = model.operation_blks['globalIdle'].num_params() # assumes nqnoise (Implicit) model
-    SPAM_nparams = sum([obj.num_params() for obj in _itertools.chain(model.prep_blks.values(), model.povm_blks.values())])
+    Gi_nparams = model.operation_blks['layers']['globalIdle'].num_params() # assumes nqnoise (Implicit) model
+    SPAM_nparams = sum([obj.num_params() for obj in _itertools.chain(model.prep_blks['layers'].values(),
+                                                                     model.povm_blks['layers'].values())])
     Np_to_amplify = model.num_params() - Gi_nparams - SPAM_nparams
     printer.log("Idle gate has %d (amplified) params; Spam has %d (unamplifiable) params; %d gate params left" %
                (Gi_nparams, SPAM_nparams, Np_to_amplify))
@@ -1788,13 +1793,13 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
         # This is fine, but we don't demand that such params be amplified, since they *must* be
         # amplified for another cloud with core exaclty equal to the gate's target qubits (e.g. [0])
         wrtParams = set()
-        Gi_params = set(_slct.as_array(model.operation_blks['globalIdle'].gpindices))
+        Gi_params = set(_slct.as_array(model.operation_blks['layers']['globalIdle'].gpindices)) # OK b/c model.num_params() called above
         pure_op_labels = []
         for gl in model.get_primitive_op_labels(): #take this as the set of "base"/"serial" operations
             if gl.sslbls is None: continue # gates that act on everything (usually just the identity Gi gate)
             if set(gl.sslbls) == set(core_qubits):
                 pure_op_labels.append(gl)
-                wrtParams.update( _slct.as_array(model.operation_blks[gl].gpindices) )
+                wrtParams.update( _slct.as_array(model.operation_blks['layers'][gl].gpindices) )
         pure_op_params = wrtParams - Gi_params # (Gi params don't count)
         wrtParams = _slct.list_to_slice( sorted(list(pure_op_params)), array_ok=True )
         Ngp = _slct.length(wrtParams) # number of "pure gate" params that we want to amplify
@@ -1979,7 +1984,7 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
                 maxWt = min( (len(core_qubits) + extraGateWeight) + (len(core_qubits) - 1),
                              len(cloud_qubits) ) # gate-error-wt + spreading potential
                 printer.log("%s germ: %s (synthetic idle %s)" %
-                            (germ_type,str(candidate_germ),str(syntheticIdle)),3)
+                            (germ_type,candidate_germ.str,syntheticIdle.str),3)
 
 
                 old_Jrank = Jrank
@@ -2016,7 +2021,7 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
 
                         if effective_reps not in access_fidpairs_cache:
                             printer.log("Finding the fiducial pairs needed to amplify %s^%d (L=%d, effreps=%d)" %
-                                       (str(candidate_germ),reps,L,effective_reps),4)
+                                       (candidate_germ.str,reps,L,effective_reps),4)
                             gatename_fidpair_lists = get_fidpairs_needed_to_access_amped_polys(
                                 cloud_qubits, core_qubits, germPower, amped_polyJ, sidle_gatename_fidpair_lists,
                                 model, singleQfiducials, prepLbl, effectLbls, wrtParams, printer-3)
@@ -2036,7 +2041,7 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
                             access_fidpairs_cache[effective_reps] = gatename_fidpair_lists
                         else:
                             printer.log("Already found fiducial pairs needed to amplify %s^%d (L=%d, effreps=%d)" %
-                                       (str(candidate_germ),reps,L,effective_reps),4)                    
+                                       (candidate_germ.str,reps,L,effective_reps),4)                    
                     
                     if Jrank == Np: # really this will never happen b/c we'll never amplify SPAM and gauge directions...
                         break       # instead exit after we haven't seen a germ that amplifies anything new in a while  
@@ -2063,7 +2068,7 @@ def create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducial
         #  cloudbank.
         for template_germ,(germ_order,access_cache) in germ_dict.items():
             
-            printer.log("Tiling for template germ = %s" % str(template_germ), 3)
+            printer.log("Tiling for template germ = %s" % template_germ.str, 3)
             add_germs = True
             for L in maxLengths:
                 reps = _gsc.repeat_count_with_max_length(template_germ,L)

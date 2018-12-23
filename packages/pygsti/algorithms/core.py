@@ -267,7 +267,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
                     % (guessTrunc,len(guess_s)), 2)
         for sval in guess_s: printer.log(sval,2)
         printer.log('',2)
-        lgstModel._check_paramvec()
+        #REMOVE lgstModel._check_paramvec()
 
         if guessTrunc < trunc:  # if the dimension of the gauge-guess model is smaller than the matrices being estimated, pad B with identity
             printer.log("LGST: Padding target B with sqrt of low singular values of I_tilde: \n", 2)
@@ -283,7 +283,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
             ggEl = _objs.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
             lgstModel.transform(ggEl)
 
-        lgstModel._check_paramvec()
+        #REMOVE lgstModel._check_paramvec()
         # Force lgstModel to have gates, preps, & effects parameterized in the same way as those in
         # guessModelForGauge, but we only know how to do this when the dimensions of the target and
         # created model match.  If they don't, it doesn't make sense to increase the target model
@@ -333,7 +333,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
                             new_effects.append( (effectLabel,new_vec) )
                         lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM( new_effects )
 
-                    lgstModel._check_paramvec()
+                    #REMOVE lgstModel._check_paramvec()
 
 
 
@@ -350,7 +350,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     printer.log(lgstModel,3)
     #    for line in str(lgstModel).split('\n'):
     #       printer.log(line, 3)
-    lgstModel._check_paramvec()
+    #REMOVE lgstModel._check_paramvec()
     return lgstModel
 
 def _lgst_matrix_dims(mdl, prepStrs, effectStrs):

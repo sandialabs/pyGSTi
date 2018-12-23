@@ -138,7 +138,7 @@ class ResultsEstimateTestCase(BaseTestCase):
 
         chi2_res.estimates['default'].parameters['objective'] = "foobar" #sets up error below
         chi2_res.estimates['Test'].parameters['objective'] = "foobar"
-        print("DB: ",chi2_res.estimates.keys())
+        #print("DB: ",chi2_res.estimates.keys())
         with self.assertRaises(ValueError):
             chi2_res.add_model_test(std.target_model(), mdl_guess,
                                     estimate_key='Test', gauge_opt_keys="auto") # invalid "objective"
@@ -162,6 +162,7 @@ class ResultsEstimateTestCase(BaseTestCase):
         #pygsti.obj.results.disable_old_python_results_unpickling()
         pygsti.io.disable_old_object_unpickling()
         with open(temp_files + "/repickle_old_results.pkl.%s" % vs,'wb') as f:
+            #pickle.dump(results.estimates['TP'].models['single'], f) # Debug
             pickle.dump(results, f)
 
         

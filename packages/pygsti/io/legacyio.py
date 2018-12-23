@@ -48,7 +48,6 @@ def enable_old_object_unpickling():
             replacement_obj = _objs.LindbladDenseOp.__new__(_objs.LindbladDenseOp)
             return replacement_obj
     def Lind_setstate(self,state):
-        print("DB LOAD: ",list(state['ham_basis'].__dict__.keys()))
         assert(not state['sparse']), "Can only unpickle old *dense* LindbladParameterizedGate objects"
         g = _objs.LindbladDenseOp.from_operation_matrix(state['base'], state['unitary_postfactor'],
                                                         ham_basis=state['ham_basis'], nonham_basis=state['other_basis'],
@@ -67,6 +66,12 @@ def enable_old_object_unpickling():
         if "gateDim" in state: # .label was replaced with ._label
             state['opDim'] = state['gateDim']
             del state['gateDim']
+        self.__dict__.update(state)
+
+    def ModelMember_setstate(self,state):
+        if "dirty" in state: # .dirty was replaced with ._dirty
+            state['_dirty'] = state['dirty']
+            del state['dirty']
         self.__dict__.update(state)
 
         
@@ -129,6 +134,7 @@ def enable_old_object_unpickling():
 
     _baseobjs.basis.Basis.__setstate__ = Basis_setstate
     _baseobjs.dim.Dim.__setstate__ = Dim_setstate
+    _objs.modelmember.ModelMember.__setstate__ = ModelMember_setstate
 
 
 def disable_old_object_unpickling():
@@ -152,3 +158,4 @@ def disable_old_object_unpickling():
     delattr(_objs.LindbladDenseOp,'__setstate__')
     delattr(_baseobjs.Basis,'__setstate__')
     delattr(_baseobjs.Dim,'__setstate__')
+    delattr(_objs.modelmember.ModelMember,'__setstate__')

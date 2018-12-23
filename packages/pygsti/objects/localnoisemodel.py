@@ -18,6 +18,7 @@ from . import operation as _op
 from . import spamvec as _sv
 from . import povm as _povm
 from . import qubitgraph as _qgraph
+from . import labeldicts as _ld
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
@@ -275,7 +276,15 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
 
         super(LocalNoiseModel,self).__init__(qubit_labels, "pp", {}, SimpleCompLayerLizard, {},
                                              sim_type=sim_type, evotype=evotype)
-    
+
+        flags = { 'auto_embed': False, 'match_parent_dim': False,
+                  'match_parent_evotype': True, 'cast_to_type': None }
+        self.prep_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.povm_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.operation_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.operation_blks['gates'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.instrument_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+        
         if parameterization in ("TP","full"): # then make tensor-product spam
             prep_factors = []; povm_factors = []
             for i in range(nQubits):
@@ -286,18 +295,18 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
                         ('0',_sv.StaticSPAMVec(v0)),
                         ('1',_sv.StaticSPAMVec(v1))]) ), "TP", basis1Q) )
             
-            self.prep_blks['rho0'] = _sv.TensorProdSPAMVec('prep', prep_factors)
-            self.povm_blks['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
+            self.prep_blks['layers']['rho0'] = _sv.TensorProdSPAMVec('prep', prep_factors)
+            self.povm_blks['layers']['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
     
         elif parameterization == "clifford":
             # Clifford object construction is different enough we do it separately
-            self.prep_blks['rho0'] = _sv.StabilizerSPAMVec(nQubits) # creates all-0 state by default
-            self.povm_blks['Mdefault'] = _povm.ComputationalBasisPOVM(nQubits,'stabilizer')
+            self.prep_blks['layers']['rho0'] = _sv.StabilizerSPAMVec(nQubits) # creates all-0 state by default
+            self.povm_blks['layers']['Mdefault'] = _povm.ComputationalBasisPOVM(nQubits,'stabilizer')
     
         elif parameterization in ("static","static unitary"):
             #static computational basis
-            self.prep_blks['rho0'] = _sv.ComputationalSPAMVec([0]*nQubits, evotype)
-            self.povm_blks['Mdefault'] = _povm.ComputationalBasisPOVM(nQubits, evotype)
+            self.prep_blks['layers']['rho0'] = _sv.ComputationalSPAMVec([0]*nQubits, evotype)
+            self.povm_blks['layers']['Mdefault'] = _povm.ComputationalBasisPOVM(nQubits, evotype)
     
         else:
             # parameterization should be a type amenable to Lindblad
@@ -310,11 +319,11 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
             prepPure = _sv.ComputationalSPAMVec([0]*nQubits, evotype)
             prepNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type,
                                                       parameterization, errcomp_type, verbosity)
-            self.prep_blks['rho0'] = _sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")
+            self.prep_blks['layers']['rho0'] = _sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")
     
             povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type, 
                                                       parameterization, errcomp_type, verbosity)
-            self.povm_blks['Mdefault'] = _povm.LindbladPOVM(povmNoiseMap, None, "pp")
+            self.povm_blks['layers']['Mdefault'] = _povm.LindbladPOVM(povmNoiseMap, None, "pp")
 
         Composed = _op.ComposedDenseOp if sim_type == "matrix" else _op.ComposedOp
         primitive_ops = []
@@ -335,7 +344,7 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
                     #Make a single ComposedDenseOp *here*, which is used
                     # in all the embeddings for different target qubits
                     gate = Composed([gate]) # to make adding more factors easy
-                self.operation_blks[_Lbl(gateName+"_gate")] = gate
+                self.operation_blks['gates'][_Lbl(gateName)] = gate
     
             gate_nQubits = int(round(_np.log2(gate.dim)/2)) if (evotype in ("densitymx","svterm","cterm")) \
                            else int(round(_np.log2(gate.dim))) # evotype in ("statevec","stabilizer")
@@ -365,7 +374,7 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
                     elif independent_gates: # want independent params but not a composed gate, so .copy()
                         base_gate = gate.copy() #so independent parameters
                         
-                    self.operation_blks[_Lbl(gateName+"_gate",inds)] = base_gate
+                    self.operation_blks['gates'][_Lbl(gateName,inds)] = base_gate
                 else:
                     base_gate = gate # already a Composed operator (for easy addition
                                      # of factors) if ensure_composed_gates == True
@@ -379,7 +388,7 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
                         embedded_op = _op.EmbeddedDenseOp(self.state_space_labels, inds, base_gate)
                     else: # sim_type == "map" or sim_type.startswidth("termorder"):
                         embedded_op = _op.EmbeddedOp(self.state_space_labels, inds, base_gate)
-                    self.operation_blks[_Lbl(gateName,inds)] = embedded_op
+                    self.operation_blks['layers'][_Lbl(gateName,inds)] = embedded_op
                     primitive_ops.append(_Lbl(gateName,inds))
 
                 except Exception as e:
@@ -390,24 +399,24 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
                     else: raise e
 
         self.set_primitive_op_labels(primitive_ops)
-        self.set_primitive_prep_labels(tuple(self.prep_blks.keys()))
-        self.set_primitive_povm_labels(tuple(self.povm_blks.keys()))
+        self.set_primitive_prep_labels(tuple(self.prep_blks['layers'].keys()))
+        self.set_primitive_povm_labels(tuple(self.povm_blks['layers'].keys()))
         #(no instruments)
 
     
 class SimpleCompLayerLizard(_mdl.ImplicitLayerLizard):
     def get_prep(self,layerlbl):
-        return self.prep_blks[layerlbl] # prep_blks are full prep ops
+        return self.prep_blks['layers'][layerlbl] # prep_blks['layer'] are full prep ops
     def get_effect(self,layerlbl):
-        return self.effect_blks[layerlbl] # effect_blks are full effect ops
+        return self.effect_blks['layers'][layerlbl] # effect_blks['layer'] are full effect ops
     def get_operation(self,layerlbl):
         dense = bool(self.model._sim_type == "matrix") # whether dense matrix gates should be created
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
 
         if len(components) == 1:
-            return self.op_blks[components[0]]
+            return self.op_blks['layers'][components[0]]
         else:
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
-            return Composed([self.op_blks[l] for l in components], dim=self.model.dim,
+            return Composed([self.op_blks['layers'][l] for l in components], dim=self.model.dim,
                                 evotype=self.model._evotype)

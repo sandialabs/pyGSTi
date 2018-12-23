@@ -37,5 +37,6 @@ LiouvilleMx
       0.00156299      0.00103957      0.95251911      0.01263976
      -0.03795598     -0.90884064     -0.00334022      0.00604163
 
-BASIS: unknown 
+STATESPACE: Q0(2)
+BASIS: pp
 GAUGEGROUP: Full

@@ -240,13 +240,14 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
                 existing = super(OrderedMemberDict,self).__getitem__(key)
             else: existing = None
 
+            if self.parent is not None: value.set_gpindices(None, self.parent) # set parent
             super(OrderedMemberDict,self).__setitem__(key, value)
 
             # let the now-replaced existing object know it's been
             # removed from the parent, allowing it to reset (to None)
             # its parent link if there are no more references to it.
             if existing is not None and value is not existing:
-                assert(existing.parent is self.parent), "Model object not setup correctly"
+                assert(existing.parent is None or existing.parent is self.parent), "Model object not setup correctly"
                 existing.unlink_parent()
 
         elif key in self: #if a object already exists...
@@ -268,8 +269,10 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             
         #rebuild Model's parameter vector (params may need to be added)
         if self.parent is not None:
-            #print("DEBUG: rebuilding paramvec after inserting ", key, " : ", list(self.keys()))
-            self.parent._update_paramvec( super(OrderedMemberDict,self).__getitem__(key) )
+            #print("DEBUG: marking paramvec for rebuild after inserting ", key, " : ", list(self.keys()))
+            #OLD TODO REMOVE: self.parent._update_paramvec( super(OrderedMemberDict,self).__getitem__(key) )
+            self.parent._mark_for_rebuild(super(OrderedMemberDict,self).__getitem__(key))
+              # mark the parent's (Model's) paramvec for rebuilding
 
     def __delitem__(self, key):
         """Implements `del self[key]`"""

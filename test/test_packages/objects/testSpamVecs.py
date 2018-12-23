@@ -63,6 +63,7 @@ class SPAMVecTestCase(BaseTestCase):
 
         dummyGS = pygsti.objects.ExplicitOpModel(['Q0'])
         dummyGS.povms['Mtest'] = povm # so to/from vector work w/tensor prod of povm in tests below
+        dummyGS.to_vector() # builds & cleans paramvec for tests below
         assert(povm.gpindices is not None)
         
         vecs = [ pygsti.obj.FullSPAMVec(v),

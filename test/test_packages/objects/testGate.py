@@ -182,6 +182,8 @@ class GateTestCase(BaseTestCase):
             ham_basis=ppBasis, nonham_basis=ppBasis, param_mode="unconstrained",
             nonham_mode="all", truncate=False, mxBasis="pp")
 
+        dummyGS.to_vector() #allocates & builds .gpindices for all gates
+
         for gate in gates_to_test:
             state = np.zeros( (4,1), 'd' )
             state[0] = state[3] = 1.0
@@ -231,7 +233,9 @@ class GateTestCase(BaseTestCase):
             nP = gate.num_params()
             op2 = gate.copy()
             self.assertTrue( np.allclose(gate,op2) )
-            
+
+            print("typ = ",type(gate))
+            print("info = ",gate.parent, gate.gpindices)
             v = gate.to_vector()
             gate.from_vector(v)
             self.assertTrue( np.allclose(gate,op2) )
@@ -352,6 +356,8 @@ class GateTestCase(BaseTestCase):
         with self.assertRaises(ValueError):
             pygsti.objects.EmbeddedOp( [('Q0',),('Q1',)], ['Q0','Q1'], testGate) #labels correspond to diff blocks            
 
+        dummyGS.to_vector() #allocates & builds .gpindices for all gates
+        dummyGS2.to_vector() #allocates & builds .gpindices for all gates        
 
         for gate in gates_to_test:
             state = np.zeros( (4,1), 'd' )

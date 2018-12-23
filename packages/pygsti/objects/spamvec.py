@@ -662,6 +662,8 @@ class SPAMVec(_modelmember.ModelMember):
 
     #Pickle plumbing
     def __setstate__(self, state):
+        if "dirty" in state: # backward compat: .dirty was replaced with ._dirty in ModelMember
+            state['_dirty'] = state['dirty']; del state['dirty']
         self.__dict__.update(state)
 
     #Note: no __str__ fn

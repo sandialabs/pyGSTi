@@ -69,14 +69,24 @@ class ModelMember(ModelChild):
         self._evotype = evotype
         self._gpindices = gpindices
         self._gplabels = None # a placeholder for FUTURE features
-        self.dirty = False # True when there's any *possibility* that this
-                           # gate's parameters have been changed since the
-                           # last setting of dirty=False
+        self._dirty = False # True when there's any *possibility* that this
+                            # gate's parameters have been changed since the
+                            # last setting of dirty=False
         super(ModelMember,self).__init__(parent)
         
     def get_dimension(self):
         """ Return the dimension of this object. """
         return self.dim
+
+    @property
+    def dirty(self):
+        return self._dirty
+
+    @dirty.setter
+    def dirty(self, value):
+        self._dirty = value
+        if value and self.parent: # propagate "True" dirty flag to parent (usually a Model)
+            self.parent.dirty = value
 
     @property
     def gpindices(self):
@@ -161,6 +171,21 @@ class ModelMember(ModelChild):
         if (self.parent is not None) and (self.parent._obj_refcount(self) == 0):
             self._parent = None
 
+    def clear_gpindices(self):
+        """
+        Sets gpindices to None, along with any submembers' gpindices.  This 
+        essentially marks these members for parameter re-allocation (e.g. if
+        the number - not just the value - of parameters they have changes).
+
+        Returns
+        -------
+        None
+        """
+        for subm in self.submembers():
+            subm.clear_gpindices()
+        self._gpindices = None
+
+        
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
@@ -263,7 +288,7 @@ class ModelMember(ModelChild):
                 slc = slice(startingIndex,startingIndex+Np) \
                     if Np > 0 else slice(0,0,None) #special "null slice" for zero params
                 self.set_gpindices(slc, parent)
-                #print(" -- allocated %d indices" % Np)
+                #print(" -- allocated %d indices: %s" % (Np,str(slc)))
                 return Np
             else: # assume gpindices is good & everything's allocated already
                 #print(" -- no need to allocate anything")
@@ -363,7 +388,7 @@ class ModelMember(ModelChild):
 
     def _print_gpindices(self,prefix=""):
         print(self.gpindices, " [%s]" % str(type(self)))
-        for i,sub in enumerate(obj.submembers()):
+        for i,sub in enumerate(self.submembers()):
             print(prefix, "  Sub%d: " % i, end='')
             sub._print_gpindices(prefix+"  ")    
 
@@ -410,10 +435,9 @@ def _decompose_gpindices(parent_gpindices, sibling_gpindices):
         if isinstance(sibling_gpindices, slice):
             if sibling_gpindices.start == sibling_gpindices.stop == 0: # "null slice" 
                 return slice(0,0,None) # ==> just return null slice
-            if not (start <= sibling_gpindices.start and sibling_gpindices.stop <= stop):
-                print("DEBUG ERROR parent = ",parent_gpindices, " sibling = ",sibling_gpindices)
             assert(start <= sibling_gpindices.start and sibling_gpindices.stop <= stop), \
-                "Sibling indices must be a sub-slice of parent indices!"
+                "Sibling indices (%s) must be a sub-slice of parent indices (%s)!" % (
+                    str(sibling_gpindices), str(parent_gpindices))
             return _slct.shift( sibling_gpindices, -start )
         else: # child_gpindices is an index array
             return sibling_gpindices - start # numpy "shift"
