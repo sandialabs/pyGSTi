@@ -3603,7 +3603,9 @@ class ExplicitLayerLizard(object):
 
     def from_vector(self, v):
         """ re-init compiled ops from vector v """
-        for _,obj in self.model._iter_parameterized_objs():
+        for _,obj in _itertools.chain(self.preps.items(),
+                                      self.effects.items(),
+                                      self.ops.items()):
             obj.from_vector( v[obj.gpindices] )
 
 
@@ -3629,8 +3631,11 @@ class ImplicitLayerLizard(object):
 
     def from_vector(self, v):
         """ re-init compiled ops from vector v """
-        for _,obj in self.model._iter_parameterized_objs():
-            obj.from_vector( v[obj.gpindices] )
+        for _,objdict in _itertools.chain(self.prep_blks.items(),
+                                          self.effect_blks.items(),
+                                          self.op_blks.items()):
+            for _,obj in objdict.items():
+                obj.from_vector( v[obj.gpindices] )
         
     
 class ImplicitOpModel(Model):
