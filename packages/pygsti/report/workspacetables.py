@@ -1180,7 +1180,7 @@ class NQubitErrgenTable(WorkspaceTable):
                 process_gate(gl,model.operations[gl],(),None)
         elif isinstance(model,_objs.ImplicitOpModel): # process primitive op error
             for gl in opLabels:
-                process_gate(gl,model.operation_blks[_Lbl('CloudNoise_'+gl.name,gl.sslbls)],(),None)
+                process_gate(gl,model.operation_blks['cloudnoise'][gl],(),None)
         else:
             raise ValueError("Unrecognized type of model: %s" % str(type(model)))
 

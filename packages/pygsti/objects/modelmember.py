@@ -288,7 +288,7 @@ class ModelMember(ModelChild):
                 slc = slice(startingIndex,startingIndex+Np) \
                     if Np > 0 else slice(0,0,None) #special "null slice" for zero params
                 self.set_gpindices(slc, parent)
-                #print(" -- allocated %d indices" % Np)
+                #print(" -- allocated %d indices: %s" % (Np,str(slc)))
                 return Np
             else: # assume gpindices is good & everything's allocated already
                 #print(" -- no need to allocate anything")
@@ -388,7 +388,7 @@ class ModelMember(ModelChild):
 
     def _print_gpindices(self,prefix=""):
         print(self.gpindices, " [%s]" % str(type(self)))
-        for i,sub in enumerate(obj.submembers()):
+        for i,sub in enumerate(self.submembers()):
             print(prefix, "  Sub%d: " % i, end='')
             sub._print_gpindices(prefix+"  ")    
 
@@ -435,10 +435,9 @@ def _decompose_gpindices(parent_gpindices, sibling_gpindices):
         if isinstance(sibling_gpindices, slice):
             if sibling_gpindices.start == sibling_gpindices.stop == 0: # "null slice" 
                 return slice(0,0,None) # ==> just return null slice
-            if not (start <= sibling_gpindices.start and sibling_gpindices.stop <= stop):
-                print("DEBUG ERROR parent = ",parent_gpindices, " sibling = ",sibling_gpindices)
             assert(start <= sibling_gpindices.start and sibling_gpindices.stop <= stop), \
-                "Sibling indices must be a sub-slice of parent indices!"
+                "Sibling indices (%s) must be a sub-slice of parent indices (%s)!" % (
+                    str(sibling_gpindices), str(parent_gpindices))
             return _slct.shift( sibling_gpindices, -start )
         else: # child_gpindices is an index array
             return sibling_gpindices - start # numpy "shift"

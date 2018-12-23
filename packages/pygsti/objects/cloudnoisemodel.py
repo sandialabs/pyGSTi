@@ -18,6 +18,7 @@ from . import operation as _op
 from . import spamvec as _sv
 from . import povm as _povm
 from . import qubitgraph as _qgraph
+from . import labeldicts as _ld
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
@@ -58,7 +59,7 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
                        extraWeight1Hops=0, extraGateWeight=0, sparse=False,
                        sim_type="matrix", parameterization="H+S",
                        spamtype="lindblad", addIdleNoiseToAllGates=True,
-                       errcomp_type="gates", verbosity=0):
+                       errcomp_type="gates", independent_clouds=True, verbosity=0):
         """
         TODO: update docstring - roughNoise in ptic; add qubit_labels like build_standard_localnoise_model;
         #                        remove cnot_edges
@@ -220,7 +221,7 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
                    maxIdleWeight, maxSpamWeight, maxhops,
                    extraWeight1Hops, extraGateWeight, sparse,
                    sim_type, parameterization, spamtype, 
-                   addIdleNoiseToAllGates, errcomp_type, verbosity)
+                   addIdleNoiseToAllGates, errcomp_type, independent_clouds, verbosity)
 
 
     def __init__(self, nQubits, gatedict, availability=None,
@@ -229,7 +230,7 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
                  extraWeight1Hops=0, extraGateWeight=0, sparse=False,
                  sim_type="auto", parameterization="H+S",
                  spamtype="lindblad", addIdleNoiseToAllGates=True,
-                 errcomp_type="gates", verbosity=0):
+                 errcomp_type="gates", independent_clouds=True, verbosity=0):
         """ 
         TODO: update docstring (see LocalNoiseModel)
         Create a noisy n-qubit model using a low-weight and geometrically local
@@ -333,6 +334,9 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
             qubit_labels = tuple(range(nQubits))
         if availability is None:
             availability = {}
+            
+        if independent_clouds != True:
+            raise NotImplementedError("Non-independent noise clounds are not supported yet!")
         
         #Set members
         self.nQubits = nQubits
@@ -364,6 +368,15 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
         super(CloudNoiseModel,self).__init__(self.qubit_labels, "pp", {}, CloudNoiseLayerLizard,
                                              lizardArgs, sim_type=sim_type, evotype=evotype)
 
+        flags = { 'auto_embed': False, 'match_parent_dim': False,
+                  'match_parent_evotype': True, 'cast_to_type': None }
+        self.prep_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.povm_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.operation_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.operation_blks['gates'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.operation_blks['cloudnoise'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.instrument_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+
         printer = _VerbosityPrinter.build_printer(verbosity)
         geometry_name = "custom" if isinstance(geometry, _qgraph.QubitGraph) else geometry
         printer.log("Creating a %d-qubit local-noise %s model" % (nQubits,geometry_name))
@@ -389,7 +402,7 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
     
         if maxIdleWeight > 0:
             printer.log("Creating Idle:")
-            self.operation_blks[_Lbl('globalIdle')] = _build_nqn_global_noise(
+            self.operation_blks['layers'][_Lbl('globalIdle')] = _build_nqn_global_noise(
                 qubitGraph, maxIdleWeight, sparse,
                 sim_type, parameterization, errcomp_type, printer-1)
         else:
@@ -441,14 +454,17 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
         StaticDenseOp = _get_Static_factory(sim_type, parameterization) # always a *gate*
 
         for gn, (gate,availList) in oneQ_gates_and_avail.items():
+            embedded_gate = StaticDenseOp(gate,"pp")
+            self.operation_blks['gates'][_Lbl(gn)] = embedded_gate
+                
             for (i,) in availList: # so 'i' is target qubit label
                 #Target operations
                 printer.log("Creating 1Q %s gate on qubit %s!!" % (gn,str(i)))
-                self.operation_blks[_Lbl(gn,i)] = EmbeddedDenseOp(
-                    ssAllQ, [i], StaticDenseOp(gate,"pp"), basisAllQ_dim)
+                self.operation_blks['layers'][_Lbl(gn,i)] = EmbeddedDenseOp(
+                    ssAllQ, [i], embedded_gate, basisAllQ_dim)
                 primitive_ops.append(_Lbl(gn,i))
                         
-                self.operation_blks[_Lbl('CloudNoise_'+gn,i)] = _build_nqn_cloud_noise(
+                self.operation_blks['cloudnoise'][_Lbl(gn,i)] = _build_nqn_cloud_noise(
                     (i,), qubitGraph, weight_maxhops_tuples_1Q,
                     errcomp_type=errcomp_type, sparse=sparse, sim_type=sim_type,
                     parameterization=parameterization, verbosity=printer-1)
@@ -463,11 +479,14 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
                                    [ (2+x,maxhops) for x in range(1,extraGateWeight+1) ]
         cloud_maxhops = max( [mx for wt,mx in weight_maxhops_tuples_2Q] ) # max of max-hops
         for gn, (gate,availList) in twoQ_gates_and_avail.items():
+            embedded_gate = StaticDenseOp(gate,"pp")
+            self.operation_blks['gates'][_Lbl(gn)] = embedded_gate
+            
             for (i,j) in availList: # so 'i' and 'j' are target qubit labels
                 printer.log("Creating %s gate between qubits %s and %s!!" % (gn,str(i),str(j)))
-                self.operation_blks[_Lbl(gn,(i,j))] = EmbeddedDenseOp(
-                    ssAllQ, [i,j], StaticDenseOp(gate,"pp"), basisAllQ_dim)
-                self.operation_blks[_Lbl('CloudNoise_'+gn,(i,j))] = _build_nqn_cloud_noise(
+                self.operation_blks['layers'][_Lbl(gn,(i,j))] = EmbeddedDenseOp(
+                    ssAllQ, [i,j], embedded_gate, basisAllQ_dim)
+                self.operation_blks['cloudnoise'][_Lbl(gn,(i,j))] = _build_nqn_cloud_noise(
                     (i,j), qubitGraph, weight_maxhops_tuples_2Q,
                     errcomp_type=errcomp_type, sparse=sparse, sim_type=sim_type,
                     parameterization=parameterization, verbosity=printer-1)
@@ -483,8 +502,8 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
             if maxSpamWeight > 0:
                 _warnings.warn(("`spamtype == 'static'` ignores the supplied "
                                 "`maxSpamWeight=%d > 0`") % maxSpamWeight )
-            self.prep_blks[_Lbl('rho0')] = _sv.ComputationalSPAMVec([0]*nQubits,evotype)
-            self.povm_blks[_Lbl('Mdefault')] = _povm.ComputationalBasisPOVM(nQubits,evotype)
+            self.prep_blks['layers'][_Lbl('rho0')] = _sv.ComputationalSPAMVec([0]*nQubits,evotype)
+            self.povm_blks['layers'][_Lbl('Mdefault')] = _povm.ComputationalBasisPOVM(nQubits,evotype)
             
         elif spamtype == "tensorproduct": 
     
@@ -527,27 +546,29 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
                     depolAmts = povmNoise[0:nQubits]
                 for amt,povm in zip(depolAmts,povm_factors): povm.depolarize(amt) 
         
-            self.prep_blks[_Lbl('rho0')] = _sv.TensorProdSPAMVec('prep', prep_factors)
-            self.povm_blks[_Lbl('Mdefault')] = _povm.TensorProdPOVM(povm_factors)
+            self.prep_blks['layers'][_Lbl('rho0')] = _sv.TensorProdSPAMVec('prep', prep_factors)
+            self.povm_blks['layers'][_Lbl('Mdefault')] = _povm.TensorProdPOVM(povm_factors)
     
         elif spamtype == "lindblad":
     
             prepPure = _sv.ComputationalSPAMVec([0]*nQubits,evotype)
             prepNoiseMap = _build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer-1)
-            self.prep_blks[_Lbl('rho0')] = _sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")
+            self.prep_blks['layers'][_Lbl('rho0')] = _sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")
     
             povmNoiseMap = _build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse, sim_type, parameterization, errcomp_type, printer-1)
-            self.povm_blks[_Lbl('Mdefault')] = _povm.LindbladPOVM(povmNoiseMap, None, "pp")
+            self.povm_blks['layers'][_Lbl('Mdefault')] = _povm.LindbladPOVM(povmNoiseMap, None, "pp")
     
         else:
             raise ValueError("Invalid `spamtype` argument: %s" % spamtype)
         
         self.set_primitive_op_labels(primitive_ops)
-        self.set_primitive_prep_labels(tuple(self.prep_blks.keys()))
-        self.set_primitive_povm_labels(tuple(self.povm_blks.keys()))
+        self.set_primitive_prep_labels(tuple(self.prep_blks['layers'].keys()))
+        self.set_primitive_povm_labels(tuple(self.povm_blks['layers'].keys()))
         #(no instruments)
         
-        printer.log("DONE! - created Model with dim=%d and op-blks=%s" % (self.dim, list(self.operation_blks.keys())))    
+        printer.log("DONE! - created Model with dim=%d and op-blks=" % self.dim)
+        for op_blk_lbl,op_blk in self.operation_blks.items():
+            printer.log("  %s: %s" % (op_blk_lbl, ', '.join(map(str,op_blk.keys()))))
 
     def get_clouds(self):
         return self.clouds
@@ -874,9 +895,9 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
 
 class CloudNoiseLayerLizard(_mdl.ImplicitLayerLizard):
     def get_prep(self,layerlbl):
-        return self.prep_blks[layerlbl] # prep_blks are full prep ops
+        return self.prep_blks['layers'][layerlbl] # prep_blks['layers'] are full prep ops
     def get_effect(self,layerlbl):
-        return self.effect_blks[layerlbl] # effect_blks are full effect ops
+        return self.effect_blks['layers'][layerlbl] # effect_blks['layers'] are full effect ops
     def get_operation(self,layerlbl):
         dense = bool(self.model._sim_type == "matrix") # whether dense matrix gates should be created
         add_idle_noise = self.model._lizardArgs['add_idle_noise']
@@ -901,24 +922,24 @@ class CloudNoiseLayerLizard(_mdl.ImplicitLayerLizard):
         
         components = layerlbl.components
         if len(components) == 0 or layerlbl == 'Gi': # idle!
-            return self.op_blks['globalIdle']
+            return self.op_blks['layers']['globalIdle']
 
         #Compose target operation from layer's component labels, which correspond
         # to the perfect (embedded) target ops in op_blks
         if len(components) > 1:
-            targetOp = Composed([self.op_blks[l] for l in components], dim=self.model.dim,
+            targetOp = Composed([self.op_blks['layers'][l] for l in components], dim=self.model.dim,
                                 evotype=self.model._evotype)
-        else: targetOp = self.op_blks[components[0]]
+        else: targetOp = self.op_blks['layers'][components[0]]
         ops_to_compose = [targetOp]
 
         if errcomp_type == "gates":
-            if add_idle_noise: ops_to_compose.append( self.op_blks['globalIdle'] )
+            if add_idle_noise: ops_to_compose.append( self.op_blks['layers']['globalIdle'] )
             if len(components) > 1:
-                localErr = Composed([self.op_blks[_Lbl('CloudNoise_'+l.name,l.sslbls)] for l in components],
+                localErr = Composed([self.op_blks['cloudnoise'][l] for l in components],
                                     dim=self.model.dim,  evotype=self.model._evotype)
             else:
                 l = components[0]
-                localErr = self.op_blks[_Lbl('CloudNoise_'+l.name,l.sslbls)]
+                localErr = self.op_blks['cloudnoise'][l]
 
             ops_to_compose.append(localErr)
 
@@ -926,8 +947,8 @@ class CloudNoiseLayerLizard(_mdl.ImplicitLayerLizard):
             #We compose the target operations to create a
             # final target op, and compose this with a *singe* Lindblad gate which has as
             # its error generator the composition (sum) of all the factors' error gens.
-            errorGens = [ self.op_blks['globalIdle'].errorgen ] if add_idle_noise else []
-            errorGens.extend( [self.op_blks[_Lbl('CloudNoise_'+l.name,l.sslbls)]
+            errorGens = [ self.op_blks['layers']['globalIdle'].errorgen ] if add_idle_noise else []
+            errorGens.extend( [self.op_blks['cloudnoise'][l]
                                for l in components] )
             if len(errorGens) > 1:
                 error = Lindblad(None, Sum(errorGens, dim=self.model.dim,

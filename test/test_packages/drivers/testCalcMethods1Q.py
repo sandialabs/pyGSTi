@@ -44,7 +44,7 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                               extraWeight1Hops, extraGateWeight, sparse,
                                               roughNoise, sim_type, parameterization,
                                               spamtype, addIdleNoiseToAllGates,
-                                              errcomp_type, return_clouds, verbosity)
+                                              errcomp_type, True, return_clouds, verbosity)
 
 
 class CalcMethods1QTestCase(BaseTestCase):

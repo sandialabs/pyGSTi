@@ -35,7 +35,7 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
         extraWeight1Hops, extraGateWeight, sparse,
         roughNoise, sim_type, parameterization,
         spamtype, addIdleNoiseToAllGates,
-        errcomp_type, return_clouds, verbosity)
+        errcomp_type, True, return_clouds, verbosity)
 
 def get_fileroot(nQubits, maxMaxLen, errMag, spamMag, nSamples, simtype, idleErrorInFiducials):
     return temp_files + "/idletomog_%dQ_maxLen%d_errMag%.5f_spamMag%.5f_%s_%s_%s" % \

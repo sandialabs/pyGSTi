@@ -295,7 +295,7 @@ class Model(object):
     def _mark_for_rebuild(self, modified_obj=None):
         #re-initialze any members that also depend on the updated parameters
         self._need_to_rebuild = True
-        for lbl,o in self._iter_parameterized_objs():
+        for _,o in self._iter_parameterized_objs():
             if o._obj_refcount(modified_obj) > 0:
                 o.clear_gpindices() # ~ o.gpindices = None but works w/submembers
                                     # (so params for this obj will be rebuilt)
@@ -353,7 +353,7 @@ class Model(object):
             v = _np.delete(v, indices_to_remove)
             get_shift = lambda j: _bisect.bisect_left(indices_to_remove, j)
             memo = set() #keep track of which object's gpindices have been set
-            for lbl,obj in self._iter_parameterized_objs():
+            for _,obj in self._iter_parameterized_objs():
                 if obj.gpindices is not None:
                     if id(obj) in memo: continue #already processed
                     if isinstance(obj.gpindices, slice):
@@ -434,7 +434,7 @@ class Model(object):
     def _obj_refcount(self, obj):
         """ Number of references to `obj` contained within this Model """
         cnt = 0
-        for lbl,o in self._iter_parameterized_objs():
+        for _,o in self._iter_parameterized_objs():
             cnt += o._obj_refcount(obj)
         return cnt
 
@@ -1765,6 +1765,7 @@ class Model(object):
         Model
             a (deep) copy of this model.
         """
+        self._clean_paramvec() # make sure _paramvec is valid before copying (necessary?)
         copyInto.uuid = _uuid.uuid4() # new uuid for a copy (don't duplicate!)
         copyInto._chlp = None # must be set by a derived-class _init_copy() method
         copyInto._need_to_rebuild = True # copy will have all gpindices = None, etc.
@@ -3522,7 +3523,62 @@ class MemberDictCompilerHelper(object):
         return tuple(self.instruments[inst_lbl].keys())
 
 
-class ImplicitModelCompilerHelper(MemberDictCompilerHelper):
+class MemberDictDictCompilerHelper(object):
+    """ Performs the work of a "Compiler Helper" using user-supplied dicts """
+    def __init__(self, prep_blks, povm_blks, instrument_blks):
+        self.prep_blks = prep_blks
+        self.povm_blks = povm_blks
+        self.instrument_blks = instrument_blks
+    
+    def is_prep_lbl(self, lbl):
+        return any([(lbl in prepdict) for prepdict in self.prep_blks.values()])
+    
+    def is_povm_lbl(self, lbl):
+        return any([(lbl in povmdict) for povmdict in self.povm_blks.values()])
+    
+    def is_instrument_lbl(self, lbl):
+        return any([(lbl in idict) for idict in self.instrument_blks.values()])
+    
+    def get_default_prep_lbl(self):
+        npreps = sum([ len(prepdict) for prepdict in self.prep_blks.values()])
+        if npreps == 1:
+            for prepdict in self.prep_blks.values():
+                if len(prepdict) > 0:
+                    return tuple(prepdict.keys())[0]
+            assert(False), "Logic error: one prepdict should have had lenght > 0!"
+        else:
+            return None
+    
+    def get_default_povm_lbl(self):
+        npovms = sum([ len(povmdict) for povmdict in self.povm_blks.values()])
+        if npovms == 1:
+            for povmdict in self.povm_blks.values():
+                if len(povmdict) > 0:
+                    return tuple(povmdict.keys())[0]
+            assert(False), "Logic error: one povmdict should have had lenght > 0!"
+        else:
+            return None
+
+    def has_preps(self):
+        return any([ (len(prepdict) > 0) for prepdict in self.prep_blks.values()])
+
+    def has_povms(self):
+        return any([ (len(povmdict) > 0) for povmdict in self.povm_blks.values()])
+
+    def get_effect_labels_for_povm(self, povm_lbl):
+        for povmdict in self.povm_blks.values():
+            if povm_lbl in povmdict:
+                return tuple(povmdict[povm_lbl].keys())
+        raise KeyError("No POVM labeled %s!" % povm_lbl)
+
+    def get_member_labels_for_instrument(self, inst_lbl):
+        for idict in self.instrument_blks.values():
+            if inst_lbl in idict:
+                return tuple(idict[inst_lbl].keys())
+        raise KeyError("No instrument labeled %s!" % inst_lbl)
+
+
+class ImplicitModelCompilerHelper(MemberDictDictCompilerHelper):
     """ Performs the work of a "Compiler Helper" using user-supplied dicts """
     def __init__(self, implicitModel):
         super(ImplicitModelCompilerHelper,self).__init__(implicitModel.prep_blks, implicitModel.povm_blks, implicitModel.instrument_blks)
@@ -3547,9 +3603,7 @@ class ExplicitLayerLizard(object):
 
     def from_vector(self, v):
         """ re-init compiled ops from vector v """
-        for _,obj in _itertools.chain(self.preps.items(),
-                                      self.effects.items(),
-                                      self.ops.items()):
+        for _,obj in self.model._iter_parameterized_objs():
             obj.from_vector( v[obj.gpindices] )
 
 
@@ -3575,9 +3629,7 @@ class ImplicitLayerLizard(object):
 
     def from_vector(self, v):
         """ re-init compiled ops from vector v """
-        for _,obj in _itertools.chain(self.prep_blks.items(),
-                                      self.effect_blks.items(),
-                                      self.op_blks.items()):
+        for _,obj in self.model._iter_parameterized_objs():
             obj.from_vector( v[obj.gpindices] )
         
     
@@ -3593,13 +3645,10 @@ class ImplicitOpModel(Model):
                  sim_type="auto", evotype="densitymx"):
         """ TODO: docstring - add state_space_labels, basis, evotype """
 
-        flags = { 'auto_embed': False, 'match_parent_dim': False,
-                  'match_parent_evotype': True, 'cast_to_type': None }
-
-        self.prep_blks = _ld.OrderedMemberDict(self, None, None, flags)
-        self.povm_blks = _ld.OrderedMemberDict(self, None, None, flags)
-        self.operation_blks = _ld.OrderedMemberDict(self, None, None, flags)
-        self.instrument_blks = _ld.OrderedMemberDict(self, None, None, flags)
+        self.prep_blks = _collections.OrderedDict()
+        self.povm_blks = _collections.OrderedDict()
+        self.operation_blks = _collections.OrderedDict()
+        self.instrument_blks = _collections.OrderedDict()
 
         if primitive_labels is None: primitive_labels = {}
         self._primitive_prep_labels = primitive_labels.get('preps',())
@@ -3656,39 +3705,48 @@ class ImplicitOpModel(Model):
     #Functions required for base class functionality
 
     def _iter_parameterized_objs(self):
-        for lbl,obj in _itertools.chain(self.prep_blks.items(),
-                                        self.povm_blks.items(),
-                                        self.operation_blks.items(),
-                                        self.instrument_blks.items()):
-            yield (lbl,obj)
+        for dictlbl,objdict in _itertools.chain(self.prep_blks.items(),
+                                                self.povm_blks.items(),
+                                                self.operation_blks.items(),
+                                                self.instrument_blks.items()):
+            for lbl,obj in objdict.items():
+                yield (_Label(dictlbl+":"+lbl.name,lbl.sslbls),obj)
     
     def _layer_lizard(self):
         """ (compiled op server) """
         self._clean_paramvec() # just to be safe
         
         compiled_effect_blks = _collections.OrderedDict()
-        for povm_lbl,povm in self.povm_blks.items():
-            for k,e in povm.compile_effects(povm_lbl).items():
-                compiled_effect_blks[k] = e
+        for povm_dict_lbl,povmdict in self.povm_blks.items():
+            compiled_effect_blks[povm_dict_lbl] = _collections.OrderedDict(
+                [(k,e) for povm_lbl,povm in povmdict.items()
+                 for k,e in povm.compile_effects(povm_lbl).items() ])
         
-        compiled_op_blks = _collections.OrderedDict()
-        for k,g in self.operation_blks.items(): compiled_op_blks[k] = g
-        for inst_lbl,inst in self.instrument_blks.items():
-            for k,g in inst.compile_operations(inst_lbl).items():
-                compiled_op_blks[k] = g
-        compiled_prep_blks = self.prep_blks
+        compiled_op_blks = self.operation_blks.copy() #no compilation needed
+        for inst_dict_lbl,instdict in self.instrument_blks.items():
+            if inst_dict_lbl not in compiled_op_blks: #only create when needed
+                compiled_op_blks[inst_dict_lbl] = _collections.OrderedDict()
+            for inst_lbl,inst in instdict.items():
+                for k,g in inst.compile_operations(inst_lbl).items():
+                    compiled_op_blks[inst_dict_lbl][k] = g            
+
+        compiled_prep_blks = self.prep_blks.copy() #no compilation needed
 
         return self._lizardClass(compiled_prep_blks, compiled_op_blks, compiled_effect_blks, self)
 
-    def _init_copy(self,copyInto):
+    def _init_copy(self,copyInto):        
         # Copy special base class members first
         super(ImplicitOpModel, self)._init_copy(copyInto)
 
         # Copy our "tricky" members
-        copyInto.prep_blks = self.prep_blks.copy(copyInto)
-        copyInto.povm_blks = self.povm_blks.copy(copyInto)
-        copyInto.operation_blks = self.operation_blks.copy(copyInto)
-        copyInto.instrument_blks = self.instrument_blks.copy(copyInto)
+        copyInto.prep_blks = _collections.OrderedDict([ (lbl,prepdict.copy(copyInto))
+                                                        for lbl,prepdict in self.prep_blks.items()])
+        copyInto.povm_blks = _collections.OrderedDict([ (lbl,povmdict.copy(copyInto))
+                                                        for lbl,povmdict in self.povm_blks.items()])
+        copyInto.operation_blks = _collections.OrderedDict([ (lbl,opdict.copy(copyInto))
+                                                        for lbl,opdict in self.operation_blks.items()])
+        copyInto.instrument_blks = _collections.OrderedDict([ (lbl,idict.copy(copyInto))
+                                                        for lbl,idict in self.instrument_blks.items()])
         copyInto._chlp = self.compiler_helper_class(copyInto)
 
 
@@ -3701,14 +3759,18 @@ class ImplicitOpModel(Model):
         # of relevant OrderedDict-derived classes, which *don't*
         # preserve this information upon pickling so as to avoid
         # circular pickling...
-        self.prep_blks.parent = self
-        self.povm_blks.parent = self
-        self.operation_blks.parent = self
-        self.instrument_blks.parent = self
-        for o in self.prep_blks.values(): o.relink_parent(self)
-        for o in self.povm_blks.values(): o.relink_parent( self)
-        for o in self.operation_blks.values(): o.relink_parent(self)
-        for o in self.instrument_blks.values(): o.relink_parent(self)
+        for prepdict in self.prep_blks.values():
+            prepdict.parent = self
+            for o in prepdict.values(): o.relink_parent(self)
+        for povmdict in self.povm_blks.values():
+            povmdict.parent = self
+            for o in povmdict.values(): o.relink_parent(self)
+        for opdict in self.operation_blks.values():
+            opdict.parent = self
+            for o in opdict.values(): o.relink_parent(self)
+        for idict in self.instrument_blks.values():
+            idict.parent = self
+            for o in idict.values(): o.relink_parent(self)
 
 
     def get_clifford_symplectic_reps(self, oplabel_filter=None):
@@ -3736,7 +3798,7 @@ class ImplicitOpModel(Model):
         srep_dict = {}
 
         for gl in self.get_primitive_op_labels():
-            gate = self.operation_blks[gl]
+            gate = self.operation_blks['layers'][gl]
             if (gfilter is not None) and (gl not in gfilter): continue
 
             if isinstance(gate, _op.EmbeddedOp):
@@ -3764,16 +3826,20 @@ class ImplicitOpModel(Model):
 
     def __str__(self):
         s = ""
-        for lbl,vec in self.prep_blks.items():
-            s += "%s = " % str(lbl) + str(vec) + "\n"
+        for dictlbl,d in self.prep_blks.items():
+            for lbl,vec in d.items():
+                s += "%s:%s = " % (str(dictlbl),str(lbl)) + str(vec) + "\n"
         s += "\n"
-        for lbl,povm in self.povm_blks.items():
-            s += "%s = " % str(lbl) + str(povm) + "\n"
+        for dictlbl,d in self.povm_blks.items():
+            for lbl,povm in d.items():
+                s += "%s:%s = " % (str(dictlbl),str(lbl)) + str(povm) + "\n"
         s += "\n"
-        for lbl,gate in self.operation_blks.items():
-            s += "%s = \n" % str(lbl) + str(gate) + "\n\n"
-        for lbl,inst in self.instrument_blks.items():
-            s += "%s = " % str(lbl) + str(inst) + "\n"
+        for dictlbl,d in self.operation_blks.items():
+            for lbl,gate in d.items():
+                s += "%s:%s = \n" % (str(dictlbl),str(lbl)) + str(gate) + "\n\n"
+        for dictlbl,d in self.instrument_blks.items():
+            for lbl,inst in d.items():
+                s += "%s:%s = " % (str(dictlbl),str(lbl)) + str(inst) + "\n"
         s += "\n"
 
         return s

@@ -45,6 +45,7 @@ def shift(s, offset):
     -------
     slice
     """
+    if s == slice(0,0,None): return s #special "null slice": shifted(null_slice) == null_slice
     return slice(s.start + offset, s.stop + offset, s.step)
 
 
