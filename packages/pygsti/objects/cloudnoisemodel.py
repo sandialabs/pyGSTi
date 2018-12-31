@@ -53,7 +53,7 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
 
 
     @classmethod
-    def build_standard(cls, nQubits, gate_names, nonstd_gate_unitaries={}, availability={},
+    def build_standard(cls, nQubits, gate_names, nonstd_gate_unitaries=None, availability=None,
                        qubit_labels=None, geometry="line",
                        maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
                        extraWeight1Hops=0, extraGateWeight=0, sparse=False,
@@ -203,6 +203,7 @@ class CloudNoiseModel(_mdl.ImplicitOpModel):
             `availability`).  For instance, the operation label for the `"Gx"` gate on
             qubit 2 might be `Label("Gx",1)`.
         """
+        if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
         std_unitaries = _itgs.get_standard_gatename_unitaries()
             
         gatedict = _collections.OrderedDict()

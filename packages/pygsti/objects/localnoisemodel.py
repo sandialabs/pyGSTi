@@ -38,7 +38,7 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
     """
 
     @classmethod
-    def build_standard(cls, nQubits, gate_names, nonstd_gate_unitaries={}, availability={}, 
+    def build_standard(cls, nQubits, gate_names, nonstd_gate_unitaries=None, availability=None, 
                        qubit_labels=None, geometry="line", parameterization='static',
                        evotype="auto", sim_type="auto", on_construction_error='raise',
                        independent_gates=False, ensure_composed_gates=False):
@@ -118,12 +118,15 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
             `availability`).  For instance, the operation label for the `"Gx"` gate on
             qubit 2 might be `Label("Gx",1)`.
         """
+        if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
         std_unitaries = _itgs.get_standard_gatename_unitaries()
-    
+
+
         if evotype == "auto": # same logic as in LocalNoiseModel
             if parameterization == "clifford": evotype = "stabilizer"
-            elif parameterization == "H+S terms": evotype = "svterm"
-            elif parameterization == "H+S clifford terms": evotype = "cterm"
+            elif parameterization == "static unitary": evotype = "statevec"
+            elif _gt.is_valid_lindblad_paramtype(parameterization):
+                _,evotype = _gt.split_lindblad_paramtype(parameterization)
             else: evotype = "densitymx" #everything else
         
         gatedict = _collections.OrderedDict()
@@ -331,7 +334,10 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
         for gateName, gate in gatedict.items():
             if not isinstance(gate, _op.LinearOperator):
                 try:
-                    gate = _op.convert(_op.StaticDenseOp(gate), parameterization, "pp")
+                    if parameterization == "static unitary": #assume gate dict is already unitary gates?
+                        gate = _op.StaticDenseOp(gate, "statevec")
+                    else:
+                        gate = _op.convert(_op.StaticDenseOp(gate), parameterization, "pp")
                 except Exception as e:
                     if on_construction_error == 'warn':
                         _warnings.warn("Failed to create %s gate %s. Dropping it." %

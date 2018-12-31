@@ -272,7 +272,7 @@ class Model(object):
                         
             def clean_obj(obj,lbl): # recursive so works with objects that have sub-members
                 for i,subm in enumerate(obj.submembers()):
-                    clean_obj(subm, lbl+":%d" % i)
+                    clean_obj(subm, _Label(lbl.name+":%d"%i,lbl.sslbls))
                 clean_single_obj(obj,lbl)
 
             def reset_dirty(obj): # recursive so works with objects that have sub-members
@@ -3603,7 +3603,9 @@ class ExplicitLayerLizard(object):
 
     def from_vector(self, v):
         """ re-init compiled ops from vector v """
-        for _,obj in self.model._iter_parameterized_objs():
+        for _,obj in _itertools.chain(self.preps.items(),
+                                      self.effects.items(),
+                                      self.ops.items()):
             obj.from_vector( v[obj.gpindices] )
 
 
@@ -3629,8 +3631,11 @@ class ImplicitLayerLizard(object):
 
     def from_vector(self, v):
         """ re-init compiled ops from vector v """
-        for _,obj in self.model._iter_parameterized_objs():
-            obj.from_vector( v[obj.gpindices] )
+        for _,objdict in _itertools.chain(self.prep_blks.items(),
+                                          self.effect_blks.items(),
+                                          self.op_blks.items()):
+            for _,obj in objdict.items():
+                obj.from_vector( v[obj.gpindices] )
         
     
 class ImplicitOpModel(Model):

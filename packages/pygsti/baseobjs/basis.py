@@ -103,7 +103,7 @@ class Basis(object):
         self._blockMatrices = None  # means "needs to be computed"
         self._matrices = None       # means "needs to be computed"
         self.longname = "Empty (0-element) basis"
-        self._labels = labels        # None means "needs to be computed"
+        self._labels = labels       # None means "needs to be computed"
         self.real = real
 
 
@@ -185,18 +185,7 @@ class Basis(object):
                     "Dimension mismatch in basis construction: %s != %s" % (str(dims),str(blockDims))
             self.dim = Dim(blockDims)
 
-        if labels is None:
-            try:
-                self._labels = basis_element_labels(self.name, self.dim.blockDims)
-            except NotImplementedError:
-                self._labels = []
-                for i, blockDim in enumerate(self.dim.blockDims):
-                    for j in range(blockDim):
-                        self._labels.append('M({})[{}]'.format(
-                            self.name,
-                            '{},{}'.format(i, j)
-                        ))
-        else:
+        if labels is not None: # if None, compute labels later (only if neede)
             if len(labels) == len(self): # len(self) gives num matrices if available, otherwise d2
                 self._labels = tuple(labels)
             else:

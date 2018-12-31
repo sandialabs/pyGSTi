@@ -1096,7 +1096,7 @@ def build_explicit_alias_model(mdl_primitives, alias_dict):
     return mdl_new
 
 
-def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries={}, availability={}, 
+def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=None, availability=None, 
                                     qubit_labels=None, geometry="line", parameterization='static',
                                     evotype="auto", sim_type="auto", on_construction_error='raise',
                                     independent_gates=False, ensure_composed_gates=False):
