@@ -126,7 +126,7 @@ def nparams_XYCNOT_cloudnoise_model(nQubits, geometry="line", maxIdleWeight=1, m
     return nParams, sum(nParams.values())
 
 
-def build_standard_cloudnoise_model(nQubits, gate_names, nonstd_gate_unitaries={}, availability={},
+def build_standard_cloudnoise_model(nQubits, gate_names, nonstd_gate_unitaries=None, availability=None,
                                     qubit_labels=None, geometry="line",
                                     maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
                                     extraWeight1Hops=0, extraGateWeight=0, sparse=False,

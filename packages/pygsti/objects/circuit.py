@@ -1252,7 +1252,7 @@ class Circuit(object):
 
     def map_state_space_labels(self, mapper):
         mapper_func = lambda line_label: mapper[line_label] \
-            if isinstance(mapper, dict) else mapper
+            if isinstance(mapper, dict) else mapper(line_label)
         mapped_line_labels = tuple(map(mapper_func,self.line_labels))
         return Circuit( [l.map_state_space_labels(mapper_func) for l in self._labels],
                         mapped_line_labels, None, not self._static)

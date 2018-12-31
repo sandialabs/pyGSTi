@@ -272,7 +272,7 @@ class Model(object):
                         
             def clean_obj(obj,lbl): # recursive so works with objects that have sub-members
                 for i,subm in enumerate(obj.submembers()):
-                    clean_obj(subm, lbl+":%d" % i)
+                    clean_obj(subm, _Label(lbl.name+":%d"%i,lbl.sslbls))
                 clean_single_obj(obj,lbl)
 
             def reset_dirty(obj): # recursive so works with objects that have sub-members
