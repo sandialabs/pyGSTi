@@ -97,12 +97,12 @@ class Basis(object):
             or dense numpy arrays (the default).
         '''
 
-        self.name = "*Empty*"
+        self.name = None
         self.dim    = Dim([])
         self.sparse = sparse
         self._blockMatrices = None  # means "needs to be computed"
         self._matrices = None       # means "needs to be computed"
-        self.longname = "Empty (0-element) basis"
+        self.longname = None
         self._labels = labels       # None means "needs to be computed"
         self.real = real
 
@@ -126,6 +126,8 @@ class Basis(object):
                     self._blockMatrices = [] # computed, but there aren't any!
                     self._matrices = []      # computed, but there aren't any!
                     self._labels = []         # computed, but there aren't any!
+                    self.name     = "*Empty*"
+                    self.longname = "Empty (0-element) basis"
                 else:
                     basis = _build_composite_basis(basis_list, sparse)
                     self.__dict__.update(basis.__dict__)
@@ -137,6 +139,8 @@ class Basis(object):
                 self._blockMatrices = [] # computed, but there aren't any!
                 self._matrices = []      # computed, but there aren't any!
                 self._labels = []         # computed, but there aren't any!
+                self.name     = "*Empty*"
+                self.longname = "Empty (0-element) basis"
                 
         else: #explicit 'matrices' given, so populate using these
             #Assume name is just a string (not lists or Basis objs, etc?)
@@ -204,8 +208,7 @@ class Basis(object):
         if self.real is None:
             self.real = get_info('real', default=True)
         if self.longname is None:
-            self.longname = get_info('longname', default=self.name)
-            
+            self.longname = get_info('longname', default=self.name)            
 
     def _lazy_build_matrices_and_labels(self):
         #LAZY building of matrices (in case we never need them)
