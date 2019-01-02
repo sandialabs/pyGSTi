@@ -86,6 +86,29 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	//0) init all plotdiv sizes (this also sets plotContainingTD class)
         wstable.find(".pygsti-plotgroup-master").trigger("init");
 
+	//0.5) set the widths of non-plot-containing TDs whose contents are short/simple 
+	//     (no children) - this keeps "Gx" columns, e.g. from being too large since
+	//     setting the other column widths can for some reason make their widths larger too(!)
+	var fnForSingleTableDivs = function(k,div) {
+            var was_visible = $(div).css('display') != 'none'; //is(":visible");
+            $(div).show();
+            $(div).find("td").not(".plotContainingTD").each(
+                function(i,el){
+		    if($(el).children().length == 1) {
+			$(el).css("width", $(el).width()); } });
+	    $(div).find("th").each(
+		function(i,el){
+		    if($(el).children().length == 1) {
+			$(el).css("height", $(el).height()); } });
+            if(!was_visible) { $(div).hide(); }
+        }
+	if(wstable.hasClass("single_switched_value")) {
+	    fnForSingleTableDivs( 0, wstable[0]);
+	} else {
+            wstable.children("div").each( fnForSingleTableDivs );
+	}
+
+
 	//1) set widths & heights of plot-containing TDs to the
 	//   "desired" or "native" values
 	TDtoCheck = null; // the TD element used to check for width settling
@@ -99,10 +122,14 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
             $(td).css("width", desiredW);
             $(td).css("height", desiredH);
 	    if(TDtoCheck === null) TDtoCheck = $(td); //just take the first one
+
 	    if(!initial_autosize) {
 		firstChild = $(td).children("div.pygsti-wsoutput-group").first()
-		firstChild.css("width", max_width(plots)+2*padding);
-		firstChild.css("height", max_height(plots)+2*padding);
+		firstChild.css("width", max_width(plots)+2*padding);  // these don't seem to do 
+		firstChild.css("height", max_height(plots)+2*padding);// anything... (?)
+		//console.log("DEBUG: SETTING width/height CSS of first child! ID=" + firstChild.attr("id"))
+		//console.log("Vals = ",max_width(plots)+2*padding, max_height(plots)+2*padding)
+		$(td).css("min-width", desiredW); //makes TD's width actually work
 	    }
 	});
 
@@ -114,15 +141,21 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	last_w = 0; cnt = 0; 
 	nSettle = 2; //number of times we need to get the same width to call it "settled"
         var intervalFn = setInterval( function() {
-	    w = TDtoCheck.width();
-	    if(last_w == parseFloat(w)) {
-		if(cnt < 2) cnt += 1;
-		else {
-		    clearInterval(intervalFn);
-		    wstable.trigger("after_widths_settle");
-		}
+	    if(TDtoCheck === null) {
+		clearInterval(intervalFn);
+		wstable.trigger("after_widths_settle");
 	    }
-	    else last_w = parseFloat(w);
+	    else {
+		w = TDtoCheck.width();
+		if(last_w == parseFloat(w)) {
+		    if(cnt < 2) cnt += 1;
+		    else {
+			clearInterval(intervalFn);
+			wstable.trigger("after_widths_settle");
+		    }
+		}
+		else last_w = parseFloat(w);
+	    }
 	}, 200);
     });
     
@@ -130,7 +163,7 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	var wstable = $("#"+id); //actually a div, a "workspace table"                            
 	console.log("Widths settled; Creating table " + id + " plots");
 
-        //2) lock down initial widths of non-plot cells to they don't change later
+        //2) lock down initial widths of non-plot cells so they don't change later
 	// (since we assume non-plot cells don't need to expand/contract).
 	// We go through individual tables one-by-one, making each visible if
 	// needed so that .width() and .height() will work correctly.  Also lock
