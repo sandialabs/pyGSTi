@@ -24,9 +24,16 @@ from ..baseobjs.basis import basis_matrices as _basis_matrices
     
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
-def _mut(i,j,N):
+def _flat_mut_blks(i,j,blockDims):
+    # like _mut(i,j,dim).flatten() but works with basis *blocks*
+    N = sum(blockDims)
     mx = _np.zeros( (N,N), 'd'); mx[i,j] = 1.0
-    return mx
+    ret = _np.zeros(sum([d**2 for d in blockDims]), 'd')
+    i = 0; off=0
+    for d in blockDims:
+        ret[i:i+d**2] = mx[off:off+d, off:off+d].flatten()
+        i += d**2; off += d
+    return ret
 
 def _hack_sqrtm(A):
     sqrt,_ = _spl.sqrtm(A, disp=False) #Travis found this scipy function
@@ -66,19 +73,19 @@ def fidelity(A, B):
         ivec = _np.argmax(evals)
         vec  = U[:,ivec:(ivec+1)]
         F = _np.dot( _np.conjugate(_np.transpose(vec)), _np.dot(B, vec) ).real # vec^T * B * vec
-        return F
+        return float(F)
 
     evals,U = _np.linalg.eig(B)
     if len([ev for ev in evals if abs(ev) > 1e-8]) == 1: #special case when B is rank 1 (recally fidelity is sym in args)
         ivec = _np.argmax(evals)
         vec  = U[:,ivec:(ivec+1)]
         F = _np.dot( _np.conjugate(_np.transpose(vec)), _np.dot(A, vec) ).real # vec^T * A * vec
-        return F
+        return float(F)
 
     sqrtA = _hack_sqrtm(A) #_spl.sqrtm(A)
     assert( _np.linalg.norm( _np.dot(sqrtA,sqrtA) - A ) < 1e-8 ) #test the scipy sqrtm function
     F = (_mt.trace( _hack_sqrtm( _np.dot( sqrtA, _np.dot(B, sqrtA) ) ) ).real)**2 # Tr( sqrt{ sqrt(A) * B * sqrt(A) } )^2
-    return F
+    return float(F)
 
 def frobeniusdist(A, B):
     """
@@ -253,13 +260,18 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
     #    return _np.transpose(vector_in.reshape( (d,d) ))
 
 
-    dim = A.shape[0]
-    smallDim = int(_np.sqrt(dim))
-    assert(dim == A.shape[1] == B.shape[0] == B.shape[1])
+    #Code below assumes *un-normalized* Jamiol-isomorphism, so multiply by
+    # density mx dimension (`smallDim`) below
+    JAstd = _jam.fast_jamiolkowski_iso_std(A, mxBasis)
+    JBstd = _jam.fast_jamiolkowski_iso_std(B, mxBasis)
 
-    #Code below assumes *un-normalized* Jamiol-isomorphism, so multiply by density mx dimension
-    JAstd = smallDim * _jam.fast_jamiolkowski_iso_std(A, mxBasis)
-    JBstd = smallDim * _jam.fast_jamiolkowski_iso_std(B, mxBasis)
+    #Do this *after* the fast_jamiolkowski_iso calls above because these will convert
+    # A & B to a "single-block" basis representation when mxBasis has multiple blocks.
+    dim = JAstd.shape[0]
+    smallDim = int(_np.sqrt(dim))
+    JAstd *= smallDim # see above comment
+    JBstd *= smallDim # see above comment
+    assert(dim == JAstd.shape[1] == JBstd.shape[0] == JBstd.shape[1])
 
     #CHECK: Kevin's jamiolowski, which implements the un-normalized isomorphism:
     #  smallDim * _jam.jamiolkowski_iso(M, "std", "std")
@@ -408,6 +420,7 @@ def entanglement_fidelity(A, B, mxBasis=None):
     
     if mxBasis is None:
         mxBasis = _Basis('gm', int(round(_np.sqrt(A.shape[0]))))
+        
     JA = _jam.jamiolkowski_iso(A, mxBasis)
     JB = _jam.jamiolkowski_iso(B, mxBasis)
     return fidelity(JA,JB)
@@ -632,19 +645,24 @@ def get_povm_map(model, povmlbl):
         The matrix of the "POVM map" in the `model.basis` basis.
     """
     povmVectors = [v.todense()[:,None] for v in model.povms[povmlbl].values()]
-    d = int(round(_np.sqrt(model.dim))) # density matrix is dxd
+    if model.basis is not None:
+        d = model.basis.dim.dmDim # density matrix is dxd
+        blkDims = model.basis.dim.blockDims
+    else: # old case when models didn't always have a basis (for backward compat)
+        d = int(round(_np.sqrt(model.dim))) # density matrix is dxd
+        blkDims = [d]
     nV = len(povmVectors)
-    assert(d**2 == model.dim), "Model dimension (%d) is not a perfect square!" % model.dim
+    #assert(d**2 == model.dim), "Model dimension (%d) is not a perfect square!" % model.dim
     #assert( nV**2 == d ), "Can only compute POVM metrics when num of effects == H space dimension"
     #   I don't think above assert is needed - should work in general (Robin?)
     povm_mx = _np.concatenate( povmVectors, axis=1 ).T # "povm map" ( B(H) -> S_k )
     
-    Sk_embedding_in_std = _np.zeros( (d**2, nV) )
+    Sk_embedding_in_std = _np.zeros( (model.dim, nV) )
     for i in range(nV):
-        Sk_embedding_in_std[:,i] = _mut(i,i,d).flatten()
+        Sk_embedding_in_std[:,i] = _flat_mut_blks(i,i,blkDims)
 
-    std_to_basis = _bt.transform_matrix("std", model.basis, d)
-    assert(std_to_basis.shape == (d**2,d**2))
+    std_to_basis = _bt.transform_matrix("std", model.basis, blkDims)
+    assert(std_to_basis.shape == (model.dim,model.dim))
 
     return _np.dot(std_to_basis, _np.dot(Sk_embedding_in_std, povm_mx))
 
@@ -1275,7 +1293,7 @@ def std_error_generators(dim, projection_type, projection_basis):
     #Get a list of the basis matrices
     mxs = _basis_matrices(projection_basis, d)
 
-    assert(len(mxs) == d2)
+    assert(len(mxs) <= d2) # OK if there are fewer basis matrices (e.g. for bases w/multiple blocks)
     assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
 
     lindbladMxs = _np.empty( (len(mxs),d2,d2), 'complex' )
@@ -1355,8 +1373,17 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
       scaling constant that *has already been applied* to `projections`.
     """
 
-    errgen_std = _bt.change_basis(errgen, mxBasis, "std")
-    d2 = errgen.shape[0]
+    if isinstance(mxBasis,_Basis):
+        dims = mxBasis.dim.blockDims if isinstance(mxBasis,_Basis) else None
+        errgen_std = _bt.change_basis(errgen, mxBasis, "std", dims)
+
+        #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
+        errgen_std = _bt.resize_std_mx(errgen_std, 'expand', mxBasis.std_equivalent(),
+                                       mxBasis.expanded_std_equivalent())
+    else:
+        errgen_std = _bt.change_basis(errgen, mxBasis, "std", dims)
+    
+    d2 = errgen_std.shape[0]
     d = int(_np.sqrt(d2))
     # nQubits = _np.log2(d)
 
@@ -1364,7 +1391,7 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
     #  Pauli-product matrices given by _basis.pp_matrices(d) ).
     lindbladMxs = std_error_generators(d2, projection_type, projection_basis) # in std basis
 
-    assert(len(lindbladMxs) == d2)
+    assert(len(lindbladMxs) <= d2) # can be fewer projection matrices (== lenght of projection_basis)
     assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
 
     projections = _np.empty( len(lindbladMxs), 'd' )

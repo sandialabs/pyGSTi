@@ -100,14 +100,17 @@ def jamiolkowski_iso(operationMx, opMxBasis='gm', choiMxBasis='gm'):
     # This is because even when the original operation matrix doesn't include a certain basis element (B0 say),
     # conjugating with this basis element and tracing, i.e. trace(B0^dag * Operation * B0), is not necessarily zero.
 
-    #get full list of basis matrices (in std basis) -- i.e. we use dmDim 
+    #get full list of basis matrices (in std basis) -- i.e. we use dmDim
     BVec = _basis_matrices(choiMxBasis, dmDim)
+    M = len(BVec) # can be < N if basis has multiple block dims
 
-    assert len(BVec) == N, 'Expected {}, got {}'.format(len(BVec), N)  #make sure the number of basis matrices matches the dim of the gate given
+    if M < N: # then try to make a complete basis based on the *name* of the desired basis
+        BVec = _basis_matrices(choiMxBasis.name, dmDim); M = N
+        assert len(BVec) == N, 'Expected {}, got {}'.format(len(BVec), N)  #make sure the number of basis matrices matches the dim of the gate given
 
     choiMx = _np.empty( (N,N), 'complex')
-    for i in range(N):
-        for j in range(N):
+    for i in range(M):
+        for j in range(M):
             BiBj = _np.kron( BVec[i], _np.conjugate(BVec[j]) )
             BiBj_dag = _np.transpose(_np.conjugate(BiBj))
             choiMx[i,j] = _mt.trace( _np.dot(opMxInStdBasis, BiBj_dag) ) \
@@ -199,6 +202,10 @@ def fast_jamiolkowski_iso_std(operationMx, opMxBasis):
     operationMx = _np.asarray(operationMx)
     opMxBasis = _bt.build_basis_for_matrix(operationMx, opMxBasis)
     opMxInStdBasis = _bt.change_basis(operationMx, opMxBasis, opMxBasis.std_equivalent())
+
+    #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
+    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', opMxBasis.std_equivalent(),
+                                       opMxBasis.expanded_std_equivalent())
 
     #Shuffle indices to go from process matrix to Jamiolkowski matrix (they vectorize differently)
     N2 = opMxInStdBasis.shape[0]; N = int(_np.sqrt(N2))

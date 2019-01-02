@@ -371,9 +371,10 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     numpy array
         The matrix, 2x2 or 4x4 depending on nqubits
     """
-    dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
-    basis = Basis(basis, dim)
-    ret = _np.zeros( (dim, dim), 'complex' )
+    if not isinstance(basis,Basis):
+        dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
+        basis = Basis(basis, dim)
+    ret = _np.zeros( (basis.dim.dmDim, basis.dim.dmDim), 'complex' )
     for i, mx in enumerate(basis.matrices):
         if keep_complex:
             ret += v[i]*mx
