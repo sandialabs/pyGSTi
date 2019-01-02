@@ -628,10 +628,11 @@ def eigenvalue_unitarity(A,B):
     Lambda = _np.dot(A, _np.linalg.inv(B))
     d2 = Lambda.shape[0]
     lmb = _np.linalg.eigvals(Lambda)
-    return (_np.real(_np.vdot(lmb,lmb)) - 1.0) / (d2 - 1.0)
+    return float(_np.real(_np.vdot(lmb,lmb)) - 1.0) / (d2 - 1.0)
     
 def nonunitary_entanglement_infidelity(A, B, mxBasis):
     """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the unitarity of A*B^{-1} """
+    if isinstance(mxBasis,_Basis) and len(mxBasis.dim.blockDims) > 1: return -1 # deal w/block-dims later
     d2 = A.shape[0]; U = std_unitarity(A,B,mxBasis)
     return (d2-1.0)/d2 * (1.0 - _np.sqrt(U))
 Nonunitary_entanglement_infidelity = _modf.opsfn_factory(nonunitary_entanglement_infidelity)
@@ -640,6 +641,7 @@ Nonunitary_entanglement_infidelity = _modf.opsfn_factory(nonunitary_entanglement
 
 def nonunitary_avg_gate_infidelity(A, B, mxBasis):
     """ Returns (d - 1)/d * (1 - sqrt(U)), where U is the unitarity of A*B^{-1} """
+    if isinstance(mxBasis,_Basis) and len(mxBasis.dim.blockDims) > 1: return -1 # deal w/block-dims later
     d2 = A.shape[0]; d = int(round(_np.sqrt(d2)))
     U = std_unitarity(A,B,mxBasis)
     return (d-1.0)/d * (1.0 - _np.sqrt(U))

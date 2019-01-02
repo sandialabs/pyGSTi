@@ -2229,7 +2229,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
         if M is None: M =  absMax
     
         d2 = len(projections) # number of projections == dim of gate
-        d = int(_np.sqrt(d2)) # dim of density matrix
+        d = _np.sqrt(d2) # dim of density matrix
         nQubits = _np.log2(d)
     
         if not _np.isclose(round(nQubits),nQubits):
