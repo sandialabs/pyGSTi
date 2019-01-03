@@ -212,8 +212,9 @@ class Basis(object):
 
     def _lazy_build_matrices_and_labels(self):
         #LAZY building of matrices (in case we never need them)
-        self._blockMatrices = _build_default_block_matrices(self.name, self.dim, self.sparse) 
-        self._matrices = _build_composite_matrices(self._blockMatrices, sparse=self.sparse)
+        if self._blockMatrices is None or self._matrices is None:
+            self._blockMatrices = _build_default_block_matrices(self.name, self.dim, self.sparse) 
+            self._matrices = _build_composite_matrices(self._blockMatrices, sparse=self.sparse)
         try:
             self._labels = basis_element_labels(self.name, self.dim.blockDims)
         except NotImplementedError:

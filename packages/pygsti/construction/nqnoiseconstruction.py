@@ -19,6 +19,7 @@ from ..tools import matrixtools as _mt
 from ..tools import optools as _gt
 from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
+from ..tools import internalgates as _itgs
 from ..objects import model as _mdl
 from ..objects import operation as _op
 from ..objects.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
@@ -1487,6 +1488,31 @@ def create_XYCNOT_cloudnoise_sequences(nQubits, maxLengths, geometry, cnot_edges
         singleQfiducials = [(), ('Gx',), ('Gy',)]
     else:
         singleQfiducials = [(), ('Gx',), ('Gy',), ('Gx','Gx')]
+
+    return create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducials,
+                                       maxLengths, geometry, maxIdleWeight, maxhops,
+                                       extraWeight1Hops, extraGateWeight, paramroot,
+                                       sparse, verbosity, cache, idleOnly, 
+                                       idtPauliDicts, algorithm)
+
+
+def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
+                                         gate_names, nonstd_gate_unitaries=None,
+                                         availability=None, geometry="line",
+                                         maxIdleWeight=1, maxhops=0, extraWeight1Hops=0, extraGateWeight=0,
+                                         paramroot="H+S", sparse=False, verbosity=0, cache=None, idleOnly=False, 
+                                         idtPauliDicts=None, algorithm="greedy"):
+    """ TODO: docstring """
+
+    if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
+    std_unitaries = _itgs.get_standard_gatename_unitaries()
+
+    gatedict = _collections.OrderedDict()
+    for name in gate_names:
+        U = nonstd_gate_unitaries.get(name, std_unitaries.get(name,None))
+        if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
+        gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+          # assume evotype is a densitymx or term type
 
     return create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducials,
                                        maxLengths, geometry, maxIdleWeight, maxhops,
