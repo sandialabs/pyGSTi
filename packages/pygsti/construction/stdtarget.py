@@ -219,12 +219,17 @@ def _write_calccache(calc_cache, key_fn, val_fn, json_too=False, comm=None):
             ctape.append(ct)    
         vtape = _np.concatenate(vtape)
         ctape = _np.concatenate(ctape)
-        comm.allgather(vtape.dtype)
-        comm.allgather(ctape.dtype)
+        if comm is not None:
+            comm.allgather(vtape.dtype)
+            comm.allgather(ctape.dtype)
     else:
         #Need to create vtape and ctape of length 0 and *correct type*
-        vtape_types = comm.allgather(None)
-        ctape_types = comm.allgather(None)
+        if comm is not None:
+            vtape_types = comm.allgather(None)
+            ctape_types = comm.allgather(None)
+        else:
+            vtape_types = ctape_types = [] # will cause us to use default type below
+
         for typ in vtape_types: 
             if typ is not None:
                 vtape = _np.zeros(0, typ); break
