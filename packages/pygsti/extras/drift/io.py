@@ -21,9 +21,9 @@ def load_bitstring_probabilities(filename, sequences_to_indices=None):
                 row = line.split()
                 # Skips rows containing nothing
                 if len(row) != 0:
-                    gstr = row[0]
+                    opstr = row[0]
                     data = row[1].split(',')
-                    pdict[_objs.GateString(None,gstr)] = _np.array([float(p) for p in data])
+                    pdict[_objs.Circuit(None,stringrep=opstr)] = _np.array([float(p) for p in data])
                     
     if sequences_to_indices is None:
         return pdict
@@ -49,9 +49,9 @@ def load_bitstring_data(filename, sequences_to_indices=None):
                 row = line.split()
                 # Skips rows containing nothing
                 if len(row) != 0:
-                    gstr = row[0]
+                    opstr = row[0]
                     data = row[1]
-                    datadict[_objs.GateString(None,gstr)] = _np.array([float(p) for p in data])
+                    datadict[_objs.Circuit(None,stringrep=opstr)] = _np.array([float(p) for p in data])
     
     sequences = list(datadict.keys())            
     sequences_to_indices = {}

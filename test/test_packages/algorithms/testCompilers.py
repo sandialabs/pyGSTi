@@ -1,7 +1,6 @@
 import unittest
 import pygsti
 from pygsti.objects import Circuit
-from pygsti.objects import GateString
 from pygsti.baseobjs import Label
 from pygsti.objects import ProcessorSpec
 from pygsti.tools import symplectic
@@ -29,7 +28,7 @@ class TestCompilers(AlgorithmsBase):
         n = 5
         qubit_labels = ['Q'+str(i) for i in range(n)]
         availability = {'Gcnot':[('Q'+str(i),'Q'+str(i+1)) for i in range(0,n-1)]}
-        gate_names = ['Gi','Gh','Gp','Gxpi','Gpdag','Gcnot']
+        gate_names = ['Gh','Gp','Gxpi','Gpdag','Gcnot'] # 'Gi',
         pspec = ProcessorSpec(n,gate_names=gate_names,availability=availability,qubit_labels=qubit_labels)
         s, p = symplectic.random_clifford(n)
         # Test accessing all the allowed algorithms, with a pspec but no subsetQs
@@ -83,24 +82,24 @@ class TestCompilers(AlgorithmsBase):
         n = 8
         qubit_labels = ['Q'+str(i) for i in range(n)] 
         availability = {'Gcnot':[('Q'+str(i),'Q'+str(i+1)) for i in range(0,n-1)]+[('Q0','Q2'),]}
-        gate_names = ['Gi','Gh','Gp','Gxpi','Gpdag','Gcnot']
+        gate_names = ['Gh','Gp','Gxpi','Gpdag','Gcnot'] # 'Gi',
         pspec8 = ProcessorSpec(n,gate_names=gate_names,availability=availability,qubit_labels=qubit_labels)
         n = 6
         qubit_labels = ['Q'+str(i) for i in range(n)] 
         availability = {'Gcphase':[('Q'+str(i),'Q'+str(i+1)) for i in range(0,n-1)]+[('Q'+str(n-1),'Q'+str(0))]}
-        gate_names = ['Gi','Gh','Gxpi2','Gp','Gcphase']
+        gate_names = ['Gh','Gxpi2','Gp','Gcphase'] # 'Gi',
         pspec6 = ProcessorSpec(n,gate_names=gate_names,availability=availability,qubit_labels=qubit_labels)
     
         nsubset = 6
-        gatestring = []
+        circuit = []
         for i in range(100):
             a = np.random.randint(nsubset)
             b = np.random.randint(nsubset)
             if a != b:
-                gatestring.append(Label('CNOT',('Q'+str(a),'Q'+str(b))))
+                circuit.append(Label('CNOT',('Q'+str(a),'Q'+str(b))))
     
                 subsetQs = ['Q'+str(i) for i in range(nsubset)] 
-        circuit = Circuit(gatestring=gatestring, line_labels = subsetQs)
+        circuit = Circuit(layer_labels=circuit, line_labels = subsetQs)
         s, p  = pygsti.tools.symplectic.symplectic_rep_of_clifford_circuit(circuit)
     
         aargs= {}
@@ -118,7 +117,7 @@ class TestCompilers(AlgorithmsBase):
         
         # Tests the stabilizer compilers for n = 1
         n = 1
-        pspec1 = ProcessorSpec(nQubits=n,gate_names=['Gi','Gcnot','Gh','Gp','Gxpi','Gypi','Gzpi'])
+        pspec1 = ProcessorSpec(nQubits=n,gate_names=['Gcnot','Gh','Gp','Gxpi','Gypi','Gzpi']) # 'Gi',
         s, p  = symplectic.random_clifford(n)
         c = compilers.compile_stabilizer_state(s,p,pspec1,algorithm='COCAGE',paulirandomize=False)
         c = compilers.compile_stabilizer_measurement(s,p,pspec1,algorithm='ROCAGE',paulirandomize=True)
@@ -158,6 +157,7 @@ class TestCompilers(AlgorithmsBase):
         s, p  = symplectic.random_clifford(n)
         c1 = compilers.compile_stabilizer_state(s,p,pspec6,algorithm='COiCAGE',paulirandomize=False)
         c2 = compilers.compile_stabilizer_measurement(s,p,pspec6,algorithm='COiCAGE',paulirandomize=True)
+        c2 = c2.copy(editable=True)
         c2.prefix_circuit(c1)
         zerosstate_s, zerosstate_p = symplectic.prep_stabilizer_state(n)
         sc, pc = symplectic.symplectic_rep_of_clifford_circuit(c2,pspec=pspec6)

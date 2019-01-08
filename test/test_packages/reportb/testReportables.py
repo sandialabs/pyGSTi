@@ -27,19 +27,19 @@ class TestReportables(BaseTestCase):
         self.assertTrue( np.isnan(nan_qty.value) )
 
         #deprecated:
-        rptbl.decomposition( std.gs_target.gates['Gx'] )
+        rptbl.decomposition( std.target_model().operations['Gx'] )
         rptbl.decomposition( np.zeros( (4,4), 'd') )        
 
     def test_functions(self):
         
-        gs1 = std.gs_target.depolarize(gate_noise=0.1, spam_noise=0.05)
-        gs2 = std.gs_target.copy()
-        gl = "Gx" # gate label
-        gstr = pygsti.obj.GateString( ('Gx','Gx') )
-        syntheticIdles = pygsti.construction.gatestring_list( [
+        gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)
+        gs2 = std.target_model()
+        gl = "Gx" # operation label
+        opstr = pygsti.obj.Circuit( ('Gx','Gx') )
+        syntheticIdles = pygsti.construction.circuit_list( [
              ('Gx',)*4, ('Gy',)*4 ] )
 
-        gatesetfn_factories = (  # gateset, gatelabel
+        gatesetfn_factories = (  # model, oplabel
             rptbl.Choi_matrix,
             rptbl.Choi_evals,
             rptbl.Choi_trace,
@@ -55,36 +55,36 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = ( # gateset, gatestring
-            rptbl.Gatestring_eigenvalues,
+        gatesetfn_factories = ( # model, circuit
+            rptbl.Circuit_eigenvalues,
         )
         for gsf_factory in gatesetfn_factories:
-            gsf = gsf_factory(gs1,gstr)
+            gsf = gsf_factory(gs1,opstr)
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = ( # gatesetA, gatesetB, gatestring
-            rptbl.Rel_gatestring_eigenvalues,
-            rptbl.Gatestring_fro_diff ,
-            rptbl.Gatestring_entanglement_infidelity,
-            rptbl.Gatestring_avg_gate_infidelity,
-            rptbl.Gatestring_jt_diff,
-            rptbl.Gatestring_half_diamond_norm,
-            rptbl.Gatestring_nonunitary_entanglement_infidelity,
-            rptbl.Gatestring_nonunitary_avg_gate_infidelity,
-            rptbl.Gatestring_eigenvalue_entanglement_infidelity,
-            rptbl.Gatestring_eigenvalue_avg_gate_infidelity,
-            rptbl.Gatestring_eigenvalue_nonunitary_entanglement_infidelity,
-            rptbl.Gatestring_eigenvalue_nonunitary_avg_gate_infidelity,
-            rptbl.Gatestring_eigenvalue_diamondnorm,
-            rptbl.Gatestring_eigenvalue_nonunitary_diamondnorm,
+        gatesetfn_factories = ( # modelA, modelB, circuit
+            rptbl.Rel_circuit_eigenvalues,
+            rptbl.Circuit_fro_diff ,
+            rptbl.Circuit_entanglement_infidelity,
+            rptbl.Circuit_avg_gate_infidelity,
+            rptbl.Circuit_jt_diff,
+            rptbl.Circuit_half_diamond_norm,
+            rptbl.Circuit_nonunitary_entanglement_infidelity,
+            rptbl.Circuit_nonunitary_avg_gate_infidelity,
+            rptbl.Circuit_eigenvalue_entanglement_infidelity,
+            rptbl.Circuit_eigenvalue_avg_gate_infidelity,
+            rptbl.Circuit_eigenvalue_nonunitary_entanglement_infidelity,
+            rptbl.Circuit_eigenvalue_nonunitary_avg_gate_infidelity,
+            rptbl.Circuit_eigenvalue_diamondnorm,
+            rptbl.Circuit_eigenvalue_nonunitary_diamondnorm,
         )
         for gsf_factory in gatesetfn_factories:
-            gsf = gsf_factory(gs1,gs2,gstr)
+            gsf = gsf_factory(gs1,gs2,opstr)
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = ( # gatesetA, gatesetB, povmlbl
+        gatesetfn_factories = ( # modelA, modelB, povmlbl
             rptbl.POVM_entanglement_infidelity,
             rptbl.POVM_jt_diff,
             rptbl.POVM_half_diamond_norm,
@@ -94,7 +94,7 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = (  # gateset
+        gatesetfn_factories = (  # model
             rptbl.Spam_dotprods,
             rptbl.Angles_btwn_rotn_axes,
         )
@@ -103,7 +103,7 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = ( # gatesetA, gatesetB, gatelbl
+        gatesetfn_factories = ( # modelA, modelB, gatelbl
             rptbl.Entanglement_fidelity,
             rptbl.Entanglement_infidelity,
             rptbl.Closest_unitary_fidelity,
@@ -119,7 +119,7 @@ class TestReportables(BaseTestCase):
             rptbl.Eigenvalue_diamondnorm, 
             rptbl.Eigenvalue_nonunitary_diamondnorm, 
             rptbl.Avg_gate_infidelity, 
-            rptbl.Gateset_gateset_angles_btwn_axes, 
+            rptbl.Model_model_angles_btwn_axes, 
             rptbl.Rel_eigvals, 
             rptbl.Rel_logTiG_eigvals, 
             rptbl.Rel_logGTi_eigvals, 
@@ -134,7 +134,7 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = ( # gatesetA, gatesetB, syntheticIdleStrs
+        gatesetfn_factories = ( # modelA, modelB, syntheticIdleStrs
             rptbl.Robust_LogGTi_and_projections,
         )
         for gsf_factory in gatesetfn_factories:
@@ -142,7 +142,7 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
             
 
-        gatesetfn_factories = ( # gatesetA, gatesetB
+        gatesetfn_factories = ( # modelA, modelB
             rptbl.General_decomposition,
             rptbl.Average_gateset_infidelity,
             rptbl.Predicted_rb_number,
@@ -152,7 +152,7 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = ( # gateset1, gateset2, label, typ
+        gatesetfn_factories = ( # model1, model2, label, typ
             rptbl.Vec_fidelity,
             rptbl.Vec_infidelity,
             rptbl.Vec_tr_diff,
@@ -164,7 +164,7 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = ( # gateset, label, typ
+        gatesetfn_factories = ( # model, label, typ
             rptbl.Vec_as_stdmx,
             rptbl.Vec_as_stdmx_eigenvalues,
         )
@@ -175,28 +175,28 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
 
     def test_nearby_gatesetfns(self):
-        gs1 = std.gs_target.depolarize(gate_noise=0.1, spam_noise=0.05)
-        gs2 = std.gs_target.copy()
-        gstr = pygsti.obj.GateString( ('Gx','Gx') )
+        gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)
+        gs2 = std.target_model()
+        opstr = pygsti.obj.Circuit( ('Gx','Gx') )
         
         fn = rptbl.Half_diamond_norm(gs1,gs2,'Gx')
         fn.evaluate(gs1)
         fn.evaluate_nearby(gs1)        
         
-        fn = rptbl.Gatestring_half_diamond_norm(gs1,gs2,gstr)
+        fn = rptbl.Circuit_half_diamond_norm(gs1,gs2,opstr)
         fn.evaluate(gs1)
         fn.evaluate_nearby(gs1)
 
     def test_closest_unitary(self):
-        gs1 = std.gs_target.depolarize(gate_noise=0.1, spam_noise=0.05)
-        gs2 = std.gs_target.copy()
-        rptbl.closest_unitary_fidelity(gs1.gates['Gx'], gs2.gates['Gx'], "pp") # gate2 is unitary
-        rptbl.closest_unitary_fidelity(gs2.gates['Gx'], gs1.gates['Gx'], "pp") # gate1 is unitary
+        gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)
+        gs2 = std.target_model()
+        rptbl.closest_unitary_fidelity(gs1.operations['Gx'], gs2.operations['Gx'], "pp") # op2 is unitary
+        rptbl.closest_unitary_fidelity(gs2.operations['Gx'], gs1.operations['Gx'], "pp") # op1 is unitary
 
     def test_general_decomp(self):
-        gs1 = std.gs_target.depolarize(gate_noise=0.1, spam_noise=0.05)
-        gs2 = std.gs_target.copy()
-        gs1.gates['Gx'] = np.array( [[-1, 0, 0, 0],
+        gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)
+        gs2 = std.target_model()
+        gs1.operations['Gx'] = np.array( [[-1, 0, 0, 0],
                                      [ 0,-1, 0, 0],
                                      [ 0, 0, 1, 0],
                                      [ 0, 0, 0, 1]], 'd') # -1 eigenvalues => use approx log.
@@ -210,35 +210,35 @@ class TestReportables(BaseTestCase):
 #        #Test that None is returned when qty cannot be computed
 #        qty = pygsti.report.reportables.compute_dataset_qty("FooBar",self.ds)
 #        self.assertIsNone(qty)
-#        qty = pygsti.report.reportables.compute_gateset_qty("FooBar",self.gs_clgst)
+#        qty = pygsti.report.reportables.compute_gateset_qty("FooBar",self.mdl_clgst)
 #        self.assertIsNone(qty)
-#        qty = pygsti.report.reportables.compute_gateset_dataset_qty("FooBar",self.gs_clgst, self.ds)
+#        qty = pygsti.report.reportables.compute_gateset_dataset_qty("FooBar",self.mdl_clgst, self.ds)
 #        self.assertIsNone(qty)
-#        qty = pygsti.report.reportables.compute_gateset_gateset_qty("FooBar",self.gs_clgst, self.gs_clgst)
+#        qty = pygsti.report.reportables.compute_gateset_gateset_qty("FooBar",self.mdl_clgst, self.mdl_clgst)
 #        self.assertIsNone(qty)
 #
-#        #test ignoring gate strings not in dataset
-#        qty = pygsti.report.reportables.compute_dataset_qty("gate string length", self.ds,
-#                                                            pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
-#        qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(0) diff", self.gs_clgst, self.ds,
-#                                                            pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
+#        #test ignoring operation sequences not in dataset
+#        qty = pygsti.report.reportables.compute_dataset_qty("operation sequence length", self.ds,
+#                                                            pygsti.construction.circuit_list([('Gx','Gx'),('Gfoobar',)]) )
+#        qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(0) diff", self.mdl_clgst, self.ds,
+#                                                            pygsti.construction.circuit_list([('Gx','Gx'),('Gfoobar',)]) )
 #        qty_str = str(qty) #test __str__
 #
-#        #Test gateset gates mismatch
+#        #Test model gates mismatch
 #        from pygsti.construction import std1Q_XY as stdXY
 #        with self.assertRaises(ValueError):
 #            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
-#                "Gx fidelity",std.gs_target, stdXY.gs_target) #Gi missing from 2nd gateset
+#                "Gx fidelity",std.target_model(), stdXY.target_model()) #Gi missing from 2nd model
 #        with self.assertRaises(ValueError):
 #            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
-#                "Gx fidelity",stdXY.gs_target, std.gs_target) #Gi missing from 1st gateset
+#                "Gx fidelity",stdXY.target_model(), std.target_model()) #Gi missing from 1st model
 
 
 
 #def test_results_object(self):
 #    results = pygsti.report.Results()
-#    results.init_single("logl", self.targetGateset, self.ds, self.gs_clgst,
-#                        self.lgstStrings, self.targetGateset)
+#    results.init_single("logl", self.targetModel, self.ds, self.mdl_clgst,
+#                        self.lgstStrings, self.targetModel)
 #
 #    results.parameters.update(
 #        {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
@@ -269,8 +269,8 @@ class TestReportables(BaseTestCase):
 #
 #    #similar test for chi2 hessian
 #    results2 = pygsti.report.Results()
-#    results2.init_single("chi2", self.targetGateset, self.ds, self.gs_clgst,
-#                        self.lgstStrings, self.targetGateset)
+#    results2.init_single("chi2", self.targetModel, self.ds, self.mdl_clgst,
+#                        self.lgstStrings, self.targetModel)
 #    results2.parameters.update(
 #        {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
 #         'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
@@ -291,9 +291,9 @@ class TestReportables(BaseTestCase):
 #    results_str = str(results)
 #    tableNames = list(results.tables.keys())
 #    figNames = list(results.figures.keys())
-#    for g in results.gatesets:
+#    for g in results.models:
 #        s = str(g)
-#    for g in results.gatestring_lists:
+#    for g in results.circuit_lists:
 #        s = str(g)
 #    s = str(results.dataset)
 #    s = str(results.options)
@@ -327,10 +327,10 @@ class TestReportables(BaseTestCase):
 #
 #    #bad objective function name
 #    results_badObjective = pygsti.report.Results()
-#    #results_badObjective.init_single("foobar", self.targetGateset, self.ds, self.gs_clgst,
+#    #results_badObjective.init_single("foobar", self.targetModel, self.ds, self.mdl_clgst,
 #    #                                 self.lgstStrings)
-#    results_badObjective.init_Ls_and_germs("foobar", self.targetGateset, self.ds, self.gs_clgst, [0], self.germs,
-#                                           [self.gs_clgst], [self.lgstStrings], self.fiducials, self.fiducials,
+#    results_badObjective.init_Ls_and_germs("foobar", self.targetModel, self.ds, self.mdl_clgst, [0], self.germs,
+#                                           [self.mdl_clgst], [self.lgstStrings], self.fiducials, self.fiducials,
 #                                           pygsti.construction.repeat_with_max_length, True)
 #
 #    with self.assertRaises(ValueError):

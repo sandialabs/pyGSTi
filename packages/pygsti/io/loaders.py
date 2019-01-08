@@ -30,9 +30,9 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
         written after loading from filename.
 
     collisionAction : {"aggregate", "keepseparate"}
-        Specifies how duplicate gate sequences should be handled.  "aggregate"
+        Specifies how duplicate operation sequences should be handled.  "aggregate"
         adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
-        sequence data with by appending a final "#<number>" gate label to the
+        sequence data with by appending a final "#<number>" operation label to the
         duplicated gate sequence.
 
     verbosity : int, optional
@@ -103,9 +103,9 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
         written after loading from filename.
 
     collisionAction : {"aggregate", "keepseparate"}
-        Specifies how duplicate gate sequences should be handled.  "aggregate"
+        Specifies how duplicate operation sequences should be handled.  "aggregate"
         adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
-        sequence data with by appending a final "#<number>" gate label to the
+        sequence data with by appending a final "#<number>" operation label to the
         duplicated gate sequence.
 
     verbosity : int, optional
@@ -168,10 +168,10 @@ def load_tddataset(filename, cache=False):
     return tdds
 
 
-def load_gateset(filename):
+def load_model(filename):
     """
-    Load a GateSet from a file, formatted using the
-    standard text-format for gate sets.
+    Load a Model from a file, formatted using the
+    standard text-format for models.
 
     Parameters
     ----------
@@ -180,13 +180,13 @@ def load_gateset(filename):
 
     Returns
     -------
-    GateSet
+    Model
     """
-    return _stdinput.read_gateset(filename)
+    return _stdinput.read_model(filename)
 
-def load_gatestring_dict(filename):
+def load_circuit_dict(filename):
     """
-    Load a gate string dictionary from a file, formatted
+    Load a operation sequence dictionary from a file, formatted
     using the standard text-format.
 
     Parameters
@@ -196,15 +196,15 @@ def load_gatestring_dict(filename):
 
     Returns
     -------
-    Dictionary with keys = gate string labels and
-      values = GateString objects.
+    Dictionary with keys = operation sequence labels and
+      values = Circuit objects.
     """
     std = _stdinput.StdInputParser()
     return std.parse_dictfile(filename)
 
-def load_gatestring_list(filename, readRawStrings=False):
+def load_circuit_list(filename, readRawStrings=False, line_labels='auto', num_lines=None):
     """
-    Load a gate string list from a file, formatted
+    Load a operation sequence list from a file, formatted
     using the standard text-format.
 
     Parameters
@@ -213,21 +213,23 @@ def load_gatestring_list(filename, readRawStrings=False):
         The name of the file
 
     readRawStrings : boolean
-        If True, gate strings are not converted
-        to tuples of gate labels.
+        If True, operation sequences are not converted
+        to tuples of operation labels.
+
+    TODO: docstring line_labels, num_lines - see Circuit constructor
 
     Returns
     -------
-    list of GateString objects
+    list of Circuit objects
     """
     if readRawStrings:
         rawList = []
-        with open(filename, 'r') as gatestringlist:
-            for line in gatestringlist:
+        with open(filename, 'r') as circuitlist:
+            for line in circuitlist:
                 if len(line.strip()) == 0: continue
                 if len(line) == 0 or line[0] == '#': continue
                 rawList.append( line.strip() )
         return rawList
     else:
         std = _stdinput.StdInputParser()
-        return std.parse_stringfile(filename)
+        return std.parse_stringfile(filename, line_labels, num_lines)

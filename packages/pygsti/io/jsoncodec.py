@@ -174,9 +174,10 @@ def encode_std_obj(py_obj, binary):
         return  {'__complex__': data}
     elif not binary and isinstance(py_obj, bytes):
         return {'__bytes__': tostr(_base64.b64encode(py_obj)) }
-    elif binary and isinstance(py_obj, str):
+    elif binary and (isinstance(py_obj, str) or
+                     (_sys.version_info < (3, 0) and isinstance(py_obj, unicode))):
+        #Python2 "strings" can also be unicode (but 'unicode' isn't defined in python3!)
         return {'__string__': tobin(py_obj) }
-
         
     #Numpy encoding
     elif isinstance(py_obj, _np.ndarray):

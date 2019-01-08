@@ -21,7 +21,7 @@ class QubitGraph(object):
     """
 
     @classmethod
-    def common_graph(cls, nQubits=0, geometry="line", directed=True):
+    def common_graph(cls, nQubits=0, geometry="line", directed=True, qubit_labels=None):
         """
         Create a QubitGraph that is one of several standard types of graphs.
 
@@ -37,17 +37,24 @@ class QubitGraph(object):
         directed : bool, optional
             Whether the graph is directed or undirected.
 
+        qubit_labels : iterable, optional
+            The labels for the qubits.  Must be of length `nQubits`.
+            If None, then the integers from 0 to `nQubits-1` are used.
+
+
         Returns
         -------
         QubitGraph
         """
+        qls = tuple(range(nQubits)) if (qubit_labels is None) else qubit_labels
+        assert(len(qls) == nQubits), "Invalid `qubit_labels` arg - length %d! (expected %d)" % (len(qls),nQubits)
         edges = []
         if nQubits >= 2: 
             if geometry in ("line","ring"):
                 for i in range(nQubits-1):
-                    edges.append((i,i+1))
+                    edges.append((qls[i],qls[i+1]))
                 if nQubits > 2 and geometry == "ring":
-                    edges.append((nQubits-1,0))
+                    edges.append((qls[nQubits-1],qls[0]))
             elif geometry in ("grid","torus"):
                 s = int(round(_np.sqrt(nQubits)))
                 assert(nQubits >= 4 and s*s == nQubits), \
@@ -56,17 +63,17 @@ class QubitGraph(object):
                 for irow in range(s):
                     for icol in range(s):
                         if icol+1 < s:
-                            edges.append((irow*s+icol, irow*s+icol+1)) #link right
+                            edges.append((qls[irow*s+icol], qls[irow*s+icol+1])) #link right
                         elif geometry == "torus" and s > 2:
-                            edges.append((irow*s+icol, irow*s+0))
+                            edges.append((qls[irow*s+icol], qls[irow*s+0]))
                             
                         if irow+1 < s:
-                            edges.append((irow*s+icol, (irow+1)*s+icol)) #link down
+                            edges.append((qls[irow*s+icol], qls[(irow+1)*s+icol])) #link down
                         elif geometry == "torus" and s > 2:
-                            edges.append((irow*s+icol, 0+icol))
+                            edges.append((qls[irow*s+icol], qls[0+icol]))
             else:
                 raise ValueError("Invalid `geometry`: %s" % geometry)
-        return cls(list(range(nQubits)), initial_edges=edges, directed=directed)
+        return cls(qls, initial_edges=edges, directed=directed)
         
     
     def __init__(self, qubit_labels, initial_connectivity=None, initial_edges=None, directed=True):
@@ -148,7 +155,7 @@ class QubitGraph(object):
             self._connectivity[j,i] = bool(val)
         else:
             self._connectivity[i,j] = bool(val)
-        self.dirty = True
+        self._dirty = True
 
     def get_node_names(self):
         """ 

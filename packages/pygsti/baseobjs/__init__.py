@@ -1,4 +1,4 @@
-""" Gate Set Tomography Base-Objects Python Package """
+""" pyGSTi Base-Objects Python Package """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -13,7 +13,7 @@ from .exceptions import *
 from .profiler import Profiler
 from .profiler import DummyProfiler
 from .protectedarray import ProtectedArray
-from .gatestringparser import GateStringParser
+from .circuitparser import CircuitParser
 from .verbosityprinter import VerbosityPrinter
 from .label import Label
 

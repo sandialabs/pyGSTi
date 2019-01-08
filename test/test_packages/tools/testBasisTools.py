@@ -53,7 +53,7 @@ class BasisBaseTestCase(BaseTestCase):
         self.assertArraysAlmostEqual( GM2_mxs[1], sigmax )
         self.assertArraysAlmostEqual( GM2_mxs[2], sigmay )
         self.assertArraysAlmostEqual( GM2_mxs[3], sigmaz )
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             pygsti.gm_matrices_unnormalized("FooBar") #arg must be tuple,list,or int
 
         '''
@@ -104,7 +104,7 @@ class BasisBaseTestCase(BaseTestCase):
         mxs = pygsti.pp_matrices(dim)
         N = len(mxs); self.assertTrue(N == dim**2)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             pygsti.pp_matrices("Foobar") #dim must be an int
         with self.assertRaises(ValueError):
             pygsti.pp_matrices(3) #dim must be a power of 2
@@ -295,7 +295,7 @@ class BasisBaseTestCase(BaseTestCase):
         a = Basis([('std', 2), ('std', 2)])
         b = Basis('std', [2,2])
         self.assertEqual(len(a), len(b))
-        self.assertArraysAlmostEqual(np.array(a._matrices), np.array(b._matrices))
+        self.assertArraysAlmostEqual(np.array(a.matrices), np.array(b.matrices))
 
     def test_auto_expand(self):
         comp = Basis(matrices=[('std', 2,), ('std', 1)])
@@ -361,7 +361,7 @@ class BasisBaseTestCase(BaseTestCase):
 
         comp = Basis(matrices=[std, gm], name='comp', longname='CustomComposite')
 
-        comp.labels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+        #comp.labels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] #read-only
         comp = Basis(matrices=[std, gm], name='comp', longname='CustomComposite', labels=[
                 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'
             ])

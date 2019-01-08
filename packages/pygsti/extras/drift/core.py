@@ -6,12 +6,14 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from . import signal as _sig
 from . import results as _dresults
+from . import signal as _sig
+from . import estimate as _est
 from . import model as _mdl
-from ...tools import hypothesis as _hyp
 from . import statistics as _stats
+
 from ... import objects as _obj
+from ...tools import hypothesis as _hyp
 
 import numpy as _np
 import warnings as _warnings
@@ -45,22 +47,132 @@ import copy as _copy
 #                                   maxLengthList=None, transform='DCT', control='FDR'):
 
 #     """
-#     prepStrs : list of GateStrings
-#         List of the preparation fiducial gate strings, which follow state
+#     prepStrs : list of Circuits
+#         List of the preparation fiducial operation sequences, which follow state
 #         preparation.
 
-#     effectStrs : list of GateStrings
-#         List of the measurement fiducial gate strings, which precede
+#     effectStrs : list of Circuits
+#         List of the measurement fiducial operation sequences, which precede
 #         measurement.
 
-#     germList : list of GateStrings
-#         List of the germ gate strings.
+#     germList : list of Circuits
+#         List of the germ operation sequences.
 
 #     maxLengthList : list of ints
 #         List of maximum lengths. A zero value in this list has special
 #         meaning, and corresponds to the LGST sequences.
 #     """
 #     return 0
+
+def do_drift_characterization(ds, significance=0.05, marginalize='auto', transform='DCT',
+                            spectrafrequencies='auto', testFreqInds=None,
+                            groupoutcomes=None, enforceConstNumTimes='auto',
+                            whichTests=(('avg','avg','avg'), ('per','avg','avg'), ('per','per','avg')), 
+                            betweenClassCorrection=True, inClassCorrection=('FWER','FWER','FDR','FDR'), 
+                            modelSelectionMethod=(('per','per','avg'),'detection'), estimator='FF-UAR', 
+                            verbosity=1, name=None):
+    """
+    Todo : docstring update.
+
+    Implements drift detection and characterization analysis on timeseries data from any set of
+    quantum circuits (GST data is permissable but not required).
+
+    The default settings for this function should result in a reasonably fast analysis. Some of
+    the alternative settings will result in a much slower analsis. Moreover, note that additional
+    analyses can be added to the returned results object.
+
+    Parameters
+    ----------
+    ds : DataSet
+        The time series data to analyze. This must contain time series data, rather than data that
+        is not time-resolved and contains only one set of counts for each outcome and each circuit.
+
+    significance : float, optional
+        The "global" statistical significance to use in the drift detection hypothesis testing, and
+        in the model selection required for estimating time-resolved probability trajectories.
+
+    marginalize : 'auto', True or False, optional
+        Whether or not to marginalize the data. (todo : add details).
+
+    transform : one of 'DCT', 'DFT' and 'LSP', optional
+        The type of spectral analysis to use. (todo : add details).
+
+    testing_method =
+        DoGlobalTest=False, DoPerEntityTest, PerSequence, PerSequencePerEntity, PerSequencePerEntityPerOutcome
+        
+        {PerEnt:'Bonferroni','none', 'PerSeq':'FDR-BH','Bon','Sidak','none'
+
+        PerOut:'Bonferroni','none', 'local':'FDR-BH','Bon','Sidak'}
+        
+        ModelSelection : 'PerSeq', 'PerEnt', 'PerSeqPerEnt' or 'Global'
+  
+    Returns
+    -------
+    results : DriftResults
+        The results of the drift analysis. This contains: power spectra, statistical test outcomes,
+        drift frequencies, reconstructions of drifting probabilities, all of the input information.
+        See the docstrings of the .get... and .plot... methods in the returned object for information
+        on how to access the results.
+
+    """ 
+    # If the input is already a DriftResults objected with the data pre-formated as necessary.
+    if isinstance(ds,_dresults.DriftResults):
+        results = ds
+        if verbosity > 0: 
+            print(" - data is pre-formatted as a DriftResults object, skippng the data formatting step.")
+    # The standard case of a DataSet input.
+    else:
+        # Todo : add various asserts here. 
+        assert(isinstance(ds,_obj.dataset.DataSet)), "If the input is not pre-formatted data as a DriftResults object, it must be a pyGSTi DataSet!"
+        
+        # Work out what the 'auto' value should be for enforcing a fixed number of time stamps.
+        if isinstance(enforceConstNumTimes,str):
+            assert(enforceConstNumTimes == 'auto')
+            if transform == 'LSP':
+                enforceConstNumTimes = False
+            else:
+                enforceConstNumTimes = True
+
+        if transform != 'LSP':
+            assert(enforceConstNumTimes), "Except for the LSP transform, the code currently requires that fixed T is enforced!"
+
+        if verbosity > 0: 
+            print(" - Formatting the data...",end='')
+        # Format the input, and record it inside the results object.
+        results = format_data(ds, marginalize=marginalize, enforceConstNumTimes=enforceConstNumTimes, name=name)
+        if verbosity > 0: print("complete.")
+           
+    if verbosity > 0: print(" - Calculating power spectra...",end='')
+    
+    # Calculate the power spectra: if we're not doing an LSP we can pass anything as the frequencies as it's just ignored.
+    calculate_power_spectra(results, transform=transform, frequenciesInHz=spectrafrequencies)
+    
+    if verbosity > 0: print("complete.")
+
+    if testFreqInds is not None:
+        assert(set(testFreqInds).issubset(set(_np.arange(len(results.frequenciesInHz))))), "Invalid frequency indices!"
+
+    if verbosity > 0: 
+        print(" - Implementing statistical tests for drift detection...",end='')
+        if verbosity > 1: print('')
+    
+    # Implement the drift detection with statistical hypothesis testing on the power spectra
+    implement_drift_detection(results, significance=significance, testFreqInds=testFreqInds, whichTests=whichTests, 
+                              betweenClassCorrection=betweenClassCorrection, inClassCorrection=inClassCorrection,
+                              verbosity=verbosity-1)
+    
+    if verbosity == 1: print("complete.")
+
+    if verbosity > 0: 
+        print(" - Estimating the probability trajectories...",end='')
+        if verbosity > 1: print('')
+    
+    # Estimate the drifting probabilities.
+    estimate_probability_trajectories(results, modelSelector=modelSelectionMethod, estimator=estimator, verbosity=verbosity-1)
+    
+    if verbosity == 1: print("complete.")
+
+    return results
 
 def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes=False, name=None):
     """"
@@ -85,7 +197,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
 
 
      enforceConstNumTimes : bool, optional
-        If True, if the number of data points varies between GateStrings (i.e., the time series is
+        If True, if the number of data points varies between Circuits (i.e., the time series is
         a different length for different sequences), then the ... todo
 
     name : None or str.
@@ -104,7 +216,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
     results = _dresults.DriftResults(name=name)
 
     num_sequences = len(list(ds.keys()))
-    gatestringlist = list(ds.keys())
+    circuitlist = list(ds.keys())
     
     timestamps = []
     num_timesteps = []
@@ -113,7 +225,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
     # Find the timestamps for each sequence, and the total number of counts at each timestamp.
     for i in range(num_sequences):
         # Find the set of all timestamps and total counts
-        timesforseq, countsforseq = ds[gatestringlist[i]].timeseries('all')
+        timesforseq, countsforseq = ds[circuitlist[i]].timeseries('all')
         # Record the number of timestamps for this sequence
         num_timesteps.append(len(timesforseq))
         timestamps.append(timesforseq)
@@ -138,6 +250,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
     # by dropping as many of the final timestamps as necessary to have a fixed number of timestamps.
     if enforceConstNumTimes and not constNumTimes:
         num_timesteps = min(num_timesteps)
+        #print("Fixing number of time-stamps to {}".format(num_timesteps))
         timestamps = [timestamps[i][0:num_timesteps] for i in range(num_sequences)] 
     else:
         # We do this, because this gets recorded in the results as whether we *have* enforced this.
@@ -172,19 +285,22 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
             for s in range(num_sequences):
                 timeseries[e][s] = {}
                 for o in range(2):
-                    junk, timeseries[e][s][o] = tempdata[gatestringlist[s]].timeseries(outcomes[o],timestamps[s])
+                    junk, timeseries[e][s][o] = tempdata[circuitlist[s]].timeseries(outcomes[o],timestamps[s])
 
     else:
-        outcomes = list(ds.get_outcome_labels())
-        num_outcomes = len(list(ds.get_outcome_labels()))
+        outcomes = ds.get_outcome_labels()
+        if len(outcomes) > 10:
+            _warnings.warn("There are more than 10 outcomes per sequence! Consider marginalizing the data.")
+
         timeseries = {}
         timeseries[0] = {}
         for s in range(num_sequences):
             timeseries[0][s] = {}
-            for o in range(num_outcomes):
-                junk, timeseries[0][s][o] = ds[gatestringlist[s]].timeseries(outcomes[o],timestamps[s])
+            for o in outcomes:
+                #print(len(timestamps[s]))
+                junk, timeseries[0][s][o] = ds[circuitlist[s]].timeseries(o,timestamps[s])
 
-    results.add_formatted_data(timeseries, timestamps, gatestringlist, outcomes, counts, constNumTimes, 
+    results.add_formatted_data(timeseries, timestamps, circuitlist, outcomes, counts, constNumTimes, 
                                enforcedConstNumTimes=enforceConstNumTimes, marginalized=marginalize)
     return results
 
@@ -197,7 +313,7 @@ def calculate_power_spectra(results, transform='DCT', frequenciesInHz='auto'):
 
     Parameters
     ----------
-    results : DriftResults object
+    results : DriftResults
         A drift results object, containing data that has been formatted for a time-series
         analysis, either manually or using the `format_data()` function. The power spectra
         and Fourier modes calculated by this function are written into this results object.
@@ -234,11 +350,11 @@ def calculate_power_spectra(results, transform='DCT', frequenciesInHz='auto'):
         assert(results.constNumTimes == True)
         # We can store the modes and spectra in an array, because fixed-T must be enforced.
         modes = _np.zeros(shape,float)
-        for q in range(results.number_of_entities): 
-            for s in range(results.number_of_sequences):
-                for o in range(results.number_of_outcomes):
-                    x = results.timeseries[q][s][o] 
-                    modes[q,s,o,:] = _sig.DCT(x, counts=results.number_of_counts)
+        for qInd in range(results.number_of_entities): 
+            for sInd in range(results.number_of_sequences):
+                for oInd, out in enumerate(results.outcomes):
+                    x = results.timeseries[qInd][sInd][out] 
+                    modes[qInd,sInd,oInd,:] = _sig.DCT(x, counts=results.number_of_counts)
 
         spectra = modes**2
 
@@ -253,12 +369,12 @@ def calculate_power_spectra(results, transform='DCT', frequenciesInHz='auto'):
         # We can store the modes and spectra in an array regardless of fixed T, because we calculate the
         # periodgram at a fixed set of frequencies.
         modes = None
-        for q in range(0,num_entities): 
-            for s in range(0,num_sequences):
-                for o in range(0,num_outcomes):
-                    x = results.timeseries[q][s][o] 
-                    t = results.timestamps[q][s][o]
-                    specta[q,s,o,:] = _sig.LSP(t, x, frequenciesInHz, counts=results.number_of_counts)
+        for qInd in range(results.number_of_entities): 
+            for sInd in range(results.number_of_sequences):
+                for oInd, out in enumerate(results.outcomes):
+                    x = results.timeseries[qInd][sInd][out] 
+                    t = results.timestamps[qInd][sInd]
+                    specta[qInd,sInd,oInd,:] = _sig.LSP(t, x, frequenciesInHz, counts=results.number_of_counts)
 
     results.add_spectra(frequenciesInHz, spectra, transform, modes)
 
@@ -394,7 +510,7 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
         usedTestFreqInds = _np.arange(results.number_of_frequencies)
 
     driftdetectedinClass = {}
-    driftdeteted = False
+    driftdetected = False
     power_significance_pseudothreshold = {}
     sigFreqInds = {}
 
@@ -564,39 +680,56 @@ def implement_drift_detection(results, significance=0.05, testFreqInds=None,
     inClassCorrections = {test:inClassCorrection for test in whichTestsUpdated}
 
     results.add_drift_detection_results(significance=significance, testClasses=whichTestsUpdated, 
-                                        betweenClassCorrection=betweenClassCorrection, inClassCorrections=inClassCorrections,
-                                        control=control, driftdetected=driftdetected, driftdetectedinClass=driftdetectedinClass,
+                                        betweenClassCorrection=betweenClassCorrection, 
+                                        inClassCorrections=inClassCorrections,
+                                        control=control, driftdetected=driftdetected, 
+                                        driftdetectedinClass=driftdetectedinClass,
                                         testFreqInds=testFreqInds, sigFreqIndsinClass=sigFreqInds,
                                         powerSignificancePseudothreshold=power_significance_pseudothreshold,
-                                        significanceForClass=significancePerTestClass, name=name, overwrite=overwrite)
+                                        significanceForClass=significancePerTestClass, 
+                                        name=name, overwrite=overwrite)
 
     return None
 
-def estimate_probability_trajectories(results, modelSelector=(('per','per','avg'),None), estimator='DCT-filter-UAR', 
-                                      estimatorSettings=[], verbosity=1, overwrite=False, setasDefault=True):
+def estimate_probability_trajectories(results, modelSelector=(('per','per','avg'),None), estimator='FF-UAR', 
+                                      estimatorSettings=[], verbosity=1, overwrite=True, setasDefault=True):
     """
     Todo:
     """
     testClass = modelSelector[0]
     detectorkey = modelSelector[1]
+    transform = results.transform
+    outcomes = results.outcomes
 
     if detectorkey is None:
         detectorkey = results.defaultdetectorkey
 
     assert(testClass[2] == 'avg'), "The model selection must use outcome-averaged model selection!"
 
-    for e in range(results.number_of_entities):
-        for s in range(results.number_of_sequences):
+    if transform == 'DCT' or transform == 'DFT':
+        assert(estimator in ('FF-unbounded', 'FF-UAR', 'MLE')), "For the {} transform, the estimator must be FF-unbounded, FF-UAR or MLE!".format(transform)
+
+
+    for e, ent in enumerate(results.entitieslist):
+        for s, seq in enumerate(results.circuitlist):
             
+            if verbosity > 0:
+                print("    - Generating estimates for entity {} and sequence {}".format(ent,seq))
             # Get the time-series data for this entity and sequence, as a dict with keys from 0 to the
             # number of possible measurement outcomes - 1.
             timeseries = results.timeseries[e][s]
+            # Normalize the timeseries 
+            timeseries = {key:value/results.number_of_counts for key,value in timeseries.items()}
             timestamps = results.timestamps[s] # Timestamps only indexed by sequence.
 
-            meandict = {o : _np.mean(results.timeseries[e][s][o]) for o in range(results.number_of_outcomes)}
-            outcomeIndlist = list(range(results.number_of_outcomes))
-            nullmodel = _mdl.ProbabilityTrajectoryModel(outcomeIndlist, modeltype='null', hyperparameters={'basisfunctionInds':[0.,]}, parameters=meandict)
-            results.add_reconstruction(e, s, nullmodel, modelSelector='null', estimator='null', auxDict={}, overwrite=overwrite)
+            meandict = {o : _np.mean(results.timeseries[e][s][o])/results.number_of_counts for o in outcomes[:-1]}
+            #outcomeIndlist = list(range(results.number_of_outcomes))
+            nullmodel = _mdl.ProbabilityTrajectoryModel(outcomes, modeltype='null', 
+                                                        hyperparameters={'basisfunctionInds':[0.,]}, 
+                                                        parameters=meandict)
+
+            results.add_reconstruction(ent, seq, nullmodel, modelSelector='null', estimator='null', auxDict={}, 
+                                       overwrite=overwrite)
 
             if testClass[0] == 'per': entkey = e
             else: entkey = 'avg'
@@ -606,149 +739,81 @@ def estimate_probability_trajectories(results, modelSelector=(('per','per','avg'
                    
             # The hyper-parameters for the DCT (or DFT) models are frequency indices,
             # along with the start and end times.
-            if results.transform != 'LSP':
+            if transform == 'DCT' or transform == 'DFT':
+
+                # Get the drift frequencies (doesn't include the zero frequency)
                 freqs = results.get_drift_frequency_indices(entity=entkey, sequence=seqkey, 
-                                                               outcome='avg', sort=True)
-                # We need the 0 mode as a hyper-parameter
+                                                            outcome='avg', sort=True, detectorkey=detectorkey)
+
+                # Add in the zero frequency, as it's a hyper-parameter of the models
                 freqs.insert(0,0)
+                
+                # Flag specifying whether we only need the null hypothesis estimate of a constant frequency.
                 null = True
                 if len(freqs) > 1:
                     null = False
-                hyperparameters = {"basisfunctionInds":freqs, 'starttime':results.timestamps[s][0], 'endtime':results.timestamps[s][-1]}
-                parameters = _sig.amplitudes_at_frequencies(freqs, timeseries, transform='DCT')
-                                
-                ffmodel = _mdl.ProbabilityTrajectoryModel(outcomeIndlist, modeltype='DCT', hyperparameters=hyperparameters, parameters=parameters)
-                results.add_reconstruction(e, s, ffmodel, modelSelector=modelSelector, estimator='DCT-filter-unbounded', 
-                                        auxDict={'null':null}, overwrite=overwrite)
+
+                # The hyper-parameters for the DCT model
+                hyperparameters = {"basisfunctionInds":freqs, 'starttime':results.timestamps[s][0], 
+                                   'timestep':results.meantimestepPerSeq[s], 'numsteps':results.number_of_timesteps[s]}
+                                   #starttime = hyperparameters['starttime']
+
+                # The parameters for the DCT filter without amplitude reduction model (a "raw" DCT filter). This
+                # is the basis for *all* the models, so we construct it and save it no matter what 
+                # estimator has been requested
+                parameters = _sig.amplitudes_at_frequencies(freqs, timeseries, transform=transform)
+                del parameters[outcomes[-1]]
+                # Creates the model, and records it into the results object with a standard 'key' to find it later.
+                ffmodel = _mdl.ProbabilityTrajectoryModel(outcomes, modeltype=transform, 
+                                                          hyperparameters=hyperparameters, parameters=parameters)
+                # Records this estimate.
+                results.add_reconstruction(ent, seq, ffmodel, modelSelector=modelSelector, estimator='FF-unbounded', 
+                                           auxDict={'null':null}, overwrite=overwrite)
                 
-                if estimator == 'DCT-filter-unbounded':
-                    break
+                # If we are doing MLE or FF-UAR we now construct the FF-UAR estimate
+                if estimator in ('FF-UAR','MLE'):
 
-                ffmodel.get_probabilities(timeseries)
+                    #ffmodel.get_probabilities(timeseries)
 
-                ffmodelUniReduce = ffmodel.copy()
-                ffmodelUniReduce, flag = _sig.constrain_model_via_uniform_amplitude_compression(ffmodelUniReduce, timestamps)
-                results.add_reconstruction(e, s, ffmodelUniReduce, modelSelector=modelSelector, estimator='DCT-filter-UAR', 
-                                        auxDict={'null':null, "reduction":flag}, overwrite=overwrite)
- 
-                if estimator == 'DCT-filter-UAR':
-                    break
+                    # The uniform-amplitude-reduction model is the same as above, but with post-processing on the size of the amplitudes.
+                    ffmodelUniReduce = ffmodel.copy()
+                    ffmodelUniReduce, flag = _est.uniform_amplitude_compression(ffmodelUniReduce, timestamps)
+                    # Records this estimate.
+                    results.add_reconstruction(ent, seq, ffmodelUniReduce, modelSelector=modelSelector, estimator='FF-UAR', 
+                                               auxDict={'null':null, "reduction":flag}, overwrite=overwrite)
+     
+                # If we are doing MLE, we go in here and use the estimates above to seed it.
+                if estimator == 'MLE':
 
-                # Todo : write the MLE of p(t) function
-                # ffmodelmle = ffmodelUniReduce.copy()
-                # ffmodelmle, optout = _est.do_mle_of_ptrajectory(ffmodelmle, timeseries, timestamps)
-                # optout = None
-                # results.add_reconstruction(e, s, ffmodelUniReduce, modelSelector=modelSelector, estimator='DCT-filter-MLE', 
-                #                            auxDict={'null':null, 'optout'=optout}, overwrite=overwrite)
+                    if not null:
+                        # The MLE model uses the above UAR estimate as the seed, and then does MLE on the model.
+                        ffmodelmle = ffmodelUniReduce.copy()
+                        ffmodelmle, optout = _est.maximum_likelihood_model(ffmodelmle, timeseries, timestamps,
+                                                                           verbosity=verbosity-1, returnOptout=True)
+                    else:
+                        # If there are no significant frequencies the MLE model is necessarily equal to the "raw" Fourier 
+                        # filter (so just copy it and don't do any estimation), but not necessarily the UAR model (if the
+                        # data mean is v. close to 0 or 1). 
+                        ffmodelmle = ffmodel.copy()
+                        optout = None 
+                    
+                    # Records this estimate.
+                    results.add_reconstruction(ent, seq, ffmodelmle, modelSelector=modelSelector, estimator='MLE', 
+                                               auxDict={'null':null, 'optout':optout}, overwrite=overwrite)
 
+            else:
+                raise ValueError("Estimators based on the {} transform are not yet implemented!".format(transform))
+            
+            # Todo : the LPS estimators.
             # The hyper-parameters for the LSP models are real-valued frequencies.
-            elif results.transform == 'LSP':
-                freqs = results.get_drift_frequencies(entity=entkey, sequence=seqkey, 
-                                                            outcome='avg', sort=True)
-                # We need the 0. frequency as a hyper-parameter
-                freqs.insert(0,0.)
-                hyperparameters = {'freqs' : freqs}
+            # elif results.transform == 'LSP':
+            #     freqs = results.get_drift_frequencies(entity=entkey, sequence=seqkey, 
+            #                                                 outcome='avg', sort=True)
+            #     # We need the 0. frequency as a hyper-parameter
+            #     freqs.insert(0,0.)
+            #     hyperparameters = {'freqs' : freqs}
         
             #params, recon, uncert, aux = _est.estimate_probability_trace(timeseries, timestamps, results.transform, estimator,
             #                                                             hyperparameters, modes=modes, estimatorSettings)
         
     return None
-
-def do_drift_characterization(ds, significance=0.05, marginalize='auto', transform='DCT',
-                            spectrafrequencies='auto', testFreqInds=None,
-                            groupoutcomes=None, enforceConstNumTimes='auto',
-                            whichTests=(('avg','avg','avg'), ('per','avg','avg'), ('per','per','avg')), 
-                            betweenClassCorrection=True, inClassCorrection=('FWER','FWER','FDR','FDR'), 
-                            modelSelectionMethod=(('per','per','avg'),'detection'), estimator='FFLogistic', verbosity=1, name=None):
-    """
-    Implements a drift detection and characterization analysis on timeseries data.
-
-    testing_method =
-        DoGlobalTest=False, DoPerEntityTest, PerSequence, PerSequencePerEntity, PerSequencePerEntityPerOutcome
-        
-        {PerEnt:'Bonferroni','none', 'PerSeq':'FDR-BH','Bon','Sidak','none'
-
-        PerOut:'Bonferroni','none', 'local':'FDR-BH','Bon','Sidak'}
-        
-        ModelSelection : 'PerSeq', 'PerEnt', 'PerSeqPerEnt' or 'Global'
-    
-    Parameters
-    ----------
-    ds : pyGSTi DataSet or numpy array
-        The time series data to analyze. If this is a DataSet it should contain time series
-        data (rather than, e.g., a total counts per-outcome per-GateString). If this is a
-        numpy array, it must again contain time series data and it may be either 1, 2, 3
-        or 4 dimensional. 
-
-    structuresList:
-        {(germ,mfudicial,pfud):[.....], }
-
-    marginalize : str, optional
- 
-    significance : float, optional
-
-    Returns
-    -------
-    results : DriftResults object
-        The results of the drift analysis. This contains: power spectra, statistical test outcomes,
-        drift frequencies, reconstructions of drifting probabilities, all of the input information.
-
-    """ 
-    # If the input is already a DriftResults objected with the data pre-formated as necessary.
-    if isinstance(ds,_dresults.DriftResults):
-        results = ds
-        if verbosity > 0: 
-            print(" - data is pre-formatted as a DriftResults object, skippng the data formatting step.")
-    # The standard case of a DataSet input.
-    else:
-        # Todo : add various asserts here. 
-        assert(isinstance(ds,_obj.dataset.DataSet)), "If the input is not pre-formatted data as a DriftResults object, it must be a pyGSTi DataSet!"
-        
-        # Work out what the 'auto' value should be for enforcing a fixed number of time stamps.
-        if isinstance(enforceConstNumTimes,str):
-            assert(enforceConstNumTimes == 'auto')
-            if transform == 'LSP':
-                enforceConstNumTimes = False
-            else:
-                enforceConstNumTimes = True
-
-        if transform != 'LSP':
-            assert(enforceConstNumTimes), "Except for the LSP transform, the code currently requires that fixed T is enforced!"
-
-        if verbosity > 0: 
-            print(" - Formatting the data...",end='')
-        # Format the input, and record it inside the results object.
-        results = format_data(ds, marginalize=marginalize, enforceConstNumTimes=enforceConstNumTimes, name=name)
-        if verbosity > 0: print("complete.")
-           
-    if verbosity > 0: print(" - Calculating power spectra...",end='')
-    
-    # Calculate the power spectra: if we're not doing an LSP we can pass anything as the frequencies as it's just ignored.
-    calculate_power_spectra(results, transform=transform, frequenciesInHz=spectrafrequencies)
-    
-    if verbosity > 0: print("complete.")
-
-    if testFreqInds is not None:
-        assert(set(testFreqInds).issubset(set(_np.arange(len(results.frequenciesInHz))))), "Invalid frequency indices!"
-
-    if verbosity > 0: 
-        print(" - Implementing statistical tests for drift detection...",end='')
-        if verbosity > 1: print('')
-    
-    # Implement the drift detection with statistical hypothesis testing on the power spectra
-    implement_drift_detection(results, significance=0.05, testFreqInds=testFreqInds, whichTests=whichTests, 
-                              betweenClassCorrection=betweenClassCorrection, inClassCorrection=inClassCorrection,
-                              verbosity=verbosity-1)
-    
-    if verbosity == 1: print("complete.")
-
-    if verbosity > 0: 
-        print(" - Estimating the probability trajectories...",end='')
-        if verbosity > 1: print('')
-    
-    # Estimate the drifting probabilities.
-    estimate_probability_trajectories(results, modelSelector=modelSelectionMethod, estimator=estimator, verbosity=verbosity-1)
-    
-    if verbosity == 1: print("complete.")
-
-    return results

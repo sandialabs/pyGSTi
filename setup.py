@@ -27,8 +27,8 @@ try:
                   include_dirs=['.', np.get_include()]
                   #libraries=['m'] #math lib?
                   ),
-        Extension("pygsti.objects.fastgatecalc",
-                  sources=["packages/pygsti/objects/fastgatecalc.pyx"], 
+        Extension("pygsti.objects.fastopcalc",
+                  sources=["packages/pygsti/objects/fastopcalc.pyx"], 
                   include_dirs=['.', np.get_include()],
                   language="c++",
                   extra_compile_args=["-std=c++11"], #,"-stdlib=libc++"
@@ -81,7 +81,7 @@ setup(name='pyGSTi',
       packages=['pygsti', 'pygsti.algorithms', 'pygsti.baseobjs', 'pygsti.construction', 'pygsti.drivers', 'pygsti.extras', 'pygsti.extras.rb', 'pygsti.extras.rpe', 'pygsti.extras.drift', 'pygsti.io', 'pygsti.objects', 'pygsti.optimize', 'pygsti.report', 'pygsti.tools'],
       package_dir={'': 'packages'},
       package_data={'pygsti.tools': ['fastcalc.pyx'],
-                    'pygsti.objects': ['fastgatecalc.pyx','fastreplib.pyx','fastreps.cpp','fastreps.h'],
+                    'pygsti.objects': ['fastopcalc.pyx','fastreplib.pyx','fastreps.cpp','fastreps.h'],
                     'pygsti.report': ['templates/*.tex', 'templates/*.html', 'templates/*.json',
                                       'templates/report_notebook/*.txt',
                                       'templates/standard_html_report/*.html',

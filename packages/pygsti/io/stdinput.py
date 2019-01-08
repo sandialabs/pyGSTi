@@ -19,7 +19,7 @@ from collections import OrderedDict as _OrderedDict
 from .. import objects as _objs
 from .. import tools as _tools
 
-from ..baseobjs import GateStringParser as _GateStringParser
+from ..baseobjs import CircuitParser as _CircuitParser
 
 
 def get_display_progress_fn(showProgress):
@@ -53,15 +53,15 @@ class StdInputParser(object):
     """
 
     #  Using a single parser. This speeds up parsing, however, it means the parser is NOT reentrant
-    _string_parser = _GateStringParser()
+    _circuit_parser = _CircuitParser()
 
     def __init__(self):
         """ Create a new standard-input parser object """
         pass
 
-    def parse_gatestring(self, s, lookup={}):
+    def parse_circuit(self, s, lookup={}):
         """
-        Parse a gate string (string in grammar)
+        Parse a operation sequence (string in grammar)
 
         Parameters
         ----------
@@ -69,19 +69,19 @@ class StdInputParser(object):
             The string to parse.
 
         lookup : dict, optional
-            A dictionary with keys == reflbls and values == tuples of gate labels
+            A dictionary with keys == reflbls and values == tuples of operation labels
             which can be used for substitutions using the S<reflbl> syntax.
 
         Returns
         -------
-        tuple of gate labels
-            Representing the gate string.
+        tuple of operation labels
+            Representing the operation sequence.
         """
-        self._string_parser.lookup = lookup
-        gate_tuple = self._string_parser.parse(s)
+        self._circuit_parser.lookup = lookup
+        circuit_tuple, circuit_labels = self._circuit_parser.parse(s)
         # print "DB: result = ",result
         # print "DB: stack = ",self.exprStack
-        return gate_tuple
+        return circuit_tuple, circuit_labels
 
     def parse_dataline(self, s, lookup={}, expectedCounts=-1):
         """
@@ -93,22 +93,24 @@ class StdInputParser(object):
             The string to parse.
 
         lookup : dict, optional
-            A dictionary with keys == reflbls and values == tuples of gate labels
+            A dictionary with keys == reflbls and values == tuples of operation labels
             which can be used for substitutions using the S<reflbl> syntax.
 
         expectedCounts : int, optional
-            The expected number of counts to accompany the gate string on this
+            The expected number of counts to accompany the operation sequence on this
             data line.  If < 0, no check is performed; otherwise raises ValueError
             if the number of counts does not equal expectedCounts.
 
         Returns
         -------
-        gateStringTuple : tuple
-            The gate string as a tuple of gate labels.
-        gateStringStr : string
-            The gate string as represented as a string in the dataline
+        circuitTuple : tuple
+            The circuit as a tuple of layer-operation labels.
+        circuitStr : string
+            The circuit as represented as a string in the dataline (minus any line labels)
+        circuitLabels : tuple
+            A tuple of the circuit's line labels (given after '@' symbol on line)
         counts : list
-            List of counts following the gate string.
+            List of counts following the operation sequence.
         """
 
         # get counts from end of s
@@ -140,15 +142,15 @@ class StdInputParser(object):
         if expectedCounts >= 0 and nCounts != expectedCounts:
             raise ValueError("Found %d count columns when %d were expected" % (nCounts, expectedCounts))
         if nCounts == len(parts):
-            raise ValueError("No gatestring column found -- all columns look like data")
+            raise ValueError("No circuit column found -- all columns look like data")
 
-        gateStringStr = " ".join(parts[0:len(parts)-totalCounts])
-        gateStringTuple = self.parse_gatestring(gateStringStr, lookup)
-        return gateStringTuple, gateStringStr, counts
+        circuitStr = " ".join(parts[0:len(parts)-totalCounts])
+        circuitTuple, circuitLabels = self.parse_circuit(circuitStr, lookup)
+        return circuitTuple, circuitStr, circuitLabels, counts
 
     def parse_dictline(self, s):
         """
-        Parse a gatestring dictionary line (dictline in grammar)
+        Parse a circuit dictionary line (dictline in grammar)
 
         Parameters
         ----------
@@ -157,47 +159,56 @@ class StdInputParser(object):
 
         Returns
         -------
-        gateStringLabel : string
-            The user-defined label to represent this gate string.
-        gateStringTuple : tuple
-            The gate string as a tuple of gate labels.
-        gateStringStr : string
-            The gate string as represented as a string in the dictline.
+        circuitLabel : string
+            The user-defined label to represent this operation sequence.
+        circuitTuple : tuple
+            The operation sequence as a tuple of operation labels.
+        circuitStr : string
+            The operation sequence as represented as a string in the dictline.
         """
         label = r'\s*([a-zA-Z0-9_]+)\s+'
         match = _re.match(label, s)
         if not match:
             raise ValueError("'{}' is not a valid dictline".format(s))
-        gateStringLabel = match.group(1)
-        gateStringStr = s[match.end():]
-        gateStringTuple = self._string_parser.parse(gateStringStr)
-        return gateStringLabel, gateStringTuple, gateStringStr
+        circuitLabel = match.group(1)
+        circuitStr = s[match.end():]
+        circuitTuple,circuitLineLabels = self._circuit_parser.parse(circuitStr)
+        return circuitLabel, circuitTuple, circuitStr, circuitLineLabels
 
-    def parse_stringfile(self, filename):
+    def parse_stringfile(self, filename, line_labels="auto", num_lines=None):
         """
-        Parse a gatestring list file.
+        Parse a circuit list file.
 
         Parameters
         ----------
         filename : string
             The file to parse.
 
+        TODO: docstring line_labels, num_lines - see Circuit constructor
+
         Returns
         -------
-        list of GateStrings
-            The gatestrings read from the file.
+        list of Circuits
+            The circuits read from the file.
         """
-        gatestring_list = [ ]
+        circuit_list = [ ]
         with open(filename, 'r') as stringfile:
             for line in stringfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] =='#': continue
-                gatestring_list.append( _objs.GateString(self.parse_gatestring(line), line) )
-        return gatestring_list
+                layer_lbls, line_lbls = self.parse_circuit(line)
+                if line_lbls is None:
+                    line_lbls = line_labels # default to the passed-in argument
+                    nlines = num_lines
+                else: nlines = None # b/c we've got a valid line_lbls
+                
+                circuit_list.append( _objs.Circuit(layer_lbls, stringrep=line.strip(),
+                                                   line_labels=line_lbls, num_lines=nlines, check=False) )
+        return circuit_list
 
     def parse_dictfile(self, filename):
         """
-        Parse a gatestring dictionary file.
+        Parse a circuit dictionary file.
 
         Parameters
         ----------
@@ -207,15 +218,16 @@ class StdInputParser(object):
         Returns
         -------
         dict
-           Dictionary with keys == gate string labels and values == GateStrings.
+           Dictionary with keys == operation sequence labels and values == Circuits.
         """
         lookupDict = { }
         with open(filename, 'r') as dictfile:
             for line in dictfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] =='#': continue
-                label, tup, s = self.parse_dictline(line)
-                lookupDict[ label ] = _objs.GateString(tup, s)
+                label, tup, s, lineLbls = self.parse_dictline(line)
+                if lineLbls is None: lineLbls = "auto"
+                lookupDict[ label ] = _objs.Circuit(tup, stringrep=s, line_labels=lineLbls, check=False)
         return lookupDict
 
     def parse_datafile(self, filename, showProgress=True,
@@ -232,9 +244,9 @@ class StdInputParser(object):
             Whether or not progress should be displayed
 
         collisionAction : {"aggregate", "keepseparate"}
-            Specifies how duplicate gate sequences should be handled.  "aggregate"
+            Specifies how duplicate operation sequences should be handled.  "aggregate"
             adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
-            sequence data with by appending a final "#<number>" gate label to the
+            sequence data with by appending a final "#<number>" operation label to the
             duplicated gate sequence.
 
         Returns
@@ -305,7 +317,7 @@ class StdInputParser(object):
 
                 if len(dataline) == 0: continue
                 try:
-                    gateStringTuple, gateStringStr, valueList = \
+                    circuitTuple, circuitStr, circuitLbls, valueList = \
                             self.parse_dataline(dataline, lookupDict, nDataCols)
 
                     commentDict = {}
@@ -335,10 +347,11 @@ class StdInputParser(object):
                 countDict = _OrderedDict()
                 self._fillDataCountDict( countDict, fillInfo, valueList )
                 if all([ (abs(v) < 1e-9) for v in list(countDict.values())]):
-                    warnings.append("Dataline for gateString '%s' has zero counts and will be ignored" % gateStringStr)
+                    warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % circuitStr)
                     continue #skip lines in dataset file with zero counts (no experiments done)
-                gateStr = _objs.GateString(gateStringTuple, gateStringStr, lookup=lookupDict)
-                dataset.add_count_dict(gateStr, countDict, aux=commentDict)
+                if circuitLbls is None: circuitLbls = "auto" # if line labels weren't given just use defaults
+                circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls, check=False) #, lookup=lookupDict)
+                dataset.add_count_dict(circuit, countDict, aux=commentDict)
 
         if warnings:
             _warnings.warn('\n'.join(warnings)) # to be displayed at end, after potential progress updates
@@ -432,9 +445,9 @@ class StdInputParser(object):
             Whether or not progress should be displayed
 
         collisionAction : {"aggregate", "keepseparate"}
-            Specifies how duplicate gate sequences should be handled.  "aggregate"
+            Specifies how duplicate operation sequences should be handled.  "aggregate"
             adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
-            sequence data with by appending a final "#<number>" gate label to the
+            sequence data with by appending a final "#<number>" operation label to the
             duplicated gate sequence.
 
         Returns
@@ -497,14 +510,16 @@ class StdInputParser(object):
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
                 try:
-                    gateStringTuple, gateStringStr, valueList = self.parse_dataline(line, lookupDict, nDataCols)
+                    circuitTuple, circuitStr, circuitLbls, valueList = \
+                        self.parse_dataline(line, lookupDict, nDataCols)
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-                gateStr = _objs.GateString(gateStringTuple, gateStringStr, lookup=lookupDict)
+                if circuitLbls is None: circuitLbls = "auto" # if line labels aren't given find them automatically
+                opStr = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls, check=False) #, lookup=lookupDict)
                 self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
                 for dsLabel, countDict in dsCountDicts.items():                    
-                    datasets[dsLabel].add_count_dict(gateStr, countDict)
+                    datasets[dsLabel].add_count_dict(opStr, countDict)
 
         mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
         for dsLabel,ds in datasets.items():
@@ -651,16 +666,17 @@ class StdInputParser(object):
                 try:
                     parts = line.split()
                     lastpart = parts[-1]
-                    gateStringStr = line[:-len(lastpart)].strip()
-                    gateStringTuple = self.parse_gatestring(gateStringStr, lookupDict)
-                    gateString = _objs.GateString(gateStringTuple, gateStringStr)
+                    circuitStr = line[:-len(lastpart)].strip()
+                    circuitTuple, circuitLbls = self.parse_circuit(circuitStr, lookupDict)
+                    if circuitLbls is None: circuitLbls = "auto" # maybe allow a default line_labels to be passed in later?
+                    circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls, check=False)
                     timeSeriesStr = lastpart.strip()
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
     
                 seriesList = [ outcomeLabelAbbrevs[abbrev] for abbrev in timeSeriesStr ] #iter over characters in str
                 timesList = list(range(len(seriesList))) #FUTURE: specify an offset and step??
-                dataset.add_raw_series_data(gateString, seriesList, timesList)
+                dataset.add_raw_series_data(circuit, seriesList, timesList)
                 
         dataset.done_adding_data()
         return dataset
@@ -676,9 +692,9 @@ def _evalRowList(rows, bComplex):
     return _np.array( [ [ _evalElement(x,bComplex) for x in r ] for r in rows ],
                      'complex' if bComplex else 'd' )
 
-def read_gateset(filename):
+def read_model(filename):
     """
-    Parse a gateset file into a GateSet object.
+    Parse a model file into a Model object.
 
     Parameters
     ----------
@@ -687,18 +703,18 @@ def read_gateset(filename):
 
     Returns
     -------
-    GateSet
+    Model
     """
     basis = 'pp' #default basis to load as
 
-    gs = _objs.GateSet()
     spam_vecs = _OrderedDict();
     spam_labels = _OrderedDict(); remainder_spam_label = ""
     identity_vec = _np.transpose( _np.array( [ _np.sqrt(2.0), 0,0,0] ) )  #default = 1-QUBIT identity vector
 
     basis_abbrev = "pp" #default assumed basis
-    basis_dims = None
+    basis_dim = None
     gaugegroup_name = None
+    state_space_labels = None
 
     #First try to find basis:
     with open(filename) as inputfile:
@@ -710,22 +726,46 @@ def read_gateset(filename):
                 basis_abbrev = parts[0]
                 if len(parts) > 1:
                     basis_dims = list(map(int, "".join(parts[1:]).split(",")))
-                    if len(basis_dims) == 1: basis_dims = basis_dims[0]
+                    assert(len(basis_dims) == 1), "Multiple basis dims is no longer supported!"
+                    basis_dim = basis_dims[0]
                 else:
-                    basis_dims = None
+                    basis_dim = None
             elif line.startswith("GAUGEGROUP:"):
                 gaugegroup_name = line[len("GAUGEGROUP:"):].strip()
                 if gaugegroup_name not in ("Full","TP","Unitary"):
                     _warnings.warn(("Unknown GAUGEGROUP name %s.  Default gauge"
                                     "group will be set to None") % gaugegroup_name)
+            elif line.startswith("STATESPACE:"):
+                tpbs_lbls = []; tpbs_dims = []
+                tensor_prod_blk_strs = line[len("STATESPACE:"):].split("+")
+                for tpb_str in tensor_prod_blk_strs:
+                    tpb_lbls = []; tpb_dims = []
+                    for lbl_and_dim in tpb_str.split("*"):
+                        start = lbl_and_dim.index('(')
+                        end = lbl_and_dim.rindex(')')
+                        lbl,dim = lbl_and_dim[:start], lbl_and_dim[start+1:end]
+                        tpb_lbls.append(lbl.strip())
+                        tpb_dims.append(int(dim.strip()))
+                    tpbs_lbls.append( tuple(tpb_lbls) )
+                    tpbs_dims.append( tuple(tpb_dims) )
+                state_space_labels = _objs.StateSpaceLabels(tpbs_lbls, tpbs_dims)
 
-    if basis_dims is not None:
+    if basis_dim is not None:
         # then specfy a dimensionful basis at the outset
         basis = _objs.Basis(basis_abbrev, basis_dims)
     else:
-        # otherwise we'll try to infer one at the end (and add_current routine
-        # uses basis in a way that can infer a dimension)
-        basis = basis_abbrev
+        # otherwise we'll try to infer one from state space labels
+        if state_space_labels is not None:
+            basis = _objs.Basis(basis_abbrev, state_space_labels.dim)
+        else:
+            raise ValueError("Cannot infer basis dimension!")
+
+    if state_space_labels is None:
+        assert(basis_dim is not None) # b/c of logic above
+        state_space_labels = _objs.StateSpaceLabels(['*'], [basis_dim])
+          # special '*' state space label w/entire dimension inferred from BASIS line
+        
+    mdl = _objs.ExplicitOpModel(state_space_labels, basis)
 
     state = "look for label or property"
     cur_obj = None
@@ -761,7 +801,10 @@ def read_gateset(filename):
                 assert(cur_property == ""), "Logic error!"
                 
                 parts = line.split(':')
-                if len(parts) == 2: # then this is a '<type>: <label>' line => new cur_obj
+                if any([line.startswith(pre) for pre in ("BASIS","GAUGEGROUP","STATESPACE")]):
+                    pass #handled above
+
+                elif len(parts) == 2: # then this is a '<type>: <label>' line => new cur_obj
                     typ = parts[0].strip()
                     label = parts[1].strip()
 
@@ -772,11 +815,8 @@ def read_gateset(filename):
                         else:
                             top_level_objs.append(cur_obj)
                         cur_obj = None
-                        
-                    if typ in ("BASIS","GAUGEGROUP"):
-                        pass #handled above
                     
-                    elif typ in ("POVM","TP-POVM","CPTP-POVM","Instrument","TP-Instrument"):
+                    if typ in ("POVM","TP-POVM","CPTP-POVM","Instrument","TP-Instrument"):
                         # a group type - so create a new *group* object
                         assert(cur_group_obj is None), "Group label encountered before ENDing prior group:\n%s" % line
                         cur_group_obj = {'label': label, 'type': typ, 'properties': {}, 'objects': [] }
@@ -861,17 +901,17 @@ def read_gateset(filename):
         return lmx
 
     
-    #Now process top_level_objs to create a GateSet
+    #Now process top_level_objs to create a Model
     for obj in top_level_objs: # `obj` is a dict of object info
         cur_typ = obj['type']
         cur_label = obj['label']
 
         #Preps
         if cur_typ == "PREP":
-            gs.preps[cur_label] = _objs.FullyParameterizedSPAMVec(
+            mdl.preps[cur_label] = _objs.FullSPAMVec(
                 get_liouville_mx(obj))
         elif cur_typ == "TP-PREP":
-            gs.preps[cur_label] = _objs.TPParameterizedSPAMVec(
+            mdl.preps[cur_label] = _objs.TPSPAMVec(
                 get_liouville_mx(obj))
         elif cur_typ == "CPTP-PREP":
             props = obj['properties']
@@ -880,12 +920,12 @@ def read_gateset(filename):
             nQubits = _np.log2(qty.size)/2.0
             bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-            errorMap = _objs.LindbladParameterizedGate.from_gate_matrix(
+            errorMap = _objs.LindbladDenseOp.from_operation_matrix(
                 qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis) #unitary postfactor = Id
             pureVec = _objs.StaticSPAMVec( _np.transpose(_evalRowList( props["PureVec"], bComplex=False )))
-            gs.preps[cur_label] = _objs.LindbladParameterizedSPAMVec(pureVec,errorMap,"prep")
+            mdl.preps[cur_label] = _objs.LindbladSPAMVec(pureVec,errorMap,"prep")
         elif cur_typ == "STATIC-PREP":
-            gs.preps[cur_label] = _objs.StaticSPAMVec(get_liouville_mx(obj))
+            mdl.preps[cur_label] = _objs.StaticSPAMVec(get_liouville_mx(obj))
 
         #POVMs
         elif cur_typ in ("POVM","TP-POVM","CPTP-POVM"):
@@ -893,20 +933,20 @@ def read_gateset(filename):
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 if sub_typ == "EFFECT":
-                    Evec = _objs.FullyParameterizedSPAMVec(get_liouville_mx(sub_obj))
+                    Evec = _objs.FullSPAMVec(get_liouville_mx(sub_obj))
                 elif sub_typ == "TP-EFFECT":
-                    Evec = _objs.TPParameterizedSPAMVec(get_liouville_mx(sub_obj))
+                    Evec = _objs.TPSPAMVec(get_liouville_mx(sub_obj))
                 elif sub_typ == "STATIC-EFFECT":
                     Evec = _objs.StaticSPAMVec(get_liouville_mx(sub_obj))
                 #elif sub_typ == "CPTP-EFFECT":
-                #    Evec = _objs.LindbladParameterizedSPAMVec.from_spam_vector(qty,qty,"effect")
+                #    Evec = _objs.LindbladSPAMVec.from_spam_vector(qty,qty,"effect")
                 effects.append( (sub_obj['label'],Evec) )
 
             if cur_typ == "POVM":
-                gs.povms[cur_label] = _objs.UnconstrainedPOVM( effects )
+                mdl.povms[cur_label] = _objs.UnconstrainedPOVM( effects )
             elif cur_typ == "TP-POVM":
                 assert(len(effects) > 1), "TP-POVMs must have at least 2 elements!"
-                gs.povms[cur_label] = _objs.TPPOVM( effects )
+                mdl.povms[cur_label] = _objs.TPPOVM( effects )
             elif cur_typ == "CPTP-POVM":
                 props = obj['properties']
                 assert("ErrgenMx" in props) # and it must always be a Liouville rep!
@@ -914,17 +954,17 @@ def read_gateset(filename):
                 nQubits = _np.log2(qty.size)/2.0
                 bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
                 proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-                errorMap = _objs.LindbladParameterizedGate.from_gate_matrix(
+                errorMap = _objs.LindbladDenseOp.from_operation_matrix(
                     qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis) #unitary postfactor = Id
                 base_povm = _objs.UnconstrainedPOVM(effects) # could try to detect a ComputationalBasisPOVM in FUTURE
-                gs.povms[cur_label] = _objs.LindbladParameterizedPOVM(errorMap, base_povm)
+                mdl.povms[cur_label] = _objs.LindbladPOVM(errorMap, base_povm)
             else: assert(False), "Logic error!"
             
         elif cur_typ == "GATE":
-            gs.gates[cur_label] = _objs.FullyParameterizedGate(
+            mdl.operations[cur_label] = _objs.FullDenseOp(
                 get_liouville_mx(obj))
         elif cur_typ == "TP-GATE":
-            gs.gates[cur_label] = _objs.TPParameterizedGate(
+            mdl.operations[cur_label] = _objs.TPDenseOp(
                 get_liouville_mx(obj))
         elif cur_typ == "CPTP-GATE":
             qty = get_liouville_mx(obj)
@@ -935,11 +975,11 @@ def read_gateset(filename):
             nQubits = _np.log2(qty.shape[0])/2.0
             bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-            gs.gates[cur_label] = _objs.LindbladParameterizedGate.from_gate_matrix(
+            mdl.operations[cur_label] = _objs.LindbladDenseOp.from_operation_matrix(
                 qty, unitary_post, proj_basis, proj_basis, truncate=False, mxBasis=basis)
 
         elif cur_typ == "STATIC-GATE":
-            gs.gates[cur_label] = _objs.StaticGate(get_liouville_mx(obj))
+            mdl.operations[cur_label] = _objs.StaticDenseOp(get_liouville_mx(obj))
 
 
         elif cur_typ in ("Instrument","TP-Instrument"):
@@ -947,44 +987,28 @@ def read_gateset(filename):
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 qty = get_liouville_mx(sub_obj)
-                mxOrGate = _objs.StaticGate(qty) if cur_typ == "STATIC-IGATE" \
+                mxOrOp = _objs.StaticDenseOp(qty) if cur_typ == "STATIC-IGATE" \
                        else qty #just add numpy array `qty` to matrices list
                                 # and it will be made into a fully-param gate.
-                matrices.append( (sub_obj['label'],mxOrGate) )
+                matrices.append( (sub_obj['label'],mxOrOp) )
 
             if cur_typ == "Instrument":
-                gs.instruments[cur_label] = _objs.Instrument( matrices )
+                mdl.instruments[cur_label] = _objs.Instrument( matrices )
             elif cur_typ == "TP-Instrument":
-                gs.instruments[cur_label] = _objs.TPInstrument( matrices )
+                mdl.instruments[cur_label] = _objs.TPInstrument( matrices )
             else: assert(False), "Logic error!"
         else:
             raise ValueError("Unknown type: %s!" % cur_typ)
 
-
-            
-    #Try to infer basis dimension if none is given
-    if basis_dims is None:
-        if gs.get_dimension() is not None:
-            basis_dims = int(round(_np.sqrt(gs.get_dimension())))
-        elif len(spam_vecs) > 0:
-            basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
-        else:
-            raise ValueError("Cannot infer basis dimension!")
-
-        #Set basis (only needed if we didn't set it above)
-        gs.basis = _objs.Basis(basis_abbrev, basis_dims)
-    else:
-        gs.basis = basis # already created a Basis obj above
-
     #Add default gauge group -- the full group because
     # we add FullyParameterizedGates above.
     if gaugegroup_name == "Full":
-        gs.default_gauge_group = _objs.FullGaugeGroup(gs.dim)
+        mdl.default_gauge_group = _objs.FullGaugeGroup(mdl.dim)
     elif gaugegroup_name == "TP":
-        gs.default_gauge_group = _objs.TPGaugeGroup(gs.dim)
+        mdl.default_gauge_group = _objs.TPGaugeGroup(mdl.dim)
     elif gaugegroup_name == "Unitary":
-        gs.default_gauge_group = _objs.UnitaryGaugeGroup(gs.dim, gs.basis)
+        mdl.default_gauge_group = _objs.UnitaryGaugeGroup(mdl.dim, mdl.basis)
     else:
-        gs.default_gauge_group = None
+        mdl.default_gauge_group = None
         
-    return gs
+    return mdl

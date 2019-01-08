@@ -333,13 +333,14 @@ def do_grasp_iteration(elements, greedyScoreFn, rclFn, localScoreFn,
                                             feasibleThreshold, feasibleFn,
                                             initialElements)
     printer.log('Initial construction:', 1)
-    printer.log(str([str(element) for element in initialSoln]), 1)
+    to_str = lambda x: x.str if isinstance(x,_objs.Circuit) else str(x)
+    printer.log(str([to_str(element) for element in initialSoln]), 1)
 
     localSoln = grasp_local_search(initialSoln, localScoreFn, elements,
                                    getNeighborsFn, feasibleThreshold,
                                    feasibleFn)
     printer.log('Local optimum:', 1)
-    printer.log(str([str(element) for element in localSoln]), 1)
+    printer.log(str([to_str(element) for element in localSoln]), 1)
 
     return initialSoln, localSoln
 
@@ -413,7 +414,7 @@ def do_grasp(elements, greedyScoreFn, rclFn, localScoreFn, getNeighborsFn,
 
     Returns
     -------
-    list of GateString
+    list of Circuits
         The best germ set from all locally-optimal germ sets constructed.
 
     """

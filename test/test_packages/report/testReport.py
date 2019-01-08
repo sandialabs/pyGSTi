@@ -51,8 +51,8 @@ class TestReport(ReportBaseCase):
             pygsti.report.create_standard_report(self.results,temp_files + "/XXX.pdf")
 
     def test_std_clifford_comp(self):
-        self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(std.gs_target,3) is not None)
-        nonStdGS = std.gs_target.rotate((0.15,-0.03,0.03))
+        self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(std.target_model(),3) is not None)
+        nonStdGS = std.target_model().rotate((0.15,-0.03,0.03))
         self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(nonStdGS) is None)
         
 
@@ -120,9 +120,9 @@ class TestReport(ReportBaseCase):
         vs = self.versionsuffix
 
         #Also test adding a model-test estimate to this report
-        gs_guess = std.gs_target.depolarize(gate_noise=0.07,spam_noise=0.03)
+        mdl_guess = std.target_model().depolarize(op_noise=0.07,spam_noise=0.03)
         results = self.results_logL.copy()
-        results.add_model_test(std.gs_target, gs_guess, estimate_key='Test', gauge_opt_keys="auto")
+        results.add_model_test(std.target_model(), mdl_guess, estimate_key='Test', gauge_opt_keys="auto")
 
         
         #Note: this report will have (un-combined) Robust estimates too
@@ -171,14 +171,14 @@ class TestReport(ReportBaseCase):
 
     def test_inline_template(self):
         #Generate some results (quickly)
-        gs_tgt = std.gs_target.copy()
-        gs_datagen = gs_tgt.depolarize(gate_noise=0.01,spam_noise=0.01)
-        gateStrings = pygsti.construction.make_lsgst_experiment_list(
-            gs_tgt, std.fiducials, std.fiducials, std.germs,[1])
+        mdl_tgt = std.target_model()
+        mdl_datagen = mdl_tgt.depolarize(op_noise=0.01,spam_noise=0.01)
+        circuits = pygsti.construction.make_lsgst_experiment_list(
+            mdl_tgt, std.fiducials, std.fiducials, std.germs,[1])
         ds = pygsti.construction.generate_fake_data(
-            gs_datagen, gateStrings, nSamples=10000, sampleError='round')
-        gs_test = gs_tgt.depolarize(gate_noise=0.01,spam_noise=0.01)
-        results = pygsti.do_model_test(gs_test, ds, gs_tgt, std.fiducials, std.fiducials, std.germs, [1])
+            mdl_datagen, circuits, nSamples=10000, sampleError='round')
+        mdl_test = mdl_tgt.depolarize(op_noise=0.01,spam_noise=0.01)
+        results = pygsti.do_model_test(mdl_test, ds, mdl_tgt, std.fiducials, std.fiducials, std.germs, [1])
         
         #Mimic factory report creation to test "inline" rendering of switchboards, tables, and figures:
         qtys = {}
@@ -387,35 +387,35 @@ class TestReport(ReportBaseCase):
 #        #Test that None is returned when qty cannot be computed
 #        qty = pygsti.report.reportables.compute_dataset_qty("FooBar",self.ds)
 #        self.assertIsNone(qty)
-#        qty = pygsti.report.reportables.compute_gateset_qty("FooBar",self.gs_clgst)
+#        qty = pygsti.report.reportables.compute_gateset_qty("FooBar",self.mdl_clgst)
 #        self.assertIsNone(qty)
-#        qty = pygsti.report.reportables.compute_gateset_dataset_qty("FooBar",self.gs_clgst, self.ds)
+#        qty = pygsti.report.reportables.compute_gateset_dataset_qty("FooBar",self.mdl_clgst, self.ds)
 #        self.assertIsNone(qty)
-#        qty = pygsti.report.reportables.compute_gateset_gateset_qty("FooBar",self.gs_clgst, self.gs_clgst)
+#        qty = pygsti.report.reportables.compute_gateset_gateset_qty("FooBar",self.mdl_clgst, self.mdl_clgst)
 #        self.assertIsNone(qty)
 #
-#        #test ignoring gate strings not in dataset
-#        qty = pygsti.report.reportables.compute_dataset_qty("gate string length", self.ds,
-#                                                            pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
-#        qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(0) diff", self.gs_clgst, self.ds,
-#                                                            pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
+#        #test ignoring operation sequences not in dataset
+#        qty = pygsti.report.reportables.compute_dataset_qty("operation sequence length", self.ds,
+#                                                            pygsti.construction.circuit_list([('Gx','Gx'),('Gfoobar',)]) )
+#        qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(0) diff", self.mdl_clgst, self.ds,
+#                                                            pygsti.construction.circuit_list([('Gx','Gx'),('Gfoobar',)]) )
 #        qty_str = str(qty) #test __str__
 #
-#        #Test gateset gates mismatch
+#        #Test model gates mismatch
 #        from pygsti.construction import std1Q_XY as stdXY
 #        with self.assertRaises(ValueError):
 #            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
-#                "Gx fidelity",std.gs_target, stdXY.gs_target) #Gi missing from 2nd gateset
+#                "Gx fidelity",std.target_model(), stdXY.target_model()) #Gi missing from 2nd model
 #        with self.assertRaises(ValueError):
 #            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
-#                "Gx fidelity",stdXY.gs_target, std.gs_target) #Gi missing from 1st gateset
+#                "Gx fidelity",stdXY.target_model(), std.target_model()) #Gi missing from 1st model
 
 
 
 #def test_results_object(self):
 #    results = pygsti.report.Results()
-#    results.init_single("logl", self.targetGateset, self.ds, self.gs_clgst,
-#                        self.lgstStrings, self.targetGateset)
+#    results.init_single("logl", self.targetModel, self.ds, self.mdl_clgst,
+#                        self.lgstStrings, self.targetModel)
 #
 #    results.parameters.update(
 #        {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
@@ -446,8 +446,8 @@ class TestReport(ReportBaseCase):
 #
 #    #similar test for chi2 hessian
 #    results2 = pygsti.report.Results()
-#    results2.init_single("chi2", self.targetGateset, self.ds, self.gs_clgst,
-#                        self.lgstStrings, self.targetGateset)
+#    results2.init_single("chi2", self.targetModel, self.ds, self.mdl_clgst,
+#                        self.lgstStrings, self.targetModel)
 #    results2.parameters.update(
 #        {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
 #         'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
@@ -468,9 +468,9 @@ class TestReport(ReportBaseCase):
 #    results_str = str(results)
 #    tableNames = list(results.tables.keys())
 #    figNames = list(results.figures.keys())
-#    for g in results.gatesets:
+#    for g in results.models:
 #        s = str(g)
-#    for g in results.gatestring_lists:
+#    for g in results.circuit_lists:
 #        s = str(g)
 #    s = str(results.dataset)
 #    s = str(results.options)
@@ -504,10 +504,10 @@ class TestReport(ReportBaseCase):
 #
 #    #bad objective function name
 #    results_badObjective = pygsti.report.Results()
-#    #results_badObjective.init_single("foobar", self.targetGateset, self.ds, self.gs_clgst,
+#    #results_badObjective.init_single("foobar", self.targetModel, self.ds, self.mdl_clgst,
 #    #                                 self.lgstStrings)
-#    results_badObjective.init_Ls_and_germs("foobar", self.targetGateset, self.ds, self.gs_clgst, [0], self.germs,
-#                                           [self.gs_clgst], [self.lgstStrings], self.fiducials, self.fiducials,
+#    results_badObjective.init_Ls_and_germs("foobar", self.targetModel, self.ds, self.mdl_clgst, [0], self.germs,
+#                                           [self.mdl_clgst], [self.lgstStrings], self.fiducials, self.fiducials,
 #                                           pygsti.construction.repeat_with_max_length, True)
 #
 #    with self.assertRaises(ValueError):

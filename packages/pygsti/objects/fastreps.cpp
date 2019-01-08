@@ -214,12 +214,12 @@ namespace CReps {
   |* DMEffectCRep_Errgen                                                      *|
   \****************************************************************************/
 
-  DMEffectCRep_Errgen::DMEffectCRep_Errgen(DMGateCRep* errgen_gaterep,
+  DMEffectCRep_Errgen::DMEffectCRep_Errgen(DMOpCRep* errgen_oprep,
 					   DMEffectCRep* effect_rep,
 					   INT errgen_id, INT dim)
     :DMEffectCRep(dim)
   {
-    _errgen_ptr = errgen_gaterep;
+    _errgen_ptr = errgen_oprep;
     _effect_ptr = effect_rep;
     _errgen_id = errgen_id;
   }
@@ -234,27 +234,27 @@ namespace CReps {
 
 
   /****************************************************************************\
-  |* DMGateCRep                                                               *|
+  |* DMOpCRep                                                               *|
   \****************************************************************************/
 
-  DMGateCRep::DMGateCRep(INT dim) {
+  DMOpCRep::DMOpCRep(INT dim) {
     _dim = dim;
   }
-  DMGateCRep::~DMGateCRep() { }
+  DMOpCRep::~DMOpCRep() { }
 
 
   /****************************************************************************\
-  |* DMGateCRep_Dense                                                         *|
+  |* DMOpCRep_Dense                                                         *|
   \****************************************************************************/
 
-  DMGateCRep_Dense::DMGateCRep_Dense(double* data, INT dim)
-    :DMGateCRep(dim)
+  DMOpCRep_Dense::DMOpCRep_Dense(double* data, INT dim)
+    :DMOpCRep(dim)
   {
     _dataptr = data;
   }
-  DMGateCRep_Dense::~DMGateCRep_Dense() { }
+  DMOpCRep_Dense::~DMOpCRep_Dense() { }
 
-  DMStateCRep* DMGateCRep_Dense::acton(DMStateCRep* state,
+  DMStateCRep* DMOpCRep_Dense::acton(DMStateCRep* state,
 				       DMStateCRep* outstate) {
     DEBUG(std::cout << "Dense acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
@@ -270,7 +270,7 @@ namespace CReps {
     return outstate;
   }
 
-  DMStateCRep* DMGateCRep_Dense::adjoint_acton(DMStateCRep* state,
+  DMStateCRep* DMOpCRep_Dense::adjoint_acton(DMStateCRep* state,
 					       DMStateCRep* outstate) {
     DEBUG(std::cout << "Dense adjoint_acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
@@ -286,14 +286,14 @@ namespace CReps {
 
 
   /****************************************************************************\
-  |* DMGateCRep_Embedded                                                      *|
+  |* DMOpCRep_Embedded                                                      *|
   \****************************************************************************/
 
-  DMGateCRep_Embedded::DMGateCRep_Embedded(DMGateCRep* embedded_gate_crep, INT* noop_incrementers,
+  DMOpCRep_Embedded::DMOpCRep_Embedded(DMOpCRep* embedded_gate_crep, INT* noop_incrementers,
 					   INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
 					   INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
 					   INT nBlocks, INT dim)
-    :DMGateCRep(dim)
+    :DMOpCRep(dim)
   {
     _embedded_gate_crep = embedded_gate_crep;
     _noop_incrementers = noop_incrementers;
@@ -305,13 +305,13 @@ namespace CReps {
     _iActiveBlock = iActiveBlock;
     _nBlocks = nBlocks;
   }
-  DMGateCRep_Embedded::~DMGateCRep_Embedded() { }
+  DMOpCRep_Embedded::~DMOpCRep_Embedded() { }
   
-  DMStateCRep* DMGateCRep_Embedded::acton(DMStateCRep* state, DMStateCRep* out_state) {
+  DMStateCRep* DMOpCRep_Embedded::acton(DMStateCRep* state, DMStateCRep* out_state) {
 
     DEBUG(std::cout << "Emedded acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
-    //_fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
+    //_fastcalc.embedded_fast_acton_sparse(self.embedded_op.acton,
     //                                         output_state, state,
     //                                         self.noop_incrementers,
     //                                         self.numBasisEls_noop_blankaction,
@@ -375,7 +375,7 @@ namespace CReps {
   }
 
 
-  DMStateCRep* DMGateCRep_Embedded::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
+  DMStateCRep* DMOpCRep_Embedded::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
 
     //Note: exactly the same as acton(...) but calls embedded gate's adjoint_acton
     DEBUG(std::cout << "Emedded adjoint_acton called!" << std::endl);
@@ -441,15 +441,15 @@ namespace CReps {
 
 
   /****************************************************************************\
-  |* DMGateCRep_Composed                                                      *|
+  |* DMOpCRep_Composed                                                      *|
   \****************************************************************************/
-  DMGateCRep_Composed::DMGateCRep_Composed(std::vector<DMGateCRep*> factor_gate_creps, INT dim)
-    :DMGateCRep(dim),_factor_gate_creps(factor_gate_creps)
+  DMOpCRep_Composed::DMOpCRep_Composed(std::vector<DMOpCRep*> factor_gate_creps, INT dim)
+    :DMOpCRep(dim),_factor_gate_creps(factor_gate_creps)
   {
   }
-  DMGateCRep_Composed::~DMGateCRep_Composed() { }
+  DMOpCRep_Composed::~DMOpCRep_Composed() { }
   
-  DMStateCRep* DMGateCRep_Composed::acton(DMStateCRep* state, DMStateCRep* out_state) {
+  DMStateCRep* DMOpCRep_Composed::acton(DMStateCRep* state, DMStateCRep* out_state) {
 
     DEBUG(std::cout << "Composed acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
@@ -485,7 +485,7 @@ namespace CReps {
     return out_state;
   }
 
-  DMStateCRep* DMGateCRep_Composed::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
+  DMStateCRep* DMOpCRep_Composed::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
 
     DEBUG(std::cout << "Composed adjoint_acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
@@ -516,25 +516,81 @@ namespace CReps {
     return out_state;
   }
 
+  /****************************************************************************\
+  |* DMOpCRep_Sum                                                           *|
+  \****************************************************************************/
+  DMOpCRep_Sum::DMOpCRep_Sum(std::vector<DMOpCRep*> factor_creps, INT dim)
+    :DMOpCRep(dim),_factor_creps(factor_creps)
+  {
+  }
+  DMOpCRep_Sum::~DMOpCRep_Sum() { }
+  
+  DMStateCRep* DMOpCRep_Sum::acton(DMStateCRep* state, DMStateCRep* out_state) {
+
+    DEBUG(std::cout << "Sum acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    std::size_t nfactors = _factor_creps.size();
+    DMStateCRep temp_state(_dim);
+
+    //zero-out output state
+    for(INT k=0; k<_dim; k++)
+      out_state->_dataptr[k] = 0.0;
+
+    //if length is 0 just return "0" state --> outstate
+    if(nfactors == 0) return out_state;
+
+    //Act with factors and accumulate into out_state
+    for(std::size_t i=0; i < nfactors; i++) {
+      _factor_creps[i]->acton(state,&temp_state);
+      for(INT k=0; k<_dim; k++)
+	out_state->_dataptr[k] += temp_state._dataptr[k];
+    }
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
+  DMStateCRep* DMOpCRep_Sum::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
+
+    //Note: same as acton(...) but perform adjoint_acton
+    DEBUG(std::cout << "Sum adjoint_acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    std::size_t nfactors = _factor_creps.size();
+    DMStateCRep temp_state(_dim);
+
+    //zero-out output state
+    for(INT k=0; k<_dim; k++)
+      out_state->_dataptr[k] = 0.0;
+
+    //if length is 0 just return "0" state --> outstate
+    if(nfactors == 0) return out_state;
+
+    //Act with factors and accumulate into out_state
+    for(std::size_t i=0; i < nfactors; i++) {
+      _factor_creps[i]->adjoint_acton(state,&temp_state);
+      for(INT k=0; k<_dim; k++)
+	out_state->_dataptr[k] += temp_state._dataptr[k];
+    }
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
 
   /****************************************************************************\
-  |* DMGateCRep_Lindblad                                                      *|
+  |* DMOpCRep_Lindblad                                                      *|
   \****************************************************************************/
-  DMGateCRep_Lindblad::DMGateCRep_Lindblad(double* A_data, INT* A_indices, INT* A_indptr, INT nnz,
+
+  DMOpCRep_Lindblad::DMOpCRep_Lindblad(DMOpCRep* errgen_rep,
 			double mu, double eta, INT m_star, INT s, INT dim,
 			double* unitarypost_data, INT* unitarypost_indices,
 			INT* unitarypost_indptr, INT unitarypost_nnz)
-    :DMGateCRep(dim)
+    :DMOpCRep(dim)
   {
     _U_data = unitarypost_data;
     _U_indices = unitarypost_indices;
     _U_indptr = unitarypost_indptr;
     _U_nnz = unitarypost_nnz;
     
-    _A_data = A_data;
-    _A_indices = A_indices;
-    _A_indptr = A_indptr;
-    _A_nnz = nnz;
+    _errgen_rep = errgen_rep;
     
     _mu = mu;
     _eta = eta;
@@ -542,9 +598,9 @@ namespace CReps {
     _s = s;
   }
       
-  DMGateCRep_Lindblad::~DMGateCRep_Lindblad() { }
+  DMOpCRep_Lindblad::~DMOpCRep_Lindblad() { }
 
-  DMStateCRep* DMGateCRep_Lindblad::acton(DMStateCRep* state, DMStateCRep* out_state)
+  DMStateCRep* DMOpCRep_Lindblad::acton(DMStateCRep* state, DMStateCRep* out_state)
   {
     INT i, j;
     DMStateCRep* init_state = new DMStateCRep(_dim);
@@ -579,8 +635,8 @@ namespace CReps {
     double tol = 1e-16; // 2^-53 (=Scipy default) -- TODO: make into an arg...
 
     // F = expm(A)*B
-    expm_multiply_simple_core(_A_data, _A_indptr, _A_indices, B,
-			      N, _mu, _m_star, _s, tol, _eta, F, scratch);
+    expm_multiply_simple_core_rep(_errgen_rep, B, N, _mu,
+				  _m_star, _s, tol, _eta, F, scratch);
 
     //cleanup what we allocated
     delete [] scratch;
@@ -590,8 +646,46 @@ namespace CReps {
     return out_state;
   }
 
-  DMStateCRep* DMGateCRep_Lindblad::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
+  DMStateCRep* DMOpCRep_Lindblad::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
     assert(false); //ajoint_acton not implemented yet for Lindblad gates (TODO LATER)
+    return NULL; //to avoid compiler warning
+  }
+
+
+  /****************************************************************************\
+  |* DMOpCRep_Sparse                                                        *|
+  \****************************************************************************/
+
+  DMOpCRep_Sparse::DMOpCRep_Sparse(double* A_data, INT* A_indices, INT* A_indptr,
+				       INT nnz, INT dim)
+    :DMOpCRep(dim)
+  {
+    _A_data = A_data;
+    _A_indices = A_indices;
+    _A_indptr = A_indptr;
+    _A_nnz = nnz;
+  }
+      
+  DMOpCRep_Sparse::~DMOpCRep_Sparse() { }
+
+  DMStateCRep* DMOpCRep_Sparse::acton(DMStateCRep* state, DMStateCRep* out_state)
+  {
+    // csr_matvec: implements out_state = A * state
+    int r,k;
+    INT N = _dim; // = length(_A_indptr)-1
+    double* indata = state->_dataptr;
+    double* outdata = out_state->_dataptr;
+    for(r=0; r<N; r++) {
+      outdata[r] = 0;
+      for(k=_A_indptr[r]; k<_A_indptr[r+1]; k++)
+	outdata[r] += _A_data[k] * indata[ _A_indices[k]];
+    }
+    return out_state;
+  }
+
+  DMStateCRep* DMOpCRep_Sparse::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
+    //Need to take transpose of a CSR matrix then mult by vector...
+    assert(false); //ajoint_acton not implemented yet for Sparse gates (TODO LATER)
     return NULL; //to avoid compiler warning
   }
 
@@ -784,27 +878,27 @@ namespace CReps {
     
 
   /****************************************************************************\
-  |* SVGateCRep                                                               *|
+  |* SVOpCRep                                                               *|
   \****************************************************************************/
 
-  SVGateCRep::SVGateCRep(INT dim) {
+  SVOpCRep::SVOpCRep(INT dim) {
     _dim = dim;
   }
-  SVGateCRep::~SVGateCRep() { }
+  SVOpCRep::~SVOpCRep() { }
 
 
   /****************************************************************************\
-  |* SVGateCRep_Dense                                                         *|
+  |* SVOpCRep_Dense                                                         *|
   \****************************************************************************/
 
-  SVGateCRep_Dense::SVGateCRep_Dense(dcomplex* data, INT dim)
-    :SVGateCRep(dim)
+  SVOpCRep_Dense::SVOpCRep_Dense(dcomplex* data, INT dim)
+    :SVOpCRep(dim)
   {
     _dataptr = data;
   }
-  SVGateCRep_Dense::~SVGateCRep_Dense() { }
+  SVOpCRep_Dense::~SVOpCRep_Dense() { }
 
-  SVStateCRep* SVGateCRep_Dense::acton(SVStateCRep* state,
+  SVStateCRep* SVOpCRep_Dense::acton(SVStateCRep* state,
 				       SVStateCRep* outstate) {
     DEBUG(std::cout << "Dense acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
@@ -820,7 +914,7 @@ namespace CReps {
     return outstate;
   }
 
-  SVStateCRep* SVGateCRep_Dense::adjoint_acton(SVStateCRep* state,
+  SVStateCRep* SVOpCRep_Dense::adjoint_acton(SVStateCRep* state,
 					       SVStateCRep* outstate) {
     DEBUG(std::cout << "Dense adjoint_acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
@@ -836,14 +930,14 @@ namespace CReps {
 
 
   /****************************************************************************\
-  |* SVGateCRep_Embedded                                                      *|
+  |* SVOpCRep_Embedded                                                      *|
   \****************************************************************************/
 
-  SVGateCRep_Embedded::SVGateCRep_Embedded(SVGateCRep* embedded_gate_crep, INT* noop_incrementers,
+  SVOpCRep_Embedded::SVOpCRep_Embedded(SVOpCRep* embedded_gate_crep, INT* noop_incrementers,
 					   INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
 					   INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
 					   INT nBlocks, INT dim)
-    :SVGateCRep(dim)
+    :SVOpCRep(dim)
   {
     _embedded_gate_crep = embedded_gate_crep;
     _noop_incrementers = noop_incrementers;
@@ -855,13 +949,13 @@ namespace CReps {
     _iActiveBlock = iActiveBlock;
     _nBlocks = nBlocks;
   }
-  SVGateCRep_Embedded::~SVGateCRep_Embedded() { }
+  SVOpCRep_Embedded::~SVOpCRep_Embedded() { }
   
-  SVStateCRep* SVGateCRep_Embedded::acton(SVStateCRep* state, SVStateCRep* out_state) {
+  SVStateCRep* SVOpCRep_Embedded::acton(SVStateCRep* state, SVStateCRep* out_state) {
 
     DEBUG(std::cout << "Emedded acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
-    //_fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
+    //_fastcalc.embedded_fast_acton_sparse(self.embedded_op.acton,
     //                                         output_state, state,
     //                                         self.noop_incrementers,
     //                                         self.numBasisEls_noop_blankaction,
@@ -925,7 +1019,7 @@ namespace CReps {
   }
 
 
-  SVStateCRep* SVGateCRep_Embedded::adjoint_acton(SVStateCRep* state, SVStateCRep* out_state) {
+  SVStateCRep* SVOpCRep_Embedded::adjoint_acton(SVStateCRep* state, SVStateCRep* out_state) {
 
     //Note: exactly the same as acton(...) but calls embedded gate's adjoint_acton
     DEBUG(std::cout << "Emedded adjoint_acton called!" << std::endl);
@@ -991,15 +1085,15 @@ namespace CReps {
 
 
   /****************************************************************************\
-  |* SVGateCRep_Composed                                                      *|
+  |* SVOpCRep_Composed                                                      *|
   \****************************************************************************/
-  SVGateCRep_Composed::SVGateCRep_Composed(std::vector<SVGateCRep*> factor_gate_creps, INT dim)
-    :SVGateCRep(dim),_factor_gate_creps(factor_gate_creps)
+  SVOpCRep_Composed::SVOpCRep_Composed(std::vector<SVOpCRep*> factor_gate_creps, INT dim)
+    :SVOpCRep(dim),_factor_gate_creps(factor_gate_creps)
   {
   }
-  SVGateCRep_Composed::~SVGateCRep_Composed() { }
+  SVOpCRep_Composed::~SVOpCRep_Composed() { }
   
-  SVStateCRep* SVGateCRep_Composed::acton(SVStateCRep* state, SVStateCRep* out_state) {
+  SVStateCRep* SVOpCRep_Composed::acton(SVStateCRep* state, SVStateCRep* out_state) {
 
     DEBUG(std::cout << "Composed acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
@@ -1035,7 +1129,7 @@ namespace CReps {
     return out_state;
   }
 
-  SVStateCRep* SVGateCRep_Composed::adjoint_acton(SVStateCRep* state, SVStateCRep* out_state) {
+  SVStateCRep* SVOpCRep_Composed::adjoint_acton(SVStateCRep* state, SVStateCRep* out_state) {
 
     DEBUG(std::cout << "Composed adjoint_acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
@@ -1065,6 +1159,67 @@ namespace CReps {
     DEBUG(out_state->print("OUTPUT"));
     return out_state;
   }
+
+
+
+  /****************************************************************************\
+  |* SVOpCRep_Sum                                                           *|
+  \****************************************************************************/
+  SVOpCRep_Sum::SVOpCRep_Sum(std::vector<SVOpCRep*> factor_creps, INT dim)
+    :SVOpCRep(dim),_factor_creps(factor_creps)
+  {
+  }
+  SVOpCRep_Sum::~SVOpCRep_Sum() { }
+  
+  SVStateCRep* SVOpCRep_Sum::acton(SVStateCRep* state, SVStateCRep* out_state) {
+
+    DEBUG(std::cout << "Sum acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    std::size_t nfactors = _factor_creps.size();
+    SVStateCRep temp_state(_dim);
+
+    //zero-out output state
+    for(INT k=0; k<_dim; k++)
+      out_state->_dataptr[k] = 0.0;
+
+    //if length is 0 just return "0" state --> outstate
+    if(nfactors == 0) return out_state;
+
+    //Act with factors and accumulate into out_state
+    for(std::size_t i=0; i < nfactors; i++) {
+      _factor_creps[i]->acton(state,&temp_state);
+      for(INT k=0; k<_dim; k++)
+	out_state->_dataptr[k] += temp_state._dataptr[k];
+    }
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
+  SVStateCRep* SVOpCRep_Sum::adjoint_acton(SVStateCRep* state, SVStateCRep* out_state) {
+
+    //Note: same as acton(...) but perform adjoint_acton
+    DEBUG(std::cout << "Sum adjoint_acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    std::size_t nfactors = _factor_creps.size();
+    SVStateCRep temp_state(_dim);
+
+    //zero-out output state
+    for(INT k=0; k<_dim; k++)
+      out_state->_dataptr[k] = 0.0;
+
+    //if length is 0 just return "0" state --> outstate
+    if(nfactors == 0) return out_state;
+
+    //Act with factors and accumulate into out_state
+    for(std::size_t i=0; i < nfactors; i++) {
+      _factor_creps[i]->adjoint_acton(state,&temp_state);
+      for(INT k=0; k<_dim; k++)
+	out_state->_dataptr[k] += temp_state._dataptr[k];
+    }
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
 
 
   // STABILIZER propagation
@@ -1849,26 +2004,26 @@ namespace CReps {
 
 
   /****************************************************************************\
-  |* SBGateCRep                                                               *|
+  |* SBOpCRep                                                               *|
   \****************************************************************************/
-  SBGateCRep::SBGateCRep(INT n) {
+  SBOpCRep::SBOpCRep(INT n) {
     _n = n;
   }
-  SBGateCRep::~SBGateCRep() { }
+  SBOpCRep::~SBOpCRep() { }
 
   /****************************************************************************\
-  |* SBGateCRep_Embedded                                                      *|
+  |* SBOpCRep_Embedded                                                      *|
   \****************************************************************************/
-  SBGateCRep_Embedded::SBGateCRep_Embedded(SBGateCRep* embedded_gate_crep, INT n, INT* qubits, INT nqubits)
-    :SBGateCRep(n),_qubits(nqubits)
+  SBOpCRep_Embedded::SBOpCRep_Embedded(SBOpCRep* embedded_gate_crep, INT n, INT* qubits, INT nqubits)
+    :SBOpCRep(n),_qubits(nqubits)
   {
     _embedded_gate_crep = embedded_gate_crep;
     for(INT i=0; i<nqubits; i++)
       _qubits[i] = qubits[i];
   }
-  SBGateCRep_Embedded::~SBGateCRep_Embedded() { }
+  SBOpCRep_Embedded::~SBOpCRep_Embedded() { }
   
-  SBStateCRep* SBGateCRep_Embedded::acton(SBStateCRep* state, SBStateCRep* out_state) {
+  SBStateCRep* SBOpCRep_Embedded::acton(SBStateCRep* state, SBStateCRep* out_state) {
     DEBUG(std::cout << "Stabilizer Embedded acton called!" << std::endl);
     state->push_view(_qubits);
     _embedded_gate_crep->acton(state, out_state);
@@ -1877,7 +2032,7 @@ namespace CReps {
     return out_state;
   }
 
-  SBStateCRep* SBGateCRep_Embedded::adjoint_acton(SBStateCRep* state, SBStateCRep* out_state) {
+  SBStateCRep* SBOpCRep_Embedded::adjoint_acton(SBStateCRep* state, SBStateCRep* out_state) {
     DEBUG(std::cout << "Stabilizer Embedded adjoint_acton called!" << std::endl);
     state->push_view(_qubits);
     _embedded_gate_crep->adjoint_acton(state, out_state);
@@ -1888,15 +2043,15 @@ namespace CReps {
 
 
   /****************************************************************************\
-  |* SBGateCRep_Composed                                                      *|
+  |* SBOpCRep_Composed                                                      *|
   \****************************************************************************/
-  SBGateCRep_Composed::SBGateCRep_Composed(std::vector<SBGateCRep*> factor_gate_creps, INT n)
-    :SBGateCRep(n),_factor_gate_creps(factor_gate_creps)
+  SBOpCRep_Composed::SBOpCRep_Composed(std::vector<SBOpCRep*> factor_gate_creps, INT n)
+    :SBOpCRep(n),_factor_gate_creps(factor_gate_creps)
   {
   }
-  SBGateCRep_Composed::~SBGateCRep_Composed() { }
+  SBOpCRep_Composed::~SBOpCRep_Composed() { }
 
-  SBStateCRep* SBGateCRep_Composed::acton(SBStateCRep* state, SBStateCRep* out_state) {
+  SBStateCRep* SBOpCRep_Composed::acton(SBStateCRep* state, SBStateCRep* out_state) {
     DEBUG(std::cout << "Stabilizer Composed acton called!" << std::endl);
     std::size_t nfactors = _factor_gate_creps.size();
     SBStateCRep *tmp2, *tmp1 = out_state; //tmp1 already alloc'd
@@ -1929,7 +2084,7 @@ namespace CReps {
     return out_state;
   }
 
-  SBStateCRep* SBGateCRep_Composed::adjoint_acton(SBStateCRep* state, SBStateCRep* out_state) {
+  SBStateCRep* SBOpCRep_Composed::adjoint_acton(SBStateCRep* state, SBStateCRep* out_state) {
     DEBUG(std::cout << "Stabilizer Composed adjoint_acton called!" << std::endl);
     std::size_t nfactors = _factor_gate_creps.size();
     SBStateCRep *tmp2, *tmp1 = out_state; //tmp1 already alloc'd
@@ -1957,12 +2112,33 @@ namespace CReps {
   }
 
 
+
   /****************************************************************************\
-  |* SBGateCRep_Clifford                                                      *|
+  |* SBOpCRep_Sum                                                           *|
   \****************************************************************************/
-  SBGateCRep_Clifford::SBGateCRep_Clifford(INT* smatrix, INT* svector, dcomplex* unitary,
+  SBOpCRep_Sum::SBOpCRep_Sum(std::vector<SBOpCRep*> factor_creps, INT n)
+    :SBOpCRep(n),_factor_creps(factor_creps)
+  {
+  }
+  SBOpCRep_Sum::~SBOpCRep_Sum() { }
+
+  SBStateCRep* SBOpCRep_Sum::acton(SBStateCRep* state, SBStateCRep* out_state) {
+    assert(false); // need further stabilizer frame support to represent the sum of stabilizer states
+    return NULL; //to avoid compiler warning
+  }
+
+  SBStateCRep* SBOpCRep_Sum::adjoint_acton(SBStateCRep* state, SBStateCRep* out_state) {
+    assert(false); // need further stabilizer frame support to represent the sum of stabilizer states
+    return NULL; //to avoid compiler warning
+  }
+
+
+  /****************************************************************************\
+  |* SBOpCRep_Clifford                                                      *|
+  \****************************************************************************/
+  SBOpCRep_Clifford::SBOpCRep_Clifford(INT* smatrix, INT* svector, dcomplex* unitary,
 					   INT* smatrix_inv, INT* svector_inv, dcomplex* unitary_adj, INT n)
-    :SBGateCRep(n)
+    :SBOpCRep(n)
   {
     _smatrix = smatrix;
     _svector = svector;
@@ -1972,25 +2148,25 @@ namespace CReps {
     _unitary_adj = unitary_adj;
 
     //DEBUG!!!
-    //std::cout << "IN SBGateCRep_Clifford CONSTRUCTOR U = ";
+    //std::cout << "IN SBOpCRep_Clifford CONSTRUCTOR U = ";
     //for(int i=0; i<2*2; i++) std::cout << _unitary_adj[i] << " ";
     //std::cout << std::endl;
 
   }
-  SBGateCRep_Clifford::~SBGateCRep_Clifford() { }
+  SBOpCRep_Clifford::~SBOpCRep_Clifford() { }
   
-  SBStateCRep* SBGateCRep_Clifford::acton(SBStateCRep* state, SBStateCRep* out_state) {
+  SBStateCRep* SBOpCRep_Clifford::acton(SBStateCRep* state, SBStateCRep* out_state) {
     DEBUG(std::cout << "Stabilizer Clifford acton called!" << std::endl);
     out_state->copy_from(state);
     out_state->clifford_update(_smatrix, _svector, _unitary);
     return out_state;
   }
 
-  SBStateCRep* SBGateCRep_Clifford::adjoint_acton(SBStateCRep* state, SBStateCRep* out_state) {
+  SBStateCRep* SBOpCRep_Clifford::adjoint_acton(SBStateCRep* state, SBStateCRep* out_state) {
     DEBUG(std::cout << "Stabilizer Clifford adjoint_acton called!" << std::endl);
 
     //DEBUG!!!
-    //std::cout << "AT SBGateCRep_Clifford::adjoint_acton U = ";
+    //std::cout << "AT SBOpCRep_Clifford::adjoint_acton U = ";
     //for(INT i=0; i<2*2; i++) std::cout << _unitary_adj[i] << " ";
     //std::cout << std::endl;
     
@@ -2007,18 +2183,18 @@ namespace CReps {
 
   //        state = _mt.expm_multiply_fast(self.err_gen_prep, state) # (N,) -> (N,) shape mapping
 
-  //_fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
+  //_fastcalc.embedded_fast_acton_sparse(self.embedded_op.acton,
   //                                         output_state, state,
   //                                         self.noop_incrementers,
   //                                         self.numBasisEls_noop_blankaction,
   //                                         self.baseinds)
 
 
-  void expm_multiply_simple_core(double* Adata, INT* Aindptr,
-				 INT* Aindices, double* B,
-				 INT N, double mu, INT m_star,
-				 INT s, double tol, double eta,
-				 double* F, double* scratch) {
+  void expm_multiply_simple_core_sparsemx(double* Adata, INT* Aindptr,
+					  INT* Aindices, double* B,
+					  INT N, double mu, INT m_star,
+					  INT s, double tol, double eta,
+					  double* F, double* scratch) {
     INT i;
     INT j;
     INT r;
@@ -2067,6 +2243,73 @@ namespace CReps {
 	  for(k=Aindptr[r]; k<Aindptr[r+1]; k++)
 	    scratch[r] += Adata[k] * B[ Aindices[k]];
 	}
+
+	// if(j % 3 == 0) {...   // every == 3 TODO: work on this?
+	c2 = 0.0;
+	normF = 0.0;
+	for(k=0; k<N; k++) {
+	  B[k] = coeff * scratch[k]; //finishes B = coeff * A.dot(B) 
+	  F[k] += B[k]; //F += B
+        
+	  a = (B[k] >= 0)? B[k] : -B[k]; //abs(B[k])
+	  if(a > c2) c2 = a; // c2 = vec_inf_norm(B) // _exact_inf_norm(B)
+	  a = (F[k] >= 0)? F[k] : -F[k]; //abs(F[k])
+	  if(a > normF) normF = a; // normF = vec_inf_norm(F) // _exact_inf_norm(F)
+	}
+
+        // print("Iter %d,%d of %d,%d: %g+%g=%g < %g?" % (i,j,s,m_star,c1,c2,c1+c2,tol*normF))
+	if(c1 + c2 <= tol * normF) {
+	  // print(" --> YES - break early at %d of %d" % (i+1,s))
+	  break;
+	}
+	c1 = c2;
+      }
+
+      // F *= eta
+      // B = F
+      for(k=0; k<N; k++) {
+	F[k] *= eta;
+	B[k] = F[k];
+      }
+    }
+    // output value is in F upon returning
+  }
+
+
+  void expm_multiply_simple_core_rep(DMOpCRep* A_rep, double* B,
+				     INT N, double mu, INT m_star,
+				     INT s, double tol, double eta,
+				     double* F, double* scratch) {
+    INT i;
+    INT j;
+    INT k;
+
+    double a;
+    double c1;
+    double c2;
+    double coeff;
+    double normF;
+
+    DMStateCRep B_st(B, N); // just a wrapper
+    DMStateCRep scratch_st(scratch, N); // just a wrapper
+
+    for(i=0; i<N; i++) F[i] = B[i];
+    
+    for(i=0; i<s; i++) {
+      if(m_star > 0) { //added by EGN
+	//c1 = vec_inf_norm(B) #_exact_inf_norm(B)
+	c1 = 0.0;
+	for(k=0; k<N; k++) {
+	  a = (B[k] >= 0) ? B[k] : -B[k]; // abs(B[k])
+	  if(a > c1) c1 = a;
+	}
+      }
+      
+      for(j=0; j<m_star; j++) {
+	coeff = 1.0 / (s*(j+1)); // t == 1.0
+	
+	// B = coeff * A.dot(B)
+	A_rep->acton(&B_st,&scratch_st); // scratch = A.dot(B)
 
 	// if(j % 3 == 0) {...   // every == 3 TODO: work on this?
 	c2 = 0.0;
@@ -2219,7 +2462,7 @@ namespace CReps {
   \****************************************************************************/
     
   SVTermCRep::SVTermCRep(PolyCRep* coeff, SVStateCRep* pre_state, SVStateCRep* post_state,
-			 std::vector<SVGateCRep*> pre_ops, std::vector<SVGateCRep*> post_ops) {
+			 std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
     _pre_state = pre_state;
     _post_state = post_state;
@@ -2230,7 +2473,7 @@ namespace CReps {
   }
   
   SVTermCRep::SVTermCRep(PolyCRep* coeff, SVEffectCRep* pre_effect, SVEffectCRep* post_effect,
-			 std::vector<SVGateCRep*> pre_ops, std::vector<SVGateCRep*> post_ops) {
+			 std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
     _pre_state = NULL;
     _post_state = NULL;
@@ -2240,8 +2483,8 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  SVTermCRep::SVTermCRep(PolyCRep* coeff, std::vector<SVGateCRep*> pre_ops,
-			 std::vector<SVGateCRep*> post_ops) {
+  SVTermCRep::SVTermCRep(PolyCRep* coeff, std::vector<SVOpCRep*> pre_ops,
+			 std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
     _pre_state = NULL;
     _post_state = NULL;
@@ -2256,7 +2499,7 @@ namespace CReps {
   \****************************************************************************/
     
   SBTermCRep::SBTermCRep(PolyCRep* coeff, SBStateCRep* pre_state, SBStateCRep* post_state,
-			 std::vector<SBGateCRep*> pre_ops, std::vector<SBGateCRep*> post_ops) {
+			 std::vector<SBOpCRep*> pre_ops, std::vector<SBOpCRep*> post_ops) {
     _coeff = coeff;
     _pre_state = pre_state;
     _post_state = post_state;
@@ -2267,7 +2510,7 @@ namespace CReps {
   }
   
   SBTermCRep::SBTermCRep(PolyCRep* coeff, SBEffectCRep* pre_effect, SBEffectCRep* post_effect,
-			 std::vector<SBGateCRep*> pre_ops, std::vector<SBGateCRep*> post_ops) {
+			 std::vector<SBOpCRep*> pre_ops, std::vector<SBOpCRep*> post_ops) {
     _coeff = coeff;
     _pre_state = NULL;
     _post_state = NULL;
@@ -2277,8 +2520,8 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  SBTermCRep::SBTermCRep(PolyCRep* coeff, std::vector<SBGateCRep*> pre_ops,
-			 std::vector<SBGateCRep*> post_ops) {
+  SBTermCRep::SBTermCRep(PolyCRep* coeff, std::vector<SBOpCRep*> pre_ops,
+			 std::vector<SBOpCRep*> post_ops) {
     _coeff = coeff;
     _pre_state = NULL;
     _post_state = NULL;

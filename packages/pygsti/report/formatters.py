@@ -164,7 +164,7 @@ formatDict['Vec'] = {
     'latex' : _Formatter(latex, ebstring='%s $\pm$ %s'),
     'python'  : _no_format }
 
-formatDict['GateString'] = {
+formatDict['Circuit'] = {
     'html'  : _Formatter(lambda s,specs : '.'.join(map(str,s)) if s is not None else ''),
     'latex' : _Formatter(lambda s,specs : '' if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % str(gl)) for gl in s]))),
     'python'  : _no_format }
@@ -221,7 +221,7 @@ formatDict['Bold'] = {
     'latex' : _Formatter(latex, formatstring='\\textbf{%s}'),
     'python'  : _no_format}
 
-#Special formatting for Hamiltonian and Stochastic gateset types
+#Special formatting for Hamiltonian and Stochastic model types
 formatDict['GatesetType'] = {
     'html'  : _Formatter(),
     'latex' : _Formatter(stringreplacers=[('H','$\\mathcal{H}$'),('S','$\\mathcal{S}$')]),

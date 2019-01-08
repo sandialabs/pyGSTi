@@ -16,37 +16,61 @@ import copy as _copy
 
 class DriftResults(object):
     """
-    Todo
+    An object to contain the results of a drift detection and characterization analysis. 
+    See the various .get and .plot methods for how to access the results, after they have
+    been generated. For non-trivial use of this object it is first necessary to add time-series
+    data (see the .add_formated_data() method), and then to add the results of drift analyses, using
+    the other .add methods. This can be achieved using the core functions of the drift submodule.
     """
     def __init__(self, name=None):
         """
-        Todo
+        Initialize a DriftResults object
+
+        Parameters
+        ----------
+        name : str or None, optional
+            A name for the results object.
         """
         self.name = name
         return None
 
-    def add_formatted_data(self, timeseries, timestamps, gatestringlist, outcomes, number_of_counts, 
-                           constNumTimes, enforcedConstNumTimes=None, marginalized=None, overwrite=False):
+    def add_formatted_data(self, timeseries, timestamps, circuitlist, outcomes, number_of_counts, 
+                           constNumTimes, entitieslist=None, enforcedConstNumTimes=None, marginalized=None, 
+                           overwrite=False):
         """
-        Todo
+        Adds formatted time-series data. This is the first step in using a DriftResults object.
+
+        Todo: add details.
         """
         if not overwrite:
             assert(not hasattr(self,"timeseries")), "This results object already contains timeseries data! To overwrite it you must set `overwrite` to True!"     
+        
+        # The timeseries is a list of lists of dicts. The first index is entity index (corresponding
+        # to the entity at that index of the lsit self.entities). The second index is the 
+        # circuit index, (corresponding to the circuit at that index of the list 
+        # self.circuitlist). The dictionary keys correspond to the outcomes in self.outcomeslist.
         self.timeseries = timeseries
         self.timestamps = timestamps
-        self.gatestringlist = gatestringlist
+        self.circuitlist = circuitlist
+        self.number_of_sequences = len(circuitlist)
+        self.indexforCircuit = {circuitlist[i]:i for i in range(self.number_of_sequences)}
+
         self.outcomes = outcomes
-        self.number_of_counts = number_of_counts
+        self.number_of_outcomes = len(outcomes)
+        self.number_of_counts = number_of_counts    
         self.constNumTimes = constNumTimes
+
+        self.number_of_entities = len(timeseries)
+        if entitieslist is not None:
+            assert(len(entitieslist) == self.number_of_entities)
+        else:
+            entitieslist = [str(i) for i in range(self.number_of_entities)]
+        self.entitieslist = entitieslist
+
         self.enforcedConstNumTimes = enforcedConstNumTimes
         self.marginalized = marginalized
 
-        self.number_of_entities = len(timeseries)
-        self.number_of_sequences = len(gatestringlist)
-        self.number_of_outcomes = len(outcomes)
-        self.indexforGatestring = {gatestringlist[i]:i for i in range(self.number_of_sequences)}
-
-        self.number_of_timesteps = [len(timeseries[0][i][0]) for i in range(self.number_of_sequences)]
+        self.number_of_timesteps = [len(timeseries[0][i][self.outcomes[0]]) for i in range(self.number_of_sequences)]
         self.maxnumber_of_timesteps = max(self.number_of_timesteps)
         timesteps = self.get_timesteps()
         self.meantimestepGlobal = _np.mean(timesteps)
@@ -69,7 +93,7 @@ class DriftResults(object):
         else:
             timesteps = _np.array(self.timestamps[seqInd][1:]) - _np.array(self.timestamps[seqInd][:self.number_of_timesteps[seqInd]-1])
 
-        return _np.array(timesteps)
+        return _np.array(_copy.deepcopy(timesteps))
 
     # Todo
     #def has_equally_spaced_timestamps(self, stype='absolute', rtol=1e-2):
@@ -176,7 +200,7 @@ class DriftResults(object):
                 assert(freqInds is None), "Only allowed to store the full modes set!"
                 self.modes[tup] = modes
 
-            return modes
+            return _copy.deepcopy(modes)
 
     def get_spectra_set(self, tup, freqInds=None, store=False):
         """
@@ -209,7 +233,7 @@ class DriftResults(object):
             assert(freqInds is None), "Only allowed to store the full spectra set!"
             self.spectra[tup] = specta 
 
-        return spectra
+        return _copy.deepcopy(spectra)
 
     def get_spectrum(self, entity='avg', sequence='avg', outcome='avg'):
         """
@@ -219,7 +243,7 @@ class DriftResults(object):
         spectra = self.get_spectra_set(testclasstup, None)
         dicttup = self._create_dict_tup(entity, sequence, outcome, pad=False)
 
-        return spectra[dicttup]
+        return _copy.deepcopy(spectra[dicttup])
 
     def get_maxpower(self, entity='avg', sequence='avg', outcome='avg', onlyTestedFreqs=False):
         """
@@ -289,13 +313,6 @@ class DriftResults(object):
         self._powerSignificancePseudothreshold[name] = powerSignificancePseudothreshold
         self._significanceForClass[name] = significanceForClass
 
-        # Todo : writing this in by adding it has part of the results is maybe a bit odd, as it's a property
-        # of the data not the hypothesis testing. So maybe this should be a method of the results object.
-        # for key in dofPerSpectrumInClass:
-        #     # This over-writes any cases where we already had this.
-        #     self._dofPerSpectrumInClass[key] = dofPerSpectrumInClass[key]       
-        #     self._numTestsinClass[key] = numTestsinClass[key]
-
         return None 
 
     def _create_testclass_tuple(self, entity, sequence, outcome):
@@ -354,7 +371,7 @@ class DriftResults(object):
             if isinstance(sequence,int):
                 dicttup.append(sequence)
             else:
-                dicttup.append(self.indexforGatestring[sequence])
+                dicttup.append(self.indexforCircuit[sequence])
 
         if outcome == 'avg':
             if pad: dicttup.append('avg')
@@ -388,7 +405,7 @@ class DriftResults(object):
         if sort:
             driftfreqInds.sort()
 
-        return driftfreqInds
+        return _copy.deepcopy(driftfreqInds)
 
     def get_drift_frequencies(self, entity='avg', sequence='avg', outcome='avg', detectorkey=None):
         """
@@ -396,7 +413,7 @@ class DriftResults(object):
         """
         freqInd = self.get_drift_frequency_indices(entity=entity, sequence=sequence, outcome= outcome, sort=False, detectorkey=detectorkey)
 
-        return self.frequenciesInHz[freqInd]
+        return _copy.deepcopy(self.frequenciesInHz[freqInd])
 
     def get_power_significance_threshold(self, entity='avg', sequence='avg', outcome='avg', detectorkey=None):
         """
@@ -430,7 +447,8 @@ class DriftResults(object):
 
         return pvalue_threshold
 
-    def add_reconstruction(self, entity, sequence, model, modelSelector, estimator, auxDict={}, overwrite=False):
+    def add_reconstruction(self, entity, sequence, model, modelSelector, estimator, auxDict={}, overwrite=False,
+                           settodefault=True):
         """
         todo
         """
@@ -438,15 +456,36 @@ class DriftResults(object):
             self.models = {}
             self.estimationAuxDict = {}
 
-        if (entity, sequence) not in self.models.keys():
-            self.models[entity,sequence] = {}
+        eInd = self.entitieslist.index(entity)
+        sInd = self.indexforCircuit[sequence]
 
-        if (modelSelector, estimator) in self.models[entity,sequence].keys():
+        if (eInd, sInd) not in self.models.keys():
+            self.models[eInd,sInd] = {}
+
+        if (modelSelector, estimator) in self.models[eInd,sInd].keys():
             assert(overwrite), "Cannot add this model, as overwrite is False and a model with this key already exists!"
 
-        self.models[entity,sequence][modelSelector, estimator] =  _copy.deepcopy(model)
+        self.models[eInd,sInd][modelSelector, estimator] =  _copy.deepcopy(model)
+
+        if not hasattr(self,"defaultmodelkey"):
+            self.defaultmodelkey = {}
+        if settodefault:
+            self.defaultmodelkey[eInd,sInd] = (modelSelector, estimator)
+        else:
+            # If there isn't yet a default, we set it to this.
+            if (eInd,sInd) not in self.defaultmodelkey.keys():
+                self.defaultmodelkey[eInd,sInd] = (modelSelector, estimator)
 
         return None
+
+
+    # Todo : write this function
+    def get_probability_trajectory(self,  entity, sequence, modelkey=None, times='sequence'):
+        """
+        This function hasn't been written yet!.
+        """
+        return p
+
          # Todo : currently the AuxDict is not stored.
         
     # def is_drift_detected(self):
@@ -668,6 +707,7 @@ class DriftResults(object):
         # _plt.ylabel("Power",fontsize=15)
         # _plt.xlim(xlim)
         
+        _plt.tight_layout()
         if savepath is not None:
             _plt.savefig(savepath)
         else:
@@ -693,14 +733,14 @@ class DriftResults(object):
       
     
     # Todo:
-    #def add_target_probabilities(targetGateset):
+    #def add_target_probabilities(targetModel):
     #
     #    return  None
    
-    def plot_probability_trajectory_estimates(self, gatestringlist, entityInd=0, outcomeInd=0, uncertainties=False,
+    def plot_probability_trajectory_estimates(self, circuitlist, entity='0', outcome=('0',), uncertainties=False,
                                               plotData=False, targetValue=None, figsize=(15,3), 
                                               savepath=None, loc=None, title=True, 
-                                              estimatekey=((('per', 'per', 'avg'), 'detection'), 'DCT-filter-unbounded')):
+                                              estimatekey=None):
         
         # sequence_index = sequence
         
@@ -725,9 +765,9 @@ class DriftResults(object):
         _plt.figure(figsize=figsize)
                 
         times = []
-        for gs in gatestringlist:
-            gsInd = self.indexforGatestring[gs]
-            times += list(self.timestamps[gsInd])
+        for opstr in circuitlist:
+            gstrInd = self.indexforCircuit[opstr]
+            times += list(self.timestamps[gstrInd])
         
         times.sort()       
 
@@ -749,16 +789,23 @@ class DriftResults(object):
         #     label = 'Data'
         #     _plt.plot(times,self.timeseries[sequence][entity][outcome_index]/self.number_of_counts,'.',label=label)
              
-        for gs in gatestringlist:
-            gsInd = self.indexforGatestring[gs]
-            p = self.models[entityInd,gsInd][estimatekey].get_probabilities(times)[outcomeInd]
+        entityInd = self.entitieslist.index(entity)
+        outcomeInd = self.outcomes.index(outcome)
+
+        for opstr in circuitlist:
+            gstrInd = self.indexforCircuit[opstr]
+            if estimatekey is None:
+                mdl_estimatekey = self.defaultmodelkey[entityInd,gstrInd]
+            else:
+                 mdl_estimatekey = estimatekey
+            p = self.models[entityInd,gstrInd][mdl_estimatekey].get_probabilities(times)[outcome]
         # error = self.pspepo_reconstruction_uncertainty[sequence_index,entity,outcome_index]
         # upper = p+error
         # lower = p-error
         # upper[upper > 1.] = 1.
         # lower[lower < 0.] = 0.
         
-            _plt.plot(times,p,'-',label='{}'.format(gs))
+            _plt.plot(times,p,'-',label='{}'.format(opstr))
         
         # if errorbars:
         #     _plt.fill_between(times, upper, lower, alpha=0.2, color='r')
@@ -785,6 +832,7 @@ class DriftResults(object):
         _plt.xlabel('Time (seconds)',fontsize=15)
         _plt.ylabel("Probability",fontsize=15)
         
+        _plt.tight_layout()
         if savepath is not None:
             _plt.savefig(savepath)
         else:

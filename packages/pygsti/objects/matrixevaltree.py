@@ -6,7 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from . import gatestring as _gs
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
 from .evaltree import EvalTree
@@ -17,12 +16,12 @@ import time as _time #DEBUG TIMERS
 class MatrixEvalTree(EvalTree):
     """
     An Evaluation Tree.  Instances of this class specify how to
-      perform bulk GateSet operations.
+      perform bulk Model operations.
 
     EvalTree instances create and store the decomposition of a list
-      of gate strings into a sequence of 2-term products of smaller
+      of operation sequences into a sequence of 2-term products of smaller
       strings.  Ideally, this sequence would prescribe the way to
-      obtain the entire list of gate strings, starting with just the
+      obtain the entire list of operation sequences, starting with just the
       single gates, using the fewest number of multiplications, but
       this optimality is not guaranteed.
     """
@@ -30,16 +29,16 @@ class MatrixEvalTree(EvalTree):
         """ Create a new, empty, evaluation tree. """
         super(MatrixEvalTree, self).__init__(items)
 
-    def initialize(self, compiled_gatestring_list, numSubTreeComms=1):
+    def initialize(self, compiled_circuit_list, numSubTreeComms=1):
         """
-          Initialize an evaluation tree using a set of gate strings.
+          Initialize an evaluation tree using a set of operation sequences.
           This function must be called before using an EvalTree.
 
           Parameters
           ----------
-          gatestring_list : list of (tuples or GateStrings)
-              A list of tuples of gate labels or GateString
-              objects, specifying the gate strings that
+          circuit_list : list of (tuples or Circuits)
+              A list of tuples of operation labels or Circuit
+              objects, specifying the operation sequences that
               should be present in the evaluation tree.
 
           numSubTreeComms : int, optional
@@ -54,53 +53,53 @@ class MatrixEvalTree(EvalTree):
         """
         #tStart = _time.time() #DEBUG TIMER
 
-        # gateLabels : A list of all the length-0 & 1 gate labels to be stored
+        # opLabels : A list of all the length-0 & 1 operation labels to be stored
         #  at the beginning of the tree.  This list must include all the gate 
-        #  labels contained in the elements of compiled_gatestring_list 
+        #  labels contained in the elements of compiled_circuit_list 
         #  (including a special empty-string sentinel at the beginning).
-        self.gateLabels = [""] + self._get_gateLabels(compiled_gatestring_list)
+        self.opLabels = [""] + self._get_opLabels(compiled_circuit_list)
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 
-        gatestring_list = [tuple(gs) for gs in compiled_gatestring_list.keys()]
-        self.compiled_gatestring_spamTuples = list(compiled_gatestring_list.values())
-        self.num_final_els = sum([len(v) for v in self.compiled_gatestring_spamTuples])
-        #self._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
+        circuit_list = [tuple(mdl) for mdl in compiled_circuit_list.keys()]
+        self.compiled_circuit_spamTuples = list(compiled_circuit_list.values())
+        self.num_final_els = sum([len(v) for v in self.compiled_circuit_spamTuples])
+        #self._compute_finalStringToEls() #depends on compiled_circuit_spamTuples
         self.recompute_spamtuple_indices(bLocal=True) # bLocal shouldn't matter here
 
         #Evaluation dictionary:
-        # keys == gate strings that have been evaluated so far
-        # values == index of gate string (key) within evalTree
+        # keys == operation sequences that have been evaluated so far
+        # values == index of operation sequence (key) within evalTree
         evalDict = { }
 
         #Evaluation tree:
         # A list of tuples, where each element contains
-        #  information about evaluating a particular gate string:
+        #  information about evaluating a particular operation sequence:
         #  (iLeft, iRight)
         # and the order of the elements specifies the evaluation order.
-        # In particular, the gateString = evalTree[iLeft] + evalTree[iRight]
-        #   so that matrix(gateString) = matrixOf(evalTree[iRight]) * matrixOf(evalTree[iLeft])
+        # In particular, the circuit = evalTree[iLeft] + evalTree[iRight]
+        #   so that matrix(circuit) = matrixOf(evalTree[iRight]) * matrixOf(evalTree[iLeft])
         del self[:] #clear self (a list)
 
         #Final Indices
-        # The first len(gatestring_list) elements of the tree correspond
-        # to computing the gate strings requested in gatestring_list.  Doing
+        # The first len(circuit_list) elements of the tree correspond
+        # to computing the operation sequences requested in circuit_list.  Doing
         # this make later extraction much easier (views can be used), but
         # requires a non-linear order of evaluation, held in the eval_order list.
         self.eval_order = []
 
         #initialize self as a list of Nones
-        self.num_final_strs = len(gatestring_list)
+        self.num_final_strs = len(circuit_list)
         self[:] = [None]*self.num_final_strs
 
         #Single gate (or zero-gate) computations are assumed to be atomic, and be computed independently.
-        #  These labels serve as the initial values, and each gate string is assumed to be a tuple of
-        #  gate labels.
+        #  These labels serve as the initial values, and each operation sequence is assumed to be a tuple of
+        #  operation labels.
         self.init_indices = [] #indices to put initial zero & single gate results
-        for gateLabel in self.gateLabels:
-            tup = () if gateLabel == "" else (gateLabel,) #special case of empty label == no gate
-            if tup in gatestring_list:
-                indx = gatestring_list.index(tup) 
+        for opLabel in self.opLabels:
+            tup = () if opLabel == "" else (opLabel,) #special case of empty label == no gate
+            if tup in circuit_list:
+                indx = circuit_list.index(tup) 
                 self[indx] = (None,None) #iLeft = iRight = None for always-evaluated zero string
             else:
                 indx = len(self)
@@ -110,17 +109,17 @@ class MatrixEvalTree(EvalTree):
 
         #print("DB: initial eval dict = ",evalDict)
 
-        #Process gatestrings in order of length, so that we always place short strings
+        #Process circuits in order of length, so that we always place short strings
         # in the right place (otherwise assert stmt below can fail)
-        indices_sorted_by_gatestring_len = \
-            sorted(list(range(len(gatestring_list))),
-                   key=lambda i: len(gatestring_list[i]))
+        indices_sorted_by_circuit_len = \
+            sorted(list(range(len(circuit_list))),
+                   key=lambda i: len(circuit_list[i]))
 
         #avgBiteSize = 0
         #useCounts = {}
-        for k in indices_sorted_by_gatestring_len:
-            gateString = gatestring_list[k]
-            L = len(gateString)
+        for k in indices_sorted_by_circuit_len:
+            circuit = circuit_list[k]
+            L = len(circuit)
             if L == 0:
                 iEmptyStr = evalDict.get( (), None)
                 assert(iEmptyStr is not None) # duplicate () final strs require
@@ -131,28 +130,28 @@ class MatrixEvalTree(EvalTree):
 
             start = 0; bite = 1
             #nBites = 0
-            #print("\nDB: string = ",gateString, "(len=%d)" % len(gateString))
+            #print("\nDB: string = ",circuit, "(len=%d)" % len(circuit))
 
             while start < L:
 
-                #Take a bite out of gateString, starting at `start` that is in evalDict
+                #Take a bite out of circuit, starting at `start` that is in evalDict
                 for b in range(L-start,0,-1):
-                    if gateString[start:start+b] in evalDict:
+                    if circuit[start:start+b] in evalDict:
                         bite = b; break
                 else: assert(False), ("EvalTree Error: probably caused because "
-                  "your gate strings contain gates that your gate set does not")
+                  "your operation sequences contain gates that your model does not")
                   #Logic error - loop above should always exit when b == 1
 
                 #iInFinal = k if bool(start + bite == L) else -1
                 bFinal = bool(start + bite == L)
-                #print("DB: start=",start,": found ",gateString[start:start+bite],
+                #print("DB: start=",start,": found ",circuit[start:start+bite],
                 #      " (len=%d) in evalDict" % bite, "(final=%s)" % bFinal)
 
                 if start == 0: #first in-evalDict bite - no need to add anything to self yet
-                    iCur = evalDict[ gateString[0:bite] ]
-                    #print("DB: taking bite: ", gateString[0:bite], "indx = ",iCur)
+                    iCur = evalDict[ circuit[0:bite] ]
+                    #print("DB: taking bite: ", circuit[0:bite], "indx = ",iCur)
                     if bFinal:
-                        if iCur != k:  #then we have a duplicate final gate string
+                        if iCur != k:  #then we have a duplicate final operation sequence
                             iEmptyStr = evalDict.get( (), None)
                             assert(iEmptyStr is not None) # duplicate final strs require
                                       # the empty string to be included in the tree too!
@@ -161,19 +160,19 @@ class MatrixEvalTree(EvalTree):
                             self.eval_order.append(k)   #  multiplying by the empty string.
                 else:
                     # add (iCur, iBite)
-                    assert(gateString[0:start+bite] not in evalDict)
-                    iBite = evalDict[ gateString[start:start+bite] ]
+                    assert(circuit[0:start+bite] not in evalDict)
+                    iBite = evalDict[ circuit[start:start+bite] ]
                     if bFinal: #place (iCur, iBite) at location k
                         iNew = k
-                        evalDict[ gateString[0:start+bite] ] = iNew
+                        evalDict[ circuit[0:start+bite] ] = iNew
                         assert(self[iNew] is None) #make sure we haven't put anything here yet
                         self[k] = (iCur, iBite)
                     else:
                         iNew = len(self)
-                        evalDict[ gateString[0:start+bite] ] = iNew
+                        evalDict[ circuit[0:start+bite] ] = iNew
                         self.append( (iCur,iBite) )
 
-                    #print("DB: add %s (index %d)" % (str(gateString[0:start+bite]),iNew))
+                    #print("DB: add %s (index %d)" % (str(circuit[0:start+bite]),iNew))
                     self.eval_order.append(iNew)
                     iCur = iNew
                 start += bite
@@ -182,7 +181,7 @@ class MatrixEvalTree(EvalTree):
             #if nBites > 0: avgBiteSize += L / float(nBites)
             assert(k in self.eval_order or k in self.init_indices)
         
-        #avgBiteSize /= float(len(gatestring_list))
+        #avgBiteSize /= float(len(circuit_list))
         #print "DEBUG: Avg bite size = ",avgBiteSize
 
         #see if there are superfluous tree nodes: those with iFinal == -1 and
@@ -191,8 +190,8 @@ class MatrixEvalTree(EvalTree):
         self.parentIndexMap = None          
         self.original_index_lookup = None
         self.subTrees = [] #no subtrees yet
-        assert(self.generate_gatestring_list() == gatestring_list)
-        assert(None not in gatestring_list)
+        assert(self.generate_circuit_list() == circuit_list)
+        assert(None not in circuit_list)
 
     def cache_size(self):
         """ 
@@ -202,9 +201,9 @@ class MatrixEvalTree(EvalTree):
         return len(self)
 
 
-    def generate_gatestring_list(self, permute=True):
+    def generate_circuit_list(self, permute=True):
         """
-        Generate a list of the final gate strings this tree evaluates.
+        Generate a list of the final operation sequences this tree evaluates.
 
         This method essentially "runs" the tree and follows its
           prescription for sequentailly building up longer strings
@@ -217,9 +216,9 @@ class MatrixEvalTree(EvalTree):
         permute : bool, optional
            Whether to permute the returned list of strings into the 
            same order as the original list passed to initialize(...).
-           When False, the computed order of the gate strings is 
+           When False, the computed order of the operation sequences is 
            given, which is matches the order of the results from calls
-           to `GateSet` bulk operations.  Non-trivial permutation
+           to `Model` bulk operations.  Non-trivial permutation
            occurs only when the tree is split (in order to keep 
            each sub-tree result a contiguous slice within the parent
            result).
@@ -227,32 +226,32 @@ class MatrixEvalTree(EvalTree):
         Returns
         -------
         list of gate-label-tuples
-            A list of the gate strings evaluated by this tree, each
-            specified as a tuple of gate labels.
+            A list of the operation sequences evaluated by this tree, each
+            specified as a tuple of operation labels.
         """
-        gateStrings = [None]*len(self)
+        circuits = [None]*len(self)
 
         #Set "initial" (single- or zero- gate) strings
-        for i,gateLabel in zip(self.get_init_indices(), self.get_init_labels()):
-            if gateLabel == "": gateStrings[i] = () #special case of empty label
-            else: gateStrings[i] = (gateLabel,)
+        for i,opLabel in zip(self.get_init_indices(), self.get_init_labels()):
+            if opLabel == "": circuits[i] = () #special case of empty label
+            else: circuits[i] = (opLabel,)
 
         #Build rest of strings
         for i in self.get_evaluation_order():
             iLeft, iRight = self[i]
-            gateStrings[i] = gateStrings[iLeft] + gateStrings[iRight]
+            circuits[i] = circuits[iLeft] + circuits[iRight]
             
         #Permute to get final list:
         nFinal = self.num_final_strings()
         if self.original_index_lookup is not None and permute == True:
-            finalGateStrings = [None]*nFinal
+            finalCircuits = [None]*nFinal
             for iorig,icur in self.original_index_lookup.items():
-                if iorig < nFinal: finalGateStrings[iorig] = gateStrings[icur]
-            assert(None not in finalGateStrings)
-            return finalGateStrings
+                if iorig < nFinal: finalCircuits[iorig] = circuits[icur]
+            assert(None not in finalCircuits)
+            return finalCircuits
         else:
-            assert(None not in gateStrings[0:nFinal])
-            return gateStrings[0:nFinal]
+            assert(None not in circuits[0:nFinal])
+            return circuits[0:nFinal]
 
 
     def get_min_tree_size(self):
@@ -277,10 +276,10 @@ class MatrixEvalTree(EvalTree):
         Parameters
         ----------
         elIndicesDict : dict
-            A dictionary whose keys are integer original-gatestring indices
+            A dictionary whose keys are integer original-circuit indices
             and whose values are slices or index arrays of final-element-
             indices (typically this dict is returned by calling
-            :method:`GateSet.compile_gatestrings`).  Since splitting a 
+            :method:`Model.compile_circuits`).  Since splitting a 
             tree often involves permutation of the raw string ordering
             and thereby the element ordering, an updated version of this
             dictionary, with all permutations performed, is returned.
@@ -302,7 +301,7 @@ class MatrixEvalTree(EvalTree):
         OrderedDict
             A updated version of elIndicesDict
         """
-        #dbList = self.generate_gatestring_list()
+        #dbList = self.generate_circuit_list()
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
 
@@ -584,8 +583,8 @@ class MatrixEvalTree(EvalTree):
     
                 if (oLeft is None) and (oRight is None):
                     iLeft = iRight = None
-                    #assert(len(subTree.gateLabels) == len(subTree)) #make sure all gatelabel items come first
-                    subTree.gateLabels.append( parentTree.gateLabels[ 
+                    #assert(len(subTree.opLabels) == len(subTree)) #make sure all oplabel items come first
+                    subTree.opLabels.append( parentTree.opLabels[ 
                             parentTree.init_indices.index(k)] )
                     subTree.init_indices.append(ik)
                 else:
@@ -601,12 +600,12 @@ class MatrixEvalTree(EvalTree):
                 #    subTree.myFinalToParentFinalMap[ik] = k
     
             subTree.parentIndexMap = parentIndices #parent index of *each* subtree index
-            subTree.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[k]
+            subTree.compiled_circuit_spamTuples = [ self.compiled_circuit_spamTuples[k]
                                                        for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
-            #subTree._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
+            #subTree._compute_finalStringToEls() #depends on compiled_circuit_spamTuples
             
             final_el_startstops = []; i=0
-            for spamTuples in parentTree.compiled_gatestring_spamTuples:
+            for spamTuples in parentTree.compiled_circuit_spamTuples:
                 final_el_startstops.append( (i,i+len(spamTuples)) )
                 i += len(spamTuples)
                 
@@ -617,9 +616,9 @@ class MatrixEvalTree(EvalTree):
             else:
                 subTree.myFinalElsToParentFinalElsMap = _np.empty(0,_np.int64)
             #Note: myFinalToParentFinalMap maps only between *final* elements
-            #   (which are what is held in compiled_gatestring_spamTuples)
+            #   (which are what is held in compiled_circuit_spamTuples)
 
-            subTree.num_final_els = sum([len(v) for v in subTree.compiled_gatestring_spamTuples])
+            subTree.num_final_els = sum([len(v) for v in subTree.compiled_circuit_spamTuples])
             subTree.recompute_spamtuple_indices(bLocal=False)
             
             return subTree

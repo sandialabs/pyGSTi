@@ -9,17 +9,17 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from . import listtools as _lt
 
-def chi2_terms(gateset, dataset, gateStrings=None,
+def chi2_terms(model, dataset, circuits=None,
                minProbClipForWeighting=1e-4, clipTo=None,
                useFreqWeightedChiSq=False, check=False,
-               memLimit=None, gateLabelAliases=None,
+               memLimit=None, opLabelAliases=None,
                evaltree_cache=None, comm=None, smartc=None):
     """
-    Computes the chi^2 contributions from a set of gate strings.
+    Computes the chi^2 contributions from a set of operation sequences.
 
     This function returns the same value as :func:`chi2` with
     `returnGradient=False` and `returnHessian=False`, except the
-    contributions from different gate strings and spam labels is
+    contributions from different operation sequences and spam labels is
     not summed but returned as an array.
 
     Parameters
@@ -30,7 +30,7 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     Returns
     -------
     chi2 : numpy.ndarray
-        Array of length either `len(gatestring_list)` or `len(dataset.keys())`.
+        Array of length either `len(circuit_list)` or `len(dataset.keys())`.
         Values are the chi2 contributions of the corresponding gate
         string aggregated over outcomes.
     """
@@ -44,18 +44,18 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     if useFreqWeightedChiSq:
         raise ValueError("frequency weighted chi2 is not implemented yet.")
 
-    if gateStrings is None:
-        gateStrings = list(dataset.keys())
+    if circuits is None:
+        circuits = list(dataset.keys())
 
     if evaltree_cache and 'evTree' in evaltree_cache:
         evTree = evaltree_cache['evTree']
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
-        dstree = dataset if (gateLabelAliases is None) else None #Note: compile_gatestrings doesn't support aliased dataset (yet)
+        dstree = dataset if (opLabelAliases is None) else None #Note: compile_circuits doesn't support aliased dataset (yet)
         evTree, _,_, lookup, outcomes_lookup = \
-            smart(gateset.bulk_evaltree_from_resources,
-                  gateStrings, None, memLimit, "deriv", ['bulk_fill_probs'], dstree)
+            smart(model.bulk_evaltree_from_resources,
+                  circuits, None, memLimit, "deriv", ['bulk_fill_probs'], dstree)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
@@ -66,7 +66,7 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     #Memory allocation
     nEls = evTree.num_final_elements()
     ng = evTree.num_final_strings()
-    gd = gateset.get_dimension()
+    gd = model.get_dimension()
     C = 1.0/1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
@@ -81,54 +81,54 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     f      = _np.empty( nEls , 'd')
     probs  = _np.empty( nEls , 'd')
 
-    dsGateStrings = _lt.find_replace_tuple_list(
-            gateStrings, gateLabelAliases)
-    for (i,gateStr) in enumerate(dsGateStrings):
-        N[ lookup[i] ] = dataset[gateStr].total
-        f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
+    dsCircuits = _lt.find_replace_tuple_list(
+            circuits, opLabelAliases)
+    for (i,opStr) in enumerate(dsCircuits):
+        N[ lookup[i] ] = dataset[opStr].total
+        f[ lookup[i] ] = [ dataset[opStr].fraction(x) for x in outcomes_lookup[i] ]
 
-    smart(gateset.bulk_fill_probs, probs, evTree, clipTo, check, comm, _filledarrays=(0,))
+    smart(model.bulk_fill_probs, probs, evTree, clipTo, check, comm, _filledarrays=(0,))
 
     cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
     v = N * ((probs - f)**2/cprobs)
 
     #Aggregate over outcomes:
     # v[iElement] contains all chi2 contributions - now aggregate over outcomes
-    # terms[iGateString] wiil contain chi2 contributions for each original gate
+    # terms[iCircuit] wiil contain chi2 contributions for each original gate
     # string (aggregated over outcomes)
-    nGateStrings = len(gateStrings)
-    terms = _np.empty(nGateStrings , 'd')
-    for i in range(nGateStrings):
+    nCircuits = len(circuits)
+    terms = _np.empty(nCircuits , 'd')
+    for i in range(nCircuits):
         terms[i] = _np.sum( v[lookup[i]], axis=0 )
     return terms
 
 
 
-def chi2(gateset, dataset, gateStrings=None,
+def chi2(model, dataset, circuits=None,
          returnGradient=False, returnHessian=False,
          minProbClipForWeighting=1e-4, clipTo=None,
          useFreqWeightedChiSq=False, check=False,
-         memLimit=None, gateLabelAliases=None,
+         memLimit=None, opLabelAliases=None,
          evaltree_cache=None, comm=None,
          approximateHessian=False, smartc=None):
     """
-    Computes the total chi^2 for a set of gate strings.
+    Computes the total chi^2 for a set of operation sequences.
 
     The chi^2 test statistic obtained by summing up the
-    contributions of a given set of gate strings or all
+    contributions of a given set of operation sequences or all
     the strings available in a dataset.  Optionally,
     the gradient and/or Hessian of chi^2 can be returned too.
 
     Parameters
     ----------
-    gateset : GateSet
-        The gate set used to specify the probabilities and SPAM labels
+    model : Model
+        The model used to specify the probabilities and SPAM labels
 
     dataset : DataSet
         The data used to specify frequencies and counts
 
-    gateStrings : list of GateStrings or tuples, optional
-        List of gate strings whose terms will be included in chi^2 sum.
+    circuits : list of Circuits or tuples, optional
+        List of operation sequences whose terms will be included in chi^2 sum.
         Default value (None) means "all strings in dataset".
 
     returnGradient, returnHessian : bool
@@ -138,8 +138,8 @@ def chi2(gateset, dataset, gateStrings=None,
         defines the clipping interval for the statistical weight (see chi2fn).
 
     clipTo : 2-tuple, optional
-        (min,max) to clip probabilities to within GateSet probability
-        computation routines (see GateSet.bulk_fill_probs)
+        (min,max) to clip probabilities to within Model probability
+        computation routines (see Model.bulk_fill_probs)
 
     useFreqWeightedChiSq : bool, optional
         Whether or not frequencies (instead of probabilities) should be used
@@ -153,17 +153,17 @@ def chi2(gateset, dataset, gateStrings=None,
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
+    opLabelAliases : dictionary, optional
+        Dictionary whose keys are operation label "aliases" and whose values are tuples
+        corresponding to what that operation label should be expanded into before querying
         the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        e.g. opLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     evaltree_cache : dict, optional
         A dictionary which server as a cache for the computed EvalTree used
         in this computation.  If an empty dictionary is supplied, it is filled
         with cached values to speed up subsequent executions of this function
-        which use the *same* `gateset` and `gatestring_list`.
+        which use the *same* `model` and `circuit_list`.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -185,13 +185,13 @@ def chi2(gateset, dataset, gateStrings=None,
     Returns
     -------
     chi2 : float
-        chi^2 value, equal to the sum of chi^2 terms from all specified gate strings
+        chi^2 value, equal to the sum of chi^2 terms from all specified operation sequences
     dchi2 : numpy array
         Only returned if returnGradient == True. The gradient vector of
-        length nGatesetParams, the number of gateset parameters.
+        length nModelParams, the number of model parameters.
     d2chi2 : numpy array
         Only returned if returnHessian == True. The Hessian matrix of
-        shape (nGatesetParams, nGatesetParams).
+        shape (nModelParams, nModelParams).
     """
     def smart(fn, *args, **kwargs):
         if smartc: 
@@ -201,7 +201,7 @@ def chi2(gateset, dataset, gateStrings=None,
             return fn(*args, **kwargs)
 
     # Scratch work:
-    # chi^2 = sum_i N_i*(p_i-f_i)^2 / p_i  (i over gatestrings & spam labels)
+    # chi^2 = sum_i N_i*(p_i-f_i)^2 / p_i  (i over circuits & spam labels)
     # d(chi^2)/dx = sum_i N_i * [ 2(p_i-f_i)*dp_i/dx / p_i - (p_i-f_i)^2 / p_i^2 * dp_i/dx ]
     #             = sum_i N_i * (p_i-f_i) / p_i * [2 - (p_i-f_i)/p_i   ] * dp_i/dx
     #             = sum_i N_i * t_i * [2 - t_i ] * dp_i/dx     where t_i = (p_i-f_i) / p_i
@@ -210,19 +210,19 @@ def chi2(gateset, dataset, gateStrings=None,
     if useFreqWeightedChiSq:
         raise ValueError("frequency weighted chi2 is not implemented yet.")
 
-    vec_gs_len = gateset.num_params()
+    vec_gs_len = model.num_params()
 
-    if gateStrings is None:
-        gateStrings = list(dataset.keys())
+    if circuits is None:
+        circuits = list(dataset.keys())
 
     if evaltree_cache and 'evTree' in evaltree_cache:
         evTree = evaltree_cache['evTree']
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
-        #OLD: evTree,lookup,outcomes_lookup = smart(gateset.bulk_evaltree,gateStrings)
-        evTree,_,_,lookup,outcomes_lookup = smart(gateset.bulk_evaltree_from_resources,
-                                                    gateStrings, comm, dataset=dataset)
+        #OLD: evTree,lookup,outcomes_lookup = smart(model.bulk_evaltree,circuits)
+        evTree,_,_,lookup,outcomes_lookup = smart(model.bulk_evaltree_from_resources,
+                                                    circuits, comm, dataset=dataset)
 
         #Fill cache dict if one was given
         if evaltree_cache is not None:
@@ -234,7 +234,7 @@ def chi2(gateset, dataset, gateStrings=None,
     #Memory allocation
     nEls = evTree.num_final_elements()
     ng = evTree.num_final_strings()
-    ne = gateset.num_params(); gd = gateset.get_dimension()
+    ne = model.num_params(); gd = model.get_dimension()
     C = 1.0/1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
@@ -258,7 +258,7 @@ def chi2(gateset, dataset, gateStrings=None,
         hprobs = _np.empty( (nEls,vec_gs_len,vec_gs_len), 'd')
 
     #  Estimate & check intermediate memory
-    #    - maybe make GateSet methods get intermediate estimates?
+    #    - maybe make Model methods get intermediate estimates?
     intermedMem = 8*ng*gd**2 # ~ bulk_product
     if returnGradient: intermedMem += 8*ng*gd**2*ne # ~ bulk_dproduct
     if compute_hprobs: intermedMem += 8*ng*gd**2*ne**2 # ~ bulk_hproduct
@@ -274,7 +274,7 @@ def chi2(gateset, dataset, gateStrings=None,
     #DEBUG - no verbosity passed in to just leave commented out
     #if memLimit is not None:
     #    print "Chi2 Memory estimates: (%d spam labels," % ns + \
-    #        "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd)
+    #        "%d operation sequences, %d model params, %d gate dim)" % (ng,ne,gd)
     #    print "Peristent: %g GB " % (persistentMem*C)
     #    print "Intermediate: %g GB " % (intermedMem*C)
     #    print "Limit: %g GB" % (memLimit*C)
@@ -284,20 +284,20 @@ def chi2(gateset, dataset, gateStrings=None,
     #  evTree.print_analysis()
 
 
-    dsGateStrings = _lt.find_replace_tuple_list(
-        gateStrings, gateLabelAliases)
-    for (i,gateStr) in enumerate(dsGateStrings):
-        N[ lookup[i] ] = dataset[gateStr].total
-        f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
+    dsCircuits = _lt.find_replace_tuple_list(
+        circuits, opLabelAliases)
+    for (i,opStr) in enumerate(dsCircuits):
+        N[ lookup[i] ] = dataset[opStr].total
+        f[ lookup[i] ] = [ dataset[opStr].fraction(x) for x in outcomes_lookup[i] ]
 
     if compute_hprobs:
-        smart(gateset.bulk_fill_hprobs, hprobs, evTree,
+        smart(model.bulk_fill_hprobs, hprobs, evTree,
               probs, dprobs, clipTo, check, comm, _filledarrays=(0,2,3))
     elif returnGradient:
-        smart(gateset.bulk_fill_dprobs, dprobs, evTree,
+        smart(model.bulk_fill_dprobs, dprobs, evTree,
               probs, clipTo, check, comm, _filledarrays=(0,2))
     else:
-        smart(gateset.bulk_fill_probs, probs, evTree,
+        smart(model.bulk_fill_probs, probs, evTree,
               clipTo, check, comm, _filledarrays=(0,))
 
 
@@ -309,7 +309,7 @@ def chi2(gateset, dataset, gateStrings=None,
     if returnGradient:
         t = ((probs - f)/cprobs)[:,None] # (iElement, 0) = (KM,1)
         dchi2 = N[:,None] * t * (2 - t) * dprobs  # (KM,1) * (KM,1) * (KM,N)  (K=#spam, M=#strings, N=#vec_gs)
-        dchi2 = _np.sum( dchi2, axis=0 ) # sum over gate strings and spam labels => (N)
+        dchi2 = _np.sum( dchi2, axis=0 ) # sum over operation sequences and spam labels => (N)
 
     if returnHessian:
         dprobs_p = dprobs[:,None,:] # (KM,1,N)
@@ -321,7 +321,7 @@ def chi2(gateset, dataset, gateStrings=None,
         else: # we have hprobs and can compute the true Hessian
             d2chi2 = N[:,None,None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p + t * (2 - t) * hprobs)
 
-        d2chi2 = _np.sum( d2chi2, axis=0 ) # sum over gate strings and spam labels => (N1,N2)
+        d2chi2 = _np.sum( d2chi2, axis=0 ) # sum over operation sequences and spam labels => (N1,N2)
         # (KM,1,1) * ( (KM,N1,1) * (KM,1,1) * (KM,1,N2) + (KM,1,1) * (KM,N1,1) * (KM,1,N2) + (KM,1,1) * (KM,1,1) * (KM,N1,N2) )
 
 

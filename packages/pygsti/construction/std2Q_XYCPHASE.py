@@ -5,28 +5,28 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """
-Variables for working with the 2-qubit gate set containing the gates
+Variables for working with the 2-qubit model containing the gates
 I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
 """
 
 import sys as _sys
 import numpy as _np
-from . import gatestringconstruction as _strc
-from . import gatesetconstruction as _setc
+from . import circuitconstruction as _strc
+from . import modelconstruction as _setc
 from . import stdtarget as _stdtarget
-from ..tools import gatetools as _gt
+from ..tools import optools as _gt
 
 description = "I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE gates"
 
 gates = ['Gix','Giy','Gxi','Gyi','Gcphase']
 
-fiducials16 = _strc.gatestring_list(
+fiducials16 = _strc.circuit_list(
     [ (), ('Gix',), ('Giy',), ('Gix','Gix'),
       ('Gxi',), ('Gxi','Gix'), ('Gxi','Giy'), ('Gxi','Gix','Gix'),
       ('Gyi',), ('Gyi','Gix'), ('Gyi','Giy'), ('Gyi','Gix','Gix'),
       ('Gxi','Gxi'), ('Gxi','Gxi','Gix'), ('Gxi','Gxi','Giy'), ('Gxi','Gxi','Gix','Gix') ] )
 
-fiducials36 = _strc.gatestring_list(
+fiducials36 = _strc.circuit_list(
     [ (), ('Gix',), ('Giy',), ('Gix','Gix'), ('Gix','Gix','Gix'), ('Giy','Giy','Giy'),
       ('Gxi',), ('Gxi','Gix'), ('Gxi','Giy'), ('Gxi','Gix','Gix'), ('Gxi','Gix','Gix','Gix'), ('Gxi','Giy','Giy','Giy'),
       ('Gyi',), ('Gyi','Gix'), ('Gyi','Giy'), ('Gyi','Gix','Gix'), ('Gyi','Gix','Gix','Gix'), ('Gyi','Giy','Giy','Giy'),
@@ -39,14 +39,14 @@ fiducials36 = _strc.gatestring_list(
 fiducials = fiducials16
 prepStrs = fiducials16
 
-effectStrs = _strc.gatestring_list(
+effectStrs = _strc.circuit_list(
     [(), ('Gix',), ('Giy',), 
      ('Gix','Gix'), ('Gxi',), 
      ('Gyi',), ('Gxi','Gxi'), 
      ('Gxi','Gix'), ('Gxi','Giy'), 
      ('Gyi','Gix'), ('Gyi','Giy')] )
 
-germs = _strc.gatestring_list(
+germs = _strc.circuit_list(
     [('Gxi',),
      ('Gyi',),
      ('Gix',),
@@ -117,7 +117,7 @@ germs = _strc.gatestring_list(
      ('Gix', 'Gix', 'Gyi', 'Gxi', 'Giy', 'Gxi', 'Giy', 'Gyi')
    ])
 
-germs_lite = _strc.gatestring_list( 
+germs_lite = _strc.circuit_list( 
     [('Gxi',),
      ('Gyi',),
      ('Gix',),
@@ -135,7 +135,7 @@ germs_lite = _strc.gatestring_list(
      ('Gyi', 'Gxi', 'Giy', 'Gxi', 'Gix', 'Gxi', 'Gyi', 'Giy')
     ])
 
-legacy_germs = _strc.gatestring_list(
+legacy_germs = _strc.circuit_list(
     [('Gxi',), ('Gyi',), ('Gix',), ('Giy',), ('Gcphase',),
      ('Gxi', 'Gyi'), ('Gix', 'Giy'), ('Giy', 'Gyi'), ('Gix', 'Gyi'),
      ('Gyi', 'Gcphase'), ('Giy', 'Gcphase'),
@@ -196,30 +196,30 @@ legacy_germs = _strc.gatestring_list(
      ])
 
      
-#Construct the target gateset
-gs_target = _setc.build_gateset(
-    [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcphase'],
+#Construct the target model
+_target_model = _setc.build_explicit_model(
+    [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcphase'],
     [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CPHASE(Q0,Q1)" ],
     effectLabels=['00','01','10','11'], effectExpressions=["0","1","2","3"])
 
-_gscache = { ("full","auto"): gs_target }
-def copy_target(parameterization_type="full", sim_type="auto"):
+_gscache = { ("full","auto"): _target_model }
+def target_model(parameterization_type="full", sim_type="auto"):
     """ 
-    Returns a copy of the target gateset in the given parameterization.
+    Returns a copy of the target model in the given parameterization.
 
     Parameters
     ----------
     parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
         The gate and SPAM vector parameterization type. See 
-        :function:`GateSet.set_all_parameterizations` for all allowed values.
+        :function:`Model.set_all_parameterizations` for all allowed values.
         
     sim_type : {"auto", "matrix", "map", "termorder:X" }
-        The simulator type to be used for gate set calculations (leave as
+        The simulator type to be used for model calculations (leave as
         "auto" if you're not sure what this is).
     
     Returns
     -------
-    GateSet
+    Model
     """
     return _stdtarget._copy_target(_sys.modules[__name__],parameterization_type,
                                    sim_type, _gscache)
@@ -227,8 +227,8 @@ def copy_target(parameterization_type="full", sim_type="auto"):
 
 
 #Wrong CPHASE (bad 1Q phase factor)
-legacy_gs_target = _setc.build_gateset(
-    [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcphase'],
+legacy_gs_target = _setc.build_explicit_model(
+    [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcphase'],
     [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CZ(pi,Q0,Q1)" ],
     effectLabels=['00','01','10','11'], effectExpressions=["0","1","2","3"])
 

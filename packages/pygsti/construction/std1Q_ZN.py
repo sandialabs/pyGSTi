@@ -5,34 +5,34 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """
-Variables for working with the a gate set containing Idle, Z(pi/2) and rot(X=pi/2, Y=sqrt(3)/2) gates.
+Variables for working with the a model containing Idle, Z(pi/2) and rot(X=pi/2, Y=sqrt(3)/2) gates.
 """
 
 import sys as _sys
-from . import gatestringconstruction as _strc
-from . import gatesetconstruction as _setc
+from . import circuitconstruction as _strc
+from . import modelconstruction as _setc
 from . import stdtarget as _stdtarget
 
 
-gs_target = _setc.build_gateset([2],[('Q0',)], ['Gz','Gn'],
+_target_model = _setc.build_explicit_model([('Q0',)], ['Gz','Gn'],
                                 [ "Z(pi/2,Q0)", "N(pi/2, sqrt(3)/2, 0, -0.5, Q0)"])
 
 
-prepStrs = _strc.gatestring_list([(),
+prepStrs = _strc.circuit_list([(),
                                        ('Gn',),
                                        ('Gn','Gn'),
                                        ('Gn','Gz','Gn'),
                                        ('Gn','Gn','Gn',),
                                        ('Gn','Gz','Gn','Gn','Gn')]) # for 1Q MUB
 
-effectStrs = _strc.gatestring_list([(),
+effectStrs = _strc.circuit_list([(),
                                        ('Gn',),
                                        ('Gn','Gn'),
                                        ('Gn','Gz','Gn'),
                                        ('Gn','Gn','Gn',),
                                        ('Gn','Gn','Gn','Gz','Gn')]) # for 1Q MUB
 
-germs = _strc.gatestring_list([ ('Gz',),
+germs = _strc.circuit_list([ ('Gz',),
                                 ('Gn',),
                                 ('Gz','Gn'),
                                 ('Gz','Gz','Gn'),
@@ -41,24 +41,24 @@ germs = _strc.gatestring_list([ ('Gz',),
 germs_lite = germs[:] #same list!
 
 
-_gscache = { ("full","auto"): gs_target }
-def copy_target(parameterization_type="full", sim_type="auto"):
+_gscache = { ("full","auto"): _target_model }
+def target_model(parameterization_type="full", sim_type="auto"):
     """ 
-    Returns a copy of the target gateset in the given parameterization.
+    Returns a copy of the target model in the given parameterization.
 
     Parameters
     ----------
     parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
         The gate and SPAM vector parameterization type. See 
-        :function:`GateSet.set_all_parameterizations` for all allowed values.
+        :function:`Model.set_all_parameterizations` for all allowed values.
         
     sim_type : {"auto", "matrix", "map", "termorder:X" }
-        The simulator type to be used for gate set calculations (leave as
+        The simulator type to be used for model calculations (leave as
         "auto" if you're not sure what this is).
     
     Returns
     -------
-    GateSet
+    Model
     """
     return _stdtarget._copy_target(_sys.modules[__name__],parameterization_type,
                                    sim_type, _gscache)

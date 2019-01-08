@@ -1,15 +1,15 @@
 """ Defines the VerbosityPrinter class, used for logging output. """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
 from contextlib import contextmanager as _contextmanager
 from copy       import deepcopy as _dc
-import sys         as _sys
-import math        as _math # used for digit formatting
+import sys  as _sys
+import math as _math # used for digit formatting
 
 from ..tools import compattools as _compat
 
@@ -127,7 +127,7 @@ class VerbosityPrinter(object):
 
     # The printer is initialized with a set verbosity, and an optional filename.
     # If a filename is not provided, VerbosityPrinter writes to stdout
-    def __init__(self, verbosity=1, filename=None, comm=None, warnings=True):
+    def __init__(self, verbosity=1, filename=None, comm=None, warnings=True, split=False, clearFile=True):
         '''
         Customize a verbosity printer object
 
@@ -148,7 +148,7 @@ class VerbosityPrinter(object):
                 filename = self._get_comm_file(comm.Get_rank())
         self.verbosity = verbosity
         self.filename  = filename
-        if filename is not None and len(filename) > 0:
+        if filename is not None and len(filename) > 0 and clearFile:
             self._create_file(filename)
         self._comm            = comm
         self.progressLevel    = 0 # Used for queuing output while a progress bar is being shown
@@ -158,13 +158,14 @@ class VerbosityPrinter(object):
         self.warnings         = warnings
         self.extra_indents    = 0 # Used for nested calls
         self.defaultVerbosity = 1
-        self.recorded_output = None
+        self.recorded_output  = None
+        self.split            = split
 
     def clone(self):
         '''
         Instead of deepcopy, initialize a new printer object and feed it some select deepcopied members
         '''
-        p = VerbosityPrinter(self.verbosity, self.filename, self._comm, self.warnings)
+        p = VerbosityPrinter(self.verbosity, self.filename, self._comm, self.warnings, self.split, clearFile=False)
 
         p.defaultVerbosity = self.defaultVerbosity
         p.progressLevel    = self.progressLevel
@@ -235,7 +236,7 @@ class VerbosityPrinter(object):
     # Used once a file has been created - open the file whenever a message needs to be sent (rather than opening it for the entire program)
     def _append_to(self, filename, message):
         with open(filename, 'a') as output:
-            output.write(message + '\n')
+            output.write(message) # + '\n')
 
     # Hidden function for deciding what to do with our output
     def _put(self, message, flush=True, stderr=False):
@@ -244,17 +245,22 @@ class VerbosityPrinter(object):
                 print(message, end='', file=_sys.stderr)
             else:
                 print(message, end='')
-            if flush:
-                _sys.stdout.flush()
         elif len(self.filename) > 0:
+            if self.split:
+                if stderr:
+                    print(message, end='', file=_sys.stderr)
+                else:
+                    print(message, end='')
             self._append_to(self.filename, message)
+        if flush:
+            _sys.stdout.flush()
 
     # Hidden function for recording output to memory
     def _record(self, typ, level, message):
         if self.recorded_output is not None:
             global_level = level+self.extra_indents
             self.recorded_output.append( (typ, global_level, message) )
-            
+
     # special function reserved for logging errors
     def error(self, message):
         '''
@@ -323,13 +329,13 @@ class VerbosityPrinter(object):
         if messageLevel is None:
             messageLevel = self.defaultVerbosity
         if messageLevel <= self.verbosity:
-            indent = (indentChar * (messageLevel-1+indentOffset 
+            indent = (indentChar * (messageLevel-1+indentOffset
                                     + self.extra_indents)) if doIndent else ''
                # messageLevel-1 so no indent at verbosity == 1
             statusType = 'Status Level %s:' % messageLevel if showStatustype else ''
             if end == '\n':
                 #Special case where we process a message containing newlines
-                formattedMessage = '\n'.join(['%s%s%s' % (indent, statusType, m) 
+                formattedMessage = '\n'.join(['%s%s%s' % (indent, statusType, m)
                                               for m in str(message).split('\n')]) + end
             else:
                 formattedMessage = '%s%s%s%s' % (indent, statusType, message, end)
@@ -475,7 +481,7 @@ class VerbosityPrinter(object):
                 self.progressLevel -= 1
 
     def start_recording(self):
-        """ 
+        """
         Begins recording (in memory) a list of `(type, verbosityLevel, message)`
         tuples that is returned by the next call to :method:`stop_recording`.
         """
@@ -486,7 +492,7 @@ class VerbosityPrinter(object):
         return bool(self.recorded_output is not None)
 
     def stop_recording(self):
-        """ 
+        """
         Stops a "recording" started by :method:`start_recording` and returns the
         list of `(type, verbosityLevel, message)` tuples that have been recorded
         since then.
@@ -524,7 +530,7 @@ if __name__ == "__main__":
         with printer.progress_logging(1):
             for i, item in enumerate(data):
                 printer.show_progress(i, len(data)-1,
-                      verboseMessages=['%s gate strings' % i], prefix='-- IterativeGST (', suffix=') --')
+                      verboseMessages=['%s operation sequences' % i], prefix='-- IterativeGST (', suffix=') --')
                 if i == 5:
                     printer.error('The iterator is five. This caused an error, apparently')
                 demo(printer - 1)

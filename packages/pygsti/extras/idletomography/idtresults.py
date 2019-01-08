@@ -29,7 +29,7 @@ class IdleTomographyResults(object):
         pauli_dicts : tuple
             A 2-tuple of `(prepDict,measDict)` Pauli basis dictionaries.
 
-        idle_str : GateString
+        idle_str : Circuit
             The idle operation that was characterized.
 
         error_list : list
