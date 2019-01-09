@@ -14,6 +14,9 @@ import pcalg
 from gsq.ci_tests import ci_test_dis
 import collections
 
+def tuple_replace_at_index(tup, ix, val):
+    return tup[:ix] + (val,) + tup[ix+1:]
+
 def load_pygsti_dataset(filename):
 	"""
 	Loads a pygsti dataset from file.
@@ -26,16 +29,17 @@ def load_pygsti_dataset(filename):
 	except IOError:
 		print("File not found, or other file IO error.")
 
-	lines = file.readlines()
-	file.close()
+	# lines = file.readlines()
+	# file.close()
 
-	if lines[0] == "## Columns = 00 count, 01 count, 10 count, 11 count\n":
-		lines[0] = "## Columns = 0:0 count, 0:1 count, 1:0 count, 1:1 count\n"
-		file = open(filename, "w")
-		file.writelines(lines)
-		file.close()
+	# if lines[0] == "## Columns = 00 count, 01 count, 10 count, 11 count\n":
+	# 	lines[0] = "## Columns = 0:0 count, 0:1 count, 1:0 count, 1:1 count\n"
+	# 	file = open(filename, "w")
+	# 	file.writelines(lines)
+	# 	file.close()
 
 	data = _pygio.load_dataset(filename)
+ 
 	return data
 
 
@@ -206,7 +210,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
     cnt=0
     for col in range(num_columns) :
         if col < number_of_regions :
-            node_labels[cnt] = r'$%d^O$' % col
+            node_labels[cnt] = r'R$_{%d}$' % col
             cnt += 1
 #            node_labels.append("$%d^O$" % col)
         else :
@@ -214,7 +218,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
                 if col in range(setting_indices[region],
                                  (setting_indices[(region + 1)] if region < (number_of_regions - 1) else num_columns)):
                     break
-            node_labels[cnt] = r'$%d^S_{%d}$' % (region, (col-setting_indices[region]+1))
+            node_labels[cnt] = r'S$_{%d}^{(%d)}$' % (region, (col-setting_indices[region]))
             cnt += 1
             #node_labels.append("%d^S_{%d}$" % (region, (col-setting_indices[region]+1)))
 

@@ -22,7 +22,8 @@ def enable_old_object_unpickling():
             replacement_obj = _circuit.Circuit.__new__(_circuit.Circuit)
             return replacement_obj
     def GateString_setstate(self,state):
-        c = _objs.Circuit(state['_tup'], stringrep=state['_str'])
+        s = state['_str'] if '_str' in state else state['str']
+        c = _objs.Circuit(state['_tup'], stringrep=s)
         self.__dict__.update(c.__dict__)
 
     class dummy_CompressedGateString(object):
