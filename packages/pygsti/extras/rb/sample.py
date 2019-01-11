@@ -744,7 +744,7 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
         n = len(qubits_used)
     
     # Creates a empty circuit over no wires
-    circuit = _cir.Circuit(num_lines=0) 
+    circuit = _cir.Circuit(num_lines=0, editable=True) 
 
     s_rc_dict = {}
     p_rc_dict = {}
@@ -1031,7 +1031,7 @@ def exhaustive_independent_random_circuits_experiment(pspec, allowed_lengths, ci
     parallel_circuits = {}
     it = [range(circuits_per_subset) for i in range(len(structure))]
     for setting_comb in _itertools.product(*it):
-        pcircuit = _cir.Circuit(num_lines=0)
+        pcircuit = _cir.Circuit(num_lines=0, editable=True)
         for ssQs_ind, subsetQs in enumerate(structure):
             pcircuit.tensor_circuit(circuits[subsetQs][setting_comb[ssQs_ind]])
             parallel_circuits[setting_comb] = pcircuit
@@ -1550,7 +1550,7 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
         assert(subgraph.are_glob_connected(list(subsetQs))), "Each subset of qubits in `structure` must be connected!"
     
     # Creates a empty circuit over no wires
-    circuit = _cir.Circuit(num_lines=0)
+    circuit = _cir.Circuit(num_lines=0, editable=True)
 
     s_rc_dict = {}
     p_rc_dict = {}
@@ -1569,9 +1569,9 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
         circuit.tensor_circuit(subset_circuit)
     
     # Creates empty circuits over no wires
-    inversion_circuit = _cir.Circuit(num_lines=0)
+    inversion_circuit = _cir.Circuit(num_lines=0, editable=True)
     if cliffordtwirl: 
-        initial_circuit = _cir.Circuit(num_lines=0)
+        initial_circuit = _cir.Circuit(num_lines=0, editable=True)
       
     for subsetQs in structure:
         subsetQs = tuple(subsetQs)
