@@ -61,15 +61,6 @@ class CrosstalkResults(object):
         except ImportError:
             raise ValueError("plot_crosstalk_matrix(...) requires you to install matplotlib")
         from mpl_toolkits.axes_grid1 import make_axes_locatable
- #       import matplotlib.ticker as ticker
- #       from mpl_toolkits.axes_grid.parasite_axes import SubplotHost
-
-
-        # fig = _plt.figure()
-        # ax1 = SubplotHost(fig, 1,2,1)
-        # ax2 = SubplotHost(fig, 1,2,2)
-        # fig.add_subplot(ax1)
-        # fig.add_subplot(ax2)
 
         fig, (ax1, ax2) = _plt.subplots(1,2,figsize=(sum(self.settings)+self.number_of_regions+6, self.number_of_regions+4))
         fig.subplots_adjust(wspace=2, hspace=2)
@@ -119,18 +110,6 @@ class CrosstalkResults(object):
         ax1.set_ylabel('Region outcomes')
         ax1.set_title('Crosstalk between Region outcomes and settings')
 
-  #       ax1a = ax1.twiny()
-  #       offset = 0, -25  # Position of the second axis
-  #       new_axisline = ax1a.get_grid_helper().new_fixed_axis
-  #       ax1a.axis["bottom"] = new_axisline(loc="bottom", axes=ax1a, offset=offset)
-  #       ax1a.axis["top"].set_visible(False)
-  #
-  #       dividers.insert(0,0.0)
-  #       dividers.append(sum(self.settings)+0.5)
-  #       ax1a.set_xticks(dividers)
-  #       ax1a.xaxis.set_major_formatter(ticker.NullFormatter())
-  #       ax1a.xaxis.set_minor_locator(ticker.FixedLocator([0.3, 0.8]))
-  #       ax1a.xaxis.set_minor_formatter(ticker.FixedFormatter(['mammal', 'reptiles']))
 
         im = ax2.imshow(regions_and_regions, **kwargs)
         _plt.setp(ax2, xticks=_np.arange(0, self.number_of_regions, 1),
@@ -152,7 +131,7 @@ class CrosstalkResults(object):
             _plt.show()
 
 
-    def plot_crosstalk_graph(self, savepath=None):
+    def plot_crosstalk_dag(self, savepath=None):
         """
 
         """
@@ -160,18 +139,20 @@ class CrosstalkResults(object):
         try:
             import networkx as _nx
         except ImportError:
-            raise ValueError("plot_crosstalk_graph(...) requires you to install networkx")
+            raise ValueError("plot_crosstalk_dag(...) requires you to install networkx")
 
         try:
             import matplotlib.pyplot as _plt
         except ImportError:
-            raise ValueError("plot_crosstalk_graph(...) requires you to install matplotlib")
-        _plt.figure(figsize=(sum(self.settings)+2,6))
+            raise ValueError("plot_crosstalk_dag(...) requires you to install matplotlib")
+ #      fig = _plt.figure(figsize=(sum(self.settings)+2,6), facecolor='white')
+        fig = _plt.figure(facecolor='white')
+        ax = fig.add_subplot(1,1,1)
 
         if self.name is not None:
-            title = 'Crosstalk graph for dataset ' + self.name + '. Confidence level ' + str(self.confidence)
+            title = 'Crosstalk DAG for dataset ' + self.name + '. Confidence level ' + str(self.confidence)
         else:
-            title = 'Crosstalk graph for dataset. Confidence level ' + str(self.confidence)
+            title = 'Crosstalk DAG for dataset. Confidence level ' + str(self.confidence)
 
         # set positions for each node in graph
         G = self.graph
@@ -195,27 +176,36 @@ class CrosstalkResults(object):
 
         # draw graph nodes
         _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions), node_size=1000,
-                                node_color=outcomes_color, node_shape='o',alpha=0.4)
+                                node_color=outcomes_color, node_shape='o',alpha=0.4, ax=ax)
         _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions, self.number_of_columns), node_size=1000,
-                                node_color=settings_color, node_shape='s',alpha=0.4)
+                                node_color=settings_color, node_shape='s',alpha=0.4, ax=ax)
 
         label_posns = self.get_offset_label_posns(pos)
 
-        _nx.draw_networkx_labels(G, pos=label_posns, labels=self.node_labels)
+        _nx.draw_networkx_labels(G, pos=label_posns, labels=self.node_labels, ax=ax)
 
         float_formatter = lambda x: "%.4f" % x
 
         # draw graph edge, with ones indicating crosstalk in red
         for idx, edge in enumerate(self.graph.edges()) :
             if self.is_edge_ct[idx] :
-                _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='r')
+                _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='r', ax=ax)
                 label = {}
                 label[edge] = float_formatter(_np.max(self.edge_tvds[idx]) )
-                _nx.draw_networkx_edge_labels(G,pos,edge_labels=label,label_pos=0.2)
+                _nx.draw_networkx_edge_labels(G,pos,edge_labels=label,label_pos=0.2, ax=ax)
             else :
-                _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='b')
+                _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='b', ax=ax)
 
-        _plt.title(title, fontsize=17)
+         # insert plot title
+        _plt.title(title, fontsize=17, y=3)
+
+        # expand axis limits to make sure node labels are visible
+        ylims = ax.get_ylim()
+        ax.set_ylim((ylims[0]-0.2, ylims[1]+0.2))
+        xlims = ax.get_xlim()
+        ax.set_xlim((xlims[0]-0.2, xlims[1]+0.2))
+
+        # don't display axis
         _plt.axis('off')
 
         if savepath is not None:
@@ -223,7 +213,7 @@ class CrosstalkResults(object):
         else:
             _plt.show()
 
-    def plot_crosstalk_skeleton(self, savepath=None):
+    def plot_crosstalk_graph(self, savepath=None):
         """
 
         """
@@ -237,12 +227,14 @@ class CrosstalkResults(object):
             import matplotlib.pyplot as _plt
         except ImportError:
             raise ValueError("plot_crosstalk_graph(...) requires you to install matplotlib")
-        _plt.figure(figsize=(sum(self.settings)+2,6))
+ #       fig = _plt.figure(figsize=(sum(self.settings)+2,6), facecolor='white')
+        fig = _plt.figure(facecolor='white')
+        ax = fig.add_subplot(1,1,1)
 
         if self.name is not None:
-            title = 'Crosstalk skeleton for dataset ' + self.name + '. Confidence level ' + str(self.confidence)
+            title = 'Crosstalk graph for dataset ' + self.name + '. Confidence level ' + str(self.confidence)
         else:
-            title = 'Crosstalk skeleton for dataset. Confidence level ' + str(self.confidence)
+            title = 'Crosstalk graph for dataset. Confidence level ' + str(self.confidence)
 
         # set positions for each node in graph
         G = self.skel
@@ -266,27 +258,36 @@ class CrosstalkResults(object):
 
         # draw graph nodes
         _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions), node_size=1000,
-                                node_color=outcomes_color, node_shape='o',alpha=0.4)
+                                node_color=outcomes_color, node_shape='o',alpha=0.4, ax=ax)
         _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions, self.number_of_columns), node_size=1000,
-                                node_color=settings_color, node_shape='s',alpha=0.4)
+                                node_color=settings_color, node_shape='s',alpha=0.4, ax=ax)
 
         label_posns = self.get_offset_label_posns(pos)
 
-        _nx.draw_networkx_labels(G, pos=label_posns, labels=self.node_labels)
+        _nx.draw_networkx_labels(G, pos=label_posns, labels=self.node_labels, ax=ax)
 
         float_formatter = lambda x: "%.4f" % x
 
         # draw graph edge, with ones indicating crosstalk in red
         for idx, edge in enumerate(self.graph.edges()) :
             if self.is_edge_ct[idx] :
-                _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='r')
+                _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='r', ax=ax)
                 label = {}
                 label[edge] = float_formatter(_np.max(self.edge_tvds[idx]) )
-                _nx.draw_networkx_edge_labels(G,pos,edge_labels=label)
+                _nx.draw_networkx_edge_labels(G,pos,edge_labels=label,label_pos=0.2)
             else :
-                _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='b')
+                _nx.draw_networkx_edges(G, pos, edgelist=[edge], width=2, alpha=1, edge_color='b', ax=ax)
 
+        # insert plot title
         _plt.title(title, fontsize=17)
+
+        # expand axis limits to make sure node labels are visible
+        ylims = ax.get_ylim()
+        ax.set_ylim((ylims[0]-0.2, ylims[1]+0.2))
+        xlims = ax.get_xlim()
+        ax.set_xlim((xlims[0]-0.2, xlims[1]+0.2))
+
+        # don't display axis
         _plt.axis('off')
 
         if savepath is not None:
