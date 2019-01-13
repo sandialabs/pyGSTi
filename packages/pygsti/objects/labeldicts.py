@@ -78,10 +78,22 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         prefix : str
             The required prefix of all keys (which must be strings).
 
-        TODO: docstring : flags
-        typ : {"operation","spamvec","povm","instrument"}
-            The type of objects that this dictionary holds.  This is 
-            needed for automatic object creation and for validation. 
+        flags : dict
+            A dictionary of flags adjusting the behavior of the created
+            object.  Allowed keys are:
+
+            - `'cast_to_type'`: {`"operation"`,`"spamvec"`,`None`} -- whether 
+              (or not) to automatically convert assigned values to a particular
+              type of `ModelMember` object. (default is `None`)
+            - `'auto_embed'` : bool -- whether or not to automatically embed
+              objects with a lower dimension than this `OrderedMemberDict`'s 
+              parent model. (default is `False`).
+            - `'match_parent_dim'` : bool -- whether or not to require that 
+              all contained objects match the parent `Model`'s dimension 
+              (perhaps after embedding).  (default is `False`)
+            - `'match_parent_evotype'` : bool -- whether or not to require that
+              all contained objects match the parent `Model`'s evolution type.
+              (default is `False`).
 
         items : list, optional
             Used by pickle and other serializations to initialize elements.

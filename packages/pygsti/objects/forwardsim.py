@@ -267,12 +267,8 @@ class ForwardSimulator(object):
         -------
         probs : dictionary
             A dictionary such that `probs[opstr]` is an ordered dictionary of
-            `(outcome, p)` tuples, where `outcome` is a tuple of labels
-            and `p` is the corresponding probability.
+            outcome probabilities whose keys are (tuples of) outcome labels.
         """
-        #TODO: correct these docstrings - probs[opstr] is an ordered dictionary
-        #  of *outcome probabilities* whose keys are (tuples of) outcome labels.
-
         vp = _np.empty(evalTree.num_final_elements(),'d')
         if smartc:
             smartc.cached_compute(self.bulk_fill_probs, vp, evalTree,
@@ -352,11 +348,11 @@ class ForwardSimulator(object):
         -------
         dprobs : dictionary
             A dictionary such that `probs[opstr]` is an ordered dictionary of
-            `(outcome, dp, p)` tuples, where `outcome` is a tuple of labels,
-            `p` is the corresponding probability, and `dp` is an array containing
-            the derivative of `p` with respect to each parameter.  If `returnPr`
-            if False, then `p` is not included in the tuples (so they're just
-            `(outcome, dp)`).
+            `(dp, p)` tuples whose keys are (tuples of) outcome labels,
+            where `p` is the corresponding probability, and `dp` is an array
+            containing the derivative of `p` with respect to each parameter.
+            If `returnPr` is False, then `p` is not included in the tuples
+            (so values are just `dp`).
         """
         nElements = evalTree.num_final_elements()
         nDerivCols = self.Np
@@ -447,12 +443,14 @@ class ForwardSimulator(object):
         -------
         hprobs : dictionary
             A dictionary such that `probs[opstr]` is an ordered dictionary of
-            `(outcome, hp, dp, p)` tuples, where `outcome` is a tuple of labels,
-            `p` is the corresponding probability, `dp` is a 1D array containing
-            the derivative of `p` with respect to each parameter, and `hp` is a
-            2D array containing the Hessian of `p` with respect to each parameter.
-            If `returnPr` if False, then `p` is not included in the tuples.
-            If `returnDeriv` if False, then `dp` is not included in the tuples.
+            `(hp, dp, p)` tuples whose keys are (tuples of) outcome labels,
+            where `p` is the corresponding probability, `dp` is an array
+            containing the derivative of `p` with respect to each parameter,
+            and `hp` is a 2D array containing the Hessian of `p` with respect
+            to each parameter.  If `returnPr` is False, then `p` is not
+            included in the tuples.  If `returnDeriv` if False, then `dp` is
+            not included in the tuples (if both are false then values are
+            just `hp`, and not a tuple).
         """
         nElements = evalTree.num_final_elements()
         nDerivCols1 = self.Np if (wrtFilter1 is None) \

@@ -45,23 +45,49 @@ from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Label as _Label
 
-#TODO: docstrings in this module
 class Model(object):
     """
-    Encapsulates a set of gate, state preparation, and POVM effect operations.
+    A predictive model for a Quantum Information Processor (QIP).
 
-    TODO: docstring update - this is an explicit model:
-    A Model stores a set of labeled LinearOperator objects and provides dictionary-like
-    access to their matrices.  State preparation and POVM effect operations are
-    represented as column vectors.
+    The main function of a `Model` object is to compute the outcome
+    probabilities of :class:`Circuit` objects based on the action of the
+    model's ideal operations plus (potentially) noise which makes the
+    outcome probabilities deviate from the perfect ones.
     """
 
     #Whether to perform extra parameter-vector integrity checks
     _pcheck = False
 
     def __init__(self, state_space_labels, basis, evotype, compiler_helper, sim_type="auto"):
-        """ TODO: docstring """
+        """
+        Creates a new Model.  Rarely used except from derived classes
+        `__init__` functions.
 
+        Parameters
+        ----------
+        state_space_labels : StateSpaceLabels or list or tuple
+            The decomposition (with labels) of (pure) state-space this model
+            acts upon.  Regardless of whether the model contains operators or
+            superoperators, this argument describes the Hilbert space dimension
+            and imposed structure.  If a list or tuple is given, it must be 
+            of a from that can be passed to `StateSpaceLabels.__init__`.
+
+        basis : Basis
+            The basis used for the state space by dense operator representations.
+
+        evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
+            The evolution type of this model, describing how states are
+            represented, allowing compatibility checks with (super)operator 
+            objects.
+
+        compiler_helper : CompilerHelper
+            Provides a minimal interface for compiling circuits for forward
+            simulation.
+
+        sim_type : {"auto", "matrix", "map", "termorder:X"}
+            The type of forward simulator this model should use.  `"auto"`
+            tries to determine the best type automatically.
+        """
         self._evotype = evotype
         self.set_state_space(state_space_labels, basis)
           #sets self._state_space_labels, self._basis, self._dim
@@ -85,18 +111,22 @@ class Model(object):
 
     @property
     def simtype(self):
+        """ Forward simulation type """
         return self._sim_type
 
     @property
     def evotype(self):
+        """ Evolution type """
         return self._evotype
 
     @property
     def state_space_labels(self):
+        """ State space labels """
         return self._state_space_labels
 
     @property
     def basis(self):
+        """ The basis used to represent dense (super)operators of this model """
         return self._basis
 
     @basis.setter
@@ -108,6 +138,23 @@ class Model(object):
             self._basis = _Basis(basis, self.state_space_labels.dim)
     
     def set_simtype(self, sim_type, calc_cache=None):
+        """
+        Reset the forward simulation type of this model.
+
+        Parameters
+        ----------
+        sim_type : {"auto", "matrix", "map", "termorder:X"}
+            The type of forward simulator this model should use.  `"auto"`
+            tries to determine the best type automatically.
+
+        calc_cache : dict or None
+            A cache of pre-computed values used in Taylor-term-based forward
+            simulation.
+
+        Returns
+        -------
+        None
+        """
         #Calculator selection based on simulation type
 
         if sim_type == "auto":
@@ -136,7 +183,7 @@ class Model(object):
 
     def reset_basis(self):
         """
-        "Forgets" the basis, so that
+        "Forgets" the current basis, so that
         self.basis becomes a dummy Basis w/name "unknown".
         """
         self._basis = _Basis('unknown', None)
@@ -479,9 +526,11 @@ class Model(object):
     ######################################
         
     def _layer_lizard(self):
+        """ Return a layer lizard for this model """
         raise NotImplementedError("Derived Model classes should implement this!")
     
     def _calc(self):
+        """ Create & return a forward-simulator ("calculator") for this model """
         self._clean_paramvec()
         layer_lizard = self._layer_lizard() 
         
@@ -1758,12 +1807,8 @@ class Model(object):
 
     def _init_copy(self,copyInto):
         """
-        Copy this model
-
-        Returns
-        -------
-        Model
-            a (deep) copy of this model.
+        Copies any "tricky" member of this model into `copyInto`, before
+        deep copying everything else within a .copy() operation.
         """
         self._clean_paramvec() # make sure _paramvec is valid before copying (necessary?)
         copyInto.uuid = _uuid.uuid4() # new uuid for a copy (don't duplicate!)
@@ -1772,6 +1817,14 @@ class Model(object):
 
 
     def copy(self):
+        """
+        Copy this model.
+
+        Returns
+        -------
+        Model
+            a (deep) copy of this model.
+        """
         self._clean_paramvec() # ensure _paramvec is rebuilt if needed
         if Model._pcheck: self._check_paramvec()
         
@@ -1808,9 +1861,12 @@ class Model(object):
 
 
 class ExplicitOpModel(Model):
-    """ Holds explicit prep, povm, and propagation ops like a dictionary.
-        All ops must be the same dimension as the Model
-        Parameters independent?
+    """
+    Encapsulates a set of gate, state preparation, and POVM effect operations.
+
+    An ExplictOpModel stores a set of labeled LinearOperator objects and
+    provides dictionary-like access to their matrices.  State preparation
+    and POVM effect operations are represented as column vectors.
     """
 
     #Whether access to gates & spam vecs via Model indexing is allowed
@@ -1822,11 +1878,19 @@ class ExplicitOpModel(Model):
                  evotype="densitymx"):
                  #REMOVE auto_idle_name=None):
         """
-        Initialize a model.
+        Initialize an ExplictOpModel.
 
         Parameters
         ----------
-        TODO: docstring - add state_space_labels, basis, evotype
+        state_space_labels : StateSpaceLabels or list or tuple
+            The decomposition (with labels) of (pure) state-space this model
+            acts upon.  Regardless of whether the model contains operators or
+            superoperators, this argument describes the Hilbert space dimension
+            and imposed structure.  If a list or tuple is given, it must be 
+            of a from that can be passed to `StateSpaceLabels.__init__`.
+
+        basis : Basis
+            The basis used for the state space by dense operator representations.
 
         default_param : {"full", "TP", "CPTP", etc.}, optional
             Specifies the default gate and SPAM vector parameterization type.
@@ -1857,11 +1921,10 @@ class ExplicitOpModel(Model):
               to compute probabilities out to some maximum order <X> (an
               integer) in these rates.
 
-        auto_idle_name : str, optional
-            A gate *name* (i.e. without any state-space labels) that indicates a
-            *perfect* idle operation and thus can be used as a placeholder
-            within compound operation labels without actually being stored in the
-            Model.
+        evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
+            The evolution type of this model, describing how states are
+            represented, allowing compatibility checks with (super)operator 
+            objects.
         """        
         #More options now (TODO enumerate?)
         #assert(default_param in ('full','TP','CPTP','H+S','S','static',
@@ -1928,6 +1991,7 @@ class ExplicitOpModel(Model):
             yield (lbl,obj)
     
     def _layer_lizard(self):
+        """ Return a layer lizard for this model """
         self._clean_paramvec() # just to be safe
 
         compiled_effects = _collections.OrderedDict()
@@ -1945,6 +2009,7 @@ class ExplicitOpModel(Model):
         return ExplicitLayerLizard(compiled_preps, compiled_ops, compiled_effects, self)
 
     def _excalc(self):
+        """ Create & return a special explicit-model calculator for this model """
 
         self._clean_paramvec() #ensures paramvec is rebuild if needed
         compiled_effects = _collections.OrderedDict()
@@ -2934,6 +2999,11 @@ class ExplicitOpModel(Model):
         return s
 
     def _init_copy(self,copyInto):
+        """
+        Copies any "tricky" member of this model into `copyInto`, before
+        deep copying everything else within a .copy() operation.
+        """
+        
         # Copy special base class members first
         super(ExplicitOpModel, self)._init_copy(copyInto)
         
@@ -3446,11 +3516,33 @@ class ExplicitOpModel(Model):
                         _jt.jamiolkowski_iso(gate))] ),"\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)))
 
+class CompilerHelper(object):
+    """
+    Defines the minimal interface for performing :class:`Circuit` "compiling"
+    (pre-processing for forward simulators, which only deal with preps, ops, 
+    and effects) needed by :class:`Model`.
+
+    To compile a circuit a `Model` doesn't, for instance, need to know *all*
+    possible state preparation labels, as a dict of preparation operations
+    would provide - it only needs a function to check if a given value is a
+    viable state-preparation label.
+    """
+    pass #TODO docstring - FILL IN functions & docstrings
         
-class BasicCompilerHelper(object):
-    """ Performs the work of a "Compiler Helper" using user-supplied lists """
+class BasicCompilerHelper(CompilerHelper):
+    """
+    Performs the work of a :class:`CompilerHelper` using user-supplied lists
+    """
     def __init__(self, preplbls, povmlbls, instrumentlbls,
                  povm_effect_lbls, instrument_member_lbls):
+        """
+        Create a new BasicCompilerHelper.
+
+        preplbls, povmlbls, instrumentlbls, povm_effect_lbls,
+        instrument_member_lbls : list
+            Lists of all the state-preparation, POVM, instrument,
+            POVM-effect, and instrument-member labels of a model.
+        """
         self.preplbls = preplbls
         self.povmlbls = povmlbls
         self.instrumentlbls = instrumentlbls
@@ -3486,9 +3578,20 @@ class BasicCompilerHelper(object):
     def get_member_labels_for_instrument(self, inst_lbl):
         return self.instrument_member_lbls[inst_lbl]
 
-class MemberDictCompilerHelper(object):
-    """ Performs the work of a "Compiler Helper" using user-supplied dicts """
+class MemberDictCompilerHelper(CompilerHelper):
+    """
+    Performs the work of a :class:`CompilerHelper` using a set of
+    `OrderedMemberDict` objects, such as those contained in an
+    :class:`ExplicitOpModel`.
+    """
     def __init__(self, preps, povms, instruments):
+        """
+        Create a new MemberDictCompilerHelper.
+
+        Parameters
+        ----------
+        preps, povms, instruments : OrderedMemberDict
+        """
         self.preps = preps        
         self.povms = povms
         self.instruments = instruments
@@ -3523,9 +3626,20 @@ class MemberDictCompilerHelper(object):
         return tuple(self.instruments[inst_lbl].keys())
 
 
-class MemberDictDictCompilerHelper(object):
-    """ Performs the work of a "Compiler Helper" using user-supplied dicts """
+class MemberDictDictCompilerHelper(CompilerHelper):
+    """
+    Performs the work of a :class:`CompilerHelper` using a set of
+    dictionaries of `OrderedMemberDict` objects, such as those
+    contained in an :class:`ImplicitOpModel`.
+    """
     def __init__(self, prep_blks, povm_blks, instrument_blks):
+        """
+        Create a new MemberDictDictCompilerHelper.
+
+        Parameters
+        ----------
+        prep_blks, povm_blks, instrument_blks : dict of OrderedMemberDict
+        """
         self.prep_blks = prep_blks
         self.povm_blks = povm_blks
         self.instrument_blks = instrument_blks
@@ -3581,56 +3695,169 @@ class MemberDictDictCompilerHelper(object):
 class ImplicitModelCompilerHelper(MemberDictDictCompilerHelper):
     """ Performs the work of a "Compiler Helper" using user-supplied dicts """
     def __init__(self, implicitModel):
-        super(ImplicitModelCompilerHelper,self).__init__(implicitModel.prep_blks, implicitModel.povm_blks, implicitModel.instrument_blks)
+        """ Create a new ImplicitModelCompilerHelper. """
+        super(ImplicitModelCompilerHelper,self).__init__(
+            implicitModel.prep_blks, implicitModel.povm_blks, implicitModel.instrument_blks)
         
 
-class ExplicitLayerLizard(object):
+class LayerLizard(object):
     """ 
-    Helper "Compiled Operation Server" class for interfacing 
-    a Model and a forward simulator (which just deals with 
-    *compiled* operations.
+    Helper class for interfacing a Model and a forward simulator
+    (which just deals with *compiled* operations).  Can be thought
+    of as a "server" of compiled operations for a forward simulator
+    which pieces together layer operations from components.
+    """
+    pass # TODO docstring - add not-implemented members & docstrings?
+
+    
+class ExplicitLayerLizard(LayerLizard):
+    """
+    This layer lizard (see :class:`LayerLizard`) only serves up layer 
+    operations it have been explicitly provided upon initialization.
     """
     def __init__(self,preps,ops,effects,model):
+        """
+        Creates a new ExplicitLayerLizard.
+
+        Parameters
+        ----------
+        preps, ops, effects : OrderedMemberDict
+            Dictionaries of compiled layer operations available for 
+            serving to a forwared simulator.
+
+        model : Model
+            The model associated with the compiled operations.
+        """
         self.preps, self.ops, self.effects = preps,ops,effects
         self.model = model
         
     def get_evotype(self):
+        """ 
+        Return the evolution type of the operations being served.
+
+        Returns
+        -------
+        str
+        """
         return self.model._evotype
 
-    def get_prep(self,layerlbl): return self.preps[layerlbl]
-    def get_effect(self,layerlbl): return self.effects[layerlbl]
-    def get_operation(self,layerlbl): return self.ops[layerlbl]
+    def get_prep(self,layerlbl):
+        """
+        Return the (compiled) preparation layer operator given by `layerlbl`.
+
+        Returns
+        -------
+        LinearOperator
+        """
+        return self.preps[layerlbl]
+    
+    def get_effect(self,layerlbl):
+        """
+        Return the (compiled) POVM effect layer operator given by `layerlbl`.
+
+        Returns
+        -------
+        LinearOperator
+        """
+        return self.effects[layerlbl]
+    
+    def get_operation(self,layerlbl):
+        """
+        Return the (compiled) layer operation given by `layerlbl`.
+
+        Returns
+        -------
+        LinearOperator
+        """
+        return self.ops[layerlbl]
 
     def from_vector(self, v):
-        """ re-init compiled ops from vector v """
+        """
+        Re-initialize the compiled operators from model-parameter-vector `v`.
+
+        Parameters
+        ----------
+        v : numpy.ndarray
+            A vector of parameters for `Model` associated with this layer lizard.
+        """
         for _,obj in _itertools.chain(self.preps.items(),
                                       self.effects.items(),
                                       self.ops.items()):
             obj.from_vector( v[obj.gpindices] )
 
 
-class ImplicitLayerLizard(object):
+class ImplicitLayerLizard(LayerLizard):
     """ 
-    Helper "Compiled Operation Server" class for interfacing 
-    a Model and a forward simulator (which just deals with 
-    *compiled* operations.
+    This layer lizard (see :class:`LayerLizard`) is used as a base class for
+    objects which serve up layer operations for implicit models (and so provide
+    logic for how to construct layer operations from model components).
     """
     def __init__(self,preps,ops,effects,model):
+        """
+        Creates a new ExplicitLayerLizard.
+
+        Parameters
+        ----------
+        preps, ops, effects : dict
+            Dictionaries of :class:`OrderedMemberDict` objects, one per
+            "category" of compiled operators.  These are stored and used
+            to build layer operations for serving to a forwared simulator.
+
+        model : Model
+            The model associated with the compiled operations.
+        """
         self.prep_blks, self.op_blks, self.effect_blks = preps,ops,effects
         self.model = model
         
     def get_prep(self,layerlbl):
+        """
+        Return the (compiled) preparation layer operator given by `layerlbl`.
+
+        Returns
+        -------
+        LinearOperator
+        """
         raise NotImplementedError("ImplicitLayerLizard-derived classes must implement `get_preps`")
+    
     def get_effect(self,layerlbl):
+        """
+        Return the (compiled) POVM effect layer operator given by `layerlbl`.
+
+        Returns
+        -------
+        LinearOperator
+        """
         raise NotImplementedError("ImplicitLayerLizard-derived classes must implement `get_effect`")
+    
     def get_operation(self,layerlbl):
+        """
+        Return the (compiled) layer operation given by `layerlbl`.
+
+        Returns
+        -------
+        LinearOperator
+        """
         raise NotImplementedError("ImplicitLayerLizard-derived classes must implement `get_operation`")
 
     def get_evotype(self):
+        """ 
+        Return the evolution type of the operations being served.
+
+        Returns
+        -------
+        str
+        """
         return self.model._evotype
 
     def from_vector(self, v):
-        """ re-init compiled ops from vector v """
+        """
+        Re-initialize the compiled operators from model-parameter-vector `v`.
+
+        Parameters
+        ----------
+        v : numpy.ndarray
+            A vector of parameters for `Model` associated with this layer lizard.
+        """
         for _,objdict in _itertools.chain(self.prep_blks.items(),
                                           self.effect_blks.items(),
                                           self.op_blks.items()):
@@ -3639,16 +3866,64 @@ class ImplicitLayerLizard(object):
         
     
 class ImplicitOpModel(Model):
-    """ No explicit prep, povm, and propagation ops - relies on included explicit model for ops;
-        dict of building blocks which can be of lower dimension?
-        - want to be able to override specific layers easily 
-        
+    """
+    An ImplicitOpModel represents a flexible QIP model whereby only the
+    building blocks for layer operations are stored, and custom layer-lizard
+    logic is used to construct layer operations from these blocks on an
+    on-demand basis.
     """
 
     def __init__(self, state_space_labels, basis="pp", primitive_labels=None, layer_lizard_class=ImplicitLayerLizard,
                  layer_lizard_args=(), compiler_helper_class=None,
                  sim_type="auto", evotype="densitymx"):
-        """ TODO: docstring - add state_space_labels, basis, evotype """
+        """
+        Creates a new ImplicitOpModel.  Usually only called from derived
+        classes `__init__` functions.
+
+        Parameters
+        ----------
+        state_space_labels : StateSpaceLabels or list or tuple
+            The decomposition (with labels) of (pure) state-space this model
+            acts upon.  Regardless of whether the model contains operators or
+            superoperators, this argument describes the Hilbert space dimension
+            and imposed structure.  If a list or tuple is given, it must be 
+            of a from that can be passed to `StateSpaceLabels.__init__`.
+
+        basis : Basis
+            The basis used for the state space by dense operator representations.
+
+        primitive_labels : dict, optional
+            A dictionary of lists with keys `"preps"`, `"povms"`, `"ops"` and
+            `"instruments`" giving the primitive-layer labels for each member
+            type.  This information is needed for interfacing with the LGST
+            algorithm and for circuit compiling.
+
+        layer_lizard_class : class, optional
+            The class of the layer lizard to use, which should usually be derived
+            from :class:`ImplicitLayerLizard` and will be created using:
+            `layer_lizard_class(compiled_prep_blks, compiled_op_blks, compiled_effect_blks, self)`
+
+        layer_lizard_args : tuple, optional
+            Additional arguments reserved for the custom layer lizard class.
+            These arguments are not passed to the `layer_lizard_class`'s 
+            constructor, but are stored in the model's `._lizardArgs` member and
+            may be accessed from within the layer lizard object (which gets a 
+            reference to the model upon initialization).
+
+        compiler_helper_class : class, optional
+            The :class:`CompilerHelper`-derived type used to provide the 
+            mimial interface needed for circuit compiling.  Initalized
+            using `compiler_helper_class(self)`.
+
+        sim_type : {"auto", "matrix", "map", "termorder:X"}
+            The type of forward simulator this model should use.  `"auto"`
+            tries to determine the best type automatically.
+
+        evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
+            The evolution type of this model, describing how states are
+            represented, allowing compatibility checks with (super)operator 
+            objects.
+        """
 
         self.prep_blks = _collections.OrderedDict()
         self.povm_blks = _collections.OrderedDict()
@@ -3738,8 +4013,13 @@ class ImplicitOpModel(Model):
         compiled_prep_blks = self.prep_blks.copy() #no compilation needed
 
         return self._lizardClass(compiled_prep_blks, compiled_op_blks, compiled_effect_blks, self)
+          # use self._lizardArgs internally?
 
-    def _init_copy(self,copyInto):        
+    def _init_copy(self,copyInto):
+        """
+        Copies any "tricky" member of this model into `copyInto`, before
+        deep copying everything else within a .copy() operation.
+        """
         # Copy special base class members first
         super(ImplicitOpModel, self)._init_copy(copyInto)
 
