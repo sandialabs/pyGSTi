@@ -58,7 +58,7 @@ class Model(object):
     #Whether to perform extra parameter-vector integrity checks
     _pcheck = False
 
-    def __init__(self, state_space_labels, basis, evotype, compiler_helper, sim_type="auto"):
+    def __init__(self, state_space_labels, basis, evotype, simplifier_helper, sim_type="auto"):
         """
         Creates a new Model.  Rarely used except from derived classes
         `__init__` functions.
@@ -80,7 +80,7 @@ class Model(object):
             represented, allowing compatibility checks with (super)operator 
             objects.
 
-        compiler_helper : CompilerHelper
+        simplifier_helper : SimplifierHelper
             Provides a minimal interface for compiling circuits for forward
             simulation.
 
@@ -96,7 +96,7 @@ class Model(object):
           #sets self._calcClass, self._sim_type, self._sim_args
 
         self._paramvec = _np.zeros(0, 'd')
-        self._chlp = compiler_helper
+        self._shlp = simplifier_helper
         self._paramlbls = None # a placeholder for FUTURE functionality
         self._need_to_rebuild = True #whether we call _rebuild_paramvec() in to_vector() or num_params()
         self.dirty = False #indicates when objects and _paramvec may be out of sync
@@ -570,34 +570,34 @@ class Model(object):
         opsOnlyString : Circuit
         povmLabel : str or None
         """
-        if len(circuit) > 0 and self._chlp.is_prep_lbl(circuit[0]):
+        if len(circuit) > 0 and self._shlp.is_prep_lbl(circuit[0]):
             prep_lbl = circuit[0]
             circuit = circuit[1:]
-        elif self._chlp.get_default_prep_lbl() is not None:
-            prep_lbl = self._chlp.get_default_prep_lbl()
+        elif self._shlp.get_default_prep_lbl() is not None:
+            prep_lbl = self._shlp.get_default_prep_lbl()
         else:
-            if 'prep' in erroron and self._chlp.has_preps():
+            if 'prep' in erroron and self._shlp.has_preps():
                 raise ValueError("Cannot resolve state prep in %s" % circuit)
             else: prep_lbl = None
 
-        if len(circuit) > 0 and self._chlp.is_povm_lbl(circuit[-1]):
+        if len(circuit) > 0 and self._shlp.is_povm_lbl(circuit[-1]):
             povm_lbl = circuit[-1]
             circuit = circuit[:-1]
-        elif self._chlp.get_default_povm_lbl() is not None:
-            povm_lbl = self._chlp.get_default_povm_lbl()
+        elif self._shlp.get_default_povm_lbl() is not None:
+            povm_lbl = self._shlp.get_default_povm_lbl()
         else:
-            if 'povm' in erroron and self._chlp.has_povms():
+            if 'povm' in erroron and self._shlp.has_povms():
                 raise ValueError("Cannot resolve POVM in %s" % circuit)
             else: povm_lbl = None
 
         return prep_lbl, circuit, povm_lbl
 
 
-    def compile_circuits(self, circuits, dataset=None):
+    def simplify_circuits(self, circuits, dataset=None):
         """
-        Compiles a list of :class:`Circuit`s.
+        Simplifies a list of :class:`Circuit`s.
 
-        Circuits must be "compiled" before probabilities can be computed for
+        Circuits must be "simplified" before probabilities can be computed for
         them. Each string corresponds to some number of "outcomes", indexed by an
         "outcome label" that is a tuple of POVM-effect or instrument-element
         labels like "0".  Compiling creates maps between operation sequences and their
@@ -607,10 +607,10 @@ class Model(object):
         Parameters
         ----------
         circuits : list of Circuits
-            The list to compile.
+            The list to simplify.
 
         dataset : DataSet, optional
-            If not None, restrict what is compiled to only those
+            If not None, restrict what is simplified to only those
             probabilities corresponding to non-zero counts (observed
             outcomes) in this data set.
 
@@ -618,9 +618,9 @@ class Model(object):
         -------
         raw_spamTuples_dict : collections.OrderedDict
             A dictionary whose keys are raw operation sequences (containing just
-            "compiled" gates, i.e. not instruments), and whose values are
+            "simplified" gates, i.e. not instruments), and whose values are
             lists of (preplbl, effectlbl) tuples.  The effectlbl names a
-            "compiled" effect vector; preplbl is just a prep label. Each tuple
+            "simplified" effect vector; preplbl is just a prep label. Each tuple
             corresponds to a single "final element" of the computation, e.g. a
             probability.  The ordering is important - and is why this needs to be
             an ordered dictionary - when the lists of tuples are concatenated (by
@@ -644,9 +644,9 @@ class Model(object):
             The total number of "final elements" - this is how big of an array
             is need to hold all of the probabilities `circuits` generates.
         """
-        # model.compile -> odict[raw_gstr] = spamTuples, elementIndices, nElements
-        # dataset.compile -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
-        # compile all gsplaq strs -> elementIndices[(i,j)],
+        # model.simplify -> odict[raw_gstr] = spamTuples, elementIndices, nElements
+        # dataset.simplify -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
+        # simplify all gsplaq strs -> elementIndices[(i,j)],
 
         circuits = [ _cir.Circuit(opstr) for opstr in circuits ] # cast to Circuits
 
@@ -677,9 +677,9 @@ class Model(object):
                 self.split_circuit(circuit)
             if prep_lbl is None or povm_lbl is None:
                 spamtups = [ None ] #put a single "dummy" spam-tuple placeholder
-                  # so that there's a single "element" for each compiled string,
+                  # so that there's a single "element" for each simplified string,
                   # which means that the usual "lookup" or "elIndices" will map
-                  # original circuit-list indices to compiled-string, i.e.,
+                  # original circuit-list indices to simplified-string, i.e.,
                   # evalTree index, which is useful when computing products
                   # (often the case when a Model has no preps or povms,
                   #  e.g. in germ selection)
@@ -697,7 +697,7 @@ class Model(object):
                       # to the POVM (earlier ones = instruments)
                 else:
                     spamtups = [ (prep_lbl, povm_lbl + "_" + elbl)
-                                 for elbl in self._chlp.get_effect_labels_for_povm(povm_lbl) ]
+                                 for elbl in self._shlp.get_effect_labels_for_povm(povm_lbl) ]
             return circuit, spamtups
 
         def process(s, spamtuples, observed_outcomes, elIndsToOutcomes,
@@ -717,18 +717,18 @@ class Model(object):
                 #if op_label in self.instruments: 
                 #    #we've found an instrument - recurse!
                 #    for inst_el_lbl in self.instruments[op_label]:
-                #        compiled_el_lbl = op_label + "_" + inst_el_lbl
-                #        process(s[0:i] + _cir.Circuit((compiled_el_lbl,)) + s[i+1:],
+                #        simplified_el_lbl = op_label + "_" + inst_el_lbl
+                #        process(s[0:i] + _cir.Circuit((simplified_el_lbl,)) + s[i+1:],
                 #                spamtuples, elIndsToOutcomes, op_outcomes + (inst_el_lbl,), i+1)
                 #    break
 
-                if any([ self._chlp.is_instrument_lbl(sub_gl) for sub_gl in op_label.components]):
+                if any([ self._shlp.is_instrument_lbl(sub_gl) for sub_gl in op_label.components]):
                     # we've found an instrument - recurse!
                     sublabel_tups_to_iter = [] # one per label component (may be only 1)
                     for sub_gl in op_label.components:
-                        if self._chlp.is_instrument_lbl(sub_gl):
+                        if self._shlp.is_instrument_lbl(sub_gl):
                             sublabel_tups_to_iter.append( [ (sub_gl,inst_el_lbl)
-                                                            for inst_el_lbl in self._chlp.get_member_labels_for_instrument(sub_gl) ])
+                                                            for inst_el_lbl in self._shlp.get_member_labels_for_instrument(sub_gl) ])
                         else:
                             sublabel_tups_to_iter.append( [(sub_gl,None)] ) # just a single element
                             
@@ -742,11 +742,11 @@ class Model(object):
                             else:
                                 sublabels.append(sub_gl)
                                 
-                        compiled_el_lbl = _Label(sublabels)
-                        compiled_el_outcomes = tuple(outcomes)
-                        process(s[0:i] + _cir.Circuit((compiled_el_lbl,)) + s[i+1:],
+                        simplified_el_lbl = _Label(sublabels)
+                        simplified_el_outcomes = tuple(outcomes)
+                        process(s[0:i] + _cir.Circuit((simplified_el_lbl,)) + s[i+1:],
                                 spamtuples, observed_outcomes, elIndsToOutcomes,
-                                op_outcomes + compiled_el_outcomes, i+1)
+                                op_outcomes + simplified_el_outcomes, i+1)
                     break
                     
             else: #no instruments -- add "raw" operation sequence s
@@ -835,13 +835,13 @@ class Model(object):
         ##DEBUG: SANITY CHECK
         #if len(circuits) > 1:
         #    for k,opstr in enumerate(circuits):
-        #        _,outcomes_k = self.compile_circuit(opstr)
+        #        _,outcomes_k = self.simplify_circuit(opstr)
         #        nIndices = _slct.length(elIndicesByParent[k]) if isinstance(elIndicesByParent[k], slice) \
         #                      else len(elIndicesByParent[k])
         #        assert(len(outcomes_k) == nIndices)
         #        assert(outcomes_k == outcomesByParent[k])
 
-        #print("Model.compile debug:")
+        #print("Model.simplify debug:")
         #print("input = ",'\n'.join(["%d: %s" % (i,repr(c)) for i,c in enumerate(circuits)]))
         #print("raw_dict = ", raw_spamTuples_dict)
         #print("elIndices = ", elIndicesByParent)
@@ -852,22 +852,22 @@ class Model(object):
                 outcomesByParent, nTotElements)
 
 
-    def compile_circuit(self, circuit):
+    def simplify_circuit(self, circuit):
         """
-        Compiles a single :class:`Circuit`.
+        Simplifies a single :class:`Circuit`.
 
         Parameters
         ----------
         circuit : Circuit
-            The operation sequence to compile
+            The operation sequence to simplify
 
         Returns
         -------
         raw_spamTuples_dict : collections.OrderedDict
             A dictionary whose keys are raw operation sequences (containing just
-            "compiled" gates, i.e. not instruments), and whose values are
+            "simplified" gates, i.e. not instruments), and whose values are
             lists of (preplbl, effectlbl) tuples.  The effectlbl names a
-            "compiled" effect vector; preplbl is just a prep label. Each tuple
+            "simplified" effect vector; preplbl is just a prep label. Each tuple
             corresponds to a single "final element" of the computation for this
             operation sequence.  The ordering is important - and is why this needs to be
             an ordered dictionary - when the lists of tuples are concatenated (by
@@ -879,7 +879,7 @@ class Model(object):
             of POVM-effect and/or instrument-element labels), corresponding to
             the final elements.
         """
-        raw_dict,_,outcomes,nEls = self.compile_circuits([circuit])
+        raw_dict,_,outcomes,nEls = self.simplify_circuits([circuit])
         assert(len(outcomes[0]) == nEls)
         return raw_dict,outcomes[0]
 
@@ -903,7 +903,7 @@ class Model(object):
             probs[SL] = pr(SL,circuit,clipTo)
             for each spam label (string) SL.
         """
-        return self._calc().probs(self.compile_circuit(circuit), clipTo)
+        return self._calc().probs(self.simplify_circuit(circuit), clipTo)
 
 
     def dprobs(self, circuit, returnPr=False,clipTo=None):
@@ -930,7 +930,7 @@ class Model(object):
             dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,clipTo)
             for each spam label (string) SL.
         """
-        return self._calc().dprobs(self.compile_circuit(circuit),
+        return self._calc().dprobs(self.simplify_circuit(circuit),
                                    returnPr,clipTo)
 
 
@@ -962,7 +962,7 @@ class Model(object):
             hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo)
             for each spam label (string) SL.
         """
-        return self._calc().hprobs(self.compile_circuit(circuit),
+        return self._calc().hprobs(self.simplify_circuit(circuit),
                                    returnPr, returnDeriv, clipTo)
 
 
@@ -1083,8 +1083,8 @@ class Model(object):
                         evt_cache[ng] = self.bulk_evaltree(
                             circuit_list, minSubtrees=ng, numSubtreeComms=Ng,
                             dataset=dataset)                        
-                        # FUTURE: make a _bulk_evaltree_precompiled version that takes compiled
-                        # operation sequences as input so don't have to recompile every time we hit this line.
+                        # FUTURE: make a _bulk_evaltree_presimplified version that takes simplified
+                        # operation sequences as input so don't have to re-simplify every time we hit this line.
                     cacheSize = max([s.cache_size() for s in evt_cache[ng][0].get_sub_trees()])
                     nFinalStrs = max([s.num_final_strings() for s in evt_cache[ng][0].get_sub_trees()])
                 else:
@@ -1333,12 +1333,12 @@ class Model(object):
         printer = _VerbosityPrinter.build_printer(verbosity)
 
         toCircuit = lambda x : x if isinstance(x,_cir.Circuit) else _cir.Circuit(x)
-        circuit_list = list(map(toCircuit,circuit_list)) # make sure compile_circuits is given Circuits
-        compiled_circuits, elIndices, outcomes, nEls = \
-                            self.compile_circuits(circuit_list, dataset)
+        circuit_list = list(map(toCircuit,circuit_list)) # make sure simplify_circuits is given Circuits
+        simplified_circuits, elIndices, outcomes, nEls = \
+                            self.simplify_circuits(circuit_list, dataset)
 
         evalTree = self._calc().construct_evaltree()
-        evalTree.initialize(compiled_circuits, numSubtreeComms)
+        evalTree.initialize(simplified_circuits, numSubtreeComms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
                     (len(circuit_list),_time.time()-tm)); tm = _time.time()
@@ -1551,16 +1551,16 @@ class Model(object):
         Compute the outcome probabilities for an entire tree of operation sequences.
 
         This routine fills a 1D array, `mxToFill` with the probabilities
-        corresponding to the *compiled* operation sequences found in an evaluation
+        corresponding to the *simplified* operation sequences found in an evaluation
         tree, `evalTree`.  An initial list of (general) :class:`Circuit`
-        objects is *compiled* into a lists of gate-only sequences along with
+        objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently
         compute the gate-only sequences.  This routine fills in `mxToFill`, which
         must have length equal to the number of final elements (this can be
         obtained by `evalTree.num_final_elements()`.  To interpret which elements
         correspond to which strings and outcomes, you'll need the mappings
-        generated when the original list of `Circuits` was compiled.
+        generated when the original list of `Circuits` was simplified.
 
         Parameters
         ----------
@@ -1569,7 +1569,7 @@ class Model(object):
           total number of computed elements (i.e. evalTree.num_final_elements())
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
         clipTo : 2-tuple, optional
@@ -1612,7 +1612,7 @@ class Model(object):
           number of model parameters.
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional
@@ -1679,7 +1679,7 @@ class Model(object):
           the number of selected gate-set parameters (by wrtFilter1 and wrtFilter2).
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional
@@ -1812,7 +1812,7 @@ class Model(object):
         """
         self._clean_paramvec() # make sure _paramvec is valid before copying (necessary?)
         copyInto.uuid = _uuid.uuid4() # new uuid for a copy (don't duplicate!)
-        copyInto._chlp = None # must be set by a derived-class _init_copy() method
+        copyInto._shlp = None # must be set by a derived-class _init_copy() method
         copyInto._need_to_rebuild = True # copy will have all gpindices = None, etc.
 
 
@@ -1940,7 +1940,7 @@ class ExplicitOpModel(Model):
         
         self._default_gauge_group = None
 
-        chelper = MemberDictCompilerHelper(self.preps, self.povms, self.instruments)
+        chelper = MemberDictSimplifierHelper(self.preps, self.povms, self.instruments)
         super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, chelper, sim_type)
 
 
@@ -1994,48 +1994,48 @@ class ExplicitOpModel(Model):
         """ Return a layer lizard for this model """
         self._clean_paramvec() # just to be safe
 
-        compiled_effects = _collections.OrderedDict()
+        simplified_effects = _collections.OrderedDict()
         for povm_lbl,povm in self.povms.items():
-            for k,e in povm.compile_effects(povm_lbl).items():
-                compiled_effects[k] = e
+            for k,e in povm.simplify_effects(povm_lbl).items():
+                simplified_effects[k] = e
         
-        compiled_ops = _collections.OrderedDict()
-        for k,g in self.operations.items(): compiled_ops[k] = g
+        simplified_ops = _collections.OrderedDict()
+        for k,g in self.operations.items(): simplified_ops[k] = g
         for inst_lbl,inst in self.instruments.items():
-            for k,g in inst.compile_operations(inst_lbl).items():
-                compiled_ops[k] = g
-        compiled_preps = self.preps
+            for k,g in inst.simplify_operations(inst_lbl).items():
+                simplified_ops[k] = g
+        simplified_preps = self.preps
 
-        return ExplicitLayerLizard(compiled_preps, compiled_ops, compiled_effects, self)
+        return ExplicitLayerLizard(simplified_preps, simplified_ops, simplified_effects, self)
 
     def _excalc(self):
         """ Create & return a special explicit-model calculator for this model """
 
         self._clean_paramvec() #ensures paramvec is rebuild if needed
-        compiled_effects = _collections.OrderedDict()
+        simplified_effects = _collections.OrderedDict()
         for povm_lbl,povm in self.povms.items():
-            for k,e in povm.compile_effects(povm_lbl).items():
-                compiled_effects[k] = e
+            for k,e in povm.simplify_effects(povm_lbl).items():
+                simplified_effects[k] = e
         
-        compiled_ops = _collections.OrderedDict()
-        for k,g in self.operations.items(): compiled_ops[k] = g
+        simplified_ops = _collections.OrderedDict()
+        for k,g in self.operations.items(): simplified_ops[k] = g
         for inst_lbl,inst in self.instruments.items():
-            for k,g in inst.compile_operations(inst_lbl).items():
-                compiled_ops[k] = g
-        compiled_preps = self.preps
+            for k,g in inst.simplify_operations(inst_lbl).items():
+                simplified_ops[k] = g
+        simplified_preps = self.preps
 
-        return _explicitcalc.ExplicitOpModel_Calc(self.dim, compiled_preps, compiled_ops,
-                                                  compiled_effects, self.num_params())
+        return _explicitcalc.ExplicitOpModel_Calc(self.dim, simplified_preps, simplified_ops,
+                                                  simplified_effects, self.num_params())
 
     #Unneeded - just use string processing & rely on effect labels *not* having underscores in them
-    #def compiled_spamtuple_to_outcome_label(self, compiled_spamTuple):
+    #def simplify_spamtuple_to_outcome_label(self, simplified_spamTuple):
     #    #TODO: make this more efficient (prep lbl isn't even used!)
     #    for prep_lbl in self.preps:
     #        for povm_lbl in self.povms:
     #            for elbl in self.povms[povm_lbl]:
-    #                if compiled_spamTuple == (prep_lbl, povm_lbl + "_" + elbl):
+    #                if simplified_spamTuple == (prep_lbl, povm_lbl + "_" + elbl):
     #                    return (elbl,) # outcome "label" (a tuple)
-    #    raise ValueError("No outcome label found for compiled spamTuple: ", compiled_spamTuple)
+    #    raise ValueError("No outcome label found for simplified spamTuple: ", simplified_spamTuple)
 
 
     def _embedOperation(self, opTargetLabels, opVal, force=False):
@@ -2291,7 +2291,7 @@ class ExplicitOpModel(Model):
             self.operations = stateDict['gates']
             self._state_space_labels = stateDict['stateSpaceLabels']
             self._paramlbls = None
-            self._chlp = MemberDictCompilerHelper(stateDict['preps'], stateDict['povms'], stateDict['instruments'])
+            self._shlp = MemberDictSimplifierHelper(stateDict['preps'], stateDict['povms'], stateDict['instruments'])
             del stateDict['gates']
             del stateDict['_autogator']
             del stateDict['auto_idle_gatename']
@@ -3012,7 +3012,7 @@ class ExplicitOpModel(Model):
         copyInto.povms = self.povms.copy(copyInto)
         copyInto.operations = self.operations.copy(copyInto)
         copyInto.instruments = self.instruments.copy(copyInto)
-        copyInto._chlp = MemberDictCompilerHelper(copyInto.preps, copyInto.povms, copyInto.instruments)
+        copyInto._shlp = MemberDictSimplifierHelper(copyInto.preps, copyInto.povms, copyInto.instruments)
 
         copyInto._default_gauge_group = self._default_gauge_group #Note: SHALLOW copy
 
@@ -3516,27 +3516,27 @@ class ExplicitOpModel(Model):
                         _jt.jamiolkowski_iso(gate))] ),"\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)))
 
-class CompilerHelper(object):
+class SimplifierHelper(object):
     """
     Defines the minimal interface for performing :class:`Circuit` "compiling"
     (pre-processing for forward simulators, which only deal with preps, ops, 
     and effects) needed by :class:`Model`.
 
-    To compile a circuit a `Model` doesn't, for instance, need to know *all*
+    To simplify a circuit a `Model` doesn't, for instance, need to know *all*
     possible state preparation labels, as a dict of preparation operations
     would provide - it only needs a function to check if a given value is a
     viable state-preparation label.
     """
     pass #TODO docstring - FILL IN functions & docstrings
         
-class BasicCompilerHelper(CompilerHelper):
+class BasicSimplifierHelper(SimplifierHelper):
     """
-    Performs the work of a :class:`CompilerHelper` using user-supplied lists
+    Performs the work of a :class:`SimplifierHelper` using user-supplied lists
     """
     def __init__(self, preplbls, povmlbls, instrumentlbls,
                  povm_effect_lbls, instrument_member_lbls):
         """
-        Create a new BasicCompilerHelper.
+        Create a new BasicSimplifierHelper.
 
         preplbls, povmlbls, instrumentlbls, povm_effect_lbls,
         instrument_member_lbls : list
@@ -3578,15 +3578,15 @@ class BasicCompilerHelper(CompilerHelper):
     def get_member_labels_for_instrument(self, inst_lbl):
         return self.instrument_member_lbls[inst_lbl]
 
-class MemberDictCompilerHelper(CompilerHelper):
+class MemberDictSimplifierHelper(SimplifierHelper):
     """
-    Performs the work of a :class:`CompilerHelper` using a set of
+    Performs the work of a :class:`SimplifierHelper` using a set of
     `OrderedMemberDict` objects, such as those contained in an
     :class:`ExplicitOpModel`.
     """
     def __init__(self, preps, povms, instruments):
         """
-        Create a new MemberDictCompilerHelper.
+        Create a new MemberDictSimplifierHelper.
 
         Parameters
         ----------
@@ -3626,15 +3626,15 @@ class MemberDictCompilerHelper(CompilerHelper):
         return tuple(self.instruments[inst_lbl].keys())
 
 
-class MemberDictDictCompilerHelper(CompilerHelper):
+class MemberDictDictSimplifierHelper(SimplifierHelper):
     """
-    Performs the work of a :class:`CompilerHelper` using a set of
+    Performs the work of a :class:`SimplifierHelper` using a set of
     dictionaries of `OrderedMemberDict` objects, such as those
     contained in an :class:`ImplicitOpModel`.
     """
     def __init__(self, prep_blks, povm_blks, instrument_blks):
         """
-        Create a new MemberDictDictCompilerHelper.
+        Create a new MemberDictDictSimplifierHelper.
 
         Parameters
         ----------
@@ -3692,19 +3692,19 @@ class MemberDictDictCompilerHelper(CompilerHelper):
         raise KeyError("No instrument labeled %s!" % inst_lbl)
 
 
-class ImplicitModelCompilerHelper(MemberDictDictCompilerHelper):
-    """ Performs the work of a "Compiler Helper" using user-supplied dicts """
+class ImplicitModelSimplifierHelper(MemberDictDictSimplifierHelper):
+    """ Performs the work of a "Simplifier Helper" using user-supplied dicts """
     def __init__(self, implicitModel):
-        """ Create a new ImplicitModelCompilerHelper. """
-        super(ImplicitModelCompilerHelper,self).__init__(
+        """ Create a new ImplicitModelSimplifierHelper. """
+        super(ImplicitModelSimplifierHelper,self).__init__(
             implicitModel.prep_blks, implicitModel.povm_blks, implicitModel.instrument_blks)
         
 
 class LayerLizard(object):
     """ 
     Helper class for interfacing a Model and a forward simulator
-    (which just deals with *compiled* operations).  Can be thought
-    of as a "server" of compiled operations for a forward simulator
+    (which just deals with *simplified* operations).  Can be thought
+    of as a "server" of simplified operations for a forward simulator
     which pieces together layer operations from components.
     """
     pass # TODO docstring - add not-implemented members & docstrings?
@@ -3722,11 +3722,11 @@ class ExplicitLayerLizard(LayerLizard):
         Parameters
         ----------
         preps, ops, effects : OrderedMemberDict
-            Dictionaries of compiled layer operations available for 
+            Dictionaries of simplified layer operations available for 
             serving to a forwared simulator.
 
         model : Model
-            The model associated with the compiled operations.
+            The model associated with the simplified operations.
         """
         self.preps, self.ops, self.effects = preps,ops,effects
         self.model = model
@@ -3743,7 +3743,7 @@ class ExplicitLayerLizard(LayerLizard):
 
     def get_prep(self,layerlbl):
         """
-        Return the (compiled) preparation layer operator given by `layerlbl`.
+        Return the (simplified) preparation layer operator given by `layerlbl`.
 
         Returns
         -------
@@ -3753,7 +3753,7 @@ class ExplicitLayerLizard(LayerLizard):
     
     def get_effect(self,layerlbl):
         """
-        Return the (compiled) POVM effect layer operator given by `layerlbl`.
+        Return the (simplified) POVM effect layer operator given by `layerlbl`.
 
         Returns
         -------
@@ -3763,7 +3763,7 @@ class ExplicitLayerLizard(LayerLizard):
     
     def get_operation(self,layerlbl):
         """
-        Return the (compiled) layer operation given by `layerlbl`.
+        Return the (simplified) layer operation given by `layerlbl`.
 
         Returns
         -------
@@ -3773,7 +3773,7 @@ class ExplicitLayerLizard(LayerLizard):
 
     def from_vector(self, v):
         """
-        Re-initialize the compiled operators from model-parameter-vector `v`.
+        Re-initialize the simplified operators from model-parameter-vector `v`.
 
         Parameters
         ----------
@@ -3800,18 +3800,18 @@ class ImplicitLayerLizard(LayerLizard):
         ----------
         preps, ops, effects : dict
             Dictionaries of :class:`OrderedMemberDict` objects, one per
-            "category" of compiled operators.  These are stored and used
+            "category" of simplified operators.  These are stored and used
             to build layer operations for serving to a forwared simulator.
 
         model : Model
-            The model associated with the compiled operations.
+            The model associated with the simplified operations.
         """
         self.prep_blks, self.op_blks, self.effect_blks = preps,ops,effects
         self.model = model
         
     def get_prep(self,layerlbl):
         """
-        Return the (compiled) preparation layer operator given by `layerlbl`.
+        Return the (simplified) preparation layer operator given by `layerlbl`.
 
         Returns
         -------
@@ -3821,7 +3821,7 @@ class ImplicitLayerLizard(LayerLizard):
     
     def get_effect(self,layerlbl):
         """
-        Return the (compiled) POVM effect layer operator given by `layerlbl`.
+        Return the (simplified) POVM effect layer operator given by `layerlbl`.
 
         Returns
         -------
@@ -3831,7 +3831,7 @@ class ImplicitLayerLizard(LayerLizard):
     
     def get_operation(self,layerlbl):
         """
-        Return the (compiled) layer operation given by `layerlbl`.
+        Return the (simplified) layer operation given by `layerlbl`.
 
         Returns
         -------
@@ -3851,7 +3851,7 @@ class ImplicitLayerLizard(LayerLizard):
 
     def from_vector(self, v):
         """
-        Re-initialize the compiled operators from model-parameter-vector `v`.
+        Re-initialize the simplified operators from model-parameter-vector `v`.
 
         Parameters
         ----------
@@ -3874,7 +3874,7 @@ class ImplicitOpModel(Model):
     """
 
     def __init__(self, state_space_labels, basis="pp", primitive_labels=None, layer_lizard_class=ImplicitLayerLizard,
-                 layer_lizard_args=(), compiler_helper_class=None,
+                 layer_lizard_args=(), simplifier_helper_class=None,
                  sim_type="auto", evotype="densitymx"):
         """
         Creates a new ImplicitOpModel.  Usually only called from derived
@@ -3901,7 +3901,7 @@ class ImplicitOpModel(Model):
         layer_lizard_class : class, optional
             The class of the layer lizard to use, which should usually be derived
             from :class:`ImplicitLayerLizard` and will be created using:
-            `layer_lizard_class(compiled_prep_blks, compiled_op_blks, compiled_effect_blks, self)`
+            `layer_lizard_class(simplified_prep_blks, simplified_op_blks, simplified_effect_blks, self)`
 
         layer_lizard_args : tuple, optional
             Additional arguments reserved for the custom layer lizard class.
@@ -3910,10 +3910,10 @@ class ImplicitOpModel(Model):
             may be accessed from within the layer lizard object (which gets a 
             reference to the model upon initialization).
 
-        compiler_helper_class : class, optional
-            The :class:`CompilerHelper`-derived type used to provide the 
+        simplifier_helper_class : class, optional
+            The :class:`SimplifierHelper`-derived type used to provide the 
             mimial interface needed for circuit compiling.  Initalized
-            using `compiler_helper_class(self)`.
+            using `simplifier_helper_class(self)`.
 
         sim_type : {"auto", "matrix", "map", "termorder:X"}
             The type of forward simulator this model should use.  `"auto"`
@@ -3939,14 +3939,14 @@ class ImplicitOpModel(Model):
         self._lizardClass = layer_lizard_class
         self._lizardArgs = layer_lizard_args
         
-        if compiler_helper_class is None:
-            compiler_helper_class = ImplicitModelCompilerHelper
+        if simplifier_helper_class is None:
+            simplifier_helper_class = ImplicitModelSimplifierHelper
             # by default, assume *_blk members have keys which match the simple
             # labels found in the circuits this model can simulate.
-        self.compiler_helper_class = compiler_helper_class
-        compiler_helper = compiler_helper_class(self)
+        self.simplifier_helper_class = simplifier_helper_class
+        simplifier_helper = simplifier_helper_class(self)
         super(ImplicitOpModel, self).__init__(state_space_labels, basis, evotype,
-                                              compiler_helper, sim_type)
+                                              simplifier_helper, sim_type)
 
 
     def get_primitive_prep_labels(self):
@@ -3993,26 +3993,26 @@ class ImplicitOpModel(Model):
                 yield (_Label(dictlbl+":"+lbl.name,lbl.sslbls),obj)
     
     def _layer_lizard(self):
-        """ (compiled op server) """
+        """ (simplified op server) """
         self._clean_paramvec() # just to be safe
         
-        compiled_effect_blks = _collections.OrderedDict()
+        simplified_effect_blks = _collections.OrderedDict()
         for povm_dict_lbl,povmdict in self.povm_blks.items():
-            compiled_effect_blks[povm_dict_lbl] = _collections.OrderedDict(
+            simplified_effect_blks[povm_dict_lbl] = _collections.OrderedDict(
                 [(k,e) for povm_lbl,povm in povmdict.items()
-                 for k,e in povm.compile_effects(povm_lbl).items() ])
+                 for k,e in povm.simplify_effects(povm_lbl).items() ])
         
-        compiled_op_blks = self.operation_blks.copy() #no compilation needed
+        simplified_op_blks = self.operation_blks.copy() #no compilation needed
         for inst_dict_lbl,instdict in self.instrument_blks.items():
-            if inst_dict_lbl not in compiled_op_blks: #only create when needed
-                compiled_op_blks[inst_dict_lbl] = _collections.OrderedDict()
+            if inst_dict_lbl not in simplified_op_blks: #only create when needed
+                simplified_op_blks[inst_dict_lbl] = _collections.OrderedDict()
             for inst_lbl,inst in instdict.items():
-                for k,g in inst.compile_operations(inst_lbl).items():
-                    compiled_op_blks[inst_dict_lbl][k] = g            
+                for k,g in inst.simplify_operations(inst_lbl).items():
+                    simplified_op_blks[inst_dict_lbl][k] = g            
 
-        compiled_prep_blks = self.prep_blks.copy() #no compilation needed
+        simplified_prep_blks = self.prep_blks.copy() #no compilation needed
 
-        return self._lizardClass(compiled_prep_blks, compiled_op_blks, compiled_effect_blks, self)
+        return self._lizardClass(simplified_prep_blks, simplified_op_blks, simplified_effect_blks, self)
           # use self._lizardArgs internally?
 
     def _init_copy(self,copyInto):
@@ -4032,7 +4032,7 @@ class ImplicitOpModel(Model):
                                                         for lbl,opdict in self.operation_blks.items()])
         copyInto.instrument_blks = _collections.OrderedDict([ (lbl,idict.copy(copyInto))
                                                         for lbl,idict in self.instrument_blks.items()])
-        copyInto._chlp = self.compiler_helper_class(copyInto)
+        copyInto._shlp = self.simplifier_helper_class(copyInto)
 
 
     def __setstate__(self, stateDict):

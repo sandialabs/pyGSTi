@@ -29,7 +29,7 @@ class MatrixEvalTree(EvalTree):
         """ Create a new, empty, evaluation tree. """
         super(MatrixEvalTree, self).__init__(items)
 
-    def initialize(self, compiled_circuit_list, numSubTreeComms=1):
+    def initialize(self, simplified_circuit_list, numSubTreeComms=1):
         """
           Initialize an evaluation tree using a set of operation sequences.
           This function must be called before using an EvalTree.
@@ -55,16 +55,16 @@ class MatrixEvalTree(EvalTree):
 
         # opLabels : A list of all the length-0 & 1 operation labels to be stored
         #  at the beginning of the tree.  This list must include all the gate 
-        #  labels contained in the elements of compiled_circuit_list 
+        #  labels contained in the elements of simplified_circuit_list 
         #  (including a special empty-string sentinel at the beginning).
-        self.opLabels = [""] + self._get_opLabels(compiled_circuit_list)
+        self.opLabels = [""] + self._get_opLabels(simplified_circuit_list)
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 
-        circuit_list = [tuple(mdl) for mdl in compiled_circuit_list.keys()]
-        self.compiled_circuit_spamTuples = list(compiled_circuit_list.values())
-        self.num_final_els = sum([len(v) for v in self.compiled_circuit_spamTuples])
-        #self._compute_finalStringToEls() #depends on compiled_circuit_spamTuples
+        circuit_list = [tuple(mdl) for mdl in simplified_circuit_list.keys()]
+        self.simplified_circuit_spamTuples = list(simplified_circuit_list.values())
+        self.num_final_els = sum([len(v) for v in self.simplified_circuit_spamTuples])
+        #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
         self.recompute_spamtuple_indices(bLocal=True) # bLocal shouldn't matter here
 
         #Evaluation dictionary:
@@ -279,7 +279,7 @@ class MatrixEvalTree(EvalTree):
             A dictionary whose keys are integer original-circuit indices
             and whose values are slices or index arrays of final-element-
             indices (typically this dict is returned by calling
-            :method:`Model.compile_circuits`).  Since splitting a 
+            :method:`Model.simplify_circuits`).  Since splitting a 
             tree often involves permutation of the raw string ordering
             and thereby the element ordering, an updated version of this
             dictionary, with all permutations performed, is returned.
@@ -600,12 +600,12 @@ class MatrixEvalTree(EvalTree):
                 #    subTree.myFinalToParentFinalMap[ik] = k
     
             subTree.parentIndexMap = parentIndices #parent index of *each* subtree index
-            subTree.compiled_circuit_spamTuples = [ self.compiled_circuit_spamTuples[k]
+            subTree.simplified_circuit_spamTuples = [ self.simplified_circuit_spamTuples[k]
                                                        for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
-            #subTree._compute_finalStringToEls() #depends on compiled_circuit_spamTuples
+            #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
             
             final_el_startstops = []; i=0
-            for spamTuples in parentTree.compiled_circuit_spamTuples:
+            for spamTuples in parentTree.simplified_circuit_spamTuples:
                 final_el_startstops.append( (i,i+len(spamTuples)) )
                 i += len(spamTuples)
                 
@@ -616,9 +616,9 @@ class MatrixEvalTree(EvalTree):
             else:
                 subTree.myFinalElsToParentFinalElsMap = _np.empty(0,_np.int64)
             #Note: myFinalToParentFinalMap maps only between *final* elements
-            #   (which are what is held in compiled_circuit_spamTuples)
+            #   (which are what is held in simplified_circuit_spamTuples)
 
-            subTree.num_final_els = sum([len(v) for v in subTree.compiled_circuit_spamTuples])
+            subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_spamTuples])
             subTree.recompute_spamtuple_indices(bLocal=False)
             
             return subTree

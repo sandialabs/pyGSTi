@@ -27,14 +27,14 @@ P_RANK_TOL = 1e-7
 
 class ExplicitOpModel_Calc(object):
     """ 
-    This class performs calculations with *compiled* objects (so don't 
+    This class performs calculations with *simplified* objects (so don't 
     need to worry abount POVMs or Instruments, just preps, ops, & effects),
     but, unlike fwd simulators, these calculations require knowledge of *all*
     of the possible operations in each category (not just the ones in a given
     circuti).  As such, instances of `ExplicitOpModel_Calc` are almost always
     associated with an instance of `ExplicitOpModel`.
     """
-    def __init__(self, dim, compiled_preps, compiled_ops, compiled_effects, Np):
+    def __init__(self, dim, simplified_preps, simplified_ops, simplified_effects, Np):
         """
         Initialize a new ExplicitOpModel_Calc object.
         
@@ -44,7 +44,7 @@ class ExplicitOpModel_Calc(object):
             The dimenstion of the Hilbert-Schmidt space upon which the 
             various operators act.
 
-        compiled_preps, compiled_ops, compiled_effects : dict
+        simplified_preps, simplified_ops, simplified_effects : dict
             Dictionaries containing *all* the possible state preparations,
             layer operations, and POVM effects, respectively.
 
@@ -53,9 +53,9 @@ class ExplicitOpModel_Calc(object):
             number of parameters of the associated :class:`ExplicitOpModel`).
         """
         self.dim = dim
-        self.preps = compiled_preps
-        self.operations = compiled_ops
-        self.effects = compiled_effects
+        self.preps = simplified_preps
+        self.operations = simplified_ops
+        self.effects = simplified_effects
         self.Np = Np
 
     def iter_objs(self):

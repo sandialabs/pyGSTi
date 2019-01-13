@@ -36,8 +36,8 @@ def total_count_matrix(gsplaq, dataset):
         between the specified set of N prep-fiducial and M effect-fiducial
         operation sequences.
     """
-    ret = _np.nan * _np.ones(gsplaq.num_compiled_elements, 'd')
-    for i,j,opstr,elIndices,outcomes in gsplaq.iter_compiled():
+    ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
+    for i,j,opstr,elIndices,outcomes in gsplaq.iter_simplified():
         ret[elIndices] = dataset[ opstr ].total
           # OR should it sum only over outcomes, i.e.
           # = sum([dataset[opstr][ol] for ol in outcomes])
@@ -68,8 +68,8 @@ def count_matrices(gsplaq, dataset):
         where circuit is sandwiched between the each prep-fiducial and
         effect-fiducial pair.
     """
-    ret = _np.nan * _np.ones(gsplaq.num_compiled_elements, 'd')
-    for i,j,opstr,elIndices,outcomes in gsplaq.iter_compiled():
+    ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
+    for i,j,opstr,elIndices,outcomes in gsplaq.iter_simplified():
         datarow = dataset[ opstr ]
         ret[elIndices] = [datarow[ol] for ol in outcomes]
     return ret
@@ -135,14 +135,14 @@ def probability_matrices(gsplaq, model,
         where circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
-    ret = _np.nan * _np.ones(gsplaq.num_compiled_elements, 'd')
+    ret = _np.nan * _np.ones(gsplaq.num_simplified_elements, 'd')
     if probs_precomp_dict is None:
         if model is not None:
-            for i,j,opstr,elIndices,outcomes in gsplaq.iter_compiled():
+            for i,j,opstr,elIndices,outcomes in gsplaq.iter_simplified():
                 probs = model.probs(opstr)
                 ret[elIndices] = [probs[ol] for ol in outcomes]
     else:
-        for i,j,opstr,elIndices,_ in gsplaq.iter_compiled():
+        for i,j,opstr,elIndices,_ in gsplaq.iter_simplified():
             ret[elIndices] =  probs_precomp_dict[opstr] #precomp is already in element-array form
     return ret
 
@@ -180,7 +180,7 @@ def chi2_matrix(gsplaq, dataset, model, minProbClipForWeighting=1e-4,
         circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
-    gsplaq_ds = gsplaq.expand_aliases(dataset, circuit_compiler=model)
+    gsplaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=model)
     cnts = total_count_matrix(gsplaq_ds, dataset)
     probs = probability_matrices(gsplaq, model,
                                  probs_precomp_dict)
@@ -188,7 +188,7 @@ def chi2_matrix(gsplaq, dataset, model, minProbClipForWeighting=1e-4,
 
     ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for (i,j,opstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
-            gsplaq.iter_compiled(),gsplaq_ds.iter_compiled()) :
+            gsplaq.iter_simplified(),gsplaq_ds.iter_simplified()) :
         chiSqs= _tools.chi2fn( cnts[elIndices_ds], probs[elIndices],
                                freqs[elIndices_ds], minProbClipForWeighting)
         ret[i,j] = sum(chiSqs) # sum all elements for each (i,j) pair
@@ -231,7 +231,7 @@ def logl_matrix(gsplaq, dataset, model, minProbClip=1e-6,
         circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
-    gsplaq_ds = gsplaq.expand_aliases(dataset, circuit_compiler=model)
+    gsplaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=model)
 
     cnts = total_count_matrix(gsplaq_ds, dataset)
     probs = probability_matrices(gsplaq, model,
@@ -240,7 +240,7 @@ def logl_matrix(gsplaq, dataset, model, minProbClip=1e-6,
 
     ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for (i,j,opstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
-            gsplaq.iter_compiled(),gsplaq_ds.iter_compiled()) :
+            gsplaq.iter_simplified(),gsplaq_ds.iter_simplified()) :
         logLs = _tools.two_delta_loglfn( cnts[elIndices_ds], probs[elIndices],
                                          freqs[elIndices_ds], minProbClip)
         ret[i,j] = sum(logLs) # sum all elements for each (i,j) pair
@@ -279,7 +279,7 @@ def tvd_matrix(gsplaq, dataset, model, probs_precomp_dict=None):
         circuit is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
-    gsplaq_ds = gsplaq.expand_aliases(dataset, circuit_compiler=model)
+    gsplaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=model)
 
     probs = probability_matrices(gsplaq, model,
                                  probs_precomp_dict)
@@ -287,7 +287,7 @@ def tvd_matrix(gsplaq, dataset, model, probs_precomp_dict=None):
 
     ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for (i,j,opstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
-            gsplaq.iter_compiled(),gsplaq_ds.iter_compiled()) :
+            gsplaq.iter_simplified(),gsplaq_ds.iter_simplified()) :
         TVDs = 0.5 * _np.abs(probs[elIndices] - freqs[elIndices_ds])
         ret[i,j] = sum(TVDs) # sum all elements for each (i,j) pair
     return ret
@@ -459,7 +459,7 @@ def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6,1e6),
 
 #@smart_cached
 def _computeSubMxs(gss, model, subMxCreationFn, dataset=None):
-    if model is not None: gss.compile_plaquettes(model, dataset)
+    if model is not None: gss.simplify_plaquettes(model, dataset)
     subMxs = [ [ subMxCreationFn(gss.get_plaquette(x,y),x,y)
                  for x in gss.used_xvals() ] for y in gss.used_yvals()]
     #Note: subMxs[y-index][x-index] is proper usage
@@ -507,9 +507,9 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directModel,
         circuit is sandwiched between the each (effectStr,prepStr) pair.
     """
     if len(gsplaq.get_all_strs()) > 0: #skip cases with no strings
-        plaq_ds = gsplaq.expand_aliases(dataset, circuit_compiler=directModel)
+        plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=directModel)
         plaq_pr = gss.create_plaquette( _objs.Circuit( ("GsigmaLbl",) ) )
-        plaq_pr.compile_circuits(directModel)
+        plaq_pr.simplify_circuits(directModel)
 
         cnts = total_count_matrix(plaq_ds, dataset)
         probs = probability_matrices( plaq_pr, directModel) # no probs_precomp_dict
@@ -517,7 +517,7 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directModel,
 
         ret = _np.empty( (plaq_ds.rows,plaq_ds.cols), 'd')
         for (i,j,opstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
-                plaq_pr.iter_compiled(),plaq_ds.iter_compiled()) :
+                plaq_pr.iter_simplified(),plaq_ds.iter_simplified()) :
             chiSqs= _tools.chi2fn( cnts[elIndices_ds], probs[elIndices],
                                    freqs[elIndices_ds], minProbClipForWeighting)
             ret[i,j] = sum(chiSqs) # sum all elements for each (i,j) pair
@@ -570,9 +570,9 @@ def direct_logl_matrix(gsplaq, gss, dataset, directModel,
         circuit is sandwiched between the each (effectStr,prepStr) pair.
     """
     if len(gsplaq.get_all_strs()) > 0: #skip cases with no strings
-        plaq_ds = gsplaq.expand_aliases(dataset, circuit_compiler=directModel)
+        plaq_ds = gsplaq.expand_aliases(dataset, circuit_simplifier=directModel)
         plaq_pr = gss.create_plaquette( _objs.Circuit( ("GsigmaLbl",) ) )
-        plaq_pr.compile_circuits(directModel)
+        plaq_pr.simplify_circuits(directModel)
 
         cnts = total_count_matrix(plaq_ds, dataset)
         probs = probability_matrices( plaq_pr, directModel) # no probs_precomp_dict
@@ -580,7 +580,7 @@ def direct_logl_matrix(gsplaq, gss, dataset, directModel,
 
         ret = _np.empty( (plaq_ds.rows,plaq_ds.cols), 'd')
         for (i,j,opstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
-                plaq_pr.iter_compiled(),plaq_ds.iter_compiled()) :
+                plaq_pr.iter_simplified(),plaq_ds.iter_simplified()) :
             logLs = _tools.two_delta_loglfn( cnts[elIndices_ds], probs[elIndices],
                                                   freqs[elIndices_ds], minProbClip)
             ret[i,j] = sum(logLs) # sum all elements for each (i,j) pair

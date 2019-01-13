@@ -3177,7 +3177,7 @@ class TPInstrumentOp(DenseOperator):
         """
         #Rely on the Instrument ordering of it's elements: if we're being called
         # to init from v then this is within the context of a TPInstrument's gates
-        # having been compiled and now being initialized from a vector (within a
+        # having been simplified and now being initialized from a vector (within a
         # calculator).  We rely on the Instrument elements having their
         # from_vector() methods called in self.index order.
         

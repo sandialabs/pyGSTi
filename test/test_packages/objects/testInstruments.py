@@ -112,7 +112,7 @@ class InstrumentTestCase(BaseTestCase):
             inst_copy.transform(T)
 
             v = mdl.to_vector()
-            gates = mdl.instruments[lbl].compile_operations(prefix="ABC")
+            gates = mdl.instruments[lbl].simplify_operations(prefix="ABC")
             for igate in gates.values():
                 igate.from_vector(v[igate.gpindices]) # gpindices should be setup relative to Model's param vec
 
@@ -186,8 +186,8 @@ class InstrumentTestCase(BaseTestCase):
 
         #DEBUG compiling w/dataset
         #dbList = pygsti.construction.make_lsgst_experiment_list(self.target_model,fiducials,fiducials,germs,max_lengths)
-        ##self.target_model.compile_circuits(dbList, ds)
-        #self.target_model.compile_circuits([ pygsti.obj.Circuit(None,stringrep="Iz") ], ds )
+        ##self.target_model.simplify_circuits(dbList, ds)
+        #self.target_model.simplify_circuits([ pygsti.obj.Circuit(None,stringrep="Iz") ], ds )
         #assert(False),"STOP"
         
         #LSGST

@@ -57,7 +57,7 @@ class EvalTreeTestCase(BaseTestCase):
         #print("\n".join(map(str,strs)))
 
         compiled_gatestrings, lookup, outcome_lookup, nEls = \
-                    target_model.compile_circuits(strs)
+                    target_model.simplify_circuits(strs)
         self.assertTrue(isinstance(compiled_gatestrings, dict))
 
         t = TreeClass()
@@ -102,7 +102,7 @@ class EvalTreeTestCase(BaseTestCase):
             ##Creation failure b/c of unknown operation labels (for now just matrix eval tree)
             #with self.assertRaises(AssertionError):
             #    tbad = TreeClass()
-            #    compiled_strs,_,_,_ =target_model.compile_circuits([ (), ('Gnotpresent',)])
+            #    compiled_strs,_,_,_ =target_model.simplify_circuits([ (), ('Gnotpresent',)])
             #    tbad.initialize(compiled_strs )
 
         #Split using numSubTrees
@@ -169,7 +169,7 @@ class EvalTreeTestCase(BaseTestCase):
                               ('Gx','Gx','Gx'),
                               ('Gx','Gy','Gx')]
             compiled_gatestrings2, lookup2, outcome_lookup2, nEls2 = \
-                        target_model.compile_circuits(strs_with_dups)
+                        target_model.simplify_circuits(strs_with_dups)
             tdup = TreeClass()
             tdup.initialize(compiled_gatestrings2)
         

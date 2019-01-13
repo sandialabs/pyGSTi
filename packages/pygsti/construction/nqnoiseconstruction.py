@@ -396,7 +396,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
 
     effectLbls : list, optional
         The list of POVM effect labels to use, as a list of `Label` objects.
-        These are *compiled* POVM effect labels, so something like "Mdefault_0",
+        These are *simplified* POVM effect labels, so something like "Mdefault_0",
         and if None the default is all the effect labels of the first POVM of
         `model`, which is usually what you want.
 
@@ -480,11 +480,11 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
     printer = _VerbosityPrinter.build_printer(verbosity)
     
     if prepLbl is None:
-        prepLbl = model._chlp.get_default_prep_lbl()
+        prepLbl = model._shlp.get_default_prep_lbl()
     if effectLbls is None:
-        povmLbl = model._chlp.get_default_povm_lbl()
+        povmLbl = model._shlp.get_default_povm_lbl()
         effectLbls = [ _Lbl("%s_%s" % (povmLbl,l))
-                       for l in model._chlp.get_effect_labels_for_povm(povmLbl) ]
+                       for l in model._shlp.get_effect_labels_for_povm(povmLbl) ]
     if singleQfiducials is None:
         # TODO: assert model has Gx and Gy gates?
         singleQfiducials = [(), ('Gx',), ('Gy',)] # ('Gx','Gx')
@@ -635,7 +635,7 @@ def test_amped_polys_for_syntheticidle(fidpairs, idleStr, model,  prepLbl=None, 
 
     effectLbls : list, optional
         The list of POVM effect labels to use, as a list of `Label` objects.
-        These are *compiled* POVM effect labels, so something like "Mdefault_0",
+        These are *simplified* POVM effect labels, so something like "Mdefault_0",
         and if None the default is all the effect labels of the first POVM of
         `model`, which is usually what you want.
 
@@ -662,10 +662,10 @@ def test_amped_polys_for_syntheticidle(fidpairs, idleStr, model,  prepLbl=None, 
     printer = _VerbosityPrinter.build_printer(verbosity)
 
     if prepLbl is None:
-        prepLbl = model._chlp.get_default_prep_lbl()
+        prepLbl = model._shlp.get_default_prep_lbl()
     if effectLbls is None:
-        povmLbl = model._chlp.get_default_povm_lbl()
-        effectLbls = [ _Lbl("%s_%s" % (povmLbl,l)) for l in model._chlp.get_effect_labels_for_povm(povmLbl) ]
+        povmLbl = model._shlp.get_default_povm_lbl()
+        effectLbls = [ _Lbl("%s_%s" % (povmLbl,l)) for l in model._shlp.get_effect_labels_for_povm(povmLbl) ]
     dummy = 5.0*_np.random.random(model.num_params()) + 0.5*_np.ones(model.num_params(),'d')
     
     if wrtParams is None: wrtParams = slice(0,model.num_params())
@@ -770,7 +770,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
 
     effectLbls : list, optional
         The list of POVM effect labels to use, as a list of `Label` objects.
-        These are *compiled* POVM effect labels, so something like "Mdefault_0",
+        These are *simplified* POVM effect labels, so something like "Mdefault_0",
         and if None the default is all the effect labels of the first POVM of
         `model`, which is usually what you want.
 
@@ -821,10 +821,10 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
     printer = _VerbosityPrinter.build_printer(verbosity)
 
     if prepLbl is None:
-        prepLbl = model._chlp.get_default_prep_lbl()
+        prepLbl = model._shlp.get_default_prep_lbl()
     if effectLbls is None:
-        povmLbl = model._chlp.get_default_povm_lbl()
-        effectLbls = [ _Lbl("%s_%s" % (povmLbl,l)) for l in model._chlp.get_effect_labels_for_povm(povmLbl) ]
+        povmLbl = model._shlp.get_default_povm_lbl()
+        effectLbls = [ _Lbl("%s_%s" % (povmLbl,l)) for l in model._shlp.get_effect_labels_for_povm(povmLbl) ]
     if singleQfiducials is None:
         # TODO: assert model has Gx and Gy gates?
         singleQfiducials = [(), ('Gx',), ('Gy',)] # ('Gx','Gx')
@@ -1031,7 +1031,7 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
 
     effectLbls : list, optional
         The list of POVM effect labels to use, as a list of `Label` objects.
-        These are *compiled* POVM effect labels, so something like "Mdefault_0",
+        These are *simplified* POVM effect labels, so something like "Mdefault_0",
         and if None the default is all the effect labels of the first POVM of
         `model`, which is usually what you want.
 
@@ -1051,10 +1051,10 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
     printer = _VerbosityPrinter.build_printer(verbosity)
 
     if prepLbl is None:
-        prepLbl = model._chlp.get_default_prep_lbl()
+        prepLbl = model._shlp.get_default_prep_lbl()
     if effectLbls is None:
-        povmLbl = model._chlp.get_default_povm_lbl()
-        effectLbls = model._chlp.get_effect_labels_for_povm(povmLbl)
+        povmLbl = model._shlp.get_default_povm_lbl()
+        effectLbls = model._shlp.get_effect_labels_for_povm(povmLbl)
     if singleQfiducials is None:
         # TODO: assert model has Gx and Gy gates?
         singleQfiducials = [(), ('Gx',), ('Gy',)] # ('Gx','Gx')
@@ -1811,7 +1811,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     Np = model.num_params()
     idleOpStr = _objs.Circuit(("Gi",))
     prepLbl = _Lbl("rho0")
-    effectLbls = [ _Lbl("Mdefault_%s" % l) for l in model._chlp.get_effect_labels_for_povm('Mdefault')]
+    effectLbls = [ _Lbl("Mdefault_%s" % l) for l in model._shlp.get_effect_labels_for_povm('Mdefault')]
 
     # create a model with maxIdleWeight qubits that includes all
     # the errors of the actual n-qubit model...

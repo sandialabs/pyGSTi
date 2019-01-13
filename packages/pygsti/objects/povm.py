@@ -399,7 +399,7 @@ class _BasePOVM(POVM):
         self._rebuild_complement()
 
         
-    def compile_effects(self, prefix=""):
+    def simplify_effects(self, prefix=""):
         """
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
@@ -410,28 +410,28 @@ class _BasePOVM(POVM):
         ----------
         prefix : str
             A string, usually identitying this POVM, which may be used
-            to prefix the compiled gate keys.
+            to prefix the simplified gate keys.
 
         Returns
         -------
         OrderedDict of SPAMVecs
         """
         if prefix: prefix = prefix + "_"
-        compiled = _collections.OrderedDict()
+        simplified = _collections.OrderedDict()
         for lbl,effect in self.items():
             if lbl == self.complement_label: continue
-            compiled[prefix+lbl] = effect.copy()
-            compiled[prefix+lbl].set_gpindices(
+            simplified[prefix+lbl] = effect.copy()
+            simplified[prefix+lbl].set_gpindices(
                 _gm._compose_gpindices(self.gpindices, effect.gpindices),
                 self.parent )
             
         if self.complement_label:
             lbl = self.complement_label
-            compiled[prefix+lbl] = _sv.ComplementSPAMVec(
-                self[lbl].identity, [v for k,v in compiled.items()])
-            self._copy_gpindices(compiled[prefix+lbl], self.parent) #set gpindices
+            simplified[prefix+lbl] = _sv.ComplementSPAMVec(
+                self[lbl].identity, [v for k,v in simplified.items()])
+            self._copy_gpindices(simplified[prefix+lbl], self.parent) #set gpindices
               # of complement vector to the same as POVM (it uses *all* params)
-        return compiled
+        return simplified
     
 
     def num_params(self):
@@ -705,7 +705,7 @@ class TensorProdPOVM(POVM):
                 {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
 
 
-    def compile_effects(self, prefix=""):
+    def simplify_effects(self, prefix=""):
         """
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
@@ -716,33 +716,33 @@ class TensorProdPOVM(POVM):
         ----------
         prefix : str
             A string, usually identitying this POVM, which may be used
-            to prefix the compiled gate keys.
+            to prefix the simplified gate keys.
 
         Returns
         -------
         OrderedDict of SPAMVecs
         """
-        #Note: calling from_vector(...) on the compiled effect vectors (in
+        #Note: calling from_vector(...) on the simplified effect vectors (in
         # order) - e.g. within the finite differencing in MapForwardSimulator -  must
         # be able to properly initialize them, so need to set gpindices
         # appropriately.
 
-        #Create a "compiled" (Model-referencing) set of factor POVMs
-        factorPOVMs_compiled = []
+        #Create a "simplified" (Model-referencing) set of factor POVMs
+        factorPOVMs_simplified = []
         for p in self.factorPOVMs:
             povm = p.copy()
             povm.set_gpindices( _gm._compose_gpindices(self.gpindices,
                                                        p.gpindices), self.parent)
-            factorPOVMs_compiled.append(povm)
+            factorPOVMs_simplified.append(povm)
 
-        # Create "compiled" effect vectors, which infer their parent and
+        # Create "simplified" effect vectors, which infer their parent and
         # gpindices from the set of "factor-POVMs" they're constructed with.
-        # Currently compile *all* the effects, creating those that haven't been yet (lazy creation)
+        # Currently simplify *all* the effects, creating those that haven't been yet (lazy creation)
         if prefix: prefix += "_"
-        compiled = _collections.OrderedDict(
-            [ (prefix + k, _sv.TensorProdSPAMVec('effect',factorPOVMs_compiled, self[k].effectLbls))
+        simplified = _collections.OrderedDict(
+            [ (prefix + k, _sv.TensorProdSPAMVec('effect',factorPOVMs_simplified, self[k].effectLbls))
               for k in self.keys() ] )
-        return compiled
+        return simplified
 
 
     def num_params(self):
@@ -910,7 +910,7 @@ class ComputationalBasisPOVM(POVM):
                 {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
 
 
-    def compile_effects(self, prefix=""):
+    def simplify_effects(self, prefix=""):
         """
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
@@ -921,18 +921,18 @@ class ComputationalBasisPOVM(POVM):
         ----------
         prefix : str
             A string, usually identitying this POVM, which may be used
-            to prefix the compiled gate keys.
+            to prefix the simplified gate keys.
 
         Returns
         -------
         OrderedDict of SPAMVecs
         """
-        # Create "compiled" effect vectors, which infer their parent and
+        # Create "simplified" effect vectors, which infer their parent and
         # gpindices from the set of "factor-POVMs" they're constructed with.
         if prefix: prefix += "_"
-        compiled = _collections.OrderedDict(
+        simplified = _collections.OrderedDict(
             [ (prefix + k, self[k]) for k in self.keys() ] )
-        return compiled
+        return simplified
 
 
     def __str__(self):
@@ -1035,7 +1035,7 @@ class LindbladPOVM(POVM):
             pureVec = self.base_povm[key]
             effect = _sv.LindbladSPAMVec(pureVec, self.error_map,"effect")
             effect.set_gpindices(self.error_map.gpindices, self.parent)
-              # initialize gpindices of "child" effect (should be in compile_effects?)
+              # initialize gpindices of "child" effect (should be in simplify_effects?)
             _collections.OrderedDict.__setitem__(self,key,effect)
             return effect
         else: raise KeyError("%s is not an outcome label of this StabilizerZPOVM" % key)
@@ -1118,7 +1118,7 @@ class LindbladPOVM(POVM):
         _gm.ModelMember.set_gpindices(self, gpindices, parent)
 
 
-    def compile_effects(self, prefix=""):
+    def simplify_effects(self, prefix=""):
         """
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
@@ -1129,18 +1129,18 @@ class LindbladPOVM(POVM):
         ----------
         prefix : str
             A string, usually identitying this POVM, which may be used
-            to prefix the compiled gate keys.
+            to prefix the simplified gate keys.
 
         Returns
         -------
         OrderedDict of SPAMVecs
         """
-        # Create "compiled" effect vectors, which infer their parent and
+        # Create "simplified" effect vectors, which infer their parent and
         # gpindices from the set of "factor-POVMs" they're constructed with.
         if prefix: prefix += "_"
-        compiled = _collections.OrderedDict(
+        simplified = _collections.OrderedDict(
             [ (prefix + k, self[k]) for k in self.keys() ] )
-        return compiled
+        return simplified
 
     def num_params(self):
         """
