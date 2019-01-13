@@ -56,6 +56,7 @@ from .instrument import TPInstrument
 
 from .model import Model
 from .model import ExplicitOpModel
+from .model import ExplicitOpModel as GateSet #alias
 from .model import ImplicitOpModel
 from .localnoisemodel import LocalNoiseModel
 from .cloudnoisemodel import CloudNoiseModel
