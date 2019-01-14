@@ -11,6 +11,7 @@ import numpy as _np
 import copy as _copy
 import sys as _sys
 import itertools as _itertools
+import warnings as _warnings
 
 from . import labeldicts as _ld
 from ..baseobjs import Label as _Label

@@ -744,7 +744,7 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
         n = len(qubits_used)
     
     # Creates a empty circuit over no wires
-    circuit = _cir.Circuit(num_lines=0) 
+    circuit = _cir.Circuit(num_lines=0, editable=True) 
 
     s_rc_dict = {}
     p_rc_dict = {}
@@ -767,7 +767,9 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
         s_rc_dict[subsetQs], p_rc_dict[subsetQs] = _symp.symplectic_rep_of_clifford_circuit(subset_circuit,pspec=pspec)
         # Tensors this circuit with the current circuit
         circuit.tensor_circuit(subset_circuit)
-         
+    
+    circuit.done_editing()
+
     # Find the expected outcome of the circuit.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(circuit,pspec=pspec)
     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
@@ -913,19 +915,21 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
 
             if set_isolated:
                 for subset_ind, subset in enumerate(structure):
-                    subset_circuit = circuit.copy()
+                    subset_circuit = circuit.copy(editable=True)
                     for q in circuit.line_labels:
                         if q not in subset:
                             subset_circuit.replace_with_idling_wire(q)
+                    subset_circuit.done_editing()
                     experiment_dict['circuits'][l,j][(tuple(subset),)] = subset_circuit
                     experiment_dict['probs'][l,j][(tuple(subset),)] = idealout[subset_ind]
             
             if setcomplement_isolated:
                 for subset_ind, subset in enumerate(structure):
-                        subsetcomplement_circuit = circuit.copy()
+                        subsetcomplement_circuit = circuit.copy(editable=True)
                         for q in circuit.line_labels:
                             if q in subset:
                                 subsetcomplement_circuit.replace_with_idling_wire(q)
+                        subsetcomplement_circuit.done_editing()
                         subsetcomplement = list(_copy.copy(structure))
                         subsetcomplement_idealout = list(_copy.copy(idealout))
                         del subsetcomplement[subset_ind]
@@ -1031,9 +1035,10 @@ def exhaustive_independent_random_circuits_experiment(pspec, allowed_lengths, ci
     parallel_circuits = {}
     it = [range(circuits_per_subset) for i in range(len(structure))]
     for setting_comb in _itertools.product(*it):
-        pcircuit = _cir.Circuit(num_lines=0)
+        pcircuit = _cir.Circuit(num_lines=0, editable=True)
         for ssQs_ind, subsetQs in enumerate(structure):
             pcircuit.tensor_circuit(circuits[subsetQs][setting_comb[ssQs_ind]])
+            pcircuit.done_editing()
             parallel_circuits[setting_comb] = pcircuit
     
     experiment_dict['circuits'] = parallel_circuits
@@ -1211,7 +1216,9 @@ def direct_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         full_circuit.append_circuit(inversion_circuit)
     else:
         full_circuit = circuit.copy(editable=True)
-        full_circuit.append_circuit(inversion_circuit)         
+        full_circuit.append_circuit(inversion_circuit)
+
+    full_circuit.done_editing()         
      
     # Find the expected outcome of the circuit.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit,pspec=pspec)
@@ -1550,7 +1557,7 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
         assert(subgraph.are_glob_connected(list(subsetQs))), "Each subset of qubits in `structure` must be connected!"
     
     # Creates a empty circuit over no wires
-    circuit = _cir.Circuit(num_lines=0)
+    circuit = _cir.Circuit(num_lines=0, editable=True)
 
     s_rc_dict = {}
     p_rc_dict = {}
@@ -1569,9 +1576,9 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
         circuit.tensor_circuit(subset_circuit)
     
     # Creates empty circuits over no wires
-    inversion_circuit = _cir.Circuit(num_lines=0)
+    inversion_circuit = _cir.Circuit(num_lines=0, editable=True)
     if cliffordtwirl: 
-        initial_circuit = _cir.Circuit(num_lines=0)
+        initial_circuit = _cir.Circuit(num_lines=0, editable=True)
       
     for subsetQs in structure:
         subsetQs = tuple(subsetQs)
@@ -1624,6 +1631,8 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
 
         inversion_circuit.tensor_circuit(subset_inversion_circuit)
 
+    inversion_circuit.done_editing()
+
     if cliffordtwirl:
         full_circuit = initial_circuit.copy()
         full_circuit.append_circuit(circuit)
@@ -1631,6 +1640,8 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
     else:
         full_circuit = _copy.deepcopy(circuit)
         full_circuit.append_circuit(inversion_circuit)
+
+    full_circuit.done_editing()
          
     # Find the expected outcome of the circuit.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit,pspec=pspec)
@@ -2021,6 +2032,7 @@ def clifford_rb_circuit(pspec, length, subsetQs=None, randomizeout=False, citera
     inversion_circuit = _cmpl.compile_clifford(s_inverse, p_for_inversion, pspec, subsetQs=subsetQs, iterations=citerations, 
                                                *compilerargs)    
     full_circuit.append_circuit(inversion_circuit)
+    full_circuit.done_editing()
     # Find the expected outcome of the circuit.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit,pspec=pspec)
     # Check the output is the identity up to Paulis.
@@ -2412,6 +2424,8 @@ def mirror_rb_circuit(pspec, length, subsetQs=None, sampler='Qelimination', samp
         # Put one these 1Q clifford circuits at the start and one at then end.
         circuit.append_circuit(oneQclifford_circuit_out)
         circuit.prefix_circuit(oneQclifford_circuit_back)
+
+    circuit.done_editing()
 
     # The full circuit should be, up to a Pauli, the identity.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(circuit,pspec=pspec)
