@@ -1555,8 +1555,8 @@ def create_XYCNOT_cloudnoise_sequences(nQubits, maxLengths, geometry, cnot_edges
     else:
         singleQfiducials = [(), ('Gx',), ('Gy',), ('Gx','Gx')]
 
-    return create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducials,
-                                       maxLengths, geometry, maxIdleWeight, maxhops,
+    return create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
+                                       gatedict, availability, geometry, maxIdleWeight, maxhops,
                                        extraWeight1Hops, extraGateWeight, paramroot,
                                        sparse, verbosity, cache, idleOnly, 
                                        idtPauliDicts, algorithm)

@@ -13,7 +13,6 @@ import collections as _collections
 import scipy.sparse as _sps
 import warnings as _warnings
 
-from . import model as _mdl
 from . import operation as _op
 from . import spamvec as _sv
 from . import povm as _povm
@@ -22,6 +21,8 @@ from . import labeldicts as _ld
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
+from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
+from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
@@ -45,7 +46,7 @@ def basisProductMatrix(sigmaInds, sparse):
     return _sps.csr_matrix(M) if sparse else M
 
 
-class CloudNoiseModel(_mdl.ImplicitOpModel):
+class CloudNoiseModel(_ImplicitOpModel):
     """ 
     A noisy n-qubit model using a low-weight and geometrically local
     error model with a common "global idle" operation.  
@@ -939,7 +940,7 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
     return fullCloudErr
 
 
-class CloudNoiseLayerLizard(_mdl.ImplicitLayerLizard):
+class CloudNoiseLayerLizard(_ImplicitLayerLizard):
     """
     The layer lizard class for a :class:`CloudNoiseModel`, which
     creates layers by composing perfect target gates, global idle error,

@@ -19,7 +19,7 @@ from ..tools import compattools as _compat
 from ..objects import operation as _op
 from ..objects import spamvec as _spamvec
 from ..objects import povm as _povm
-from ..objects import model as _mdl
+from ..objects import explicitmodel as _emdl
 from ..objects import gaugegroup as _gg
 from ..objects import labeldicts as _ld
 from ..objects import qubitgraph as _qubitgraph
@@ -910,7 +910,7 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
     defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
     stateSpaceLabels = _ld.StateSpaceLabels(stateSpaceLabels)
 
-    ret = _mdl.ExplicitOpModel(stateSpaceLabels, basis.copy(), default_param=defP)
+    ret = _emdl.ExplicitOpModel(stateSpaceLabels, basis.copy(), default_param=defP)
                  #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
 
     for label,rhoExpr in zip(prepLabels, prepExpressions):

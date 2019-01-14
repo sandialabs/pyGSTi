@@ -13,7 +13,6 @@ import collections as _collections
 import scipy.sparse as _sps
 import warnings as _warnings
 
-from . import model as _mdl
 from . import operation as _op
 from . import spamvec as _sv
 from . import povm as _povm
@@ -22,6 +21,8 @@ from . import labeldicts as _ld
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
+from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
+from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
@@ -30,7 +31,7 @@ from ..baseobjs import Label as _Lbl
 
 from ..baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
-class LocalNoiseModel(_mdl.ImplicitOpModel):
+class LocalNoiseModel(_ImplicitOpModel):
     """ 
     A n-qubit model by embedding the *same* gates from `gatedict`
     as requested and creating a perfect 0-prep and z-basis POVM.
@@ -464,7 +465,7 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
         #(no instruments)
 
     
-class SimpleCompLayerLizard(_mdl.ImplicitLayerLizard):
+class SimpleCompLayerLizard(_ImplicitLayerLizard):
     """
     The layer lizard class for a :class:`LocalNoiseModel`, which
     creates layers by composing perfect target gates, and local errors.
