@@ -916,8 +916,10 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
             if set_isolated:
                 for subset_ind, subset in enumerate(structure):
                     subset_circuit = circuit.copy(editable=True)
+                    print(subset)
                     for q in circuit.line_labels:
                         if q not in subset:
+                            print(subset_circuit, q)
                             subset_circuit.replace_with_idling_wire(q)
                     subset_circuit.done_editing()
                     experiment_dict['circuits'][l,j][(tuple(subset),)] = subset_circuit
