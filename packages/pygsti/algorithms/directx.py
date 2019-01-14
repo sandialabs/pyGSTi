@@ -40,7 +40,7 @@ def model_with_lgst_circuit_estimates(
     targetModel : Model
         A model used by LGST to specify which operation labels should be estimated,
         a guess for which gauge these estimates should be returned in, and 
-        used to compile operation sequences.
+        used to simplify operation sequences.
 
     includeTargetOps : bool, optional
         If True, the operation labels in targetModel will be included in the

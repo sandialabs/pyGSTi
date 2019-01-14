@@ -277,8 +277,21 @@ class CircuitParser(object):
         raise ValueError(message)
 
     def parse(self, code):
-        """ Perform lexing and parsing of `code` """
-        #TODO: docstring return value at least
+        """
+        Perform lexing and parsing of `code`.  
+        
+        Parameters
+        ----------
+        code : str
+            A circuit encoded as a single-line string
+        
+        Returns
+        -------
+        layer_labels : tuple
+            A tuple of the layer-labels of the circuit
+        line_labels : tuple
+            A tuple of the line labels of the circuit.
+        """
         if '@' in code: # format:  <string>@<line_labels>
             code,labels = code.split('@')
             labels = labels.strip("( )") #remove opening and closing parenthesis

@@ -233,7 +233,7 @@ def merge_outcomes(dataset,label_merge_dict):
     Parameters
     ----------
     dataset : DataSet object
-        The input DataSet whose results will be compiled according to the rules
+        The input DataSet whose results will be simplified according to the rules
         set forth in label_merge_dict
 
     label_merge_dict : dictionary

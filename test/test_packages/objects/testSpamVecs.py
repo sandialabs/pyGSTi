@@ -317,7 +317,7 @@ class SPAMVecTestCase(BaseTestCase):
             p.from_vector(v)
 
             v = model.to_vector() if i < 2 else gateset2Q.to_vector()
-            effects = p.compile_effects(prefix="ABC")
+            effects = p.simplify_effects(prefix="ABC")
             for Evec in effects.values():
                 print("inds = ",Evec.gpindices, len(v))
                 Evec.from_vector(v[Evec.gpindices]) # gpindices should be setup relative to Model's param vec

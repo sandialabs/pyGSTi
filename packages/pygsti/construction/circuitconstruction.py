@@ -520,7 +520,11 @@ def circuit_list( listOfOpLabelTuplesOrStrings, line_labels="auto"):
         List which may contain a mix of Circuit objects, tuples of gate
         labels, and strings in standard-text-format.
 
-    TODO: docstring line_labels - only imposed for non-Circuits created by this fn
+    line_labels : "auto" or tuple, optional
+        The line labels to use when creating Circuit objects from *non-Circuit*
+        elements of `listOfOpLabelTuplesOrStrings`.  If `"auto"` then the 
+        line labels are determined automatically based on the line-labels which
+        are present in the layer labels.
 
     Returns
     -------
@@ -647,7 +651,10 @@ def manipulate_circuit(circuit, sequenceRules, line_labels="auto"):
         (or `Circuit` objects).  If `sequenceRules is None` then
         `circuit` is returned.
 
-    TODO: docstring line_labels
+    line_labels : "auto" or tuple, optional
+        The line labels to use when creating a the output Circuit objects.
+        If `"auto"` then the line labels are determined automatically based
+        on the line-labels which are present in the corresponding layer labels.
 
     Returns
     -------
@@ -734,7 +741,10 @@ def manipulate_circuit_list(circuitList, sequenceRules, line_labels="auto"):
         (or `Circuit` objects).  If `sequenceRules is None` then
         `circuitList` is returned.
     
-    TODO: docstring line_labels
+    line_labels : "auto" or tuple, optional
+        The line labels to use when creating output Circuit objects.
+        If `"auto"` then the line labels are determined automatically based on
+        the line-labels which are present in the corresponding layer labels.
 
     Returns
     -------

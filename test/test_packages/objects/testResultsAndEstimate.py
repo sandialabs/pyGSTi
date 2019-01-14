@@ -156,11 +156,11 @@ class ResultsEstimateTestCase(BaseTestCase):
     def test_load_old_results(self):
         vs = "v2" if self.versionsuffix == "" else "v3"
         #pygsti.obj.results.enable_old_python_results_unpickling()
-        pygsti.io.enable_old_object_unpickling()
-        with open(compare_files + "/pygsti0.9.6.results.pkl.%s" % vs,'rb') as f:
-            results = pickle.load(f)
+        with pygsti.io.enable_old_object_unpickling():
+            with open(compare_files + "/pygsti0.9.6.results.pkl.%s" % vs,'rb') as f:
+                results = pickle.load(f)
         #pygsti.obj.results.disable_old_python_results_unpickling()
-        pygsti.io.disable_old_object_unpickling()
+        #pygsti.io.disable_old_object_unpickling()
         with open(temp_files + "/repickle_old_results.pkl.%s" % vs,'wb') as f:
             #pickle.dump(results.estimates['TP'].models['single'], f) # Debug
             pickle.dump(results, f)

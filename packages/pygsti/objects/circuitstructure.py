@@ -55,9 +55,9 @@ class CircuitPlaquette(object):
         #After compiling:
         self._elementIndicesByStr = None
         self._outcomesByStr = None
-        self.num_compiled_elements = None
+        self.num_simplified_elements = None
 
-    def expand_aliases(self, dsFilter=None, circuit_compiler=None):
+    def expand_aliases(self, dsFilter=None, circuit_simplifier=None):
         """
         Returns a new CircuitPlaquette with any aliases
         expanded (within the operation sequences).  Optionally keeps only
@@ -68,8 +68,8 @@ class CircuitPlaquette(object):
         dsFilter : DataSet, optional
             If not None, keep only strings that are in this data set.
 
-        circuit_compiler : Model, optional
-            Whether to call `compile_circuits(circuit_compiler)`
+        circuit_simplifier : Model, optional
+            Whether to call `simplify_circuits(circuit_simplifier)`
             on the new CircuitPlaquette.
 
         Returns
@@ -96,18 +96,18 @@ class CircuitPlaquette(object):
 
         ret = CircuitPlaquette(self.base, self.rows, self.cols,
                                    new_elements, None, new_fidpairs)
-        if circuit_compiler is not None:
-            ret.compile_circuits(circuit_compiler, dsFilter)
+        if circuit_simplifier is not None:
+            ret.simplify_circuits(circuit_simplifier, dsFilter)
         return ret
 
     def get_all_strs(self):
         """Return a list of all the operation sequences contained in this plaquette"""
         return [s for i,j,s in self.elements]
 
-    def compile_circuits(self, model, dataset=None):
+    def simplify_circuits(self, model, dataset=None):
         """
-        Compiles this plaquette so that the `num_compiled_elements` property and
-        the `iter_compiled()` method may be used.
+        Simplified this plaquette so that the `num_simplified_elements` property and
+        the `iter_simplified()` method may be used.
 
         Parameters
         ----------
@@ -115,21 +115,21 @@ class CircuitPlaquette(object):
             The model used to perform the compiling.
 
         dataset : DataSet, optional
-            If not None, restrict what is compiled to only those
+            If not None, restrict what is simplified to only those
             probabilities corresponding to non-zero counts (observed
             outcomes) in this data set.
         """
         all_strs = self.get_all_strs()
         if len(all_strs) > 0:
             rawmap, self._elementIndicesByStr, self._outcomesByStr, nEls = \
-              model.compile_circuits(all_strs, dataset)
+              model.simplify_circuits(all_strs, dataset)
         else:
-            nEls = 0 #nothing to compile
-        self.num_compiled_elements = nEls
+            nEls = 0 #nothing to simplify
+        self.num_simplified_elements = nEls
 
-    def iter_compiled(self):
-        assert(self.num_compiled_elements is not None), \
-            "Plaquette must be compiled first!"
+    def iter_simplified(self):
+        assert(self.num_simplified_elements is not None), \
+            "Plaquette must be simplified first!"
         for k,(i,j,s) in enumerate(self.elements):
             yield i,j,s,self._elementIndicesByStr[k],self._outcomesByStr[k]
 
@@ -252,10 +252,10 @@ class CircuitStructure(object):
                     baseStrs.add(p.base)
         return list(baseStrs)
 
-    def compile_plaquettes(self, model, dataset=None):
+    def simplify_plaquettes(self, model, dataset=None):
         """
-        Compiles all the plaquettes in this structure so that their
-        `num_compiled_elements` property and the `iter_compiled()` methods
+        Simplifies all the plaquettes in this structure so that their
+        `num_simplified_elements` property and the `iter_simplified()` methods
         may be used.
 
         Parameters
@@ -264,7 +264,7 @@ class CircuitStructure(object):
             The model used to perform the compiling.
 
         dataset : DataSet, optional
-            If not None, restrict what is compiled to only those
+            If not None, restrict what is simplified to only those
             probabilities corresponding to non-zero counts (observed
             outcomes) in this data set.
         """
@@ -272,7 +272,7 @@ class CircuitStructure(object):
             for y in self.yvals():
                 p = self.get_plaquette(x,y)
                 if p is not None:
-                    p.compile_circuits(model, dataset)
+                    p.simplify_circuits(model, dataset)
 
 
 class LsGermsStructure(CircuitStructure):
@@ -473,7 +473,7 @@ class LsGermsStructure(CircuitStructure):
         """
         if (L,germ) not in self._plaquettes:
             p =  self.create_plaquette(None,[]) # no elements
-            p.compile_circuits(None) # just marks as "compiled"
+            p.simplify_circuits(None) # just marks as "simplified"
             return p
 
         if not onlyfirst or (L,germ) in self._firsts:
@@ -481,7 +481,7 @@ class LsGermsStructure(CircuitStructure):
         else:
             basestr = self._plaquettes[(L,germ)].base
             p = self.create_plaquette(basestr,[]) # no elements
-            p.compile_circuits(None) # just marks as "compiled"
+            p.simplify_circuits(None) # just marks as "simplified"
             return p
 
     def truncate(self, Ls=None, germs=None, prepStrs=None, effectStrs=None):
@@ -784,7 +784,7 @@ class LsGermsSerialStructure(CircuitStructure):
         """
         if (L,germ) not in self._plaquettes:
             p =  self.create_plaquette(None,[]) # no elements
-            p.compile_circuits(None) # just marks as "compiled"
+            p.simplify_circuits(None) # just marks as "simplified"
             return p
 
         if not onlyfirst or (L,germ) in self._firsts:
@@ -792,7 +792,7 @@ class LsGermsSerialStructure(CircuitStructure):
         else:
             basestr = self._plaquettes[(L,germ)].base
             p = self.create_plaquette(basestr,[]) # no elements
-            p.compile_circuits(None) # just marks as "compiled"
+            p.simplify_circuits(None) # just marks as "simplified"
             return p
 
     def truncate(self, Ls=None, germs=None, nMinorRows=None, nMinorCols=None):

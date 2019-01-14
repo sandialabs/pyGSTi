@@ -184,7 +184,18 @@ class StdInputParser(object):
         filename : string
             The file to parse.
 
-        TODO: docstring line_labels, num_lines - see Circuit constructor
+        line_labels : iterable, optional
+            The (string valued) line labels used to initialize :class:`Circuit`
+            objects when line label information is absent from the one-line text 
+            representation contained in `filename`.  If `'auto'`, then line labels
+            are taken to be the list of all state-space labels present in the 
+            circuit's layers.  If there are no such labels then the special value
+            `'*'` is used as a single line label.
+    
+        num_lines : int, optional
+            Specify this instead of `line_labels` to set the latter to the
+            integers between 0 and `num_lines-1`.
+
 
         Returns
         -------

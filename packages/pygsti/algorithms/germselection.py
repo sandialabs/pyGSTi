@@ -767,7 +767,7 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
     Returns
     -------
     numpy array
-        An array of shape (num_compiled_gate_strings, op_dim^2, num_model_params)
+        An array of shape (num_simplified_circuits, op_dim^2, num_model_params)
     """
     if len(model.preps) > 0 or len(model.povms) > 0:
         model = removeSPAMVectors(model)
@@ -780,12 +780,12 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
     fd = op_dim**2 # flattened gate dimension
 
     nOrigStrs = len(circuits)
-    nCompiledStrs = evalTree.num_final_strings()
+    nSimplifiedStrs = evalTree.num_final_strings()
 
     ret = _np.empty( (nOrigStrs, fd, dProds.shape[1]), 'complex')
     for iOrig in range(nOrigStrs):
         iArray = _slct.as_array(lookup[iOrig])
-        assert(iArray.size == 1),("Compiled lookup table should have length-1"
+        assert(iArray.size == 1),("Simplified lookup table should have length-1"
                                   " element slices!  Maybe you're using a"
                                   " Model without SPAM elements removed?")
         i = iArray[0] # get evalTree-final index (within dProds or prods)
@@ -805,7 +805,7 @@ def bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
                                % (_nla.norm(ret[i]), _nla.norm(chk_ret),
                                   _nla.norm(ret[i] - chk_ret))) # pragma: no cover
 
-    return ret # nCompiledCircuits x flattened_op_dim x vec_model_dim
+    return ret # nSimplifiedCircuits x flattened_op_dim x vec_model_dim
 
 
 
@@ -858,7 +858,7 @@ def test_germ_list_finitel(model, germsToTest, L, weights=None,
     dprods.shape = (evt.num_final_strings(), op_dim**2, dprods.shape[1])
     prod_inds = [ _slct.as_array(lookup[i]) for i in range(nGerms) ]
     assert( all([len(x)==1 for x in prod_inds])), \
-        ("Compiled lookup table should have length-1"
+        ("Simplified lookup table should have length-1"
          " element slices!  Maybe you're using a"
          " Model without SPAM elements removed?")
     dprods = _np.take( dprods, _np.concatenate(prod_inds), axis=0)

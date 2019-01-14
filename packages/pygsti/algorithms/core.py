@@ -53,7 +53,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     targetModel : Model
         A model used to specify which operation labels should be estimated, a
         guess for which gauge these estimates should be returned in, and
-        used to compile operation sequences.
+        used to simplify operation sequences.
 
     opLabels : list, optional
         A list of which operation labels (or aliases) should be estimated.
@@ -372,7 +372,7 @@ def _constructAB(prepStrs, effectStrs, model, dataset, opLabelAliases=None):
         for j,rhostr in enumerate(prepStrs):
             opLabelString = rhostr + estr # LEXICOGRAPHICAL VS MATRIX ORDER
             dsStr = _tools.find_replace_tuple(opLabelString,opLabelAliases)
-            raw_dict, outcomes = model.compile_circuit(opLabelString)
+            raw_dict, outcomes = model.simplify_circuit(opLabelString)
             assert(len(raw_dict) == 1), "No instruments are allowed in LGST fiducials!"
             unique_key = list(raw_dict.keys())[0]
             assert(len(raw_dict[unique_key]) == povmLen)
@@ -399,7 +399,7 @@ def _constructXMatrix(prepStrs, effectStrs, model, opLabelTuple, dataset, opLabe
         for j,rhostr in enumerate(prepStrs):
             opLabelString = rhostr + _objs.Circuit(opLabelTuple) + estr # LEXICOGRAPHICAL VS MATRIX ORDER
             dsStr = _tools.find_replace_tuple(tuple(opLabelString),opLabelAliases)
-            raw_dict, outcomes = model.compile_circuit(opLabelString)
+            raw_dict, outcomes = model.simplify_circuit(opLabelString)
             dsRow = dataset[dsStr]
             assert(len(raw_dict) == nVariants)
 
@@ -635,7 +635,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
     #Step 1: get the lgst estimates for each of the "operation sequences to use in estimation" list
     evTree,_,_ = mdl.bulk_evaltree(circuitsToUseInEstimation)
     circuitsToUseInEstimation = evTree.generate_circuit_list(permute=False)
-      # length of this list == that of raw "compile" dict == dim of bulk_product, etc.
+      # length of this list == that of raw "simplify" dict == dim of bulk_product, etc.
 
     opLabelAliases = {}
     for i,opStrTuple in enumerate(circuitsToUseInEstimation):
@@ -1122,7 +1122,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:        
-        dstree = dataset if (opLabelAliases is None) else None #Note: compile_circuits doesn't support aliased dataset (yet)
+        dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
         evTree, wrtBlkSize,_, lookup, outcomes_lookup = mdl.bulk_evaltree_from_resources(
             circuitsToUse, comm, mlim, distributeMethod,
             ["bulk_fill_probs","bulk_fill_dprobs"], dstree, printer-1)
@@ -2346,7 +2346,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
-        dstree = dataset if (opLabelAliases is None) else None #Note: compile_circuits doesn't support aliased dataset (yet)
+        dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
         evTree, wrtBlkSize,_,lookup,outcomes_lookup = mdl.bulk_evaltree_from_resources(
             circuitsToUse, comm, mlim, distributeMethod,
             ["bulk_fill_probs","bulk_fill_dprobs"], dstree, printer-1)
@@ -3123,9 +3123,9 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
     #Compute derivatives for effect terms
     i = len(mdl.preps)
     for povmlbl,povm in mdl.povms.items():
-        #Compile effects of povm so we can take their derivatives
+        #Simplify effects of povm so we can take their derivatives
         # directly wrt parent Model parameters
-        for _,effectvec in povm.compile_effects(povmlbl).items():
+        for _,effectvec in povm.simplify_effects(povmlbl).items():
             nP = effectvec.num_params()
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis

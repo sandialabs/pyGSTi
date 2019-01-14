@@ -1543,14 +1543,14 @@ class ColorBoxPlot(WorkspacePlot):
         # Begin "Additional sub-matrix" functions for adding more info to hover text
         def _separate_outcomes_matrix(plaq, elements, fmt="%.3g"):
             list_mx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
-            for i,j,_,elIndices,_ in plaq.iter_compiled():
+            for i,j,_,elIndices,_ in plaq.iter_simplified():
                 list_mx[i,j] = ", ".join(["NaN" if _np.isnan(x) else
                                           (fmt%x) for x in elements[elIndices]])
             return list_mx
 
         def _addl_mx_fn_sl(plaq,x,y):
             slmx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
-            for i,j,opstr,elIndices,outcomes in plaq.iter_compiled():
+            for i,j,opstr,elIndices,outcomes in plaq.iter_simplified():
                 slmx[i,j] = ", ".join([ outcome_to_str(ol) for ol in outcomes ])
             return slmx
 
@@ -1560,12 +1560,12 @@ class ColorBoxPlot(WorkspacePlot):
             return _separate_outcomes_matrix(plaq, probs, "%.5g")
 
         def _addl_mx_fn_f(plaq,x,y):
-            plaq_ds = plaq.expand_aliases(dataset, circuit_compiler=model)
+            plaq_ds = plaq.expand_aliases(dataset, circuit_simplifier=model)
             freqs = _ph.frequency_matrices( plaq_ds, dataset)
             return _separate_outcomes_matrix(plaq, freqs, "%.5g")
 
         def _addl_mx_fn_cnt(plaq,x,y):
-            plaq_ds = plaq.expand_aliases(dataset, circuit_compiler=model)
+            plaq_ds = plaq.expand_aliases(dataset, circuit_simplifier=model)
             cnts = _ph.total_count_matrix(plaq_ds, dataset)
             return _separate_outcomes_matrix(plaq, cnts, "%d")
 

@@ -25,36 +25,58 @@ P_RANK_TOL = 1e-7
 
 
 
-#TODO: docstring for this entire module
 class ExplicitOpModel_Calc(object):
     """ 
-    Calculations dealing with compiled objects (so don't need to 
-    worry abount POVM or Instruments, just preps, ops, & effects),
-    but, unlike fwd simulators, require knowledge of *all* of the 
-    possible ops of each category.
+    This class performs calculations with *simplified* objects (so don't 
+    need to worry abount POVMs or Instruments, just preps, ops, & effects),
+    but, unlike fwd simulators, these calculations require knowledge of *all*
+    of the possible operations in each category (not just the ones in a given
+    circuti).  As such, instances of `ExplicitOpModel_Calc` are almost always
+    associated with an instance of `ExplicitOpModel`.
     """
-    def __init__(self, dim, compiled_preps, compiled_ops, compiled_effects, Np):
+    def __init__(self, dim, simplified_preps, simplified_ops, simplified_effects, Np):
+        """
+        Initialize a new ExplicitOpModel_Calc object.
+        
+        Parameters
+        ----------
+        dim : int
+            The dimenstion of the Hilbert-Schmidt space upon which the 
+            various operators act.
+
+        simplified_preps, simplified_ops, simplified_effects : dict
+            Dictionaries containing *all* the possible state preparations,
+            layer operations, and POVM effects, respectively.
+
+        Np : int
+            The total number of parameters in all the operators (the
+            number of parameters of the associated :class:`ExplicitOpModel`).
+        """
         self.dim = dim
-        self.preps = compiled_preps
-        self.operations = compiled_ops
-        self.effects = compiled_effects
+        self.preps = simplified_preps
+        self.operations = simplified_ops
+        self.effects = simplified_effects
         self.Np = Np
 
     def iter_objs(self):
+        """
+        Return an iterator over all the state preparation,
+        POVM effect, and layer operations.
+        """
         for lbl,obj in _itertools.chain(self.preps.items(),
                                         self.effects.items(),
                                         self.operations.items()):
             yield (lbl,obj)
 
     def copy(self):
-        """ Return a shallow copy of this MatrixForwardSimulator """
+        """ Return a shallow copy of this ExplicitOpModel_Calc """
         return ExplicitOpModel_Calc(self.dim, self.preps, self.operations, self.effects, self.Np)
         
     def frobeniusdist(self, otherCalc, transformMx=None,
                       itemWeights=None, normalize=True):
         """
         Compute the weighted frobenius norm of the difference between this
-        model and otherModel.  Differences in each corresponding gate
+        calc object and `otherCalc`.  Differences in each corresponding gate
         matrix and spam vector element are squared, weighted (using 
         `itemWeights` as applicable), then summed.  The value returned is the
         square root of this sum, or the square root of this sum divided by the
@@ -147,7 +169,7 @@ class ExplicitOpModel_Calc(object):
         
     def residuals(self, otherCalc, transformMx=None, itemWeights=None):
         """
-        Compute the weighted residuals between two models (the differences
+        Compute the weighted residuals between two models/calcs (the differences
         in corresponding operation matrix and spam vector elements).
 
         Parameters
@@ -238,7 +260,7 @@ class ExplicitOpModel_Calc(object):
     def jtracedist(self, otherCalc, transformMx=None):
         """
         Compute the Jamiolkowski trace distance between two
-        models, defined as the maximum of the trace distances
+        models/calcs, defined as the maximum of the trace distances
         between each corresponding gate, including spam gates.
 
         Parameters
@@ -301,7 +323,7 @@ class ExplicitOpModel_Calc(object):
     def diamonddist(self, otherCalc, transformMx=None):
         """
         Compute the diamond-norm distance between two
-        models, defined as the maximum
+        models/calcs, defined as the maximum
         of the diamond-norm distances between each
         corresponding gate, including spam gates.
 
@@ -365,8 +387,8 @@ class ExplicitOpModel_Calc(object):
     def deriv_wrt_params(self):
         """
         Construct a matrix whose columns are the vectorized derivatives of all
-        the model's raw matrix and vector *elements* (placed in a vector)
-        with respect to each single model parameter.
+        this calc object's (model's) raw matrix and vector *elements* (placed in
+        a vector) with respect to each single model parameter.
         
         Returns
         -------

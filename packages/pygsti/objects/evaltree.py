@@ -56,7 +56,7 @@ class EvalTree(list):
         self.distribution = {}
 
         # a list of spamTuple-lists, one for each final operation sequence
-        self.compiled_circuit_spamTuples = None
+        self.simplified_circuit_spamTuples = None
         #self.finalStringToElsMap = None
 
         # a dictionary of final-gate-string index lists keyed by 
@@ -83,7 +83,7 @@ class EvalTree(list):
         super(EvalTree, self).__init__(items)
 
         
-    def initialize(self, compiled_circuit_list, numSubTreeComms=1):
+    def initialize(self, simplified_circuit_list, numSubTreeComms=1):
         """
           Initialize an evaluation tree using a set of operation sequences.
           This function must be called before using an EvalTree.
@@ -107,13 +107,13 @@ class EvalTree(list):
         """
         raise NotImplementedError("initialize(...) must be implemented by a derived class")
 
-    def _get_opLabels(self, compiled_circuit_list):
+    def _get_opLabels(self, simplified_circuit_list):
         """ 
         Returns a list of the distinct operation labels in 
-        `compiled_circuit_list` - a dictionary w/keys = "raw" operation sequences OR a list of them.
+        `simplified_circuit_list` - a dictionary w/keys = "raw" operation sequences OR a list of them.
         """
         opLabels = set()
-        for raw_gstr in compiled_circuit_list: # will work for dict keys too
+        for raw_gstr in simplified_circuit_list: # will work for dict keys too
             opLabels.update( raw_gstr )
         return sorted(opLabels)
 
@@ -133,7 +133,7 @@ class EvalTree(list):
         newTree.subTrees = [ st.copy() for st in self.subTrees ]
         newTree.original_index_lookup = self.original_index_lookup[:] \
             if (self.original_index_lookup is not None) else None
-        newTree.compiled_circuit_spamTuples = self.compiled_circuit_spamTuples[:]
+        newTree.simplified_circuit_spamTuples = self.simplified_circuit_spamTuples[:]
         #newTree.finalStringToElsMap = self.finalStringToElsMap[:]
         newTree.spamtuple_indices = self.spamtuple_indices.copy()
         return newTree
@@ -259,7 +259,7 @@ class EvalTree(list):
     def num_final_strings(self):
         """
         Returns the integer number of "final" operation sequences, equal
-          to the number of keys in the `compiled_circuit_list`
+          to the number of keys in the `simplified_circuit_list`
           passed to :method:`initialize`.
         """
         return self.num_final_strs
@@ -268,7 +268,7 @@ class EvalTree(list):
         """
         Returns the integer number of "final" elements, equal
           to the number of (circuit, spamTuple) pairs contained in
-          the `compiled_circuit_list` passed to :method:`initialize`.
+          the `simplified_circuit_list` passed to :method:`initialize`.
         """
         return self.num_final_els
 
@@ -471,7 +471,7 @@ class EvalTree(list):
             A dictionary whose keys are integer original-circuit indices
             and whose values are slices or index arrays of final-element-
             indices (typically this dict is returned by calling
-            :method:`Model.compile_circuits`).  Since splitting a 
+            :method:`Model.simplify_circuits`).  Since splitting a 
             tree often involves permutation of the raw string ordering
             and thereby the element ordering, an updated version of this
             dictionary, with all permutations performed, is returned.
@@ -512,7 +512,7 @@ class EvalTree(list):
         None
         """
         self.spamtuple_indices = _compute_spamtuple_indices(
-            self.compiled_circuit_spamTuples,
+            self.simplified_circuit_spamTuples,
             None if bLocal else self.myFinalElsToParentFinalElsMap)
         
 
@@ -598,11 +598,11 @@ class EvalTree(list):
                     for iCur in parentIndexRevPerm ]
 
 
-        # Setting compiled_circuit_spamTuples, (re)sets the element ordering,
+        # Setting simplified_circuit_spamTuples, (re)sets the element ordering,
         # so before doint this compute the old_to_new mapping and update
         # elIndicesDict.
         old_finalStringToElsMap = []; i=0
-        for k,spamTuples in enumerate(self.compiled_circuit_spamTuples):
+        for k,spamTuples in enumerate(self.simplified_circuit_spamTuples):
             old_finalStringToElsMap.append( list(range(i,i+len(spamTuples))) )
             i += len(spamTuples)
 
@@ -621,8 +621,8 @@ class EvalTree(list):
                 [ permute_oldToNew[x] for x in
                   (_slct.indices(indices) if isinstance(indices,slice) else indices)] )
 
-        # Now update compiled_circuit_spamTuples
-        self.compiled_circuit_spamTuples = [ self.compiled_circuit_spamTuples[iCur]
+        # Now update simplified_circuit_spamTuples
+        self.simplified_circuit_spamTuples = [ self.simplified_circuit_spamTuples[iCur]
                                                 for iCur in parentIndexRevPerm[0:self.num_final_strings()] ]
         self.recompute_spamtuple_indices(bLocal=True) #bLocal shouldn't matter here - just for clarity
 
@@ -686,7 +686,7 @@ class EvalTree(list):
     #    #Create a mapping from each final operation sequence (index) to
     #    # a slice of final element indices
     #    self.finalStringToElsMap = []; i=0
-    #    for k,spamTuples in enumerate(self.compiled_circuit_spamTuples):
+    #    for k,spamTuples in enumerate(self.simplified_circuit_spamTuples):
     #        self.finalStringToElsMap.append( slice(i,i+len(spamTuples)) )
     #        i += len(spamTuples)
 
@@ -739,11 +739,11 @@ class EvalTree(list):
                 t.print_analysis()
 
                 
-def _compute_spamtuple_indices(compiled_circuit_spamTuples,
+def _compute_spamtuple_indices(simplified_circuit_spamTuples,
                                subtreeFinalElsToParentFinalElsMap=None):
     """ 
     Returns a dictionary whose keys are the distinct spamTuples
-    found in `compiled_circuit_spamTuples` and whose values are
+    found in `simplified_circuit_spamTuples` and whose values are
     (finalIndices, finalTreeSlice) tuples where:
 
     finalIndices = the "element" indices in any final filled quantities
@@ -759,7 +759,7 @@ def _compute_spamtuple_indices(compiled_circuit_spamTuples,
     """
     spamtuple_indices = _collections.OrderedDict(); el_off = 0
     for i,spamTuples in enumerate(  # i == final operation sequence index
-            compiled_circuit_spamTuples):
+            simplified_circuit_spamTuples):
         for j,spamTuple in enumerate(spamTuples,start=el_off): # j == final element index
             if spamTuple not in spamtuple_indices:
                 spamtuple_indices[spamTuple] = ([],[])
@@ -772,7 +772,7 @@ def _compute_spamtuple_indices(compiled_circuit_spamTuples,
     def to_slice(x):
         s = _slct.list_to_slice(x,array_ok=True,require_contiguous=False)
         if isinstance(s, slice) and (s.start,s.stop,s.step) == \
-           (0,len(compiled_circuit_spamTuples),None):
+           (0,len(simplified_circuit_spamTuples),None):
             return slice(None,None) #check for entire range
         else:
             return s

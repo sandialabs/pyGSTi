@@ -53,6 +53,7 @@ def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_ret
              for l in lbl.components ] # a *list*     
 
 def _sslbls_of_nested_lists_of_simple_labels(obj):
+    """ Get state space labels from a nested lists of simple (not compound) Labels. """
     if isinstance(obj,_Label):
         return obj.sslbls
     else:
@@ -60,6 +61,10 @@ def _sslbls_of_nested_lists_of_simple_labels(obj):
         return None if (None in sub_sslbls) else set(_itertools.chain(*sub_sslbls))
 
 def _accumulate_explicit_sslbls(obj):
+    """ 
+    Get all the explicitly given state-space labels within `obj`,
+    which can be a Label or a list/tuple of labels.  Returns a *set*.
+    """
     ret = set()
     if isinstance(obj,_Label):
         if len(obj.components) > 1:
@@ -74,6 +79,7 @@ def _accumulate_explicit_sslbls(obj):
     return ret
 
 def _opSeqToStr(seq, line_labels):
+    """ Used for creating default string representations. """
     if len(seq) == 0: return "{}" #special case of empty operation sequence
     if line_labels is None or line_labels == ('*',):
         return ''.join(map(str,seq))
@@ -82,73 +88,74 @@ def _opSeqToStr(seq, line_labels):
 
     
 
-
-    
-#TODO: upddate docstrings throughout
 class Circuit(object):
     """
-    A Circuit is a more structured representation of a sequence of preparation,
-    gate, and measurement operations.  It is composed of some number of "lines",
+    A Circuit represents a quantum circuit, consisting of state preparation,
+    gates, and measurement operations.  It is composed of some number of "lines",
     typically one per qubit, and stores the operations on these lines as a 
     sequence of :class:`Label` objects, one per circuit layer, whose `.sslbls`
     members indicate which line(s) the label belongs on.  When a circuit is
     created with 'editable=True', a rich set of operations may be used to 
     construct the circuit in place, after which `done_editing()` should be 
-    called so that the Circuit is properly hash-able.
+    called so that the Circuit can be properly hashed as needed.
     """   
     def __init__(self, layer_labels=(), line_labels='auto', num_lines=None, editable=False,
                  stringrep=None, check=True):
         """
         Creates a new Circuit object, encapsulating a quantum circuit.
 
-        You can supply at most one of `line_items` and `circuit` (alternate
-        ways of specifying the gates).  If neither are specified an empty
-        Circuit is created.  Unless `line_items` is specified, you must also
-        specify the number of lines via `num_lines` and/or `line_labels`. If
-        labels aren't specified they default to the integers starting at 0.
+        You only need to supply the first `layer_labels` argument, though
+        usually (except for just 1 or 2 qubits) you'll want to also supply
+        `line_labels` or `num_lines`.  If you'll be adding to or altering 
+        the circuit before using it, you should set `editable=True`.
 
         Parameters
         ----------
-        line_items : list, optional
-            A list of lists of Label objects, giving the operation labels present on
-            each "line" (usually "qubit") of the circuit.  When a gate occupies
-            more than one line its label is present in the lists of *all* the
-            lines it occupies.
+        layer_labels : iterable of Labels
+            This argument provides a list of the layer labels specifying the
+            state preparations, gates, and measurements for the circuit.  This 
+            argument can also be a :class:`Circuit`.  Internally this will
+            eventually be converted to a list of `Label` objects, one per layer,
+            but it may be specified using anything that can be readily converted
+            to a Label objects.  For example, any of the following are allowed:
 
-        circuit : list, optional
-            A list of Label objects, specifying a serial sequence of gates to
-            be made into a circuit.  Gates are placed in as few "layers" as 
-            possible, meaning that gates acting on different qubits are 
-            done in parallel (placed at the same position in their respective
-            lines).  This is equivalent to saying the list for each line is 
-            made as short as possible.
+            - `['Gx','Gx']` : X gate on each of 2 layers
+            - `[Label('Gx'),Label('Gx')] : same as above
+            - `[('Gx',0),('Gy',0)]` : X then Y on qubit 0 (2 layers)
+            - `[[('Gx',0),('Gx',1)],[('Gy',0),('Gy',1)]]` : parallel X then Y on qubits 0 & 1
+            
+        line_labels : iterable, optional
+            The (string valued) label for each circuit line.  If `'auto'`, then
+            `line_labels` is taken to be the list of all state-space labels
+            present within `layer_labels`.  If there are no such labels (e.g.
+            if `layer_labels` contains just gate names like `('Gx','Gy')`), then
+            the special value `'*'` is used as a single line label.
 
         num_lines : int, optional
-            The number of lines (usually qubits).  You only need to specify 
-            this when it cannot be inferred, that is, when `line_items` or
-            `line_labels` is not given.
+            Specify this instead of `line_labels` to set the latter to the
+            integers between 0 and `num_lines-1`.
+        
+        editable : bool, optional
+            Whether the created `Circuit` is created in able to be modified.  If
+            `True`, then you should call `done_editing()` once the circuit is
+            completely assembled, as this makes the circuit read-only and 
+            allows it to be hashed.
 
-        line_labels : list, optional
-            A list of strings or integers labelling each of the lines.  The
-            length of this list equals the number of lines in the circuit, 
-            and if `line_labels` is not given these labels default to the 
-            integers starting with 0.
+        stringrep : string, optional
+            A string representation for the circuit.  If `None` (the default),
+            then this will be generated automatically when needed.  One 
+            reason you'd want to specify this is if you know of a nice compact
+            string representation that you'd rather use, e.g. `"Gx^4"` instead
+            of the automatically generated `"GxGxGxGx"`.  Another reason is if
+            you want to initialize a `Circuit` entirely from a string
+            representation you can set `layer_labels` to `None` and `stringrep`
+            to any valid (one-line) circuit string.
 
-        parallelize : bool, optional
-            Only used when initializing from `circuit`.  When True, automatic
-            parallelization is performed: consecutive gates in `circuit`
-            acting on disjoint sets of qubits are placed in the same layer.
-
-        identity : str, optional
-            The "name" for the identity gate. This is the gate name that will
-            be used to "pad" layers: qubits that are without a gate in
-            a layer when the circuit is constructed will be assigned an idle gate
-            with a name fixed by this string. Unlike all other gates, the created
-            circuit "knows" that this particular gate is an idle. So, the circuit
-            will potentially drop idle gates when doing depth-compression, whereas 
-            all other gates are treat as having an unspecified action, by all methods
-            of the circuit, unless the relationship between the gates is given to 
-            a method of circuit.        
+        check : bool, optional
+            Whether `stringrep` should be checked against `layer_labels` to 
+            ensure they are consistent.  The only reason you'd want to set 
+            this to `False` is if you're absolutely sure `stringrep` is
+            consistent and want to save computation time.
         """
         toLabel = lambda x : x if isinstance(x,_Label) else _Label(x) #helper
 
@@ -217,7 +224,7 @@ class Circuit(object):
 
     @property
     def tup(self):
-        """ This Circuit as a standard Python tuple of Labels."""
+        """ This Circuit as a standard Python tuple of layer Labels."""
         if self._static:
             return self._labels
         else:
@@ -231,6 +238,7 @@ class Circuit(object):
         return self._str
 
     def _labels_lines_str(self):
+        """ Split the string representation up into layer-labels & line-labels parts """
         if '@' in self.str:
             return self.str.split('@')
         else:
@@ -317,7 +325,11 @@ class Circuit(object):
 
     def number_of_lines(self):
         """
-        The number of lines in the circuit
+        The number of lines in this circuit.
+
+        Returns
+        -------
+        int
         """
         return len(self.line_labels)
 
@@ -347,6 +359,7 @@ class Circuit(object):
 
 
     def _proc_layers_arg(self, layers):
+        """ Pre-process the layers argument used by many methods """
         if layers is None:
             layers = list(range(len(self._labels)))
         elif isinstance(layers, slice):
@@ -359,6 +372,7 @@ class Circuit(object):
         return layers
 
     def _proc_lines_arg(self, lines):
+        """ Pre-process the lines argument used by many methods """
         if lines is None:
             lines = self.line_labels
         elif isinstance(lines, slice):
@@ -371,6 +385,7 @@ class Circuit(object):
         return lines
 
     def _proc_key_arg(self, key):
+        """ Pre-process the key argument used by many methods """
         if isinstance(key,tuple):
             if len(key) != 2: return IndexError("Index must be of the form <layerIndex>,<lineIndex>")
             layers = key[0]
@@ -381,6 +396,8 @@ class Circuit(object):
         return layers, lines
 
     def _layer_components(self, ilayer):
+        """ Get the components of the `ilayer`-th layer as a list/tuple. """
+        #(works for static and non-static Circuits)
         if self._static:
             return self._labels[ilayer].components
         else:
@@ -388,6 +405,8 @@ class Circuit(object):
                 else [ self._labels[ilayer] ]
 
     def _remove_layer_component(self, ilayer, indx):
+        """ Removes the `indx`-th component from the `ilayer`-th layer """
+        #(works for special case when layer is just a *single* component)
         assert(not self._static),"Cannot edit a read-only circuit!"
         if isinstance(self._labels[ilayer],list):
             del self._labels[ilayer][indx]
@@ -396,6 +415,8 @@ class Circuit(object):
             self._labels[ilayer] = [] # don't remove *layer* - when final component is removed we're left with an empty layer
 
     def _append_layer_component(self, ilayer, val):
+        """ Add `val` to the `ilayer`-th layer """
+        #(works for special case when layer is just a *single* component)
         assert(not self._static),"Cannot edit a read-only circuit!"
         if isinstance(self._labels[ilayer],list):
             self._labels[ilayer].append(val)
@@ -404,6 +425,8 @@ class Circuit(object):
             
     def _replace_layer_component(self, ilayer, indx, val):
         assert(not self._static),"Cannot edit a read-only circuit!"
+        """ Replace `indx`-th component of `ilayer`-th layer with `val` """
+        #(works for special case when layer is just a *single* component)
         if isinstance(self._labels[ilayer],list):
             self._labels[ilayer][indx] = val
         else:
@@ -412,7 +435,55 @@ class Circuit(object):
 
 
     def get_labels(self, layers=None, lines=None, strict=True):
-        """ TODO: docstring """
+        """
+        Get a subregion - a "rectangle" - of this Circuit.
+
+        This can be used to select multiple layers and/or lines of this Circuit.
+        The `strict` argument controls whether gates need to be entirely within
+        the given rectangle or can be intersecting it.  If `layers` is a single
+        integer then a :class:`Label` is returned (representing a layer or a
+        part of a layer), otherwise a :class:`Circuit` is returned.
+
+        Parameters
+        ----------
+        layers : int, slice, or list/tuple of ints
+            Which layers to select (the horizontal dimension of the selection
+            rectangle).  Layers are always selected by index, and this
+            argument can be a single (integer) index - in which case a `Label`
+            is returned - or multiple indices as given by a slice or list -
+            in which case a `Circuit` is returned.  Note that, even though
+            we speak of a "rectangle", layer indices do not need to be
+            contiguous.  The special value `None` selects all layers.
+        
+        lines : str/int, slice, or list/tuple of strs/ints
+            Which lines to select (the vertical dimension of the selection
+            rectangle).  Lines are selected by their line-labels (elements
+            of the circuit's `.line_labels` property), which can be strings
+            and/or integers.  A single or multiple line-labels can be
+            specified.  If the line labels are integers a slice can be used,
+            otherwise a list or tuple of labels is the only way to select
+            multiple of them.  Note that line-labels do not need to be
+            contiguous. The special value `None` selects all lines.
+
+        strict : bool, optional
+            When `True`, only gates lying completely within the selected
+            region are included in the return value.  If a gate straddles
+            the region boundary (e.g. if we select just line `1` and the
+            circuit contains `"Gcnot:1:2"`) then it is *silently* not-included
+            in the returned label or circuit.  If `False`, then gates which
+            straddle the region boundary *are* included.  Note that this may
+            result in a `Label` or `Circuit` containing more line labels than
+            where requested in the call to `get_labels(...)`..
+
+        Returns
+        -------
+        Label or Circuit
+            The requested portion of this circuit, given as a `Label` if
+            `layers` is a single integer and as a `Circuit` otherwise.
+            Note: if you want a `Circuit` when only selecting one layer,
+            set `layers` to a slice or tuple containing just a single index.
+        """
+        
         nonint_layers = not isinstance(layers,int)
         layers = self._proc_layers_arg(layers)
         lines = self._proc_lines_arg(lines)
@@ -450,13 +521,36 @@ class Circuit(object):
     
     def set_labels(self, lbls, layers=None, lines=None):
         """
-        Write `layers`, which can be anything that can be interpreted as a :class:`Label`,
-        to the block defined by the `layers` and `lines`.
+        Write `lbls`, which can be anything that can be interpreted as a
+        :class:`Label` or list of labels to the block defined by the 
+        `layers` and `lines` arguments.
 
         Parameters
         ----------
+        lbls : Label, list/tuple of Labels, or Circuit
+            When `layers` is a single integer, `lbls` should be a single
+            "layer label" of type `Label`.  Otherwise, `lbls` should be
+            a list or tuple of `Label` objects with length equal to the
+            number of layers being set.  A `Circuit` may also be used in this
+            case.
 
-        layers, lines : slices (if integers) or a single (non-iterable) value or a list/tuple of values
+        layers : int, slice, or list/tuple of ints
+            Which layers to set (the horizontal dimension of the destination
+            rectangle).  Layers are always selected by index, and this
+            argument can be a single (integer) index  or multiple indices as
+            given by a slice or list.  Note that these indices do not need to be
+            contiguous.  The special value `None` stands for all layers.
+        
+        lines : str/int, slice, or list/tuple of strs/ints
+            Which lines to set (the vertical dimension of the destination
+            rectangle).  Lines are selected by their line-labels, which can be
+            strings and/or integers.  A single or multiple line-labels can be
+            specified.  If the line labels are integers a slice can be used,
+            otherwise a list or tuple of labels is the only way to specify
+            multiple of them.  The line-labels do not need to be contiguous.
+            The special value `None` stands for all lines, and in this case
+            new lines will be created if there are new state-space labels
+            in `lbls` (when `lines` is not `None` an error is raised instead).
 
         Returns
         -------
@@ -482,6 +576,8 @@ class Circuit(object):
             lbls = toLabel(lbls)
             lbls_sslbls = None if (lbls.sslbls is None) else set(lbls.sslbls)
         else:
+            if isinstance(lbls, Circuit):
+                lbls = lbls.tup #circuit layer labels as a tuple
             assert(isinstance(lbls,(tuple,list))), \
                 ("When assigning to a layer range (even w/len=1) `lbls` "
                  "must be  a *list or tuple* of label-like items")
@@ -529,7 +625,33 @@ class Circuit(object):
 
 
     def insert_idling_layers(self, insertBefore, numToInsert, lines=None):
-        """ TODO: docstring """
+        """
+        Inserts into this circuit one or more idling (blank) layers.
+
+        By default, complete layer(s) are inserted.  The `lines` argument
+        allows you to insert partial layers (on only a subset of the lines).
+
+        Parameters
+        ----------
+        insertBefore : int
+            The layer index to insert the new layers before.  Can be from 0
+            (insert at the beginning) to `len(self)-1` (insert at end), and
+            negative indexing can be used to insert relative to the last layer.
+            The special value `None` inserts at the end.
+
+        numToInsert : int
+            The number of new layers to insert.
+
+        lines : str/int, slice, or list/tuple of strs/ints, optional
+            Which lines should have new layers (blank circuit space)
+            inserted into them.  A single or multiple line-labels can be
+            specified, similarly as in :method:`get_labels`.  The default
+            value `None` stands for *all* lines.
+
+        Returns
+        -------
+        None
+        """
         assert(not self._static),"Cannot edit a read-only circuit!"
         if insertBefore is None: insertBefore = len(self._labels)
         elif insertBefore < 0: insertBefore = len(self._labels) + insertBefore
@@ -555,9 +677,62 @@ class Circuit(object):
                     del self._labels[i][k]
 
     def append_idling_layers(self, numToInsert, lines=None):
+        """
+        Adds one or more idling (blank) layers to the end of this circuit.
+
+        By default, complete layer(s) are appended.  The `lines` argument
+        allows you to add partial layers (on only a subset of the lines).
+
+        Parameters
+        ----------
+        numToInsert : int
+            The number of new layers to append.
+
+        lines : str/int, slice, or list/tuple of strs/ints, optional
+            Which lines should have new layers (blank circuit space)
+            inserted into them.  A single or multiple line-labels can be
+            specified, similarly as in :method:`get_labels`.  The default
+            value `None` stands for *all* lines.
+
+        Returns
+        -------
+        None        
+        """
         self.insert_idling_layers(None, numToInsert, lines)
 
+        
     def insert_labels_into_layers(self, lbls, layerToInsertBefore, lines=None):
+        """
+        Inserts into this circuit the contents of `lbls` into new full or
+        partial layers.
+
+        By default, complete layer(s) are inserted.  The `lines` argument
+        allows you to insert partial layers (on only a subset of the lines).
+
+        Parameters
+        ----------
+        lbls : list/tuple of Labels, or Circuit
+            The full or partial layer labels to insert.  The length of this
+            list, tuple, or circuit determines the number of layers which are
+            inserted.
+
+        layerToInsertBefore : int
+            The layer index to insert `lbls` before.  Can be from 0
+            (insert at the beginning) to `len(self)-1` (insert at end), and
+            negative indexing can be used to insert relative to the last layer.
+            The special value `None` inserts at the end.
+
+        lines : str/int, slice, or list/tuple of strs/ints, optional
+            Which lines should have `lbls` inserted into them.  Currently
+            this can only be a larger set than the set of line labels present
+            in `lbls` (in future versions this may allow filtering of `lbls`).
+            value `None` stands for *all* lines.
+
+        Returns
+        -------
+        None
+        """
+        if isinstance(lbls,Circuit): lbls = lbls.tup
         toLabel = lambda x : x if isinstance(x,_Label) else _Label(x)
         lbls = tuple(map(toLabel,lbls)) # lbls is expected to be a list/tuple of Label-like items, one per inserted layer
         numLayersToInsert = len(lbls)
@@ -567,7 +742,23 @@ class Circuit(object):
 
 
     def insert_idling_lines(self, insertBefore, line_labels):
-        """ insertBefore=None => insert at end """
+        """
+        Insert one or more idling (blank) lines into this circuit.
+
+        Parameters
+        ----------
+        insertBefore : str or int
+            The line label to insert new lines before.  The special value `None`
+            inserts lines at the bottom of this circuit.
+
+        line_labels : list or tuple
+            A list or tuple of the new line labels to insert (can be integers
+            and/or strings).
+
+        Returns
+        -------
+        None
+        """
         assert(not self._static),"Cannot edit a read-only circuit!"
         if insertBefore is None:
             i = len(self.line_labels)
@@ -576,15 +767,64 @@ class Circuit(object):
         self.line_labels = self.line_labels[0:i] + tuple(line_labels) + self.line_labels[i:]
 
     def append_idling_lines(self, line_labels):
+        """
+        Add one or more idling (blank) lines onto the bottom of this circuit.
+
+        Parameters
+        ----------
+        line_labels : list or tuple
+            A list or tuple of the new line labels to insert (can be integers
+            and/or strings).
+
+        Returns
+        -------
+        None
+        """        
         self.insert_idling_lines(None, line_labels)
 
     def insert_labels_as_lines(self, lbls, layerToInsertBefore=None, lineToInsertBefore=None, line_labels="auto"):
-        """ lineToInsertBefore=None => insert at end; lbls is a list/tuple of Label-like items """
+        """
+        Inserts into this circuit the contents of `lbls` into new lines.
+
+        By default, `lbls` is inserted at the beginning of the new lines(s). The
+        `layerToInsertBefore` argument allows you to insert `lbls` beginning at
+        a layer of your choice.
+
+        Parameters
+        ----------
+        lbls : list/tuple of Labels, or Circuit
+            A list of layer labels to insert as new lines.  The state-space
+            (line) labels within `lbls` must not overlap with that of this
+            circuit or an error is raised.  If `lbls` contains more layers
+            than this circuit currently has, new layers are added automatically.
+
+        layerToInsertBefore : int
+            The layer index to insert `lbls` before.  Can be from 0
+            (insert at the beginning) to `len(self)-1` (insert at end), and
+            negative indexing can be used to insert relative to the last layer.
+            The default value of `None` inserts at the beginning.
+
+        lineToInsertBefore : str or int
+            The line label to insert the new lines before.  The default value
+            of `None` inserts lines at the bottom of the circuit.
+        
+        line_labels : list, tuple, or "auto"
+            The labels of the new lines being inserted.  If `"auto"`, then
+            these are inferred from `lbls`.
+
+        Returns
+        -------
+        None
+        """
         if layerToInsertBefore is None: layerToInsertBefore = 0
         elif layerToInsertBefore < 0: layerToInsertBefore = len(self._labels) + layerToInsertBefore
 
-        if line_labels == "auto":
+        if isinstance(lbls,Circuit):
+            if line_labels == "auto": line_labels = lbls.line_labels
+            lbls = lbls.tup
+        elif line_labels == "auto":
             line_labels = tuple(sorted(_accumulate_explicit_sslbls(lbls)))
+                
         existing_labels = set(line_labels).intersection(self.line_labels)
         if len(existing_labels) > 0:
             raise ValueError("Cannot insert line(s) labeled %s - they already exist!" % str(existing_labels))
@@ -600,9 +840,38 @@ class Circuit(object):
         self.set_labels(lbls, slice(layerToInsertBefore,layerToInsertBefore+numLayersToInsert), line_labels)
 
     def append_labels_as_lines(self, lbls, layerToInsertBefore=None, line_labels="auto"):
+        """
+        Adds the contents of `lbls` as new lines at the bottom of this circuit.
+
+        By default, `lbls` is inserted at the beginning of the new lines(s). The
+        `layerToInsertBefore` argument allows you to insert `lbls` beginning at
+        a layer of your choice.
+
+        Parameters
+        ----------
+        lbls : list/tuple of Labels, or Circuit
+            A list of layer labels to append as new lines.  The state-space
+            (line) labels within `lbls` must not overlap with that of this
+            circuit or an error is raised.  If `lbls` contains more layers
+            than this circuit currently has, new layers are added automatically.
+
+        layerToInsertBefore : int
+            The layer index to insert `lbls` before.  Can be from 0
+            (insert at the beginning) to `len(self)-1` (insert at end), and
+            negative indexing can be used to insert relative to the last layer.
+            The default value of `None` inserts at the beginning.
+        
+        line_labels : list, tuple, or "auto"
+            The labels of the new lines being added.  If `"auto"`, then
+            these are inferred from `lbls`.
+
+        Returns
+        -------
+        None
+        """
         return self.insert_labels_as_lines(lbls, layerToInsertBefore, None, line_labels)
 
-    def _clear_labels(self, layers, lines):
+    def _clear_labels(self, layers, lines, clear_straddlers=False):
         """ remove all labels in a block given by layers and lines
             Note: layers & lines must be lists/tuples of values; they can't be slices or single vals
         """
@@ -614,25 +883,48 @@ class Circuit(object):
                 sslbls = set(self.line_labels) if (sslbls is None) else set(sslbls)
                 if len(sslbls.intersection(lines)) == 0:
                     new_layer.append(l)
-                elif not sslbls.issubset(lines):
-                    raise ValueError("Cannot operate on a block that is straddled by %s!" % _Label(l))
+                elif not clear_straddlers and not sslbls.issubset(lines):
+                    raise ValueError("Cannot operate on a block that is straddled by %s!" % str(_Label(l)))
             self._labels[i] = new_layer
+            
 
-    def clear_labels(self, layers=None, lines=None):
-        """ TODO: docstring """
+    def clear_labels(self, layers=None, lines=None, clear_straddlers=False):
+        """
+        Removes all the gates within the given circuit region.  Does not reduce
+        the number of layers or lines.
+
+        Parameters
+        ----------
+        layers : int, slice, or list/tuple of ints
+            Defines the horizontal dimension of the region to clear.  See
+            :method:`get_labels` for details.
+
+        lines : str/int, slice, or list/tuple of strs/ints
+            Defines the vertical dimension of the region to clear.  See
+            :method:`get_labels` for details.
+
+        clear_straddlers : bool, optional
+            Whether or not gates which straddle cleared and non-cleared lines
+            should be cleared.  If `False` and straddling gates exist, an error
+            will be raised.
+
+        Returns
+        -------
+        None
+        """
         layers = self._proc_layers_arg(layers)
         lines = self._proc_lines_arg(lines)
-        self._clear_labels(layers, lines)
+        self._clear_labels(layers, lines, clear_straddlers)
         
     def delete_layers(self, layers=None):
         """
         Deletes one or more layers from the circuit.
-        TODO: docstring
         
         Parameters
         ----------
-        j : int
-            The index (depth) of the layer to be deleted.
+        layers : int, slice, or list/tuple of ints
+            The layer index or indices to delete.  See :method:`get_labels`
+            for details.
     
         Returns
         -------
@@ -644,7 +936,25 @@ class Circuit(object):
             del self._labels[i]
 
     def delete_lines(self, lines, delete_straddlers=False):
+        """
+        Deletes one or more lines from the circuit.
+        
+        Parameters
+        ----------
+        lines : str/int, slice, or list/tuple of strs/ints
+            The line label(s) to delete.  See :method:`get_labels` for details.
+
+        delete_straddlers : bool, optional
+            Whether or not gates which straddle deleted and non-deleted lines
+            should be removed.  If `False` and straddling gates exist, an error
+            will be raised.
+    
+        Returns
+        -------
+        None
+        """
         assert(not self._static),"Cannot edit a read-only circuit!"
+        lines = self._proc_lines_arg(lines)
         for i in range(len(self._labels)):
             new_layer = []
             for l in self._layer_components(i): # loop over labels in this layer
@@ -674,9 +984,9 @@ class Circuit(object):
         else:
             raise IndexError("Can only delete entire layers or enire lines.")
 
-    def to_pythonstr(self,opLabels):
+    def to_pythonstr(self, opLabels):
         """
-        Convert this operation sequence into a python string, where each operation label is
+        Convert this circuit to a python string, where each operation label is
         represented as a **single** character, starting with 'A' and contining
         down the alphabet.  This can be useful for processing operation sequences
         using python's string tools (regex in particular).
@@ -738,10 +1048,10 @@ class Circuit(object):
 
     def serialize(self):
         """
-        Construct a new Circuit whereby all compound labels (containing multiple
-        gates in parallel) in this circuit are converted to separate labels,
-        effectively putting each elementary gate operation into its own "layer".
-        Ordering is dictated by the ordering of the compound label.
+        Construct a new Circuit whereby all layers containing multiple gates are
+        converted to separate single-gate layers, effectively putting each
+        elementary gate operation into its own layer.  Ordering is dictated by
+        the ordering of the compound layer labels.
 
         Returns
         -------
@@ -758,8 +1068,8 @@ class Circuit(object):
         """
         Construct a circuit with the same underlying labels as this one,
         but with as many gates performed in parallel as possible (with
-        some restrictions - see the Parameters sectin below).  Generally,
-        gates are moved as far left (toward the start) in the sequence as
+        some restrictions - see the Parameters section below).  Generally,
+        gates are moved as far left (toward the start) of the circuit as
         possible.
 
         Parameters
@@ -880,18 +1190,21 @@ class Circuit(object):
        
     def insert_layer(self,circuit_layer,j):
         """
-        Inserts a layer into a circuit. The input layer does not
-        need to contain a gate that acts on every qubit. But,
-        it should be a valid layer, meaning that the layer
-        does not contain more than one gate on a qubit.
+        Inserts a single layer into a circuit. 
+
+        The input layer does not need to contain a gate that acts on
+        every qubit, but it should not contain more than one gate on
+        a qubit.
         
         Parameters
         ----------
-        circuit_layer : list
-            A list of Label objects, to insert as a circuit layer.
+        circuit_layer : Label
+            The layer to insert.  A (possibly compound) Label object or
+            something that can be converted into one, e.g.
+            `(('Gx',0),('Gcnot',1,2))` or just `'Gx'`.
             
         j : int
-            The layer index (depth) at which to insert the circuit layer.
+            The layer index (depth) at which to insert the `circuit_layer`.
 
         Returns
         -------
@@ -902,19 +1215,17 @@ class Circuit(object):
                     
     def insert_circuit(self,circuit,j):
         """
-        Inserts a circuit into this circuit. The circuit to insert can be over more qubits than
-        this circuit, as long as all qubits that are not part of this circuit are idling. In this
-        case, the idling qubits are all discarded. The circuit to insert can also be on less qubits
-        than this circuit: all other qubits are set to idling. So, the labels of the circuit to insert 
-        for all non-idling qubits must be a subset of the labels of this circuit.
+        Inserts a circuit into this circuit. The circuit to insert can be over
+        more qubits than this circuit, as long as all qubits that are not part
+        of this circuit are idling. In this case, the idling qubits are all
+        discarded. The circuit to insert can also be on less qubits than this
+        circuit: all other qubits are set to idling. So, the labels of the
+        circuit to insert for all non-idling qubits must be a subset of the
+        labels of this circuit.
 
-        Note the "idling" for the inserted circuit is decided according to the circuit.identity label,
-        and that all auxillary properties of this circuit are unchanged (e.g., the self.identity
-        over-rides the circuit.identity if they are different).
-        
         Parameters
         ----------
-        circuit : A Circuit object
+        circuit : Circuit
             The circuit to be inserted.
             
         j : int
@@ -939,8 +1250,9 @@ class Circuit(object):
         
     def append_circuit(self,circuit):
         """
-        Append a circuit to the end of this circuit. This circuit must satisfy the requirements
-        of the `insert_circuit()` method. See that method for more details.
+        Append a circuit to the end of this circuit. This circuit must satisfy
+        the requirements of :method:`insert_circuit()`. See that method for
+        more details.
         
         Parameters
         ----------
@@ -956,8 +1268,9 @@ class Circuit(object):
         
     def prefix_circuit(self,circuit):
         """
-        Prefix a circuit to the end of this circuit. This circuit must satisfy the requirements
-        of the `insert_circuit()` method. See that method for more details.
+        Prefix a circuit to the beginning of this circuit. This circuit must
+        satisfy the requirements of the :method:`insert_circuit()`. See that
+        method for more details.
         
         Parameters
         ----------
@@ -967,18 +1280,16 @@ class Circuit(object):
         Returns
         -------
         None
-
         """  
         self.insert_circuit(circuit,0)
 
         
     def tensor_circuit(self, circuit, line_order=None):
         """
-        Tensors a circuit to this circuit. It creates a circuit that consists of the current
-        circuit in parallel with the circuit of `circuit`. The line_labels of `circuit` must
-        be disjoint from the line_labels of this circuit, as otherwise applying the circuits
-        in parallel does not make sense. Note that the `identity` label of this circuit must
-        be the same as the `identity` label of `circuit`.
+        Tensors a circuit to this circuit. That is, it adds `circuit` to this
+        circuit as new lines.  The line labels of `circuit` must be disjoint
+        from the line labels of this circuit, as otherwise applying the circuits
+        in parallel does not make sense. 
 
         Parameters
         ----------
@@ -1025,11 +1336,26 @@ class Circuit(object):
         self.line_labels = new_line_labels # essentially just reorders labels if needed
 
     def replace_layer_with_circuit(self, circuit, j):
-        """ TODO: docstring """
+        """
+        Replaces the `j`-th layer of this circuit with `circuit`.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to insert
+        
+        j : int
+            The layer index to replace.
+
+        Returns
+        -------
+        None
+        """
         del self[j]
         self.insert_labels_into_layers(circuit,j)
-                       
-    def replace_gatename(self, old_gatename, new_gatename): #THIS module only
+
+        
+    def replace_gatename(self, old_gatename, new_gatename):
         """
         Changes the *name* of a gate throughout this Circuit.
 
@@ -1128,11 +1454,6 @@ class Circuit(object):
             cancel / combine gates. E.g., one key-value pair might be  ('Gh','Gh') : 'I', to signify that two Hadamards c
             ompose to the idle gate 'Gi'. See the depth_compression() method for more details.
 
-        identity : str, optional
-            A new name for the identity/idle gate. If not None, we set self.identity = identity and rename any gates
-            that have the old identity name with the new identity name -- unless there is a compilation provided for
-            gates with the old identity name; compilations for the old identity take precedence over this renaming
-            method.
        
         Returns
         -------
@@ -1183,7 +1504,7 @@ class Circuit(object):
 
     def map_names_inplace(self, mapper):
         """
-        The names of all of the simple labels are updated according to 
+        The names of all of the simple labels are updated in-place according to
         the mapping function `mapper`.
 
         Parameters
@@ -1252,6 +1573,21 @@ class Circuit(object):
         self._labels = map_sslbls(self._labels)
 
     def map_state_space_labels(self, mapper):
+        """
+        Creates and returns a new Circuit whereby The names of all of the simple
+        labels are updated according to the mapping function `mapper`.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing gate name values
+            and whose values are the new names (strings) or a function 
+            which takes a single (existing name) argument and returns a new name.
+
+        Returns
+        -------
+        Circuit
+        """
         mapper_func = lambda line_label: mapper[line_label] \
             if isinstance(mapper, dict) else mapper(line_label)
         mapped_line_labels = tuple(map(mapper_func,self.line_labels))
@@ -1279,9 +1615,11 @@ class Circuit(object):
 
     def delete_idling_lines(self):
         """
-        Removes from the circuit all lines that are idling at every layer. These
-        are the lines in the circuit whereby every gate has the name self.identity,
-        which is by default 'Gi'.
+        Removes from this circuit all lines that are idling at every layer.
+
+        Returns
+        -------
+        None
         """
         assert(not self._static),"Cannot edit a read-only circuit!"
         if self._static:
@@ -1299,19 +1637,23 @@ class Circuit(object):
                                   if x in all_sslbls]) # preserve order
 
         
-    def replace_with_idling_wire(self, line_label):
+    def replace_with_idling_line(self, line_label, clear_straddlers=True):
         """
-        Converts the specified wire to an idling wire, by changing all
-        gates to the identity gate. If there are any multi-qubit gates
-        acting on this wire, they are converted to idles on qubits on
-        which they act.
+        Converts the specified line to an idling line, by removing all
+        its gates. If there are any multi-qubit gates acting on this line,
+        this function will raise an error when `clear_straddlers=False`.
 
         Parameters
         ----------
         line_label: str or int
-            The label of the line/wire to convert to an idling wire.
+            The label of the line to convert to an idling line.
+
+        clear_straddlers : bool, optional
+            Whether or not gates which straddle the `line_label` should also
+            be cleared.  If `False` and straddling gates exist, an error
+            will be raised.
         """
-        self.clear_labels(lines=line_label)
+        self.clear_labels(lines=line_label, clear_straddlers=clear_straddlers)
 
     #TODO REMOVE
     #def insert_idling_wires(self, all_line_labels): # THIS module only
@@ -1360,7 +1702,7 @@ class Circuit(object):
         self._labels = list(reversed(self._labels)) # reverses the layer order
         #FUTURE: would need to reverse each layer too, if layer can have *sublayers*
 
-    def combine_oneQgates(self, oneQgate_relations): #THIS module only
+    def combine_oneQgates(self, oneQgate_relations):
         """
         Compresses sequences of 1-qubit gates in the circuit, using the provided gate relations.
         One of the steps of the depth_compression() method, and in most cases that method will
@@ -1457,10 +1799,11 @@ class Circuit(object):
         return compression_implemented
 
 
-    def shift_gates_forward(self): #THIS module only
+    def shift_gates_forward(self):
         """
-        All gates are shifted forward (left) as far as is possible without any knowledge
-        of what any of the gates are.  One of the steps of the depth_compression() method.
+        Shifted all gates forward (left) as far as is possible without any
+        knowledge of what any of the gates are.  One of the steps of the
+        `depth_compression()` method.
         
         Returns
         -------
@@ -1508,10 +1851,10 @@ class Circuit(object):
         return compression_implemented
     
 
-    def delete_idle_layers(self): #THIS module only
+    def delete_idle_layers(self):
         """
-        Deletes all layers in the circuit that consist of only idle layers. One of the steps of the
-        depth_compression() method. 
+        Deletes all layers in this circuit that contain no gate operations. One
+        of the steps of the `depth_compression()` method. 
 
         Returns
         -------
@@ -1532,13 +1875,13 @@ class Circuit(object):
     
     def compress_depth(self, oneQgate_relations=None, verbosity=0):
         """
-        Compresses the depth of a circuit using very simple re-write rules. 
+        Compresses the depth of this circuit using very simple re-write rules.
 
-        1. If `oneQgate_relations` is provided, all sequences of 1-qubit gates in the  circuit 
-           are compressed as far as is possible using only the pair-wise combination rules
-           provided by this dict (see below).
-        2. All gates are shifted forwarded as far as is possible without any knowledge of what 
-           any of the gates are, except that the self.identity gates (idle gates) can be replaced.
+        1. If `oneQgate_relations` is provided, all sequences of 1-qubit gates
+           in the  circuit are compressed as far as is possible using only the
+           pair-wise combination rules provided by this dict (see below).
+        2. All gates are shifted forwarded as far as is possible without any
+           knowledge of what any of the gates are.
         3. All idle-only layers are deleted.
         
         Parameters
@@ -1594,9 +1937,8 @@ class Circuit(object):
 
     def get_layer(self,j):
         """
-        Returns the layer, as a list, at depth j. This list contains all gates
-        in the layer except self.identity gates, and contains each gate only
-        once (although multi-qubit gates appear on multiple lines of the circuit).
+        Returns the layer, as a :class:`Label`, at depth j. This label contains
+        as components all the (non-identity) gates in the layer..
     
         Parameters
         ----------
@@ -1605,18 +1947,17 @@ class Circuit(object):
     
         Returns
         -------
-        List of Labels
-            Each gate in the layer, except self.identity gates, once and only once.
+        Label
         """
         assert(j >= 0 and j < self.depth()), "Circuit layer label invalid! Circuit is only of depth {}".format(self.depth())
         return self[j]
 
+    
     def get_layer_with_idles(self,j,idleGateName='I'):
         """
-        Returns the layer, as a list, at depth j. This list contains all gates
-        in the layer *including* self.identity gates, and contains each gate only
-        once (although multi-qubit gates appear on multiple lines of the circuit).
-        To get a layer without the self.identity gates, use the `get_layer()` method.
+        Returns the layer, as a :class:`Label`, at depth j. This list contains
+        all the gates in the layer *including* `idleGateName` gates wherever 
+        there is an identity operation.
 
         Parameters
         ----------
@@ -1625,8 +1966,7 @@ class Circuit(object):
 
         Returns
         -------
-        List of Labels
-            Each gate in the layer, except self.identity gates, once and only once.
+        Label
         """
         layer_lbl = self.get_layer(j) # (a Label)
         if layer_lbl.sslbls is None:
@@ -1641,9 +1981,7 @@ class Circuit(object):
     
     def is_line_idling(self,line_label):
         """
-        Wether the "line" in question is idling in *every* cirucuit layer.
-        Idling is specified by gate with the name self.identity. All other
-        gates are not considered to be an idle.
+        Whether the line in question is idling in *every* circuit layer.
         
         Parameters
         ----------
@@ -1652,7 +1990,7 @@ class Circuit(object):
 
         Returns
         -------
-        Bool
+        bool
             True if the line is idling. False otherwise.
         """
         if self._static:
@@ -1680,10 +2018,8 @@ class Circuit(object):
         """
         Returns the circuit size, which is the sum of the sizes of all the
         gates in the circuit. A gate that acts on n-qubits has a size of n, 
-        with the exception of the special idle with the name self.identity,
-        which has a size of 0. Hence, the circuit size = (circuit depth) X 
-        (the number of lines) - (the number of self.identity gates in the
-        circuit).
+        with the exception of the idle which has a size of 0. Hence, the
+        circuit is given by: `size = depth * num_lines - num_1Q_idles`.
         
         Returns
         -------
@@ -1720,9 +2056,16 @@ class Circuit(object):
 
     def nQgate_count(self,nQ):
         """
-        The number of multi-qubit gates in the circuit. (Note that this cannot
-        distinguish between "true" multi-qubit gates and gate that have been defined
-        to act on more than one qubit but that represent some tensor-product gate.)
+        The number of `nQ`-qubit gates in the circuit. (Note that this cannot
+        distinguish between "true" `nQ`-qubit gates and gate that have been
+        defined to act on `nQ` qubits but that represent some tensor-product
+        gate.)
+
+        Parameters
+        ----------
+        nQ : int
+            The qubit-count of the gates to count.  For example, if `nQ == 3`,
+            this function returns the number of 3-qubit gates.
         
         Returns
         -------
@@ -1746,9 +2089,10 @@ class Circuit(object):
 
     def multiQgate_count(self):
         """
-        The number of multi-qubit gates in the circuit. (Note that this cannot
-        distinguish between "true" multi-qubit gates and gate that have been defined
-        to act on more than one qubit but that represent some tensor-product gate.)
+        The number of multi-qubit (2+ qubits) gates in the circuit. (Note that
+        this cannot distinguish between "true" multi-qubit gates and gate that
+        have been defined to act on more than one qubit but that represent some
+        tensor-product gate.)
         
         Returns
         -------
@@ -1891,7 +2235,7 @@ class Circuit(object):
     def write_Qcircuit_tex(self, filename): #TODO
         """
         Writes this circuit into a file, containing LaTex that will diplay this circuit using the 
-        Qcircuit.tex LaTex import (running the LaTex requires the Qcircuit.tex file).
+        Qcircuit.tex LaTex import (running LaTex requires the Qcircuit.tex file).
         
         Parameters
         ----------
@@ -1948,7 +2292,7 @@ class Circuit(object):
 
     def convert_to_quil(self, gatename_conversion=None, qubit_conversion=None, readout_conversion=None): #TODO
         """
-        Converts a circuit to a quil string.
+        Converts this circuit to a quil string.
 
         Parameters
         ----------
@@ -2075,7 +2419,7 @@ class Circuit(object):
 
     def convert_to_openqasm(self, gatename_conversion=None, qubit_conversion=None): #TODO
         """
-        Converts a circuit to an openqasm string.
+        Converts this circuit to an openqasm string.
 
         Parameters
         ----------
@@ -2179,8 +2523,9 @@ class Circuit(object):
         """
         Compute the outcome probabilities of this Circuit using `model` as a
         model for the gates. The order of the outcome strings (e.g., '0100') is
-        w.r.t to the ordering of the qubits in the circuit. That is, the ith element
-        of the outcome string corresponds to the qubit with label self.qubit_labels[i].
+        w.r.t. to the ordering of the qubits in the circuit. That is, the ith
+        element of the outcome string corresponds to the qubit with label
+        `self.qubit_labels[i]`.
 
         Parameters
         ----------
@@ -2243,11 +2588,12 @@ class Circuit(object):
     
     def done_editing(self):
         """
-        Make this Circuit read-only, so that it can be hashed (used as a
+        Make this circuit read-only, so that it can be hashed (e.g. used as a
         dictionary key).  
 
-        This is done automatically when attempting to hash a Circuit for the
-        first time, so there's usually no need to call this function.
+        This is done automatically when attempting to hash a :class:`Circuit`
+        for the first time, so there's calling this function can usually be
+        skipped (but it's good for code clarity).
 
         Returns
         -------

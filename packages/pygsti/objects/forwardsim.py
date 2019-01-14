@@ -34,7 +34,7 @@ class ForwardSimulator(object):
     fundamental operations.
     """
 
-    def __init__(self, dim, compiled_op_server, paramvec):
+    def __init__(self, dim, simplified_op_server, paramvec):
         """
         Construct a new ForwardSimulator object.
 
@@ -57,7 +57,7 @@ class ForwardSimulator(object):
             for use in computations.
         """
         self.dim = dim
-        self.cos = compiled_op_server
+        self.sos = simplified_op_server
 
         #Conversion of labels -> integers for speed & C-compatibility
         #self.operation_lookup = { lbl:i for i,lbl in enumerate(gates.keys()) }
@@ -70,7 +70,7 @@ class ForwardSimulator(object):
         
         self.paramvec = paramvec
         self.Np = len(paramvec)
-        self.evotype = compiled_op_server.get_evotype()
+        self.evotype = simplified_op_server.get_evotype()
 
     def to_vector(self):
         """
@@ -94,9 +94,9 @@ class ForwardSimulator(object):
         # since only references to preps, effects, and gates are held
         # by the calculator class.  ORDER is important, as elements of
         # POVMs and Instruments rely on a fixed from_vector ordering
-        # of their compiled effects/gates.
+        # of their simplified effects/gates.
         self.paramvec = v.copy()
-        self.cos.from_vector(v)
+        self.sos.from_vector(v)
 
         #Re-init reps for computation
         #self.operationreps = { i:self.operations[lbl].torep() for lbl,i in self.operation_lookup.items() }
@@ -104,7 +104,7 @@ class ForwardSimulator(object):
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
-    def probs(self, compiled_circuit, clipTo=None):
+    def probs(self, simplified_circuit, clipTo=None):
         """
         Construct a dictionary containing the probabilities of every spam label
         given a operation sequence.
@@ -125,7 +125,7 @@ class ForwardSimulator(object):
             for each spam label (string) SL.
         """
         probs = _ld.OutcomeLabelDict()
-        raw_dict, outcomeLbls = compiled_circuit
+        raw_dict, outcomeLbls = simplified_circuit
         iOut = 0 #outcome index
 
         for raw_circuit, spamTuples in raw_dict.items():
@@ -151,7 +151,7 @@ class ForwardSimulator(object):
         return probs
 
 
-    def dprobs(self, compiled_circuit, returnPr=False,clipTo=None):
+    def dprobs(self, simplified_circuit, returnPr=False,clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -176,7 +176,7 @@ class ForwardSimulator(object):
             for each spam label (string) SL.
         """
         dprobs = { }
-        raw_dict, outcomeLbls = compiled_circuit
+        raw_dict, outcomeLbls = simplified_circuit
         iOut = 0 #outcome index
         for raw_circuit, spamTuples in raw_dict.items():
             for spamTuple in spamTuples:
@@ -187,7 +187,7 @@ class ForwardSimulator(object):
 
 
 
-    def hprobs(self, compiled_circuit, returnPr=False, returnDeriv=False, clipTo=None):
+    def hprobs(self, simplified_circuit, returnPr=False, returnDeriv=False, clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given operation sequence.
@@ -216,7 +216,7 @@ class ForwardSimulator(object):
             for each spam label (string) SL.
         """
         hprobs = { }
-        raw_dict, outcomeLbls = compiled_circuit
+        raw_dict, outcomeLbls = simplified_circuit
         iOut = 0 #outcome index
         for raw_circuit, spamTuples in raw_dict.items():
             for spamTuple in spamTuples:
@@ -234,7 +234,7 @@ class ForwardSimulator(object):
         Parameters
         ----------
         circuits : list of Circuits
-            The list of (uncompiled) original operation sequences.
+            The list of (non-simplified) original operation sequences.
 
         evalTree : EvalTree
             An evalution tree corresponding to `circuits`.
@@ -267,12 +267,8 @@ class ForwardSimulator(object):
         -------
         probs : dictionary
             A dictionary such that `probs[opstr]` is an ordered dictionary of
-            `(outcome, p)` tuples, where `outcome` is a tuple of labels
-            and `p` is the corresponding probability.
+            outcome probabilities whose keys are (tuples of) outcome labels.
         """
-        #TODO: correct these docstrings - probs[opstr] is an ordered dictionary
-        #  of *outcome probabilities* whose keys are (tuples of) outcome labels.
-
         vp = _np.empty(evalTree.num_final_elements(),'d')
         if smartc:
             smartc.cached_compute(self.bulk_fill_probs, vp, evalTree,
@@ -301,7 +297,7 @@ class ForwardSimulator(object):
         Parameters
         ----------
         circuits : list of Circuits
-            The list of (uncompiled) original operation sequences.
+            The list of (non-simplified) original operation sequences.
 
         evalTree : EvalTree
             An evalution tree corresponding to `circuits`.
@@ -352,11 +348,11 @@ class ForwardSimulator(object):
         -------
         dprobs : dictionary
             A dictionary such that `probs[opstr]` is an ordered dictionary of
-            `(outcome, dp, p)` tuples, where `outcome` is a tuple of labels,
-            `p` is the corresponding probability, and `dp` is an array containing
-            the derivative of `p` with respect to each parameter.  If `returnPr`
-            if False, then `p` is not included in the tuples (so they're just
-            `(outcome, dp)`).
+            `(dp, p)` tuples whose keys are (tuples of) outcome labels,
+            where `p` is the corresponding probability, and `dp` is an array
+            containing the derivative of `p` with respect to each parameter.
+            If `returnPr` is False, then `p` is not included in the tuples
+            (so values are just `dp`).
         """
         nElements = evalTree.num_final_elements()
         nDerivCols = self.Np
@@ -394,7 +390,7 @@ class ForwardSimulator(object):
         Parameters
         ----------
         circuits : list of Circuits
-            The list of (uncompiled) original operation sequences.
+            The list of (non-simplified) original operation sequences.
 
         evalTree : EvalTree
             An evalution tree corresponding to `circuits`.
@@ -447,12 +443,14 @@ class ForwardSimulator(object):
         -------
         hprobs : dictionary
             A dictionary such that `probs[opstr]` is an ordered dictionary of
-            `(outcome, hp, dp, p)` tuples, where `outcome` is a tuple of labels,
-            `p` is the corresponding probability, `dp` is a 1D array containing
-            the derivative of `p` with respect to each parameter, and `hp` is a
-            2D array containing the Hessian of `p` with respect to each parameter.
-            If `returnPr` if False, then `p` is not included in the tuples.
-            If `returnDeriv` if False, then `dp` is not included in the tuples.
+            `(hp, dp, p)` tuples whose keys are (tuples of) outcome labels,
+            where `p` is the corresponding probability, `dp` is an array
+            containing the derivative of `p` with respect to each parameter,
+            and `hp` is a 2D array containing the Hessian of `p` with respect
+            to each parameter.  If `returnPr` is False, then `p` is not
+            included in the tuples.  If `returnDeriv` if False, then `dp` is
+            not included in the tuples (if both are false then values are
+            just `hp`, and not a tuple).
         """
         nElements = evalTree.num_final_elements()
         nDerivCols1 = self.Np if (wrtFilter1 is None) \
@@ -565,16 +563,16 @@ class ForwardSimulator(object):
         Compute the outcome probabilities for an entire tree of operation sequences.
 
         This routine fills a 1D array, `mxToFill` with the probabilities
-        corresponding to the *compiled* operation sequences found in an evaluation
+        corresponding to the *simplified* operation sequences found in an evaluation
         tree, `evalTree`.  An initial list of (general) :class:`Circuit`
-        objects is *compiled* into a lists of gate-only sequences along with
+        objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently
         compute the gate-only sequences.  This routine fills in `mxToFill`, which
         must have length equal to the number of final elements (this can be 
         obtained by `evalTree.num_final_elements()`.  To interpret which elements
         correspond to which strings and outcomes, you'll need the mappings 
-        generated when the original list of `Circuits` was compiled.
+        generated when the original list of `Circuits` was simplified.
 
         Parameters
         ----------
@@ -583,7 +581,7 @@ class ForwardSimulator(object):
           total number of computed elements (i.e. evalTree.num_final_elements())
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
         clipTo : 2-tuple, optional
@@ -627,7 +625,7 @@ class ForwardSimulator(object):
           number of model parameters.
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional
@@ -697,7 +695,7 @@ class ForwardSimulator(object):
           the number of selected gate-set parameters (by wrtFilter1 and wrtFilter2).
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional

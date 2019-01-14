@@ -173,7 +173,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         return self.__reduce__()
 
         
-    def compile_operations(self,prefix=""):
+    def simplify_operations(self,prefix=""):
         """
         Returns a dictionary of gates that belong to the Instrument's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
@@ -184,21 +184,21 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         ----------
         prefix : str
             A string, usually identitying this instrument, which may be used
-            to prefix the compiled gate keys.
+            to prefix the simplified gate keys.
 
         Returns
         -------
         OrderedDict of Gates
         """
-        #Create a "compiled" (Model-referencing) set of element gates
+        #Create a "simplified" (Model-referencing) set of element gates
         if prefix: prefix += "_"
-        compiled = _collections.OrderedDict()
+        simplified = _collections.OrderedDict()
         for k,g in self.items():
             comp = g.copy()
             comp.set_gpindices( _gm._compose_gpindices(self.gpindices,
                                                        g.gpindices), self.parent)
-            compiled[prefix + k] = comp
-        return compiled
+            simplified[prefix + k] = comp
+        return simplified
 
 
     def num_elements(self):
@@ -445,7 +445,7 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         return self.__reduce__()
 
 
-    def compile_operations(self, prefix=""):
+    def simplify_operations(self, prefix=""):
         """
         Returns a dictionary of gates that belong to the Instrument's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
@@ -456,27 +456,27 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
         ----------
         prefix : str
             A string, usually identitying this instrument, which may be used
-            to prefix the compiled gate keys.
+            to prefix the simplified gate keys.
 
         Returns
         -------
         OrderedDict of Gates
         """
-        #Create a "compiled" (Model-referencing) set of param gates
-        param_compiled = []
+        #Create a "simplified" (Model-referencing) set of param gates
+        param_simplified = []
         for g in self.param_ops:
             comp = g.copy()
             comp.set_gpindices( _gm._compose_gpindices(self.gpindices,
                                                        g.gpindices), self.parent)
-            param_compiled.append(comp)
+            param_simplified.append(comp)
 
-        # Create "compiled" elements, which infer their parent and
+        # Create "simplified" elements, which infer their parent and
         # gpindices from the set of "param-gates" they're constructed with.
         if prefix: prefix += "_"
-        compiled = _collections.OrderedDict(
-            [ (prefix + k, _op.TPInstrumentOp(param_compiled,i)) 
+        simplified = _collections.OrderedDict(
+            [ (prefix + k, _op.TPInstrumentOp(param_simplified,i)) 
               for i,k in enumerate(self.keys()) ] )
-        return compiled
+        return simplified
 
     def num_elements(self):
         """
