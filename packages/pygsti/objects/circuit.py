@@ -1655,41 +1655,7 @@ class Circuit(object):
         """
         self.clear_labels(lines=line_label, clear_straddlers=clear_straddlers)
 
-    #TODO REMOVE
-    #def insert_idling_wires(self, all_line_labels): # THIS module only
-    #    """
-    #    Creates more lines (wires/qubits) in the circuit, with these new lines 
-    #    consisting of idle gates (with the name self.identity)
-    #
-    #    Parameters
-    #    ----------
-    #    all_line_labels : list
-    #        A list containing all of the current circuit line labels (self.line_labels),
-    #        along with further labels for all of the additional all-idle lines. The circuit
-    #        has lines that are ordered according to the ordering of this list (but note that
-    #        line ordering is irrevelant for most purposes).
-    #
-    #    Returns
-    #    -------
-    #    None
-    #    """
-    #    assert(not self._static),"Cannot edit a read-only circuit!"
-    #
-    #    old_line_items = _copy.deepcopy(self.line_items)
-    #    old_line_labels = _copy.deepcopy(self.line_labels)
-    #    depth = self.depth()
-    #
-    #    self.line_labels = all_line_labels
-    #    self.line_items = []
-    #
-    #    for llabel in all_line_labels:
-    #        if llabel in old_line_labels:
-    #            self.line_items.append(old_line_items[old_line_labels.index(llabel)])
-    #        else:
-    #            self.line_items.append([_Label(self.identity,llabel) for i in range(depth)])
-    #
-    #    self._tup_dirty = self._str_dirty = True        
-         
+        
     def reverse(self):
         """
         Reverses the order of the circuit.

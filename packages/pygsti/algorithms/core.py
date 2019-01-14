@@ -267,7 +267,6 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
                     % (guessTrunc,len(guess_s)), 2)
         for sval in guess_s: printer.log(sval,2)
         printer.log('',2)
-        #REMOVE lgstModel._check_paramvec()
 
         if guessTrunc < trunc:  # if the dimension of the gauge-guess model is smaller than the matrices being estimated, pad B with identity
             printer.log("LGST: Padding target B with sqrt of low singular values of I_tilde: \n", 2)
@@ -283,7 +282,6 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
             ggEl = _objs.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
             lgstModel.transform(ggEl)
 
-        #REMOVE lgstModel._check_paramvec()
         # Force lgstModel to have gates, preps, & effects parameterized in the same way as those in
         # guessModelForGauge, but we only know how to do this when the dimensions of the target and
         # created model match.  If they don't, it doesn't make sense to increase the target model
@@ -333,9 +331,6 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
                             new_effects.append( (effectLabel,new_vec) )
                         lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM( new_effects )
 
-                    #REMOVE lgstModel._check_paramvec()
-
-
 
             #Also convey default gauge group & calc class from guessModelForGauge
             lgstModel.default_gauge_group = \
@@ -350,7 +345,6 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     printer.log(lgstModel,3)
     #    for line in str(lgstModel).split('\n'):
     #       printer.log(line, 3)
-    #REMOVE lgstModel._check_paramvec()
     return lgstModel
 
 def _lgst_matrix_dims(mdl, prepStrs, effectStrs):
@@ -1074,14 +1068,6 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         if _np.linalg.norm(mdl.to_vector()-v_cmp) > 1e-6:
                 raise ValueError("MPI ERROR: *different* MC2GST start models" + # pragma: no cover
                              " given to different processors!")                   # pragma: no cover
-
-        #OLD: TODO REMOVE
-        #mdl_cmp = comm.bcast(mdl if (comm.Get_rank() == 0) else None, root=0)
-        #try:
-        #    if mdl.frobeniusdist(mdl_cmp) > 1e-6:
-        #        raise ValueError("MPI ERROR: *different* MC2GST start models" + # pragma: no cover
-        #                     " given to different processors!")                   # pragma: no cover
-        #except NotImplementedError: pass # OK if some gates (maps) don't implement this
 
     #convert list of Circuits to list of raw tuples since that's all we'll need
     if len(circuitsToUse) > 0 and \
@@ -2293,14 +2279,6 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         if _np.linalg.norm(mdl.to_vector()-v_cmp) > 1e-6:
                 raise ValueError("MPI ERROR: *different* MC2GST start models" + # pragma: no cover
                              " given to different processors!")                   # pragma: no cover
-
-        #OLD TODO REMOVE
-        #mdl_cmp = comm.bcast(mdl if (comm.Get_rank() == 0) else None, root=0)
-        #try:
-        #    if mdl.frobeniusdist(mdl_cmp) > 1e-6:
-        #        raise ValueError("MPI ERROR: *different* MLGST start models" +
-        #                         " given to different processors!") # pragma: no cover
-        #except NotImplementedError: pass # OK if some gates (maps) don't implement this
 
         if forcefn_grad is not None:
             forcefn_cmp = comm.bcast(forcefn_grad if (comm.Get_rank() == 0) else None, root=0)

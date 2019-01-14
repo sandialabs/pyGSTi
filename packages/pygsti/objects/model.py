@@ -98,7 +98,6 @@ class Model(object):
         self._paramlbls = None # a placeholder for FUTURE functionality
         self._need_to_rebuild = True #whether we call _rebuild_paramvec() in to_vector() or num_params()
         self.dirty = False #indicates when objects and _paramvec may be out of sync
-        #OLD TODO REMOVE self._rebuild_paramvec()
         
         self.uuid = _uuid.uuid4() # a Model's uuid is like a persistent id(), useful for hashing
         super(Model, self).__init__()
@@ -348,22 +347,6 @@ class Model(object):
           #since it's likely we'll set at least one of our object's .dirty flags
           # to True (and said object may have parent=None and so won't
           # auto-propagate up to set this model's dirty flag (self.dirty)
-
-        
-    #TODO REMOVE: unneeded now that we do *lazy* rebuilding of paramvec (now set self.need_to_rebuild=True)
-    #def _update_paramvec(self, modified_obj=None):
-    #    """Updates self._paramvec after a member of this Model is modified"""
-    #    self._rebuild_paramvec() # prepares _paramvec & gpindices
-    #
-    #    #update parameters changed by modified_obj
-    #    self._paramvec[modified_obj.gpindices] = modified_obj.to_vector()
-    #
-    #    #re-initialze any members that also depend on the updated parameters
-    #    modified_indices = set(modified_obj.gpindices_as_array())
-    #    for _,obj in self._iter_parameterized_objs():
-    #        if obj is modified_obj: continue
-    #        if modified_indices.intersection(obj.gpindices_as_array()):
-    #            obj.from_vector(self._paramvec[obj.gpindices])
 
     def _print_gpindices(self):
         print("PRINTING MODEL GPINDICES!!!")

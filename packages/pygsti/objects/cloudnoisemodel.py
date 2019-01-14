@@ -224,12 +224,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         std_unitaries = _itgs.get_standard_gatename_unitaries()
             
         gatedict = _collections.OrderedDict()
-        for name in gate_names:
-            #TODO REMOVE
-            #if name == "Gi": # special case: Gi as a gate *name* is interpreted as a
-            #    gatedict[name] = "PerfectIdle" # perfect idle operation/placeholder.
-            #    continue
-                
+        for name in gate_names:                
             U = nonstd_gate_unitaries.get(name, std_unitaries.get(name,None))
             if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
             gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
@@ -976,16 +971,6 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         Sum = _op.ComposedErrorgen
         #print("DB: CloudNoiseLayerLizard building gate %s for %s w/comp-type %s" %
         #      (('matrix' if dense else 'map'), str(oplabel), self.errcomp_type) )
-
-        #TODO REMOVE
-        #if self.model.auto_idle_gatename is not None:
-        #    component_labels = []
-        #    for l in layerlabel.components:
-        #        if l.name == self.model.auto_idle_gatename \
-        #                and l not in existing_ops:
-        #            continue #skip perfect idle placeholders
-        #        components_labels.append(l)
-        #else:
         
         components = layerlbl.components
         if len(components) == 0 or layerlbl == 'Gi': # idle!

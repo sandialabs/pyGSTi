@@ -64,7 +64,6 @@ class ExplicitOpModel(_mdl.Model):
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
                  povm_prefix="M", instrument_prefix="I", sim_type="auto",
                  evotype="densitymx"):
-                 #REMOVE auto_idle_name=None):
         """
         Initialize an ExplictOpModel.
 
@@ -541,10 +540,6 @@ class ExplicitOpModel(_mdl.Model):
 
         if 'uuid' not in stateDict:
             self.uuid = _uuid.uuid4() #create a new uuid
-
-        #TODO REMOVE
-        #if 'auto_idle_gatename' not in stateDict:
-        #    self.auto_idle_gatename = None
 
         #Additionally, must re-connect this model as the parent
         # of relevant OrderedDict-derived classes, which *don't*
@@ -1648,11 +1643,6 @@ class ExplicitOpModel(_mdl.Model):
                   else None
 
         srep_dict = {}
-
-        #TODO REMOVE
-        #if self.auto_idle_gatename is not None:
-        #    # Special case: gatename for a 1-qubit perfect idle (not actually stored as gates)
-        #    srep_dict[self.auto_idle_gatename] = _symp.unitary_to_symplectic(_np.identity(2,'d'))
 
         for gl,gate in self.operations.items():
             if (gfilter is not None) and (gl not in gfilter): continue

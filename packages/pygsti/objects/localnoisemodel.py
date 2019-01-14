@@ -176,11 +176,6 @@ class LocalNoiseModel(_ImplicitOpModel):
         
         gatedict = _collections.OrderedDict()
         for name in gate_names:
-            #TODO REMOVE
-            #if name == "Gi": # special case: Gi as a gate *name* is interpreted as a
-            #    gatedict[name] = "PerfectIdle" # perfect idle operation/placeholder.
-            #    continue
-                
             U = nonstd_gate_unitaries.get(name, std_unitaries.get(name,None))
             if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
             if evotype in ("densitymx","svterm","cterm"): 

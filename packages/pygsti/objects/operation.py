@@ -4705,9 +4705,6 @@ class ComposedErrorgen(LinearOperator):
             factor_local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, eg.gpindices)
             eg.from_vector( v[factor_local_inds] )
-        #OLD TODO REMOVE
-        #if self._evotype == "densitymx":
-        #    self._construct_errgen_matrix()        
         self.dirty = True
 
 
@@ -4849,9 +4846,6 @@ class EmbeddedErrorgen(EmbeddedOp):
         None
         """
         EmbeddedOp.from_vector(self, v) 
-        #OLD TODO REMOVE
-        #if self._evotype == "densitymx":
-        #    self._construct_errgen_matrix()        
         self.dirty = True
 
 
@@ -5433,89 +5427,6 @@ class LindbladErrorgen(LinearOperator):
         hamCoeffs, otherCoeffs = _gt.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
-
-        #TODO REMOVE
-        #bsH = self.ham_basis_size
-        #bsO = self.other_basis_size
-        #
-        ## self.paramvals = [hamCoeffs] + [otherParams]
-        ##  where hamCoeffs are *real* and of length d2-1 (self.dim == d2)
-        #if bsH > 0:
-        #    hamCoeffs = self.paramvals[0:bsH-1]
-        #    nHam = bsH-1
-        #else:
-        #    nHam = 0
-        #
-        ##built up otherCoeffs based on self.param_mode and self.nonham_mode
-        #if bsO > 0:
-        #    if self.nonham_mode == "diagonal":
-        #        otherParams = self.paramvals[nHam:]
-        #        expected_shape = (1,) if (self.param_mode in ("depol","reldepol")) else (bsO-1,)
-        #        assert(otherParams.shape == expected_shape)
-        #        
-        #        if self.param_mode in ("cptp","depol"):
-        #            otherCoeffs = otherParams**2 #Analagous to L*L_dagger
-        #        else: # "unconstrained"
-        #            otherCoeffs = otherParams
-        #            
-        #    elif self.nonham_mode == "diag_affine":
-        #
-        #        if self.param_mode in ("depol","reldepol"):
-        #            otherParams = self.paramvals[nHam:].reshape((1+bsO-1,))
-        #            otherCoeffs = _np.empty((2,bsO-1), 'd') #leave as real type b/c doesn't have complex entries
-        #            if self.param_mode == "depol":
-        #                otherCoeffs[0,:] = otherParams[0]**2
-        #            else:
-        #                otherCoeffs[0,:] = otherParams[0]
-        #            otherCoeffs[1,:] = otherParams[1:]
-        #
-        #        else:
-        #            otherParams = self.paramvals[nHam:].reshape((2,bsO-1))
-        #            if self.param_mode == "cptp":
-        #                otherCoeffs = otherParams.copy()
-        #                otherCoeffs[0,:] = otherParams[0]**2
-        #            else: # param_mode == "unconstrained"
-        #                #otherCoeffs = _np.empty((2,bsO-1),'complex')
-        #                otherCoeffs = otherParams
-        #                
-        #    else: # self.nonham_mode == "all"
-        #        otherParams = self.paramvals[nHam:].reshape((bsO-1,bsO-1))
-        #
-        #        if self.param_mode == "cptp":
-        #            #  otherParams is an array of length (bs-1)*(bs-1) that
-        #            #  encodes a lower-triangular matrix "Lmx" via:
-        #            #  Lmx[i,i] = otherParams[i,i]
-        #            #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
-        #            for i in range(bsO-1):
-        #                self.Lmx[i,i] = otherParams[i,i]
-        #                for j in range(i):
-        #                    self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
-        #    
-        #            #The matrix of (complex) "other"-coefficients is build by
-        #            # assuming Lmx is its Cholesky decomp; means otherCoeffs
-        #            # is pos-def.
-        #
-        #            # NOTE that the Cholesky decomp with all positive real diagonal
-        #            # elements is *unique* for a given positive-definite otherCoeffs
-        #            # matrix, but we don't care about this uniqueness criteria and so
-        #            # the diagonal els of Lmx can be negative and that's fine -
-        #            # otherCoeffs will still be posdef.
-        #            otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
-        #
-        #            #DEBUG - test for pos-def
-        #            #evals = _np.linalg.eigvalsh(otherCoeffs)
-        #            #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
-        #            #assert(all([ev >= -DEBUG_TOL for ev in evals]))
-        #
-        #        else: # param_mode == "unconstrained"
-        #            #otherParams holds otherCoeff real and imaginary parts directly
-        #            otherCoeffs = _np.empty((bsO-1,bsO-1),'complex')
-        #            for i in range(bsO-1):
-        #                otherCoeffs[i,i] = otherParams[i,i]
-        #                for j in range(i):
-        #                    otherCoeffs[i,j] = otherParams[i,j] +1j*otherParams[j,i]
-        #                    otherCoeffs[j,i] = otherParams[i,j] -1j*otherParams[j,i]
-        #END REMOVE
                             
         #Finally, build operation matrix from generators and coefficients:
         if self.sparse:
@@ -5525,12 +5436,10 @@ class LindbladErrorgen(LinearOperator):
                # the structure of a CSR matrix with 0-elements in all possible places
             data = _np.zeros(len(indices),'complex') # data starts at zero
             
-            #if bsH > 0: REMOVE
             if hamCoeffs is not None:
                 # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
                 _mt.csr_sum(data,hamCoeffs, self.hamGens, self.hamCSRSumIndices)
 
-            #if bsO > 0: REMOVE
             if otherCoeffs is not None:
                 if self.nonham_mode == "diagonal":
                     # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
@@ -5545,14 +5454,12 @@ class LindbladErrorgen(LinearOperator):
             lnd_error_gen = _sps.csr_matrix( (data, indices.copy(), indptr.copy()), shape=(N,N) ) #copies needed (?)
             
         else: #dense matrices
-            #if bsH > 0: REMOVE
             if hamCoeffs is not None:
                 #lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
                 lnd_error_gen = _np.tensordot(hamCoeffs, self.hamGens, (0,0))
             else:
                 lnd_error_gen = _np.zeros( (d2,d2), 'complex')
 
-            #if bsO > 0: REMOVE
             if otherCoeffs is not None:
                 if self.nonham_mode == "diagonal":
                     #lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
