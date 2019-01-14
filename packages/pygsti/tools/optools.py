@@ -1374,14 +1374,14 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
     """
 
     if isinstance(mxBasis,_Basis):
-        dims = mxBasis.dim.blockDims if isinstance(mxBasis,_Basis) else None
+        dims = mxBasis.dim.blockDims
         errgen_std = _bt.change_basis(errgen, mxBasis, "std", dims)
 
         #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
         errgen_std = _bt.resize_std_mx(errgen_std, 'expand', mxBasis.std_equivalent(),
                                        mxBasis.expanded_std_equivalent())
     else:
-        errgen_std = _bt.change_basis(errgen, mxBasis, "std", dims)
+        errgen_std = _bt.change_basis(errgen, mxBasis, "std", None)
     
     d2 = errgen_std.shape[0]
     d = int(_np.sqrt(d2))
