@@ -186,7 +186,7 @@ def tracedist(A, B):
 
 
 
-def diamonddist(A, B, mxBasis='gm', return_x=False):
+def diamonddist(A, B, mxBasis='pp', return_x=False):
     """
     Returns the approximate diamond norm describing the difference between gate
     matrices A and B given by :
@@ -361,7 +361,7 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
     else:
         return prob.value
 
-def jtracedist(A, B, mxBasis=None): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
+def jtracedist(A, B, mxBasis='pp'): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
     """
     Compute the Jamiolkowski trace distance between operation matrices A and B,
     given by:
@@ -381,14 +381,12 @@ def jtracedist(A, B, mxBasis=None): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
     """
-    if mxBasis is None:
-        mxBasis = _Basis('gm', int(round(_np.sqrt(A.shape[0]))))
     JA = _jam.fast_jamiolkowski_iso_std(A, mxBasis)
     JB = _jam.fast_jamiolkowski_iso_std(B, mxBasis)
     return tracedist(JA,JB)
 
 
-def entanglement_fidelity(A, B, mxBasis=None):
+def entanglement_fidelity(A, B, mxBasis='pp'):
     """
     Returns the "entanglement" process fidelity between gate
     matrices A and B given by :
@@ -417,15 +415,12 @@ def entanglement_fidelity(A, B, mxBasis=None):
         TrLambda = _np.trace( _np.dot(A, B.conjugate().T) ) # same as using _np.linalg.inv(B)
         d2 = A.shape[0]
         return TrLambda / d2
-    
-    if mxBasis is None:
-        mxBasis = _Basis('gm', int(round(_np.sqrt(A.shape[0]))))
-        
+            
     JA = _jam.jamiolkowski_iso(A, mxBasis)
     JB = _jam.jamiolkowski_iso(B, mxBasis)
     return fidelity(JA,JB)
 
-def average_gate_fidelity(A ,B, mxBasis=None):
+def average_gate_fidelity(A ,B, mxBasis='pp'):
     """
     Computes the average gate fidelity (AGF) between two gates. 
     Average gate fidelity (F_g) is related to entanglement fidelity 
@@ -490,7 +485,7 @@ def average_gate_infidelity(A ,B, mxBasis="gm"):
     """
     return 1 - average_gate_fidelity(A ,B, mxBasis)
 
-def entanglement_infidelity(A, B, mxBasis=None):
+def entanglement_infidelity(A, B, mxBasis='pp'):
     """
     Returns the entanglement infidelity (EI) between gate
     matrices A and B given by :
