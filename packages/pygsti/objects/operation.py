@@ -393,7 +393,7 @@ class LinearOperator(_modelmember.ModelMember):
 
     def todense(self):
         """
-        Return this gate as a dense matrix.
+        Return this operation as a dense matrix.
         """
         raise NotImplementedError("todense(...) not implemented for %s objects!" % self.__class__.__name__)
 
@@ -418,14 +418,14 @@ class LinearOperator(_modelmember.ModelMember):
 
     def tosparse(self):
         """
-        Return this gate as a sparse matrix.
+        Return this operation as a sparse matrix.
         """
         raise NotImplementedError("tosparse(...) not implemented for %s objects!" % self.__class__.__name__)
 
     
     def get_order_terms(self, order):
         """ 
-        Get the `order`-th order Taylor-expansion terms of this gate.
+        Get the `order`-th order Taylor-expansion terms of this operation.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that its action on a
@@ -476,7 +476,7 @@ class LinearOperator(_modelmember.ModelMember):
     def residuals(self, otherOp, transform=None, inv_transform=None):
         """
         The per-element difference between this `DenseOperator` and `otherOp`,
-        possibly after transforming this gate as 
+        possibly after transforming this operation as 
         `G => inv_transform * G * transform`.
 
         Parameters
@@ -616,7 +616,7 @@ class LinearOperator(_modelmember.ModelMember):
         
     def compose(self, otherOp):
         """
-        Create and return a new gate that is the composition of this gate
+        Create and return a new gate that is the composition of this operation
         followed by otherOp of the same type.  (For more general compositions
         between different types of gates, use the module-level compose function.
         )  The returned gate's matrix is equal to dot(this, otherOp).
@@ -676,7 +676,7 @@ class LinearOperator(_modelmember.ModelMember):
     
     def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
         """
-        Construct the Hessian of this gate with respect to its parameters.
+        Construct the Hessian of this operation with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
         flattened operation matrix and whose 2nd and 3rd axes correspond to the
@@ -792,14 +792,14 @@ class DenseOperator(LinearOperator):
 
     def todense(self):
         """
-        Return this gate as a dense matrix.
+        Return this operation as a dense matrix.
         """
         return _np.asarray(self.base)
           # *must* be a numpy array for Cython arg conversion
 
     def tosparse(self):
         """
-        Return the gate as a sparse matrix.
+        Return the operation as a sparse matrix.
         """
         return _sps.csr_matrix(self.todense())
 
@@ -903,7 +903,7 @@ class StaticDenseOp(DenseOperator):
 
     def compose(self, otherOp):
         """
-        Create and return a new gate that is the composition of this gate
+        Create and return a new gate that is the composition of this operation
         followed by otherOp, which *must be another StaticDenseOp*.
         (For more general compositions between different types of gates, use
         the module-level compose function.)  The returned gate's matrix is
@@ -1408,7 +1408,7 @@ class LinearlyParamDenseOp(DenseOperator):
 
     def compose(self, otherOp):
         """
-        Create and return a new gate that is the composition of this gate
+        Create and return a new gate that is the composition of this operation
         followed by otherOp, which *must be another LinearlyParamDenseOp*.
         (For more general compositions between different types of gates, use
         the module-level compose function.)  The returned gate's matrix is
@@ -2159,16 +2159,11 @@ class LindbladOp(LinearOperator):
 
     def __init__(self, unitaryPostfactor, errorgen, sparse_expm=False):     
         """
-        TODO: docstring (fix!) - note: unitaryPostfactor doesn't need to be
-          a dimension since we can take it from errorgen.dim... so unitaryPostFactor
-          *can* be None and that's ok.
+        Create a new `LinbladOp` based on an error generator and postfactor.
 
-        Create a new LinbladParameterizedMap based on a set of Lindblad terms.
-
-        Note that if you want to construct a LinbladParameterizedMap from a
-        gate error generator or a operation matrix, you can use the 
-        :method:`from_error_generator` and :method:`from_operation_matrix` class
-        methods and save youself some time and effort.
+        Note that if you want to construct a `LinbladOp` from an operation
+        matrix, you can use the :method:`from_operation_matrix` class
+        method and save youself some time and effort.
 
         Parameters
         ----------
@@ -2179,60 +2174,21 @@ class LindbladOp(LinearOperator):
             right of the exponentiated Lindblad terms, this means it is applied
             to a state *before* the Lindblad terms (which usually represent
             gate errors).  Typically, this is a target (desired) gate operation.
-            This argument is needed at the very least to specify the dimension 
-            of the gate, and if this post-factor is just the identity you can
-            simply pass the integer dimension as `unitaryPostfactor` instead of
-            a matrix.
+            If this post-factor is just the identity you can simply pass the
+            integer dimension as `unitaryPostfactor` instead of a matrix, or 
+            you can pass `None` and the dimension will be inferred from
+            `errorgen`.
 
-        Ltermdict : dict
-            A dictionary specifying which Linblad terms are present in the gate
-            parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` can be `"H"` (Hamiltonian), `"S"`
-            (Stochastic), or `"A"` (Affine).  Hamiltonian and Affine terms always
-            have a single basis label (so key is a 2-tuple) whereas Stochastic
-            tuples with 1 basis label indicate a *diagonal* term, and are the
-            only types of terms allowed when `nonham_mode != "all"`.  Otherwise,
-            Stochastic term tuples can include 2 basis labels to specify
-            "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
-            strings or integers.  Values are complex coefficients (error rates).
+        errorgen : LinearOperator
+            The error generator for this operator.  That is, the `L` if this
+            operator is `exp(L)*unitaryPostfactor`.
 
-        basisdict : dict, optional
-            A dictionary mapping the basis labels (strings or ints) used in the
-            keys of `Ltermdict` to basis matrices (numpy arrays or Scipy sparse
-            matrices).
-
-        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
-            Describes how the Lindblad coefficients/projections relate to the
-            gate's parameter values.  Allowed values are:
-            `"unconstrained"` (coeffs are independent unconstrained parameters),
-            `"cptp"` (independent parameters but constrained so map is CPTP),
-            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
-            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
-
-        nonham_mode : {"diagonal", "diag_affine", "all"}
-            Which non-Hamiltonian Lindblad projections are potentially non-zero.
-            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
-            `"diag_affine"` (diagonal coefficients + affine projections), and
-            `"all"` (the entire matrix of coefficients is allowed).
-
-        truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in
-            order to meet constraints (e.g. to preserve CPTP) when necessary.
-            If False, then an error is thrown when the given dictionary of
-            Lindblad terms doesn't conform to the constrains.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The basis for this gate's linear mapping. Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        evotype : {"densitymx","svterm","cterm"}
-            The evolution type of the gate being constructed.  `"densitymx"` is
-            usual Lioville density-matrix-vector propagation via matrix-vector
-            products.  `"svterm"` denotes state-vector term-based evolution
-            (action of gate is obtained by evaluating the rank-1 terms up to
-            some order).  `"cterm"` is similar but uses Clifford gate action
-            on stabilizer states.
+        sparse_expm : bool, optional
+            Whether to implement exponentiation in an approximate way that
+            treats the error generator as a sparse matrix.  Namely, it only
+            uses the action of `errorgen` and its adjoint on a state.  Setting
+            `sparse_expm=True` is typically more efficient when `errorgen` has
+            a large dimension, say greater than 100.
         """
 
         # Extract superop dimension from 'errorgen'
@@ -2336,8 +2292,9 @@ class LindbladOp(LinearOperator):
 
         
     def _prepare_for_torep(self):
-        """ Constructs Sets self.err_gen_prep or self.exp_err_gen 
-        TODO: docstring (better?)
+        """ 
+        Prepares needed intermediate values for calls to `torep()`.
+        (sets `self.err_gen_prep` or `self.exp_err_gen`).
         """                
         #Pre-compute the exponential of the error generator if dense matrices
         # are used, otherwise cache prepwork for sparse expm calls
@@ -2372,7 +2329,7 @@ class LindbladOp(LinearOperator):
 
     def todense(self):
         """
-        Return this gate as a dense matrix.
+        Return this operation as a dense matrix.
         """
         if self.sparse_expm: raise NotImplementedError("todense() not implemented for sparse-expm-mode LindbladOp objects")
         if self._evotype in ("svterm","cterm"): 
@@ -2387,7 +2344,7 @@ class LindbladOp(LinearOperator):
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
     def tosparse(self):
         """
-        Return the gate as a sparse matrix.
+        Return the operation as a sparse matrix.
         """
         _warnings.warn(("Constructing the sparse matrix of a LindbladDenseOp."
                         "  Usually this is *NOT* a sparse matrix (the exponential of a"
@@ -2442,7 +2399,7 @@ class LindbladOp(LinearOperator):
         
     def get_order_terms(self, order):
         """ 
-        Get the `order`-th order Taylor-expansion terms of this gate.
+        Get the `order`-th order Taylor-expansion terms of this operation.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that its action on a
@@ -2539,7 +2496,7 @@ class LindbladOp(LinearOperator):
     def get_errgen_coeffs(self):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients 
-        (i.e. the "error rates") of this gate.  Note that these are not
+        (i.e. the "error rates") of this operation.  Note that these are not
         necessarily the parameter values, as these coefficients are generally
         functions of the parameters (so as to keep the coefficients positive,
         for instance).
@@ -2706,73 +2663,36 @@ class LindbladDenseOp(LindbladOp,DenseOperator):
 
     def __init__(self, unitaryPostfactor, errorgen, sparse_expm=False):     
         """
-        TODO: docstring (fix!) - similar to above class
-        Create a new LinbladParameterizedGate based on a set of Lindblad terms.
+        Create a new LinbladDenseOp based on an error generator and postfactor.
 
-        Note that if you want to construct a LinbladParameterizedGate from a
-        gate error generator or a operation matrix, you can use the 
-        :method:`from_error_generator` and :method:`from_operation_matrix` class
-        methods and save youself some time and effort.
+        Note that if you want to construct a `LinbladDenseOp` from an operation
+        matrix, you can use the :method:`from_operation_matrix` class method
+        and save youself some time and effort.
 
         Parameters
         ----------
-        unitaryPostfactor : numpy array or int
+        unitaryPostfactor : numpy array or SciPy sparse matrix or int
             a square 2D array which specifies a part of the gate action 
             to remove before parameterization via Lindblad projections.
             While this is termed a "post-factor" because it occurs to the
             right of the exponentiated Lindblad terms, this means it is applied
             to a state *before* the Lindblad terms (which usually represent
             gate errors).  Typically, this is a target (desired) gate operation.
-            This argument is needed at the very least to specify the dimension 
-            of the gate, and if this post-factor is just the identity you can
-            simply pass the integer dimension as `unitaryPostfactor` instead of
-            a matrix.
+            If this post-factor is just the identity you can simply pass the
+            integer dimension as `unitaryPostfactor` instead of a matrix, or 
+            you can pass `None` and the dimension will be inferred from
+            `errorgen`.
 
-        Ltermdict : dict
-            A dictionary specifying which Linblad terms are present in the gate
-            parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` can be `"H"` (Hamiltonian), `"S"`
-            (Stochastic), or `"A"` (Affine).  Hamiltonian and Affine terms always
-            have a single basis label (so key is a 2-tuple) whereas Stochastic
-            tuples with 1 basis label indicate a *diagonal* term, and are the
-            only types of terms allowed when `nonham_mode != "all"`.  Otherwise,
-            Stochastic term tuples can include 2 basis labels to specify
-            "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
-            strings or integers.  Values are complex coefficients (error rates).
+        errorgen : LinearOperator
+            The error generator for this operator.  That is, the `L` if this
+            operator is `exp(L)*unitaryPostfactor`.
 
-        basisdict : dict, optional
-            A dictionary mapping the basis labels (strings or ints) used in the
-            keys of `Ltermdict` to basis matrices (numpy arrays).
-
-        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
-            Describes how the Lindblad coefficients/projections relate to the
-            gate's parameter values.  Allowed values are:
-            `"unconstrained"` (coeffs are independent unconstrained parameters),
-            `"cptp"` (independent parameters but constrained so map is CPTP),
-            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
-            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
-
-        nonham_mode : {"diagonal", "diag_affine", "all"}
-            Which non-Hamiltonian Lindblad projections are potentially non-zero.
-            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
-            `"diag_affine"` (diagonal coefficients + affine projections), and
-            `"all"` (the entire matrix of coefficients is allowed).
-
-        truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in
-            order to meet constraints (e.g. to preserve CPTP) when necessary.
-            If False, then an error is thrown when the given dictionary of
-            Lindblad terms doesn't conform to the constrains.
-
-        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        evotype : {"densitymx"}
-            The evolution type of the gate being constructed.  Currently,
-            only `"densitymx"` (Lioville density-matrix vector) is supported.
-            For more options, see :class:`LindbladOp`.
+        sparse_expm : bool, optional
+            Whether to implement exponentiation in an approximate way that
+            treats the error generator as a sparse matrix.  Namely, it only
+            uses the action of `errorgen` and its adjoint on a state.  Setting
+            `sparse_expm=True` is typically more efficient when `errorgen` has
+            a large dimension, say greater than 100.
         """
         assert(errorgen._evotype == "densitymx"), \
             "LindbladDenseOp objects can only be used for the 'densitymx' evolution type"
@@ -2906,7 +2826,7 @@ class LindbladDenseOp(LindbladOp,DenseOperator):
 
     def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
         """
-        Construct the Hessian of this gate with respect to its parameters.
+        Construct the Hessian of this operation with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
         flattened operation matrix and whose 2nd and 3rd axes correspond to the
@@ -3257,7 +3177,7 @@ class TPInstrumentOp(DenseOperator):
         """
         #Rely on the Instrument ordering of it's elements: if we're being called
         # to init from v then this is within the context of a TPInstrument's gates
-        # having been compiled and now being initialized from a vector (within a
+        # having been simplified and now being initialized from a vector (within a
         # calculator).  We rely on the Instrument elements having their
         # from_vector() methods called in self.index order.
         
@@ -3291,12 +3211,12 @@ class ComposedOp(LinearOperator):
             *opposite* from standard matrix multiplication order.
             
         dim : int or "auto"
-            Dimension of this gate.  Can be set to `"auto"` to take dimension
+            Dimension of this operation.  Can be set to `"auto"` to take dimension
             from `ops_to_compose[0]` *if* there's at least one gate being
             composed.
 
         evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
-            The evolution type of this gate.  Can be set to `"auto"` to take
+            The evolution type of this operation.  Can be set to `"auto"` to take
             the evolution type of `ops_to_compose[0]` *if* there's at least
             one gate being composed.
         """
@@ -3327,13 +3247,36 @@ class ComposedOp(LinearOperator):
         return self.factorops
 
     def append(*factorops_to_add):
-        """ TODO: docstring """
+        """
+        Add one or more factors to this operator.
+
+        Parameters
+        ----------
+        *factors_to_add : LinearOperator
+            One or multiple factor operators to add on at the *end* (evaluated
+            last) of this operator.
+
+        Returns
+        -------
+        None
+        """
         self.factorops.extend(factorops_to_add)
         if self.parent: #need to alert parent that *number* (not just value)
             parent._mark_for_rebuild(self) #  of our params may have changed
 
     def remove(*factorop_indices):
-        """ TODO: docstring """
+        """
+        Remove one or more factors from this operator.
+
+        Parameters
+        ----------
+        *factorop_indices : int
+            One or multiple factor indices to remove from this operator.
+
+        Returns
+        -------
+        None
+        """
         for i in sorted(factorop_indices, reverse=True):
             del self.factorops[i]
         if self.parent: #need to alert parent that *number* (not just value)
@@ -3356,14 +3299,16 @@ class ComposedOp(LinearOperator):
 
 
     def tosparse(self):
-        """ Return the gate as a sparse matrix """
+        """ Return the operation as a sparse matrix """
         mx = self.factorops[0].tosparse()
         for gate in self.factorops[1:]:
             mx = gate.tosparse().dot(mx)
         return mx
 
     def todense(self):
-        """ TODO: docstring """
+        """
+        Return this operation as a dense matrix.
+        """
         mx = self.factorops[0].todense()
         for gate in self.factorops[1:]:
             mx = _np.dot(gate.todense(),mx)
@@ -3393,7 +3338,31 @@ class ComposedOp(LinearOperator):
 
 
     def get_order_terms(self, order):
-        """ TODO: docstring """
+        """ 
+        Get the `order`-th order Taylor-expansion terms of this operation.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the gate's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the gate's parent (usually a :class:`Model`), not the 
+        gate's local parameter array (i.e. that returned from `to_vector`).
+
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        Returns
+        -------
+        list
+            A list of :class:`RankOneTerm` objects.
+        """
         terms = []
         for p in _lt.partition_into(order, len(self.factorops)):
             factor_lists = [ self.factorops[i].get_order_terms(pi) for i,pi in enumerate(p) ]
@@ -3505,12 +3474,12 @@ class ComposedDenseOp(ComposedOp,DenseOperator):
             *opposite* from standard matrix multiplication order.
 
         dim : int or "auto"
-            Dimension of this gate.  Can be set to `"auto"` to take dimension
+            Dimension of this operation.  Can be set to `"auto"` to take dimension
             from `ops_to_compose[0]` *if* there's at least one gate being
             composed.
 
         evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
-            The evolution type of this gate.  Can be set to `"auto"` to take
+            The evolution type of this operation.  Can be set to `"auto"` to take
             the evolution type of `ops_to_compose[0]` *if* there's at least
             one gate being composed.
         """
@@ -3885,7 +3854,7 @@ class EmbeddedOp(LinearOperator):
                                              embeddedDim, nComponents, iActiveBlock, nBlocks, self.dim)
 
     def tosparse(self):
-        """ Return the gate as a sparse matrix """
+        """ Return the operation as a sparse matrix """
         dmDim, superOpDim, blockDims = self.basisdim
         embedded_sparse = self.embedded_op.tosparse().tolil()
         dim = superOpDim if self._evotype != "statevec" else dmDim
@@ -3899,7 +3868,7 @@ class EmbeddedOp(LinearOperator):
 
     
     def todense(self):
-        """ Return the gate as a dense matrix """
+        """ Return the operation as a dense matrix """
         
         #FUTURE: maybe here or in a new "tosymplectic" method, could
         # create an embeded clifford symplectic rep as follows (when
@@ -3926,7 +3895,7 @@ class EmbeddedOp(LinearOperator):
     
     def get_order_terms(self, order):
         """ 
-        Get the `order`-th order Taylor-expansion terms of this gate.
+        Get the `order`-th order Taylor-expansion terms of this operation.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that its action on a
@@ -4351,8 +4320,10 @@ class CliffordOp(LinearOperator):
 
 
 class ComposedErrorgen(LinearOperator):
-    """ Not a CPTP map - just the Lindbladian exponent
-        TODO: docstring  -- a *sum* (not product) of other error generators """
+    """ 
+    A composition (sum!) of several Lindbladian exponent operators, that is, a
+    *sum* (not product) of other error generators.
+    """
     
     def __init__(self, errgens_to_compose, dim="auto", evotype="auto"):
         """
@@ -4410,7 +4381,29 @@ class ComposedErrorgen(LinearOperator):
 
 
     def get_coeffs(self):
-        """ TODO: docstring - see other get_coeffs for a start """
+        """
+        Constructs a dictionary of the Lindblad-error-generator coefficients 
+        (i.e. the "error rates") of this error generator.  Note that these are
+        not necessarily the parameter values, as these coefficients are
+        generally functions of the parameters (so as to keep the coefficients
+        positive, for instance).
+
+        Returns
+        -------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Basis labels are integers starting at 0.  Values are complex
+            coefficients (error rates).
+    
+        basisdict : dict
+            A dictionary mapping the integer basis labels used in the
+            keys of `Ltermdict` to basis matrices..
+        """
         Ltermdict = {}; basisdict = {}; next_available = 0
         for eg in self.factors:
             ltdict, bdict = eg.get_coeffs()
@@ -4449,7 +4442,15 @@ class ComposedErrorgen(LinearOperator):
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
-        TODO: docstring - look at other for ref
+        Construct a matrix whose columns are the vectorized derivatives of the
+        flattened error generator matrix with respect to a single operator
+        parameter.  Thus, each column is of length op_dim^2 and there is one
+        column per gate parameter.
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives, shape == (dimension^2, num_params)
         """
         #TODO: in the furture could do this more cleverly so 
         # each factor gets an appropriate wrtFilter instead of
@@ -4473,7 +4474,24 @@ class ComposedErrorgen(LinearOperator):
 
     def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
         """
-        TODO: docstring - look at other for ref
+        Construct the Hessian of this error generator with respect to
+        its parameters.
+
+        This function returns a tensor whose first axis corresponds to the
+        flattened operation matrix and whose 2nd and 3rd axes correspond to the
+        parameters that are differentiated with respect to.
+
+        Parameters
+        ----------
+        wrtFilter1, wrtFilter2 : list
+            Lists of indices of the paramters to take first and second
+            derivatives with respect to.  If None, then derivatives are
+            taken with respect to all of the gate's parameters.
+
+        Returns
+        -------
+        numpy array
+            Hessian with shape (dimension^2, num_params1, num_params2)
         """
         #TODO: in the furture could do this more cleverly so 
         # each factor gets an appropriate wrtFilter instead of
@@ -4512,13 +4530,36 @@ class ComposedErrorgen(LinearOperator):
         return self.factors
 
     def append(*factors_to_add):
-        """ TODO: docstring """
+        """
+        Add one or more factors to this operator.
+
+        Parameters
+        ----------
+        *factors_to_add : LinearOperator
+            One or multiple factor operators to add on at the *end* (summed
+            last) of this operator.
+
+        Returns
+        -------
+        None
+        """
         self.factors.extend(factors_to_add)
         if self.parent: #need to alert parent that *number* (not just value)
             parent._mark_for_rebuild(self) #  of our params may have changed
 
     def remove(*factor_indices):
-        """ TODO: docstring """
+        """
+        Remove one or more factors from this operator.
+
+        Parameters
+        ----------
+        *factorop_indices : int
+            One or multiple factor indices to remove from this operator.
+
+        Returns
+        -------
+        None
+        """
         for i in sorted(factor_indices, reverse=True):
             del self.factors[i]
         if self.parent: #need to alert parent that *number* (not just value)
@@ -4540,14 +4581,14 @@ class ComposedErrorgen(LinearOperator):
         return self._copy_gpindices(copyOfMe, parent)
 
     def tosparse(self):
-        """ Return the error generator as a sparse matrix """
+        """ Return this error generator as a sparse matrix """
         mx = self.factors[0].tosparse()
         for eg in self.factors[1:]:
             mx += eg.tosparse()
         return mx
 
     def todense(self):
-        """ TODO: docstring """
+        """ Return this error generator as a dense matrix """
         mx = self.factors[0].todense()
         for eg in self.factors[1:]:
             mx += eg.todense()
@@ -4555,7 +4596,6 @@ class ComposedErrorgen(LinearOperator):
 
     #OLD: UNUSED - now use tosparse/todense
     #def _construct_errgen_matrix(self):
-    #    """ TODO: docstring """
     #    self.factors[0]._construct_errgen_matrix()
     #    mx = self.factors[0].err_gen_mx
     #    for eg in self.factors[1:]:
@@ -4588,7 +4628,31 @@ class ComposedErrorgen(LinearOperator):
 
 
     def get_order_terms(self, order):
-        """ TODO: docstring """
+        """ 
+        Get the `order`-th order Taylor-expansion terms of this error generator..
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the gate's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the gate's parent (usually a :class:`Model`), not the 
+        gate's local parameter array (i.e. that returned from `to_vector`).
+
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        Returns
+        -------
+        list
+            A list of :class:`RankOneTerm` objects.
+        """
         assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
         return list(_itertools.chain(*[eg.get_order_terms(order) for eg in self.factors]))
 
@@ -4641,9 +4705,6 @@ class ComposedErrorgen(LinearOperator):
             factor_local_inds = _modelmember._decompose_gpindices(
                     self.gpindices, eg.gpindices)
             eg.from_vector( v[factor_local_inds] )
-        #OLD TODO REMOVE
-        #if self._evotype == "densitymx":
-        #    self._construct_errgen_matrix()        
         self.dirty = True
 
 
@@ -4756,7 +4817,6 @@ class EmbeddedErrorgen(EmbeddedOp):
         #    self.err_gen_mx = None
 
     #def _construct_errgen_matrix(self):
-    #    """ TODO: docstring """
     #    #Always construct a sparse errgen matrix, so just use
     #    # base class's .tosparse() (which calls embedded errorgen's
     #    # .tosparse(), which will convert a dense->sparse embedded
@@ -4786,14 +4846,33 @@ class EmbeddedErrorgen(EmbeddedOp):
         None
         """
         EmbeddedOp.from_vector(self, v) 
-        #OLD TODO REMOVE
-        #if self._evotype == "densitymx":
-        #    self._construct_errgen_matrix()        
         self.dirty = True
 
 
     def get_coeffs(self):
-        """ TODO: docstring - see other get_coeffs for a start """
+        """
+        Constructs a dictionary of the Lindblad-error-generator coefficients 
+        (i.e. the "error rates") of this operation.  Note that these are
+        not necessarily the parameter values, as these coefficients are
+        generally functions of the parameters (so as to keep the coefficients
+        positive, for instance).
+
+        Returns
+        -------
+        Ltermdict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Basis labels are integers starting at 0.  Values are complex
+            coefficients (error rates).
+    
+        basisdict : dict
+            A dictionary mapping the integer basis labels used in the
+            keys of `Ltermdict` to basis matrices..
+        """
         Ltermdict, basisdict = self.embedded_op.get_coeffs()
         
         #go through basis and embed basis matrices
@@ -4805,13 +4884,38 @@ class EmbeddedErrorgen(EmbeddedOp):
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
-        TODO: docstring - look at other for ref
+        Construct a matrix whose columns are the vectorized derivatives of the
+        flattened error generator matrix with respect to a single operator
+        parameter.  Thus, each column is of length op_dim^2 and there is one
+        column per gate parameter.
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives, shape == (dimension^2, num_params)
         """
         raise NotImplementedError("deriv_wrt_params is not implemented for EmbeddedErrorGen objects")
 
     def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
         """
-        TODO: docstring - look at other for ref
+        Construct the Hessian of this error generator with respect to
+        its parameters.
+
+        This function returns a tensor whose first axis corresponds to the
+        flattened operation matrix and whose 2nd and 3rd axes correspond to the
+        parameters that are differentiated with respect to.
+
+        Parameters
+        ----------
+        wrtFilter1, wrtFilter2 : list
+            Lists of indices of the paramters to take first and second
+            derivatives with respect to.  If None, then derivatives are
+            taken with respect to all of the gate's parameters.
+
+        Returns
+        -------
+        numpy array
+            Hessian with shape (dimension^2, num_params1, num_params2)
         """
         raise NotImplementedError("hessian_wrt_params is not implemented for EmbeddedErrorGen objects")
 
@@ -4825,35 +4929,29 @@ class EmbeddedErrorgen(EmbeddedOp):
 
 
 class LindbladErrorgen(LinearOperator):
-    """ Not a CPTP map - just the Lindbladian exponent
-        TODO: docstring """
-
-    # REMOVE - and remove reference in docstrings to unitaryPostfactor?
-    #    unitaryPostfactor : numpy array or SciPy sparse matrix or int
-    #        a square 2D array which specifies a part of the gate action 
-    #        to remove before parameterization via Lindblad projections.
-    #        While this is termed a "post-factor" because it occurs to the
-    #        right of the exponentiated Lindblad terms, this means it is applied
-    #        to a state *before* the Lindblad terms (which usually represent
-    #        gate errors).  Typically, this is a target (desired) gate operation.
-    #        If None, then the identity is assumed.
+    """
+    An Lindblad-form error generator consisting of terms that, with appropriate
+    constraints ensurse that the resulting (after exponentiation) gate/layer
+    operation is CPTP.  These terms can be divided into "Hamiltonian"-type
+    terms, which map rho -> i[H,rho] and "non-Hamiltonian"/"other"-type terms,
+    which map rho -> A rho B + 0.5*(ABrho + rhoAB).
+    """
 
     @classmethod
     def from_error_generator(cls, errgen, ham_basis="pp", nonham_basis="pp",
                              param_mode="cptp", nonham_mode="all",
                              mxBasis="pp", truncate=True, evotype="densitymx"):
         """
-        TODO: docstring (fix!) - just creates a Lindblad error gen now
-        Create a Lindblad-parameterized gate from an error generator and a
-        basis which specifies how to decompose (project) the error generator.
+        Create a Lindblad-form error generator from an error generator matrix
+        and a basis which specifies how to decompose (project) the error
+        generator.
             
         errgen : numpy array or SciPy sparse matrix
-            a square 2D array that gives the full error generator `L` such 
-            that the gate action is `exp(L)*unitaryPostFactor`.  The shape of
-            this array sets the dimension of the gate. The projections of this
-            quantity onto the `ham_basis` and `nonham_basis` are closely related
-            to the parameters of the gate (they may not be exactly equal if,
-            e.g `cptp=True`).
+            a square 2D array that gives the full error generator. The shape of
+            this array sets the dimension of the operator. The projections of
+            this quantity onto the `ham_basis` and `nonham_basis` are closely
+            related to the parameters of the error generator (they may not be
+            exactly equal if, e.g `cptp=True`).
 
         ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
             The basis is used to construct the Hamiltonian-type lindblad error
@@ -4861,7 +4959,7 @@ class LindbladErrorgen(LinearOperator):
             and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
         other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the Stochastic-type lindblad error
+            The basis is used to construct the non-Hamiltonian-type lindblad error
             Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
@@ -4891,16 +4989,16 @@ class LindbladErrorgen(LinearOperator):
             be realized by the specified set of Lindblad projections.
 
         evotype : {"densitymx","svterm","cterm"}
-            The evolution type of the gate being constructed.  `"densitymx"` is
-            usual Lioville density-matrix-vector propagation via matrix-vector
-            products.  `"svterm"` denotes state-vector term-based evolution
-            (action of gate is obtained by evaluating the rank-1 terms up to
-            some order).  `"cterm"` is similar but uses Clifford gate action
-            on stabilizer states.
+            The evolution type of the error generator being constructed.  
+            `"densitymx"` means usual Lioville density-matrix-vector propagation
+            via matrix-vector products.  `"svterm"` denotes state-vector term-
+            based evolution (action of gate is obtained by evaluating the rank-1
+            terms up to some order).  `"cterm"` is similar but uses Clifford gate
+            action on stabilizer states.
 
         Returns
         -------
-        LindbladOp                
+        LindbladErrorgen
         """
 
         d2 = errgen.shape[0]
@@ -4951,30 +5049,20 @@ class LindbladErrorgen(LinearOperator):
                  param_mode="cptp", nonham_mode="all", truncate=True,
                  mxBasis="pp", evotype="densitymx"): 
         """
-        TODO: docstring (fix!) - no unitaryPostfactor...
-        Create a new LinbladParameterizedMap based on a set of Lindblad terms.
+        Create a new LinbladErrorgen based on a set of Lindblad terms.
 
-        Note that if you want to construct a LinbladParameterizedMap from a
-        gate error generator or a operation matrix, you can use the 
-        :method:`from_error_generator` and :method:`from_operation_matrix` class
-        methods and save youself some time and effort.
+        Note that if you want to construct a LinbladErrorgen from a
+        error generator matrix, you can use the :method:`from_error_generator`
+        class method.
 
         Parameters
         ----------
-        unitaryPostfactor : numpy array or SciPy sparse matrix or int
-            a square 2D array which specifies a part of the gate action 
-            to remove before parameterization via Lindblad projections.
-            While this is termed a "post-factor" because it occurs to the
-            right of the exponentiated Lindblad terms, this means it is applied
-            to a state *before* the Lindblad terms (which usually represent
-            gate errors).  Typically, this is a target (desired) gate operation.
-            This argument is needed at the very least to specify the dimension 
-            of the gate, and if this post-factor is just the identity you can
-            simply pass the integer dimension as `unitaryPostfactor` instead of
-            a matrix.
+        dim : int
+            The Hilbert-Schmidt (superoperator) dimension, which will be the
+            dimension of the created operator.
 
         Ltermdict : dict
-            A dictionary specifying which Linblad terms are present in the gate
+            A dictionary specifying which Linblad terms are present in the
             parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
             tuples, where `termType` can be `"H"` (Hamiltonian), `"S"`
             (Stochastic), or `"A"` (Affine).  Hamiltonian and Affine terms always
@@ -4992,7 +5080,7 @@ class LindbladErrorgen(LinearOperator):
 
         param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
             Describes how the Lindblad coefficients/projections relate to the
-            gate's parameter values.  Allowed values are:
+            error generator's parameter values.  Allowed values are:
             `"unconstrained"` (coeffs are independent unconstrained parameters),
             `"cptp"` (independent parameters but constrained so map is CPTP),
             `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
@@ -5011,17 +5099,17 @@ class LindbladErrorgen(LinearOperator):
             Lindblad terms doesn't conform to the constrains.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The basis for this gate's linear mapping. Allowed
+            The basis for this error generator's linear mapping. Allowed
             values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt) (or a custom basis object).
 
         evotype : {"densitymx","svterm","cterm"}
-            The evolution type of the gate being constructed.  `"densitymx"` is
-            usual Lioville density-matrix-vector propagation via matrix-vector
-            products.  `"svterm"` denotes state-vector term-based evolution
-            (action of gate is obtained by evaluating the rank-1 terms up to
-            some order).  `"cterm"` is similar but uses Clifford gate action
-            on stabilizer states.
+            The evolution type of the error generator being constructed.
+            `"densitymx"` means the usual Lioville density-matrix-vector
+            propagation via matrix-vector products.  `"svterm"` denotes
+            state-vector term-based evolution (action of gate is obtained by
+            evaluating the rank-1 terms up to some order).  `"cterm"` is similar
+            but uses Clifford gate action on stabilizer states.
         """
 
         #FUTURE:
@@ -5339,89 +5427,6 @@ class LindbladErrorgen(LinearOperator):
         hamCoeffs, otherCoeffs = _gt.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
-
-        #TODO REMOVE
-        #bsH = self.ham_basis_size
-        #bsO = self.other_basis_size
-        #
-        ## self.paramvals = [hamCoeffs] + [otherParams]
-        ##  where hamCoeffs are *real* and of length d2-1 (self.dim == d2)
-        #if bsH > 0:
-        #    hamCoeffs = self.paramvals[0:bsH-1]
-        #    nHam = bsH-1
-        #else:
-        #    nHam = 0
-        #
-        ##built up otherCoeffs based on self.param_mode and self.nonham_mode
-        #if bsO > 0:
-        #    if self.nonham_mode == "diagonal":
-        #        otherParams = self.paramvals[nHam:]
-        #        expected_shape = (1,) if (self.param_mode in ("depol","reldepol")) else (bsO-1,)
-        #        assert(otherParams.shape == expected_shape)
-        #        
-        #        if self.param_mode in ("cptp","depol"):
-        #            otherCoeffs = otherParams**2 #Analagous to L*L_dagger
-        #        else: # "unconstrained"
-        #            otherCoeffs = otherParams
-        #            
-        #    elif self.nonham_mode == "diag_affine":
-        #
-        #        if self.param_mode in ("depol","reldepol"):
-        #            otherParams = self.paramvals[nHam:].reshape((1+bsO-1,))
-        #            otherCoeffs = _np.empty((2,bsO-1), 'd') #leave as real type b/c doesn't have complex entries
-        #            if self.param_mode == "depol":
-        #                otherCoeffs[0,:] = otherParams[0]**2
-        #            else:
-        #                otherCoeffs[0,:] = otherParams[0]
-        #            otherCoeffs[1,:] = otherParams[1:]
-        #
-        #        else:
-        #            otherParams = self.paramvals[nHam:].reshape((2,bsO-1))
-        #            if self.param_mode == "cptp":
-        #                otherCoeffs = otherParams.copy()
-        #                otherCoeffs[0,:] = otherParams[0]**2
-        #            else: # param_mode == "unconstrained"
-        #                #otherCoeffs = _np.empty((2,bsO-1),'complex')
-        #                otherCoeffs = otherParams
-        #                
-        #    else: # self.nonham_mode == "all"
-        #        otherParams = self.paramvals[nHam:].reshape((bsO-1,bsO-1))
-        #
-        #        if self.param_mode == "cptp":
-        #            #  otherParams is an array of length (bs-1)*(bs-1) that
-        #            #  encodes a lower-triangular matrix "Lmx" via:
-        #            #  Lmx[i,i] = otherParams[i,i]
-        #            #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
-        #            for i in range(bsO-1):
-        #                self.Lmx[i,i] = otherParams[i,i]
-        #                for j in range(i):
-        #                    self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
-        #    
-        #            #The matrix of (complex) "other"-coefficients is build by
-        #            # assuming Lmx is its Cholesky decomp; means otherCoeffs
-        #            # is pos-def.
-        #
-        #            # NOTE that the Cholesky decomp with all positive real diagonal
-        #            # elements is *unique* for a given positive-definite otherCoeffs
-        #            # matrix, but we don't care about this uniqueness criteria and so
-        #            # the diagonal els of Lmx can be negative and that's fine -
-        #            # otherCoeffs will still be posdef.
-        #            otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
-        #
-        #            #DEBUG - test for pos-def
-        #            #evals = _np.linalg.eigvalsh(otherCoeffs)
-        #            #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
-        #            #assert(all([ev >= -DEBUG_TOL for ev in evals]))
-        #
-        #        else: # param_mode == "unconstrained"
-        #            #otherParams holds otherCoeff real and imaginary parts directly
-        #            otherCoeffs = _np.empty((bsO-1,bsO-1),'complex')
-        #            for i in range(bsO-1):
-        #                otherCoeffs[i,i] = otherParams[i,i]
-        #                for j in range(i):
-        #                    otherCoeffs[i,j] = otherParams[i,j] +1j*otherParams[j,i]
-        #                    otherCoeffs[j,i] = otherParams[i,j] -1j*otherParams[j,i]
-        #END REMOVE
                             
         #Finally, build operation matrix from generators and coefficients:
         if self.sparse:
@@ -5431,12 +5436,10 @@ class LindbladErrorgen(LinearOperator):
                # the structure of a CSR matrix with 0-elements in all possible places
             data = _np.zeros(len(indices),'complex') # data starts at zero
             
-            #if bsH > 0: REMOVE
             if hamCoeffs is not None:
                 # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
                 _mt.csr_sum(data,hamCoeffs, self.hamGens, self.hamCSRSumIndices)
 
-            #if bsO > 0: REMOVE
             if otherCoeffs is not None:
                 if self.nonham_mode == "diagonal":
                     # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
@@ -5451,14 +5454,12 @@ class LindbladErrorgen(LinearOperator):
             lnd_error_gen = _sps.csr_matrix( (data, indices.copy(), indptr.copy()), shape=(N,N) ) #copies needed (?)
             
         else: #dense matrices
-            #if bsH > 0: REMOVE
             if hamCoeffs is not None:
                 #lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
                 lnd_error_gen = _np.tensordot(hamCoeffs, self.hamGens, (0,0))
             else:
                 lnd_error_gen = _np.zeros( (d2,d2), 'complex')
 
-            #if bsO > 0: REMOVE
             if otherCoeffs is not None:
                 if self.nonham_mode == "diagonal":
                     #lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
@@ -5525,7 +5526,7 @@ class LindbladErrorgen(LinearOperator):
 
     def get_order_terms(self, order):
         """ 
-        Get the `order`-th order Taylor-expansion terms of this gate.
+        Get the `order`-th order Taylor-expansion terms of this operation.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that its action on a
@@ -5600,12 +5601,11 @@ class LindbladErrorgen(LinearOperator):
 
     def get_coeffs(self):
         """
-        TODO: docstring - this *is* an error generator, not a 'gate'
         Constructs a dictionary of the Lindblad-error-generator coefficients 
-        (i.e. the "error rates") of this gate.  Note that these are not
-        necessarily the parameter values, as these coefficients are generally
-        functions of the parameters (so as to keep the coefficients positive,
-        for instance).
+        (i.e. the "error rates") of this error generator.  Note that these are
+        not necessarily the parameter values, as these coefficients are
+        generally functions of the parameters (so as to keep the coefficients
+        positive, for instance).
 
         Returns
         -------
@@ -5904,9 +5904,8 @@ class LindbladErrorgen(LinearOperator):
 
     def deriv_wrt_params(self, wrtFilter=None):
         """
-        TODO: docstring - this is an *error generator* now
         Construct a matrix whose columns are the vectorized derivatives of the
-        flattened error generator matrix with respect to a single gate
+        flattened error generator matrix with respect to a single operator
         parameter.  Thus, each column is of length op_dim^2 and there is one
         column per gate parameter.
 

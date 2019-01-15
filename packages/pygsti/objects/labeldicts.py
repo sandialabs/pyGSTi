@@ -78,10 +78,22 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         prefix : str
             The required prefix of all keys (which must be strings).
 
-        TODO: docstring : flags
-        typ : {"operation","spamvec","povm","instrument"}
-            The type of objects that this dictionary holds.  This is 
-            needed for automatic object creation and for validation. 
+        flags : dict
+            A dictionary of flags adjusting the behavior of the created
+            object.  Allowed keys are:
+
+            - `'cast_to_type'`: {`"operation"`,`"spamvec"`,`None`} -- whether 
+              (or not) to automatically convert assigned values to a particular
+              type of `ModelMember` object. (default is `None`)
+            - `'auto_embed'` : bool -- whether or not to automatically embed
+              objects with a lower dimension than this `OrderedMemberDict`'s 
+              parent model. (default is `False`).
+            - `'match_parent_dim'` : bool -- whether or not to require that 
+              all contained objects match the parent `Model`'s dimension 
+              (perhaps after embedding).  (default is `False`)
+            - `'match_parent_evotype'` : bool -- whether or not to require that
+              all contained objects match the parent `Model`'s evolution type.
+              (default is `False`).
 
         items : list, optional
             Used by pickle and other serializations to initialize elements.
@@ -131,11 +143,6 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
             raise ValueError("Cannot obtain dimension!")
 
         if self.parent is None: return
-        #TODO REMOVE # Model dim is set at creation time now (w/state space lbls)
-        #if self.parent.dim is None: 
-        #    self.parent._dim = dim
-        #    if self.parent._sim_type == "auto":
-        #        self.parent.set_simtype("auto") # run deferred auto-simtype now that _dim is set
         elif self.parent.dim != dim:
             raise ValueError("Cannot add object with dimension " +
                              "%s to model of dimension %d"
@@ -145,9 +152,6 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
     def _check_evotype(self, evotype):
         if not self.flags['match_parent_evotype']: return # no check
         if self.parent is None: return
-        #TODO REMOVE # Model evotype is set at creation time now
-        #if self.parent._evotype is None:
-        #    self.parent._evotype = evotype
         elif self.parent._evotype != evotype:
             raise ValueError(("Cannot add an object with evolution type"
                               " '%s' to a model with one of '%s'") %
@@ -197,12 +201,6 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         basis = self.parent.basis if self.parent else None
         obj = None; 
         if self.flags['cast_to_type'] == "spamvec":
-            # not needed anymore (spam vecs can be lindblad types now ) TODO REMOVE
-            #typ = self.default_param
-            #rtyp = "TP" if typ in ("CPTP","H+S","S") else typ 
-            #obj = _sv.StaticSPAMVec(value)
-            #obj = _sv.convert(obj, rtyp, basis)
-
             obj = _sv.StaticSPAMVec(value)
             obj = _sv.convert(obj, self.default_param, basis)
         elif self.flags['cast_to_type'] == "operation":
@@ -270,7 +268,6 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.ModelChild):
         #rebuild Model's parameter vector (params may need to be added)
         if self.parent is not None:
             #print("DEBUG: marking paramvec for rebuild after inserting ", key, " : ", list(self.keys()))
-            #OLD TODO REMOVE: self.parent._update_paramvec( super(OrderedMemberDict,self).__getitem__(key) )
             self.parent._mark_for_rebuild(super(OrderedMemberDict,self).__getitem__(key))
               # mark the parent's (Model's) paramvec for rebuilding
 

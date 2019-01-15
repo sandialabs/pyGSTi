@@ -62,7 +62,7 @@ class TermForwardSimulator(ForwardSimulator):
     that can be expanded into terms of different orders and PureStateSPAMVecs.
     """
 
-    def __init__(self, dim, compiled_op_server, paramvec, max_order, cache=None):
+    def __init__(self, dim, simplified_op_server, paramvec, max_order, cache=None):
         """
         Construct a new TermForwardSimulator object.
 
@@ -104,14 +104,14 @@ class TermForwardSimulator(ForwardSimulator):
         self.max_order = max_order
         self.cache = cache
         super(TermForwardSimulator, self).__init__(
-            dim, compiled_op_server, paramvec)
+            dim, simplified_op_server, paramvec)
         if self.evotype not in ("svterm","cterm"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "term-based calculations" % self.evotype))
         
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
-        return TermForwardSimulator(self.dim, self.cos, self.paramvec,
+        return TermForwardSimulator(self.dim, self.sos, self.paramvec,
                                     self.max_order, self.cache)
 
         
@@ -119,8 +119,8 @@ class TermForwardSimulator(ForwardSimulator):
         assert( len(spamTuple) == 2 )
         if isinstance(spamTuple[0],_Label):
             rholabel,elabel = spamTuple
-            rho = self.cos.get_prep(rholabel)
-            E   = self.cos.get_effect(elabel)
+            rho = self.sos.get_prep(rholabel)
+            E   = self.sos.get_effect(elabel)
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
@@ -129,8 +129,8 @@ class TermForwardSimulator(ForwardSimulator):
 
     def _rhoEs_from_labels(self, rholabel, elabels):
         """ Returns SPAMVec *objects*, so must call .todense() later """
-        rho = self.cos.get_prep(rholabel)
-        Es = [ self.cos.get_effect(elabel) for elabel in elabels ]
+        rho = self.sos.get_prep(rholabel)
+        Es = [ self.sos.get_effect(elabel) for elabel in elabels ]
         #No support for "custom" spamlabel stuff here
         return rho,Es
 
@@ -174,10 +174,10 @@ class TermForwardSimulator(ForwardSimulator):
             The state preparation label.
         
         elabels : list
-            A list of :class:`Label` objects giving the *compiled* effect labels.
+            A list of :class:`Label` objects giving the *simplified* effect labels.
 
         circuit : Circuit or tuple
-            A tuple-like object of *compiled* gates (e.g. may include
+            A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
         
         comm : mpi4py.MPI.Comm, optional
@@ -218,11 +218,11 @@ class TermForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        spamTuple : (rho_label, compiled_effect_label)
+        spamTuple : (rho_label, simplified_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
         circuit : Circuit or tuple
-            A tuple-like object of *compiled* gates (e.g. may include
+            A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
         
         comm : mpi4py.MPI.Comm, optional
@@ -251,10 +251,10 @@ class TermForwardSimulator(ForwardSimulator):
             The state preparation label.
         
         elabels : list
-            A list of :class:`Label` objects giving the *compiled* effect labels.
+            A list of :class:`Label` objects giving the *simplified* effect labels.
 
         circuit : Circuit or tuple
-            A tuple-like object of *compiled* gates (e.g. may include
+            A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
         
         comm : mpi4py.MPI.Comm, optional
@@ -296,10 +296,10 @@ class TermForwardSimulator(ForwardSimulator):
             The state preparation label.
         
         elabels : list
-            A list of :class:`Label` objects giving the *compiled* effect labels.
+            A list of :class:`Label` objects giving the *simplified* effect labels.
 
         circuit : Circuit or tuple
-            A tuple-like object of *compiled* gates (e.g. may include
+            A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
         clipTo : 2-tuple
@@ -331,11 +331,11 @@ class TermForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        spamTuple : (rho_label, compiled_effect_label)
+        spamTuple : (rho_label, simplified_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
         circuit : Circuit or tuple
-            A tuple-like object of *compiled* gates (e.g. may include
+            A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
         returnPr : bool
@@ -376,11 +376,11 @@ class TermForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        spamTuple : (rho_label, compiled_effect_label)
+        spamTuple : (rho_label, simplified_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
         circuit : Circuit or tuple
-            A tuple-like object of *compiled* gates (e.g. may include
+            A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
         returnPr : bool
@@ -519,16 +519,16 @@ class TermForwardSimulator(ForwardSimulator):
         Compute the outcome probabilities for an entire tree of operation sequences.
 
         This routine fills a 1D array, `mxToFill` with the probabilities
-        corresponding to the *compiled* operation sequences found in an evaluation
+        corresponding to the *simplified* operation sequences found in an evaluation
         tree, `evalTree`.  An initial list of (general) :class:`Circuit`
-        objects is *compiled* into a lists of gate-only sequences along with
+        objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently
         compute the gate-only sequences.  This routine fills in `mxToFill`, which
         must have length equal to the number of final elements (this can be 
         obtained by `evalTree.num_final_elements()`.  To interpret which elements
         correspond to which strings and outcomes, you'll need the mappings 
-        generated when the original list of `Circuits` was compiled.
+        generated when the original list of `Circuits` was simplified.
 
         Parameters
         ----------
@@ -537,7 +537,7 @@ class TermForwardSimulator(ForwardSimulator):
           total number of computed elements (i.e. evalTree.num_final_elements())
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
         clipTo : 2-tuple, optional
@@ -615,7 +615,7 @@ class TermForwardSimulator(ForwardSimulator):
           number of model parameters.
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional
@@ -808,7 +808,7 @@ class TermForwardSimulator(ForwardSimulator):
           the number of selected gate-set parameters (by wrtFilter1 and wrtFilter2).
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional

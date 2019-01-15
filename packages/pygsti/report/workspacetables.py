@@ -1094,15 +1094,6 @@ class NQubitErrgenTable(WorkspaceTable):
         table = _ReportTable(colHeadings, (None,)*len(colHeadings),
                              confidenceRegionInfo=confidenceRegionInfo)
 
-        #coeffsM = []
-
-        #OLD TODO REMOVE
-        #errgenAndProjs = { }  
-        #errgensM = []
-        #hamProjsM = []
-        #stoProjsM = []
-        #affProjsM = []
-
         def getMinMax(max_lst, M):
             """return a [min,max] already in list if there's one within an
                order of magnitude"""
@@ -2291,8 +2282,6 @@ class GaugeOptParamsTable(WorkspaceTable):
             pre = ("%d: " % i) if len(goargs_list) > 1 else ""
             if 'method' in goargs:
                 table.addrow(("%sMethod" % pre, str(goargs['method'])), (None,None))
-            #if 'TPpenalty' in goargs: #REMOVED
-            #    table.addrow(("%sTP penalty factor" % pre, str(goargs['TPpenalty'])), (None,None))
             if 'cptp_penalty_factor' in goargs and goargs['cptp_penalty_factor'] != 0:
                 table.addrow(("%sCP penalty factor" % pre, str(goargs['cptp_penalty_factor'])), (None,None))
             if 'spam_penalty_factor' in goargs and goargs['spam_penalty_factor'] != 0:

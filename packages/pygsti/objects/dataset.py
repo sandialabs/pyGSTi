@@ -100,7 +100,7 @@ class DataSet_ValIterator(object):
 
 class DataSetRow(object):
     """
-    Encapsulates DataSet time series data for a single operation sequence.  Outwardly
+    Encapsulates DataSet time series data for a single circuit.  Outwardly
     looks similar to a list with `(outcome_label, time_index, repetition_count)`
     tuples as the values.
     """
@@ -418,7 +418,7 @@ def _round_int_repcnt(nreps):
 
 class DataSet(object):
     """
-    The DataSet class associates operation sequences with counts or time series of
+    The DataSet class associates circuits with counts or time series of
     counts for each outcome label, and can be thought of as a table with gate
     strings labeling the rows and outcome labels and/or time labeling the
     columns.  It is designed to behave similarly to a dictionary of
@@ -467,8 +467,8 @@ class DataSet(object):
             indices (above).   Only specify this argument OR circuitIndices, not both.
 
         circuitIndices : ordered dictionary
-            An OrderedDict with keys equal to operation sequences (tuples of operation labels) and values equal to
-            integer indices associating a row/element of counts with the operation sequence.  Only
+            An OrderedDict with keys equal to circuits (tuples of operation labels) and values equal to
+            integer indices associating a row/element of counts with the circuit.  Only
             specify this argument OR circuits, not both.
 
         outcomeLabels : list of strings
@@ -484,7 +484,7 @@ class DataSet(object):
 
         bStatic : bool
             When True, create a read-only, i.e. "static" DataSet which cannot be modified. In
-              this case you must specify the timeseries data, operation sequences, and spam labels.
+              this case you must specify the timeseries data, circuits, and spam labels.
             When False, create a DataSet that can have time series data added to it.  In this case,
               you only need to specify the spam labels.
 
@@ -493,7 +493,7 @@ class DataSet(object):
             from a file (just like using the load(...) function).
 
         collisionAction : {"aggregate","keepseparate"}
-            Specifies how duplicate operation sequences should be handled.  "aggregate"
+            Specifies how duplicate circuits should be handled.  "aggregate"
             adds duplicate-sequence counts to the same circuit's data at the
             next integer timestamp.  "keepseparate" tags duplicate-sequences by
             appending a final "#<number>" operation label to the duplicated gate
@@ -590,12 +590,12 @@ class DataSet(object):
                     assert( len(self.oliData) > maxIndex )
                     if len(self.oliData) > 0:
                         assert( all( [ max(oliSeries) <= maxOlIndex for oliSeries in self.oliData ] ) )
-            #else cirIndex has length 0 so there are no operation sequences in this dataset (even though oliData can contain data)
+            #else cirIndex has length 0 so there are no circuits in this dataset (even though oliData can contain data)
 
         elif not bStatic:
             assert( timeData is None ), "timeData must be None when oliData is"
             assert( repData is None ), "repData must be None when oliData is"
-            assert( len(self.cirIndex) == 0), "operation sequences specified without data!"
+            assert( len(self.cirIndex) == 0), "circuit specified without data!"
             self.oliData = []
             self.timeData = []
             self.repData = None
@@ -632,7 +632,7 @@ class DataSet(object):
 
 
     def __iter__(self):
-        return self.cirIndex.__iter__() #iterator over operation sequences
+        return self.cirIndex.__iter__() #iterator over circuits
 
     def __len__(self):
         return len(self.cirIndex)
@@ -729,7 +729,7 @@ class DataSet(object):
 
     def keys(self, stripOccurrenceTags=False):
         """
-        Returns the operation sequences used as keys of this DataSet.
+        Returns the circuits used as keys of this DataSet.
 
         Parameters
         ----------
@@ -737,7 +737,7 @@ class DataSet(object):
             Only applicable if `collisionAction` has been set to
             "keepseparate", when this argument is set to True
             any final "#<number>" elements of (would-be dupilcate)
-            operation sequences are stripped so that the returned list
+            circuits are stripped so that the returned list
             may have *duplicate* entries.
 
         Returns
@@ -756,13 +756,13 @@ class DataSet(object):
 
     def has_key(self, circuit):
         """
-        Test whether data set contains a given operation sequence.
+        Test whether data set contains a given circuit.
 
         Parameters
         ----------
         circuit : tuple or Circuit
             A tuple of operation labels or a Circuit instance
-            which specifies the the operation sequence to check for.
+            which specifies the the circuit to check for.
 
         Returns
         -------
@@ -788,7 +788,7 @@ class DataSet(object):
     def values(self):
         """
         Iterator over DataSetRow instances corresponding
-        to the time series data for each operation sequence.
+        to the time series data for each circuit.
         """
         return DataSet_ValIterator(self)
 
@@ -809,12 +809,12 @@ class DataSet(object):
     def get_gate_labels(self, prefix='G'):
         """
         Get a list of all the distinct operation labels used
-        in the operation sequences of this dataset.
+        in the circuits of this dataset.
 
         Parameters
         ----------
         prefix : str
-            Filter the operation sequence labels so that only elements beginning with
+            Filter the circuit labels so that only elements beginning with
             this prefix are returned.  `None` performs no filtering.
 
         Returns
@@ -834,12 +834,12 @@ class DataSet(object):
                                aggregate_times=True):
         """
         Returns the number of independent degrees of freedom in the data for
-        the operation sequences in `circuitList`.
+        the circuits in `circuitList`.
 
         Parameters
         ----------
         circuitList : list of Circuits
-            The list of operation sequences to count degrees of freedom for.  If `None`
+            The list of circuits to count degrees of freedom for.  If `None`
             then all of the `DataSet`'s strings are used.
 
         method : {'all_outcomes-1', 'present_outcomes-1'}
@@ -919,12 +919,12 @@ class DataSet(object):
     def add_count_dict(self, circuit, countDict, overwriteExisting=True,
                        recordZeroCnts=False, aux=None):
         """
-        Add a single operation sequence's counts to this DataSet
+        Add a single circuit's counts to this DataSet
 
         Parameters
         ----------
         circuit : tuple or Circuit
-            A tuple of operation labels specifying the operation sequence or a Circuit object
+            A tuple of operation labels specifying the circuit or a Circuit object
 
         countDict : dict
             A dictionary with keys = outcome labels and values = counts
@@ -981,12 +981,12 @@ class DataSet(object):
                             repCountList=None, overwriteExisting=True,
                             recordZeroCnts=True, aux=None):
         """
-        Add a single operation sequence's counts to this DataSet
+        Add a single circuit's counts to this DataSet
 
         Parameters
         ----------
         circuit : tuple or Circuit
-            A tuple of operation labels specifying the operation sequence or a Circuit object
+            A tuple of operation labels specifying the circuit or a Circuit object
 
         outcomeLabelList : list
             A list of outcome labels (strings or tuples).  An element's index
@@ -1078,7 +1078,7 @@ class DataSet(object):
         else:
             #add data for a new circuit
             assert( len(self.oliData) == len(self.timeData) ), "OLI and TIME data are out of sync!!"
-            circuitIndx = len(self.oliData) #index of to-be-added operation sequence
+            circuitIndx = len(self.oliData) #index of to-be-added circuit
             self.oliData.append( oliArray )
             self.timeData.append( timeArray )
             if repArray is not None: self.repData.append( repArray )
@@ -1090,12 +1090,12 @@ class DataSet(object):
     def add_series_data(self, circuit, countDictList, timeStampList,
                         overwriteExisting=True, aux=None):
         """
-        Add a single operation sequence's counts to this DataSet
+        Add a single circuit's counts to this DataSet
 
         Parameters
         ----------
         circuit : tuple or Circuit
-            A tuple of operation labels specifying the operation sequence or a Circuit object
+            A tuple of operation labels specifying the circuit or a Circuit object
 
         countDictList : list
             A list of dictionaries holding the outcome-label:count pairs for each
@@ -1142,7 +1142,7 @@ class DataSet(object):
         Parameters
         ----------
         circuit : tuple or Circuit
-            A tuple of operation labels specifying the operation sequence or a Circuit object
+            A tuple of operation labels specifying the circuit or a Circuit object
 
         aux : dict, optional
             A dictionary of auxiliary meta information to be included with
@@ -1231,14 +1231,14 @@ class DataSet(object):
 
     def truncate(self, listOfCircuitsToKeep, missingAction='raise'):
         """
-        Create a truncated dataset comprised of a subset of the operation sequences
+        Create a truncated dataset comprised of a subset of the circuits
         in this dataset.
 
         Parameters
         ----------
         listOfCircuitsToKeep : list of (tuples or Circuits)
-            A list of the operation sequences for the new returned dataset.  If a
-            operation sequence is given in this list that isn't in the original
+            A list of the circuits for the new returned dataset.  If a
+            circuit is given in this list that isn't in the original
             data set, `missingAction` determines the behavior.
 
         missingAction : {"raise","warn","ignore"}
@@ -1270,7 +1270,7 @@ class DataSet(object):
                     else:
                         raise ValueError("Invalid `missingAction`: %s" % str(missingAction))
 
-                #only keep track of operation sequences if they could be different from listOfCircuitsToKeep
+                #only keep track of circuits if they could be different from listOfCircuitsToKeep
                 if missingAction != "raise": circuits.append( circuit )
                 circuitIndices.append( self.cirIndex[circuit] )
 
@@ -1363,9 +1363,9 @@ class DataSet(object):
         return ds
 
 
-    def process_op_strings(self, processor_fn, aggregate=False):
+    def process_circuits(self, processor_fn, aggregate=False):
         """
-        Manipulate this DataSet's operation sequences according to `processor_fn`.
+        Manipulate this DataSet's circuits (keys) according to `processor_fn`.
 
         All of the DataSet's gate sequence labels are updated by running each
         through `processor_fn`.  This can be useful when "tracing out" qubits
@@ -1379,15 +1379,15 @@ class DataSet(object):
             `None`, in which case the data for that string is deleted.
 
         aggregate : bool, optional
-            When `True`, aggregate the data for operation sequences that `processor_fn`
-            assigns to the same "new" operation sequence.  When `False`, use the data
-            from the *last* original string that maps to a given "new" string.
+            When `True`, aggregate the data for ciruits that `processor_fn`
+            assigns to the same "new" circuit.  When `False`, use the data
+            from the *last* original circuit that maps to a given "new" circuit.
 
         Returns
         -------
         None
         """
-        if self.bStatic: raise ValueError("Cannot process_op_strings on a static DataSet object")
+        if self.bStatic: raise ValueError("Cannot process_circuits on a static DataSet object")
 
         to_delete = []
         new_cirIndex = _OrderedDict()
@@ -1443,7 +1443,7 @@ class DataSet(object):
         ----------
         circuits : iterable
             An iterable over Circuit-like objects specifying the keys
-            (operation sequences) to remove.
+            (circuits) to remove.
 
         missingAction : {"raise","warn","ignore"}
             What to do when a string in `circuits` is not in this data
@@ -1787,7 +1787,7 @@ class DataSet(object):
                 state_dict['auxInfo'] = new_aux_info
         
         def expand(x): #to be backward compatible
-            """ Expand a compressed operation sequence """
+            """ Expand a compressed circuit """
             if isinstance(x,_cir.CompressedCircuit): return x.expand()
             elif hasattr(x,'__class__') and x.__class__.__name__ == "dummy_CompressedGateString":
                 return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x._tup), stringrep=x.str)

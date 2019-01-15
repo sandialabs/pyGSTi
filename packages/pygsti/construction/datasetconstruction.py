@@ -233,7 +233,7 @@ def merge_outcomes(dataset,label_merge_dict):
     Parameters
     ----------
     dataset : DataSet object
-        The input DataSet whose results will be compiled according to the rules
+        The input DataSet whose results will be simplified according to the rules
         set forth in label_merge_dict
 
     label_merge_dict : dictionary
@@ -412,8 +412,7 @@ def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,
     ds_merged = merge_outcomes(dataset, create_merge_dict(sindices_to_keep,
                                              dataset.get_outcome_labels()))
     ds_merged = ds_merged.copy_nonstatic()
-    ds_merged.process_op_strings(lambda s: _gstrc.filter_circuit(
-                                       s, sectors_to_keep, new_sectors, idle),
-                                   aggregate=True)
+    ds_merged.process_circuits(lambda s: _gstrc.filter_circuit(
+        s, sectors_to_keep, new_sectors, idle), aggregate=True)
     ds_merged.done_adding_data()
     return ds_merged

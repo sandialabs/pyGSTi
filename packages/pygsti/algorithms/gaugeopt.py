@@ -403,7 +403,7 @@ def _create_objective_fn(model, targetModel, itemWeights=None,
             # --- NOTE: ordering here, with running `start` index MUST
             #           correspond to those in Model.residuals, which in turn
             #           must correspond to those in ForwardSimulator.residuals - which
-            #           currently orders as: gates, compiled_ops, preps, effects.
+            #           currently orders as: gates, simplified_ops, preps, effects.
 
 
             # -- LinearOperator terms

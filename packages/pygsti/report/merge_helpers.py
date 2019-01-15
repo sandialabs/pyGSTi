@@ -728,7 +728,7 @@ def merge_latex_template(qtys, templateFilename, outputFilename,
     output_dir = _os.path.dirname(outputFilename)
     output_base = _os.path.splitext( _os.path.basename(outputFilename) )[0]
 
-    #render quantities as LaTeX within dir where report will be compiled
+    #render quantities as LaTeX within dir where report will be simplified
     cwd = _os.getcwd()
     if len(output_dir) > 0: _os.chdir(output_dir)
     try:

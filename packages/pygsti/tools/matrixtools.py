@@ -1085,8 +1085,6 @@ def safereal(A, inplace=False, check=False):
     a sparse matrix
     """
     if check:
-        #test =safenorm(A,'real'),safenorm(A,'imag')  #TODO REMOVE
-        #if test[1] >= 1e-6: print("safereal check failed (Re,Im) = ",test)
         assert( safenorm(A,'imag') < 1e-6 ), "Check failed: taking real-part of matrix w/nonzero imaginary part"
     if _sps.issparse(A):
         if _sps.isspmatrix_csr(A):

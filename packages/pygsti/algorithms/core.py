@@ -53,7 +53,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     targetModel : Model
         A model used to specify which operation labels should be estimated, a
         guess for which gauge these estimates should be returned in, and
-        used to compile operation sequences.
+        used to simplify operation sequences.
 
     opLabels : list, optional
         A list of which operation labels (or aliases) should be estimated.
@@ -267,7 +267,6 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
                     % (guessTrunc,len(guess_s)), 2)
         for sval in guess_s: printer.log(sval,2)
         printer.log('',2)
-        #REMOVE lgstModel._check_paramvec()
 
         if guessTrunc < trunc:  # if the dimension of the gauge-guess model is smaller than the matrices being estimated, pad B with identity
             printer.log("LGST: Padding target B with sqrt of low singular values of I_tilde: \n", 2)
@@ -283,7 +282,6 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
             ggEl = _objs.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
             lgstModel.transform(ggEl)
 
-        #REMOVE lgstModel._check_paramvec()
         # Force lgstModel to have gates, preps, & effects parameterized in the same way as those in
         # guessModelForGauge, but we only know how to do this when the dimensions of the target and
         # created model match.  If they don't, it doesn't make sense to increase the target model
@@ -333,9 +331,6 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
                             new_effects.append( (effectLabel,new_vec) )
                         lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM( new_effects )
 
-                    #REMOVE lgstModel._check_paramvec()
-
-
 
             #Also convey default gauge group & calc class from guessModelForGauge
             lgstModel.default_gauge_group = \
@@ -350,7 +345,6 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     printer.log(lgstModel,3)
     #    for line in str(lgstModel).split('\n'):
     #       printer.log(line, 3)
-    #REMOVE lgstModel._check_paramvec()
     return lgstModel
 
 def _lgst_matrix_dims(mdl, prepStrs, effectStrs):
@@ -372,7 +366,7 @@ def _constructAB(prepStrs, effectStrs, model, dataset, opLabelAliases=None):
         for j,rhostr in enumerate(prepStrs):
             opLabelString = rhostr + estr # LEXICOGRAPHICAL VS MATRIX ORDER
             dsStr = _tools.find_replace_tuple(opLabelString,opLabelAliases)
-            raw_dict, outcomes = model.compile_circuit(opLabelString)
+            raw_dict, outcomes = model.simplify_circuit(opLabelString)
             assert(len(raw_dict) == 1), "No instruments are allowed in LGST fiducials!"
             unique_key = list(raw_dict.keys())[0]
             assert(len(raw_dict[unique_key]) == povmLen)
@@ -399,7 +393,7 @@ def _constructXMatrix(prepStrs, effectStrs, model, opLabelTuple, dataset, opLabe
         for j,rhostr in enumerate(prepStrs):
             opLabelString = rhostr + _objs.Circuit(opLabelTuple) + estr # LEXICOGRAPHICAL VS MATRIX ORDER
             dsStr = _tools.find_replace_tuple(tuple(opLabelString),opLabelAliases)
-            raw_dict, outcomes = model.compile_circuit(opLabelString)
+            raw_dict, outcomes = model.simplify_circuit(opLabelString)
             dsRow = dataset[dsStr]
             assert(len(raw_dict) == nVariants)
 
@@ -635,7 +629,7 @@ def do_exlgst(dataset, startModel, circuitsToUseInEstimation, prepStrs,
     #Step 1: get the lgst estimates for each of the "operation sequences to use in estimation" list
     evTree,_,_ = mdl.bulk_evaltree(circuitsToUseInEstimation)
     circuitsToUseInEstimation = evTree.generate_circuit_list(permute=False)
-      # length of this list == that of raw "compile" dict == dim of bulk_product, etc.
+      # length of this list == that of raw "simplify" dict == dim of bulk_product, etc.
 
     opLabelAliases = {}
     for i,opStrTuple in enumerate(circuitsToUseInEstimation):
@@ -1075,14 +1069,6 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
                 raise ValueError("MPI ERROR: *different* MC2GST start models" + # pragma: no cover
                              " given to different processors!")                   # pragma: no cover
 
-        #OLD: TODO REMOVE
-        #mdl_cmp = comm.bcast(mdl if (comm.Get_rank() == 0) else None, root=0)
-        #try:
-        #    if mdl.frobeniusdist(mdl_cmp) > 1e-6:
-        #        raise ValueError("MPI ERROR: *different* MC2GST start models" + # pragma: no cover
-        #                     " given to different processors!")                   # pragma: no cover
-        #except NotImplementedError: pass # OK if some gates (maps) don't implement this
-
     #convert list of Circuits to list of raw tuples since that's all we'll need
     if len(circuitsToUse) > 0 and \
           isinstance(circuitsToUse[0],_objs.Circuit):
@@ -1122,7 +1108,7 @@ def do_mc2gst(dataset, startModel, circuitsToUse,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:        
-        dstree = dataset if (opLabelAliases is None) else None #Note: compile_circuits doesn't support aliased dataset (yet)
+        dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
         evTree, wrtBlkSize,_, lookup, outcomes_lookup = mdl.bulk_evaltree_from_resources(
             circuitsToUse, comm, mlim, distributeMethod,
             ["bulk_fill_probs","bulk_fill_dprobs"], dstree, printer-1)
@@ -2294,14 +2280,6 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
                 raise ValueError("MPI ERROR: *different* MC2GST start models" + # pragma: no cover
                              " given to different processors!")                   # pragma: no cover
 
-        #OLD TODO REMOVE
-        #mdl_cmp = comm.bcast(mdl if (comm.Get_rank() == 0) else None, root=0)
-        #try:
-        #    if mdl.frobeniusdist(mdl_cmp) > 1e-6:
-        #        raise ValueError("MPI ERROR: *different* MLGST start models" +
-        #                         " given to different processors!") # pragma: no cover
-        #except NotImplementedError: pass # OK if some gates (maps) don't implement this
-
         if forcefn_grad is not None:
             forcefn_cmp = comm.bcast(forcefn_grad if (comm.Get_rank() == 0) else None, root=0)
             normdiff = _np.linalg.norm(forcefn_cmp - forcefn_grad)
@@ -2346,7 +2324,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
-        dstree = dataset if (opLabelAliases is None) else None #Note: compile_circuits doesn't support aliased dataset (yet)
+        dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
         evTree, wrtBlkSize,_,lookup,outcomes_lookup = mdl.bulk_evaltree_from_resources(
             circuitsToUse, comm, mlim, distributeMethod,
             ["bulk_fill_probs","bulk_fill_dprobs"], dstree, printer-1)
@@ -3123,9 +3101,9 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
     #Compute derivatives for effect terms
     i = len(mdl.preps)
     for povmlbl,povm in mdl.povms.items():
-        #Compile effects of povm so we can take their derivatives
+        #Simplify effects of povm so we can take their derivatives
         # directly wrt parent Model parameters
-        for _,effectvec in povm.compile_effects(povmlbl).items():
+        for _,effectvec in povm.simplify_effects(povmlbl).items():
             nP = effectvec.num_params()
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis

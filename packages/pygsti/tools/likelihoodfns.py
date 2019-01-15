@@ -141,7 +141,7 @@ def logl_terms(model, dataset, circuit_list=None,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
         #tree_circuit_list = evalTree.generate_circuit_list()
-        # Note: this is != circuit_list, as the tree hold *compiled* circuits
+        # Note: this is != circuit_list, as the tree hold *simplified* circuits
     else:
         #OLD: evalTree,lookup,outcomes_lookup = smart(model.bulk_evaltree,circuit_list, dataset=dataset)
         evalTree,_,_,lookup,outcomes_lookup = smart(model.bulk_evaltree_from_resources,
@@ -395,7 +395,7 @@ def logl_jacobian(model, dataset, circuit_list=None,
 
     #OLD: evalTree,lookup,outcomes_lookup = model.bulk_evaltree(circuit_list)
     mlim = None if (memLimit is None) else memLimit-persistentMem
-    dstree = dataset if (opLabelAliases is None) else None #Note: compile_circuits doesn't support aliased dataset (yet)
+    dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
     evalTree, blkSize, _, lookup, outcomes_lookup = \
         smart(model.bulk_evaltree_from_resources,
             circuit_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
@@ -566,7 +566,7 @@ def logl_hessian(model, dataset, circuit_list=None, minProbClip=1e-6,
     #  - figure out how many row & column partitions are needed
     #    to fit computation within available memory (and use all cpus)
     mlim = None if (memLimit is None) else memLimit-persistentMem
-    dstree = dataset if (opLabelAliases is None) else None #Note: compile_circuits doesn't support aliased dataset (yet)
+    dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
     evalTree, blkSize1, blkSize2, lookup, outcomes_lookup = \
         smart(model.bulk_evaltree_from_resources,
             circuit_list, comm, mlim, "deriv", ['bulk_hprobs_by_block'],
@@ -874,7 +874,7 @@ def logl_approximate_hessian(model, dataset, circuit_list=None,
 
     #OLD: evalTree,lookup,outcomes_lookup = model.bulk_evaltree(circuit_list)
     mlim = None if (memLimit is None) else memLimit-persistentMem
-    dstree = dataset if (opLabelAliases is None) else None #Note: compile_circuits doesn't support aliased dataset (yet)
+    dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
     evalTree, blkSize, _, lookup, outcomes_lookup = \
         smart(model.bulk_evaltree_from_resources,
               circuit_list, comm, mlim, "deriv", ['bulk_fill_dprobs'],
@@ -1049,16 +1049,16 @@ def logl_max_terms(model, dataset, circuit_list=None,
 
         #construct raw_dict & nEls from tree (holds keys & vals separately)
         #tree_circuit_list = evalTree.generate_circuit_list()
-        # Note: this is != circuit_list, as the tree hold *compiled* circuits
+        # Note: this is != circuit_list, as the tree hold *simplified* circuits
         raw_dict = _OrderedDict(list(zip(circuit_list,
-                                         evalTree.compiled_circuit_spamTuples)))
+                                         evalTree.simplified_circuit_spamTuples)))
         nEls = evalTree.num_final_elements()
     else:
         if circuit_list is None:
             circuit_list = list(dataset.keys())
 
         raw_dict, lookup, outcomes_lookup, nEls = \
-            smart(model.compile_circuits, circuit_list, dataset)
+            smart(model.simplify_circuits, circuit_list, dataset)
         #Note: we don't actually need an evaltree, so we
         # won't make one here and so won't fill an empty
         # evaltree_cache.

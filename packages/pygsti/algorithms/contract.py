@@ -286,7 +286,6 @@ def _contractToCP_direct(model,verbosity,TPalso=False,maxiter=100000,tol=1e-8):
         op_dim = mdl.get_dimension()
         for rhoVec in list(mdl.preps.values()):
             rhoVec[0,0] = 1.0 / op_dim**0.25
-            #REMOVE mdl._update_paramvec(rhoVec) #tell Model that rhoVec has been updated
             
     mdl._need_to_rebuild = True
     return distance, mdl
@@ -301,12 +300,10 @@ def _contractToTP(model,verbosity):
     for gate in list(mdl.operations.values()):
         gate[0,0] = 1.0
         for k in range(1,gate.shape[1]): gate[0,k] = 0.0
-        #REMOVE mdl._update_paramvec(gate)
 
     op_dim = mdl.get_dimension()
     for rhoVec in list(mdl.preps.values()):
         rhoVec[0,0] = 1.0 / op_dim**0.25
-        #REMOVE mdl._update_paramvec(rhoVec)
 
     mdl._need_to_rebuild = True
     distance = mdl.frobeniusdist(model)

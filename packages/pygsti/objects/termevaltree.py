@@ -40,7 +40,7 @@ class TermEvalTree(EvalTree):
         """ Create a new, empty, evaluation tree. """
         super(TermEvalTree, self).__init__(items)
 
-    def initialize(self, compiled_circuit_list, numSubTreeComms=1, maxCacheSize=None):
+    def initialize(self, simplified_circuit_list, numSubTreeComms=1, maxCacheSize=None):
         """
         Initialize an evaluation tree using a set of complied operation sequences.
         This function must be called before using this EvalTree.
@@ -65,16 +65,16 @@ class TermEvalTree(EvalTree):
         #tStart = _time.time() #DEBUG TIMER
 
         # opLabels : A list of all the distinct operation labels found in
-        #              compiled_circuit_list.  Used in calc classes
+        #              simplified_circuit_list.  Used in calc classes
         #              as a convenient precomputed quantity.
-        self.opLabels = self._get_opLabels(compiled_circuit_list)
+        self.opLabels = self._get_opLabels(simplified_circuit_list)
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 
-        circuit_list = [tuple(opstr) for opstr in compiled_circuit_list.keys()]
-        self.compiled_circuit_spamTuples = list(compiled_circuit_list.values())
-        self.num_final_els = sum([len(v) for v in self.compiled_circuit_spamTuples])
-        #self._compute_finalStringToEls() #depends on compiled_circuit_spamTuples
+        circuit_list = [tuple(opstr) for opstr in simplified_circuit_list.keys()]
+        self.simplified_circuit_spamTuples = list(simplified_circuit_list.values())
+        self.num_final_els = sum([len(v) for v in self.simplified_circuit_spamTuples])
+        #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
         self.recompute_spamtuple_indices(bLocal=True) # bLocal shouldn't matter here
 
         #Evaluation tree:
@@ -179,7 +179,7 @@ class TermEvalTree(EvalTree):
             A dictionary whose keys are integer original-circuit indices
             and whose values are slices or index arrays of final-element-
             indices (typically this dict is returned by calling
-            :method:`Model.compile_circuits`).  Since splitting a 
+            :method:`Model.simplify_circuits`).  Since splitting a 
             tree often involves permutation of the raw string ordering
             and thereby the element ordering, an updated version of this
             dictionary, with all permutations performed, is returned.
@@ -371,21 +371,21 @@ class TermEvalTree(EvalTree):
                 subTree[ik] = circuit
 
             subTree.parentIndexMap = parentIndices #parent index of each subtree index
-            subTree.compiled_circuit_spamTuples = [ self.compiled_circuit_spamTuples[k]
+            subTree.simplified_circuit_spamTuples = [ self.simplified_circuit_spamTuples[k]
                                                        for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
-            #subTree._compute_finalStringToEls() #depends on compiled_circuit_spamTuples
+            #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
             
             final_el_startstops = []; i=0
-            for spamTuples in parentTree.compiled_circuit_spamTuples:
+            for spamTuples in parentTree.simplified_circuit_spamTuples:
                 final_el_startstops.append( (i,i+len(spamTuples)) )
                 i += len(spamTuples)
             subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
                 [ _np.arange(*final_el_startstops[k])
                   for k in _slct.indices(subTree.myFinalToParentFinalMap) ] )
             #Note: myFinalToParentFinalMap maps only between *final* elements
-            #   (which are what is held in compiled_circuit_spamTuples)
+            #   (which are what is held in simplified_circuit_spamTuples)
             
-            subTree.num_final_els = sum([len(v) for v in subTree.compiled_circuit_spamTuples])
+            subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_spamTuples])
             subTree.recompute_spamtuple_indices(bLocal=False)
 
             subTree.opLabels = self._get_opLabels( subTree.generate_circuit_list(permute=False) )
@@ -424,10 +424,10 @@ class TermEvalTree(EvalTree):
             A calculator object for computing the raw polynomials (if necessary)
 
         rholabel : Label
-            The (compiled) state preparation label.
+            The (simplified) state preparation label.
 
         elabels : list
-            A list of (compiled) POVM effect labels.
+            A list of (simplified) POVM effect labels.
 
         comm : mpi4py.MPI.Comm
             When not None, an MPI communicator for distributing the computation
@@ -486,10 +486,10 @@ class TermEvalTree(EvalTree):
             A calculator object for computing the raw polynomials (if necessary)
 
         rholabel : Label
-            The (compiled) state preparation label.
+            The (simplified) state preparation label.
 
         elabels : list
-            A list of (compiled) POVM effect labels.
+            A list of (simplified) POVM effect labels.
 
         wrtSlice : slice
             The parameter slice to differentiate with respect to.
@@ -553,10 +553,10 @@ class TermEvalTree(EvalTree):
             A calculator object for computing the raw polynomials (if necessary)
 
         rholabel : Label
-            The (compiled) state preparation label.
+            The (simplified) state preparation label.
 
         elabels : list
-            A list of (compiled) POVM effect labels.
+            A list of (simplified) POVM effect labels.
 
         wrtSlice1, wrtSlice2 : slice
             The parameter slices to differentiate with respect to.

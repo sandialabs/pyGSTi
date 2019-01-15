@@ -13,7 +13,6 @@ import collections as _collections
 import scipy.sparse as _sps
 import warnings as _warnings
 
-from . import model as _mdl
 from . import operation as _op
 from . import spamvec as _sv
 from . import povm as _povm
@@ -22,6 +21,8 @@ from . import labeldicts as _ld
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
+from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
+from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
@@ -30,8 +31,7 @@ from ..baseobjs import Label as _Lbl
 
 from ..baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
-# TODO docstrings -- at least check them in this (new) module
-class LocalNoiseModel(_mdl.ImplicitOpModel):
+class LocalNoiseModel(_ImplicitOpModel):
     """ 
     A n-qubit model by embedding the *same* gates from `gatedict`
     as requested and creating a perfect 0-prep and z-basis POVM.
@@ -43,8 +43,15 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
                        evotype="auto", sim_type="auto", on_construction_error='raise',
                        independent_gates=False, ensure_composed_gates=False):
         """
-        TODO: docstring - add geometry, independent_gates, ensure_composed_gates
-        Creates a "standard" n-qubit model, usually of ideal gates.
+        Creates a "standard" n-qubit model, usually of ideal gates, which 
+        is capable of describing "local noise", that is, noise/error that only 
+        acts on the *target qubits* of a given gate.
+
+        For example, in a model with 4 qubits, a X(pi/2) gate on the 2nd
+        qubit (which might be labelled something like `("Gx",1)`) can only
+        act non-trivially on the 2nd qubit in a local noise model.  Because
+        of a local noise  model's limitations, it is often used for describing
+        ideal gates or very simple perturbations of them.
     
         The returned model is "standard", in that the following standard gate
         names may be specified as elements to `gate_names` without the need to
@@ -78,16 +85,39 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
         nonstd_gate_unitaries : dict, optional 
             A dictionary of numpy arrays which specifies the unitary gate action
             of the gate names given by the dictionary's keys.
-    
+
         availability : dict, optional
-            A dictionary whose keys are gate names and whose values are lists of 
-            qubit-label-tuples.  See constructor docstring for more details.
+            A dictionary whose keys are the same gate names as in
+            `gate_names` and whose values are lists of qubit-label-tuples.  Each
+            qubit-label-tuple must have length equal to the number of qubits
+            the corresponding gate acts upon, and specifies that the named gate
+            is available to act on the specified qubits.  For example,
+            `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
+            the `1-qubit `'Gx'`-gate to be available for acting on qubits
+            0, 1, or 2, and the 2-qubit `'Gcnot'`-gate to be availalbe to
+            act on qubits 0 & 1 or 1 & 2.  Instead of a list of tuples, values of
+            `availability` may take the special values `"all-permutations"` and
+            `"all-combinations"`, which as their names imply, equate to all possible
+            permutations and combinations of the appropriate number of qubit labels
+            (deterined by the gate's dimension).  The default value `"all-edges"`
+            equates to all the edges in the graph given by `geometry`.
     
+        qubit_labels : tuple, optional
+            The circuit-line labels for each of the qubits, which can be integers
+            and/or strings.  Must be of length `nQubits`.  If None, then the 
+            integers from 0 to `nQubits-1` are used.
+        
+        geometry : {"line","ring","grid","torus"} or QubitGraph
+            The type of connectivity among the qubits, specifying a
+            graph used to define neighbor relationships.  Alternatively,
+            a :class:`QubitGraph` object with node labels equal to 
+            `qubit_labels` may be passed directly.
+
         parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
                             "H+S clifford terms", "clifford"}
             The type of parameterizaton to use for each gate value before it is
-            embedded. See :method:`Model.set_all_parameterizations` for more
-            details.
+            embedded. See :method:`ExplicitOpModel.set_all_parameterizations`
+            for more details.
     
         evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
             The evolution type.  Often this is determined by the choice of 
@@ -109,14 +139,29 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
             In some cases, for example when converting as many gates as you can
             into `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
             may be useful.
+
+        independent_gates : bool, optional
+            Whether gates are allowed independent local noise or not.  If False,
+            then all gates with the same name (e.g. "Gx") will have the *same*
+            (local) noise (e.g. an overrotation by 1 degree), and the 
+            `operation_bks['gates']` dictionary contains a single key per gate 
+            name.  If True, then gates with the same name acting on different
+            qubits may have different local noise, and so the 
+            `operation_bks['gates']` dictionary contains a key for each gate
+             available gate placement.
+    
+        ensure_composed_gates : bool, optional
+            If True then the elements of the `operation_bks['gates']` will always
+            be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or 
+            :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+            facilitate modifying the gate operations after the model is created.
+            If False, then the appropriately parameterized gate objects (often 
+            dense gates) are used directly.
+    
     
         Returns
         -------
-        Model
-            A model with `"rho0"` prep, `"Mdefault"` POVM, and gates labeled by
-            gate name (keys of `gatedict`) and qubit labels (from within
-            `availability`).  For instance, the operation label for the `"Gx"` gate on
-            qubit 2 might be `Label("Gx",1)`.
+        LocalNoiseModel
         """
         if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
         std_unitaries = _itgs.get_standard_gatename_unitaries()
@@ -131,11 +176,6 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
         
         gatedict = _collections.OrderedDict()
         for name in gate_names:
-            #TODO REMOVE
-            #if name == "Gi": # special case: Gi as a gate *name* is interpreted as a
-            #    gatedict[name] = "PerfectIdle" # perfect idle operation/placeholder.
-            #    continue
-                
             U = nonstd_gate_unitaries.get(name, std_unitaries.get(name,None))
             if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
             if evotype in ("densitymx","svterm","cterm"): 
@@ -196,7 +236,7 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
         parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
                             "H+S clifford terms", "clifford"}
             The type of parameterizaton to convert each value in `gatedict` to. See
-            :method:`Model.set_all_parameterizations` for more details.
+            :method:`ExplicitOpModel.set_all_parameterizations` for more details.
     
         evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
             The evolution type.  Often this is determined by the choice of 
@@ -219,14 +259,24 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
             for example when converting as many gates as you can into
             `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
             may be useful.
+
+        independent_gates : bool, optional
+            Whether gates are allowed independent local noise or not.  If False,
+            then all gates with the same name (e.g. "Gx") will have the *same*
+            (local) noise (e.g. an overrotation by 1 degree), and the 
+            `operation_bks['gates']` dictionary contains a single key per gate 
+            name.  If True, then gates with the same name acting on different
+            qubits may have different local noise, and so the 
+            `operation_bks['gates']` dictionary contains a key for each gate
+             available gate placement.
     
-        Returns
-        -------
-        Model
-            A model with `"rho0"` prep, `"Mdefault"` POVM, and gates labeled by
-            gate name (keys of `gatedict`) and qubit labels (from within
-            `availability`).  For instance, the operation label for the `"Gx"` gate on
-            qubit 2 might be `Label("Gx",1)`.
+        ensure_composed_gates : bool, optional
+            If True then the elements of the `operation_bks['gates']` will always
+            be either :class:`ComposedDenseOp` (if `sim_type == "matrix"`) or 
+            :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+            facilitate modifying the gate operations after the model is created.
+            If False, then the appropriately parameterized gate objects (often 
+            dense gates) are used directly.
         """
         if qubit_labels is None:
             qubit_labels = tuple(range(nQubits))
@@ -410,7 +460,16 @@ class LocalNoiseModel(_mdl.ImplicitOpModel):
         #(no instruments)
 
     
-class SimpleCompLayerLizard(_mdl.ImplicitLayerLizard):
+class SimpleCompLayerLizard(_ImplicitLayerLizard):
+    """
+    The layer lizard class for a :class:`LocalNoiseModel`, which
+    creates layers by composing perfect target gates, and local errors.
+
+    This is a simple process because gates in a layer will have disjoint sets
+    of target qubits, and thus the local errors (and, as always, the gate
+    operations) can be composed as separate quantum processes without regard
+    for ordering.
+    """
     def get_prep(self,layerlbl):
         return self.prep_blks['layers'][layerlbl] # prep_blks['layer'] are full prep ops
     def get_effect(self,layerlbl):

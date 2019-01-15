@@ -272,7 +272,7 @@ class NQubitTestCase(BaseTestCase):
         print(" povm.gpindices = ",povm.gpindices, "parent is None?", bool(povm.parent is None))
         for i,fpovm in enumerate(povm.factorPOVMs):
             print(" factorPOVM%d.gpindices = " % i, fpovm.gpindices, "parent is None?", bool(fpovm.parent is None))
-        for lbl,effect in povm.compile_effects().items():
+        for lbl,effect in povm.simplify_effects().items():
             print(" compiled[%s].gpindices = " % lbl, effect.gpindices, "parent is None?", bool(effect.parent is None))
         
         mdl.povms['Mtest'] = povm
@@ -281,7 +281,7 @@ class NQubitTestCase(BaseTestCase):
         print(" povm.gpindices = ",povm.gpindices, "parent is None?", bool(povm.parent is None))
         for i,fpovm in enumerate(povm.factorPOVMs):
             print(" factorPOVM%d.gpindices = " % i, fpovm.gpindices, "parent is None?", bool(fpovm.parent is None))
-        for lbl,effect in povm.compile_effects("Mtest").items():
+        for lbl,effect in povm.simplify_effects("Mtest").items():
             print(" compiled[%s].gpindices = " % lbl, effect.gpindices, "parent is None?", bool(effect.parent is None))
 
 

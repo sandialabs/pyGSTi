@@ -76,7 +76,7 @@ class MultiDataSet_ValIterator(object):
 class MultiDataSet(object):
     """
     The MultiDataSet class allows for the combined access and storage of
-    several static DataSets that contain the same operation sequences (in the same
+    several static DataSets that contain the same circuits (in the same
     order) AND the same time-dependence structure (if applicable).
 
     It is designed to behave similarly to a dictionary of DataSets, so that
@@ -111,8 +111,8 @@ class MultiDataSet(object):
           counts (can be `None` if there are no repetitions)
 
         circuitIndices : ordered dictionary, optional
-          An OrderedDict with keys equal to operation sequences (tuples of operation labels) and values equal to
-          integer indices associating a row/element of counts with the operation sequence.
+          An OrderedDict with keys equal to circuits (tuples of operation labels) and values equal to
+          integer indices associating a row/element of counts with the circuit.
 
         outcomeLabels : list of strings
           Specifies the set of spam labels for the DataSet.  Indices for the spam labels
@@ -130,7 +130,7 @@ class MultiDataSet(object):
           from a file (just like using the load(...) function).
 
         collisionActions : dictionary, optional
-            Specifies how duplicate operation sequences should be handled for the data
+            Specifies how duplicate circuits should be handled for the data
             sets.  Keys must match those of `oliDict` and values are "aggregate"
             or "keepseparate".  See documentation for :class:`DataSet`.  If None,
             then "aggregate" is used for all sets by default.
@@ -158,7 +158,7 @@ class MultiDataSet(object):
             self.load(fileToLoadFrom)
             return
 
-        # self.cirIndex  :  Ordered dictionary where keys = operation sequences (tuples), values = integer indices into counts
+        # self.cirIndex  :  Ordered dictionary where keys = circuits (tuples), values = integer indices into counts
         if circuitIndices is not None:
             self.cirIndex = circuitIndices
         else:
@@ -362,7 +362,7 @@ class MultiDataSet(object):
     def add_dataset(self, datasetName, dataset):
         """
         Add a DataSet to this MultiDataSet.  The dataset
-        must be static and conform with the operation sequences and
+        must be static and conform with the circuits and
         time-dependent structure passed upon construction or
         those inherited from the first dataset added.
 
@@ -380,7 +380,7 @@ class MultiDataSet(object):
         if not dataset.bStatic:
             raise ValueError("Cannot add dataset: only static DataSets can be added to a MultiDataSet")
         if self.cirIndex is not None and set(dataset.cirIndex.keys()) != set(self.cirIndex.keys()):
-            raise ValueError("Cannot add dataset: operation sequences do not match")
+            raise ValueError("Cannot add dataset: circuits do not match")
 
         if self.cirIndex is None:
             self.cirIndex = dataset.cirIndex
@@ -610,7 +610,7 @@ class MultiDataSet(object):
 
         state_dict = _pickle.load(f)
         def expand(x): 
-            """ Expand a comproessed operation sequence """
+            """ Expand a comproessed circuit """
             assert isinstance(x,_cir.CompressedCircuit)
             return x.expand()
             #else: #to be backward compatible

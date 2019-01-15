@@ -9,14 +9,18 @@ from __future__ import division, print_function, absolute_import #, unicode_lite
 import sys as _sys
 import numpy as _np
 from types import ModuleType as _ModuleType
+from contextlib import contextmanager as _contextmanager
 
 from .. import objects as _objs
 from .. import baseobjs as _baseobjs
 from ..objects import circuit as _circuit
 
-
+@_contextmanager
 def enable_old_object_unpickling():
-    """ TODO: docstring """
+    """
+    Returns a context manager which enables the unpickling of old-version (0.9.6
+    and sometimes prior) objects.
+    """
     class dummy_GateString(object):
         def __new__(cls):
             replacement_obj = _circuit.Circuit.__new__(_circuit.Circuit)
@@ -137,9 +141,13 @@ def enable_old_object_unpickling():
     _baseobjs.dim.Dim.__setstate__ = Dim_setstate
     _objs.modelmember.ModelMember.__setstate__ = ModelMember_setstate
 
+    yield # body of context-manager block
 
-def disable_old_object_unpickling():
-    """ TODO: docstring """
+#def disable_old_object_unpickling():
+#    """
+#    Disables the unpickling of old-version (0.9.6 and sometimes prior) objects,
+#    which was enabled using :function:`enable_old_object_unpickling`.
+#    """
     del _sys.modules['pygsti.objects.gatestring']
     del _sys.modules['pygsti.objects.gateset']
     del _sys.modules['pygsti.objects.gate']

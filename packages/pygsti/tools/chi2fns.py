@@ -52,7 +52,7 @@ def chi2_terms(model, dataset, circuits=None,
         lookup = evaltree_cache['lookup']
         outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
-        dstree = dataset if (opLabelAliases is None) else None #Note: compile_circuits doesn't support aliased dataset (yet)
+        dstree = dataset if (opLabelAliases is None) else None #Note: simplify_circuits doesn't support aliased dataset (yet)
         evTree, _,_, lookup, outcomes_lookup = \
             smart(model.bulk_evaltree_from_resources,
                   circuits, None, memLimit, "deriv", ['bulk_fill_probs'], dstree)

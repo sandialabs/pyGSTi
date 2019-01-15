@@ -41,7 +41,7 @@ class MapForwardSimulator(ForwardSimulator):
     -- parameterizations of operation matrices and SPAM vectors) access to these
     fundamental operations.
     """    
-    def __init__(self, dim, compiled_op_server, paramvec):
+    def __init__(self, dim, simplified_op_server, paramvec):
         """
         Construct a new MapForwardSimulator object.
 
@@ -64,7 +64,7 @@ class MapForwardSimulator(ForwardSimulator):
             for use in computations.
         """
         super(MapForwardSimulator, self).__init__(
-            dim, compiled_op_server, paramvec)
+            dim, simplified_op_server, paramvec)
         if self.evotype not in ("statevec","densitymx","stabilizer"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "map-based calculations" % self.evotype))
@@ -72,12 +72,12 @@ class MapForwardSimulator(ForwardSimulator):
         
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
-        return MapForwardSimulator(self.dim, self.cos, self.paramvec)
+        return MapForwardSimulator(self.dim, self.sos, self.paramvec)
     
     def _rhoEs_from_labels(self, rholabel, elabels):
         """ Returns SPAMVec *objects*, so must call .todense() later """
-        rho = self.cos.get_prep(rholabel)
-        Es = [ self.cos.get_effect(elabel) for elabel in elabels ]
+        rho = self.sos.get_prep(rholabel)
+        Es = [ self.sos.get_effect(elabel) for elabel in elabels ]
         #No support for "custom" spamlabel stuff here
         return rho,Es
         
@@ -93,10 +93,10 @@ class MapForwardSimulator(ForwardSimulator):
             The state preparation label.
         
         elabels : list
-            A list of :class:`Label` objects giving the *compiled* effect labels.
+            A list of :class:`Label` objects giving the *simplified* effect labels.
 
         circuit : Circuit or tuple
-            A tuple-like object of *compiled* gates (e.g. may include
+            A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
         clipTo : 2-tuple
@@ -112,9 +112,9 @@ class MapForwardSimulator(ForwardSimulator):
             An array of floating-point probabilities, corresponding to
             the elements of `elabels`.
         """
-        rhorep = self.cos.get_prep(rholabel).torep('prep')
-        ereps = [ self.cos.get_effect(elabel).torep('effect') for elabel in elabels ]
-        rhorep = replib.propagate_staterep(rhorep, [self.cos.get_operation(gl).torep() for gl in circuit])
+        rhorep = self.sos.get_prep(rholabel).torep('prep')
+        ereps = [ self.sos.get_effect(elabel).torep('effect') for elabel in elabels ]
+        rhorep = replib.propagate_staterep(rhorep, [self.sos.get_operation(gl).torep() for gl in circuit])
         ps = _np.array([ erep.probability(rhorep) for erep in ereps ], 'd')
           #outcome probabilities
 
@@ -138,11 +138,11 @@ class MapForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        spamTuple : (rho_label, compiled_effect_label)
+        spamTuple : (rho_label, simplified_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
         circuit : Circuit or tuple
-            A tuple-like object of *compiled* gates (e.g. may include
+            A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
         returnPr : bool
@@ -188,11 +188,11 @@ class MapForwardSimulator(ForwardSimulator):
 
         Parameters
         ----------
-        spamTuple : (rho_label, compiled_effect_label)
+        spamTuple : (rho_label, simplified_effect_label)
             Specifies the prep and POVM effect used to compute the probability.
 
         circuit : Circuit or tuple
-            A tuple-like object of *compiled* gates (e.g. may include
+            A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
         returnPr : bool
@@ -539,16 +539,16 @@ class MapForwardSimulator(ForwardSimulator):
         Compute the outcome probabilities for an entire tree of operation sequences.
 
         This routine fills a 1D array, `mxToFill` with the probabilities
-        corresponding to the *compiled* operation sequences found in an evaluation
+        corresponding to the *simplified* operation sequences found in an evaluation
         tree, `evalTree`.  An initial list of (general) :class:`Circuit`
-        objects is *compiled* into a lists of gate-only sequences along with
+        objects is *simplified* into a lists of gate-only sequences along with
         a mapping of final elements (i.e. probabilities) to gate-only sequence
         and prep/effect pairs.  The evaluation tree organizes how to efficiently
         compute the gate-only sequences.  This routine fills in `mxToFill`, which
         must have length equal to the number of final elements (this can be 
         obtained by `evalTree.num_final_elements()`.  To interpret which elements
         correspond to which strings and outcomes, you'll need the mappings 
-        generated when the original list of `Circuits` was compiled.
+        generated when the original list of `Circuits` was simplified.
 
         Parameters
         ----------
@@ -557,7 +557,7 @@ class MapForwardSimulator(ForwardSimulator):
           total number of computed elements (i.e. evalTree.num_final_elements())
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
         clipTo : 2-tuple, optional
@@ -633,7 +633,7 @@ class MapForwardSimulator(ForwardSimulator):
           number of model parameters.
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional
@@ -822,7 +822,7 @@ class MapForwardSimulator(ForwardSimulator):
           the number of selected gate-set parameters (by wrtFilter1 and wrtFilter2).
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           given by a prior call to bulk_evaltree.  Specifies the *simplified* gate
            strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional

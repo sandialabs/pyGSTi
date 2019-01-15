@@ -138,7 +138,7 @@ class TestDataSetMethods(BaseTestCase):
         ds4.get_degrees_of_freedom()
 
         #String Manipulation
-        dsWritable.process_op_strings( lambda s: pygsti.construction.manipulate_circuit(s, [( ('Gx',), ('Gy',))]) )
+        dsWritable.process_circuits( lambda s: pygsti.construction.manipulate_circuit(s, [( ('Gx',), ('Gy',))]) )
         test_cntDict = dsWritable[('Gy',)].as_dict()
 
         #Test truncation
@@ -782,11 +782,11 @@ Gy 11001100
     def test_load_old_dataset(self):
         vs = "v2" if self.versionsuffix == "" else "v3"
         #pygsti.obj.results.enable_old_python_results_unpickling()
-        pygsti.io.enable_old_object_unpickling()
-        with open(compare_files + "/pygsti0.9.6.dataset.pkl.%s" % vs,'rb') as f:
-            ds = pickle.load(f)
+        with pygsti.io.enable_old_object_unpickling():
+            with open(compare_files + "/pygsti0.9.6.dataset.pkl.%s" % vs,'rb') as f:
+                ds = pickle.load(f)
         #pygsti.obj.results.disable_old_python_results_unpickling()
-        pygsti.io.disable_old_object_unpickling()
+        #pygsti.io.disable_old_object_unpickling()
         with open(temp_files + "/repickle_old_dataset.pkl.%s" % vs,'wb') as f:
             pickle.dump(ds, f)
 
