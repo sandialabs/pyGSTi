@@ -150,6 +150,7 @@ class NQPauliState(object):
         """
         opstr = []
         sgn = {1:'+', -1:'-'}
+        nQubits = len(self.signs)
         for i,(s,let) in enumerate(zip(self.signs,self.rep)):
             key = sgn[s] + let # e.g. "+X", "-Y", etc
             if key not in pauliBasisDict and s == +1: 
@@ -159,7 +160,7 @@ class NQPauliState(object):
                                  % (key,str(list(pauliBasisDict.keys()))))
             opstr.extend( [ _Lbl(opname,i) for opname in pauliBasisDict[key] ] )
               # pauliBasisDict just has 1Q gate *names* -- need to make into labels
-        return _objs.Circuit(opstr).parallelize()
+        return _objs.Circuit(opstr, num_lines=nQubits).parallelize()
 
 
 

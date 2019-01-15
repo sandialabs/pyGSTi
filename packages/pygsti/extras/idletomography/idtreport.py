@@ -114,10 +114,10 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
             for i,el in enumerate(jac_row):
                 if abs(el) > 1e-6:
                     # get intrinsic name `iname` for i-th element:
-                    if typ == "hamiltonian":
+                    if typ == "diffbasis":
                         if i < Ne: iname = "H(%s)"%str(errlst[i]).strip()
                         else: iname = "A(%s)"%str(errlst[i-Ne]).strip()
-                    else: # typ == "stochastic" or "stochastic/affine"
+                    else: # typ == "samebasis"
                         if i < Ne: iname = "S(%s)"%str(errlst[i]).strip()
                         else: iname = "A(%s)"%str(errlst[i-Ne]).strip()
                         
@@ -328,8 +328,8 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
             predictedRate = None
 
         if title == "auto":
-            title = "Prep: %s (%s), Meas: %s (%s)" % (str(prepStr),str(fidpair[0]),
-                                                      str(measStr),str(fidpair[1]))
+            title = "Prep: %s (%s), Meas: %s (%s)" % (prepStr.str,str(fidpair[0]),
+                                                      measStr.str,str(fidpair[1]))
         xlabel = "Length"
         if typ == "diffbasis": 
             ylabel =  "<" + str(obsORoutcome).strip() + ">" #Expectation value

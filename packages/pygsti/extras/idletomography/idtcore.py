@@ -706,7 +706,7 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
     if preferred_meas_basis_signs == "auto":
         preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
         
-    GiStr = _objs.Circuit( idle_string )
+    GiStr = _objs.Circuit( idle_string, num_lines=nQubits )
 
     pauli_fidpairs = idle_tomography_fidpairs(
         nQubits, maxweight, include_hamiltonian, include_stochastic,
