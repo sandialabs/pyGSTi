@@ -916,9 +916,11 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
             if set_isolated:
                 for subset_ind, subset in enumerate(structure):
                     subset_circuit = circuit.copy(editable=True)
+                    print(subset)
                     for q in circuit.line_labels:
                         if q not in subset:
-                            subset_circuit.replace_with_idling_wire(q)
+                            print(subset_circuit, q)
+                            subset_circuit.replace_with_idling_line(q)
                     subset_circuit.done_editing()
                     experiment_dict['circuits'][l,j][(tuple(subset),)] = subset_circuit
                     experiment_dict['probs'][l,j][(tuple(subset),)] = idealout[subset_ind]
@@ -928,7 +930,7 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
                         subsetcomplement_circuit = circuit.copy(editable=True)
                         for q in circuit.line_labels:
                             if q in subset:
-                                subsetcomplement_circuit.replace_with_idling_wire(q)
+                                subsetcomplement_circuit.replace_with_idling_line(q)
                         subsetcomplement_circuit.done_editing()
                         subsetcomplement = list(_copy.copy(structure))
                         subsetcomplement_idealout = list(_copy.copy(idealout))
@@ -1892,7 +1894,7 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
                     subset_circuit = circuit.copy()
                     for q in circuit.line_labels:
                         if q not in subset:
-                            subset_circuit.replace_with_idling_wire(q)
+                            subset_circuit.replace_with_idling_line(q)
                     experiment_dict['circuits'][l,j][(tuple(subset),)] = subset_circuit
                     experiment_dict['idealout'][l,j][(tuple(subset),)] = (idealout[subset_ind],)
             
@@ -1901,7 +1903,7 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
                         subsetcomplement_circuit = circuit.copy()
                         for q in circuit.line_labels:
                             if q in subset:
-                                subsetcomplement_circuit.replace_with_idling_wire(q)
+                                subsetcomplement_circuit.replace_with_idling_line(q)
                         subsetcomplement = list(_copy.copy(structure))
                         subsetcomplement_idealout = list(_copy.copy(idealout))
                         del subsetcomplement[subset_ind]
