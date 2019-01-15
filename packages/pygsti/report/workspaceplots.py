@@ -2252,17 +2252,26 @@ class ProjectionsBoxPlot(WorkspacePlot):
         xd = int(round(_np.sqrt(projections.shape[1]))) #x-basis-dim
         yd = int(round(_np.sqrt(projections.shape[0]))) #y-basis-dim
 
-        if isinstance(projection_basis, _objs.Basis) and \
-           xd == projection_basis.dim.dmDim and yd == 1:
-            basis_for_xlabels = projection_basis
-            basis_for_ylabels = None
+        if isinstance(projection_basis, _objs.Basis):
+            if xd == projection_basis.dim.dmDim and yd == 1:
+                basis_for_xlabels = projection_basis
+                basis_for_ylabels = None
+            elif xd == yd == projection_basis.dim.dmDim:
+                basis_for_xlabels = projection_basis
+                basis_for_ylabels = projection_basis
+            else:
+                try:
+                    basis_for_xlabels = _objs.Basis(projection_basis.name,xd)
+                    basis_for_ylabels = _objs.Basis(projection_basis.name,yd)
+                except:
+                    basis_for_xlabels = basis_for_ylabels = None
         else:
             try:
                 basis_for_xlabels = _objs.Basis(projection_basis,xd)
                 basis_for_ylabels = _objs.Basis(projection_basis,yd)
             except:
                 basis_for_xlabels = basis_for_ylabels = None
-        
+
         return opmatrix_color_boxplot(
             projections, m, M,
             basis_for_xlabels,
