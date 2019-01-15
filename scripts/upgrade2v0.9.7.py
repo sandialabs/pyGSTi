@@ -132,7 +132,7 @@ replacements = {
 "CompressedGateString" : "CompressedCircuit",
 "gateStringToEstimate" : "circuitToEstimate",
 "translate_gatestring" : "translate_circuit",
-"process_gate_strings" : "process_op_strings",
+"process_gate_strings" : "process_circuits",
 "list_all_gatestrings" : "list_all_circuits",
 "build_nqubit_gateset" : "build_standard_localnoise_model",
 "load_gatestring_list" : "load_circuit_list",

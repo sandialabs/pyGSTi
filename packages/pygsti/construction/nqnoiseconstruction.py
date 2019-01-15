@@ -2760,8 +2760,8 @@ def stdmodule_to_smqmodule(std_module):
         """
         Update DataSet `ds` in-place to use  multi-qubit style labels.
         """
-        ds.process_op_strings(lambda s: _gsc.manipulate_circuit(
-                                                s,find_replace_strs,sslbls))
+        ds.process_circuits(lambda s: _gsc.manipulate_circuit(
+            s,find_replace_strs,sslbls))
 
     out_module['find_replace_gatelabels'] = find_replace_labels
     out_module['find_replace_circuits'] = find_replace_strs

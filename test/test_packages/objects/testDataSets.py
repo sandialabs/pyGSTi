@@ -138,7 +138,7 @@ class TestDataSetMethods(BaseTestCase):
         ds4.get_degrees_of_freedom()
 
         #String Manipulation
-        dsWritable.process_op_strings( lambda s: pygsti.construction.manipulate_circuit(s, [( ('Gx',), ('Gy',))]) )
+        dsWritable.process_circuits( lambda s: pygsti.construction.manipulate_circuit(s, [( ('Gx',), ('Gy',))]) )
         test_cntDict = dsWritable[('Gy',)].as_dict()
 
         #Test truncation
