@@ -94,6 +94,7 @@ class Model(object):
           #sets self._calcClass, self._sim_type, self._sim_args
 
         self._paramvec = _np.zeros(0, 'd')
+        self._hyperparams = {}
         self._shlp = simplifier_helper
         self._paramlbls = None # a placeholder for FUTURE functionality
         self._need_to_rebuild = True #whether we call _rebuild_paramvec() in to_vector() or num_params()
@@ -133,7 +134,12 @@ class Model(object):
             self._basis = basis
         else: #create a basis with the proper dimension
             self._basis = _Basis(basis, self.state_space_labels.dim)
-    
+
+    @property
+    def hyperparams(self):
+        """ Dictionary of hyperparameters associated with this model """
+        return self._hyperparams # Note: no need to set this param - just set/update values
+        
     def set_simtype(self, sim_type, calc_cache=None):
         """
         Reset the forward simulation type of this model.
