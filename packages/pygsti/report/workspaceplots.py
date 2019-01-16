@@ -2729,7 +2729,7 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
         
         #Combine plotly figures into one
         nSigma_figdict = nSigma_fig.plotlyfig.to_dict() # so we can work with normal dicts
-        logL_figdict = logL_fig.plotlyfig.to_dict()     # and not weird plotly objects
+        logL_figdict = logL_fig.plotlyfig.to_dict()     # and not weird plotly objects.  Older versions of plotly do not support this syntax, so upgrade if needed.
         combined_fig_data = list(nSigma_figdict['data']) + [ logL_figdict['data'][0] ]
         combined_fig_data[-1].update(visible=False)
         combined_fig = ReportFigure( go.Figure(data=combined_fig_data, layout=nSigma_figdict['layout']),
