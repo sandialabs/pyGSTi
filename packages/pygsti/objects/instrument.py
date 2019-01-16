@@ -12,8 +12,8 @@ import warnings as _warnings
 from ..tools import matrixtools as _mt
 
 #from . import labeldicts as _ld
-from . import gatesetmember as _gm
-from . import gate as _gate
+from . import modelmember as _gm
+from . import operation as _op
 
 
 def convert(instrument, toType, basis, extra=None):
@@ -28,7 +28,7 @@ def convert(instrument, toType, basis, extra=None):
 
     toType : {"full","TP","static","static unitary"}
         The type of parameterizaton to convert to.  See 
-        :method:`GateSet.set_all_parameterizations` for more details.
+        :method:`Model.set_all_parameterizations` for more details.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `povm`.  Allowed values are Matrix-unit (std),
@@ -51,47 +51,47 @@ def convert(instrument, toType, basis, extra=None):
         else:
             return TPInstrument(list(instrument.items()))
     elif toType in ("full","static","static unitary"):
-        gate_list = [(k,_gate.convert(g,toType,basis)) for k,g in instrument.items()]
+        gate_list = [(k,_op.convert(g,toType,basis)) for k,g in instrument.items()]
         return Instrument(gate_list)
     else:
         raise ValueError("Cannot convert an instrument to type %s" % toType)
 
 
-class Instrument(_gm.GateSetMember, _collections.OrderedDict):
+class Instrument(_gm.ModelMember, _collections.OrderedDict):
     """ 
     Meant to correspond to a quantum instrument in theory, this class
     generalizes that notion slightly to include a collection of gates that may
     or may not have all of the properties associated by a mathematical quantum
     instrument.
     """
-    def __init__(self, gate_matrices, items=[]):
+    def __init__(self, op_matrices, items=[]):
         """
         Creates a new Instrument object.
 
         Parameters
         ----------
-        gate_matrices : dict of Gate objects
+        op_matrices : dict of LinearOperator objects
             A dict (or list of key,value pairs) of the gates.
         """
         self._readonly = False #until init is done
         if len(items)>0:
-            assert(gate_matrices is None), "`items` was given when gate_matrices != None"
+            assert(op_matrices is None), "`items` was given when op_matrices != None"
 
         dim = None
         evotype = None
         
-        if gate_matrices is not None:
-            if isinstance(gate_matrices,dict):
-                matrix_list = [(k,v) for k,v in gate_matrices.items()] #gives definite ordering
-            elif isinstance(gate_matrices,list):
-                matrix_list = gate_matrices # assume it's is already an ordered (key,value) list
+        if op_matrices is not None:
+            if isinstance(op_matrices,dict):
+                matrix_list = [(k,v) for k,v in op_matrices.items()] #gives definite ordering
+            elif isinstance(op_matrices,list):
+                matrix_list = op_matrices # assume it's is already an ordered (key,value) list
             else:
-                raise ValueError("Invalid `gate_matrices` arg of type %s" % type(gate_matrices))
+                raise ValueError("Invalid `op_matrices` arg of type %s" % type(op_matrices))
 
             items = []
             for k,v in matrix_list:
-                gate = v if isinstance(v, _gate.Gate) else \
-                       _gate.FullyParameterizedGate(v)
+                gate = v if isinstance(v, _op.LinearOperator) else \
+                       _op.FullDenseOp(v)
 
                 if evotype is None: evotype = gate._evotype
                 else: assert(evotype == gate._evotype), \
@@ -105,14 +105,14 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
             evotype = "densitymx" # default (if no instrument gates)
 
         _collections.OrderedDict.__init__(self, items)
-        _gm.GateSetMember.__init__(self, dim, evotype)
+        _gm.ModelMember.__init__(self, dim, evotype)
         self._paramvec = self._build_paramvec()
         self._readonly = True
 
 
     #No good way to update Instrument on the fly yet...
     #def _update_paramvec(self, modified_obj=None):
-    #    """Updates self._paramvec after a member of this GateSet is modified"""
+    #    """Updates self._paramvec after a member of this Model is modified"""
     #    for obj in self.values():
     #        assert(obj.gpindices is self), "Cannot add/adjust parameter vector!"
     #
@@ -158,7 +158,7 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
         
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
-        #need to *not* pickle parent, as __reduce__ bypasses GateSetMember.__getstate__
+        #need to *not* pickle parent, as __reduce__ bypasses ModelMember.__getstate__
         dict_to_pickle = self.__dict__.copy()
         dict_to_pickle['_parent'] = None
 
@@ -173,32 +173,32 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
         return self.__reduce__()
 
         
-    def compile_gates(self,prefix=""):
+    def simplify_operations(self,prefix=""):
         """
         Returns a dictionary of gates that belong to the Instrument's parent
-        `GateSet` - that is, whose `gpindices` are set to all or a subset of
+        `Model` - that is, whose `gpindices` are set to all or a subset of
         this instruments's gpindices.  These are used internally within
-        computations involving the parent `GateSet`.
+        computations involving the parent `Model`.
 
         Parameters
         ----------
         prefix : str
             A string, usually identitying this instrument, which may be used
-            to prefix the compiled gate keys.
+            to prefix the simplified gate keys.
 
         Returns
         -------
         OrderedDict of Gates
         """
-        #Create a "compiled" (GateSet-referencing) set of element gates
+        #Create a "simplified" (Model-referencing) set of element gates
         if prefix: prefix += "_"
-        compiled = _collections.OrderedDict()
+        simplified = _collections.OrderedDict()
         for k,g in self.items():
             comp = g.copy()
             comp.set_gpindices( _gm._compose_gpindices(self.gpindices,
                                                        g.gpindices), self.parent)
-            compiled[prefix + k] = comp
-        return compiled
+            simplified[prefix + k] = comp
+        return simplified
 
 
     def num_elements(self):
@@ -270,7 +270,7 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
             (and it's inverse) used in the above similarity transform.            
         """
         #Note: since each Mi is a linear function of MT and the Di, we can just
-        # transform the MT and Di (self.param_gates) and re-init the elements.
+        # transform the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.values():
             gate.transform(S)
             self._paramvec[gate.gpindices] = gate.to_vector()
@@ -295,7 +295,7 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
         None
         """
         #Note: since each Mi is a linear function of MT and the Di, we can just
-        # depolarize the MT and Di (self.param_gates) and re-init the elements.
+        # depolarize the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.values():
             gate.depolarize(amount)
             self._paramvec[gate.gpindices] = gate.to_vector()
@@ -326,7 +326,7 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
         None
         """
         #Note: since each Mi is a linear function of MT and the Di, we can just
-        # rotate the MT and Di (self.param_gates) and re-init the elements.
+        # rotate the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.values():
             gate.rotate(amount,mxBasis)
             self._paramvec[gate.gpindices] = gate.to_vector()
@@ -341,7 +341,7 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
 
 
 
-class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
+class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
     """ 
     A trace-preservng quantum instrument which is a collection of gates whose
     sum is a trace-preserving map.  The instrument's elements may or may not
@@ -366,56 +366,56 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
     # M4 = -(sum(Di)+(4-2=2)*MT) = -(sum(all)+(4-3=1)*MT)
     #n=2 case: (M1-MT) = (MT-M2)-MT = -M2, so M2 = -sum(Di)
     
-    def __init__(self, gate_matrices, items=[]):
+    def __init__(self, op_matrices, items=[]):
         """
         Creates a new Instrument object.
 
         Parameters
         ----------
         gates : dict of numpy arrays
-            A dict (or list of key,value pairs) of the gate matrices whose sum
+            A dict (or list of key,value pairs) of the operation matrices whose sum
             must be a trace-preserving (TP) map.
         """
         self._readonly = False #until init is done
         if len(items)>0:
-            assert(gate_matrices is None), "`items` was given when gate_matrices != None"
+            assert(op_matrices is None), "`items` was given when op_matrices != None"
 
         dim = None
-        self.param_gates = [] #first element is TP sum (MT), following
+        self.param_ops = [] #first element is TP sum (MT), following
            #elements are fully-param'd (Mi-Mt) for i=0...n-2
 
         #Note: when un-pickling using items arg, these members will
         # remain the above values, but *will* be set when state dict is copied
         # in (so unpickling works as desired)
         
-        if gate_matrices is not None:
-            if isinstance(gate_matrices,dict):
-                matrix_list = [(k,v) for k,v in gate_matrices.items()] #gives definite ordering
-            elif isinstance(gate_matrices,list):
-                matrix_list = gate_matrices # assume it's is already an ordered (key,value) list
+        if op_matrices is not None:
+            if isinstance(op_matrices,dict):
+                matrix_list = [(k,v) for k,v in op_matrices.items()] #gives definite ordering
+            elif isinstance(op_matrices,list):
+                matrix_list = op_matrices # assume it's is already an ordered (key,value) list
             else:
-                raise ValueError("Invalid `gate_matrices` arg of type %s" % type(gate_matrices))
+                raise ValueError("Invalid `op_matrices` arg of type %s" % type(op_matrices))
 
             # Create gate objects that are used to parameterize this instrument
-            MT = _gate.TPParameterizedGate( sum([v for k,v in matrix_list]) )
+            MT = _op.TPDenseOp( sum([v for k,v in matrix_list]) )
             MT.set_gpindices( slice(0, MT.num_params()), self)
-            self.param_gates.append( MT )
+            self.param_ops.append( MT )
 
             dim = MT.dim; off = MT.num_params()
             for k,v in matrix_list[:-1]:
-                Di = _gate.FullyParameterizedGate(v-MT)
+                Di = _op.FullDenseOp(v-MT)
                 Di.set_gpindices( slice(off, off+Di.num_params()), self )
                 assert(Di.dim == dim)
-                self.param_gates.append( Di ); off += Di.num_params()
+                self.param_ops.append( Di ); off += Di.num_params()
             
-            #Create a TPInstrumentGate for each gate matrix
-            # Note: TPInstrumentGate sets it's own parent and gpindices
-            items = [ (k, _gate.TPInstrumentGate(self.param_gates,i)) 
+            #Create a TPInstrumentOp for each operation matrix
+            # Note: TPInstrumentOp sets it's own parent and gpindices
+            items = [ (k, _op.TPInstrumentOp(self.param_ops,i)) 
                       for i,(k,v) in enumerate(matrix_list) ]
 
             #DEBUG
             #print("POST INIT PARAM GATES:")
-            #for i,v in enumerate(self.param_gates):
+            #for i,v in enumerate(self.param_ops):
             #    print(i,":\n",v)
             #
             #print("POST INIT ITEMS:")
@@ -424,7 +424,7 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
 
 
         _collections.OrderedDict.__init__(self,items)
-        _gm.GateSetMember.__init__(self,dim,"densitymx")
+        _gm.ModelMember.__init__(self,dim,"densitymx")
         self._readonly = True
 
     def __setitem__(self, key, value):
@@ -435,48 +435,48 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         #Don't pickle TPInstrumentGates b/c they'll each pickle the same
-        # param_gates and I don't this will unpickle correctly.  Instead, just
+        # param_ops and I don't this will unpickle correctly.  Instead, just
         # strip the numpy array from each element and call __init__ again when
         # unpickling:
-        gate_matrices = [ (lbl,_np.asarray(val)) for lbl,val in self.items()]
-        return (TPInstrument, (gate_matrices,[]), {'_gpindices': self._gpindices})
+        op_matrices = [ (lbl,_np.asarray(val)) for lbl,val in self.items()]
+        return (TPInstrument, (op_matrices,[]), {'_gpindices': self._gpindices})
 
     def __pygsti_reduce__(self):
         return self.__reduce__()
 
 
-    def compile_gates(self, prefix=""):
+    def simplify_operations(self, prefix=""):
         """
         Returns a dictionary of gates that belong to the Instrument's parent
-        `GateSet` - that is, whose `gpindices` are set to all or a subset of
+        `Model` - that is, whose `gpindices` are set to all or a subset of
         this instruments's gpindices.  These are used internally within
-        computations involving the parent `GateSet`.
+        computations involving the parent `Model`.
 
         Parameters
         ----------
         prefix : str
             A string, usually identitying this instrument, which may be used
-            to prefix the compiled gate keys.
+            to prefix the simplified gate keys.
 
         Returns
         -------
         OrderedDict of Gates
         """
-        #Create a "compiled" (GateSet-referencing) set of param gates
-        param_compiled = []
-        for g in self.param_gates:
+        #Create a "simplified" (Model-referencing) set of param gates
+        param_simplified = []
+        for g in self.param_ops:
             comp = g.copy()
             comp.set_gpindices( _gm._compose_gpindices(self.gpindices,
                                                        g.gpindices), self.parent)
-            param_compiled.append(comp)
+            param_simplified.append(comp)
 
-        # Create "compiled" elements, which infer their parent and
+        # Create "simplified" elements, which infer their parent and
         # gpindices from the set of "param-gates" they're constructed with.
         if prefix: prefix += "_"
-        compiled = _collections.OrderedDict(
-            [ (prefix + k, _gate.TPInstrumentGate(param_compiled,i)) 
+        simplified = _collections.OrderedDict(
+            [ (prefix + k, _op.TPInstrumentOp(param_simplified,i)) 
               for i,k in enumerate(self.keys()) ] )
-        return compiled
+        return simplified
 
     def num_elements(self):
         """
@@ -501,7 +501,7 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
         int
            the number of independent parameters.
         """
-        return sum([g.num_params() for g in self.param_gates])
+        return sum([g.num_params() for g in self.param_ops])
 
 
     def to_vector(self):
@@ -514,7 +514,7 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
             a 1D numpy array with length == num_params().
         """
         v = _np.empty(self.num_params(),'d')
-        for gate in self.param_gates:
+        for gate in self.param_ops:
             v[gate.gpindices] = gate.to_vector()
         return v
 
@@ -533,7 +533,7 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
         -------
         None
         """
-        for gate in self.param_gates:
+        for gate in self.param_ops:
             gate.from_vector( v[gate.gpindices] )
         for instGate in self.values():
             instGate._construct_matrix()
@@ -550,8 +550,8 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
             (and it's inverse) used in the above similarity transform.            
         """
         #Note: since each Mi is a linear function of MT and the Di, we can just
-        # transform the MT and Di (self.param_gates) and re-init the elements.
-        for gate in self.param_gates:
+        # transform the MT and Di (self.param_ops) and re-init the elements.
+        for gate in self.param_ops:
             gate.transform(S)
 
         for element in self.values():
@@ -577,8 +577,8 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
         None
         """
         #Note: since each Mi is a linear function of MT and the Di, we can just
-        # depolarize the MT and Di (self.param_gates) and re-init the elements.
-        for gate in self.param_gates:
+        # depolarize the MT and Di (self.param_ops) and re-init the elements.
+        for gate in self.param_ops:
             gate.depolarize(amount)
 
         for element in self.values():
@@ -610,8 +610,8 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
         None
         """
         #Note: since each Mi is a linear function of MT and the Di, we can just
-        # rotate the MT and Di (self.param_gates) and re-init the elements.
-        for gate in self.param_gates:
+        # rotate the MT and Di (self.param_ops) and re-init the elements.
+        for gate in self.param_ops:
             gate.rotate(amount,mxBasis)
 
         for element in self.values():

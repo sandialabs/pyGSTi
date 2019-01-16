@@ -44,7 +44,7 @@ def extract_rotation_hat(xhat,yhat,k,Nx,Ny,angleName="epsilon",
        generation's estimate.  Default is None (for estimation with no
        previous genereation's data)
 
-    rpeconfig_inst : Declares which gate set configuration RPE should be trying to fit;
+    rpeconfig_inst : Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
 
     Returns
@@ -95,10 +95,10 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
     DS : DataSet
        The dataset from which the angle estimates will be extracted.
 
-    angleSinStrs : list of GateStrings
+    angleSinStrs : list of Circuits
        The list of sin strs that the estimator will use.
 
-    angleCosStrs : list of GateStrings
+    angleCosStrs : list of Circuits
        The list of cos strs that the estimator will use.
 
     angleName : { "alpha", "epsilon", "Phi" }, optional
@@ -108,7 +108,7 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
         If None is specified, then lengthList becomes [1,2,4,...,2**(len(angleSinStrs)-1)]
      
     rpeconfig_inst : rpeconfig object
-        Declares which gate set configuration RPE should be trying to fit;
+        Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
        
     Returns
@@ -181,10 +181,10 @@ def est_theta_list(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = F
     DS : DataSet
        The dataset from which the theta estimates will be extracted.
 
-    angleSinStrs : list of GateStrings
+    angleSinStrs : list of Circuits
        The list of sin strs that the estimator will use.
 
-    angleCosStrs : list of GateStrings
+    angleCosStrs : list of Circuits
        The list of cos strs that the estimator will use.
 
     epsilonList : list of floats
@@ -195,7 +195,7 @@ def est_theta_list(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = F
        Default is False.
 
     rpeconfig_inst : rpeconfig object
-        Declares which gate set configuration RPE should be trying to fit;
+        Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
 
     Returns
@@ -225,62 +225,62 @@ def est_theta_list(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = F
         return thetaList
 
 
-def extract_alpha(gateset,rpeconfig_inst):
+def extract_alpha(model,rpeconfig_inst):
     """
-    For a given gateset, obtain the angle of rotation about the "fixed axis"
+    For a given model, obtain the angle of rotation about the "fixed axis"
     
     WARNING:  This is a gauge-covariant parameter!  Gauge must be fixed prior
     to estimating.
 
     Parameters
     ----------
-    gateset : GateSet
-       The gateset whose angle of rotation about the fixed axis is to be calculated.
+    model : Model
+       The model whose angle of rotation about the fixed axis is to be calculated.
     
     rpeconfig_inst : rpeconfig object
-        Declares which gate set configuration RPE should be trying to fit;
+        Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
     
     Returns
     -------
     alphaVal : float
-        The value of alpha for the input gateset.
+        The value of alpha for the input model.
     """
-    gate_label = rpeconfig_inst.fixed_axis_gate_label
-    decomp = _decompose_gate_matrix( gateset.gates[gate_label] )
+    op_label = rpeconfig_inst.fixed_axis_gate_label
+    decomp = _decompose_gate_matrix( model.operations[op_label] )
     alphaVal = decomp['pi rotations'] * _np.pi
     return alphaVal
 
-def extract_epsilon(gateset,rpeconfig_inst):
+def extract_epsilon(model,rpeconfig_inst):
     """
-    For a given gateset, obtain the angle of rotation about the "loose axis" 
+    For a given model, obtain the angle of rotation about the "loose axis" 
     
     WARNING:  This is a gauge-covariant parameter!  Gauge must be fixed prior
     to estimating.
 
     Parameters
     ----------
-    gateset : GateSet
-       The gateset whose angle of rotation about the "loose axis" is to be calculated.
+    model : Model
+       The model whose angle of rotation about the "loose axis" is to be calculated.
     
     rpeconfig_inst : rpeconfig object
-        Declares which gate set configuration RPE should be trying to fit;
+        Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
     
     Returns
     -------
     epsilonVal : float
-        The value of epsilon for the input gateset.
+        The value of epsilon for the input model.
     """
-    gate_label = rpeconfig_inst.loose_axis_gate_label
-    decomp = _decompose_gate_matrix( gateset.gates[gate_label] )
+    op_label = rpeconfig_inst.loose_axis_gate_label
+    decomp = _decompose_gate_matrix( model.operations[op_label] )
     
     epsilonVal = decomp['pi rotations'] * _np.pi
     return epsilonVal
 
-def extract_theta(gateset,rpeconfig_inst):
+def extract_theta(model,rpeconfig_inst):
     """
-    For a given gateset, obtain the angle between the estimated "loose axis" and
+    For a given model, obtain the angle between the estimated "loose axis" and
     the target "loose axis".
     
     WARNING:  This is a gauge-covariant parameter!  (I think!)  Gauge must be
@@ -288,23 +288,23 @@ def extract_theta(gateset,rpeconfig_inst):
 
     Parameters
     ----------
-    gateset : GateSet
-        The gateset whose loose axis misalignment is to be calculated.
+    model : Model
+        The model whose loose axis misalignment is to be calculated.
     
     rpeconfig_inst : rpeconfig object
-        Declares which gate set configuration RPE should be trying to fit;
+        Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
     
     Returns
     -------
     thetaVal : float
-        The value of theta for the input gateset.
+        The value of theta for the input model.
     """
-    gate_label = rpeconfig_inst.loose_axis_gate_label
-    decomp = _decompose_gate_matrix( gateset.gates[gate_label] )
+    op_label = rpeconfig_inst.loose_axis_gate_label
+    decomp = _decompose_gate_matrix( model.operations[op_label] )
     target_axis = rpeconfig_inst.loose_axis_target
     
-    decomp = _decompose_gate_matrix( gateset.gates[gate_label] )
+    decomp = _decompose_gate_matrix( model.operations[op_label] )
     thetaVal =  _np.real_if_close( [ _np.arccos(
                 _np.dot(decomp['axis of rotation'], target_axis))])[0]
     if thetaVal > _np.pi/2:
@@ -334,7 +334,7 @@ def consistency_check(angle_k, angle_final, k):
     else:
         return 0.0
 
-def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst,do_consistency_check=False,k_list=None):
+def analyze_rpe_data(inputDataset,trueOrTargetModel,stringListD,rpeconfig_inst,do_consistency_check=False,k_list=None):
     """
     Compute angle estimates and compare to true or target values for alpha, epsilon,
     and theta.  ("True" will typically be used for simulated data, when the 
@@ -347,15 +347,15 @@ def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst
     inputDataset : DataSet
         The dataset containing the RPE experiments.
 
-    trueOrTargetGateset : GateSet
-        The gateset used to generate the RPE data OR the target gateset.
+    trueOrTargetModel : Model
+        The model used to generate the RPE data OR the target model.
 
     stringListD : dict
-       The dictionary of gate string lists used for the RPE experiments.
+       The dictionary of operation sequence lists used for the RPE experiments.
        This should be generated via make_rpe_string_list_d.
     
     rpeconfig_inst : rpeconfig object
-        Declares which gate set configuration RPE should be trying to fit;
+        Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
     
     Returns
@@ -383,17 +383,17 @@ def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst
     thetaCosStrList = stringListD['theta','cos']
     thetaSinStrList = stringListD['theta','sin']
     try:
-        alphaTrue = trueOrTargetGateset.alphaTrue
+        alphaTrue = trueOrTargetModel.alphaTrue
     except:
-        alphaTrue = extract_alpha(trueOrTargetGateset,rpeconfig_inst)
+        alphaTrue = extract_alpha(trueOrTargetModel,rpeconfig_inst)
     try:
-        epsilonTrue = trueOrTargetGateset.epsilonTrue
+        epsilonTrue = trueOrTargetModel.epsilonTrue
     except:
-        epsilonTrue = extract_epsilon(trueOrTargetGateset,rpeconfig_inst)
+        epsilonTrue = extract_epsilon(trueOrTargetModel,rpeconfig_inst)
     try:
-        thetaTrue = trueOrTargetGateset.thetaTrue
+        thetaTrue = trueOrTargetModel.thetaTrue
     except:
-        thetaTrue = extract_theta(trueOrTargetGateset,rpeconfig_inst)
+        thetaTrue = extract_theta(trueOrTargetModel,rpeconfig_inst)
     alphaErrorList = []
     epsilonErrorList = []
     thetaErrorList = []

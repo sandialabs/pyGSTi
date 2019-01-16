@@ -5,7 +5,7 @@ import numpy as np
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-# This class is for unifying some gatesets that get used in this file and in testGateSets2.py
+# This class is for unifying some models that get used in this file and in testGateSets2.py
 class PolynomialTestCase(BaseTestCase):
 
     def setUp(self):
@@ -68,11 +68,11 @@ class PolynomialTestCase(BaseTestCase):
         # => [2 2 1 2 1 2]
 
         try:
-            from pygsti.objects import fastgatecalc
-            vout2, cout2 = fastgatecalc.fast_compact_deriv(v,c,np.array((1,2,3),int))
+            from pygsti.objects import fastopcalc
+            vout2, cout2 = fastopcalc.fast_compact_deriv(v,c,np.array((1,2,3),int))
             self.assertEqual( list(vout2), [2, 2, 1, 2, 1, 2, 2, 2, 1, 1, 1, 1, 0, 1, 1, 1, 1, 2, 2, 3, 1, 2, 2, 2])
             self.assertEqual( list(cout2), [ 6.+0.j,  2.+0.j,  3.+0.j,  2.+0.j, 10.+0.j, 12.+0.j,  6.+0.j] )
         except ImportError:
-            pass # ok if fastgatecalc doesn't exist...
+            pass # ok if fastopcalc doesn't exist...
 
 

@@ -15,6 +15,7 @@ from .. import tools      as _tools
 from .. import objects    as _objs
 from . import reportables as _reportables
 from .reportables import evaluate as _ev
+from ..baseobjs import Label as _Lbl
 
 from .table import ReportTable as _ReportTable
 
@@ -34,22 +35,22 @@ class BlankTable(WorkspaceTable):
         return table
 
 class SpamTable(WorkspaceTable):
-    """ A table of one or more gateset's SPAM elements. """
-    def __init__(self, ws, gatesets, titles=None,
+    """ A table of one or more model's SPAM elements. """
+    def __init__(self, ws, models, titles=None,
                  display_as="boxes", confidenceRegionInfo=None,
                  includeHSVec=True):
         """
-        A table of one or more gateset's SPAM elements.
+        A table of one or more model's SPAM elements.
 
         Parameters
         ----------
-        gatesets : GateSet or list of GateSets
-            The GateSet(s) whose SPAM elements should be displayed. If
-            multiple GateSets are given, they should have the same SPAM
+        models : Model or list of Models
+            The Model(s) whose SPAM elements should be displayed. If
+            multiple Models are given, they should have the same SPAM
             elements..
 
         titles : list of strs, optional
-            Titles correponding to elements of `gatesets`, e.g. `"Target"`.
+            Titles correponding to elements of `models`, e.g. `"Target"`.
 
         display_as : {"numbers", "boxes"}, optional
             How to display the SPAM matrices, as either numerical
@@ -64,33 +65,33 @@ class SpamTable(WorkspaceTable):
             Whether or not to include Hilbert-Schmidt
             vector representation columns in the table.
         """
-        super(SpamTable,self).__init__(ws, self._create, gatesets,
+        super(SpamTable,self).__init__(ws, self._create, models,
                                        titles, display_as, confidenceRegionInfo,
                                        includeHSVec)
 
-    def _create(self, gatesets, titles, display_as, confidenceRegionInfo,
+    def _create(self, models, titles, display_as, confidenceRegionInfo,
                 includeHSVec):
 
-        if isinstance(gatesets, _objs.GateSet):
-            gatesets = [gatesets]
+        if isinstance(models, _objs.Model):
+            models = [models]
 
-        rhoLabels = list(gatesets[0].preps.keys()) #use labels of 1st gateset
-        povmLabels = list(gatesets[0].povms.keys()) #use labels of 1st gateset
+        rhoLabels = list(models[0].preps.keys()) #use labels of 1st model
+        povmLabels = list(models[0].povms.keys()) #use labels of 1st model
 
         if titles is None:
-            titles = ['']*len(gatesets)
+            titles = ['']*len(models)
 
         colHeadings = ['Operator']
-        for gateset,title in zip(gatesets,titles):
+        for model,title in zip(models,titles):
             colHeadings.append( '%sMatrix' % (title+' ' if title else '') )
-        for gateset,title in zip(gatesets,titles):
+        for model,title in zip(models,titles):
             colHeadings.append( '%sEigenvals' % (title+' ' if title else '') )
 
         formatters = [None]*len(colHeadings)
 
         if includeHSVec:
-            gateset = gatesets[-1] #only show HSVec for last gateset
-            basisNm    = _tools.basis_longname(gateset.basis.name)
+            model = models[-1] #only show HSVec for last model
+            basisNm    = _tools.basis_longname(model.basis)
             colHeadings.append( 'Hilbert-Schmidt vector (%s basis)' % basisNm )
             formatters.append( None )
 
@@ -104,8 +105,8 @@ class SpamTable(WorkspaceTable):
         for lbl in rhoLabels:
             rowData = [lbl]; rowFormatters = ['Rho']
 
-            for gateset in gatesets:
-                rhoMx = _ev(_reportables.Vec_as_stdmx(gateset, lbl, "prep"))
+            for model in models:
+                rhoMx = _ev(_reportables.Vec_as_stdmx(model, lbl, "prep"))
                             # confidenceRegionInfo) #don't put CIs on matrices for now
                 if display_as == "numbers":
                     rowData.append( rhoMx )
@@ -122,21 +123,21 @@ class SpamTable(WorkspaceTable):
                     raise ValueError("Invalid 'display_as' argument: %s" % display_as)
 
 
-            for gateset in gatesets:
+            for model in models:
                 cri = confidenceRegionInfo if confidenceRegionInfo and \
-                      (confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
-                evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "prep"),
+                      (confidenceRegionInfo.model.frobeniusdist(model) < 1e-6) else None
+                evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(model, lbl, "prep"),
                             cri)
                 rowData.append( evals )
                 rowFormatters.append('Brackets')
 
             if includeHSVec:
-                rowData.append( gatesets[-1].preps[lbl] )
+                rowData.append( models[-1].preps[lbl] )
                 rowFormatters.append('Normal')
 
                 if confidenceRegionInfo is not None:
                     intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
-                    if intervalVec.shape[0] == gatesets[-1].get_dimension()-1:
+                    if intervalVec.shape[0] == models[-1].get_dimension()-1:
                         #TP constrained, so pad with zero top row
                         intervalVec = _np.concatenate( (_np.zeros((1,1),'d'),intervalVec), axis=0 )
                     rowData.append( intervalVec ); rowFormatters.append('Normal')
@@ -146,13 +147,13 @@ class SpamTable(WorkspaceTable):
 
 
         for povmlbl in povmLabels:
-            for lbl in gatesets[0].povms[povmlbl].keys():
-                povmAndELbl = str(povmlbl) + ":" + lbl # format for GateSetFunction objs
+            for lbl in models[0].povms[povmlbl].keys():
+                povmAndELbl = str(povmlbl) + ":" + lbl # format for ModelFunction objs
                 rowData = [lbl] if (len(povmLabels) == 1) else [povmAndELbl] #show POVM name if there's more than one of them
                 rowFormatters = ['Effect']
 
-                for gateset in gatesets:
-                    EMx = _ev(_reportables.Vec_as_stdmx(gateset, povmAndELbl, "effect"))
+                for model in models:
+                    EMx = _ev(_reportables.Vec_as_stdmx(model, povmAndELbl, "effect"))
                               #confidenceRegionInfo) #don't put CIs on matrices for now
                     if display_as == "numbers":
                         rowData.append( EMx )
@@ -168,21 +169,21 @@ class SpamTable(WorkspaceTable):
                     else:
                         raise ValueError("Invalid 'display_as' argument: %s" % display_as) # pragma: no cover
 
-                for gateset in gatesets:
+                for model in models:
                     cri = confidenceRegionInfo if confidenceRegionInfo and \
-                          (confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
-                    evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, povmAndELbl, "effect"),
+                          (confidenceRegionInfo.model.frobeniusdist(model) < 1e-6) else None
+                    evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(model, povmAndELbl, "effect"),
                                 cri)
                     rowData.append( evals )
                     rowFormatters.append('Brackets')
 
                 if includeHSVec:
-                    rowData.append( gatesets[-1].povms[povmlbl][lbl] )
+                    rowData.append( models[-1].povms[povmlbl][lbl] )
                     rowFormatters.append('Normal')
 
                     if confidenceRegionInfo is not None:
                         intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(povmlbl)[:,None] #for all povm params
-                        intervalVec = intervalVec[gatesets[-1].povms[povmlbl][lbl].gpindices] #specific to this effect
+                        intervalVec = intervalVec[models[-1].povms[povmlbl][lbl].gpindices] #specific to this effect
                         rowData.append( intervalVec ); rowFormatters.append('Normal')
 
                 #Note: no dependence on confidence region (yet) when HS vector is not shown...
@@ -195,19 +196,19 @@ class SpamTable(WorkspaceTable):
 
 class SpamParametersTable(WorkspaceTable):
     """ A table for "SPAM parameters" (dot products of SPAM vectors)"""
-    def __init__(self, ws, gatesets, titles=None, confidenceRegionInfo=None):
+    def __init__(self, ws, models, titles=None, confidenceRegionInfo=None):
         """
-        Create a table for gateset's "SPAM parameters", that is, the
+        Create a table for model's "SPAM parameters", that is, the
         dot products of prep-vectors and effect-vectors.
 
         Parameters
         ----------
-        gatesets : GateSet or list of GateSets
-            The GateSet(s) whose SPAM parameters should be displayed. If
-            multiple GateSets are given, they should have the same gates.
+        models : Model or list of Models
+            The Model(s) whose SPAM parameters should be displayed. If
+            multiple Models are given, they should have the same gates.
 
         titles : list of strs, optional
-            Titles correponding to elements of `gatesets`, e.g. `"Target"`.
+            Titles correponding to elements of `models`, e.g. `"Target"`.
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -217,21 +218,21 @@ class SpamParametersTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(SpamParametersTable,self).__init__(ws, self._create, gatesets, titles, confidenceRegionInfo)
+        super(SpamParametersTable,self).__init__(ws, self._create, models, titles, confidenceRegionInfo)
 
-    def _create(self, gatesets, titles, confidenceRegionInfo):
+    def _create(self, models, titles, confidenceRegionInfo):
 
-        if isinstance(gatesets, _objs.GateSet):
-            gatesets = [gatesets]
+        if isinstance(models, _objs.Model):
+            models = [models]
         if titles is None:
-            titles = ['']*len(gatesets)
+            titles = ['']*len(models)
 
-        if len(gatesets[0].povms) == 1:
-            povmKey = list(gatesets[0].povms.keys())[0]
-            effectLbls = [ eLbl for eLbl in gatesets[0].povms[povmKey] ]
+        if len(models[0].povms) == 1:
+            povmKey = list(models[0].povms.keys())[0]
+            effectLbls = [ eLbl for eLbl in models[0].povms[povmKey] ]
         else:
             effectLbls = [ povmLbl + "." + eLbl
-                           for povmLbl,povm in gatesets[0].povms.items()
+                           for povmLbl,povm in models[0].povms.items()
                            for eLbl in povm.keys() ]
 
         colHeadings = [''] + effectLbls
@@ -239,17 +240,17 @@ class SpamParametersTable(WorkspaceTable):
 
         table       = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
-        for gstitle, gateset in zip(titles,gatesets):
+        for gstitle, model in zip(titles,models):
             cri = confidenceRegionInfo if (confidenceRegionInfo and
-                                           confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
-            spamDotProdsQty = _ev( _reportables.Spam_dotprods(gateset), cri)
+                                           confidenceRegionInfo.model.frobeniusdist(model) < 1e-6) else None
+            spamDotProdsQty = _ev( _reportables.Spam_dotprods(model), cri)
             DPs, DPEBs      = spamDotProdsQty.get_value_and_err_bar()
             assert(DPs.shape[1] == len(effectLbls)), \
-                "Gatesets must have the same number of POVMs & effects"
+                "Models must have the same number of POVMs & effects"
 
             formatters      = [ 'Rho' ] + [ 'Normal' ]*len(effectLbls) #for rows below
 
-            for ii,prepLabel in enumerate(gateset.preps.keys()): # ii enumerates rhoLabels to index DPs
+            for ii,prepLabel in enumerate(model.preps.keys()): # ii enumerates rhoLabels to index DPs
                 prefix = gstitle + " " if len(gstitle) else ""
                 rowData = [prefix + str(prepLabel)]
                 for jj,_ in enumerate(effectLbls): # jj enumerates eLabels to index DPs
@@ -264,77 +265,78 @@ class SpamParametersTable(WorkspaceTable):
 
 
 class GatesTable(WorkspaceTable):
-    """ Create a table showing a gateset's raw gates. """
-    def __init__(self, ws, gatesets, titles=None, display_as="boxes",
+    """ Create a table showing a model's raw gates. """
+    def __init__(self, ws, models, titles=None, display_as="boxes",
                  confidenceRegionInfo=None):
         """
-        Create a table showing a gateset's raw gates.
+        Create a table showing a model's raw gates.
 
         Parameters
         ----------
-        gatesets : GateSet or list of GateSets
-            The GateSet(s) whose gates should be displayed.  If multiple
-            GateSets are given, they should have the same gate labels.
+        models : Model or list of Models
+            The Model(s) whose gates should be displayed.  If multiple
+            Models are given, they should have the same operation labels.
 
         titles : list of strings, optional
-            A list of titles corresponding to the gate sets, used to
-            prefix the column(s) for that gate set. E.g. `"Target"`.
+            A list of titles corresponding to the models, used to
+            prefix the column(s) for that model. E.g. `"Target"`.
 
         display_as : {"numbers", "boxes"}, optional
-            How to display the gate matrices, as either numerical
+            How to display the operation matrices, as either numerical
             grids (fine for small matrices) or as a plot of colored
             boxes (space-conserving and better for large matrices).
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
             used to display error intervals for the *final*
-            element of `gatesets`.
+            element of `models`.
 
         Returns
         -------
         ReportTable
         """
-        super(GatesTable,self).__init__(ws, self._create, gatesets, titles,
+        super(GatesTable,self).__init__(ws, self._create, models, titles,
                                         display_as, confidenceRegionInfo)
 
 
-    def _create(self, gatesets, titles, display_as, confidenceRegionInfo):
+    def _create(self, models, titles, display_as, confidenceRegionInfo):
 
-        if isinstance(gatesets, _objs.GateSet):
-            gatesets = [gatesets]
+        if isinstance(models, _objs.Model):
+            models = [models]
 
-        gateLabels = list(gatesets[0].gates.keys()) #use labels of 1st gateset
+        opLabels = models[0].get_primitive_op_labels() #use labels of 1st model
+        assert(isinstance(models[0],_objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         if titles is None:
-            titles = ['']*len(gatesets)
+            titles = ['']*len(models)
 
         colHeadings = ['Gate']
-        for gateset,title in zip(gatesets,titles):
-            basisLongNm = _tools.basis_longname(gateset.basis.name)
+        for model,title in zip(models,titles):
+            basisLongNm = _tools.basis_longname(model.basis)
             pre = (title+' ' if title else '')
             colHeadings.append('%sSuperoperator (%s basis)' % (pre,basisLongNm))
         formatters = [None]*len(colHeadings)
 
         if confidenceRegionInfo is not None:
-            #Only use confidence region for the *final* gateset.
+            #Only use confidence region for the *final* model.
             colHeadings.append('%g%% C.I. half-width' % confidenceRegionInfo.level)
             formatters.append('Conversion')
 
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
-        for gl in gateLabels:
+        for gl in opLabels:
             #Note: currently, we don't use confidence region...
             row_data = [gl]
             row_formatters = [None]
 
-            for gateset in gatesets:
-                basis = gateset.basis
+            for model in models:
+                basis = model.basis
 
                 if display_as == "numbers":
-                    row_data.append(gateset.gates[gl])
+                    row_data.append(model.operations[gl])
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
-                    fig = _wp.GateMatrixPlot(self.ws, gateset.gates[gl].todense(),
+                    fig = _wp.GateMatrixPlot(self.ws, model.operations[gl].todense(),
                                              colorbar=False,
                                              mxBasis=basis)
 
@@ -345,24 +347,24 @@ class GatesTable(WorkspaceTable):
 
             if confidenceRegionInfo is not None:
                 intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(gl)[:,None]
-                if isinstance(gatesets[-1].gates[gl], _objs.FullyParameterizedGate):
+                if isinstance(models[-1].operations[gl], _objs.FullDenseOp):
                     #then we know how to reshape into a matrix
-                    gate_dim   = gatesets[-1].get_dimension()
-                    basis = gatesets[-1].basis
-                    intervalMx = intervalVec.reshape(gate_dim,gate_dim)
-                elif isinstance(gatesets[-1].gates[gl], _objs.TPParameterizedGate):
+                    op_dim   = models[-1].get_dimension()
+                    basis = models[-1].basis
+                    intervalMx = intervalVec.reshape(op_dim,op_dim)
+                elif isinstance(models[-1].operations[gl], _objs.TPDenseOp):
                     #then we know how to reshape into a matrix
-                    gate_dim   = gatesets[-1].get_dimension()
-                    basis = gatesets[-1].basis
-                    intervalMx = _np.concatenate( ( _np.zeros((1,gate_dim),'d'),
-                                                    intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
+                    op_dim   = models[-1].get_dimension()
+                    basis = models[-1].basis
+                    intervalMx = _np.concatenate( ( _np.zeros((1,op_dim),'d'),
+                                                    intervalVec.reshape(op_dim-1,op_dim)), axis=0 )
                 else:
                     # we don't know how best to reshape interval matrix for gate, so
                     # use derivative
-                    gate_dim   = gatesets[-1].get_dimension()
-                    basis = gatesets[-1].basis
-                    gate_deriv = gatesets[-1].gates[gl].deriv_wrt_params()
-                    intervalMx = _np.abs(_np.dot(gate_deriv, intervalVec).reshape(gate_dim,gate_dim))
+                    op_dim   = models[-1].get_dimension()
+                    basis = models[-1].basis
+                    op_deriv = models[-1].operations[gl].deriv_wrt_params()
+                    intervalMx = _np.abs(_np.dot(op_deriv, intervalVec).reshape(op_dim,op_dim))
 
                 if display_as == "numbers":
                     row_data.append(intervalMx)
@@ -386,28 +388,28 @@ class GatesTable(WorkspaceTable):
 
 
 class ChoiTable(WorkspaceTable):
-    """A table of the Choi representations of a GateSet's gates"""
-    def __init__(self, ws, gatesets, titles=None,
+    """A table of the Choi representations of a Model's gates"""
+    def __init__(self, ws, models, titles=None,
                  confidenceRegionInfo=None,
                  display=("matrix","eigenvalues","barplot")):
         """
         Create a table of the Choi matrices and/or their eigenvalues of
-        a gateset's gates.
+        a model's gates.
 
         Parameters
         ----------
-        gatesets : GateSet or list of GateSets
-            The GateSet(s) whose Choi info should be displayed.  If multiple
-            GateSets are given, they should have the same gate labels.
+        models : Model or list of Models
+            The Model(s) whose Choi info should be displayed.  If multiple
+            Models are given, they should have the same operation labels.
 
         titles : list of strings, optional
-            A list of titles corresponding to the gate sets, used to
-            prefix the column(s) for that gate set. E.g. `"Target"`.
+            A list of titles corresponding to the models, used to
+            prefix the column(s) for that model. E.g. `"Target"`.
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
             used to display eigenvalue error intervals for the
-            *final* GateSet in `gatesets`.
+            *final* Model in `models`.
 
         display : tuple/list of {"matrices","eigenvalues","barplot","boxplot"}
             Which columns to display: the Choi matrices (as numerical grids),
@@ -419,49 +421,50 @@ class ChoiTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(ChoiTable,self).__init__(ws, self._create, gatesets, titles,
+        super(ChoiTable,self).__init__(ws, self._create, models, titles,
                                        confidenceRegionInfo, display)
 
-    def _create(self, gatesets, titles, confidenceRegionInfo, display):
-        if isinstance(gatesets, _objs.GateSet):
-            gatesets = [gatesets]
+    def _create(self, models, titles, confidenceRegionInfo, display):
+        if isinstance(models, _objs.Model):
+            models = [models]
 
-        gateLabels = list(gatesets[0].gates.keys()) #use labels of 1st gateset
+        opLabels = models[0].get_primitive_op_labels() #use labels of 1st model
+        assert(isinstance(models[0],_objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         if titles is None:
-            titles = ['']*len(gatesets)
+            titles = ['']*len(models)
 
         qtysList = []
-        for gateset in gatesets:
-            gateLabels = list(gateset.gates.keys()) # gate labels
+        for model in models:
+            opLabels = model.get_primitive_op_labels() # operation labels
             #qtys_to_compute = []
             if 'matrix' in display or 'boxplot' in display:
-                choiMxs = [_ev(_reportables.Choi_matrix(gateset,gl)) for gl in gateLabels]
+                choiMxs = [_ev(_reportables.Choi_matrix(model,gl)) for gl in opLabels]
             else:
                 choiMxs = None
             if 'eigenvalues' in display or 'barplot' in display:
-                evals   = [_ev(_reportables.Choi_evals(gateset,gl), confidenceRegionInfo) for gl in gateLabels]
+                evals   = [_ev(_reportables.Choi_evals(model,gl), confidenceRegionInfo) for gl in opLabels]
             else:
                 evals = None
             qtysList.append((choiMxs, evals))
         colHeadings = ['Gate']
         for disp in display:
             if disp == "matrix":
-                for gateset,title in zip(gatesets,titles):
-                    basisLongNm = _tools.basis_longname(gateset.basis.name)
+                for model,title in zip(models,titles):
+                    basisLongNm = _tools.basis_longname(model.basis)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             elif disp == "eigenvalues":
-                for gateset,title in zip(gatesets,titles):
+                for model,title in zip(models,titles):
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sEigenvalues' % pre)
             elif disp == "barplot":
-                for gateset,title in zip(gatesets,titles):
+                for model,title in zip(models,titles):
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sEigenvalue Magnitudes' % pre)
             elif disp == "boxplot":
-                for gateset,title in zip(gatesets,titles):
-                    basisLongNm = _tools.basis_longname(gateset.basis.name)
+                for model,title in zip(models,titles):
+                    basisLongNm = _tools.basis_longname(model.basis)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             else:
@@ -471,19 +474,19 @@ class ChoiTable(WorkspaceTable):
 
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
-        for i, gl in enumerate(gateLabels):
+        for i, gl in enumerate(opLabels):
             #Note: currently, we don't use confidence region...
             row_data = [gl]
             row_formatters = [None]
 
             for disp in display:
                 if disp == "matrix":
-                    for gateset, (choiMxs, _) in zip(gatesets, qtysList):
+                    for model, (choiMxs, _) in zip(models, qtysList):
                         row_data.append(choiMxs[i])
                         row_formatters.append('Brackets')
 
                 elif disp == "eigenvalues":
-                    for gateset, (_, evals) in zip(gatesets, qtysList):
+                    for model, (_, evals) in zip(models, qtysList):
                         try:
                             evals[i] = evals[i].reshape(evals[i].size//4, 4)
                             #assumes len(evals) is multiple of 4!
@@ -494,19 +497,19 @@ class ChoiTable(WorkspaceTable):
                         row_formatters.append('Normal')
 
                 elif disp == "barplot":
-                    for gateset, (_, evals) in zip(gatesets,qtysList):
+                    for model, (_, evals) in zip(models,qtysList):
                         evs, evsEB = evals[i].get_value_and_err_bar()
                         fig = _wp.ChoiEigenvalueBarPlot(self.ws, evs, evsEB)
                         row_data.append(fig)
                         row_formatters.append('Figure')
 
                 elif disp == "boxplot":
-                    for gateset, (choiMxs, _) in zip(gatesets, qtysList):
+                    for model, (choiMxs, _) in zip(models, qtysList):
                         choiMx_real = choiMxs[i].hermitian_to_real()
                         choiMx, EB = choiMx_real.get_value_and_err_bar()
                         fig = _wp.GateMatrixPlot(self.ws, choiMx,
                                                  colorbar=False,
-                                                 mxBasis=gateset.basis,
+                                                 mxBasis=model.basis,
                                                  EBmatrix=EB)
                         row_data.append( fig )
                         row_formatters.append('Figure')
@@ -516,21 +519,21 @@ class ChoiTable(WorkspaceTable):
         return table
 
 
-class GatesetVsTargetTable(WorkspaceTable):
-    """ Table comparing a GateSet (as a whole) to a target """
-    def __init__(self, ws, gateset, targetGateset, clifford_compilation, confidenceRegionInfo=None):
+class ModelVsTargetTable(WorkspaceTable):
+    """ Table comparing a Model (as a whole) to a target """
+    def __init__(self, ws, model, targetModel, clifford_compilation, confidenceRegionInfo=None):
         """
-        Create a table comparing a gateset (as a whole) to a target gateset
-        using metrics that can be evaluatd for an entire gate set.
+        Create a table comparing a model (as a whole) to a target model
+        using metrics that can be evaluatd for an entire model.
 
         Parameters
         ----------
-        gateset, targetGateset : GateSet
-            The gate sets to compare
+        model, targetModel : Model
+            The models to compare
 
         clifford_compilation : dict
-            A dictionary of gate sequences, one for each Clifford operation
-            in the Clifford group relevant to the gate set Hilbert space.  If
+            A dictionary of operation sequences, one for each Clifford operation
+            in the Clifford group relevant to the model Hilbert space.  If
             None, then rows requiring a clifford compilation are omitted.
 
         confidenceRegionInfo : ConfidenceRegion, optional
@@ -541,11 +544,11 @@ class GatesetVsTargetTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(GatesetVsTargetTable,self).__init__(ws, self._create, gateset,
-                                                  targetGateset, clifford_compilation,
+        super(ModelVsTargetTable,self).__init__(ws, self._create, model,
+                                                  targetModel, clifford_compilation,
                                                   confidenceRegionInfo)
 
-    def _create(self, gateset, targetGateset, clifford_compilation, confidenceRegionInfo):
+    def _create(self, model, targetModel, clifford_compilation, confidenceRegionInfo):
 
         colHeadings = ('Metric', "Value")
         formatters  = (None,None)
@@ -554,21 +557,21 @@ class GatesetVsTargetTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=tooltips, confidenceRegionInfo=confidenceRegionInfo)
 
         #Leave this off for now, as it's primary use is to compare with RB and the predicted RB number is better for this.
-        #pAGsI = _ev(_reportables.Average_gateset_infidelity(gateset, targetGateset), confidenceRegionInfo)
-        #table.addrow(("Avg. primitive gate set infidelity", pAGsI), (None, 'Normal') )
+        #pAGsI = _ev(_reportables.Average_gateset_infidelity(model, targetModel), confidenceRegionInfo)
+        #table.addrow(("Avg. primitive model infidelity", pAGsI), (None, 'Normal') )
 
-        pRBnum = _ev(_reportables.Predicted_rb_number(gateset, targetGateset), confidenceRegionInfo)
+        pRBnum = _ev(_reportables.Predicted_rb_number(model, targetModel), confidenceRegionInfo)
         table.addrow(("Predicted primitive RB number", pRBnum), (None, 'Normal') )
 
         if clifford_compilation:
-            clifford_gateset = _cnst.build_alias_gateset(gateset,clifford_compilation)
-            clifford_targetGateset = _cnst.build_alias_gateset(targetGateset,clifford_compilation)
+            clifford_model = _cnst.build_explicit_alias_model(model,clifford_compilation)
+            clifford_targetModel = _cnst.build_explicit_alias_model(targetModel,clifford_compilation)
 
             ##For clifford versions we don't have a confidence region - so no error bars
-            #AGsI = _ev(_reportables.Average_gateset_infidelity(clifford_gateset, clifford_targetGateset))
-            #table.addrow(("Avg. clifford gate set infidelity", AGsI), (None, 'Normal') )
+            #AGsI = _ev(_reportables.Average_gateset_infidelity(clifford_model, clifford_targetModel))
+            #table.addrow(("Avg. clifford model infidelity", AGsI), (None, 'Normal') )
 
-            RBnum = _ev(_reportables.Predicted_rb_number(clifford_gateset, clifford_targetGateset))
+            RBnum = _ev(_reportables.Predicted_rb_number(clifford_model, clifford_targetModel))
             table.addrow(("Predicted Clifford RB number", RBnum), (None, 'Normal') )
 
         table.finish()
@@ -576,18 +579,18 @@ class GatesetVsTargetTable(WorkspaceTable):
 
 
 class GatesVsTargetTable(WorkspaceTable):
-    """ Table comparing a GateSet's gates to those of a target gate set """
-    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
+    """ Table comparing a Model's gates to those of a target model """
+    def __init__(self, ws, model, targetModel, confidenceRegionInfo=None,
                  display=('inf','agi','trace','diamond','nuinf','nuagi'),
-                 virtual_gates=None):
+                 virtual_ops=None):
         """
-        Create a table comparing a gateset's gates to a target gateset using
+        Create a table comparing a model's gates to a target model using
         metrics such as the  infidelity, diamond-norm distance, and trace distance.
 
         Parameters
         ----------
-        gateset, targetGateset : GateSet
-            The gate sets to compare
+        model, targetModel : Model
+            The models to compare
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -611,29 +614,30 @@ class GatesVsTargetTable(WorkspaceTable):
             - "evnudiamond" : eigenvalue non-unitary 1/2 diamond norm distance
             - "frob" :    frobenius distance
 
-        virtual_gates : list, optional
-            If not None, a list of `GateString` objects specifying additional "gates"
-            (i.e. processes) to compute eigenvalues of.  Length-1 gate strings are
+        virtual_ops : list, optional
+            If not None, a list of `Circuit` objects specifying additional "gates"
+            (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
             automatically discarded so they are not displayed twice.
 
         Returns
         -------
         ReportTable
         """
-        super(GatesVsTargetTable,self).__init__(ws, self._create, gateset,
-                                                targetGateset, confidenceRegionInfo,
-                                                display, virtual_gates)
+        super(GatesVsTargetTable,self).__init__(ws, self._create, model,
+                                                targetModel, confidenceRegionInfo,
+                                                display, virtual_ops)
 
-    def _create(self, gateset, targetGateset, confidenceRegionInfo,
-                display, virtual_gates):
+    def _create(self, model, targetModel, confidenceRegionInfo,
+                display, virtual_ops):
 
-        gateLabels  = list(gateset.gates.keys())  # gate labels
+        opLabels  = model.get_primitive_op_labels() # operation labels
+        assert(isinstance(model,_objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
-        colHeadings = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
-        tooltips    = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
+        colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
+        tooltips    = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
         for disp in display:
             try:
-                heading, tooltip = _reportables.info_of_gatefn_by_name(disp)
+                heading, tooltip = _reportables.info_of_opfn_by_name(disp)
             except ValueError:
                 raise ValueError("Invalid display column name: %s" % disp)
             colHeadings.append(heading)
@@ -646,20 +650,20 @@ class GatesVsTargetTable(WorkspaceTable):
 
         formatters = (None,) + ('Normal',) * (len(colHeadings) - 1)
 
-        if virtual_gates is None:
-            iterOver = gateLabels
+        if virtual_ops is None:
+            iterOver = opLabels
         else:
-            iterOver = gateLabels + [v for v in virtual_gates if len(v) > 1]
+            iterOver = opLabels + tuple((v for v in virtual_ops if len(v) > 1))
 
         for gl in iterOver:
-            #Note: gl may be a gate label (a string) or a GateString
+            #Note: gl may be a operation label (a string) or a Circuit
             row_data = [ str(gl) ]
 
             for disp in display:
                 #import time as _time #DEBUG
                 #tStart = _time.time() #DEBUG
-                qty = _reportables.evaluate_gatefn_by_name(
-                    disp, gateset, targetGateset, gl, confidenceRegionInfo)
+                qty = _reportables.evaluate_opfn_by_name(
+                    disp, model, targetModel, gl, confidenceRegionInfo)
                 #tm = _time.time()-tStart #DEBUG
                 #if tm > 0.01: print("DB: Evaluated %s in %gs" % (disp, tm)) #DEBUG
                 row_data.append( qty )
@@ -670,16 +674,16 @@ class GatesVsTargetTable(WorkspaceTable):
 
 
 class SpamVsTargetTable(WorkspaceTable):
-    """ Table comparing a GateSet's SPAM vectors to those of a target """
-    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
+    """ Table comparing a Model's SPAM vectors to those of a target """
+    def __init__(self, ws, model, targetModel, confidenceRegionInfo=None):
         """
-        Create a table comparing a gateset's SPAM operations to a target gateset
+        Create a table comparing a model's SPAM operations to a target model
         using state infidelity and trace distance.
 
         Parameters
         ----------
-        gateset, targetGateset : GateSet
-            The gate sets to compare
+        model, targetModel : Model
+            The models to compare
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -689,13 +693,13 @@ class SpamVsTargetTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(SpamVsTargetTable,self).__init__(ws, self._create, gateset,
-                                               targetGateset, confidenceRegionInfo)
+        super(SpamVsTargetTable,self).__init__(ws, self._create, model,
+                                               targetModel, confidenceRegionInfo)
 
-    def _create(self, gateset, targetGateset, confidenceRegionInfo):
+    def _create(self, model, targetModel, confidenceRegionInfo):
 
-        prepLabels = list(gateset.preps.keys())
-        povmLabels = list(gateset.povms.keys())
+        prepLabels = list(model.preps.keys())
+        povmLabels = list(model.povms.keys())
 
         colHeadings  = ('Prep/POVM', "Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Dist")
         formatters   = (None,'Conversion','Conversion','Conversion')
@@ -706,10 +710,10 @@ class SpamVsTargetTable(WorkspaceTable):
                              confidenceRegionInfo=confidenceRegionInfo)
 
         formatters = [ 'Rho' ] + [ 'Normal' ] * (len(colHeadings) - 1)
-        prepInfidelities = [_ev(_reportables.Vec_infidelity(gateset, targetGateset, l,
+        prepInfidelities = [_ev(_reportables.Vec_infidelity(model, targetModel, l,
                                                             'prep'), confidenceRegionInfo)
                             for l in prepLabels]
-        prepTraceDists   = [_ev(_reportables.Vec_tr_diff(gateset, targetGateset, l,
+        prepTraceDists   = [_ev(_reportables.Vec_tr_diff(model, targetModel, l,
                                                         'prep'), confidenceRegionInfo)
                             for l in prepLabels]
         prepDiamondDists = [ _objs.reportableqty.ReportableQty(_np.nan) ] * len(prepLabels)
@@ -720,13 +724,13 @@ class SpamVsTargetTable(WorkspaceTable):
 
         formatters = [ 'Normal' ] + [ 'Normal' ] * (len(colHeadings) - 1)
         povmInfidelities = [_ev(_reportables.POVM_entanglement_infidelity(
-                             gateset, targetGateset, l), confidenceRegionInfo)
+                             model, targetModel, l), confidenceRegionInfo)
                             for l in povmLabels]
         povmTraceDists   = [_ev(_reportables.POVM_jt_diff(
-                             gateset, targetGateset, l), confidenceRegionInfo)
+                             model, targetModel, l), confidenceRegionInfo)
                             for l in povmLabels]
         povmDiamondDists = [_ev(_reportables.POVM_half_diamond_norm(
-                             gateset, targetGateset, l), confidenceRegionInfo)
+                             model, targetModel, l), confidenceRegionInfo)
                             for l in povmLabels]
 
         for rowData in zip(povmLabels, povmInfidelities, povmTraceDists,
@@ -740,20 +744,20 @@ class SpamVsTargetTable(WorkspaceTable):
 
 
 class ErrgenTable(WorkspaceTable):
-    """ Table displaying the error generators of a GateSet's gates as well
+    """ Table displaying the error generators of a Model's gates as well
         as their projections onto spaces of standard generators """
-    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
+    def __init__(self, ws, model, targetModel, confidenceRegionInfo=None,
                  display=("errgen","H","S","A"), display_as="boxes",
                  genType="logGTi"):
 
         """
         Create a table listing the error generators obtained by
-        comparing a gateset's gates to a target gateset.
+        comparing a model's gates to a target model.
 
         Parameters
         ----------
-        gateset, targetGateset : GateSet
-            The gate sets to compare
+        model, targetModel : Model
+            The models to compare
 
         display : tuple of {"errgen","H","S","A"}
             Specifes which columns to include: the error generator itself
@@ -772,23 +776,23 @@ class ErrgenTable(WorkspaceTable):
         genType : {"logG-logT", "logTiG", "logGTi"}
             The type of error generator to compute.  Allowed values are:
 
-            - "logG-logT" : errgen = log(gate) - log(target_gate)
-            - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
-            - "logTiG" : errgen = log( dot(gate, inv(target_gate)) )
+            - "logG-logT" : errgen = log(gate) - log(target_op)
+            - "logTiG" : errgen = log( dot(inv(target_op), gate) )
+            - "logTiG" : errgen = log( dot(gate, inv(target_op)) )
 
         Returns
         -------
         ReportTable
         """
-        super(ErrgenTable,self).__init__(ws, self._create, gateset,
-                                         targetGateset, confidenceRegionInfo,
+        super(ErrgenTable,self).__init__(ws, self._create, model,
+                                         targetModel, confidenceRegionInfo,
                                          display, display_as, genType)
 
-    def _create(self, gateset, targetGateset,
+    def _create(self, model, targetModel,
                 confidenceRegionInfo, display, display_as, genType):
 
-        gateLabels  = list(gateset.gates.keys())  # gate labels
-        basis = gateset.basis
+        opLabels  = model.get_primitive_op_labels()  # operation labels
+        basis = model.basis
         basisPrefix = ""
         if basis.name == "pp": basisPrefix = "Pauli "
         elif basis.name == "qt": basisPrefix = "Qutrit "
@@ -836,16 +840,16 @@ class ErrgenTable(WorkspaceTable):
                 max_lst.append(M)
 
         #Do computation, so shared color scales can be computed
-        for gl in gateLabels:
+        for gl in opLabels:
             if genType == "logG-logT":
                 info = _ev(_reportables.LogGmlogT_and_projections(
-                    gateset, targetGateset, gl), confidenceRegionInfo)
+                    model, targetModel, gl), confidenceRegionInfo)
             elif genType == "logTiG":
                 info = _ev(_reportables.LogTiG_and_projections(
-                    gateset, targetGateset, gl), confidenceRegionInfo)
+                    model, targetModel, gl), confidenceRegionInfo)
             elif genType == "logGTi":
                 info = _ev(_reportables.LogGTi_and_projections(
-                    gateset, targetGateset, gl), confidenceRegionInfo)
+                    model, targetModel, gl), confidenceRegionInfo)
             else: raise ValueError("Invalid generator type: %s" % genType)
             errgenAndProjs[gl] = info
 
@@ -867,7 +871,7 @@ class ErrgenTable(WorkspaceTable):
 
 
         #Do plotting
-        for gl in gateLabels:
+        for gl in opLabels:
             row_data = [gl]
             row_formatters = [None]
             info = errgenAndProjs[gl]
@@ -891,8 +895,8 @@ class ErrgenTable(WorkspaceTable):
                         hamProjs, EB = info['hamiltonian projections'].get_value_and_err_bar()
                         m,M = getMinMax(hamProjsM,_np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, hamProjs, basis.name, m, M,
-                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                            self.ws, hamProjs, basis, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T)
                         row_data.append(hamdecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -906,8 +910,8 @@ class ErrgenTable(WorkspaceTable):
                         stoProjs, EB = info['stochastic projections'].get_value_and_err_bar()
                         m,M = getMinMax(stoProjsM,_np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, stoProjs, basis.name, m, M,
-                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                            self.ws, stoProjs, basis, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T)
                         row_data.append(stodecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -920,8 +924,8 @@ class ErrgenTable(WorkspaceTable):
                         affProjs, EB = info['affine projections'].get_value_and_err_bar()
                         m,M = getMinMax(affProjsM,_np.max(_np.abs(affProjs)))
                         affdecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, affProjs, basis.name, m, M,
-                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                            self.ws, affProjs, basis, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T)
                         row_data.append(affdecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -937,22 +941,22 @@ class ErrgenTable(WorkspaceTable):
 class GaugeRobustErrgenTable(WorkspaceTable):
     """ Table displaying the first-order gauge invariant ("gauge robust")
         linear combinations of standard error generator coefficients for
-        the gates in a gate set.
+        the gates in a model.
     """
-    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
+    def __init__(self, ws, model, targetModel, confidenceRegionInfo=None,
                  genType="logGTi"):
 
         """
         Create a table listing the first-order gauge invariant ("gauge robust")
         linear combinations of standard error generator coefficients for
-        the gates in `gateset`.  This table identifies, through the use of
+        the gates in `model`.  This table identifies, through the use of
         "synthetic idle tomography", which combinations of standard-error-
         generator coefficients are robust (to first-order) to gauge variations.
 
         Parameters
         ----------
-        gateset, targetGateset : GateSet
-            The gate sets to compare
+        model, targetModel : Model
+            The models to compare
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -961,21 +965,23 @@ class GaugeRobustErrgenTable(WorkspaceTable):
         genType : {"logG-logT", "logTiG", "logGTi"}
             The type of error generator to compute.  Allowed values are:
 
-            - "logG-logT" : errgen = log(gate) - log(target_gate)
-            - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
-            - "logTiG" : errgen = log( dot(gate, inv(target_gate)) )
+            - "logG-logT" : errgen = log(gate) - log(target_op)
+            - "logTiG" : errgen = log( dot(inv(target_op), gate) )
+            - "logTiG" : errgen = log( dot(gate, inv(target_op)) )
 
         Returns
         -------
         ReportTable
         """
-        super(GaugeRobustErrgenTable,self).__init__(ws, self._create, gateset,
-                                                    targetGateset, confidenceRegionInfo,
+        super(GaugeRobustErrgenTable,self).__init__(ws, self._create, model,
+                                                    targetModel, confidenceRegionInfo,
                                                     genType)
 
-    def _create(self, gateset, targetGateset, confidenceRegionInfo, genType):
+    def _create(self, model, targetModel, confidenceRegionInfo, genType):
 
-        gateLabels  = list(gateset.gates.keys())  # gate labels
+        opLabels  = model.get_primitive_op_labels()  # operation labels
+        assert(isinstance(model,_objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+        
         colHeadings = ['Error rates', 'Value']
 
         table = _ReportTable(colHeadings, (None,)*len(colHeadings),
@@ -985,18 +991,18 @@ class GaugeRobustErrgenTable(WorkspaceTable):
         syntheticIdleStrs = []
 
         ## Construct synthetic idles
-        maxPower = 4; maxLen = 6; Id = _np.identity(targetGateset.dim,'d')
-        baseStrs = _cnst.list_all_gatestrings_without_powers_and_cycles(list(gateset.gates.keys()), maxLen)
+        maxPower = 4; maxLen = 6; Id = _np.identity(targetModel.dim,'d')
+        baseStrs = _cnst.list_all_circuits_without_powers_and_cycles(list(model.operations.keys()), maxLen)
         for s in baseStrs:
             for i in range(1,maxPower):
-                if len(s**i) > 1 and _np.linalg.norm(targetGateset.product( s**i ) - Id) < 1e-6:
+                if len(s**i) > 1 and _np.linalg.norm(targetModel.product( s**i ) - Id) < 1e-6:
                     syntheticIdleStrs.append( s**i ); break
-        #syntheticIdleStrs = _cnst.gatestring_list([ ('Gx',)*4, ('Gy',)*4 ] ) #DEBUG!!!
-        #syntheticIdleStrs = _cnst.gatestring_list([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
-        print("Using synthetic idles: \n",'\n'.join([str(gstr) for gstr in syntheticIdleStrs]))
+        #syntheticIdleStrs = _cnst.circuit_list([ ('Gx',)*4, ('Gy',)*4 ] ) #DEBUG!!!
+        #syntheticIdleStrs = _cnst.circuit_list([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
+        print("Using synthetic idles: \n",'\n'.join([str(opstr) for opstr in syntheticIdleStrs]))
 
         gaugeRobust_info = _ev(_reportables.Robust_LogGTi_and_projections(
-            gateset, targetGateset, syntheticIdleStrs), confidenceRegionInfo)
+            model, targetModel, syntheticIdleStrs), confidenceRegionInfo)
 
         for linear_combo_lbl, val in gaugeRobust_info.items():
             row_data = [linear_combo_lbl, val]
@@ -1010,35 +1016,35 @@ class GaugeRobustErrgenTable(WorkspaceTable):
 class NQubitErrgenTable(WorkspaceTable):
     """
     Table displaying the error rates (coefficients of error generators) of a
-    GateSet's gates.  The gates are assumed to have a particular structure.
+    Model's gates.  The gates are assumed to have a particular structure.
 
-    Specifically, gates must be :class:`LinbladParameterizedGateMap` or
-    :class:`StaticGate` objects wrapped within :class:`EmbeddedGateMap` and/or 
-    :class:`ComposedGateMap` objects (this is consistent with the gates
-    constructed by :function:`build_nqnoise_gateset`).  As such, error rates
+    Specifically, gates must be :class:`LindbladOp` or
+    :class:`StaticDenseOp` objects wrapped within :class:`EmbeddedOp` and/or 
+    :class:`ComposedOp` objects (this is consistent with the operation
+    blocks of a :class:`CloudNoiseModel`).  As such, error rates
     are read directly from the gate objects rather than being computed by
     projecting dense gate representations onto a "basis" of fixed error
     generators (e.g. H+S+A generators).
     """
 
-    def __init__(self, ws, gateset, confidenceRegionInfo=None,
+    def __init__(self, ws, model, confidenceRegionInfo=None,
                  display=("H","S","A"), display_as="boxes"):
 
         """
-        Create a table listing the error rates of the gates in `gateset`.
+        Create a table listing the error rates of the gates in `model`.
 
-        The gates in `gateset` are assumed to have a particular structure,
-        namely: they must be :class:`LinbladParameterizedGateMap` or
-        :class:`StaticGate` objects wrapped within :class:`EmbeddedGateMap`
-        and/or :class:`ComposedGateMap` objects.  
+        The gates in `model` are assumed to have a particular structure,
+        namely: they must be :class:`LindbladOp` or
+        :class:`StaticDenseOp` objects wrapped within :class:`EmbeddedOp`
+        and/or :class:`ComposedOp` objects.  
 
         Error rates are organized by order of composition and which qubits
         the corresponding error generators act upon.
 
         Parameters
         ----------
-        gateset : GateSet
-            The gate set to analyze.
+        model : Model
+            The model to analyze.
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -1057,14 +1063,14 @@ class NQubitErrgenTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(NQubitErrgenTable,self).__init__(ws, self._create, gateset,
+        super(NQubitErrgenTable,self).__init__(ws, self._create, model,
                                                confidenceRegionInfo,
                                                display, display_as)
 
-    def _create(self, gateset, confidenceRegionInfo, display, display_as):
-        gateLabels  = list(gateset.gates.keys())  # gate labels
+    def _create(self, model, confidenceRegionInfo, display, display_as):
+        opLabels = model.get_primitive_op_labels()  # operation labels
         
-        #basis = gateset.basis
+        #basis = model.basis
         #basisPrefix = ""
         #if basis.name == "pp": basisPrefix = "Pauli "
         #elif basis.name == "qt": basisPrefix = "Qutrit "
@@ -1088,15 +1094,6 @@ class NQubitErrgenTable(WorkspaceTable):
         table = _ReportTable(colHeadings, (None,)*len(colHeadings),
                              confidenceRegionInfo=confidenceRegionInfo)
 
-        #coeffsM = []
-
-        #OLD TODO REMOVE
-        #errgenAndProjs = { }  
-        #errgensM = []
-        #hamProjsM = []
-        #stoProjsM = []
-        #affProjsM = []
-
         def getMinMax(max_lst, M):
             """return a [min,max] already in list if there's one within an
                order of magnitude"""
@@ -1116,14 +1113,14 @@ class NQubitErrgenTable(WorkspaceTable):
 
         pre_rows = []; displayed_params = set()
         def process_gate(lbl, gate, comppos_prefix, sslbls):
-            if isinstance(gate,_objs.ComposedGateMap):
-                for i,fgate in enumerate(gate.factorgates):
+            if isinstance(gate,_objs.ComposedOp):
+                for i,fgate in enumerate(gate.factorops):
                     process_gate(lbl,fgate, comppos_prefix + (i,), sslbls)
-            elif isinstance(gate,_objs.EmbeddedGateMap):
-                process_gate(lbl,gate.embedded_gate, comppos_prefix, gate.targetLabels)
-            elif isinstance(gate,_objs.StaticGate):
+            elif isinstance(gate,_objs.EmbeddedOp):
+                process_gate(lbl,gate.embedded_op, comppos_prefix, gate.targetLabels)
+            elif isinstance(gate,_objs.StaticDenseOp):
                 pass # no error coefficients associated w/static gates
-            elif isinstance(gate,_objs.LindbladParameterizedGateMap):
+            elif isinstance(gate,_objs.LindbladOp):
 
                 # Only display coeffs for gates that correspond to *new*
                 # (not yet displayed) parameters.
@@ -1169,12 +1166,21 @@ class NQubitErrgenTable(WorkspaceTable):
             return _np.array([coeffs]), xlabels, ylabels
 
         #Do computation, so shared color scales can be computed
-        for gl in gateLabels:
-            process_gate(gl,gateset.gates[gl],(),None)
+        if isinstance(model,_objs.ExplicitOpModel):
+            for gl in opLabels:
+                process_gate(gl,model.operations[gl],(),None)
+        elif isinstance(model,_objs.ImplicitOpModel): # process primitive op error
+            for gl in opLabels:
+                process_gate(gl,model.operation_blks['cloudnoise'][gl],(),None)
+        else:
+            raise ValueError("Unrecognized type of model: %s" % str(type(model)))
 
         #get min/max
-        M = max(( max(map(abs,Ldict.values())) for _,_,_,Ldict,_ in pre_rows))
-        m = -M        
+        if len(pre_rows) > 0:
+            M = max(( max(map(abs,Ldict.values())) for _,_,_,Ldict,_ in pre_rows))
+            m = -M
+        else:
+            M = m = 0
 
         #Now pre_rows is filled, so we just need to create the plots:
         for gl, comppos, sslbls, Ldict, basisLbls in pre_rows:
@@ -1230,16 +1236,16 @@ class NQubitErrgenTable(WorkspaceTable):
 
 class old_RotationAxisVsTargetTable(WorkspaceTable):
     """ Old 1-qubit-only gate rotation axis table """
-    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
+    def __init__(self, ws, model, targetModel, confidenceRegionInfo=None):
         """
         Create a table comparing the rotation axes of the single-qubit gates in
-        `gateset` with those in `targetGateset`.  Differences are shown as
+        `model` with those in `targetModel`.  Differences are shown as
         angles between the rotation axes of corresponding gates.
 
         Parameters
         ----------
-        gateset, targetGateset : GateSet
-            The gate sets to compare.  Must be single-qubit.
+        model, targetModel : Model
+            The models to compare.  Must be single-qubit.
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -1250,24 +1256,24 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
         ReportTable
         """
         super(old_RotationAxisVsTargetTable,self).__init__(
-            ws, self._create, gateset, targetGateset, confidenceRegionInfo)
+            ws, self._create, model, targetModel, confidenceRegionInfo)
 
 
-    def _create(self, gateset, targetGateset, confidenceRegionInfo):
+    def _create(self, model, targetModel, confidenceRegionInfo):
 
-        gateLabels  = list(gateset.gates.keys())  # gate labels
+        opLabels  = model.get_primitive_op_labels()  # operation labels
 
         colHeadings = ('Gate', "Angle between|rotation axes")
         formatters  = (None,'Conversion')
 
-        anglesList = [_ev(_reportables.Gateset_gateset_angles_btwn_axes(
-            gateset, targetGateset, gl), confidenceRegionInfo) for gl in gateLabels]
+        anglesList = [_ev(_reportables.Model_model_angles_btwn_axes(
+            model, targetModel, gl), confidenceRegionInfo) for gl in opLabels]
 
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
         formatters = [None] + ['Pi']
 
-        for gl, angle in zip(gateLabels, anglesList):
+        for gl, angle in zip(opLabels, anglesList):
             rowData = [gl] + [angle]
             table.addrow(rowData, formatters)
 
@@ -1276,21 +1282,21 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
 
 
 class GateDecompTable(WorkspaceTable):
-    """ Table of angle & axis decompositions of a GateSet's gates """
-    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
+    """ Table of angle & axis decompositions of a Model's gates """
+    def __init__(self, ws, model, targetModel, confidenceRegionInfo=None):
         """
-        Create table for decomposing a gateset's gates.
+        Create table for decomposing a model's gates.
 
         This table interprets the Hamiltonian projection of the log
-        of the gate matrix to extract a rotation angle and axis.
+        of the operation matrix to extract a rotation angle and axis.
 
         Parameters
         ----------
-        gateset : GateSet
-            The estimated gate set.
+        model : Model
+            The estimated model.
 
-        targetGateset : GateSet
-            The target gate set, used to help disambiguate the matrix
+        targetModel : Model
+            The target model, used to help disambiguate the matrix
             logarithms that are used in the decomposition.
 
         confidenceRegionInfo : ConfidenceRegion, optional
@@ -1301,40 +1307,40 @@ class GateDecompTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(GateDecompTable,self).__init__(ws, self._create, gateset,
-                                             targetGateset, confidenceRegionInfo)
+        super(GateDecompTable,self).__init__(ws, self._create, model,
+                                             targetModel, confidenceRegionInfo)
 
 
-    def _create(self, gateset, targetGateset, confidenceRegionInfo):
-        gateLabels = list(gateset.gates.keys())  # gate labels
+    def _create(self, model, targetModel, confidenceRegionInfo):
+        opLabels = model.get_primitive_op_labels() # operation labels
 
         colHeadings = ('Gate','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') \
-                      + tuple( [ "Axis angle w/%s" % str(gl) for gl in gateLabels] )
+                      + tuple( [ "Axis angle w/%s" % str(gl) for gl in opLabels] )
         tooltips = ('Gate','Hamiltonian Eigenvalues','Rotation angle','Rotation axis',
                     'Taking the log of a gate may be performed approximately.  This is ' +
                     'error in that estimate, i.e. norm(G - exp(approxLogG)).') + \
                     tuple( [ "Angle between the rotation axis of %s and the gate of the current row"
-                             % str(gl) for gl in gateLabels] )
+                             % str(gl) for gl in opLabels] )
         formatters = [None]*len(colHeadings)
 
         table = _ReportTable(colHeadings, formatters,
                              colHeadingLabels=tooltips, confidenceRegionInfo=confidenceRegionInfo)
-        formatters = (None, 'Pi','Pi', 'Figure', 'Normal') + ('Pi',)*len(gateLabels)
+        formatters = (None, 'Pi','Pi', 'Figure', 'Normal') + ('Pi',)*len(opLabels)
 
         decomp = _ev(_reportables.General_decomposition(
-            gateset, targetGateset), confidenceRegionInfo)
+            model, targetModel), confidenceRegionInfo)
 
-        for gl in gateLabels:
+        for gl in opLabels:
             gl = str(gl) # Label -> str for decomp-dict keys
             axis, axisEB = decomp[gl + ' axis'].get_value_and_err_bar()
-            axisFig = _wp.ProjectionsBoxPlot(self.ws, axis, gateset.basis.name, -1.0,1.0,
+            axisFig = _wp.ProjectionsBoxPlot(self.ws, axis, model.basis, -1.0,1.0,
                                              boxLabels=True, EBmatrix=axisEB)
             decomp[gl + ' hamiltonian eigenvalues'].scale( 1.0/_np.pi ) #scale evals to units of pi
             rowData = [gl, decomp[gl + ' hamiltonian eigenvalues'],
                        decomp[gl + ' angle'], axisFig,
                        decomp[gl + ' log inexactness'] ]
 
-            for gl_other in gateLabels:
+            for gl_other in opLabels:
                 gl_other = str(gl_other)
                 rotnAngle = decomp[gl + ' angle'].get_value()
                 rotnAngle_other = decomp[gl_other + ' angle'].get_value()
@@ -1354,9 +1360,9 @@ class GateDecompTable(WorkspaceTable):
 
 class old_GateDecompTable(WorkspaceTable):
     """ 1-qubit-only table of gate decompositions """
-    def __init__(self, ws, gateset, confidenceRegionInfo=None):
+    def __init__(self, ws, model, confidenceRegionInfo=None):
         """
-        Create table for decomposing a single-qubit gateset's gates.
+        Create table for decomposing a single-qubit model's gates.
 
         This table interprets the eigenvectors and eigenvalues of the
         gates to extract a rotation angle, axis, and various decay
@@ -1364,8 +1370,8 @@ class old_GateDecompTable(WorkspaceTable):
 
         Parameters
         ----------
-        gateset : GateSet
-            A single-qubit `GateSet`.
+        model : Model
+            A single-qubit `Model`.
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -1375,16 +1381,17 @@ class old_GateDecompTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(old_GateDecompTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo)
+        super(old_GateDecompTable,self).__init__(ws, self._create, model, confidenceRegionInfo)
 
 
-    def _create(self, gateset, confidenceRegionInfo):
+    def _create(self, model, confidenceRegionInfo):
 
-        gateLabels = list(gateset.gates.keys())  # gate labels
+        opLabels = model.get_primitive_op_labels()  # operation labels
         colHeadings = ('Gate','Eigenvalues','Fixed pt','Rotn. axis','Diag. decay','Off-diag. decay')
         formatters = [None]*6
-
-        decomps = [_reportables.decomposition(gateset.gates[gl]) for gl in gateLabels]
+        
+        assert(isinstance(model,_objs.ExplicitOpModel)), "old_GateDecompTable only works with explicit models"
+        decomps = [_reportables.decomposition(model.operations[gl]) for gl in opLabels]
         decompNames = ('fixed point',
                        'axis of rotation',
                        'decay of diagonal rotation terms',
@@ -1394,8 +1401,8 @@ class old_GateDecompTable(WorkspaceTable):
 
         formatters = (None, 'Vec', 'Normal', 'Normal', 'Normal', 'Normal')
 
-        for decomp, gl in zip(decomps, gateLabels):
-            evals = _ev(_reportables.Gate_eigenvalues(gateset,gl))
+        for decomp, gl in zip(decomps, opLabels):
+            evals = _ev(_reportables.Gate_eigenvalues(model,gl))
             decomp, decompEB = decomp.get_value_and_err_bar() #OLD
 
             rowData = [gl, evals] + [decomp.get(x,'X') for x in decompNames[0:2] ] + \
@@ -1409,15 +1416,15 @@ class old_GateDecompTable(WorkspaceTable):
 
 class old_RotationAxisTable(WorkspaceTable):
     """ 1-qubit-only table of gate rotation angles and axes """
-    def __init__(self, ws, gateset, confidenceRegionInfo=None, showAxisAngleErrBars=True):
+    def __init__(self, ws, model, confidenceRegionInfo=None, showAxisAngleErrBars=True):
         """
         Create a table of the angle between a gate rotation axes for
-        gates belonging to a single-qubit gateset.
+        gates belonging to a single-qubit model.
 
         Parameters
         ----------
-        gateset : GateSet
-            A single-qubit `GateSet`.
+        model : Model
+            A single-qubit `Model`.
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -1432,40 +1439,41 @@ class old_RotationAxisTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(old_RotationAxisTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo, showAxisAngleErrBars)
+        super(old_RotationAxisTable,self).__init__(ws, self._create, model, confidenceRegionInfo, showAxisAngleErrBars)
 
 
-    def _create(self, gateset, confidenceRegionInfo, showAxisAngleErrBars):
+    def _create(self, model, confidenceRegionInfo, showAxisAngleErrBars):
 
-        gateLabels = list(gateset.gates.keys())
+        opLabels = model.get_primitive_op_labels()
+        
+        assert(isinstance(model,_objs.ExplicitOpModel)), "old_RotationAxisTable only works with explicit models"
+        decomps = [_reportables.decomposition(model.operations[gl]) for gl in opLabels]
 
-        decomps = [_reportables.decomposition(gateset.gates[gl]) for gl in gateLabels]
-
-        colHeadings = ("Gate","Angle") + tuple( [ "RAAW(%s)" % gl for gl in gateLabels] )
+        colHeadings = ("Gate","Angle") + tuple( [ "RAAW(%s)" % gl for gl in opLabels] )
         nCols = len(colHeadings)
         formatters = [None] * nCols
 
         table = "tabular"
         latex_head =  "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * nCols + "|")
         latex_head += "\\multirow{2}{*}{Gate} & \\multirow{2}{*}{Angle} & " + \
-                      "\\multicolumn{%d}{c|}{Angle between Rotation Axes} \\\\ \cline{3-%d}\n" % (len(gateLabels),nCols)
-        latex_head += " & & %s \\\\ \hline\n" % (" & ".join(map(str,gateLabels)))
+                      "\\multicolumn{%d}{c|}{Angle between Rotation Axes} \\\\ \cline{3-%d}\n" % (len(opLabels),nCols)
+        latex_head += " & & %s \\\\ \hline\n" % (" & ".join(map(str,opLabels)))
     
         table = _ReportTable(colHeadings, formatters,
                              customHeader={'latex': latex_head}, confidenceRegionInfo=confidenceRegionInfo)
 
-        formatters = [None, 'Pi'] + ['Pi'] * len(gateLabels)
+        formatters = [None, 'Pi'] + ['Pi'] * len(opLabels)
 
-        rotnAxisAnglesQty = _ev(_reportables.Angles_btwn_rotn_axes(gateset),
+        rotnAxisAnglesQty = _ev(_reportables.Angles_btwn_rotn_axes(model),
                                 confidenceRegionInfo)
         rotnAxisAngles, rotnAxisAnglesEB = rotnAxisAnglesQty.get_value_and_err_bar()
 
-        for i,gl in enumerate(gateLabels):
+        for i,gl in enumerate(opLabels):
             decomp, decompEB = decomps[i].get_value_and_err_bar() #OLD
             rotnAngle = decomp.get('pi rotations','X')
 
             angles_btwn_rotn_axes = []
-            for j,gl_other in enumerate(gateLabels):
+            for j,gl_other in enumerate(opLabels):
                 decomp_other, _ = decomps[j].get_value_and_err_bar() #OLD
                 rotnAngle_other = decomp_other.get('pi rotations','X')
 
@@ -1494,23 +1502,23 @@ class old_RotationAxisTable(WorkspaceTable):
 
 class GateEigenvalueTable(WorkspaceTable):
     """ Table displaying, in a variety of ways, the eigenvalues of a
-        GateSet's gates """
-    def __init__(self, ws, gateset, targetGateset=None,
+        Model's gates """
+    def __init__(self, ws, model, targetModel=None,
                  confidenceRegionInfo=None,
                  display=('evals','rel','log-evals','log-rel','polar','relpolar'),
-                 virtual_gates=None):
+                 virtual_ops=None):
         """
         Create table which lists and displays (using a polar plot)
-        the eigenvalues of a gateset's gates.
+        the eigenvalues of a model's gates.
 
         Parameters
         ----------
-        gateset : GateSet
-            The GateSet
+        model : Model
+            The Model
 
-        targetGateset : GateSet, optional
-            The target gate set.  If given, the target's eigenvalue will
-            be plotted alongside `gateset`'s gate eigenvalue, the
+        targetModel : Model, optional
+            The target model.  If given, the target's eigenvalue will
+            be plotted alongside `model`'s gate eigenvalue, the
             "relative eigenvalues".
 
         confidenceRegionInfo : ConfidenceRegion, optional
@@ -1520,7 +1528,7 @@ class GateEigenvalueTable(WorkspaceTable):
         display : tuple
             A tuple of one or more of the allowed options (see below) which
             specify which columns are displayed in the table.  If
-            `targetGateset` is None, then `"target"`, `"rel"`, `"log-rel"`
+            `targetModel` is None, then `"target"`, `"rel"`, `"log-rel"`
             `"relpolar"`, `"gidm"`, and `"giinf"` will be silently ignored.
 
             - "evals" : the gate eigenvalues
@@ -1536,26 +1544,28 @@ class GateEigenvalueTable(WorkspaceTable):
             - "evdm" : the gauge-invariant "eigenvalue diamond norm" metric
             - "evinf" : the gauge-invariant "eigenvalue infidelity" metric
 
-        virtual_gates : list, optional
-            If not None, a list of `GateString` objects specifying additional "gates"
-            (i.e. processes) to compute eigenvalues of.  Length-1 gate strings are
+        virtual_ops : list, optional
+            If not None, a list of `Circuit` objects specifying additional "gates"
+            (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
             automatically discarded so they are not displayed twice.
 
         Returns
         -------
         ReportTable
         """
-        super(GateEigenvalueTable,self).__init__(ws, self._create, gateset,
-                                                 targetGateset,
+        super(GateEigenvalueTable,self).__init__(ws, self._create, model,
+                                                 targetModel,
                                                  confidenceRegionInfo, display,
-                                                 virtual_gates)
+                                                 virtual_ops)
 
-    def _create(self, gateset, targetGateset,
+    def _create(self, model, targetModel,
                 confidenceRegionInfo, display,
-                virtual_gates):
+                virtual_ops):
 
-        gateLabels = list(gateset.gates.keys())  # gate labels
-        colHeadings = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
+        opLabels = model.get_primitive_op_labels()  # operation labels
+        assert(isinstance(model,_objs.ExplicitOpModel)), "GateEigenvalueTable only works with explicit models"
+        
+        colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
         formatters = [None]
         for disp in display:
             if disp == "evals":
@@ -1567,7 +1577,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 formatters.append(None)
 
             elif disp == "rel":
-                if(targetGateset is not None): #silently ignore
+                if(targetModel is not None): #silently ignore
                     colHeadings.append('Rel. Evals ($R$)')
                     formatters.append(None)
 
@@ -1588,34 +1598,34 @@ class GateEigenvalueTable(WorkspaceTable):
                 formatters.append(None)
 
             elif disp == "relpolar":
-                if(targetGateset is not None): #silently ignore
+                if(targetModel is not None): #silently ignore
                     colHeadings.append('Rel. Evals')  #Note: make sure header is *distinct* for pandas conversion
                     formatters.append(None)
 
             elif disp == "absdiff-evals":
-                if(targetGateset is not None): #silently ignore
+                if(targetModel is not None): #silently ignore
                     colHeadings.append('|E - T|')
                     formatters.append('MathText')
 
             elif disp == "infdiff-evals":
-                if(targetGateset is not None): #silently ignore
+                if(targetModel is not None): #silently ignore
                     colHeadings.append('1.0 - Re(\\bar{T}*E)')
                     formatters.append('MathText')
 
             elif disp == "absdiff-log-evals":
-                if(targetGateset is not None): #silently ignore
+                if(targetModel is not None): #silently ignore
                     colHeadings.append('|Re(log E) - Re(log T)|')
                     colHeadings.append('|Im(log E) - Im(log T)|')
                     formatters.append('MathText')
                     formatters.append('MathText')
 
             elif disp == "evdm":
-                if(targetGateset is not None): #silently ignore
+                if(targetModel is not None): #silently ignore
                     colHeadings.append('Eigenvalue Diamond norm')
                     formatters.append('Conversion')
 
             elif disp == "evinf":
-                if(targetGateset is not None): #silently ignore
+                if(targetModel is not None): #silently ignore
                     colHeadings.append('Eigenvalue infidelity')
                     formatters.append(None)
             else:
@@ -1623,13 +1633,13 @@ class GateEigenvalueTable(WorkspaceTable):
 
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
-        if virtual_gates is None:
-            iterOver = gateLabels
+        if virtual_ops is None:
+            iterOver = opLabels
         else:
-            iterOver = gateLabels + [v for v in virtual_gates if len(v) > 1]
+            iterOver = opLabels + tuple((v for v in virtual_ops if len(v) > 1))
 
         for gl in iterOver:
-            #Note: gl may be a gate label (a string) or a GateString
+            #Note: gl may be a operation label (a string) or a Circuit
             row_data = [ str(gl) ]
             row_formatters = [None]
 
@@ -1637,8 +1647,8 @@ class GateEigenvalueTable(WorkspaceTable):
             #tStart = _time.time() #DEBUG
             fn = _reportables.Gate_eigenvalues if \
                 isinstance(gl,_objs.Label) or _tools.isstr(gl) else \
-                _reportables.Gatestring_eigenvalues
-            evals = _ev(fn(gateset,gl), confidenceRegionInfo)
+                _reportables.Circuit_eigenvalues
+            evals = _ev(fn(model,gl), confidenceRegionInfo)
             #tm = _time.time() - tStart #DEBUG
             #if tm > 0.01: print("DB: Gate eigenvalues in %gs" % tm) #DEBUG
 
@@ -1647,19 +1657,19 @@ class GateEigenvalueTable(WorkspaceTable):
             #try: evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
             #except: evals = evals.reshape(evals.size, 1)
 
-            if targetGateset is not None:
+            if targetModel is not None:
                 #TODO: move this to a reportable qty to get error bars?
 
                 if isinstance(gl,_objs.Label) or _tools.isstr(gl):
-                    target_evals = _np.linalg.eigvals( targetGateset.gates[gl].todense() ) #no error bars
+                    target_evals = _np.linalg.eigvals( targetModel.operations[gl].todense() ) #no error bars
                 else:
-                    target_evals = _np.linalg.eigvals( targetGateset.product(gl) ) #no error bars
+                    target_evals = _np.linalg.eigvals( targetModel.product(gl) ) #no error bars
 
                 if any([(x in display) for x in ('rel','log-rel','relpolar')]):
                     if isinstance(gl,_objs.Label) or _tools.isstr(gl):
-                        rel_evals = _ev(_reportables.Rel_gate_eigenvalues(gateset, targetGateset, gl), confidenceRegionInfo)
+                        rel_evals = _ev(_reportables.Rel_gate_eigenvalues(model, targetModel, gl), confidenceRegionInfo)
                     else:
-                        rel_evals = _ev(_reportables.Rel_gatestring_eigenvalues(gateset, targetGateset, gl), confidenceRegionInfo)
+                        rel_evals = _ev(_reportables.Rel_circuit_eigenvalues(model, targetModel, gl), confidenceRegionInfo)
 
                 # permute target eigenvalues according to min-weight matching
                 _, pairs = _tools.minweight_match( evals.get_value(), target_evals, lambda x,y: abs(x-y) )
@@ -1676,11 +1686,11 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_data.append( evals )
                     row_formatters.append('Normal')
 
-                elif disp == "target" and targetGateset is not None:
+                elif disp == "target" and targetModel is not None:
                     row_data.append( target_evals )
                     row_formatters.append('Normal')
 
-                elif disp == "rel" and targetGateset is not None:
+                elif disp == "rel" and targetModel is not None:
                     row_data.append( rel_evals )
                     row_formatters.append('Normal')
 
@@ -1717,26 +1727,26 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_formatters.append('Pi')
 
                 elif disp == "evdm":
-                    if targetGateset is not None:
+                    if targetModel is not None:
                         fn = _reportables.Eigenvalue_diamondnorm if \
                             isinstance(gl,_objs.Label) or _tools.isstr(gl) else \
-                             _reportables.Gatestring_eigenvalue_diamondnorm
-                        gidm = _ev(fn(gateset, targetGateset, gl), confidenceRegionInfo)
+                             _reportables.Circuit_eigenvalue_diamondnorm
+                        gidm = _ev(fn(model, targetModel, gl), confidenceRegionInfo)
                         row_data.append( gidm )
                         row_formatters.append('Normal')
 
                 elif disp == "evinf":
-                    if targetGateset is not None:
+                    if targetModel is not None:
                         fn = _reportables.Eigenvalue_entanglement_infidelity if \
                             isinstance(gl,_objs.Label) or _tools.isstr(gl) else \
-                            _reportables.Gatestring_eigenvalue_entanglement_infidelity
-                        giinf = _ev(fn(gateset, targetGateset, gl), confidenceRegionInfo)
+                            _reportables.Circuit_eigenvalue_entanglement_infidelity
+                        giinf = _ev(fn(model, targetModel, gl), confidenceRegionInfo)
                         row_data.append( giinf )
                         row_formatters.append('Normal')
 
                 elif disp == "polar":
                     evals_val = evals.get_value()
-                    if targetGateset is None:
+                    if targetModel is None:
                         fig = _wp.PolarEigenvaluePlot(
                             self.ws,[evals_val],["blue"],centerText=str(gl))
                     else:
@@ -1746,7 +1756,7 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_data.append( fig )
                     row_formatters.append('Figure')
 
-                elif disp == "relpolar" and targetGateset is not None:
+                elif disp == "relpolar" and targetModel is not None:
                     rel_evals_val = rel_evals.get_value()
                     fig = _wp.PolarEigenvaluePlot(
                         self.ws,[rel_evals_val],["red"],["rel"],centerText=str(gl))
@@ -1807,7 +1817,7 @@ class DataSetOverviewTable(WorkspaceTable):
 
 class FitComparisonTable(WorkspaceTable):
     """ Table showing how the goodness-of-fit evolved over GST iterations """
-    def __init__(self, ws, Xs, gssByX, gatesetByX, dataset, objective="logl",
+    def __init__(self, ws, Xs, gssByX, modelByX, dataset, objective="logl",
                  Xlabel='L', NpByX=None, comm=None):
         """
         Create a table showing how the chi^2 or log-likelihood changed with
@@ -1820,24 +1830,24 @@ class FitComparisonTable(WorkspaceTable):
             exponents used to index the different iterations of GST.
 
         gssByX : list of LsGermsStructure
-            Specifies the set (& structure) of the gate strings used at each X.
+            Specifies the set (& structure) of the operation sequences used at each X.
 
-        gatesetByX : list of GateSets
-            `GateSet`s corresponding to each X value.
+        modelByX : list of Models
+            `Model`s corresponding to each X value.
 
         dataset : DataSet
-            The data set to compare each gate set against.
+            The data set to compare each model against.
 
         objective : {"logl", "chi2"}, optional
             Whether to use log-likelihood or chi^2 values.
 
         Xlabel : str, optional
-            A label for the 'X' variable which indexes the different gate sets.
+            A label for the 'X' variable which indexes the different models.
             This string will be the header of the first table column.
 
         NpByX : list of ints, optional
             A list of parameter counts to use for each X.  If None, then
-            the number of non-gauge parameters for each gate set is used.
+            the number of non-gauge parameters for each model is used.
 
         comm : mpi4py.MPI.Comm, optional
             When not None, an MPI communicator for distributing the computation
@@ -1848,10 +1858,10 @@ class FitComparisonTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(FitComparisonTable,self).__init__(ws, self._create, Xs, gssByX, gatesetByX,
+        super(FitComparisonTable,self).__init__(ws, self._create, Xs, gssByX, modelByX,
                                                 dataset, objective, Xlabel, NpByX, comm)
 
-    def _create(self, Xs, gssByX, gatesetByX, dataset, objective, Xlabel, NpByX, comm):
+    def _create(self, Xs, gssByX, modelByX, dataset, objective, Xlabel, NpByX, comm):
 
         if objective == "chi2":
             colHeadings = {
@@ -1878,27 +1888,27 @@ class FitComparisonTable(WorkspaceTable):
 
         if NpByX is None:
             try:
-                NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
+                NpByX = [ mdl.num_nongauge_params() for mdl in modelByX ]
             except _np.linalg.LinAlgError:
                 _warnings.warn(("LinAlgError when trying to compute the number"
                                 " of non-gauge parameters.  Using total"
                                 " parameters instead."))
-                NpByX = [ gs.num_params() for gs in gatesetByX ]
-            except NotImplementedError:
+                NpByX = [ mdl.num_params() for mdl in modelByX ]
+            except (NotImplementedError,AttributeError):
                 _warnings.warn(("FitComparisonTable could not obtain number of"
                                 "*non-gauge* parameters - using total params instead"))
-                NpByX = [ gs.num_params() for gs in gatesetByX ]
+                NpByX = [ mdl.num_params() for mdl in modelByX ]
 
 
         tooltips = ('', 'Difference in logL', 'number of degrees of freedom',
                     'difference between observed logl and expected mean',
                     'std deviation', 'number of std deviation', 'dataset dof',
-                    'number of gateset parameters', '1-5 star rating (like Netflix)')
+                    'number of model parameters', '1-5 star rating (like Netflix)')
         table = _ReportTable(colHeadings, None, colHeadingLabels=tooltips)
 
-        for X,gs,gss,Np in zip(Xs,gatesetByX,gssByX,NpByX):
+        for X,mdl,gss,Np in zip(Xs,modelByX,gssByX,NpByX):
             Nsig, rating, fitQty, k, Ns, Np = self._ccompute( 
-                _ph.ratedNsigma, dataset, gs, gss,
+                _ph.ratedNsigma, dataset, mdl, gss,
                 objective, Np, returnAll=True,
                 comm=comm, smartc=self.ws.smartCache)
             table.addrow((str(X),fitQty,k,fitQty-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
@@ -1908,16 +1918,16 @@ class FitComparisonTable(WorkspaceTable):
         return table
 
 
-class GatestringTable(WorkspaceTable):
-    """ Table which simply displays list(s) of gate strings """
+class CircuitTable(WorkspaceTable):
+    """ Table which simply displays list(s) of operation sequences """
     def __init__(self, ws, gsLists, titles, nCols=1, commonTitle=None):
         """
-        Creates a table of enumerating one or more sets of gate strings.
+        Creates a table of enumerating one or more sets of operation sequences.
 
         Parameters
         ----------
-        gsLists : GateString list or list of GateString lists
-            List(s) of gate strings to put in table.
+        gsLists : Circuit list or list of Circuit lists
+            List(s) of operation sequences to put in table.
 
         titles : string or list of strings
             The title(s) for the different string lists.  These are displayed in
@@ -1925,7 +1935,7 @@ class GatestringTable(WorkspaceTable):
 
         nCols : int, optional
             The number of *data* columns, i.e. those containing
-            gate strings, for each string list.
+            operation sequences, for each string list.
 
         commonTitle : string, optional
             A single title string to place in a cell spanning across
@@ -1935,15 +1945,15 @@ class GatestringTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(GatestringTable,self).__init__(ws, self._create, gsLists, titles,
-                                             nCols, commonTitle)
+        super(CircuitTable,self).__init__(ws, self._create, gsLists, titles,
+                                          nCols, commonTitle)
 
 
     def _create(self, gsLists, titles, nCols, commonTitle):
 
         if len(gsLists) == 0:
             gsLists = [ [] ]
-        elif isinstance(gsLists[0], _objs.GateString) or \
+        elif isinstance(gsLists[0], _objs.Circuit) or \
            (isinstance(gsLists[0], tuple) and _tools.isstr(gsLists[0][0])):
             gsLists = [ gsLists ]
 
@@ -1970,7 +1980,7 @@ class GatestringTable(WorkspaceTable):
                                  customHeader={'latex': latex_head,
                                                'html': html_head })
 
-        formatters = (('Normal',) + ('GateString',)*len(gsLists))*nCols
+        formatters = (('Normal',) + ('Circuit',)*len(gsLists))*nCols
 
         maxListLength = max(list(map(len,gsLists)))
         nRows = (maxListLength+(nCols-1)) // nCols #ceiling
@@ -1979,7 +1989,7 @@ class GatestringTable(WorkspaceTable):
         for i in range(nRows):
             rowData = []
             for k in range(nCols):
-                l = i+nRows*k #index of gatestring
+                l = i+nRows*k #index of circuit
                 rowData.append( l+1 )
                 for gsList in gsLists:
                     if l < len(gsList):
@@ -1993,23 +2003,23 @@ class GatestringTable(WorkspaceTable):
 
 
 class GatesSingleMetricTable(WorkspaceTable):
-    """ Table that compares the gates of many GateSets which share the same gate
-        labels to target GateSets using a single metric, so that the GateSet
+    """ Table that compares the gates of many Models which share the same gate
+        labels to target Models using a single metric, so that the Model
         titles can be used as the row and column headers."""
-    def __init__(self, ws, metric, gatesets, targetGatesets, titles,
-                 rowtitles=None, tableTitle=None, gateLabel=None,
+    def __init__(self, ws, metric, models, targetModels, titles,
+                 rowtitles=None, tableTitle=None, opLabel=None,
                  confidenceRegionInfo=None):
         """
-        Create a table comparing the gates of various gate sets (`gatesets`) to
-        those of `targetGatesets` using the metric named by `metric`.
+        Create a table comparing the gates of various models (`models`) to
+        those of `targetModels` using the metric named by `metric`.
 
-        If `gatesets` and `targetGatesets` are 1D lists, then `rowtitles` and
-        `gateLabel` should be left as their default values so that the
-        gate labels are used as row headers.
+        If `models` and `targetModels` are 1D lists, then `rowtitles` and
+        `opLabel` should be left as their default values so that the
+        operation labels are used as row headers.
 
-        If `gatesets` and `targetGatesets` are 2D (nested) lists, then
+        If `models` and `targetModels` are 2D (nested) lists, then
         `rowtitles` should specify the row-titles corresponding to the outer list
-        elements and `gateLabel` should specify a single gate label that names
+        elements and `opLabel` should specify a single operation label that names
         the gate being compared throughout the entire table.
 
         Parameters
@@ -2031,31 +2041,31 @@ class GatesSingleMetricTable(WorkspaceTable):
             - "evnudiamond" : eigenvalue non-unitary 1/2 diamond norm distance
             - "frob" :    frobenius distance
 
-        gatesets : list
-            A list or nested list-of-lists of gate sets to compare with
-            corresponding elements of `targetGatesets`.
+        models : list
+            A list or nested list-of-lists of models to compare with
+            corresponding elements of `targetModels`.
 
-        targetGatesets : list
-            A list or nested list-of-lists of gate sets to compare with
-            corresponding elements of `gatesets`.
+        targetModels : list
+            A list or nested list-of-lists of models to compare with
+            corresponding elements of `models`.
 
         titles : list of strs
             A list of column titles used to describe elements of the
-            innermost list(s) in `gatesets`.
+            innermost list(s) in `models`.
 
         rowtitles : list of strs, optional
             A list of row titles used to describe elements of the
-            outer list in `gatesets`.  If None, then the gate labels
+            outer list in `models`.  If None, then the operation labels
             are used.
 
         tableTitle : str, optional
             If not None, text to place in a top header cell which spans all the
             columns of the table.
 
-        gateLabel : str, optional
-            If not None, the single gate label to use for all comparisons
+        opLabel : str, optional
+            If not None, the single operation label to use for all comparisons
             computed in this table.  This should be set when (and only when)
-            `gatesets` and `targetGatesets` are 2D (nested) lists.
+            `models` and `targetModels` are 2D (nested) lists.
 
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -2066,20 +2076,20 @@ class GatesSingleMetricTable(WorkspaceTable):
         ReportTable
         """
         super(GatesSingleMetricTable,self).__init__(
-            ws, self._create, metric, gatesets, targetGatesets, titles,
-            rowtitles, tableTitle, gateLabel, confidenceRegionInfo)
+            ws, self._create, metric, models, targetModels, titles,
+            rowtitles, tableTitle, opLabel, confidenceRegionInfo)
 
-    def _create(self, metric, gatesets, targetGatesets, titles,
-                rowtitles, tableTitle, gateLabel, confidenceRegionInfo):
+    def _create(self, metric, models, targetModels, titles,
+                rowtitles, tableTitle, opLabel, confidenceRegionInfo):
 
         if rowtitles is None:
-            assert(gateLabel is None), "`gateLabel` must be None when `rowtitles` is"
+            assert(opLabel is None), "`opLabel` must be None when `rowtitles` is"
             colHeadings = ("Gate",) + tuple(titles)
         else:
             colHeadings = ("",) + tuple(titles)
 
         nCols = len(colHeadings)
-        formatters = [None]*nCols #[None] + ['GatesetType']*(nCols-1)
+        formatters = [None]*nCols #[None] + ['ModelType']*(nCols-1)
 
         #latex_head =  "\\begin{tabular}[l]{%s}\n\hline\n" % ("|c" * nCols + "|")
         #latex_head += "\\multirow{2}{*}{Gate} & " + \
@@ -2111,25 +2121,26 @@ class GatesSingleMetricTable(WorkspaceTable):
         row_formatters = [None] + ['Normal']*len(titles)
 
         if rowtitles is None:
-            for gl in targetGatesets[0].gates: # use first target's gate labels
+            assert(isinstance(targetModels[0],_objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+            for gl in targetModels[0].operations: # use first target's operation labels
                 row_data = [gl]
-                for gs,gsTarget in zip(gatesets, targetGatesets):
-                    if gs is None or gsTarget is None:
+                for mdl,gsTarget in zip(models, targetModels):
+                    if mdl is None or gsTarget is None:
                         qty = _objs.reportableqty.ReportableQty(_np.nan)
                     else:
-                        qty = _reportables.evaluate_gatefn_by_name(
-                            metric, gs, gsTarget, gl, confidenceRegionInfo)
+                        qty = _reportables.evaluate_opfn_by_name(
+                            metric, mdl, gsTarget, gl, confidenceRegionInfo)
                     row_data.append( qty )
                 table.addrow(row_data, row_formatters)
         else:
-            for rowtitle,gsList,tgsList in zip(rowtitles,gatesets,targetGatesets):
+            for rowtitle,gsList,tgsList in zip(rowtitles,models,targetModels):
                 row_data = [rowtitle]
-                for gs,gsTarget in zip(gsList, tgsList):
-                    if gs is None or gsTarget is None:
+                for mdl,gsTarget in zip(gsList, tgsList):
+                    if mdl is None or gsTarget is None:
                         qty = _objs.reportableqty.ReportableQty(_np.nan)
                     else:
-                        qty = _reportables.evaluate_gatefn_by_name(
-                            metric, gs, gsTarget, gateLabel, confidenceRegionInfo)
+                        qty = _reportables.evaluate_opfn_by_name(
+                            metric, mdl, gsTarget, opLabel, confidenceRegionInfo)
                     row_data.append( qty )
                 table.addrow(row_data, row_formatters)
 
@@ -2140,7 +2151,7 @@ class GatesSingleMetricTable(WorkspaceTable):
 class StandardErrgenTable(WorkspaceTable):
     """ A table showing what the standard error generators' superoperator
         matrices look like."""
-    def __init__(self, ws, gateset_dim, projection_type,
+    def __init__(self, ws, model_dim, projection_type,
                  projection_basis):
         """
         Create a table of the "standard" gate error generators, such as those
@@ -2149,9 +2160,9 @@ class StandardErrgenTable(WorkspaceTable):
 
         Parameters
         ----------
-        gateset_dim : int
-            The dimension of the gate set, which equals the number of
-            rows (or columns) in a gate matrix (e.g., 4 for a single qubit).
+        model_dim : int
+            The dimension of the model, which equals the number of
+            rows (or columns) in a operation matrix (e.g., 4 for a single qubit).
 
         projection_type : {"hamiltonian", "stochastic"}
             The type of error generator projectors to create a table for.
@@ -2170,14 +2181,14 @@ class StandardErrgenTable(WorkspaceTable):
         ReportTable
         """
         super(StandardErrgenTable,self).__init__(
-            ws, self._create, gateset_dim, projection_type,
+            ws, self._create, model_dim, projection_type,
             projection_basis)
 
 
-    def _create(self,  gateset_dim, projection_type,
+    def _create(self,  model_dim, projection_type,
                 projection_basis):
 
-        d2 = gateset_dim # number of projections == dim of gate
+        d2 = model_dim # number of projections == dim of gate
         d = int(_np.sqrt(d2)) # dim of density matrix
         nQubits = _np.log2(d)
 
@@ -2271,8 +2282,6 @@ class GaugeOptParamsTable(WorkspaceTable):
             pre = ("%d: " % i) if len(goargs_list) > 1 else ""
             if 'method' in goargs:
                 table.addrow(("%sMethod" % pre, str(goargs['method'])), (None,None))
-            #if 'TPpenalty' in goargs: #REMOVED
-            #    table.addrow(("%sTP penalty factor" % pre, str(goargs['TPpenalty'])), (None,None))
             if 'cptp_penalty_factor' in goargs and goargs['cptp_penalty_factor'] != 0:
                 table.addrow(("%sCP penalty factor" % pre, str(goargs['cptp_penalty_factor'])), (None,None))
             if 'spam_penalty_factor' in goargs and goargs['spam_penalty_factor'] != 0:
@@ -2295,14 +2304,14 @@ class GaugeOptParamsTable(WorkspaceTable):
 
 class MetadataTable(WorkspaceTable):
     """ Table of raw parameters, often taken directly from a `Results` object"""
-    def __init__(self, ws, gateset, params):
+    def __init__(self, ws, model, params):
         """
         Create a table of parameters and options from a `Results` object.
 
         Parameters
         ----------
-        gateset : GateSet
-            The gateset (usually the final estimate of a GST computation) to
+        model : Model
+            The model (usually the final estimate of a GST computation) to
             show information for (e.g. the types of its gates).
 
         params: dict
@@ -2312,9 +2321,9 @@ class MetadataTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(MetadataTable,self).__init__(ws, self._create, gateset, params)
+        super(MetadataTable,self).__init__(ws, self._create, model, params)
 
-    def _create(self, gateset, params_dict):
+    def _create(self, model, params_dict):
 
         colHeadings = ('Quantity','Value')
         formatters = ('Bold','Bold')
@@ -2330,56 +2339,56 @@ class MetadataTable(WorkspaceTable):
             if key == 'gaugeOptParams':
                 if isinstance(params_dict[key],dict):
                     val = params_dict[key].copy()
-                    if 'targetGateset' in val:
-                        del val['targetGateset'] #don't print this!
+                    if 'targetModel' in val:
+                        del val['targetModel'] #don't print this!
 
                 elif isinstance(params_dict[key],list):
                     val = []
                     for go_param_dict in params_dict[key]:
                         if isinstance(go_param_dict,dict): #to ensure .copy() exists
                             val.append(go_param_dict.copy())
-                            if 'targetGateset' in val[-1]:
-                                del val[-1]['targetGateset'] #don't print this!
+                            if 'targetModel' in val[-1]:
+                                del val[-1]['targetModel'] #don't print this!
             else:
                 val = params_dict[key]
             table.addrow((key, str(val)), (None,'Verbatim'))
 
-
-        for lbl,vec in gateset.preps.items():
-            if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
-            elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
-            elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
-            elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
-            else: paramTyp = "unknown" # pragma: no cover
-            table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
-
-        for povmlbl, povm in gateset.povms.items():
-            if isinstance(povm, _objs.UnconstrainedPOVM): paramTyp = "unconstrained"
-            elif isinstance(povm, _objs.TPPOVM): paramTyp = "TP"
-            elif isinstance(povm, _objs.TensorProdPOVM): paramTyp = "TensorProd"
-            else: paramTyp = "unknown" # pragma: no cover
-            table.addrow((povmlbl + " parameterization", paramTyp), (None,'Verbatim'))
-
-            for lbl,vec in povm.items():
+        if isinstance(self,_objs.ExplicitOpModel):
+            for lbl,vec in model.preps.items():
                 if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
-                elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
-                elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+                elif isinstance(vec, _objs.FullSPAMVec): paramTyp = "full"
+                elif isinstance(vec, _objs.TPSPAMVec): paramTyp = "TP"
                 elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
                 else: paramTyp = "unknown" # pragma: no cover
-                table.addrow(("> " + lbl + " parameterization", paramTyp), (None,'Verbatim'))
-
-        for gl,gate in gateset.gates.items():
-            if isinstance(gate, _objs.StaticGate): paramTyp = "static"
-            elif isinstance(gate, _objs.FullyParameterizedGate): paramTyp = "full"
-            elif isinstance(gate, _objs.TPParameterizedGate): paramTyp = "TP"
-            elif isinstance(gate, _objs.LinearlyParameterizedGate): paramTyp = "linear"
-            elif isinstance(gate, _objs.EigenvalueParameterizedGate): paramTyp = "eigenvalue"
-            elif isinstance(gate, _objs.LindbladParameterizedGate):
-                paramTyp = "Lindblad"
-                if gate.errorgen.param_mode == "cptp": paramTyp += " CPTP "
-                paramTyp += "(%d, %d params)" % (gate.errorgen.ham_basis_size, gate.errorgen.other_basis_size)
-            else: paramTyp = "unknown" # pragma: no cover
-            table.addrow((gl + " parameterization", paramTyp), (None,'Verbatim'))
+                table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
+    
+            for povmlbl, povm in model.povms.items():
+                if isinstance(povm, _objs.UnconstrainedPOVM): paramTyp = "unconstrained"
+                elif isinstance(povm, _objs.TPPOVM): paramTyp = "TP"
+                elif isinstance(povm, _objs.TensorProdPOVM): paramTyp = "TensorProd"
+                else: paramTyp = "unknown" # pragma: no cover
+                table.addrow((povmlbl + " parameterization", paramTyp), (None,'Verbatim'))
+    
+                for lbl,vec in povm.items():
+                    if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+                    elif isinstance(vec, _objs.FullSPAMVec): paramTyp = "full"
+                    elif isinstance(vec, _objs.TPSPAMVec): paramTyp = "TP"
+                    elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
+                    else: paramTyp = "unknown" # pragma: no cover
+                    table.addrow(("> " + lbl + " parameterization", paramTyp), (None,'Verbatim'))
+    
+            for gl,gate in model.operations.items():
+                if isinstance(gate, _objs.StaticDenseOp): paramTyp = "static"
+                elif isinstance(gate, _objs.FullDenseOp): paramTyp = "full"
+                elif isinstance(gate, _objs.TPDenseOp): paramTyp = "TP"
+                elif isinstance(gate, _objs.LinearlyParamDenseOp): paramTyp = "linear"
+                elif isinstance(gate, _objs.EigenvalueParamDenseOp): paramTyp = "eigenvalue"
+                elif isinstance(gate, _objs.LindbladDenseOp):
+                    paramTyp = "Lindblad"
+                    if gate.errorgen.param_mode == "cptp": paramTyp += " CPTP "
+                    paramTyp += "(%d, %d params)" % (gate.errorgen.ham_basis_size, gate.errorgen.other_basis_size)
+                else: paramTyp = "unknown" # pragma: no cover
+                table.addrow((gl + " parameterization", paramTyp), (None,'Verbatim'))
 
 
         table.finish()

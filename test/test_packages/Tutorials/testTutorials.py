@@ -1,165 +1,122 @@
-import unittest
-import os, sys
-import importlib
-import pygsti
+from notebookstestcase import NotebooksTestCase
 
-#if __name__ == "__main__":
-#    tutorialFile = "01 GateSets.ipynb"
-#    tutorialDir = os.path.join("..","jupyter_notebooks","Tutorials")
-#    tutorialModuleName = os.path.splitext(tutorialFile)[0]
-#    os.chdir(tutorialDir)
-#    sys.path.append(".") #tutorialDir)
-#    #cwd = os.getcwd()
-#    #os.chdir(tutorialDir)
-#    tutorial_module = importlib.import_module(tutorialModuleName)
-#    #os.chdir(cwd)
-#    #sys.path.pop()
-#    exit()
+class NotebooksMethods(NotebooksTestCase):
+    def test_01_Essential_Objects(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/","01-Essential-Objects.ipynb")
 
-tutorialDir = os.path.join("../../..","jupyter_notebooks","Tutorials")
+    def test_02_Applications(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/","02-Applications.ipynb")
 
-class TutorialsTestCase(unittest.TestCase):
+    def test_03_Miscellaneous(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/","03-Miscellaneous.ipynb")
 
-    def setUp(self):
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+    def test_BasicDriftCharacterization(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms","BasicDriftCharacterization.ipynb")
 
-        #Set GateSet objects to non-"strict" mode, as this would be the
-        # tutorial environment
-        pygsti.objects.GateSet._strict = False
+    def test_Circuit(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects","Circuit.ipynb")
 
-    def tearDown(self):
-        os.chdir(self.old)
+    def test_CircuitLists(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects","CircuitLists.ipynb")
 
-    def runTutorial_as_script(self, tutorialFile):
-        tutorialModuleName = os.path.splitext(tutorialFile)[0]
-        cwd = os.getcwd()
-        os.chdir(tutorialDir)
-        os.system('jupyter nbconvert --to script "%s"' % tutorialFile)
-        sys.path.append(".") # not "tutorialDir" b/c of chdir above
+    def test_CliffordRB(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms","CliffordRB.ipynb")
 
-        orig_stdout = sys.stdout
-        sys.stdout = open(tutorialModuleName + ".out","w")
+    def test_DataSet(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects","DataSet.ipynb")
 
-        try:
-            tutorial_module = importlib.import_module(tutorialModuleName)
-            sys.stdout.close()
-            os.remove(tutorialModuleName + ".py") #only remove if all is OK
-            os.remove(tutorialModuleName + ".pyc")
+    def test_DatasetComparison(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms","DatasetComparison.ipynb")
 
-            #do comparison with accepted tutorial output?
-            os.remove(tutorialModuleName + ".out") #only remove if all is OK
+    def test_DirectRB(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms","DirectRB.ipynb")
 
-        finally:
-            sys.stdout.close()
-            sys.stdout = orig_stdout
-            sys.path.pop()
-            os.chdir(cwd)
+    def test_ExplicitModel(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects","ExplicitModel.ipynb")
 
-    def runTutorial_jupyter(self, tutorialFile, inplace=True):
+    def test_FileIO(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/other","FileIO.ipynb")
 
-        #check whether an jupyter notebook contains any "error" cells
-        def containsErrors(fn):
-            with open(fn, 'r') as fn_file:
-                for line in fn_file:
-                    if '"output_type": "error"' in line:
-                        return True
-                return False
+    def test_GST_Drivers(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms","GST-Drivers.ipynb")
 
-        tutorialName,Ext = os.path.splitext(tutorialFile)
+    def test_GST_Overview(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms","GST-Overview.ipynb")
 
-        cwd = os.getcwd()
-        os.chdir(tutorialDir)
-        if inplace:
-            os.system('jupyter nbconvert --to notebook --execute ' +
-                      '--ExecutePreprocessor.timeout=3600 --inplace ' +
-                      '"%s"' % tutorialFile)
-            outName = tutorialFile # executed notebook (side benefit of updating notebook)
-            if containsErrors(outName):
-                os.chdir(cwd)
-                raise ValueError("Error(s) occurred when running tutorial '%s'." % tutorialFile +
-                                 "  open notebook to see error details.")
-            # (never remove original notebook)
-        else:
-            os.system('jupyter nbconvert --to notebook --execute "%s"' % tutorialFile)
-            outName = tutorialName + ".nbconvert." + Ext # executed notebook
-            if containsErrors(outName):
-                os.chdir(cwd)
-                raise ValueError("Error(s) occurred when running tutorial '%s'." % tutorialFile +
-                                 "  Open output notebook '%s' for details." % outName)
+    def test_ImplicitModel(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects","ImplicitModel.ipynb")
 
-            else:
-                os.remove(outName)
-        os.chdir(cwd)
+    def test_Metrics(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/reporting","Metrics.ipynb")
 
+    def test_ModelAnalysisMetrics(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/reporting","ModelAnalysisMetrics.ipynb")
 
-class TutorialsMethods(TutorialsTestCase):
+    def test_ModelTesting(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms","ModelTesting.ipynb")
 
-class TutorialsMethods(TutorialsTestCase):
+    def test_RBAnalysis(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms","RBAnalysis.ipynb")
 
-    def test_tutorial_00(self):
-        self.runTutorial_jupyter("00 Getting Started.ipynb")
+    def test_ReportGeneration(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/reporting","ReportGeneration.ipynb")
 
-    def test_tutorial_01(self):
-        self.runTutorial_jupyter("01 GateSets.ipynb")
+    def test_RobustPhaseEstimation(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms","RobustPhaseEstimation.ipynb")
 
-    def test_tutorial_02(self):
-        self.runTutorial_jupyter("02 Matrix Bases.ipynb")
+    def test_Workspace(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/reporting","Workspace.ipynb")
 
-    def test_tutorial_03(self):
-        self.runTutorial_jupyter("03 GateStrings.ipynb")
+    def test_WorkspaceExamples(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/reporting","WorkspaceExamples.ipynb")
 
-    def test_tutorial_04(self):
-        self.runTutorial_jupyter("04 DataSets.ipynb")
+    def test_CustomOperator(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects/advanced","CustomOperator.ipynb")
 
-    def test_tutorial_05(self):
-        self.runTutorial_jupyter("05 Text file IO.ipynb")
+    def test_ForwardSimulationTypes(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms/advanced","ForwardSimulationTypes.ipynb")
 
-    def test_tutorial_06(self):
-        self.runTutorial_jupyter("06 Fiducials, Germs, and Maximum Lengths.ipynb")
+    def test_GST_FiducialAndGermSelection(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms/advanced","GST-FiducialAndGermSelection.ipynb")
 
-    def test_tutorial_07(self):
-        self.runTutorial_jupyter("07 Fiducial and Germ Selection.ipynb")
+    def test_GST_FiducialPairReduction(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms/advanced","GST-FiducialPairReduction.ipynb")
 
-    def test_tutorial_08(self):
-        self.runTutorial_jupyter("08 Algorithms low-level.ipynb")
+    def test_GST_LowLevel(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms/advanced","GST-LowLevel.ipynb")
 
-    def test_tutorial_09(self):
-        self.runTutorial_jupyter("09 Algorithms high-level.ipynb")
+    def test_GSTCircuitConstruction(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects/advanced","GSTCircuitConstruction.ipynb")
 
-    def test_tutorial_10(self):
-        self.runTutorial_jupyter("10 Fiducial Pair Reduction.ipynb")
+    def test_GaugeOpt(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/algorithms/advanced","GaugeOpt.ipynb")
 
-    def test_tutorial_11(self):
-        self.runTutorial_jupyter("11 Results.ipynb")
+    def test_Instruments(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects/advanced","Instruments.ipynb")
 
-    def test_tutorial_12(self):
-        self.runTutorial_jupyter("12 Report Generation.ipynb")
+    def test_MatrixBases(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects/advanced","MatrixBases.ipynb")
 
-    def test_tutorial_13(self):
-        self.runTutorial_jupyter("13 Workspace Basics.ipynb")
+    def test_MultiDataSet(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects/advanced","MultiDataSet.ipynb")
 
-    def test_tutorial_14(self):
-        self.runTutorial_jupyter("14 Workspace Switchboards.ipynb")
+    def test_Operators(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects/advanced","Operators.ipynb")
 
-    def test_tutorial_15(self):
-        self.runTutorial_jupyter("15 Randomized Benchmarking.ipynb")
+    def test_ProcessorSpec(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects/advanced","ProcessorSpec.ipynb")
 
-    def test_tutorial_16(self):
-        self.runTutorial_jupyter("16 Robust Phase Estimation.ipynb")
+    def test_Results(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects/advanced","Results.ipynb")
 
-    def test_tutorial_17(self):
-        self.runTutorial_jupyter("17 Pure Data Analysis.ipynb")
+    def test_StandardModules(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects/advanced","StandardModules.ipynb")
 
-    def test_tutorial_18(self):
-        self.runTutorial_jupyter("18 Model Testing.ipynb")
+    def test_StateSpaceLabels(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects/advanced","StateSpaceLabels.ipynb")
 
-    def test_tutorial_19(self):
-        self.runTutorial_jupyter("19 Basic drift characterization.ipynb")
+    def test_TimestampedDataSets(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/objects/advanced","TimestampedDataSets.ipynb")
 
-    def test_tutorial_20(self):
-        self.runTutorial_jupyter("20 Intermediate Measurements.ipynb")
-
-
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    def test_WorkspaceSwitchboards(self):
+        self.runNotebook_jupyter("../../../jupyter_notebooks/Tutorials/reporting/advanced","WorkspaceSwitchboards.ipynb")

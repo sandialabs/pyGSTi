@@ -31,13 +31,13 @@ def is_sparse_basis(nameOrBasis):
 
 def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
     """
-    Convert a gate matrix from one basis of a density matrix space
+    Convert a operation matrix from one basis of a density matrix space
     to another.
 
     Parameters
     ----------
     mx : numpy array
-        The gate matrix (a 2D square array) in the `from_basis` basis.
+        The operation matrix (a 2D square array) in the `from_basis` basis.
 
     from_basis, to_basis: {'std', 'gm', 'pp', 'qt'} or Basis object
         The source and destination basis, respectively.  Allowed
@@ -52,7 +52,7 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
     Returns
     -------
     numpy array
-        The given gate matrix converted to the `to_basis` basis.
+        The given operation matrix converted to the `to_basis` basis.
         Array size is the same as `mx`.
     """
     if len(mx.shape) not in (1, 2):
@@ -78,7 +78,7 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
     to_basis   = Basis(to_basis, dim, sparse=try_for_sparse)
     #TODO: check for 'unknown' basis here and display meaningful warning - otherwise just get 0-dimensional basis...
 
-    if from_basis.dim.gateDim != to_basis.dim.gateDim:
+    if from_basis.dim.opDim != to_basis.dim.opDim:
         raise ValueError('Automatic basis expanding/contracting is disabled: use flexible_change_basis')
 
     if from_basis.name == to_basis.name:
@@ -237,16 +237,16 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     numpy.ndarray
     """
     assert stdBasis1.dim.embedDim == stdBasis2.dim.embedDim
-    if stdBasis1.dim.gateDim == stdBasis2.dim.gateDim:
+    if stdBasis1.dim.opDim == stdBasis2.dim.opDim:
         return mx
     #print('{}ing {} to {}'.format(resize, stdBasis1, stdBasis2))
     #print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
     if resize == 'expand':
-        assert stdBasis1.dim.gateDim < stdBasis2.dim.gateDim
+        assert stdBasis1.dim.opDim < stdBasis2.dim.opDim
         right = _np.dot(mx, stdBasis1.get_expand_mx())
         mid   = _np.dot(stdBasis1.get_contract_mx(), right)
     elif resize == 'contract':
-        assert stdBasis1.dim.gateDim > stdBasis2.dim.gateDim
+        assert stdBasis1.dim.opDim > stdBasis2.dim.opDim
         right = _np.dot(mx, stdBasis2.get_contract_mx())
         mid = _np.dot(stdBasis2.get_expand_mx(), right)
     return mid
@@ -259,7 +259,7 @@ def flexible_change_basis(mx, startBasis, endBasis):
     Parameters
     ----------
     mx : numpy array
-        The gate matrix (a 2D square array) in the `startBasis` basis.
+        The operation matrix (a 2D square array) in the `startBasis` basis.
 
     startBasis, endBasis : Basis
         The source and destination bases, respectively.
@@ -268,9 +268,9 @@ def flexible_change_basis(mx, startBasis, endBasis):
     -------
     numpy.ndarray
     """
-    if startBasis.dim.gateDim == endBasis.dim.gateDim:
+    if startBasis.dim.opDim == endBasis.dim.opDim:
         return change_basis(mx, startBasis, endBasis)
-    if startBasis.dim.gateDim < endBasis.dim.gateDim:
+    if startBasis.dim.opDim < endBasis.dim.opDim:
         resize = 'expand'
     else:
         resize = 'contract'
@@ -371,10 +371,11 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     numpy array
         The matrix, 2x2 or 4x4 depending on nqubits
     """
-    dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
-    basis = Basis(basis, dim)
-    ret = _np.zeros( (dim, dim), 'complex' )
-    for i, mx in enumerate(basis._matrices):
+    if not isinstance(basis,Basis):
+        dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
+        basis = Basis(basis, dim)
+    ret = _np.zeros( (basis.dim.dmDim, basis.dim.dmDim), 'complex' )
+    for i, mx in enumerate(basis.matrices):
         if keep_complex:
             ret += v[i]*mx
         else:
@@ -408,11 +409,11 @@ def stdmx_to_vec(m, basis):
     dim = m.shape[0]
     basis = Basis(basis, dim)
     v = _np.empty((dim**2,1))
-    for i, mx in enumerate(basis._matrices):
+    for i, mx in enumerate(basis.matrices):
         if basis.real:
             v[i,0] = _np.real(_mt.trace(_np.dot(mx,m)))
         else:
-            v[i,0] = _mt.trace(_np.dot(mx,m))
+            v[i,0] = _np.real_if_close(_mt.trace(_np.dot(mx,m)))
     return v
 
 stdmx_to_ppvec  = partial(stdmx_to_vec, basis='pp')

@@ -4,7 +4,7 @@ import numpy as np
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-# This class is for unifying some gatesets that get used in this file and in testGateSets2.py
+# This class is for unifying some models that get used in this file and in testGateSets2.py
 class StdModuleTestCase(BaseTestCase):
 
     def setUp(self):
@@ -17,10 +17,10 @@ class StdModuleTestCase(BaseTestCase):
 
         for std in (std1Q_XYI, std2Q_XXYYII, std2Q_XYICNOT):
             newmod = pygsti.construction.stdmodule_to_smqmodule(std)
-            gateLabels = list(newmod.gs_target.gates.keys())
+            opLabels = list(newmod.target_model().operations.keys())
             germStrs = newmod.germs
 
-            for gl in gateLabels:
+            for gl in opLabels:
                 if gl != "Gi": 
                     self.assertGreater(len(gl.sslbls),0)
 

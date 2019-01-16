@@ -85,7 +85,7 @@ th .errorbar {
 	margin: auto;
 	margin-top: 5px;
 	max-width: 100%;
-	overflow: hidden;
+	overflow: auto; /*hidden; - this hides content sometimes - needed?  */
         }
 
 /*.dataTable tr {

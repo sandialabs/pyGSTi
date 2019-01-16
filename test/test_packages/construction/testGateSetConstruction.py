@@ -16,8 +16,8 @@ class TestGateSetConstructionMethods(BaseTestCase):
         super(TestGateSetConstructionMethods, self).setUp()
 
         #OK for these tests, since we test user interface?
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = False
+        #Set Model objects to "strict" mode for testing
+        pygsti.objects.ExplicitOpModel._strict = False
 
 
     def test_constructGates(self):
@@ -37,7 +37,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
 
     def helper_constructGates(self, b, prm, ue):
         
-        old_build_gate = pygsti.construction.gatesetconstruction._oldBuildGate
+        old_build_gate = pygsti.construction.modelconstruction._oldBuildGate
 
         # All of the following use blockDims that are unsupported by the Pauli Product basis
         leakA_old   = old_build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b)
@@ -86,49 +86,49 @@ class TestGateSetConstructionMethods(BaseTestCase):
         CPHASE_chk = pygsti.tools.change_basis(cphaseMx, "std", b)
 
         print((b,prm,ue))
-        build_gate = pygsti.construction.build_gate
+        build_operation = pygsti.construction.build_operation
 
         # Block matrix items
-        leakA   = build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b,prm,ue)
-        rotLeak = build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b,prm,ue)
-        leakB   = build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b,prm,ue)
-        rotXb   = build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b,prm,ue)
-        CnotB   = build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b,prm,ue)
+        leakA   = build_operation( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b,prm,ue)
+        rotLeak = build_operation( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b,prm,ue)
+        leakB   = build_operation( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b,prm,ue)
+        rotXb   = build_operation( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b,prm,ue)
+        CnotB   = build_operation( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b,prm,ue)
 
-        ident   = build_gate( [2],[('Q0',)], "I(Q0)",b,prm,ue)
-        rotXa   = build_gate( [2],[('Q0',)], "X(pi/2,Q0)",b,prm,ue)
-        rotX2   = build_gate( [2],[('Q0',)], "X(pi,Q0)",b,prm,ue)
-        rotYa   = build_gate( [2],[('Q0',)], "Y(pi/2,Q0)",b,prm,ue)
-        rotZa   = build_gate( [2],[('Q0',)], "Z(pi/2,Q0)",b,prm,ue)
-        rotNa   = build_gate( [2],[('Q0',)], "N(pi/2,1.0,0.5,0,Q0)",b,prm,ue)
-        iwL     = build_gate( [2],[('Q0','L0')], "I(Q0)",b,prm,ue)
-        CnotA   = build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b,prm,ue)
-        CY      = build_gate( [4],[('Q0','Q1')], "CY(pi,Q0,Q1)",b,prm,ue)
-        CZ      = build_gate( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b,prm,ue)
-        CNOT    = build_gate( [4],[('Q0','Q1')], "CNOT(Q0,Q1)",b,prm,ue)
-        CPHASE  = build_gate( [4],[('Q0','Q1')], "CPHASE(Q0,Q1)",b,prm,ue)
-        #rotXstd = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std",prm,ue)
-        #rotXpp  = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp",prm,ue)
+        ident   = build_operation( [2],[('Q0',)], "I(Q0)",b,prm,ue)
+        rotXa   = build_operation( [2],[('Q0',)], "X(pi/2,Q0)",b,prm,ue)
+        rotX2   = build_operation( [2],[('Q0',)], "X(pi,Q0)",b,prm,ue)
+        rotYa   = build_operation( [2],[('Q0',)], "Y(pi/2,Q0)",b,prm,ue)
+        rotZa   = build_operation( [2],[('Q0',)], "Z(pi/2,Q0)",b,prm,ue)
+        rotNa   = build_operation( [2],[('Q0',)], "N(pi/2,1.0,0.5,0,Q0)",b,prm,ue)
+        iwL     = build_operation( [2],[('Q0','L0')], "I(Q0)",b,prm,ue)
+        CnotA   = build_operation( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b,prm,ue)
+        CY      = build_operation( [4],[('Q0','Q1')], "CY(pi,Q0,Q1)",b,prm,ue)
+        CZ      = build_operation( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b,prm,ue)
+        CNOT    = build_operation( [4],[('Q0','Q1')], "CNOT(Q0,Q1)",b,prm,ue)
+        CPHASE  = build_operation( [4],[('Q0','Q1')], "CPHASE(Q0,Q1)",b,prm,ue)
+        #rotXstd = build_operation( [2],[('Q0',)], "X(pi/2,Q0)","std",prm,ue)
+        #rotXpp  = build_operation( [2],[('Q0',)], "X(pi/2,Q0)","pp",prm,ue)
 
         with self.assertRaises(NotImplementedError):
-            build_gate( [2],[('Q0',)], "X(pi/2,Q0)","FooBar",prm,ue) #bad basis specifier
+            build_operation( [2],[('Q0',)], "X(pi/2,Q0)","FooBar",prm,ue) #bad basis specifier
         with self.assertRaises(ValueError):
-            build_gate( [2],[('Q0',)], "FooBar(Q0)",b,prm,ue) #bad gate name
+            build_operation( [2],[('Q0',)], "FooBar(Q0)",b,prm,ue) #bad gate name
         with self.assertRaises(ValueError):
-            build_gate( [2],[('A0',)], "I(Q0)",b,prm,ue) #bad state specifier (A0)
+            build_operation( [2],[('A0',)], "I(Q0)",b,prm,ue) #bad state specifier (A0)
         with self.assertRaises(KeyError):
-            build_gate( [2],[('Q0','L0')], "I(Q0,A0)",b,prm,ue) #bad label A0
+            build_operation( [2],[('Q0','L0')], "I(Q0,A0)",b,prm,ue) #bad label A0
 
         with self.assertRaises(AssertionError):
-            build_gate( [4],[('Q0',)], "I(Q0)",b,prm,ue) #state space dim mismatch
+            build_operation( [4],[('Q0',)], "I(Q0)",b,prm,ue) #state space dim mismatch
         with self.assertRaises(ValueError):
-            build_gate( [2,2],[('Q0',),('Q1',)], "CZ(pi,Q0,Q1)",b,prm,ue) # Q0 & Q1 must be in same tensor-prod block of state space
+            build_operation( [2,2],[('Q0',),('Q1',)], "CZ(pi,Q0,Q1)",b,prm,ue) # Q0 & Q1 must be in same tensor-prod block of state space
 
         if ue == True:
             with self.assertRaises(ValueError):
-                build_gate( [2],[('Q0',)], "D(Q0)",b,prm,ue) # D gate only for ue=False
+                build_operation( [2],[('Q0',)], "D(Q0)",b,prm,ue) # D gate only for ue=False
         with self.assertRaises(NotImplementedError):
-            build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)","foobar",prm,ue)
+            build_operation( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)","foobar",prm,ue)
               #LX with bad basis spec
 
         # Block matrix asserts
@@ -233,39 +233,39 @@ class TestGateSetConstructionMethods(BaseTestCase):
 
 
     def test_qutrit_gateset(self):
-        gs = pygsti.construction.qutrit.make_qutrit_gateset(
+        mdl = pygsti.construction.qutrit.make_qutrit_model(
             errorScale = 0.1,
             similarity=False, seed=1234, basis='qt')
-        gs2 = pygsti.construction.qutrit.make_qutrit_gateset(
+        gs2 = pygsti.construction.qutrit.make_qutrit_model(
             errorScale = 0.1,
             similarity=True, seed=1234, basis='qt')
 
         #just test building a gate in the qutrit basis
         # Can't do this b/c need a 'T*' triplet space designator for "triplet space" and it doesn't seem
         # worth adding this now...
-        #qutrit_gate = pygsti.construction.build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "I()", 'qt', 'full')
+        #qutrit_gate = pygsti.construction.build_operation( [1,1,1], [('L0',),('L1',),('L2',)], "I()", 'qt', 'full')
 
 
     def test_parameterized_gate(self):
 
         # A single-qubit gate on a 2-qubit space, parameterizes so that there are only 16 gate parameters
-        gate = pygsti.construction.build_gate( [4],[('Q0','Q1')], "X(pi,Q0)","gm",
+        gate = pygsti.construction.build_operation( [4],[('Q0','Q1')], "X(pi,Q0)","gm",
                                                parameterization="linear")
-        gate2  = pygsti.construction.build_gate( [2],[('Q0',)], "D(Q0)","gm", parameterization="linear")
-        gate2b = pygsti.construction.build_gate( [2],[('Q0',)], "D(Q0)","gm", parameterization="linearTP")
-        gate3 = pygsti.construction.build_gate( [4],[('Q0','Q1')], "X(pi,Q0):D(Q1)","gm",
+        op2  = pygsti.construction.build_operation( [2],[('Q0',)], "D(Q0)","gm", parameterization="linear")
+        gate2b = pygsti.construction.build_operation( [2],[('Q0',)], "D(Q0)","gm", parameterization="linearTP")
+        gate3 = pygsti.construction.build_operation( [4],[('Q0','Q1')], "X(pi,Q0):D(Q1)","gm",
                                                parameterization="linear") #composes parameterized gates
 
         #Test L's in spec
-        gateL  = pygsti.construction.build_gate( [2,1],[('Q0',),('L0',)], "D(Q0)","gm", parameterization="linear")
+        gateL  = pygsti.construction.build_operation( [2,1],[('Q0',),('L0',)], "D(Q0)","gm", parameterization="linear")
 
         with self.assertRaises(ValueError):
-            gate = pygsti.construction.build_gate( [4],[('Q0','Q1')], "X(pi,Q0)","gm",
+            gate = pygsti.construction.build_operation( [4],[('Q0','Q1')], "X(pi,Q0)","gm",
                                                    parameterization="linear",unitaryEmbedding=True)
             #no unitary embedding support for "linear"
 
         with self.assertRaises(ValueError):
-            gate = pygsti.construction.build_gate( [4],[('Q0','Q1')], "X(pi,Q0)","gm",
+            gate = pygsti.construction.build_operation( [4],[('Q0','Q1')], "X(pi,Q0)","gm",
                                                    parameterization="FooBar") # bad parameterization
 
 
@@ -302,42 +302,42 @@ class TestGateSetConstructionMethods(BaseTestCase):
         self.assertArraysAlmostEqual(vec, vec_ans)
 
     def test_build_basis_gateset(self):
-        gatesetA = pygsti.construction.build_gateset([2], [('Q0',)], ['Gi','Gx','Gy'],
+        modelA = pygsti.construction.build_explicit_model([('Q0',)], ['Gi','Gx','Gy'],
                                                      [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
-        gatesetB = pygsti.construction.basis_build_gateset([('Q0',)], pygsti.Basis('gm', 2),
+        modelB = pygsti.construction.basis_build_explicit_model([('Q0',)], pygsti.Basis('gm', 2),
                                                      ['Gi','Gx','Gy'], [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
-        self.assertAlmostEqual(gatesetA.frobeniusdist(gatesetB), 0)
+        self.assertAlmostEqual(modelA.frobeniusdist(modelB), 0)
 
 
     def test_iter_gatesets(self):
-        gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
+        model = pygsti.construction.build_explicit_model([('Q0',)],['Gi','Gx','Gy'],
                                                      [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
-        gateset2 = pygsti.objects.GateSet()
-        for label,gate in gateset.gates.items():
-            gateset2[label] = gate
-        for label,vec in gateset.preps.items():
-            gateset2[label] = vec
-        for label,povm in gateset.povms.items():
-            gateset2[label] = povm
+        model2 = pygsti.objects.ExplicitOpModel(['Q0'])
+        for label,gate in model.operations.items():
+            model2[label] = gate
+        for label,vec in model.preps.items():
+            model2[label] = vec
+        for label,povm in model.povms.items():
+            model2[label] = povm
 
-        self.assertAlmostEqual( gateset.frobeniusdist(gateset2), 0.0 )
+        self.assertAlmostEqual( model.frobeniusdist(model2), 0.0 )
 
 
     def test_build_gatesets(self):
 
         stateSpace = [2] #density matrix is a 2x2 matrix
         spaceLabels = [('Q0',)] #interpret the 2x2 density matrix as a single qubit named 'Q0'
-        gateset1 = pygsti.objects.GateSet()
-        gateset1['rho0'] = pygsti.construction.build_vector(stateSpace,spaceLabels,"0")
-        gateset1['Mdefault'] = pygsti.obj.UnconstrainedPOVM( [('0',pygsti.construction.build_vector(stateSpace,spaceLabels,"0")),
+        model1 = pygsti.objects.ExplicitOpModel(['Q0'])
+        model1['rho0'] = pygsti.construction.build_vector(stateSpace,spaceLabels,"0")
+        model1['Mdefault'] = pygsti.obj.UnconstrainedPOVM( [('0',pygsti.construction.build_vector(stateSpace,spaceLabels,"0")),
                                                              ('1',pygsti.construction.build_vector(stateSpace,spaceLabels,"1"))] )
-        gateset1['Gi'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"I(Q0)")
-        gateset1['Gx'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"X(pi/2,Q0)")
-        gateset1['Gy'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"Y(pi/2,Q0)")
+        model1['Gi'] = pygsti.construction.build_operation(stateSpace,spaceLabels,"I(Q0)")
+        model1['Gx'] = pygsti.construction.build_operation(stateSpace,spaceLabels,"X(pi/2,Q0)")
+        model1['Gy'] = pygsti.construction.build_operation(stateSpace,spaceLabels,"Y(pi/2,Q0)")
 
         SQ2 = 1/np.sqrt(2)
         for defParamType in ("full", "TP", "static"):
-            gateset_simple = pygsti.objects.GateSet(defParamType)
+            gateset_simple = pygsti.objects.ExplicitOpModel(['Q0'],'pp',defParamType)
             gateset_simple['rho0'] = [SQ2, 0, 0, SQ2]
             gateset_simple['Mdefault'] = pygsti.obj.UnconstrainedPOVM( [('0',[SQ2, 0, 0, -SQ2])] )
             gateset_simple['Gi'] = [ [1, 0, 0, 0],
@@ -364,9 +364,9 @@ class TestGateSetConstructionMethods(BaseTestCase):
             #      # 2nd el must be 'remainder' when first is
 
 
-        gateset_badDefParam = pygsti.objects.GateSet("full")
+        gateset_badDefParam = pygsti.objects.ExplicitOpModel(['Q0'],"pp","full")
         gateset_badDefParam.preps.default_param = "foobar"
-        gateset_badDefParam.gates.default_param = "foobar"
+        gateset_badDefParam.operations.default_param = "foobar"
         with self.assertRaises(ValueError):
             gateset_badDefParam['rho0'] = [1, 0, 0, 0]
         with self.assertRaises(ValueError):
@@ -376,15 +376,15 @@ class TestGateSetConstructionMethods(BaseTestCase):
 
         #Removed checks for unset labels for now.
         #with self.assertRaises(ValueError):
-        #    gateset1.spamdefs['badspam'] = ('rhoNonExistent','E0') # bad rho index
+        #    model1.spamdefs['badspam'] = ('rhoNonExistent','E0') # bad rho index
         #with self.assertRaises(ValueError):
-        #    gateset1.spamdefs['bade'] = ('rho0','ENonExistent') # bad E index
+        #    model1.spamdefs['bade'] = ('rho0','ENonExistent') # bad E index
 
         with self.assertRaises(NotImplementedError):
             pygsti.construction.build_identity_vec(stateSpace, basis="foobar")
 
 
-        gateset_povm_first = pygsti.objects.GateSet() #set effect vector first
+        gateset_povm_first = pygsti.objects.ExplicitOpModel(['Q0']) #set effect vector first
         gateset_povm_first['Mdefault'] = pygsti.obj.TPPOVM(
             [ ('0', pygsti.construction.build_vector(stateSpace,spaceLabels,"0")),
               ('1', pygsti.construction.build_vector(stateSpace,spaceLabels,"1")) ] )
@@ -394,28 +394,28 @@ class TestGateSetConstructionMethods(BaseTestCase):
         with self.assertRaises(ValueError):
             gateset_povm_first['Mdefault'] =  pygsti.obj.UnconstrainedPOVM( [('0',np.array([1,2,3],'d'))] ) #wrong dimension
 
-        gateset2 = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
+        model2 = pygsti.construction.build_explicit_model([('Q0',)],['Gi','Gx','Gy'],
                                                       [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
         
-        gateset2b = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
+        gateset2b = pygsti.construction.build_explicit_model([('Q0',)],['Gi','Gx','Gy'],
                                                        [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                                        effectLabels=['1','0'] )
 
-        gateset2c = pygsti.construction.build_gateset( [1,1], [('L0',),('L1',)],['Gi','Gd'],
+        gateset2c = pygsti.construction.build_explicit_model([('L0',),('L1',)],['Gi','Gd'],
                                                        [ "I(L0)","D(L1)"], parameterization="linear",
                                                        prepLabels=[], effectLabels=[])
 
         #constructions that result in non-"pp" automatic basis selection: (CANT DO THIS YET - NO Labels for odd-dim blocks...
-        #gateset2d = pygsti.construction.build_gateset( [3], [('L0',),('L1',),('L2',)],['Gi'],
+        #gateset2d = pygsti.construction.build_explicit_model([('L0',),('L1',),('L2',)],['Gi'],
         #                                               [ "I(L0)"], prepLabels=[], effectLabels=[]) #qutrit
-        #gateset2e = pygsti.construction.build_gateset( [5], [('L0',),('L1',),('L2',),('L3',),('L4',)],['Gi'],
+        #gateset2e = pygsti.construction.build_explicit_model([('L0',),('L1',),('L2',),('L3',),('L4',)],['Gi'],
         #                                               [ "I(L0)"], prepLabels=[], effectLabels=[]) #gell-mann
 
         
 
         gateset4_txt = \
 """
-# Test text file describing a gateset
+# Test text file describing a model
 
 # State prepared, specified as a state in the Pauli basis (I,X,Y,Z)
 PREP: rho
@@ -461,38 +461,33 @@ GAUGEGROUP: Full
 """
         with open(temp_files + "/Test_Gateset.txt","w") as output:
             output.write(gateset4_txt)
-        gateset4 = pygsti.io.load_gateset(temp_files + "/Test_Gateset.txt")
+        gateset4 = pygsti.io.load_model(temp_files + "/Test_Gateset.txt")
 
-        std_gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
+        std_gateset = pygsti.construction.build_explicit_model([('Q0',)],['Gi','Gx','Gy'],
                                                          [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
                                                          basis="std")
 
-        pp_gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
+        pp_gateset = pygsti.construction.build_explicit_model([('Q0',)],['Gi','Gx','Gy'],
                                                         [ "I(Q0)","X(pi/8,Q0)", "Z(pi/8,Q0)"],
                                                         basis="pp")
 
         with self.assertRaises(ValueError):
-            pygsti.construction.build_gateset( [2], [('A0',)],['Gi','Gx','Gy'],
+            pygsti.construction.build_explicit_model([('A0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
                                                # invalid state specifier (A0)
 
-        with self.assertRaises(AssertionError):
-            pygsti.construction.build_gateset( [4], [('Q0',)],['Gi','Gx','Gy'],
-                                               [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
-                                               # state space dimension mismatch (4 != 2)
-
         with self.assertRaises(NotImplementedError):
-            pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
+            pygsti.construction.build_explicit_model([('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
                                                basis="FooBar") #Bad basis
 
         with self.assertRaises(ValueError):
-            pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
+            pygsti.construction.build_explicit_model([('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
                                                prepLabels=['rho0'], prepExpressions=["FooBar"],)
                                                #Bad rhoExpression
         with self.assertRaises(ValueError):
-            pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
+            pygsti.construction.build_explicit_model([('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
                                                effectLabels=['0','1'], effectExpressions=["FooBar","1"])
                                                #Bad EExpression
@@ -504,25 +499,25 @@ GAUGEGROUP: Full
 
     def test_gateset_tools(self):
 
-        gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
+        model = pygsti.construction.build_explicit_model([('Q0',)],['Gi','Gx','Gy'],
                                                      [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
-        gateset_2q = pygsti.construction.build_gateset(
-            [4], [('Q0','Q1')],['GIX','GIY','GXI','GYI','GCNOT'],
+        gateset_2q = pygsti.construction.build_explicit_model(
+            [('Q0','Q1')],['GIX','GIY','GXI','GYI','GCNOT'],
             [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ])
             #prepLabels=['rho0'], prepExpressions=["0"],
             #effectLabels=['E0','E1','E2','Ec'], effectExpressions=["0","1","2","C"],
             #spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'),
             #          'dnup': ('rho0','E2'), 'dndn': ('rho0','Ec') }, basis="pp")
 
-        gateset_rot = gateset.rotate( (np.pi/2,0,0) ) #rotate all gates by pi/2 about X axis
-        gateset_randu = gateset.randomize_with_unitary(0.01)
-        gateset_randu = gateset.randomize_with_unitary(0.01,seed=1234)
-        #print(gateset_rot.gates['Gi'])
+        gateset_rot = model.rotate( (np.pi/2,0,0) ) #rotate all gates by pi/2 about X axis
+        gateset_randu = model.randomize_with_unitary(0.01)
+        gateset_randu = model.randomize_with_unitary(0.01,seed=1234)
+        #print(gateset_rot.operations['Gi'])
 
-        rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)")
-        rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)")
+        rotXPi   = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi,Q0)")
+        rotXPiOv2   = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2   = pygsti.construction.build_operation( [2],[('Q0',)], "Y(pi/2,Q0)")
         #print(rotXPiOv2)
 
         self.assertArraysAlmostEqual(gateset_rot['Gi'], rotXPiOv2)
@@ -537,7 +532,7 @@ GAUGEGROUP: Full
 
         #TODO: test 2q rotated gates??
 
-        gateset_dep = gateset.depolarize(gate_noise=0.1)
+        gateset_dep = model.depolarize(op_noise=0.1)
         #print gateset_dep
 
         Gi_dep = np.array([[ 1,   0,   0,   0 ],
@@ -558,9 +553,9 @@ GAUGEGROUP: Full
         self.assertArraysAlmostEqual(gateset_dep['Gy'], Gy_dep)
 
 
-        gateset_spam = gateset.depolarize(spam_noise=0.1)
+        gateset_spam = model.depolarize(spam_noise=0.1)
         #print gateset_spam
-        self.assertAlmostEqual(float(np.dot(gateset['Mdefault']['0'].T,gateset['rho0'])), 1.0)
+        self.assertAlmostEqual(float(np.dot(model['Mdefault']['0'].T,model['rho0'])), 1.0)
         # print(np.dot(gateset_spam['E0'].T,gateset_spam['rho0']))
         # self.assertAlmostEqual(np.dot(gateset_spam['E0'].T,gateset_spam['rho0']), 0.095)
         # Since np.ndarray doesn't implement __round__... (assertAlmostEqual() doesn't work)
@@ -576,18 +571,18 @@ GAUGEGROUP: Full
         #self.assertArraysAlmostEqual(gateset_spam['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,0.9]).reshape(-1,1) ) #not depolarized now
         self.assertArraysAlmostEqual(gateset_spam['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) ) #not depolarized now
         
-        gateset_rand_rot = gateset.rotate(max_rotate=0.2)
-        gateset_rand_rot = gateset.rotate(max_rotate=0.2,seed=1234)
+        gateset_rand_rot = model.rotate(max_rotate=0.2)
+        gateset_rand_rot = model.rotate(max_rotate=0.2,seed=1234)
         with self.assertRaises(ValueError):
-            gateset.rotate(rotate=(0.2,)*3,max_rotate=0.2) #can't specify both
+            model.rotate(rotate=(0.2,)*3,max_rotate=0.2) #can't specify both
         with self.assertRaises(ValueError):
-            gateset.rotate() #must specify rotate or max_rotate
+            model.rotate() #must specify rotate or max_rotate
         with self.assertRaises(AssertionError):
-            gateset.rotate( (1,2,3,4) ) #tuple must be length 3
+            model.rotate( (1,2,3,4) ) #tuple must be length 3
         with self.assertRaises(AssertionError):
-            gateset.rotate( "a string!" ) #must be a 3-tuple
+            model.rotate( "a string!" ) #must be a 3-tuple
         with self.assertRaises(AssertionError):
-            gateset_2q.rotate(rotate=(0,0,0)) #wrong dimension gateset
+            gateset_2q.rotate(rotate=(0,0,0)) #wrong dimension model
 
 
         gateset_2q_rand_rot = gateset_2q.rotate(max_rotate=0.2)
@@ -601,22 +596,22 @@ GAUGEGROUP: Full
         with self.assertRaises(AssertionError):
             gateset_2q.rotate( "a string!" ) #must be a 15-tuple
         with self.assertRaises(AssertionError):
-            gateset.rotate( rotate=np.zeros(15,'d')) #wrong dimension gateset
+            model.rotate( rotate=np.zeros(15,'d')) #wrong dimension model
 
-        gateset_rand_dep = gateset.depolarize(max_gate_noise=0.1)
-        gateset_rand_dep = gateset.depolarize(max_gate_noise=0.1, seed=1234)
+        gateset_rand_dep = model.depolarize(max_op_noise=0.1)
+        gateset_rand_dep = model.depolarize(max_op_noise=0.1, seed=1234)
         with self.assertRaises(ValueError):
-            gateset.depolarize(gate_noise=0.1,max_gate_noise=0.1, spam_noise=0) #can't specify both
+            model.depolarize(op_noise=0.1,max_op_noise=0.1, spam_noise=0) #can't specify both
 
-        gateset_rand_spam = gateset.depolarize(max_spam_noise=0.1)
-        gateset_rand_spam = gateset.depolarize(max_spam_noise=0.1,seed=1234)
+        gateset_rand_spam = model.depolarize(max_spam_noise=0.1)
+        gateset_rand_spam = model.depolarize(max_spam_noise=0.1,seed=1234)
         with self.assertRaises(ValueError):
-            gateset.depolarize(spam_noise=0.1,max_spam_noise=0.1) #can't specify both
+            model.depolarize(spam_noise=0.1,max_spam_noise=0.1) #can't specify both
 
 
     #OLD
     #def test_spamspecs(self):
-    #    strs = pygsti.construction.gatestring_list( [('Gx',),('Gy',),('Gx','Gx')] )
+    #    strs = pygsti.construction.circuit_list( [('Gx',),('Gy',),('Gx','Gx')] )
     #    prepSpecs, effectSpecs = pygsti.construction.build_spam_specs(fiducialGateStrings=strs)
     #
     #    with self.assertRaises(ValueError):
@@ -666,10 +661,10 @@ GAUGEGROUP: Full
     def test_gate_object(self):
 
         #Build each type of gate
-        gate_full = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/8,Q0)","gm", parameterization="full")
-        gate_linear = pygsti.construction.build_gate( [2],[('Q0',)], "D(Q0)","gm", parameterization="linear")
-        gate_tp = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/4,Q0)","gm", parameterization="TP")
-        gate_static = pygsti.construction.build_gate( [2],[('Q0',)], "Z(pi/3,Q0)","gm", parameterization="static")
+        gate_full = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi/8,Q0)","gm", parameterization="full")
+        gate_linear = pygsti.construction.build_operation( [2],[('Q0',)], "D(Q0)","gm", parameterization="linear")
+        gate_tp = pygsti.construction.build_operation( [2],[('Q0',)], "Y(pi/4,Q0)","gm", parameterization="TP")
+        gate_static = pygsti.construction.build_operation( [2],[('Q0',)], "Z(pi/3,Q0)","gm", parameterization="static")
         gate_objs = [gate_full, gate_linear, gate_tp, gate_static]
 
         self.assertEqual(gate_full.num_params(), 16)
@@ -686,7 +681,7 @@ GAUGEGROUP: Full
             self.assertEqual(gate.get_dimension(), 4)
 
             M = np.asarray(gate) #gate as a matrix
-            if isinstance(gate, (pygsti.obj.LinearlyParameterizedGate,pygsti.obj.StaticGate)):
+            if isinstance(gate, (pygsti.obj.LinearlyParamDenseOp,pygsti.obj.StaticDenseOp)):
                 with self.assertRaises(ValueError):
                     gate.set_value(M)
             else:
@@ -701,8 +696,8 @@ GAUGEGROUP: Full
             #test results?
 
             T = pygsti.obj.FullGaugeGroupElement(np.identity(4,'d'))
-            if type(gate) in (pygsti.obj.LinearlyParameterizedGate,
-                              pygsti.obj.StaticGate):
+            if type(gate) in (pygsti.obj.LinearlyParamDenseOp,
+                              pygsti.obj.StaticDenseOp):
                 with self.assertRaises(ValueError):
                     gate_copy.transform(T)
             else:
@@ -759,80 +754,80 @@ GAUGEGROUP: Full
         #Test compositions (and conversions)
         c = pygsti.obj.compose(gate_full, gate_full, "gm", "full")
         self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_full) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
         c = pygsti.obj.compose(gate_full, gate_tp, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_tp) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
         c = pygsti.obj.compose(gate_full, gate_static, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_static) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
         c = pygsti.obj.compose(gate_full, gate_linear, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_linear) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
 
         c = pygsti.obj.compose(gate_linear, gate_full, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_full) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
         c = pygsti.obj.compose(gate_linear, gate_tp, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_tp) )
-        self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.TPDenseOp)
 
         c = pygsti.obj.compose(gate_linear, gate_static, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_static) )
-        self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.LinearlyParamDenseOp)
 
         c = pygsti.obj.compose(gate_linear, gate_linear, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_linear) )
-        self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.LinearlyParamDenseOp)
 
 
         c = pygsti.obj.compose(gate_tp, gate_full, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_full) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
         c = pygsti.obj.compose(gate_tp, gate_tp, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_tp) )
-        self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.TPDenseOp)
 
         c = pygsti.obj.compose(gate_tp, gate_static, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_static) )
-        self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.TPDenseOp)
 
         c = pygsti.obj.compose(gate_tp, gate_linear, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_linear) )
-        self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.TPDenseOp)
 
 
         c = pygsti.obj.compose(gate_static, gate_full, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_full) )
-        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.FullDenseOp)
 
         c = pygsti.obj.compose(gate_static, gate_tp, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_tp) )
-        self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.TPDenseOp)
 
         c = pygsti.obj.compose(gate_static, gate_static, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_static) )
-        self.assertEqual(type(c), pygsti.obj.StaticGate)
+        self.assertEqual(type(c), pygsti.obj.StaticDenseOp)
 
         c = pygsti.obj.compose(gate_static, gate_linear, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_linear) )
-        self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedGate)
+        self.assertEqual(type(c), pygsti.obj.LinearlyParamDenseOp)
 
         #Test specific conversions that don't get tested by compose
-        conv = pygsti.obj.gate.convert(gate_tp, "full", "gm")
-        conv = pygsti.obj.gate.convert(gate_tp, "TP", "gm")
-        conv = pygsti.obj.gate.convert(gate_static, "static", "gm")
+        conv = pygsti.obj.operation.convert(gate_tp, "full", "gm")
+        conv = pygsti.obj.operation.convert(gate_tp, "TP", "gm")
+        conv = pygsti.obj.operation.convert(gate_static, "static", "gm")
 
         with self.assertRaises(ValueError):
-            pygsti.obj.gate.convert(gate_full, "linear", "gm") #unallowed
+            pygsti.obj.operation.convert(gate_full, "linear", "gm") #unallowed
         with self.assertRaises(ValueError):
-            pygsti.obj.gate.convert(gate_full, "foobar", "gm")
+            pygsti.obj.operation.convert(gate_full, "foobar", "gm")
 
 
         #Test element access/setting
@@ -948,7 +943,7 @@ GAUGEGROUP: Full
 
 
         #Full from scratch
-        gate_full_B = pygsti.obj.FullyParameterizedGate([[1,0],[0,1]])
+        gate_full_B = pygsti.obj.FullDenseOp([[1,0],[0,1]])
 
         numParams = gate_full_B.num_params()
         v = gate_full_B.to_vector()
@@ -960,10 +955,10 @@ GAUGEGROUP: Full
         baseMx = np.zeros( (2,2) )
         paramArray = np.array( [1.0,1.0] )
         parameterToBaseIndicesMap = { 0: [(0,0)], 1: [(1,1)] } #parameterize only the diagonal els
-        gate_linear_B = pygsti.obj.LinearlyParameterizedGate(baseMx, paramArray,
+        gate_linear_B = pygsti.obj.LinearlyParamDenseOp(baseMx, paramArray,
                                                              parameterToBaseIndicesMap, real=True)
         with self.assertRaises(AssertionError):
-            pygsti.obj.LinearlyParameterizedGate(baseMx, np.array( [1.0+1j, 1.0] ),
+            pygsti.obj.LinearlyParamDenseOp(baseMx, np.array( [1.0+1j, 1.0] ),
                                                  parameterToBaseIndicesMap, real=True) #must be real
 
         numParams = gate_linear_B.num_params()
@@ -973,16 +968,16 @@ GAUGEGROUP: Full
 
 
     def test_spamvec_object(self):
-        full_spamvec = pygsti.obj.FullyParameterizedSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
-        tp_spamvec = pygsti.obj.TPParameterizedSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
+        full_spamvec = pygsti.obj.FullSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
+        tp_spamvec = pygsti.obj.TPSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
         static_spamvec = pygsti.obj.StaticSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
         spamvec_objs = [full_spamvec, tp_spamvec, static_spamvec]
 
         with self.assertRaises(ValueError):
-            pygsti.obj.FullyParameterizedSPAMVec([[ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ],[0,0,0,0]] )
+            pygsti.obj.FullSPAMVec([[ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ],[0,0,0,0]] )
             # 2nd dimension must == 1
         with self.assertRaises(ValueError):
-            pygsti.obj.TPParameterizedSPAMVec([ 1.0, 0, 0, 0 ])
+            pygsti.obj.TPSPAMVec([ 1.0, 0, 0, 0 ])
             # incorrect initial element for TP!
         with self.assertRaises(ValueError):
             tp_spamvec.set_value([1.0 ,0, 0, 0])
@@ -1095,7 +1090,9 @@ GAUGEGROUP: Full
 
 
     def test_labeldicts(self):
-        d = pygsti.objects.labeldicts.OrderedMemberDict(None,"foobar","rho","spamvec")
+        flags = { 'auto_embed': True, 'match_parent_dim': True,
+                  'match_parent_evotype': True, 'cast_to_type': "spamvec" }
+        d = pygsti.objects.labeldicts.OrderedMemberDict(None,"foobar","rho",flags)
 
         with self.assertRaises(ValueError):
             d['rho0'] = [0] # bad default parameter type

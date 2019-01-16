@@ -369,7 +369,7 @@ def unitary_superoperator_matrix_log(M, mxBasis):
         and `logM` can be written as the action `rho -> -i[H,rho]`.
     """
     from . import lindbladtools as _lt # (would create circular imports if at top)
-    from . import gatetools as _gt # (would create circular imports if at top)
+    from . import optools as _gt # (would create circular imports if at top)
 
     M_std = change_basis(M, mxBasis, "std")
     evals = _np.linalg.eigvals(M_std)
@@ -1085,8 +1085,6 @@ def safereal(A, inplace=False, check=False):
     a sparse matrix
     """
     if check:
-        #test =safenorm(A,'real'),safenorm(A,'imag')  #TODO REMOVE
-        #if test[1] >= 1e-6: print("safereal check failed (Re,Im) = ",test)
         assert( safenorm(A,'imag') < 1e-6 ), "Check failed: taking real-part of matrix w/nonzero imaginary part"
     if _sps.issparse(A):
         if _sps.isspmatrix_csr(A):
@@ -1350,7 +1348,7 @@ def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta): # t == 1.0
 
 def expop_multiply_prep(op, tol=EXPM_DEFAULT_TOL):
     """
-    Returns "prepared" meta-info about LinearOperator op,
+    Returns "prepared" meta-info about operation op,
       which is assumed to be traceless (so no shift is needed).
       Used as input for use with _custom_expm_multiply_simple_core
       or fast C-reps.

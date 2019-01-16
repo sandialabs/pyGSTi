@@ -8,14 +8,14 @@ print("================================================================")
 print("================================================================")
 print("================================================================")
 
-g0 = std.gs_target.depolarize(max_gate_noise=0.1,seed=12)
+g0 = std.target_model.depolarize(max_op_noise=0.1,seed=12)
 g0.set_rhovec( np.array([[1/np.sqrt(2)],[0.1],[0.1],[1/np.sqrt(2)]],'d'))
 
 Gi_mx = np.array( [[1.0,   0,    0,    0],
                    [0,  0.99,    0,    0],
                    [0,     0, 0.98,    0],
                    [0,     0,    0, 0.97]], 'd')
-#g0.set_gate("Gi", pygsti.objects.FullyParameterizedGate( Gi_mx ))
+#g0.set_gate("Gi", pygsti.objects.FullDenseOp( Gi_mx ))
 #g0 = g0.kick(0.01, seed=1211)
 
 ggi = pygsti.objects.GaugeInvGateSet()
@@ -40,7 +40,7 @@ if False:
 
 
     for gl in g0:
-        print("Gate %s:" % gl)
+        print("LinearOperator %s:" % gl)
         pygsti.print_mx(g0[gl])
         print("vs")
         pygsti.print_mx(g1[gl])

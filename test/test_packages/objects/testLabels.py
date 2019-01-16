@@ -11,7 +11,7 @@ from pygsti.objects import Label as L
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-# This class is for unifying some gatesets that get used in this file and in testGateSets2.py
+# This class is for unifying some models that get used in this file and in testGateSets2.py
 class LabelTestCase(BaseTestCase):
 
     def setUp(self):
@@ -50,38 +50,40 @@ class LabelTestCase(BaseTestCase):
             self.assertEqual(type(l),type(l3))
         
     def test_loadsave(self):
-        #test saving and loading "parallel" gate labels
-        gslist = pygsti.construction.gatestring_list( [('Gx','Gy'), (('Gx',0),('Gy',1)), ((('Gx',0),('Gy',1)),('Gcnot',0,1)) ])
+        #test saving and loading "parallel" operation labels
+        gslist = pygsti.construction.circuit_list( [('Gx','Gy'), (('Gx',0),('Gy',1)), ((('Gx',0),('Gy',1)),('Gcnot',0,1)) ])
 
-        pygsti.io.write_gatestring_list(temp_files + "/test_gslist.txt", gslist)
-        gslist2 = pygsti.io.load_gatestring_list(temp_files + "/test_gslist.txt")
+        pygsti.io.write_circuit_list(temp_files + "/test_gslist.txt", gslist)
+        gslist2 = pygsti.io.load_circuit_list(temp_files + "/test_gslist.txt")
         self.assertEqual(gslist,gslist2)
 
     def test_circuit_init(self):
-        #Check that parallel gate labels get converted to circuits properly
-        gstr = pygsti.obj.GateString( ((('Gx',0),('Gy',1)),('Gcnot',0,1)) )
-        c = pygsti.obj.Circuit(gatestring=gstr, num_lines=2)
-        print(c)
-        self.assertEqual(c.line_items, [[L(('Gx',0)), L(('Gcnot',0,1))], [ L(('Gy',1)), L(('Gcnot',0,1))]])
+        #Check that parallel operation labels get converted to circuits properly
+        opstr = pygsti.obj.Circuit( ((('Gx',0),('Gy',1)),('Gcnot',0,1)) )
+        c = pygsti.obj.Circuit(layer_labels=opstr, num_lines=2)
+        print(c._labels)
+        self.assertEqual(c._labels, ( L( (('Gx',0),('Gy',1)) ), L('Gcnot',(0,1)) ))
 
 
-    def test_autogator(self):
-        #Test this here b/c auto-gators are associated with parallel gate labels
-        gs = pc.build_nqnoise_gateset(2, "line", [(0,1)], maxIdleWeight=2, maxhops=1,
-                                      extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
-                                      sim_type="map", parameterization="H+S", sparse=True)
+    def test_layerlizzard(self):
+        #Test this here b/c auto-gators are associated with parallel operation labels
+        availability = {'Gcnot': [(0,1)]}
+        mdl = pc.build_standard_cloudnoise_model(2, ['Gx','Gy','Gcnot'], {}, availability,
+                                                 None, "line", maxIdleWeight=1, maxhops=1,
+                                                 extraWeight1Hops=0, extraGateWeight=1, sparse=True,
+                                                 sim_type="map", parameterization="H+S")
         
-        # gs[('Gx',0)].factorgates  # Composed([fullTargetOp,fullIdleErr,fullLocalErr])
-        self.assertEqual( set(gs.gates.keys()), set([L('Gi'), L('Gx',0), L('Gy',0), L('Gx',1), L('Gy',1), L('Gcnot',(0,1))]))
+        # mdl[('Gx',0)].factorops  # Composed([fullTargetOp,fullIdleErr,fullLocalErr])
+        self.assertEqual( set(mdl.get_primitive_op_labels()), set([L('Gx',0), L('Gy',0), L('Gx',1), L('Gy',1), L('Gcnot',(0,1))]))
 
-        #But we can *compute* with gatestrings containing parallel labels...
+        #But we can *compute* with circuits containing parallel labels...
         parallelLbl = L( [('Gx',0),('Gy',1)] )
 
         with self.assertRaises(KeyError):
-            gs.gates[parallelLbl]
+            mdl.operation_blks[parallelLbl]
         
-        gstr = pygsti.obj.GateString( (parallelLbl,) )
-        probs = gs.probs(gstr)
+        opstr = pygsti.obj.Circuit( (parallelLbl,) )
+        probs = mdl.probs(opstr)
         print(probs)
 
         expected = { ('00',): 0.25, ('01',): 0.25, ('10',): 0.25, ('11',): 0.25 }
