@@ -2252,17 +2252,26 @@ class ProjectionsBoxPlot(WorkspacePlot):
         xd = int(round(_np.sqrt(projections.shape[1]))) #x-basis-dim
         yd = int(round(_np.sqrt(projections.shape[0]))) #y-basis-dim
 
-        if isinstance(projection_basis, _objs.Basis) and \
-           xd == projection_basis.dim.dmDim and yd == 1:
-            basis_for_xlabels = projection_basis
-            basis_for_ylabels = None
+        if isinstance(projection_basis, _objs.Basis):
+            if xd == projection_basis.dim.dmDim and yd == 1:
+                basis_for_xlabels = projection_basis
+                basis_for_ylabels = None
+            elif xd == yd == projection_basis.dim.dmDim:
+                basis_for_xlabels = projection_basis
+                basis_for_ylabels = projection_basis
+            else:
+                try:
+                    basis_for_xlabels = _objs.Basis(projection_basis.name,xd)
+                    basis_for_ylabels = _objs.Basis(projection_basis.name,yd)
+                except:
+                    basis_for_xlabels = basis_for_ylabels = None
         else:
             try:
                 basis_for_xlabels = _objs.Basis(projection_basis,xd)
                 basis_for_ylabels = _objs.Basis(projection_basis,yd)
             except:
                 basis_for_xlabels = basis_for_ylabels = None
-        
+
         return opmatrix_color_boxplot(
             projections, m, M,
             basis_for_xlabels,
@@ -2739,7 +2748,7 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
         
         #Combine plotly figures into one
         nSigma_figdict = nSigma_fig.plotlyfig.to_dict() # so we can work with normal dicts
-        logL_figdict = logL_fig.plotlyfig.to_dict()     # and not weird plotly objects
+        logL_figdict = logL_fig.plotlyfig.to_dict()     # and not weird plotly objects.  Older versions of plotly do not support this syntax, so upgrade if needed.
         combined_fig_data = list(nSigma_figdict['data']) + [ logL_figdict['data'][0] ]
         combined_fig_data[-1].update(visible=False)
         combined_fig = ReportFigure( go.Figure(data=combined_fig_data, layout=nSigma_figdict['layout']),

@@ -2317,6 +2317,8 @@ class Circuit(object):
         
         quil += 'DECLARE ro BIT[{0}]\n'.format(str(self.number_of_lines()))
         
+        quil += 'RESET\n'
+        
         quil += 'PRAGMA INITIAL_REWIRING "NAIVE"\n'
         
         # Go through the layers, and add the quil for each layer in turn.
