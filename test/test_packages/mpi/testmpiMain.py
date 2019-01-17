@@ -126,7 +126,7 @@ def test_MPI_products(comm):
     # Check wrtFilter functionality in dproduct
     some_wrtFilter = [0,2,3,5,10]
     for s in gstrs[0:20]:
-        result = mdl._calc().dproduct(s, wrtFilter=some_wrtFilter)
+        result = mdl._fwdsim().dproduct(s, wrtFilter=some_wrtFilter)
         chk_result = mdl.dproduct(s) #no filtering
         for ii,i in enumerate(some_wrtFilter):
             assert(np.linalg.norm(chk_result[i]-result[ii]) < 1e-6)
@@ -473,7 +473,7 @@ def test_MPI_fills(comm):
 
     for tstTree,tstLookup in zip([tree, split_tree],[lookup, split_lookup]):
 
-        mdl._calc().bulk_fill_dprobs(vdp_parallelF, tstTree,
+        mdl._fwdsim().bulk_fill_dprobs(vdp_parallelF, tstTree,
                             None, (-1e6,1e6), comm=comm,
                             wrtFilter=some_wrtFilter, wrtBlockSize=None)
         for k,opstr in enumerate(gstrs):
@@ -483,7 +483,7 @@ def test_MPI_fills(comm):
         for k,opstr in enumerate(gstrs):
             assert(np.linalg.norm(taken_result[lookup[k]]-vdp_parallelF[tstLookup[k]]) < 1e-6)
 
-        mdl._calc().bulk_fill_hprobs(vhp_parallelF, tstTree,
+        mdl._fwdsim().bulk_fill_hprobs(vhp_parallelF, tstTree,
                         None, None,None, (-1e6,1e6), comm=comm,
                         wrtFilter2=some_wrtFilter, wrtBlockSize2=None)
         for k,opstr in enumerate(gstrs):
@@ -493,7 +493,7 @@ def test_MPI_fills(comm):
         for k,opstr in enumerate(gstrs):
             assert(np.linalg.norm(taken_result[lookup[k]]-vhp_parallelF[tstLookup[k]]) < 1e-6)
 
-        mdl._calc().bulk_fill_hprobs(vhp_parallelF2, tstTree,
+        mdl._fwdsim().bulk_fill_hprobs(vhp_parallelF2, tstTree,
                         None, None,None, (-1e6,1e6), comm=comm,
                         wrtFilter1=some_wrtFilter, wrtFilter2=some_wrtFilter2)
         for k,opstr in enumerate(gstrs):
@@ -534,11 +534,11 @@ def test_MPI_compute_cache(comm):
     pcache = np.empty((nEls,d,d),'d')
     dcache1 = np.empty((nEls,2,d,d),'d')
     dcache2 = np.empty((nEls,2,d,d),'d')
-    hcache = mdl._calc()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
+    hcache = mdl._fwdsim()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
                                                 comm, wrtSlice1=slc1, wrtSlice2=slc2)
 
     #without comm
-    hcache_chk = mdl._calc()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
+    hcache_chk = mdl._fwdsim()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
                                                 comm=None, wrtSlice1=slc1, wrtSlice2=slc2)
     assert(np.linalg.norm(hcache-hcache_chk) < 1e-6)
     

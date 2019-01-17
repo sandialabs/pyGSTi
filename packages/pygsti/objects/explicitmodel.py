@@ -48,7 +48,7 @@ from ..baseobjs import Label as _Label
 
 
 
-class ExplicitOpModel(_mdl.Model):
+class ExplicitOpModel(_mdl.OpModel):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
 
@@ -717,7 +717,7 @@ class ExplicitOpModel(_mdl.Model):
             prior to the scaling.
         """
         circuit = _cir.Circuit(circuit) # cast to Circuit
-        return self._calc().product(circuit, bScale)
+        return self._fwdsim().product(circuit, bScale)
 
 
     def dproduct(self, circuit, flat=False):
@@ -752,7 +752,7 @@ class ExplicitOpModel(_mdl.Model):
               product with respect to the j-th model parameter.
         """
         circuit = _cir.Circuit(circuit) # cast to Circuit
-        return self._calc().dproduct(circuit, flat)
+        return self._fwdsim().dproduct(circuit, flat)
 
 
     def hproduct(self, circuit, flat=False):
@@ -787,7 +787,7 @@ class ExplicitOpModel(_mdl.Model):
               product with respect to the k-th then k-th model parameters.
         """
         circuit = _cir.Circuit(circuit) # cast to Circuit
-        return self._calc().hproduct(circuit, flat)
+        return self._fwdsim().hproduct(circuit, flat)
 
 
     def bulk_product(self, evalTree, bScale=False, comm=None):
@@ -822,7 +822,7 @@ class ExplicitOpModel(_mdl.Model):
             the scaling that needs to be applied to the resulting products
             (final_product[i] = scaleValues[i] * prods[i]).
         """
-        return self._calc().bulk_product(evalTree, bScale, comm)
+        return self._fwdsim().bulk_product(evalTree, bScale, comm)
 
 
     def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False,
@@ -886,7 +886,7 @@ class ExplicitOpModel(_mdl.Model):
           that ``scaleVals[i]`` contains the multiplicative scaling needed for
           the derivatives and/or products for the i-th operation sequence.
         """
-        return self._calc().bulk_dproduct(evalTree, flat, bReturnProds,
+        return self._fwdsim().bulk_dproduct(evalTree, flat, bReturnProds,
                                           bScale, comm)
 
 
@@ -974,7 +974,7 @@ class ExplicitOpModel(_mdl.Model):
           scaleVals[i] contains the multiplicative scaling needed for
           the hessians, derivatives, and/or products for the i-th operation sequence.
         """
-        ret = self._calc().bulk_hproduct(
+        ret = self._fwdsim().bulk_hproduct(
             evalTree, flat, bReturnDProdsAndProds, bScale, comm)
         if bReturnDProdsAndProds:
             return ret[0:2] + ret[3:] #remove ret[2] == deriv wrt filter2,

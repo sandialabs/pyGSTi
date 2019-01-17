@@ -47,7 +47,7 @@ from ..baseobjs import Basis as _Basis
 from ..baseobjs import Label as _Label
 
 
-class ImplicitOpModel(_mdl.Model):
+class ImplicitOpModel(_mdl.OpModel):
     """
     An ImplicitOpModel represents a flexible QIP model whereby only the
     building blocks for layer operations are stored, and custom layer-lizard
