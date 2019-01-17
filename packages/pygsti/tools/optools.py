@@ -416,8 +416,8 @@ def entanglement_fidelity(A, B, mxBasis='pp'):
         d2 = A.shape[0]
         return TrLambda / d2
             
-    JA = _jam.jamiolkowski_iso(A, mxBasis)
-    JB = _jam.jamiolkowski_iso(B, mxBasis)
+    JA = _jam.jamiolkowski_iso(A, mxBasis, mxBasis)
+    JB = _jam.jamiolkowski_iso(B, mxBasis, mxBasis)
     return fidelity(JA,JB)
 
 def average_gate_fidelity(A ,B, mxBasis='pp'):
