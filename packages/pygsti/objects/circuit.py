@@ -220,6 +220,8 @@ class Circuit(object):
             raise ValueError("line labels must contain at least %s" % str(explicit_lbls))
 
         self._str = stringrep #can be None (lazy generation)
+        self._times = None # for FUTURE expansion
+        self.auxinfo = {} # for FUTURE expansion / user metadata
 
 
     @property
