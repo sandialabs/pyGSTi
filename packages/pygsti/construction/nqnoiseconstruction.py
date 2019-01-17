@@ -552,8 +552,8 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
             
                     gstr_L0 = prepFid + measFid            # should be a Circuit
                     gstr_L1 = prepFid + idleStr + measFid  # should be a Circuit
-                    ps=model._calc().prs_as_polys(prepLbl, effectLbls, gstr_L1 )
-                    qs=model._calc().prs_as_polys(prepLbl, effectLbls, gstr_L0 )
+                    ps=model._fwdsim().prs_as_polys(prepLbl, effectLbls, gstr_L1 )
+                    qs=model._fwdsim().prs_as_polys(prepLbl, effectLbls, gstr_L0 )
 
                     if algorithm == "sequential":
                         added = False
@@ -677,8 +677,8 @@ def test_amped_polys_for_syntheticidle(fidpairs, idleStr, model,  prepLbl=None, 
     for i,(prepFid, measFid) in enumerate(fidpairs):
         gstr_L0 = prepFid + measFid            # should be a Circuit
         gstr_L1 = prepFid + idleStr + measFid  # should be a Circuit
-        ps=model._calc().prs_as_polys(prepLbl, effectLbls, gstr_L1 )
-        qs=model._calc().prs_as_polys(prepLbl, effectLbls, gstr_L0 )
+        ps=model._fwdsim().prs_as_polys(prepLbl, effectLbls, gstr_L1 )
+        qs=model._fwdsim().prs_as_polys(prepLbl, effectLbls, gstr_L0 )
 
         for k,(elbl,p,q) in enumerate(zip(effectLbls,ps,qs)):
             amped = p + -1*q # the amplified poly
@@ -933,8 +933,8 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
         
         gstr_L0 = prepFid + measFid            # should be a Circuit
         gstr_L1 = prepFid + idleStr + measFid  # should be a Circuit
-        ps=model._calc().prs_as_polys(prepLbl, effectLbls, gstr_L1 )
-        qs=model._calc().prs_as_polys(prepLbl, effectLbls, gstr_L0 )
+        ps=model._fwdsim().prs_as_polys(prepLbl, effectLbls, gstr_L1 )
+        qs=model._fwdsim().prs_as_polys(prepLbl, effectLbls, gstr_L0 )
         added = False
         for elbl,p,q in zip(effectLbls,ps,qs):
             amped = p + -1*q # the amplified poly
@@ -1140,7 +1140,7 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
                 if opstr in already_tried: continue
                 else: already_tried.add(opstr)
                 
-                ps=model._calc().prs_as_polys(prepLbl, effectLbls, opstr)
+                ps=model._fwdsim().prs_as_polys(prepLbl, effectLbls, opstr)
                 #OLD: Jtest = J
                 added = False
                 for elbl,p in zip(effectLbls,ps):

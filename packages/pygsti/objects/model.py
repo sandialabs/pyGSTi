@@ -53,12 +53,286 @@ class Model(object):
     outcome probabilities deviate from the perfect ones.
     """
 
+    def __init__(self, state_space_labels):
+        """
+        Creates a new Model.  Rarely used except from derived classes
+        `__init__` functions.
+
+        Parameters
+        ----------
+        state_space_labels : StateSpaceLabels or list or tuple
+            The decomposition (with labels) of (pure) state-space this model
+            acts upon.  Regardless of whether the model contains operators or
+            superoperators, this argument describes the Hilbert space dimension
+            and imposed structure.  If a list or tuple is given, it must be 
+            of a from that can be passed to `StateSpaceLabels.__init__`.
+        """
+        if isinstance(state_space_labels, _ld.StateSpaceLabels):
+            self._state_space_labels = state_space_labels
+        else:
+            self._state_space_labels = _ld.StateSpaceLabels(state_space_labels)
+
+        self._hyperparams = {}
+        self._paramvec = _np.zeros(0, 'd')
+        self._paramlbls = None # a placeholder for FUTURE functionality
+        self.uuid = _uuid.uuid4() # a Model's uuid is like a persistent id(), useful for hashing
+        
+
+    @property
+    def state_space_labels(self):
+        """ State space labels """
+        return self._state_space_labels
+
+    @property
+    def hyperparams(self):
+        """ Dictionary of hyperparameters associated with this model """
+        return self._hyperparams # Note: no need to set this param - just set/update values
+
+    def num_params(self):
+        """
+        Return the number of free parameters when vectorizing
+        this model.
+
+        Returns
+        -------
+        int
+            the number of model parameters.
+        """
+        return len(self._paramvec)
+
+    def to_vector(self):
+        """
+        Returns the model vectorized according to the optional parameters.
+
+        Returns
+        -------
+        numpy array
+            The vectorized model parameters.
+        """
+        return self._paramvec
+
+
+    def from_vector(self, v, reset_basis=False):
+        """
+        The inverse of to_vector.  Loads values of gates and rho and E vecs from
+        from the vector `v`.  Note that `v` does not specify the number of
+        gates, etc., and their labels: this information must be contained in
+        this `Model` prior to calling `from_vector`.  In practice, this just
+        means you should call the `from_vector` method using the same `Model`
+        that was used to generate the vector `v` in the first place.
+        """
+        assert( len(v) == self.num_params() )
+        self._paramvec = v.copy()
+
+
+    def probs(self, circuit, clipTo=None):
+        """
+        Construct a dictionary containing the probabilities of every spam label
+        given a operation sequence.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+          The sequence of operation labels specifying the operation sequence.
+
+        clipTo : 2-tuple, optional
+           (min,max) to clip probabilities to if not None.
+
+        Returns
+        -------
+        probs : dictionary
+            A dictionary such that
+            probs[SL] = pr(SL,circuit,clipTo)
+            for each spam label (string) SL.
+        """
+        raise NotImplementedError("Derived classes should implement this!")
+
+
+    def dprobs(self, circuit, returnPr=False,clipTo=None):
+        """
+        Construct a dictionary containing the probability derivatives of every
+        spam label for a given operation sequence.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+          The sequence of operation labels specifying the operation sequence.
+
+        returnPr : bool, optional
+          when set to True, additionally return the probabilities.
+
+        clipTo : 2-tuple, optional
+           (min,max) to clip returned probability to if not None.
+           Only relevant when returnPr == True.
+
+        Returns
+        -------
+        dprobs : dictionary
+            A dictionary such that
+            dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,clipTo)
+            for each spam label (string) SL.
+        """
+        #Finite difference default?
+        raise NotImplementedError("Derived classes should implement this!")
+
+
+    def hprobs(self, circuit, returnPr=False,returnDeriv=False,clipTo=None):
+        """
+        Construct a dictionary containing the probability derivatives of every
+        spam label for a given operation sequence.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+          The sequence of operation labels specifying the operation sequence.
+
+        returnPr : bool, optional
+          when set to True, additionally return the probabilities.
+
+        returnDeriv : bool, optional
+          when set to True, additionally return the derivatives of the
+          probabilities.
+
+        clipTo : 2-tuple, optional
+           (min,max) to clip returned probability to if not None.
+           Only relevant when returnPr == True.
+
+        Returns
+        -------
+        hprobs : dictionary
+            A dictionary such that
+            hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo)
+            for each spam label (string) SL.
+        """
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def bulk_evaltree_from_resources(self, circuit_list, comm=None, memLimit=None,
+                                     distributeMethod="default", subcalls=[],
+                                     dataset=None, verbosity=0):
+        raise NotImplementedError("Derived classes should implement this!")
+        #return circuit_list # MORE?
+
+    def bulk_evaltree(self, circuit_list, minSubtrees=None, maxTreeSize=None,
+                      numSubtreeComms=1, dataset=None, verbosity=0):
+        raise NotImplementedError("Derived classes should implement this!")
+        #return circuit_list # MORE?
+
+    #def uses_evaltrees(self):
+    #    """
+    #    Whether or not this model uses evaluation trees to compute many
+    #    (bulk) probabilities and their derivatives.
+    #
+    #    Returns
+    #    -------
+    #    bool
+    #    """
+    #    return False
+
+    def bulk_probs(self, circuit_list, clipTo=None, check=False,
+                   comm=None, memLimit=None, dataset=None, smartc=None):
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def bulk_dprobs(self, circuit_list, returnPr=False,clipTo=None,
+                    check=False,comm=None,wrtBlockSize=None,dataset=None):
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def bulk_hprobs(self, circuit_list, returnPr=False,returnDeriv=False,
+                    clipTo=None, check=False, comm=None,
+                    wrtBlockSize1=None, wrtBlockSize2=None, dataset=None):
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False, comm=None):
+        raise NotImplementedError("Derived classes should implement this!")
+    
+    def bulk_fill_dprobs(self, mxToFill, evalTree, prMxToFill=None,clipTo=None,
+                         check=False,comm=None, wrtBlockSize=None,
+                         profiler=None, gatherMemLimit=None):
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def bulk_fill_hprobs(self, mxToFill, evalTree=None,
+                         prMxToFill=None, derivMxToFill=None,
+                         clipTo=None, check=False, comm=None,
+                         wrtBlockSize1=None, wrtBlockSize2=None,
+                         gatherMemLimit=None):
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def bulk_hprobs_by_block(self, evalTree, wrtSlicesList,
+                             bReturnDProbs12=False, comm=None):
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def _init_copy(self,copyInto):
+        """
+        Copies any "tricky" member of this model into `copyInto`, before
+        deep copying everything else within a .copy() operation.
+        """
+        copyInto.uuid = _uuid.uuid4() # new uuid for a copy (don't duplicate!)
+
+    def copy(self):
+        """
+        Copy this model.
+
+        Returns
+        -------
+        Model
+            a (deep) copy of this model.
+        """
+        #Avoid having to reconstruct everything via __init__;
+        # essentially deepcopy this object, but give the
+        # class opportunity to initialize tricky members instead
+        # of letting deepcopy do it.
+        newModel = type(self).__new__(self.__class__) # empty object
+
+        #first call _init_copy to initialize any tricky members
+        # (like those that contain references to self or other members)
+        self._init_copy(newModel)
+        
+        for attr,val in self.__dict__.items():
+            if not hasattr(newModel,attr):
+                setattr(newModel,attr,_copy.deepcopy(val))
+
+        if OpModel._pcheck: newModel._check_paramvec()
+        return newModel
+
+    def __str__(self):
+        pass
+
+    def __hash__(self):
+        if self.uuid is not None:
+            return hash(self.uuid)
+        else:
+            raise TypeError('Use digest hash')
+
+
+
+class OpModel(Model):
+    """
+    A Model containing operators (i.e. "members") which are independently
+    (sort of) parameterized and can be thought to have dense representations
+    (even if they're not actually stored that way).  This gives rise to the
+    model having `basis` and `evotype` members.
+
+    Secondly, attached to an `OpModel` is the idea of "circuit simplification"
+    whereby the operators (preps, operations, povms, instruments) within
+    a circuit get simplified to things corresponding to a single outcome
+    probability, i.e. pseudo-circuits containing just preps, operations,
+    and POMV effects.  
+
+    Thirdly, an `OpModel` is assumed to use a *layer-by-layer* evolution, and,
+    because of circuit simplification process, the calculaton of circuit
+    outcome probabilities has been pushed to a :class:`ForwardSimulator`
+    object which just deals with the forward simulation of simplified circuits.
+    Furthermore, instead of relying on a static set of operations a forward
+    simulator queries a :class:`LayerLizard` for layer operations, making it
+    possible to build up layer operations in an on-demand fashion from pieces
+    within the model.
+    """
+
     #Whether to perform extra parameter-vector integrity checks
     _pcheck = False
 
     def __init__(self, state_space_labels, basis, evotype, simplifier_helper, sim_type="auto"):
         """
-        Creates a new Model.  Rarely used except from derived classes
+        Creates a new OpModel.  Rarely used except from derived classes
         `__init__` functions.
 
         Parameters
@@ -93,15 +367,11 @@ class Model(object):
         self.set_simtype(sim_type)
           #sets self._calcClass, self._sim_type, self._sim_args
 
-        self._paramvec = _np.zeros(0, 'd')
-        self._hyperparams = {}
         self._shlp = simplifier_helper
-        self._paramlbls = None # a placeholder for FUTURE functionality
         self._need_to_rebuild = True #whether we call _rebuild_paramvec() in to_vector() or num_params()
         self.dirty = False #indicates when objects and _paramvec may be out of sync
         
-        self.uuid = _uuid.uuid4() # a Model's uuid is like a persistent id(), useful for hashing
-        super(Model, self).__init__()
+        super(OpModel, self).__init__(state_space_labels)
 
     ##########################################
     ## Get/Set methods
@@ -118,11 +388,6 @@ class Model(object):
         return self._evotype
 
     @property
-    def state_space_labels(self):
-        """ State space labels """
-        return self._state_space_labels
-
-    @property
     def basis(self):
         """ The basis used to represent dense (super)operators of this model """
         return self._basis
@@ -135,11 +400,7 @@ class Model(object):
         else: #create a basis with the proper dimension
             self._basis = _Basis(basis, self.state_space_labels.dim)
 
-    @property
-    def hyperparams(self):
-        """ Dictionary of hyperparameters associated with this model """
-        return self._hyperparams # Note: no need to set this param - just set/update values
-        
+            
     def set_simtype(self, sim_type, calc_cache=None):
         """
         Reset the forward simulation type of this model.
@@ -339,7 +600,7 @@ class Model(object):
                 reset_dirty(obj) # like "obj.dirty = False" but recursive
                   #object is known to be consistent with _paramvec
             
-        if Model._pcheck: self._check_paramvec()
+        if OpModel._pcheck: self._check_paramvec()
 
 
     def _mark_for_rebuild(self, modified_obj=None):
@@ -505,7 +766,7 @@ class Model(object):
             self.reset_basis() 
             # assume the vector we're loading isn't producing gates & vectors in
             # a known basis.
-        if Model._pcheck: self._check_paramvec()
+        if OpModel._pcheck: self._check_paramvec()
 
 
     ######################################
@@ -516,7 +777,7 @@ class Model(object):
         """ Return a layer lizard for this model """
         raise NotImplementedError("Derived Model classes should implement this!")
     
-    def _calc(self):
+    def _fwdsim(self):
         """ Create & return a forward-simulator ("calculator") for this model """
         self._clean_paramvec()
         layer_lizard = self._layer_lizard() 
@@ -890,7 +1151,7 @@ class Model(object):
             probs[SL] = pr(SL,circuit,clipTo)
             for each spam label (string) SL.
         """
-        return self._calc().probs(self.simplify_circuit(circuit), clipTo)
+        return self._fwdsim().probs(self.simplify_circuit(circuit), clipTo)
 
 
     def dprobs(self, circuit, returnPr=False,clipTo=None):
@@ -917,7 +1178,7 @@ class Model(object):
             dprobs[SL] = dpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,clipTo)
             for each spam label (string) SL.
         """
-        return self._calc().dprobs(self.simplify_circuit(circuit),
+        return self._fwdsim().dprobs(self.simplify_circuit(circuit),
                                    returnPr,clipTo)
 
 
@@ -949,10 +1210,10 @@ class Model(object):
             hprobs[SL] = hpr(SL,circuit,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo)
             for each spam label (string) SL.
         """
-        return self._calc().hprobs(self.simplify_circuit(circuit),
+        return self._fwdsim().hprobs(self.simplify_circuit(circuit),
                                    returnPr, returnDeriv, clipTo)
 
-
+    
     def bulk_evaltree_from_resources(self, circuit_list, comm=None, memLimit=None,
                                      distributeMethod="default", subcalls=[],
                                      dataset=None, verbosity=0):
@@ -1045,7 +1306,7 @@ class Model(object):
         num_params = self.num_params()
         evt_cache = {} # cache of eval trees based on # min subtrees, to avoid re-computation
         C = 1.0/(1024.0**3)
-        calc = self._calc()
+        calc = self._fwdsim()
 
         bNp2Matters = ("bulk_fill_hprobs" in subcalls) or ("bulk_hprobs_by_block" in subcalls)
 
@@ -1324,7 +1585,7 @@ class Model(object):
         simplified_circuits, elIndices, outcomes, nEls = \
                             self.simplify_circuits(circuit_list, dataset)
 
-        evalTree = self._calc().construct_evaltree()
+        evalTree = self._fwdsim().construct_evaltree()
         evalTree.initialize(simplified_circuits, numSubtreeComms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
@@ -1402,7 +1663,7 @@ class Model(object):
             circuit_list, comm, memLimit, subcalls=['bulk_fill_probs'],
             dataset=dataset, verbosity=0) # FUTURE (maybe make verbosity into an arg?)
 
-        return self._calc().bulk_probs(circuit_list, evalTree, elIndices,
+        return self._fwdsim().bulk_probs(circuit_list, evalTree, elIndices,
                                        outcomes, clipTo, check, comm, smartc)
 
 
@@ -1462,7 +1723,7 @@ class Model(object):
         """
         circuit_list = [ _cir.Circuit(opstr) for opstr in circuit_list]  # cast to Circuits
         evalTree, elIndices, outcomes = self.bulk_evaltree(circuit_list, dataset=dataset)
-        return self._calc().bulk_dprobs(circuit_list, evalTree, elIndices,
+        return self._fwdsim().bulk_dprobs(circuit_list, evalTree, elIndices,
                                         outcomes, returnPr,clipTo,
                                         check, comm, None, wrtBlockSize)
 
@@ -1527,7 +1788,7 @@ class Model(object):
         """
         circuit_list = [ _cir.Circuit(opstr) for opstr in circuit_list]  # cast to Circuits
         evalTree, elIndices, outcomes = self.bulk_evaltree(circuit_list, dataset=dataset)
-        return self._calc().bulk_hprobs(circuit_list, evalTree, elIndices,
+        return self._fwdsim().bulk_hprobs(circuit_list, evalTree, elIndices,
                                         outcomes, returnPr, returnDeriv,
                                         clipTo, check, comm, None, None,
                                         wrtBlockSize1, wrtBlockSize2)
@@ -1577,7 +1838,7 @@ class Model(object):
         -------
         None
         """
-        return self._calc().bulk_fill_probs(mxToFill,
+        return self._fwdsim().bulk_fill_probs(mxToFill,
                                             evalTree, clipTo, check, comm)
 
 
@@ -1639,7 +1900,7 @@ class Model(object):
         -------
         None
         """
-        return self._calc().bulk_fill_dprobs(mxToFill,
+        return self._fwdsim().bulk_fill_dprobs(mxToFill,
                                              evalTree, prMxToFill, clipTo,
                                              check, comm, None, wrtBlockSize,
                                              profiler, gatherMemLimit)
@@ -1650,7 +1911,6 @@ class Model(object):
                          clipTo=None, check=False, comm=None,
                          wrtBlockSize1=None, wrtBlockSize2=None,
                          gatherMemLimit=None):
-
         """
         Compute the outcome probability-Hessians for an entire tree of gate
         strings.
@@ -1714,7 +1974,7 @@ class Model(object):
         -------
         None
         """
-        return self._calc().bulk_fill_hprobs(mxToFill,
+        return self._fwdsim().bulk_fill_hprobs(mxToFill,
                                      evalTree, prMxToFill, derivMxToFill, None,
                                      clipTo, check, comm, None, None,
                                      wrtBlockSize1,wrtBlockSize2,gatherMemLimit)
@@ -1788,7 +2048,7 @@ class Model(object):
           - `hprobs == mx[:,:,rowSlice,colSlice]`
           - `dprobs12 == dp[:,:,rowSlice,None] * dp[:,:,None,colSlice]`
         """
-        return self._calc().bulk_hprobs_by_block(
+        return self._fwdsim().bulk_hprobs_by_block(
              evalTree, wrtSlicesList,
             bReturnDProbs12, comm)
 
@@ -1798,7 +2058,6 @@ class Model(object):
         deep copying everything else within a .copy() operation.
         """
         self._clean_paramvec() # make sure _paramvec is valid before copying (necessary?)
-        copyInto.uuid = _uuid.uuid4() # new uuid for a copy (don't duplicate!)
         copyInto._shlp = None # must be set by a derived-class _init_copy() method
         copyInto._need_to_rebuild = True # copy will have all gpindices = None, etc.
 
@@ -1813,31 +2072,6 @@ class Model(object):
             a (deep) copy of this model.
         """
         self._clean_paramvec() # ensure _paramvec is rebuilt if needed
-        if Model._pcheck: self._check_paramvec()
-        
-        #Avoid having to reconstruct everything via __init__;
-        # essentially deepcopy this object, but give the
-        # class opportunity to initialize tricky members instead
-        # of letting deepcopy do it.
-        newModel = type(self).__new__(self.__class__) # empty object
-
-        #first call _init_copy to initialize any tricky members
-        # (like those that contain references to self or other members)
-        self._init_copy(newModel)
-        
-        for attr,val in self.__dict__.items():
-            if not hasattr(newModel,attr):
-                setattr(newModel,attr,_copy.deepcopy(val))
-
-        if Model._pcheck: newModel._check_paramvec()
-        return newModel
-
+        if OpModel._pcheck: self._check_paramvec()
+        return Model.copy(self)
     
-    def __str__(self):
-        pass
-
-    def __hash__(self):
-        if self.uuid is not None:
-            return hash(self.uuid)
-        else:
-            raise TypeError('Use digest hash')

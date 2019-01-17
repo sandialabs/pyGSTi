@@ -1223,7 +1223,7 @@ class TestGateSetMethods(GateSetTestCase):
         #also test automatic setting of _calcClass
         #mdl = self.model.copy()
         #del mdl._calcClass
-        #c = mdl._calc() #automatically sets _calcClass
+        #c = mdl._fwdsim() #automatically sets _calcClass
         #self.assertTrue(hasattr(mdl,'_calcClass'))
 
 
@@ -1261,7 +1261,7 @@ class TestGateSetMethods(GateSetTestCase):
             rawCalc.bulk_hprobs_by_block(None,None)
 
     def test_base_gatematrixcalc(self):
-        rawCalc = self.model._calc()
+        rawCalc = self.model._fwdsim()
 
         #Make call variants that aren't called by Model routines
         dg = rawCalc.doperation(L('Gx'), flat=False)
@@ -1300,7 +1300,7 @@ class TestGateSetMethods(GateSetTestCase):
 
         cptpGateset = self.model.copy()
         cptpGateset.set_all_parameterizations("CPTP") # so gates have nonzero hessians
-        cptpCalc = cptpGateset._calc()
+        cptpCalc = cptpGateset._fwdsim()
 
         hg = cptpCalc.hoperation(L('Gx'), flat=False)
         hgflat = cptpCalc.hoperation(L('Gx'), flat=True)
@@ -1310,7 +1310,7 @@ class TestGateSetMethods(GateSetTestCase):
 
 
     def test_base_gatemapcalc(self):
-        rawCalc = self.mgateset._calc()
+        rawCalc = self.mgateset._fwdsim()
         
         #Make call variants that aren't called by Model routines
         #rawCalc.pr( Ls('rho0','Mdefault_0'), Ls('Gx','Gx'), clipTo=(-1,1))
