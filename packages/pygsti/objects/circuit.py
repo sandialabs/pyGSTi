@@ -250,7 +250,7 @@ class Circuit(object):
     @str.setter
     def str(self, value):
         """ The Python string representation of this Circuit."""
-        assert(not self._static),"Cannot edit a read-only circuit!"
+        assert(not self._static),"Cannot edit a read-only circuit!  Set editable=True when calling pygsti.obj.Circuit to create editable circuit."
         cparser = _CircuitParser()
         chk,chk_labels = cparser.parse(value)
 
@@ -2258,7 +2258,7 @@ class Circuit(object):
         f.write("\end{document}")
         f.close()    
 
-    def convert_to_quil(self, gatename_conversion=None, qubit_conversion=None, readout_conversion=None): #TODO
+    def convert_to_quil(self, gatename_conversion=None, qubit_conversion=None, readout_conversion=None, block_between_layers=True, block_idles=True): #TODO
         """
         Converts this circuit to a quil string.
 
@@ -2341,13 +2341,17 @@ class Circuit(object):
                 quil_for_gate = gatename_conversion[gate.name]
                 
                 #If gate.qubits is None, gate is assumed to be single-qubit gate
-                #acting in parallel on all qubits.
+                #acting in parallel on all qubits.  If the gate is a global idle, then 
+                #Pragma blocks are always inserted (for tests like idle tomography) even
+                #if block_between_layers==False.  Set block_idles=False to disable this as well.
                 if gate.qubits is None:
                     if quil_for_gate == 'I':
-                        quil += 'PRAGMA PRESERVE_BLOCK\n'
+                        if block_idles:
+                            quil += 'PRAGMA PRESERVE_BLOCK\n'
                         for q in gate_qubits:
                             quil += quil_for_gate + ' ' + str(qubit_conversion[q]) + '\n'
-                        quil += 'PRAGMA END_PRESERVE_BLOCK\n'
+                        if block_idles:
+                            quil += 'PRAGMA END_PRESERVE_BLOCK\n'
                     else:
                         for q in gate_qubits:
                             quil += quil_for_gate + ' ' + str(qubit_conversion[q]) + '\n'
@@ -2371,9 +2375,14 @@ class Circuit(object):
                 if q not in qubits_used:
                     quil += 'I' + ' ' + str(qubit_conversion[q]) +'\n'
                     
-            # Add in a barrier after every circuit layer. Future: Should make this optional at some
-            # point and/or to agree with the "barriers" in the circuit (to be added).
-            quil += 'PRAGMA PRESERVE_BLOCK\nPRAGMA END_PRESERVE_BLOCK\n'
+            # Add in a barrier after every circuit layer if block_between_layers==True.
+            # Including pragma blocks are critical for QCVV testing, as circuits should usually
+            # experience minimal "behind-the-scenes" compilation (beyond necessary 
+            # conversion to native instructions)
+            # To do: Add "barrier" as native pygsti circuit instruction, and use for indicating 
+            # where pragma blocks should be.
+            if block_between_layers:
+                quil += 'PRAGMA PRESERVE_BLOCK\nPRAGMA END_PRESERVE_BLOCK\n'
         
         # Add in a measurement at the end.
         if readout_conversion==None:
@@ -2387,7 +2396,7 @@ class Circuit(object):
             
         return quil  
 
-    def convert_to_openqasm(self, gatename_conversion=None, qubit_conversion=None): #TODO
+    def convert_to_openqasm(self, gatename_conversion=None, qubit_conversion=None, block_between_layers=True): #TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -2475,13 +2484,18 @@ class Circuit(object):
                 if q not in qubits_used:
                     openqasm += 'id' + ' q[' + str(qubit_conversion[q]) +'];\n'
                     
-            # Add in a barrier after every circuit layer. Future: Should make this optional at some
-            # point and/or to agree with the "barriers" in the circuit (to be added).
-            openqasm += 'barrier '
-            for q in self.line_labels[:-1]:
-                openqasm += 'q[{0}], '.format(str(qubit_conversion[q]))
-            openqasm += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
-#            openqasm += ';'
+            # Add in a barrier after every circuit layer if block_between_layers==True. 
+            # Including barriers is critical for QCVV testing, circuits should usually
+            # experience minimal "behind-the-scenes" compilation (beyond necessary 
+            # conversion to native instructions).
+            # To do: Add "barrier" as native pygsti circuit instruction, and use for indicating 
+            # where pragma blocks should be.
+            if block_between_layers:
+                openqasm += 'barrier '
+                for q in self.line_labels[:-1]:
+                    openqasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                openqasm += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+    #            openqasm += ';'
         
         # Add in a measurement at the end.
         for q in self.line_labels:
