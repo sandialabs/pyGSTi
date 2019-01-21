@@ -339,7 +339,7 @@ class HypothesisTest(object):
             self.pvalue_pseudothreshold[hypotheses] = significance/num_hypotheses
                     
         elif correction == 'Benjamini-Hochberg':
-            print("Warning: the family-wise error rate is not being controlled! Instead the False discovery rate is being controlled")
+            #print("Warning: the family-wise error rate is not being controlled! Instead the False discovery rate is being controlled")
             dynamic_hypotheses = list(_copy.copy(hypotheses))
             pvalues = [self.pvalues[h] for h in dynamic_hypotheses]
             pvalues, dynamic_hypotheses = zip(*sorted(zip(pvalues, dynamic_hypotheses)))
@@ -368,7 +368,7 @@ class HypothesisTest(object):
             self.pvalue_pseudothreshold[hypotheses] = significance/num_hypotheses
 
         elif correction == 'none':
-            print("Warning: the family-wise error rate is not being controlled, as the correction specified for this nested hypothesis is 'none'!")
+            #print("Warning: the family-wise error rate is not being controlled, as the correction specified for this nested hypothesis is 'none'!")
             self.pvalue_pseudothreshold[hypotheses] = significance
             for h in hypotheses:
                 self.significance_tested_at[h] = significance

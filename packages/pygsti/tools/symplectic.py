@@ -861,7 +861,7 @@ def embed_clifford(s,p,qubit_inds,n):
     p : numpy array
         The 'phase vector' over the integers mod 4 representing the embedded Clifford
     """
-    ne = len(qubit_inds) # nQubits for embedded_gate
+    ne = len(qubit_inds) # nQubits for embedded_op
     s_out = _np.identity(2*n, int)
     p_out = _np.zeros(2*n, int)
 
@@ -881,14 +881,14 @@ def get_internal_gate_symplectic_representations(gllist=None):
     """
     Returns dictionaries containing the symplectic matrices and phase vectors that represent
     the specified 'standard' Clifford gates, or the representations of all the standard gates
-    if no list of gate labels is supplied. These 'standard' Clifford gates are those gates that
+    if no list of operation labels is supplied. These 'standard' Clifford gates are those gates that
     are already known to the code gates (e.g., the label 'CNOT' has a specfic meaning in the
     code), and are recorded as unitaries in "internalgates.py".
     
     Parameters
     ----------
     gllist : list, optional
-        If not None, a list of strings corresponding to gate labels for any of the standard 
+        If not None, a list of strings corresponding to operation labels for any of the standard 
         gates that have fixed meaning for the code (e.g., 'CNOT' corresponds to
         the CNOT gate with the first qubit the target). For example, this list could be
         gllist = ['CNOT','H','P','I','X'].
@@ -898,7 +898,7 @@ def get_internal_gate_symplectic_representations(gllist=None):
     srep_dict : dict
         dictionary of `(smatrix,svector)` tuples, where `smatrix` and `svector`
         are numpy arrays containing the symplectic matrix and phase vector
-        representing the gate label given by the key.
+        representing the operation label given by the key.
     """    
     # Full dictionaries, containing the symplectic representations of *all* gates
     # that are hard-coded, and which have a specific meaning to the code.
@@ -1009,15 +1009,15 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
 
     srep_dict : dict, optional
         If not None, a dictionary providing the (symplectic matrix, phase vector)
-        tuples associated with each gate label. If the circuit layer contains only
+        tuples associated with each operation label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this 
         may be None. Alternatively, if `pspec` is specifed and it contains the 
-        gates in `circuit` in a Clifford gateset, it also does not need to be 
+        gates in `circuit` in a Clifford model, it also does not need to be 
         specified (and it is ignored if it is specified). Otherwise it must be 
         specified.
 
     pspec : ProcessorSpec, optional
-        A ProcessorSpec that contains a Clifford gateset that defines the symplectic
+        A ProcessorSpec that contains a Clifford model that defines the symplectic
         action of all of the gates in `circuit`. If this is not None it over-rides
         `srep_dict`. Both `pspec` and `srep_dict` can only be None if the circuit
         contains only gates with names that are hard-coded into pyGSTi.
@@ -1058,9 +1058,9 @@ def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None
     
     Parameters
     ----------
-    layer : list/tuple of gate labels
-        The Clifford gates to calculate the global action of, input as a
-        list of Label objects.
+    layer : Label
+        A layer label, often a compound label with components. Specifies
+        The Clifford gate(s) to calculate the global action of.
 
     n : int, optional
         The total number of qubits. Must be specified if `Qlabels` is None.
@@ -1075,7 +1075,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None
         
     srep_dict : dict, optional
         If not None, a dictionary providing the (symplectic matrix, phase vector)
-        tuples associated with each gate label. If the circuit layer contains only
+        tuples associated with each operation label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this 
         may be None. Otherwise it must be specified. If the layer contains some 
         standard gates it is not necesary to specify the symplectic represenation
@@ -1107,25 +1107,26 @@ def symplectic_rep_of_clifford_layer(layer, n=None, Qlabels=None, srep_dict=None
     s = _np.identity(2*n,int)
     p = _np.zeros(2*n,int)
 
-    for gatelbl in layer:
-        for sub_gl in gatelbl.components:
-
-            matrix, phase = sreps[sub_gl.name]           
-            nforgate = sub_gl.number_of_qubits
-            sub_gl_qubits = sub_gl.qubits if (sub_gl.qubits is not None) else Qlabels
-            for ind1, qlabel1 in enumerate(sub_gl_qubits):
-                qindex1 = Qlabels.index(qlabel1)
-                for ind2, qlabel2 in enumerate(sub_gl_qubits):
-                    qindex2 = Qlabels.index(qlabel2)
-                    # Put in the symp matrix elements
-                    s[qindex1,qindex2] = matrix[ind1,ind2]
-                    s[qindex1,qindex2+n] = matrix[ind1,ind2+nforgate]
-                    s[qindex1+n,qindex2] = matrix[ind1+nforgate,ind2]
-                    s[qindex1+n,qindex2+n] = matrix[ind1+nforgate,ind2+nforgate]
-                
-                # Put in the phase elements
-                p[qindex1] = phase[ind1] 
-                p[qindex1+n] = phase[ind1+nforgate]                      
+    if not isinstance(layer,_Label):
+        layer = _Label(layer)
+        
+    for sub_lbl in layer.components:
+        matrix, phase = sreps[sub_lbl.name]           
+        nforgate = sub_lbl.number_of_qubits
+        sub_lbl_qubits = sub_lbl.qubits if (sub_lbl.qubits is not None) else Qlabels
+        for ind1, qlabel1 in enumerate(sub_lbl_qubits):
+            qindex1 = Qlabels.index(qlabel1)
+            for ind2, qlabel2 in enumerate(sub_lbl_qubits):
+                qindex2 = Qlabels.index(qlabel2)
+                # Put in the symp matrix elements
+                s[qindex1,qindex2] = matrix[ind1,ind2]
+                s[qindex1,qindex2+n] = matrix[ind1,ind2+nforgate]
+                s[qindex1+n,qindex2] = matrix[ind1+nforgate,ind2]
+                s[qindex1+n,qindex2+n] = matrix[ind1+nforgate,ind2+nforgate]
+            
+            # Put in the phase elements
+            p[qindex1] = phase[ind1] 
+            p[qindex1+n] = phase[ind1+nforgate]                      
                 
     return s, p
 

@@ -57,11 +57,11 @@ class TestWorkspace(ReportBaseCase):
     def setUp(self):
         super(TestWorkspace, self).setUp()
 
-        self.tgt = self.results.estimates['default'].gatesets['target']
+        self.tgt = self.results.estimates['default'].models['target']
         self.ds = self.results.dataset.copy()
         self.ds.comment = "Hello\nWorld!" # for testing DS overview table
-        self.gs = self.results.estimates['default'].gatesets['go0']
-        self.gss = self.results.gatestring_structs['final']
+        self.mdl = self.results.estimates['default'].models['go0']
+        self.gss = self.results.circuit_structs['final']
 
     def test_notebook_mode(self):
         wnb = pygsti.report.Workspace()
@@ -131,8 +131,8 @@ class TestWorkspace(ReportBaseCase):
         pygsti.report.workspace.ws_custom_digest(M, NA)
 
         switchbd = ws.Switchboard(["My Switch"],[["On","Off"]],["buttons"])
-        switchbd.add("gs", [0])
-        switchval = switchbd.gs
+        switchbd.add("mdl", [0])
+        switchval = switchbd.mdl
         pygsti.report.workspace.ws_custom_digest(M, switchval)
 
 
@@ -140,105 +140,105 @@ class TestWorkspace(ReportBaseCase):
         w = pygsti.report.Workspace()
         tbls = []; cr = None
 
-        gsMultiSpam = self.gs.copy()
-        gsMultiSpam.povms['Msecondpovm'] = self.gs.povms['Mdefault'].copy()
+        gsMultiSpam = self.mdl.copy()
+        gsMultiSpam.povms['Msecondpovm'] = self.mdl.povms['Mdefault'].copy()
         gsTP = self.tgt.depolarize(0.01,0.01); gsTP.set_all_parameterizations("TP")
         gsCPTP = self.tgt.depolarize(0.01,0.01); gsCPTP.set_all_parameterizations("CPTP")
-        gsGM = self.gs.depolarize(0.01,0.01); gsGM.basis = pygsti.obj.Basis("gm",2)
-        gsSTD = self.gs.depolarize(0.01,0.01); gsSTD.basis = pygsti.obj.Basis("std",2)
-        gsQT = stdQT_XYIMS.gs_target.depolarize(0.01,0.01)
+        gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.obj.Basis("gm",2)
+        gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.obj.Basis("std",2)
+        gsQT = stdQT_XYIMS.target_model().depolarize(0.01,0.01)
 
         #Construct confidence regions
-        def make_cr(gs):
-            hessian = pygsti.tools.logl_hessian(gs, self.ds, self.gss.allstrs,
+        def make_cr(mdl):
+            hessian = pygsti.tools.logl_hessian(mdl, self.ds, self.gss.allstrs,
                                                 minProbClip=1e-4, probClipInterval=(-1e6,1e6),
                                                 radius=1e-4)
-            est = pygsti.objects.estimate.Estimate(None, gs, None, []) #dummy w/out parent
+            est = pygsti.objects.estimate.Estimate(None, mdl, None, []) #dummy w/out parent
             crfactory = pygsti.obj.ConfidenceRegionFactory(
-                parent=est, gateset_lbl="target", gatestring_list_lbl=None,
+                parent=est, model_lbl="target", circuit_list_lbl=None,
                 hessian=hessian, nonMarkRadiusSq=0.0)
             crfactory.project_hessian('std')
             return crfactory.view(95)
 
-        cr2 = make_cr(self.gs)
+        cr2 = make_cr(self.mdl)
         cr2TP = make_cr(gsTP)
         cr2CPTP = make_cr(gsCPTP)
 
         #----------------- Test table creation ---------------------------
         tbls.append( w.BlankTable() )
-        tbls.append( w.SpamTable(self.gs, ["mytitle"], "boxes", cr, True ) )
+        tbls.append( w.SpamTable(self.mdl, ["mytitle"], "boxes", cr, True ) )
         tbls.append( w.SpamTable(gsTP, ["mytitle"], "boxes", cr2TP, True ) )
-        tbls.append( w.SpamTable(self.gs, ["mytitle"], "numbers", cr, False ) )
+        tbls.append( w.SpamTable(self.mdl, ["mytitle"], "numbers", cr, False ) )
         with self.assertRaises(ValueError):
-            w.SpamTable(self.gs, ["mytitle"], "foobar", cr, False ) #invalid display_as
+            w.SpamTable(self.mdl, ["mytitle"], "foobar", cr, False ) #invalid display_as
         
-        tbls.append( w.SpamParametersTable(self.gs, cr ) )
+        tbls.append( w.SpamParametersTable(self.mdl, cr ) )
         tbls.append( w.SpamParametersTable(gsMultiSpam, cr ) )
         
-        tbls.append( w.GatesTable(self.gs, ["mytitle"], display_as="boxes", confidenceRegionInfo=cr ) )
-        tbls.append( w.GatesTable(self.gs, ["mytitle"], display_as="numbers", confidenceRegionInfo=cr ) )
+        tbls.append( w.GatesTable(self.mdl, ["mytitle"], display_as="boxes", confidenceRegionInfo=cr ) )
+        tbls.append( w.GatesTable(self.mdl, ["mytitle"], display_as="numbers", confidenceRegionInfo=cr ) )
         tbls.append( w.GatesTable(gsTP, ["mytitle"], display_as="numbers", confidenceRegionInfo=cr2TP ) )
         tbls.append( w.GatesTable(gsCPTP, ["mytitle"], display_as="numbers", confidenceRegionInfo=cr2CPTP ) )        
         with self.assertRaises(ValueError):
-            w.GatesTable(self.gs, ["mytitle"], display_as="foobar", confidenceRegionInfo=cr )
+            w.GatesTable(self.mdl, ["mytitle"], display_as="foobar", confidenceRegionInfo=cr )
 
-        tbls.append( w.ChoiTable(self.gs, ["mytitle"], cr ) )
+        tbls.append( w.ChoiTable(self.mdl, ["mytitle"], cr ) )
         tbls.append( w.ChoiTable(gsQT, ["mytitle"], None ) )
         with self.assertRaises(ValueError):
-            w.ChoiTable(self.gs, ["mytitle"], cr, display=("foobar",) )
+            w.ChoiTable(self.mdl, ["mytitle"], cr, display=("foobar",) )
         
-        tbls.append( w.GatesVsTargetTable(self.gs, self.tgt, cr) )
+        tbls.append( w.GatesVsTargetTable(self.mdl, self.tgt, cr) )
         with self.assertRaises(ValueError):
-            w.GatesVsTargetTable(self.gs, self.tgt, cr, display=("foobar",) )
+            w.GatesVsTargetTable(self.mdl, self.tgt, cr, display=("foobar",) )
         
-        tbls.append( w.SpamVsTargetTable(self.gs, self.tgt, cr ) )
-        tbls.append( w.ErrgenTable(self.gs, self.tgt, cr, display_as="boxes", genType="logTiG") )
-        tbls.append( w.ErrgenTable(self.gs, self.tgt, cr, display_as="numbers", genType="logTiG") )
-        tbls.append( w.ErrgenTable(self.gs, self.tgt, cr, display_as="numbers", genType="logG-logT") )
+        tbls.append( w.SpamVsTargetTable(self.mdl, self.tgt, cr ) )
+        tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="boxes", genType="logTiG") )
+        tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="numbers", genType="logTiG") )
+        tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="numbers", genType="logG-logT") )
         tbls.append( w.ErrgenTable(gsGM, self.tgt, cr, display_as="numbers", genType="logGTi") )
         tbls.append( w.ErrgenTable(gsSTD, self.tgt, cr, display_as="numbers", genType="logGTi") )
-        tbls.append( w.ErrgenTable(gsQT, stdQT_XYIMS.gs_target, cr, display_as="numbers", genType="logGTi") )
+        tbls.append( w.ErrgenTable(gsQT, stdQT_XYIMS.target_model(), cr, display_as="numbers", genType="logGTi") )
         with self.assertRaises(ValueError):
-            w.ErrgenTable(self.gs, self.tgt, cr, display=('foobar',))
+            w.ErrgenTable(self.mdl, self.tgt, cr, display=('foobar',))
         with self.assertRaises(AssertionError):
-            w.ErrgenTable(self.gs, self.tgt, cr, display_as='foobar')
+            w.ErrgenTable(self.mdl, self.tgt, cr, display_as='foobar')
         with self.assertRaises(ValueError):
-            w.ErrgenTable(self.gs, self.tgt, cr, genType='foobar')
+            w.ErrgenTable(self.mdl, self.tgt, cr, genType='foobar')
         
-        tbls.append( w.GateDecompTable(self.gs, self.tgt, cr) )
+        tbls.append( w.GateDecompTable(self.mdl, self.tgt, cr) )
         
-        tbls.append( w.GateEigenvalueTable(self.gs, self.tgt, cr) )
-        tbls.append( w.GateEigenvalueTable(self.gs, None, cr, display=("polar",) ) ) # polar with no target gateset
-        tbls.append( w.GateEigenvalueTable(self.gs, self.tgt, cr, display=("evdm","evinf","rel"),
-                                           virtual_gates=[pygsti.obj.GateString(('Gx','Gx'))] ) )
+        tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr) )
+        tbls.append( w.GateEigenvalueTable(self.mdl, None, cr, display=("polar",) ) ) # polar with no target model
+        tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("evdm","evinf","rel"),
+                                           virtual_ops=[pygsti.obj.Circuit(('Gx','Gx'))] ) )
         with self.assertRaises(ValueError):
-            tbls.append( w.GateEigenvalueTable(self.gs, self.tgt, cr, display=("foobar",)) )
+            tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("foobar",)) )
         
         tbls.append( w.DataSetOverviewTable(self.ds,maxLengthList=[1,2,4,8]) )
-        tbls.append( w.FitComparisonTable(self.gss.Ls, self.results.gatestring_structs['iteration'],
-                                          self.results.estimates['default'].gatesets['iteration estimates'], self.ds) )
+        tbls.append( w.FitComparisonTable(self.gss.Ls, self.results.circuit_structs['iteration'],
+                                          self.results.estimates['default'].models['iteration estimates'], self.ds) )
         with self.assertRaises(ValueError):
-            w.FitComparisonTable(self.gss.Ls, self.results.gatestring_structs['iteration'],
-                                 self.results.estimates['default'].gatesets['iteration estimates'], self.ds, objective="foobar")
+            w.FitComparisonTable(self.gss.Ls, self.results.circuit_structs['iteration'],
+                                 self.results.estimates['default'].models['iteration estimates'], self.ds, objective="foobar")
 
-        tbls.append( w.GaugeRobustErrgenTable(self.gs, self.tgt) )
+        tbls.append( w.GaugeRobustErrgenTable(self.mdl, self.tgt) )
 
-        prepStrs = self.results.gatestring_lists['prep fiducials']
-        effectStrs = self.results.gatestring_lists['effect fiducials']
-        tbls.append( w.GatestringTable((prepStrs,effectStrs),
-                                       ["Prep.","Measure"], commonTitle="Fiducials"))
+        prepStrs = self.results.circuit_lists['prep fiducials']
+        effectStrs = self.results.circuit_lists['effect fiducials']
+        tbls.append( w.CircuitTable((prepStrs,effectStrs),
+                                    ["Prep.","Measure"], commonTitle="Fiducials"))
 
         metric_abbrevs = ["evinf", "evagi","evnuinf","evnuagi","evdiamond",
                           "evnudiamond", "inf","agi","trace","diamond","nuinf","nuagi",
                           "frob"]
         for metric in metric_abbrevs:
             tbls.append( w.GatesSingleMetricTable(
-                metric, [self.gs,self.gs],[self.tgt,self.tgt], ['one','two'])) #1D
+                metric, [self.mdl,self.mdl],[self.tgt,self.tgt], ['one','two'])) #1D
             tbls.append( w.GatesSingleMetricTable(
-                metric, [[self.gs],[self.gs]],[[self.tgt],[self.tgt]],
-                ['column one'], ['row one','row two'], gateLabel="Gx")) #2D
+                metric, [[self.mdl],[self.mdl]],[[self.tgt],[self.tgt]],
+                ['column one'], ['row one','row two'], opLabel="Gx")) #2D
             tbls.append( w.GatesSingleMetricTable(
-                metric, [self.gs,None],[self.tgt,self.tgt], ['one','two'])) #1D w/None gateset
+                metric, [self.mdl,None],[self.tgt,self.tgt], ['one','two'])) #1D w/None model
 
         tbls.append( w.StandardErrgenTable(4, "hamiltonian", "pp") )  # 1Q
         tbls.append( w.StandardErrgenTable(9, "stochastic", "gm") )   # qutrit
@@ -252,14 +252,14 @@ class TestWorkspace(ReportBaseCase):
 
         params = self.results.estimates['default'].parameters.copy()
         params['gaugeOptParams'] = goparams # add for coverate
-        tbls.append( w.MetadataTable(self.gs, params) )
+        tbls.append( w.MetadataTable(self.mdl, params) )
         params['gaugeOptParams'] = [goparams] # can also be a list (for GOpt stages)
         tbls.append( w.MetadataTable(gsTP, params) )
 
-        weirdGS = pygsti.construction.build_gateset(
-            [4], [('Q0','Q1')],['Gi'], ["I(Q0)"])
+        weirdGS = pygsti.construction.build_explicit_model(
+            [('Q0','Q1')],['Gi'], ["I(Q0)"])
         #weirdGS.preps['rho1'] = pygsti.obj.ComplementSPAMVec(weirdGS.preps['rho0'],[]) #num_params not implemented!
-        weirdGS.povms['Mtensor'] = pygsti.obj.TensorProdPOVM([self.gs.povms['Mdefault'],self.gs.povms['Mdefault']])
+        weirdGS.povms['Mtensor'] = pygsti.obj.TensorProdPOVM([self.mdl.povms['Mdefault'],self.mdl.povms['Mdefault']])
         tbls.append( w.MetadataTable(weirdGS, params) )
         
         tbls.append( w.SoftwareEnvTable() )
@@ -272,9 +272,9 @@ class TestWorkspace(ReportBaseCase):
                 w.ProfilerTable(profiler,"foobar")
             
         #OLD tables
-        tbls.append( w.old_RotationAxisVsTargetTable(self.gs, self.tgt) )
-        tbls.append( w.old_GateDecompTable(self.gs) )
-        tbls.append( w.old_RotationAxisTable(self.gs) )
+        tbls.append( w.old_RotationAxisVsTargetTable(self.mdl, self.tgt) )
+        tbls.append( w.old_GateDecompTable(self.mdl) )
+        tbls.append( w.old_RotationAxisTable(self.mdl) )
 
 
         #Now test table rendering in html
@@ -306,64 +306,64 @@ class TestWorkspace(ReportBaseCase):
 
     def test_plot_creation(self):
         w = pygsti.report.Workspace()
-        prepStrs = self.results.gatestring_lists['prep fiducials']
-        effectStrs = self.results.gatestring_lists['effect fiducials']
+        prepStrs = self.results.circuit_lists['prep fiducials']
+        effectStrs = self.results.circuit_lists['effect fiducials']
         non_gatestring_strs = [ 'GxString', 'GyString' ]
         
         plts = []
         plts.append( w.BoxKeyPlot(prepStrs, effectStrs) )
         plts.append( w.BoxKeyPlot(non_gatestring_strs, non_gatestring_strs) )
-        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=True,
+        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, boxLabels=True,
                                     hoverInfo=True, sumUp=False, invert=False) )
-        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=False,
+        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, boxLabels=False,
                                     hoverInfo=True, sumUp=True, invert=False) )
-        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=False,
+        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, boxLabels=False,
                                     hoverInfo=True, sumUp=False, invert=True) )
-        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=False,
+        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, boxLabels=False,
                                     hoverInfo=True, sumUp=False, invert=False, typ="scatter") )
 
         mds = pygsti.objects.MultiDataSet()
         mds.add_dataset("DS0",self.ds)
         mds.add_dataset("DS1",self.ds)
-        dsc = pygsti.objects.DataComparator([self.ds,self.ds], gate_exclusions=['Gfoo'], gate_inclusions=['Gx','Gy','Gi'])
+        dsc = pygsti.objects.DataComparator([self.ds,self.ds], op_exclusions=['Gfoo'], op_inclusions=['Gx','Gy','Gi'])
         dsc2 = pygsti.objects.DataComparator(mds)
         dsc.implement()
         dsc2.implement()
-        plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.gs, dscomparator=dsc) ) # dscmp with 'None' dataset specified
-        plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.gs, dscomparator=dsc2) )
+        plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc) ) # dscmp with 'None' dataset specified
+        plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc2) )
 
         tds = pygsti.io.load_tddataset(compare_files + "/timeseries_data_trunc.txt")
         driftresults = drift.do_basic_drift_characterization(tds)
-        plts.append( w.ColorBoxPlot(("driftpv","driftpwr"), self.gss, self.ds, self.gs, boxLabels=False,
+        plts.append( w.ColorBoxPlot(("driftpv","driftpwr"), self.gss, self.ds, self.mdl, boxLabels=False,
                                     hoverInfo=True, sumUp=True, invert=False, driftresults=driftresults) )
 
         with self.assertRaises(ValueError):
-            w.ColorBoxPlot(("foobar",), self.gss, self.ds, self.gs)
+            w.ColorBoxPlot(("foobar",), self.gss, self.ds, self.mdl)
         with self.assertRaises(ValueError):
-            w.ColorBoxPlot(("chi2",), self.gss, self.ds, self.gs, typ="foobar")
+            w.ColorBoxPlot(("chi2",), self.gss, self.ds, self.mdl, typ="foobar")
 
         from pygsti.algorithms import directx as dx
         #specs = pygsti.construction.build_spam_specs(
         #        prepStrs=prepStrs,
         #        effectStrs=effectStrs,
-        #        prep_labels=list(self.gs.preps.keys()),
-        #        effect_labels=self.gs.get_effect_labels() )
+        #        prep_labels=list(self.mdl.preps.keys()),
+        #        effect_labels=self.mdl.get_effect_labels() )
         baseStrs = self.gss.get_basestrings()
-        directGatesets = dx.direct_mlgst_gatesets(
+        directModels = dx.direct_mlgst_models(
             baseStrs, self.ds, prepStrs, effectStrs, self.tgt, svdTruncateTo=4)
         plts.append( w.ColorBoxPlot(["chi2","logl","blank",'directchi2','directlogl'], self.gss,
-                                    self.ds, self.gs, boxLabels=False, directGSTgatesets=directGatesets) )
+                                    self.ds, self.mdl, boxLabels=False, directGSTmodels=directModels) )
         plts.append( w.ColorBoxPlot(["errorrate"], self.gss,
-                                    self.ds, self.gs, boxLabels=False, sumUp=True,
-                                    directGSTgatesets=directGatesets) )
+                                    self.ds, self.mdl, boxLabels=False, sumUp=True,
+                                    directGSTmodels=directModels) )
         
         gmx = np.identity(4,'d'); gmx[3,0] = 0.5
         plts.append( w.MatrixPlot(gmx, -1,1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",
                                   colormap = pygsti.report.colormaps.DivergingColormap(vmin=-2, vmax=2)) )
         plts.append( w.MatrixPlot(gmx, -1,1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",colormap=None))
         plts.append( w.GateMatrixPlot(gmx, -1,1, "pp", "in", "out", boxLabels=True) )
-        plts.append( w.PolarEigenvaluePlot([np.linalg.eigvals(self.gs.gates['Gx'])],["purple"],scale=1.5) )
-        plts.append( w.PolarEigenvaluePlot([np.linalg.eigvals(self.gs.gates['Gx'])],["purple"],amp=2.0) )
+        plts.append( w.PolarEigenvaluePlot([np.linalg.eigvals(self.mdl.operations['Gx'])],["purple"],scale=1.5) )
+        plts.append( w.PolarEigenvaluePlot([np.linalg.eigvals(self.mdl.operations['Gx'])],["purple"],amp=2.0) )
 
         projections = np.zeros(16,'d')
         plts.append( w.ProjectionsBoxPlot(projections, "pp", boxLabels=False) )
@@ -376,8 +376,8 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ChoiEigenvalueBarPlot(choievals, None) )
         plts.append( w.ChoiEigenvalueBarPlot(choievals, choieb) )
 
-        plts.append( w.FitComparisonBarPlot(self.gss.Ls, self.results.gatestring_structs['iteration'],
-                                          self.results.estimates['default'].gatesets['iteration estimates'], self.ds,) )
+        plts.append( w.FitComparisonBarPlot(self.gss.Ls, self.results.circuit_structs['iteration'],
+                                          self.results.estimates['default'].models['iteration estimates'], self.ds,) )
         plts.append( w.GramMatrixBarPlot(self.ds,self.tgt) )
 
         plts.append( w.DatasetComparisonHistogramPlot(dsc, nbins=50, frequency=True, 
@@ -412,22 +412,22 @@ class TestWorkspace(ReportBaseCase):
     def test_switchboard(self):
         w = pygsti.report.Workspace()
         ds = self.ds
-        gs = self.gs
-        gs2 = self.gs.depolarize(gate_noise=0.01, spam_noise=0.15)
-        gs3 = self.gs.depolarize(gate_noise=0.011, spam_noise=0.1)
+        mdl = self.mdl
+        gs2 = self.mdl.depolarize(op_noise=0.01, spam_noise=0.15)
+        gs3 = self.mdl.depolarize(op_noise=0.011, spam_noise=0.1)
 
-        switchbd = w.Switchboard(["dataset","gateset"],
+        switchbd = w.Switchboard(["dataset","model"],
                                  [["one","two"],["One","Two"]],
                                  ["dropdown","slider"])
         switchbd.add("ds",(0,))
-        switchbd.add("gs",(1,))
+        switchbd.add("mdl",(1,))
         switchbd["ds"][:] = [ds, ds]
-        switchbd["gs"][:] = [gs, gs2]
+        switchbd["mdl"][:] = [mdl, gs2]
 
         switchbd2 = w.Switchboard(["spamWeight"], [["0.0","0.1","0.2","0.5","0.9","0.95"]], ["slider"])        
         
-        tbl = w.SpamTable(switchbd["gs"])
-        plt = w.ColorBoxPlot(("chi2","logl"), self.gss, switchbd["ds"], switchbd["gs"], boxLabels=False)
+        tbl = w.SpamTable(switchbd["mdl"])
+        plt = w.ColorBoxPlot(("chi2","logl"), self.gss, switchbd["ds"], switchbd["mdl"], boxLabels=False)
 
         switchbd.render("html")
         switchbd2.render("html")
@@ -435,9 +435,9 @@ class TestWorkspace(ReportBaseCase):
         plt.render("html")
 
         switchbd3 = w.Switchboard(["My Switch"],[["On","Off"]],["buttons"])
-        switchbd3.add("gs", [0])
-        switchbd3.gs[:] = [gs2,gs3]
-        tbl2 = w.GatesVsTargetTable(switchbd3.gs, self.tgt)
+        switchbd3.add("mdl", [0])
+        switchbd3.mdl[:] = [gs2,gs3]
+        tbl2 = w.GatesVsTargetTable(switchbd3.mdl, self.tgt)
         
         switchbd3.render("html")
         tbl2.render("html")
@@ -481,7 +481,7 @@ class TestWorkspace(ReportBaseCase):
         switchbd6.typ[:] = ["boxes","numbers"]
         switchbd6.strs[:] = [ [('Gx',)], [('Gy',)] ]
         
-        tbl = w.SpamTable(self.gs, ["mytitle"], switchbd6.typ, None)        
+        tbl = w.SpamTable(self.mdl, ["mytitle"], switchbd6.typ, None)        
         tbl.saveas(temp_files + "/saved_switched_table.html", index=0)
         if bPandas: tbl.saveas(temp_files + "/saved_switched_table.pkl") # OK to not specify index in pkl case
         with self.assertRaises(ValueError):
@@ -579,7 +579,7 @@ class TestWorkspace(ReportBaseCase):
         printer.start_recording()
         printer.log("Hello World (with $\\alpha$ math latex)")
         lineinfo = printer.stop_recording()
-        strs = pygsti.construction.gatestring_list([ (), ('Gx',), ('Gx','Gy')])
+        strs = pygsti.construction.circuit_list([ (), ('Gx',), ('Gx','Gy')])
         
         table = ws.BlankTable()
         plot = ws.BoxKeyPlot(strs, strs)
@@ -659,7 +659,7 @@ class TestWorkspace(ReportBaseCase):
         mx = np.identity(2,'d')
         mxs = [ [mx, mx],
                 [mx, mx] ]
-        gstrs = pygsti.construction.gatestring_list([ (), ('Gx',) ])
+        gstrs = pygsti.construction.circuit_list([ (), ('Gx',) ])
 
         # ---- nested_color_boxplot ----
         pygsti.report.workspaceplots.nested_color_boxplot(mxs, colormap)
@@ -668,7 +668,7 @@ class TestWorkspace(ReportBaseCase):
         pygsti.report.workspaceplots.generate_boxplot(
             mxs, gstrs, gstrs,
             ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
-            'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap) #gatestring labels
+            'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap) #circuit labels
 
         pygsti.report.workspaceplots.generate_boxplot(
             mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
@@ -694,7 +694,7 @@ class TestWorkspace(ReportBaseCase):
             'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
             sumUp=True, invert=True) #ignores invert
 
-        # ----- gatestring_color_boxplot -----
+        # ----- circuit_color_boxplot -----
         germs = preps = effects = gstrs
         gss = pygsti.obj.LsGermsStructure([1,2],germs,preps,effects)
         for L in [1,2]:
@@ -703,50 +703,50 @@ class TestWorkspace(ReportBaseCase):
         gss2 = pygsti.obj.LsGermsStructure([1,2],germs,preps,effects)
         for L in [1,2]:
             for germ in germs:
-                gss2.add_plaquette(germ*L + pygsti.obj.GateString(('Gy',)), L, germ) # makes base strs != germ^some_power
+                gss2.add_plaquette(germ*L + pygsti.obj.Circuit(('Gy',)), L, germ) # makes base strs != germ^some_power
         gss3 = gss.copy()        
         cls = type('DummyClass', pygsti.obj.LsGermsStructure.__bases__, dict(pygsti.obj.LsGermsStructure.__dict__))
         gss3.__class__ = cls  # mimic a non-LsGermsStructure object when we don't actually have any currently (HACK)
         assert(not isinstance(gss3, pygsti.obj.LsGermsStructure))
 
-        pygsti.report.workspaceplots.gatestring_color_boxplot(
+        pygsti.report.workspaceplots.circuit_color_boxplot(
             gss, mxs, colormap, sumUp=True)
-        pygsti.report.workspaceplots.gatestring_color_boxplot(
+        pygsti.report.workspaceplots.circuit_color_boxplot(
             gss, mxs, colormap, sumUp=False)
-        pygsti.report.workspaceplots.gatestring_color_boxplot(
+        pygsti.report.workspaceplots.circuit_color_boxplot(
             gss2, mxs, colormap, sumUp=True)
-        pygsti.report.workspaceplots.gatestring_color_boxplot(
+        pygsti.report.workspaceplots.circuit_color_boxplot(
             gss2, mxs, colormap, sumUp=False)
         
 
-        # ----- gatestring_color_scatterplot -----
-        pygsti.report.workspaceplots.gatestring_color_scatterplot(
+        # ----- circuit_color_scatterplot -----
+        pygsti.report.workspaceplots.circuit_color_scatterplot(
             gss, mxs, colormap, sumUp=True)
-        pygsti.report.workspaceplots.gatestring_color_scatterplot(
+        pygsti.report.workspaceplots.circuit_color_scatterplot(
             gss, mxs, colormap, hoverInfo=False) # no hoverinfo
-        pygsti.report.workspaceplots.gatestring_color_scatterplot(
+        pygsti.report.workspaceplots.circuit_color_scatterplot(
             gss2, mxs, colormap, hoverInfo=True) # gss2 case
-        pygsti.report.workspaceplots.gatestring_color_scatterplot(
+        pygsti.report.workspaceplots.circuit_color_scatterplot(
             gss2, mxs, colormap, hoverInfo=True) # gss2 case
-        pygsti.report.workspaceplots.gatestring_color_scatterplot(
+        pygsti.report.workspaceplots.circuit_color_scatterplot(
             gss, mxs, colormap, sumUp=True, addl_hover_subMxs={'qty': mxs} ) # just reuse mxs
-        pygsti.report.workspaceplots.gatestring_color_scatterplot(
+        pygsti.report.workspaceplots.circuit_color_scatterplot(
             gss, mxs, colormap, sumUp=False, addl_hover_subMxs={'qty': mxs} ) # just reuse mxs
-        pygsti.report.workspaceplots.gatestring_color_scatterplot(
+        pygsti.report.workspaceplots.circuit_color_scatterplot(
             gss3, mxs, colormap, sumUp=True, hoverInfo=True) # gss3 case
-        pygsti.report.workspaceplots.gatestring_color_scatterplot(
+        pygsti.report.workspaceplots.circuit_color_scatterplot(
             gss3, mxs, colormap, sumUp=False, hoverInfo=True) # gss3 case
 
 
-        # ---- gatestring_color_histogram ----
+        # ---- circuit_color_histogram ----
         negmx = -1*np.ones((2,2),'d')
         mxs_allneg = [ [negmx, negmx],
                          [negmx, negmx] ]
-        pygsti.report.workspaceplots.gatestring_color_histogram(
+        pygsti.report.workspaceplots.circuit_color_histogram(
             gss, mxs_allneg, colormap) # when there's no counts to plot
 
-        # ---- gatematrix_color_boxplot ----
-        pygsti.report.workspaceplots.gatematrix_color_boxplot(
+        # ---- opmatrix_color_boxplot ----
+        pygsti.report.workspaceplots.opmatrix_color_boxplot(
             np.identity(4,'d'), -1.0, 1.0, mxBasis="pp", mxBasisY="gm")
           # test weird case when there's different bases on diff axes
 

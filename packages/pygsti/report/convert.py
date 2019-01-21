@@ -56,7 +56,7 @@ def item_type(x):
     if isinstance(x, _ReportableQty):
         return 'reportable'
     if isinstance(x,_np.ndarray) or \
-       isinstance(x,_objs.Gate) or \
+       isinstance(x,_objs.LinearOperator) or \
        isinstance(x,_objs.SPAMVec):
         d = calc_dim(x)
         if d == 0: return 'value' 
@@ -79,7 +79,7 @@ def convert(x, specs, fmt):
 
     #Squeeze arrays before formatting
     if isinstance(x,_np.ndarray) or \
-       isinstance(x,_objs.Gate) or \
+       isinstance(x,_objs.LinearOperator) or \
        isinstance(x,_objs.SPAMVec):
         x = _np.squeeze(x)
     

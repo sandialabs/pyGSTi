@@ -188,7 +188,7 @@ class Polynomial(dict):
 
         This is useful when the variable indices have external significance
         (like being the indices of a gate's parameters) and one want to convert
-        to another set of indices (like a parent gate set's parameters).
+        to another set of indices (like a parent model's parameters).
 
         Parameters
         ----------

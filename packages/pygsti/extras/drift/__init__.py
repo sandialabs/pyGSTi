@@ -1,4 +1,4 @@
-""" Gate Set Tomography Tools Python Package """
+""" LinearOperator Set Tomography Tools Python Package """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -9,8 +9,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #Import the most important/useful routines of each module into
 # the package namespace
 from .core import *
-from .signal import *
-from .io import *
 
 from . import simulate
 from . import estimate
+from . import results
+from . import signal

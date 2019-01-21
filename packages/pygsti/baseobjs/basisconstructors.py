@@ -50,6 +50,20 @@ mxUnitVec_2Q = ( mut(0,0,4), mut(0,1,4), mut(0,2,4), mut(0,3,4),
                  mut(2,0,4), mut(2,1,4), mut(2,2,4), mut(2,3,4),
                  mut(3,0,4), mut(3,1,4), mut(3,2,4), mut(3,3,4)  )
 
+MAX_BASIS_MATRIX_DIM = 2**6
+
+def _check_dim(dim):
+    global MAX_BASIS_MATRIX_DIM
+    if not isinstance(dim, _numbers.Integral):
+        dim = max(dim) # assume dim is a list/tuple of dims & just consider max
+    if dim > MAX_BASIS_MATRIX_DIM:
+        raise ValueError(("You have requested to build a basis with %d x %d matrices."
+                          " This is pretty big and so we're throwing this error because"
+                          " there's a good chance you didn't mean to to this.  If you "
+                          " really want to, increase `pygsti.baseobjs.basisconstructors.MAX_BASIS_MATRIX_DIM`"
+                          " (currently == %d) to something greater than %d and rerun this.")
+                         % (dim,dim,MAX_BASIS_MATRIX_DIM,dim))
+
 @basis_constructor('std', 'Matrix-unit', real=False)
 def std_matrices(dim):
     """
@@ -82,13 +96,14 @@ def std_matrices(dim):
     a single "1" entry amidst a background of zeros, and there
     are never "1"s in positions outside the block-diagonal structure.
     """
-    gateDim = dim ** 2
+    _check_dim(dim)
+    opDim = dim ** 2
 
     mxList = []
     for i in range(dim):
         for j in range(dim):
             mxList.append(mut(i, j, dim))
-    assert len(mxList) == gateDim
+    assert len(mxList) == opDim
     return mxList
 
 def _GetGellMannNonIdentityDiagMxs(dimension):
@@ -134,6 +149,7 @@ def gm_matrices_unnormalized(dim):
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
     """
+    _check_dim(dim)
     if isinstance(dim, _numbers.Integral):
         d = dim
         #Identity Mx
@@ -237,7 +253,7 @@ def pp_matrices(dim, maxWeight=None):
     Matrices are ordered with first qubit being most significant,
     e.g., for 2 qubits: II, IX, IY, IZ, XI, XX, XY, XZ, YI, ... ZZ
     """
-
+    _check_dim(dim)
     sigmaVec = (id2x2/sqrt2, sigmax/sqrt2, sigmay/sqrt2, sigmaz/sqrt2)
 
     def _is_integer(x):

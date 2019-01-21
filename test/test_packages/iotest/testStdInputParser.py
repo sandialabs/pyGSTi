@@ -49,26 +49,27 @@ class TestStdInputParser(BaseTestCase):
         #print "String Tests:"
         for s,expected in string_tests:
             #print "%s ==> " % s, result
-            result = std.parse_gatestring(s, lookup=lkup)
+            result,line_labels = std.parse_circuit(s, lookup=lkup)
             self.assertEqual(result, expected)
+            self.assertEqual(line_labels, None)
 
         with self.assertRaises(ValueError):
-            std.parse_gatestring("FooBar")
+            std.parse_circuit("FooBar")
 
         with self.assertRaises(ValueError):
-            std.parse_gatestring("G1G2^2^2")
+            std.parse_circuit("G1G2^2^2")
 
         with self.assertRaises(ValueError):
-            std.parse_gatestring("(G1")
+            std.parse_circuit("(G1")
 
 
     def test_string_exception(self):
         """Test lookup failure and Syntax error"""
         std = pygsti.io.StdInputParser()
         with self.assertRaises(ValueError):
-            std.parse_gatestring("G1 S[test]")
+            std.parse_circuit("G1 S[test]")
         with self.assertRaises(ValueError):
-            std.parse_gatestring("G1 SS")
+            std.parse_circuit("G1 SS")
 
 
     def test_lines(self):
@@ -81,20 +82,20 @@ class TestStdInputParser(BaseTestCase):
 
         std = pygsti.io.StdInputParser()
 
-        self.assertEqual( std.parse_dataline(dataline_tests[0]), (('G1', 'G2', 'G3'), 'G1G2G3', [0.1, 100.0]))
-        self.assertEqual( std.parse_dataline(dataline_tests[1]), (('G1', 'G2', 'G3'), 'G1 G2 G3', [0.798, 100.0]))
-        self.assertEqual( std.parse_dataline(dataline_tests[2]), (('G1', 'G2', 'G3', 'G2', 'G3', 'G4'), 'G1 (G2 G3)^2 G4', [1.0, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[0]), (('G1', 'G2', 'G3'), 'G1G2G3', None, [0.1, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[1]), (('G1', 'G2', 'G3'), 'G1 G2 G3', None, [0.798, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[2]), (('G1', 'G2', 'G3', 'G2', 'G3', 'G4'), 'G1 (G2 G3)^2 G4', None, [1.0, 100.0]))
         self.assertEqual( std.parse_dataline("G1G2G3 0.1 100 2.0", expectedCounts=2),
-                          (('G1', 'G2', 'G3'), 'G1G2G3', [0.1, 100.0])) #extra col ignored
+                          (('G1', 'G2', 'G3'), 'G1G2G3', None, [0.1, 100.0])) #extra col ignored
 
         with self.assertRaises(ValueError):
             std.parse_dataline("G1G2G3  1.0", expectedCounts=2) #too few cols == error
         with self.assertRaises(ValueError):
-            std.parse_dataline("1.0 2.0") #just data cols (no gatestring col!)
+            std.parse_dataline("1.0 2.0") #just data cols (no circuit col!)
 
 
-        self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3'))
-        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', ('G1', 'G2', 'G1', 'G2', 'G1', 'G2'), '(G1G2)^3'))
+        self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None))
+        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', ('G1', 'G2', 'G1', 'G2', 'G1', 'G2'), '(G1G2)^3', None))
 
         #print "Dataline Tests:"
         #for dl in dataline_tests:
@@ -397,7 +398,7 @@ G2            20  100  5  200
     def test_GateSetFile(self):
 
         gatesetfile_test = \
-"""#My Gateset file
+"""#My Model file
 
 PREP: rho
 LiouvilleVec
@@ -424,10 +425,12 @@ LiouvilleMx
 0 0 0 1
 0 0 1 0
 0 -1 0 0
+
+BASIS: pp 2
 """
 
         gatesetfile_test2 = \
-"""#My Gateset file specified using non-Liouville format
+"""#My Model file specified using non-Liouville format
 
 PREP: rho_up
 StateVec
@@ -469,7 +472,7 @@ GAUGEGROUP: Full
 """
 
         gatesetfile_test3 = \
-"""#My Gateset file with bad StateVec size
+"""#My Model file with bad StateVec size
 
 PREP: rho_up
 StateVec
@@ -478,7 +481,7 @@ StateVec
 """
 
         gatesetfile_test4 = \
-"""#My Gateset file with bad DensityMx size
+"""#My Model file with bad DensityMx size
 
 PREP: rho_dn
 DensityMx
@@ -486,20 +489,22 @@ DensityMx
 0 1 0
 0 0 1
 
+BASIS: pp 2
 """
 
         gatesetfile_test5 = \
-"""#My Gateset file with bad UnitaryMx size
+"""#My Model file with bad UnitaryMx size
 
 #G1 = X(pi/2)
 GATE: G1
 UnitaryMx
  1/sqrt(2)   -1j/sqrt(2)
 
+BASIS: pp 2
 """
 
         gatesetfile_test6 = \
-"""#My Gateset file with bad UnitaryMxExp size
+"""#My Model file with bad UnitaryMxExp size
 
 #G2 = Y(pi/2)
 GATE: G2
@@ -507,20 +512,22 @@ UnitaryMxExp
 0           -1j*pi/4.0 0.0
 1j*pi/4.0  0           0.0
 
+BASIS: pp 2
 """
 
         gatesetfile_test7 = \
-"""#My Gateset file with bad format spec
+"""#My Model file with bad format spec
 
 GATE: G2
 FooBar
 0   1
 1   0
 
+BASIS: pp 2
 """
 
         gatesetfile_test8 = \
-"""#My Gateset file specifying 2-Qubit gates using non-Lioville format
+"""#My Model file specifying 2-Qubit gates using non-Lioville format
 
 PREP: rho_up
 DensityMx
@@ -567,7 +574,7 @@ GAUGEGROUP: Full
 
 
         gatesetfile_test9 = \
-"""#My Gateset file with TP gates and no basis dim specified
+"""#My Model file with TP gates and no basis dim specified
 
 TP-PREP: rho
 LiouvilleVec
@@ -604,7 +611,7 @@ GAUGEGROUP: TP
 """
 
         gatesetfile_test10 = \
-"""#My Gateset file with instrument and POVM at end
+"""#My Model file with instrument and POVM at end
 
 PREP: rho
 LiouvilleVec
@@ -644,7 +651,7 @@ LiouvilleMx
 
 END Instrument
 
-BASIS: pp
+BASIS: pp 2
 GAUGEGROUP: full
 
 POVM: Mdefault
@@ -664,6 +671,7 @@ UnitaryMx
  1 0
  0 1
 
+BASIS: pp 2
 GAUGEGROUP: Foobar
 """
 
@@ -676,21 +684,21 @@ UnitaryMx
  1 0
  0 1
 
-BASIS: pp
+BASIS: pp 2
 GAUGEGROUP: full
 """
 
         gatesetfile_test13 = \
-"""# Cannot infer basis dimension
+"""# No basis dimension
 BASIS: pp
 """
 
 
 
-        f = open(temp_files + "/sip_test.gateset1","w")
+        f = open(temp_files + "/sip_test.model1","w")
         f.write(gatesetfile_test); f.close()
 
-        f = open(temp_files + "/sip_test.gateset2","w")
+        f = open(temp_files + "/sip_test.model2","w")
         f.write(gatesetfile_test2); f.close()
 
         f = open(temp_files + "/sip_test.gateset3","w")
@@ -726,46 +734,46 @@ BASIS: pp
         f = open(temp_files + "/sip_test.gateset13","w")
         f.write(gatesetfile_test13); f.close()
 
-        gs1 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset1")
-        gs2 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset2")
+        gs1 = pygsti.io.read_model(temp_files + "/sip_test.model1")
+        gs2 = pygsti.io.read_model(temp_files + "/sip_test.model2")
 
         with self.assertRaises(ValueError):
-            pygsti.io.read_gateset(temp_files + "/sip_test.gateset3")
+            pygsti.io.read_model(temp_files + "/sip_test.gateset3")
         with self.assertRaises(ValueError):
-            pygsti.io.read_gateset(temp_files + "/sip_test.gateset4")
+            pygsti.io.read_model(temp_files + "/sip_test.gateset4")
         with self.assertRaises(ValueError):
-            pygsti.io.read_gateset(temp_files + "/sip_test.gateset5")
+            pygsti.io.read_model(temp_files + "/sip_test.gateset5")
         with self.assertRaises(ValueError):
-            pygsti.io.read_gateset(temp_files + "/sip_test.gateset6")
+            pygsti.io.read_model(temp_files + "/sip_test.gateset6")
         with self.assertRaises(ValueError):
-            pygsti.io.read_gateset(temp_files + "/sip_test.gateset7")
+            pygsti.io.read_model(temp_files + "/sip_test.gateset7")
 
-        gs8 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset8")
-        gs9 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset9")
-        gs10 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset10")
+        gs8 = pygsti.io.read_model(temp_files + "/sip_test.gateset8")
+        #gs9 = pygsti.io.read_model(temp_files + "/sip_test.gateset9") # to test inferred basis dim, which isn't supported anymore (12/20/18)
+        gs10 = pygsti.io.read_model(temp_files + "/sip_test.gateset10")
 
-        self.assertWarns(pygsti.io.read_gateset, temp_files + "/sip_test.gateset11") #invalid gauge group = warning
+        self.assertWarns(pygsti.io.read_model, temp_files + "/sip_test.gateset11") #invalid gauge group = warning
         with self.assertRaises(ValueError):
-            pygsti.io.read_gateset(temp_files + "/sip_test.gateset12") # invalid item type
+            pygsti.io.read_model(temp_files + "/sip_test.gateset12") # invalid item type
         with self.assertRaises(ValueError):
-            pygsti.io.read_gateset(temp_files + "/sip_test.gateset13") # cannot infer basis dim
+            pygsti.io.read_model(temp_files + "/sip_test.gateset13") # cannot infer basis dim
 
 
-        #print " ==> gateset1:\n", gs1
-        #print " ==> gateset2:\n", gs2
+        #print " ==> model1:\n", gs1
+        #print " ==> model2:\n", gs2
 
-        rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)")
-        rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)")
+        rotXPi   = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi,Q0)")
+        rotXPiOv2   = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2   = pygsti.construction.build_operation( [2],[('Q0',)], "Y(pi/2,Q0)")
 
-        self.assertArraysAlmostEqual(gs1.gates['G1'],rotXPiOv2)
-        self.assertArraysAlmostEqual(gs1.gates['G2'],rotYPiOv2)
+        self.assertArraysAlmostEqual(gs1.operations['G1'],rotXPiOv2)
+        self.assertArraysAlmostEqual(gs1.operations['G2'],rotYPiOv2)
         self.assertArraysAlmostEqual(gs1.preps['rho'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
         self.assertArraysAlmostEqual(gs1.povms['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,-1]).reshape(-1,1) )
 
-        self.assertArraysAlmostEqual(gs2.gates['G1'],rotXPiOv2)
-        self.assertArraysAlmostEqual(gs2.gates['G2'],rotYPiOv2)
-        self.assertArraysAlmostEqual(gs2.gates['G3'],rotXPi)
+        self.assertArraysAlmostEqual(gs2.operations['G1'],rotXPiOv2)
+        self.assertArraysAlmostEqual(gs2.operations['G2'],rotYPiOv2)
+        self.assertArraysAlmostEqual(gs2.operations['G3'],rotXPi)
         self.assertArraysAlmostEqual(gs2.preps['rho_up'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
         self.assertArraysAlmostEqual(gs2.povms['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
 

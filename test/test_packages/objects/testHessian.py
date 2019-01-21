@@ -3,8 +3,8 @@ import warnings
 import pygsti
 from pygsti.construction import std1Q_XYI as stdxyi
 from pygsti.construction import std1Q_XY as stdxy
-from pygsti.objects import gatesetfunction as gsf
-from pygsti.objects.gatemapcalc import GateMapCalc
+from pygsti.objects import modelfunction as gsf
+from pygsti.objects.mapforwardsim import MapForwardSimulator
 from pygsti.objects import Label as L
 
 import numpy as np
@@ -19,27 +19,27 @@ class TestHessianMethods(BaseTestCase):
     def setUp(self):
         super(TestHessianMethods, self).setUp()
 
-        self.gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
+        self.model = pygsti.io.load_model(compare_files + "/analysis.model")
         self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
 
 
         fiducials = stdxyi.fiducials
         germs = stdxyi.germs
-        gateLabels = list(self.gateset.gates.keys()) # also == std.gates
+        opLabels = list(self.model.operations.keys()) # also == std.gates
         self.maxLengthList = [1,2]
-        self.gss = pygsti.construction.make_lsgst_structs(gateLabels, fiducials, fiducials, germs, self.maxLengthList)
+        self.gss = pygsti.construction.make_lsgst_structs(opLabels, fiducials, fiducials, germs, self.maxLengthList)
 
 
     def test_parameter_counting(self):
-        #XY Gateset: SPAM=True
-        n = stdxy.gs_target.num_params()
+        #XY Model: SPAM=True
+        n = stdxy.target_model().num_params()
         self.assertEqual(n,44) # 2*16 + 3*4 = 44
 
-        n = stdxy.gs_target.num_nongauge_params()
+        n = stdxy.target_model().num_nongauge_params()
         self.assertEqual(n,28) # full 16 gauge params
 
-        #XY Gateset: SPAM=False
-        tst = stdxy.gs_target.copy()
+        #XY Model: SPAM=False
+        tst = stdxy.target_model()
         del tst.preps['rho0']
         del tst.povms['Mdefault']
         n = tst.num_params()
@@ -49,15 +49,15 @@ class TestHessianMethods(BaseTestCase):
         self.assertEqual(n,18) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
 
-        #XYI Gateset: SPAM=True
-        n = stdxyi.gs_target.num_params()
+        #XYI Model: SPAM=True
+        n = stdxyi.target_model().num_params()
         self.assertEqual(n,60) # 3*16 + 3*4 = 60
 
-        n = stdxyi.gs_target.num_nongauge_params()
+        n = stdxyi.target_model().num_nongauge_params()
         self.assertEqual(n,44) # full 16 gauge params: SPAM gate + 3 others
 
-        #XYI Gateset: SPAM=False
-        tst = stdxyi.gs_target.copy()
+        #XYI Model: SPAM=False
+        tst = stdxyi.target_model()
         del tst.preps['rho0']
         del tst.povms['Mdefault']
         n = tst.num_params()
@@ -66,19 +66,19 @@ class TestHessianMethods(BaseTestCase):
         n = tst.num_nongauge_params()
         self.assertEqual(n,34) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
-        #XYI Gateset: SP0=False
-        tst = stdxyi.gs_target.copy()
-        tst.preps['rho0'] = pygsti.obj.TPParameterizedSPAMVec(tst.preps['rho0'])
+        #XYI Model: SP0=False
+        tst = stdxyi.target_model()
+        tst.preps['rho0'] = pygsti.obj.TPSPAMVec(tst.preps['rho0'])
         n = tst.num_params()
         self.assertEqual(n,59) # 3*16 + 2*4 + 3 = 59
 
         n = tst.num_nongauge_params()
         self.assertEqual(n,44) # 15 gauge params (minus one b/c can't change rho?)
 
-        #XYI Gateset: G0=SP0=False
-        tst.gates['Gi'] = pygsti.obj.TPParameterizedGate(tst.gates['Gi'])
-        tst.gates['Gx'] = pygsti.obj.TPParameterizedGate(tst.gates['Gx'])
-        tst.gates['Gy'] = pygsti.obj.TPParameterizedGate(tst.gates['Gy'])
+        #XYI Model: G0=SP0=False
+        tst.operations['Gi'] = pygsti.obj.TPDenseOp(tst.operations['Gi'])
+        tst.operations['Gx'] = pygsti.obj.TPDenseOp(tst.operations['Gx'])
+        tst.operations['Gy'] = pygsti.obj.TPDenseOp(tst.operations['Gy'])
         n = tst.num_params()
         self.assertEqual(n,47) # 3*12 + 2*4 + 3 = 47
 
@@ -88,15 +88,15 @@ class TestHessianMethods(BaseTestCase):
 
     def test_hessian_projection(self):
 
-        chi2, chi2Grad, chi2Hessian = pygsti.chi2(self.gateset, self.ds,
+        chi2, chi2Grad, chi2Hessian = pygsti.chi2(self.model, self.ds,
                                                   returnGradient=True,
                                                   returnHessian=True)
 
-        proj_non_gauge = self.gateset.get_nongauge_projector()
+        proj_non_gauge = self.model.get_nongauge_projector()
         projectedHessian = np.dot(proj_non_gauge,
                                   np.dot(chi2Hessian, proj_non_gauge))
 
-        print(self.gateset.num_params())
+        print(self.model.num_params())
         print(proj_non_gauge.shape)
         self.assertEqual( projectedHessian.shape, (60,60) )
         #print("Evals = ")
@@ -110,38 +110,38 @@ class TestHessianMethods(BaseTestCase):
 
         
         eigvals_chk =  np.array(
-            [6.11142452e-11, 5.84760068e-10, 6.73066231e-10, 6.89070172e-10,
-             6.89070172e-10, 1.16844369e-09, 1.99649746e-09, 1.99649746e-09,
-             2.41697718e-09, 2.41697718e-09, 2.80832759e-09, 4.29148412e-09,
-             4.29148412e-09, 6.59655396e-09, 6.59655396e-09, 6.76915973e-09,
-             9.23087831e+05, 1.05783101e+06, 1.16457705e+06, 1.39492929e+06,
-             1.84015484e+06, 2.10613947e+06, 2.37963392e+06, 2.47192689e+06,
-             2.64566761e+06, 2.68722871e+06, 2.82383377e+06, 2.86584033e+06,
-             2.94590436e+06, 2.96180212e+06, 3.08322015e+06, 3.29389050e+06,
-             3.66581786e+06, 3.76266448e+06, 3.81921738e+06, 3.86624688e+06,
-             3.89045873e+06, 4.72831630e+06, 4.96416855e+06, 6.53286834e+06,
-             1.01424911e+07, 1.11347312e+07, 1.26152967e+07, 1.30081040e+07,
-             1.36647082e+07, 1.49293583e+07, 1.58234599e+07, 1.80999182e+07,
-             2.09155048e+07, 2.17444267e+07, 2.46870311e+07, 2.64427393e+07,
-             2.72410297e+07, 3.34988002e+07, 3.45005948e+07, 3.69040745e+07,
-             5.08647137e+07, 9.43153151e+07, 1.36088308e+08, 6.30304807e+08] )
+            [2.91362002e-10, 2.91362002e-10, 4.88299728e-10, 7.45013244e-10,
+             1.02144573e-09, 1.02144573e-09, 1.28997433e-09, 1.66286972e-09,
+             1.66286972e-09, 1.72852379e-09, 2.62604438e-09, 2.62604438e-09,
+             4.02034447e-09, 4.05303610e-09, 1.48051489e-08, 1.48051489e-08,
+             9.23071792e+05, 1.05744555e+06, 1.16500749e+06, 1.39440723e+06,
+             1.84037685e+06, 2.10509507e+06, 2.37958815e+06, 2.47135044e+06,
+             2.64482618e+06, 2.68484021e+06, 2.82382098e+06, 2.86649959e+06,
+             2.94648858e+06, 2.96159823e+06, 3.08517441e+06, 3.29406618e+06,
+             3.66597478e+06, 3.76257933e+06, 3.81782393e+06, 3.86526910e+06,
+             3.89064722e+06, 4.72692786e+06, 4.96444423e+06, 6.53199919e+06,
+             1.01462440e+07, 1.11336618e+07, 1.26116827e+07, 1.30058231e+07,
+             1.36653835e+07, 1.49307639e+07, 1.58262439e+07, 1.81036557e+07,
+             2.09040518e+07, 2.17500095e+07, 2.46841011e+07, 2.64464653e+07,
+             2.72340391e+07, 3.34842940e+07, 3.44985297e+07, 3.69014809e+07,
+             5.08345002e+07, 9.43132959e+07, 1.36086545e+08, 6.30304950e+08] )
 
             #OLD
-            #[  1.06310603e-10,   2.65635664e-10,   6.50301005e-10,   7.97927477e-10,
-            #   7.97927477e-10,   1.00960481e-09,   1.20668922e-09,   1.60395671e-09,
-            #   1.60395671e-09,   2.10414039e-09,   2.40422523e-09,   2.66328705e-09,
-            #   2.66328705e-09,   3.78157418e-09,   4.97929640e-09,   1.69073771e-08,
-            #   9.22542920e+05,   1.05940963e+06,   1.16240250e+06,   1.39506940e+06,
-            #   1.83925308e+06,   2.11037916e+06,   2.39385711e+06,   2.47432236e+06,
-            #   2.63561759e+06,   2.68157105e+06,   2.81568070e+06,   2.86569765e+06,
-            #   2.94543146e+06,   2.95039566e+06,   3.08684833e+06,   3.28869042e+06,
-            #   3.66558726e+06,   3.76232707e+06,   3.82389736e+06,   3.86638791e+06,
-            #   3.88874028e+06,   4.73808468e+06,   4.96550964e+06,   6.53177028e+06,
-            #   1.01544928e+07,   1.11525472e+07,   1.25572253e+07,   1.30411488e+07,
-            #   1.36881398e+07,   1.49309288e+07,   1.57790471e+07,   1.81263731e+07,
-            #   2.08276405e+07,   2.18675949e+07,   2.46968548e+07,   2.64099665e+07,
-            #   2.72117335e+07,   3.35172152e+07,   3.45138716e+07,   3.68918207e+07,
-            #   5.09742531e+07,   9.43260992e+07,   1.36044734e+08,   6.30355637e+08])            
+            #[6.11142452e-11, 5.84760068e-10, 6.73066231e-10, 6.89070172e-10,
+            # 6.89070172e-10, 1.16844369e-09, 1.99649746e-09, 1.99649746e-09,
+            # 2.41697718e-09, 2.41697718e-09, 2.80832759e-09, 4.29148412e-09,
+            # 4.29148412e-09, 6.59655396e-09, 6.59655396e-09, 6.76915973e-09,
+            # 9.23087831e+05, 1.05783101e+06, 1.16457705e+06, 1.39492929e+06,
+            # 1.84015484e+06, 2.10613947e+06, 2.37963392e+06, 2.47192689e+06,
+            # 2.64566761e+06, 2.68722871e+06, 2.82383377e+06, 2.86584033e+06,
+            # 2.94590436e+06, 2.96180212e+06, 3.08322015e+06, 3.29389050e+06,
+            # 3.66581786e+06, 3.76266448e+06, 3.81921738e+06, 3.86624688e+06,
+            # 3.89045873e+06, 4.72831630e+06, 4.96416855e+06, 6.53286834e+06,
+            # 1.01424911e+07, 1.11347312e+07, 1.26152967e+07, 1.30081040e+07,
+            # 1.36647082e+07, 1.49293583e+07, 1.58234599e+07, 1.80999182e+07,
+            # 2.09155048e+07, 2.17444267e+07, 2.46870311e+07, 2.64427393e+07,
+            # 2.72410297e+07, 3.34988002e+07, 3.45005948e+07, 3.69040745e+07,
+            # 5.08647137e+07, 9.43153151e+07, 1.36088308e+08, 6.30304807e+08] )
 
         TOL = 1e-7
         for val,chk in zip(eigvals,eigvals_chk):
@@ -154,11 +154,11 @@ class TestHessianMethods(BaseTestCase):
 
         res = pygsti.obj.Results()
         res.init_dataset(self.ds)
-        res.init_gatestrings(self.gss)
+        res.init_circuits(self.gss)
 
         #Add estimate for hessian-based CI --------------------------------------------------
-        res.add_estimate(stdxyi.gs_target.copy(), stdxyi.gs_target.copy(),
-                         [self.gateset]*len(self.maxLengthList), parameters={'objective': 'logl'},
+        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
+                         [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
                          estimate_key="default")
         
         est = res.estimates['default']
@@ -173,7 +173,7 @@ class TestHessianMethods(BaseTestCase):
         self.assertTrue( cfctry.has_hessian() )
         self.assertFalse( cfctry.can_construct_views() ) # b/c hessian isn't projected yet...
 
-        gs_dummy = cfctry.get_gateset() # test method
+        mdl_dummy = cfctry.get_model() # test method
         s = pickle.dumps(cfctry) # test pickle
         pickle.loads(s)
 
@@ -198,8 +198,8 @@ class TestHessianMethods(BaseTestCase):
 
         
         #Add estimate for linresponse-based CI --------------------------------------------------
-        res.add_estimate(stdxyi.gs_target.copy(), stdxyi.gs_target.copy(),
-                         [self.gateset]*len(self.maxLengthList), parameters={'objective': 'logl'},
+        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
+                         [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
                          estimate_key="linresponse")
 
         estLR = res.estimates['linresponse']
@@ -217,14 +217,14 @@ class TestHessianMethods(BaseTestCase):
         #self.assertTrue( cfctryLR.can_construct_views() )         
         ci_linresponse = cfctryLR.view( 95.0, 'normal', None)
         
-        gs_dummy = cfctryLR.get_gateset() # test method
+        mdl_dummy = cfctryLR.get_model() # test method
         s = pickle.dumps(cfctryLR) # test pickle
         pickle.loads(s)
 
 
         #Add estimate for with bad objective ---------------------------------------------------------
-        res.add_estimate(stdxyi.gs_target.copy(), stdxyi.gs_target.copy(),
-                         [self.gateset]*len(self.maxLengthList), parameters={'objective': 'foobar'},
+        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
+                         [self.model]*len(self.maxLengthList), parameters={'objective': 'foobar'},
                          estimate_key="foo")
         est = res.estimates['foo']
         est.add_confidence_region_factory('final iteration estimate', 'final')
@@ -269,10 +269,10 @@ class TestHessianMethods(BaseTestCase):
             if ci_cur is not ci_linresponse: # complex functions not supported by linresponse CIs
                 fns += (fnOfGate_complex, fnOfGate_2D_complex)
 
-            for fnOfGate in fns:
-                FnClass = gsf.gatefn_factory(fnOfGate)
-                FnObj = FnClass(self.gateset, 'Gx')
-                if fnOfGate is fnOfGate_3D:
+            for fnOfOp in fns:
+                FnClass = gsf.opfn_factory(fnOfOp)
+                FnObj = FnClass(self.model, 'Gx')
+                if fnOfOp is fnOfGate_3D:
                     with self.assertRaises(ValueError):
                         df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
                 else:
@@ -296,7 +296,7 @@ class TestHessianMethods(BaseTestCase):
     
             for fnOfVec in (fnOfVec_float, fnOfVec_0D, fnOfVec_1D, fnOfVec_2D, fnOfVec_3D):
                 FnClass = gsf.vecfn_factory(fnOfVec)
-                FnObj = FnClass(self.gateset, 'rho0', 'prep')
+                FnObj = FnClass(self.model, 'rho0', 'prep')
                 if fnOfVec is fnOfVec_3D:
                     with self.assertRaises(ValueError):
                         df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
@@ -307,7 +307,7 @@ class TestHessianMethods(BaseTestCase):
 
             for fnOfVec in (fnOfVec_float, fnOfVec_0D, fnOfVec_1D, fnOfVec_2D, fnOfVec_3D):
                 FnClass = gsf.vecfn_factory(fnOfVec)
-                FnObj = FnClass(self.gateset, 'Mdefault:0', 'effect')
+                FnObj = FnClass(self.model, 'Mdefault:0', 'effect')
                 if fnOfVec is fnOfVec_3D:
                     with self.assertRaises(ValueError):
                         df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
@@ -334,7 +334,7 @@ class TestHessianMethods(BaseTestCase):
 
             for fnOfSpam in (fnOfSpam_float, fnOfSpam_0D, fnOfSpam_1D, fnOfSpam_2D, fnOfSpam_3D):
                 FnClass = gsf.spamfn_factory(fnOfSpam)
-                FnObj = FnClass(self.gateset)
+                FnObj = FnClass(self.model)
                 if fnOfSpam is fnOfSpam_3D:
                     with self.assertRaises(ValueError):
                         df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
@@ -344,20 +344,20 @@ class TestHessianMethods(BaseTestCase):
                                             FnObj, returnFnVal=True, verbosity=4)
 
     
-            def fnOfGateSet_float(gs):
-                return float( gs.gates['Gx'][0,0] )
-            def fnOfGateSet_0D(gs):
-                return np.array( gs.gates['Gx'][0,0]  )
-            def fnOfGateSet_1D(gs):
-                return np.array( gs.gates['Gx'][0,:] )
-            def fnOfGateSet_2D(gs):
-                return np.array( gs.gates['Gx'] )
-            def fnOfGateSet_3D(gs):
+            def fnOfGateSet_float(mdl):
+                return float( mdl.operations['Gx'][0,0] )
+            def fnOfGateSet_0D(mdl):
+                return np.array( mdl.operations['Gx'][0,0]  )
+            def fnOfGateSet_1D(mdl):
+                return np.array( mdl.operations['Gx'][0,:] )
+            def fnOfGateSet_2D(mdl):
+                return np.array( mdl.operations['Gx'] )
+            def fnOfGateSet_3D(mdl):
                 return np.zeros( (2,2,2), 'd') #just to test for error
 
             for fnOfGateSet in (fnOfGateSet_float, fnOfGateSet_0D, fnOfGateSet_1D, fnOfGateSet_2D, fnOfGateSet_3D):
-                FnClass = gsf.gatesetfn_factory(fnOfGateSet)
-                FnObj = FnClass(self.gateset)
+                FnClass = gsf.modelfn_factory(fnOfGateSet)
+                FnObj = FnClass(self.model)
                 if fnOfGateSet is fnOfGateSet_3D:
                     with self.assertRaises(ValueError):
                         df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
@@ -371,9 +371,9 @@ class TestHessianMethods(BaseTestCase):
     def tets_pickle_ConfidenceRegion(self):
         res = pygsti.obj.Results()
         res.init_dataset(self.ds)
-        res.init_gatestrings(self.gss)
-        res.add_estimate(stdxyi.gs_target.copy(), stdxyi.gs_target.copy(),
-                         [self.gateset]*len(self.maxLengthList), parameters={'objective': 'logl'},
+        res.init_circuits(self.gss)
+        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
+                         [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
                          estimate_key="default")
         
         res.add_confidence_region_factory('final iteration estimate', 'final')
@@ -396,12 +396,12 @@ class TestHessianMethods(BaseTestCase):
 
 
     def test_mapcalc_hessian(self):
-        chi2, chi2Hessian = pygsti.chi2(self.gateset, self.ds, 
+        chi2, chi2Hessian = pygsti.chi2(self.model, self.ds, 
                                         returnHessian=True)
         
-        gs_mapcalc = self.gateset.copy()
-        gs_mapcalc._calcClass = GateMapCalc
-        chi2, chi2Hessian_mapcalc = pygsti.chi2(self.gateset, self.ds, 
+        mdl_mapcalc = self.model.copy()
+        mdl_mapcalc._calcClass = MapForwardSimulator
+        chi2, chi2Hessian_mapcalc = pygsti.chi2(self.model, self.ds, 
                                         returnHessian=True)
 
         self.assertArraysAlmostEqual(chi2Hessian, chi2Hessian_mapcalc)

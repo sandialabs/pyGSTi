@@ -13,8 +13,8 @@ import copy        as _copy
 
 from .. import tools as _tools
 from ..tools import compattools as _compat
-from .gatestringstructure import LsGermsStructure as _LsGermsStructure
-from .gatestringstructure import LsGermsSerialStructure as _LsGermsSerialStructure
+from .circuitstructure import LsGermsStructure as _LsGermsStructure
+from .circuitstructure import LsGermsSerialStructure as _LsGermsSerialStructure
 from .estimate import Estimate as _Estimate
 from .gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from .gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
@@ -28,9 +28,9 @@ class Results(object):
     Encapsulates a set of related GST estimates.
 
     A Results object is a container which associates a single `DataSet` and a
-    structured set of gate sequences (usually the experiments contained in the
+    structured set of operation sequences (usually the experiments contained in the
     data set) with a set of estimates.  Each estimate (`Estimate` object) contains
-    gate sets as well as parameters used to generate those inputs.  Associated
+    models as well as parameters used to generate those inputs.  Associated
     `ConfidenceRegion` objects, because they are associated with a set of gate
     sequences, are held in the `Results` object but are associated with estimates.
 
@@ -46,8 +46,8 @@ class Results(object):
 
         #Dictionaries of inputs & outputs
         self.dataset = None
-        self.gatestring_lists = _collections.OrderedDict()
-        self.gatestring_structs = _collections.OrderedDict()
+        self.circuit_lists = _collections.OrderedDict()
+        self.circuit_structs = _collections.OrderedDict()
         self.estimates = _collections.OrderedDict()
 
 
@@ -71,9 +71,9 @@ class Results(object):
         self.dataset = dataset
 
 
-    def init_gatestrings(self, structsByIter):
+    def init_circuits(self, structsByIter):
         """
-        Initialize the common set gate sequences used to form the
+        Initialize the common set operation sequences used to form the
         estimates of this Results object.
 
         There is one such set per GST iteration (if a non-iterative
@@ -82,60 +82,60 @@ class Results(object):
         Parameters
         ----------
         structsByIter : list
-            The gate strings used at each iteration. Ideally, elements are
+            The operation sequences used at each iteration. Ideally, elements are
             `LsGermsStruct` objects, which contain the structure needed to
             create color box plots in reports.  Elements may also be
-            unstructured lists of gate sequences (but this may limit
+            unstructured lists of operation sequences (but this may limit
             the amount of data visualization one can perform later).
 
         Returns
         -------
         None
         """
-        if len(self.gatestring_structs) > 0:
-            _warnings.warn(("Re-initializing the gate sequences of a Results"
+        if len(self.circuit_structs) > 0:
+            _warnings.warn(("Re-initializing the operation sequences of a Results"
                             " object!  Usually you don't want to do this."))
 
-        #Set gatestring structures
-        self.gatestring_structs['iteration'] = []
+        #Set circuit structures
+        self.circuit_structs['iteration'] = []
         for gss in structsByIter:
             if isinstance(gss, (_LsGermsStructure,_LsGermsSerialStructure)):
-                self.gatestring_structs['iteration'].append(gss)
+                self.circuit_structs['iteration'].append(gss)
             elif isinstance(gss, list):
                 unindexed_gss = _LsGermsStructure([],[],[],[],None)
                 unindexed_gss.add_unindexed(gss)
-                self.gatestring_structs['iteration'].append(unindexed_gss)
+                self.circuit_structs['iteration'].append(unindexed_gss)
             else:
-                raise ValueError("Unknown type of gate string specifier: %s"
+                raise ValueError("Unknown type of operation sequence specifier: %s"
                                  % str(type(gss)))
 
-        self.gatestring_structs['final'] = \
-                self.gatestring_structs['iteration'][-1]
+        self.circuit_structs['final'] = \
+                self.circuit_structs['iteration'][-1]
 
-        #Extract raw gatestring lists from structs
-        self.gatestring_lists['iteration'] = \
-                [ gss.allstrs for gss in self.gatestring_structs['iteration'] ]
-        self.gatestring_lists['final'] = self.gatestring_lists['iteration'][-1]
-        self.gatestring_lists['all'] = _tools.remove_duplicates(
-            list(_itertools.chain(*self.gatestring_lists['iteration'])) )
+        #Extract raw circuit lists from structs
+        self.circuit_lists['iteration'] = \
+                [ gss.allstrs for gss in self.circuit_structs['iteration'] ]
+        self.circuit_lists['final'] = self.circuit_lists['iteration'][-1]
+        self.circuit_lists['all'] = _tools.remove_duplicates(
+            list(_itertools.chain(*self.circuit_lists['iteration'])) )
 
         running_set = set(); delta_lsts = []
-        for lst in self.gatestring_lists['iteration']:
+        for lst in self.circuit_lists['iteration']:
             delta_lst = [ x for x in lst if (x not in running_set) ]
             delta_lsts.append(delta_lst); running_set.update(delta_lst)
-        self.gatestring_lists['iteration delta'] = delta_lsts # *added* at each iteration
+        self.circuit_lists['iteration delta'] = delta_lsts # *added* at each iteration
 
         #Set "Ls and germs" info: gives particular structure
-        # to the gateStringLists used to obtain estimates
-        finalStruct = self.gatestring_structs['final']
+        # to the circuitLists used to obtain estimates
+        finalStruct = self.circuit_structs['final']
         if isinstance(finalStruct, _LsGermsStructure): # FUTURE: do something sensible w/ LsGermsSerialStructure?
-            self.gatestring_lists['prep fiducials'] = finalStruct.prepStrs
-            self.gatestring_lists['effect fiducials'] = finalStruct.effectStrs
-            self.gatestring_lists['germs'] = finalStruct.germs
+            self.circuit_lists['prep fiducials'] = finalStruct.prepStrs
+            self.circuit_lists['effect fiducials'] = finalStruct.effectStrs
+            self.circuit_lists['germs'] = finalStruct.germs
         else:
-            self.gatestring_lists['prep fiducials'] = []
-            self.gatestring_lists['effect fiducials'] = []
-            self.gatestring_lists['germs'] = []
+            self.circuit_lists['prep fiducials'] = []
+            self.circuit_lists['effect fiducials'] = []
+            self.circuit_lists['germs'] = []
 
 
     def add_estimates(self, results, estimatesToAdd=None):
@@ -161,12 +161,12 @@ class Results(object):
             raise ValueError(("The data set must be initialized"
                               "*before* adding estimates"))
 
-        if 'iteration' not in self.gatestring_structs:
-            raise ValueError(("Gate sequences must be initialized"
+        if 'iteration' not in self.circuit_structs:
+            raise ValueError(("Circuits must be initialized"
                               "*before* adding estimates"))
 
         assert(results.dataset is self.dataset), "DataSet inconsistency: cannot import estimates!"
-        assert(len(self.gatestring_structs['iteration']) == len(results.gatestring_structs['iteration'])), \
+        assert(len(self.circuit_structs['iteration']) == len(results.circuit_structs['iteration'])), \
             "Iteration count inconsistency: cannot import estimates!"
 
         for estimate_key in results.estimates:
@@ -233,24 +233,24 @@ class Results(object):
             dict.__setitem__(self.estimates, new_name, value)
 
 
-    def add_estimate(self, targetGateset, seedGateset, gatesetsByIter,
+    def add_estimate(self, targetModel, seedModel, modeslByIter,
                      parameters, estimate_key='default'):
         """
-        Add a set of `GateSet` estimates to this `Results` object.
+        Add a set of `Model` estimates to this `Results` object.
 
         Parameters
         ----------
-        targetGateset : GateSet
-            The target gateset used when optimizing the objective.
+        targetModel : Model
+            The target model used when optimizing the objective.
 
-        seedGateset : GateSet
-            The initial gateset used to seed the iterative part
+        seedModel : Model
+            The initial model used to seed the iterative part
             of the objective optimization.  Typically this is
             obtained via LGST.
 
-        gatesetsByIter : list of GateSets
-            The estimated gateset at each GST iteration. Typically these are the
-            estimated gate sets *before* any gauge optimization is performed.
+        modeslByIter : list of Models
+            The estimated model at each GST iteration. Typically these are the
+            estimated models *before* any gauge optimization is performed.
 
         parameters : dict
             A dictionary of parameters associated with how this estimate
@@ -267,12 +267,12 @@ class Results(object):
             raise ValueError(("The data set must be initialized"
                               "*before* adding estimates"))
 
-        if 'iteration' not in self.gatestring_structs:
-            raise ValueError(("Gate sequences must be initialized"
+        if 'iteration' not in self.circuit_structs:
+            raise ValueError(("Circuits must be initialized"
                               "*before* adding estimates"))
 
 
-        la,lb = len(self.gatestring_structs['iteration']), len(gatesetsByIter)
+        la,lb = len(self.circuit_structs['iteration']), len(modeslByIter)
         assert(la==lb), "Number of iterations (%d) must equal %d!" % (lb,la)
 
         if estimate_key in self.estimates:
@@ -280,26 +280,26 @@ class Results(object):
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
 
-        self.estimates[estimate_key] = _Estimate(self, targetGateset, seedGateset,
-                                                gatesetsByIter, parameters)
+        self.estimates[estimate_key] = _Estimate(self, targetModel, seedModel,
+                                                modeslByIter, parameters)
 
         #Set gate sequence related parameters inherited from Results
         self.estimates[estimate_key].parameters['max length list'] = \
-                                        self.gatestring_structs['final'].Ls
+                                        self.circuit_structs['final'].Ls
 
-    def add_model_test(self, targetGateset, modelGateset,
+    def add_model_test(self, targetModel, themodel,
                        estimate_key='test', gauge_opt_keys="auto"):
         """
         Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
 
         Parameters
         ----------
-        targetGateset : GateSet
-            The target gateset used for comparison to the model.
+        targetModel : Model
+            The target model used for comparison to the model.
 
-        modelGateset : GateSet
-            The "model" gateset whose fit to the data and distance from
-            `targetGateset` are assessed.
+        themodel : Model
+            The "model" model whose fit to the data and distance from
+            `targetModel` are assessed.
 
         estimate_key : str, optional
             The key or label used to identify this estimate.
@@ -307,7 +307,7 @@ class Results(object):
         gauge_opt_keys : list, optional
             A list of gauge-optimization keys to add to the estimate.  All
             of these keys will correspond to trivial gauge optimizations,
-            as the model gate set is assumed to be fixed and to have no
+            as the model model is assumed to be fixed and to have no
             gauge degrees of freedom.  The special value "auto" creates
             gauge-optimized estimates for all the gauge optimization labels
             currently in this `Results` object.
@@ -316,11 +316,11 @@ class Results(object):
         -------
         None
         """
-        nIter = len(self.gatestring_structs['iteration'])
+        nIter = len(self.circuit_structs['iteration'])
 
         # base parameter values off of existing estimate parameters
         defaults = {'objective': 'logl', 'minProbClip': 1e-4, 'radius': 1e-4,
-                    'minProbClipForWeighting': 1e-4, 'gateLabelAliases': None,
+                    'minProbClipForWeighting': 1e-4, 'opLabelAliases': None,
                     'truncScheme': "whole germ powers"}
         for est in self.estimates.values():
             for ky in defaults:
@@ -337,17 +337,17 @@ class Results(object):
         else:
             raise ValueError("Invalid objective: %s" % parameters['objective'])
         parameters['profiler'] = None
-        parameters['gateLabelAliases'] = defaults['gateLabelAliases']
+        parameters['opLabelAliases'] = defaults['opLabelAliases']
         parameters['weights'] = None                     #Hardcoded
 
 
         #Set default gate group to trival group to mimic do_model_test (an to
-        # be consistent with this function creating "gauge-optimized" gate sets
+        # be consistent with this function creating "gauge-optimized" models
         # by just copying the initial one).
-        modelGateset = modelGateset.copy()
-        modelGateset.default_gauge_group = _TrivialGaugeGroup(modelGateset.dim)
+        themodel = themodel.copy()
+        themodel.default_gauge_group = _TrivialGaugeGroup(themodel.dim)
 
-        self.add_estimate(targetGateset, modelGateset, [modelGateset]*nIter,
+        self.add_estimate(targetModel, themodel, [themodel]*nIter,
                           parameters, estimate_key=estimate_key)
 
         #add gauge optimizations (always trivial)
@@ -360,11 +360,11 @@ class Results(object):
 
         est = self.estimates[estimate_key]
         for gokey in gauge_opt_keys:
-            trivialEl = _TrivialGaugeGroupElement(modelGateset.dim)
-            goparams = {'gateset': modelGateset,
-                        'targetGateset': targetGateset,
+            trivialEl = _TrivialGaugeGroupElement(themodel.dim)
+            goparams = {'model': themodel,
+                        'targetModel': targetModel,
                         '_gaugeGroupEl': trivialEl }
-            est.add_gaugeoptimized(goparams, modelGateset, gokey)
+            est.add_gaugeoptimized(goparams, themodel, gokey)
 
 
     def view(self, estimate_keys, gaugeopt_keys=None):
@@ -388,8 +388,8 @@ class Results(object):
         """
         view = Results()
         view.dataset = self.dataset
-        view.gatestring_lists = self.gatestring_lists
-        view.gatestring_structs = self.gatestring_structs
+        view.circuit_lists = self.circuit_lists
+        view.circuit_structs = self.circuit_structs
 
         if _compat.isstr(estimate_keys):
             estimate_keys = [estimate_keys]
@@ -405,91 +405,31 @@ class Results(object):
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
         cpy = Results()
         cpy.dataset = self.dataset.copy()
-        cpy.gatestring_lists = _copy.deepcopy(self.gatestring_lists)
-        cpy.gatestring_structs = _copy.deepcopy(self.gatestring_structs)
+        cpy.circuit_lists = _copy.deepcopy(self.circuit_lists)
+        cpy.circuit_structs = _copy.deepcopy(self.circuit_structs)
         for est_key,est in self.estimates.items():
             cpy.estimates[est_key] = est.copy()
         return cpy
 
 
     def __setstate__(self, stateDict):
+
         if '_bEssentialResultsSet' in stateDict:
-            #Then we're unpickling an old-version Results object
-            print("NOTE: you're loading a prior-version Results object from a pickle."
-                  " This Results object will been updated, and while most data will"
-                  " be transferred seamlessly, there may be some saved values which"
-                  " are not imported. Please re-save (or re-pickle) this upgraded object"
-                  " to avoid seeing this message, or re-run the analysis leading to"
-                  " these results to create a new current-version Results object.")
+            raise ValueError(("This Results object is too old to unpickle - "
+                              "try using pyGSTi v0.9.6 to upgrade it to a version "
+                              "that this version can upgrade to the current version."))
 
-            params = _collections.OrderedDict()
-            goparams = _collections.OrderedDict()
-            for k,v in stateDict['parameters'].items():
-                if k != 'gaugeOptParams': params[k] = v
-                elif isinstance(v,list) and len(v) == 1:
-                    goparams['go0'] = v[0]
-                else:
-                    goparams['go0'] = v
-
-            gstrStructs = _collections.OrderedDict()
-            if _SHORTCUT_OLD_RESULTS_LOAD == False:
-                from ..construction import make_lsgst_structs as _make_lsgst_structs
-                try:
-                    prepStrs = stateDict['gatestring_lists']['prep fiducials']
-                    effectStrs = stateDict['gatestring_lists']['effect fiducials']
-                    germs = stateDict['gatestring_lists']['germs']
-                    aliases = stateDict['parameters'].get('gateLabelAliases',None)
-                    fidPairs = stateDict['parameters'].get('fiducial pairs',None)
-                    maxLengthList = stateDict['parameters']['max length list']
-                    if maxLengthList[0] == 0:
-                        maxLengthList = maxLengthList[1:] #Fine; includeLGST is always True below
-
-                    structs = _make_lsgst_structs(stateDict['gatesets']['target'].gates.keys(),
-                                                        prepStrs, effectStrs, germs, maxLengthList,
-                                                        fidPairs, truncScheme="whole germ powers",
-                                                        nest=True, keepFraction=1, keepSeed=None,
-                                                        includeLGST=True, gateLabelAliases=aliases)
-                except:
-                    print("Warning: Ls & germs structure not found.  Loading unstructured Results.")
-                    structs = []
-                    for lst in stateDict['gatestring_lists']['iteration']:
-                        unindexed_gss = _LsGermsStructure([],[],[],[],None)
-                        unindexed_gss.add_unindexed(lst)
-                        structs.append(unindexed_gss)
-
-                gstrStructs['iteration'] = structs
-                gstrStructs['final'] = structs[-1]
-
-            gstrLists = _collections.OrderedDict()
-            for k,v in stateDict['gatestring_lists'].items():
-                gstrLists[k] = v
-
-            gatesets =  _collections.OrderedDict()
-            for k,v in stateDict['gatesets'].items():
-                if k == 'final estimate':
-                    gatesets['go0'] = v
-                elif k == 'iteration estimates pre gauge opt':
-                    gatesets['iteration estimates'] = v
-                else: gatesets[k] = v
-            gatesets['final iteration estimate'] = gatesets['iteration estimates'][-1]
-
-            estimate = _Estimate(self, gatesets['target'], gatesets['seed'],
-                                gatesets['iteration estimates'], params)
-            if 'go0' in gatesets:
-                estimate.add_gaugeoptimized(goparams.get('go0',{}), gatesets['go0'])
-
-            filteredDict = {
-                'dataset': stateDict['dataset'],
-                'gatestring_lists': gstrLists,
-                'gatestring_structs': gstrStructs,
-                'estimates': _collections.OrderedDict( [('default',estimate)] ),
-            }
-            self.__dict__.update(filteredDict)
-        else:
-            #unpickle normally
-            self.__dict__.update(stateDict)
-            for est in self.estimates.values():
-                est.set_parent(self)
+        if 'gatestring_lists' in stateDict:
+            _warnings.warn("Unpickling deprecated-format Results.  Please re-save/pickle asap.")
+            self.circuit_lists = stateDict['gatestring_lists']
+            self.circuit_structs = stateDict['gatestring_structs']
+            del stateDict['gatestring_lists']
+            del stateDict['gatestring_structs']
+            
+        #unpickle normally
+        self.__dict__.update(stateDict)
+        for est in self.estimates.values():
+            est.set_parent(self)
 
 
     def __str__(self):
@@ -499,13 +439,13 @@ class Results(object):
         s += "\n"
         s += "How to access my contents:\n\n"
         s += " .dataset    -- the DataSet used to generate these results\n\n"
-        s += " .gatestring_lists   -- a dict of GateString lists w/keys:\n"
+        s += " .circuit_lists   -- a dict of Circuit lists w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(list(self.gatestring_lists.keys())) + "\n"
+        s += "  " + "\n  ".join(list(self.circuit_lists.keys())) + "\n"
         s += "\n"
-        s += " .gatestring_structs   -- a dict of GatestringStructures w/keys:\n"
+        s += " .circuit_structs   -- a dict of CircuitStructures w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(list(self.gatestring_structs.keys())) + "\n"
+        s += "  " + "\n  ".join(list(self.circuit_structs.keys())) + "\n"
         s += "\n"
         s += " .estimates   -- a dictionary of Estimate objects:\n"
         s += " ---------------------------------------------------------\n"
@@ -584,74 +524,3 @@ class Results(object):
              '  the functions that generate reports are now separate functions.\n'
              '  Please update this call with one to:\n'
              '  pygsti.report.create_standard_report(...)\n'))
-
-
-def enable_old_python_results_unpickling():
-    """ Perform some monkeying so that old results pickle files can load. """
-
-    #Define empty ResultCache class in resultcache module to enable loading old Results pickles
-    import sys as _sys
-    from .labeldicts import OrderedMemberDict as _OMD
-    from ..baseobjs import profiler as _profiler
-    from ..baseobjs import protectedarray as _protectedarray
-    from ..baseobjs import basis as _basis
-    from ..baseobjs import dim as _dim
-    from ..baseobjs import verbosityprinter as _verbosityprinter
-    class dummy_ResultCache(object):
-        """ Dummy """
-        pass
-    class dummy_ResultOptions(object):
-        """ Dummy """
-        pass
-    class dummy_resultcache_module(object):
-        """ Dummy """
-        def __init__(self):
-            self.ResultCache = dummy_ResultCache
-    class dummy_OrderedGateDict(_OMD):
-        """ Dummy """
-        def __init__(self, parent, default_param, prefix, items=[]):
-            _OMD.__init__(self, parent, default_param, prefix, "gate", items)
-    class dummy_OrderedSPAMVecDict(_OMD):
-        """ Dummy """
-        def __init__(self, parent, default_param, remainderLabel, prefix, items=[]):
-            _OMD.__init__(self, parent, default_param, prefix, "spamvec", items)
-              # (drop remainderLabel)
-    class dummy_OrderedSPAMLabelDict(_collections.OrderedDict):
-        def __init__(self, remainderLabel, items=[]):
-            super(dummy_OrderedSPAMLabelDict,self).__init__(items)
-
-
-    #Classes
-    _sys.modules[__name__].ResultOptions = dummy_ResultOptions
-    _sys.modules[__name__].Estimate = _Estimate
-    _sys.modules['pygsti.objects.labeldicts'].OrderedGateDict = dummy_OrderedGateDict
-    _sys.modules['pygsti.objects.labeldicts'].OrderedSPAMVecDict = dummy_OrderedSPAMVecDict
-    _sys.modules['pygsti.objects.labeldicts'].OrderedSPAMLabelDict = dummy_OrderedSPAMLabelDict
-
-    #Modules
-    _sys.modules['pygsti.tools.basis'] = _basis
-    _sys.modules['pygsti.tools.dim'] = _dim
-    _sys.modules['pygsti.objects.verbosityprinter'] = _verbosityprinter
-    _sys.modules['pygsti.objects.protectedarray'] = _protectedarray
-    _sys.modules['pygsti.objects.profiler'] = _profiler
-    _sys.modules['pygsti.report.resultcache'] = dummy_resultcache_module()
-    _sys.modules['pygsti.report.results'] = _sys.modules[__name__]
-
-def disable_old_python_results_unpickling():
-    import sys as _sys
-
-    #Classes
-    del _sys.modules[__name__].ResultOptions
-    del _sys.modules[__name__].Estimate
-    del _sys.modules['pygsti.objects.labeldicts'].OrderedGateDict
-    del _sys.modules['pygsti.objects.labeldicts'].OrderedSPAMVecDict
-    del _sys.modules['pygsti.objects.labeldicts'].OrderedSPAMLabelDict
-
-    #Modules
-    del _sys.modules['pygsti.tools.basis']
-    del _sys.modules['pygsti.tools.dim']
-    del _sys.modules['pygsti.objects.verbosityprinter']
-    del _sys.modules['pygsti.objects.protectedarray']
-    del _sys.modules['pygsti.objects.profiler']
-    del _sys.modules['pygsti.report.resultcache']
-    del _sys.modules['pygsti.report.results']

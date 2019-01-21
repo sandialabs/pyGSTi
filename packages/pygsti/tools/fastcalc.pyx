@@ -33,7 +33,7 @@ def embedded_fast_acton_sparse(embedded_gate_acton_fn,
     cdef INT nParts = numBasisEls_noop_blankaction.shape[0]
     cdef INT nActionIndices = baseinds.shape[0]
     #cdef np.ndarray b = np.zeros(nParts, dtype=np.int64_t)
-    #cdef np.ndarray gate_b = np.zeros(nAction, dtype=np.int64_t)
+    #cdef np.ndarray op_b = np.zeros(nAction, dtype=np.int64_t)
     #cdef np.ndarray[long, ndim=1] baseinds = np.empty(nActionIndices, dtype=np.int64_t) #for FASTER
     cdef INT b[100]
 
@@ -118,7 +118,7 @@ def embedded_fast_acton_sparse_spc1(
     #cdef INT nAction = numBasisEls_action.shape[0]
     cdef long nActionIndices = baseinds.shape[0]
     cdef INT b[100]
-    #cdef INT gate_b[100]
+    #cdef INT op_b[100]
     cdef long Annz = Adata.shape[0]
 
     #Note: malloc just as fast as stack alloc
@@ -257,7 +257,7 @@ def embedded_fast_acton_sparse_complex(embedded_gate_acton_fn,
     cdef INT nParts = numBasisEls_noop_blankaction.shape[0]
     cdef INT nActionIndices = baseinds.shape[0]
     #cdef np.ndarray b = np.zeros(nParts, dtype=np.int64_t)
-    #cdef np.ndarray gate_b = np.zeros(nAction, dtype=np.int64_t)
+    #cdef np.ndarray op_b = np.zeros(nAction, dtype=np.int64_t)
     #cdef np.ndarray[long, ndim=1] baseinds = np.empty(nActionIndices, dtype=np.int64_t) #for FASTER
     cdef INT b[100]
 
@@ -343,7 +343,7 @@ def embedded_fast_acton_sparse_spc1_complex(
     #cdef INT nAction = numBasisEls_action.shape[0]
     cdef long nActionIndices = baseinds.shape[0]
     cdef INT b[100]
-    #cdef INT gate_b[100]
+    #cdef INT op_b[100]
     cdef long Annz = Adata.shape[0]
 
     #Note: malloc just as fast as stack alloc

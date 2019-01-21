@@ -279,8 +279,8 @@ class Workspace(object):
         self.NotApplicable = makefactory(NotApplicable)
         
         #Tables
-          # Gate sequences
-        self.GatestringTable = makefactory(_wt.GatestringTable)
+          # Circuits
+        self.CircuitTable = makefactory(_wt.CircuitTable)
         
           # Spam & Gates
         self.SpamTable = makefactory(_wt.SpamTable)
@@ -290,7 +290,7 @@ class Workspace(object):
 
           # Spam & Gates vs. a target
         self.SpamVsTargetTable = makefactory(_wt.SpamVsTargetTable)
-        self.GatesetVsTargetTable = makefactory(_wt.GatesetVsTargetTable)
+        self.ModelVsTargetTable = makefactory(_wt.ModelVsTargetTable)
         self.GatesVsTargetTable = makefactory(_wt.GatesVsTargetTable)
         self.GatesSingleMetricTable = makefactory(_wt.GatesSingleMetricTable)
         self.GateEigenvalueTable = makefactory(_wt.GateEigenvalueTable)
@@ -334,6 +334,13 @@ class Workspace(object):
 
         #Text blocks
         self.StdoutText = makefactory(_wtxt.StdoutText)
+
+        #Extras
+        from ..extras import idletomography as _idt
+        self.IdleTomographyIntrinsicErrorsTable = makefactory(_idt.IdleTomographyIntrinsicErrorsTable)
+        self.IdleTomographyObservedRatePlot = makefactory(_idt.IdleTomographyObservedRatePlot)
+        self.IdleTomographyObservedRatesTable = makefactory(_idt.IdleTomographyObservedRatesTable)
+        self.IdleTomographyObservedRatesForIntrinsicRateTable = makefactory(_idt.IdleTomographyObservedRatesForIntrinsicRateTable)
 
         
     def init_notebook_mode(self, connected=False, autodisplay=False):
@@ -620,7 +627,7 @@ class Workspace(object):
         #print("DB: switchBdInfo = ", switchBdInfo)
         #print("DB: nonSwitchedArgs = ", nonSwitchedArgs)
 
-        #Gate a list of lists, each list holding all of the relevant switch positions for each board
+        #Create a list of lists, each list holding all of the relevant switch positions for each board
         switch_positions = []
         for isb,sb in enumerate(switchboards):
             info = switchBdInfo[isb]

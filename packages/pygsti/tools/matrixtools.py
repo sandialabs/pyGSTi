@@ -369,7 +369,7 @@ def unitary_superoperator_matrix_log(M, mxBasis):
         and `logM` can be written as the action `rho -> -i[H,rho]`.
     """
     from . import lindbladtools as _lt # (would create circular imports if at top)
-    from . import gatetools as _gt # (would create circular imports if at top)
+    from . import optools as _gt # (would create circular imports if at top)
 
     M_std = change_basis(M, mxBasis, "std")
     evals = _np.linalg.eigvals(M_std)
@@ -409,7 +409,7 @@ def near_identity_matrix_log(M, TOL=1e-8):
     logM = _spl.logm(M)
     if M_is_real:
         assert(_np.linalg.norm(logM.imag) < TOL), \
-            "near_identity_matrix_log has failed to construct a real logarithm!\n" \
+            "Failed to construct a real logarithm! " \
             + "This is probably because M is not near the identity.\n" \
             + "Its eigenvalues are: " + str(_np.linalg.eigvals(M))
         logM = logM.real
@@ -779,6 +779,128 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
         return min_weights
 
 
+def minweight_match_realmxeigs(a, b, metricfn=None,
+                               pass_indices_to_metricfn=False, EPS=1e-9):
+    """
+    Matches the elements of two vectors, `a` and `b` whose elements
+    are assumed to either real or one-half of a conjugate pair.
+
+    Matching is performed by minimizing the weight between elements,
+    defined as the sum of `metricfn(x,y)` over all `(x,y)` pairs
+    (`x` in `a` and `y` in `b`).  If straightforward matching fails
+    to preserve eigenvalue conjugacy relations, then real and conjugate-
+    pair eigenvalues are matched *separately* to ensure relations are
+    preserved (but this can result in a sub-optimal matching).  A 
+    ValueError is raised when the elements of `a` and `b` have incompatible
+    conjugacy structures (#'s of conjugate vs. real pairs).
+
+    Parameters
+    ----------
+    a, b : list or numpy.ndarray
+        1D arrays to match elements between.
+
+    metricfn : function, optional
+        A function of two float parameters, `x` and `y`,which defines the cost
+        associated with matching `x` with `y`.  If None, `abs(x-y)` is used.
+
+    pass_indices_to_metricfn : bool, optional
+        If True, the metric function is passed two *indices* into the `a` and
+        `b` arrays, respectively, instead of the values.
+
+    Returns
+    -------
+    pairs : list
+        A list of 2-tuple pairs of indices `(ix,iy)` giving the indices into
+        `a` and `b` respectively of each matched pair.
+    """
+
+    def check(pairs):
+        for i,(p0,p1) in enumerate(pairs):
+            for q0,q1 in pairs[i+1:]:
+                a_conj = _np.isclose(a[p0], _np.conjugate(a[q0]))
+                b_conj = _np.isclose(b[p1], _np.conjugate(b[q1]))
+                if (abs(a[p0].imag) > 1e-6 and a_conj and not b_conj) or \
+                   (abs(b[p1].imag) > 1e-6 and b_conj and not a_conj):
+                    #print("DB: FALSE at: ",(p0,p1),(q0,q1),(a[p0],b[p1]),(a[q0],b[q1]),a_conj,b_conj)
+                    return False
+        return  True
+     
+    #First attempt:
+    # See if matching everything at once satisfies conjugacy relations
+    # (if this works, this is the best, since it considers everything)
+    _,pairs = minweight_match(a, b, metricfn, True,
+                               pass_indices_to_metricfn)
+
+    if check(pairs):
+        return pairs # we're done! that was easy
+
+    #Otherwise we fall back to considering real values and conj pairs separately
+
+    #identify real values and conjugate pairs
+    def split_real_conj(ar):
+        real_inds = []; conj_inds = []
+        for i,v in enumerate(ar):
+            if abs(v.imag) < EPS: real_inds.append(i)
+            else:
+                for pair in conj_inds:
+                    if i in pair: break # ok, we've already found v's pair
+                else:
+                    for j,v2 in enumerate(ar[i+1:],start=i+1):
+                        if _np.isclose(_np.conj(v), v2): 
+                            conj_inds.append( (i,j) ); break
+                    else:
+                        raise ValueError("No conjugate pair found for %s" % str(v))
+
+        # choose 'a+ib' to be representative of pair 
+        conj_rep_inds = [ p0 if (ar[p0].imag > ar[p1].imag) else p1
+                          for (p0,p1) in conj_inds ] 
+
+        return real_inds, conj_inds, conj_rep_inds
+
+    def add_conjpair(ar, conj_inds, conj_rep_inds, real_inds):
+        for ii,i in enumerate(real_inds):
+            for jj,j in enumerate(real_inds[ii+1:],start=ii+1):
+                if _np.isclose(ar[i],ar[j]):
+                    conj_inds.append((i,j))
+                    conj_rep_inds.append(i)
+                    del real_inds[jj]; del real_inds[ii] # note: we know jj > ii
+                    return True
+        return False
+
+    a_real, a_conj, a_reps = split_real_conj(a) # hold indices to a & b arrays
+    b_real, b_conj, b_reps = split_real_conj(b) # hold indices to a & b arrays
+
+    while len(a_conj) > len(b_conj): #try to add real-pair(s) to b_conj 
+        if not add_conjpair(b, b_conj, b_reps, b_real):
+            raise ValueError(("Vectors `a` and `b` don't have the same conjugate-pair structure, "
+                              " and so they cannot be matched in a way the preserves this structure."))
+    while len(b_conj) > len(a_conj): #try to add real-pair(s) to a_conj 
+        if not add_conjpair(a, a_conj, a_reps, a_real):
+            raise ValueError(("Vectors `a` and `b` don't have the same conjugate-pair structure, "
+                              " and so they cannot be matched in a way the preserves this structure."))
+    #Note: problem with this approach is that we might convert a 
+    # real-pair -> conj-pair sub-optimally (i.e. there might be muliple
+    # such conversions and we just choose one at random).
+
+    _,pairs1 = minweight_match(a[a_real], b[b_real], metricfn, True,
+                               pass_indices_to_metricfn)
+    _,pairs2 = minweight_match(a[a_reps], b[b_reps], metricfn, True,
+                               pass_indices_to_metricfn)
+    
+    #pair1 gives matching of real values, pairs2 gives that of conj pairs.
+    # Now just need to assemble a master pairs list to return.
+    pairs = []
+    for p0,p1 in pairs1: # p0 & p1 are indices into a_real & b_real
+        pairs.append( (a_real[p0], b_real[p1]) )
+    for p0,p1 in pairs2: # p0 & p1 are indices into a_reps & b_reps
+        pairs.append( (a_reps[p0], b_reps[p1]) )
+        a_other = a_conj[p0][0] if (a_conj[p0][0]!=a_reps[p0]) else a_conj[p0][1]
+        b_other = b_conj[p1][0] if (b_conj[p1][0]!=b_reps[p1]) else b_conj[p1][1]
+        pairs.append( (a_other,b_other) )
+
+    return sorted(pairs, key=lambda x: x[0]) # sort by a's index
+
+
 def _fas(a, inds, rhs, add=False):
     """
     Fancy Assignment, equivalent to `a[*inds] = rhs` but with
@@ -963,8 +1085,6 @@ def safereal(A, inplace=False, check=False):
     a sparse matrix
     """
     if check:
-        #test =safenorm(A,'real'),safenorm(A,'imag')  #TODO REMOVE
-        #if test[1] >= 1e-6: print("safereal check failed (Re,Im) = ",test)
         assert( safenorm(A,'imag') < 1e-6 ), "Check failed: taking real-part of matrix w/nonzero imaginary part"
     if _sps.issparse(A):
         if _sps.isspmatrix_csr(A):
@@ -1157,7 +1277,7 @@ def expm_multiply_prep(A, tol=EXPM_DEFAULT_TOL):
     #DB: CHECK: assert(_spsl.norm(A1 - A2) < 1e-6); A = A1
 
     #exact_1_norm specific for CSR
-    A_1_norm = max(_np.sum(A.data[_np.where(A.indices == iCol)]) for iCol in range(n))
+    A_1_norm = max(_np.sum(_np.abs(A.data[_np.where(A.indices == iCol)])) for iCol in range(n))
     #A_1_norm = _spsl._expm_multiply._exact_1_norm(A) # general case
 
     t = 1.0 # always
@@ -1186,7 +1306,8 @@ else:
 
 def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta): # t == 1.0 replaced below
     """
-    A helper function.
+    A helper function.  Note that this (python) version works when A is a LinearOperator 
+    as well as a SciPy CSR sparse matrix.
     """
     #if balance:
     #    raise NotImplementedError
@@ -1224,6 +1345,37 @@ def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta): # t == 1.0
 #        return max(abs(A).sum(axis=0).flat)
 #    else:
 #        return np.linalg.norm(A, 1)
+
+def expop_multiply_prep(op, tol=EXPM_DEFAULT_TOL):
+    """
+    Returns "prepared" meta-info about operation op,
+      which is assumed to be traceless (so no shift is needed).
+      Used as input for use with _custom_expm_multiply_simple_core
+      or fast C-reps.
+    """
+    assert(isinstance(op,_spsl.LinearOperator))
+    if len(op.shape) != 2 or op.shape[0] != op.shape[1]:
+        raise ValueError('expected op to have equal input and output dimensions')
+
+    n = op.shape[0]
+    n0=1 # always act exp(op) on *single* vectors
+    mu = 0 # _spsl._expm_multiply._trace(A) / float(n)
+      #ASSUME op is *traceless*
+
+    #FUTURE: get exact_1_norm specific for our ops - now just use approximate
+    A_1_norm = _spsl.onenormest(op)
+
+    #t = 1.0 # always, so t*<X> => just <X> below
+    if A_1_norm == 0:
+        m_star, s = 0, 1
+    else:
+        ell = 2
+        norm_info = _spsl._expm_multiply.LazyOperatorNormInfo(op, A_1_norm=A_1_norm, ell=ell)
+        m_star, s = _spsl._expm_multiply._fragment_3_1(norm_info, n0, tol, ell=ell)
+
+    eta = 1.0 #_np.exp(t*mu / float(s)) # b/c mu always == 0 (traceless assumption)
+    return mu, m_star, s, eta
+
 
 
 

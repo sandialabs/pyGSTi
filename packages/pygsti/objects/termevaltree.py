@@ -8,19 +8,18 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 
-from . import gatestring as _gs
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
 from .evaltree import EvalTree
 
 try:
-    from .fastgatecalc import fast_compact_deriv as _compact_deriv
+    from .fastopcalc import fast_compact_deriv as _compact_deriv
 
     #DEBUG from .polynomial import compact_deriv as _compact_deriv
-    # from . import fastgatecalc
+    # from . import fastopcalc
     # from . import polynomial
     # def _compact_deriv(vtape, ctape, wrtParams):
-    #     v1,c1 = fastgatecalc.fast_compact_deriv(vtape,ctape,wrtParams)
+    #     v1,c1 = fastopcalc.fast_compact_deriv(vtape,ctape,wrtParams)
     #     v2,c2 = polynomial.compact_deriv(vtape,ctape,wrtParams)
     #     print("SIZES = ",v1.shape, c1.shape, v2.shape, c2.shape)
     #     assert(_np.linalg.norm(v1-v2) < 1e-6)
@@ -41,16 +40,16 @@ class TermEvalTree(EvalTree):
         """ Create a new, empty, evaluation tree. """
         super(TermEvalTree, self).__init__(items)
 
-    def initialize(self, compiled_gatestring_list, numSubTreeComms=1, maxCacheSize=None):
+    def initialize(self, simplified_circuit_list, numSubTreeComms=1, maxCacheSize=None):
         """
-        Initialize an evaluation tree using a set of complied gate strings.
+        Initialize an evaluation tree using a set of complied operation sequences.
         This function must be called before using this EvalTree.
 
         Parameters
         ----------
-        gatestring_list : list of (tuples or GateStrings)
-            A list of tuples of gate labels or GateString
-            objects, specifying the gate strings that
+        circuit_list : list of (tuples or Circuits)
+            A list of tuples of operation labels or Circuit
+            objects, specifying the operation sequences that
             should be present in the evaluation tree.
 
         numSubTreeComms : int, optional
@@ -65,44 +64,44 @@ class TermEvalTree(EvalTree):
         """
         #tStart = _time.time() #DEBUG TIMER
 
-        # gateLabels : A list of all the distinct gate labels found in
-        #              compiled_gatestring_list.  Used in calc classes
+        # opLabels : A list of all the distinct operation labels found in
+        #              simplified_circuit_list.  Used in calc classes
         #              as a convenient precomputed quantity.
-        self.gateLabels = self._get_gateLabels(compiled_gatestring_list)
+        self.opLabels = self._get_opLabels(simplified_circuit_list)
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 
-        gatestring_list = [tuple(gs) for gs in compiled_gatestring_list.keys()]
-        self.compiled_gatestring_spamTuples = list(compiled_gatestring_list.values())
-        self.num_final_els = sum([len(v) for v in self.compiled_gatestring_spamTuples])
-        #self._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
+        circuit_list = [tuple(opstr) for opstr in simplified_circuit_list.keys()]
+        self.simplified_circuit_spamTuples = list(simplified_circuit_list.values())
+        self.num_final_els = sum([len(v) for v in self.simplified_circuit_spamTuples])
+        #self._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
         self.recompute_spamtuple_indices(bLocal=True) # bLocal shouldn't matter here
 
         #Evaluation tree:
         # A list of tuples, where each element contains
-        #  information about evaluating a particular gate string:
+        #  information about evaluating a particular operation sequence:
         #  (iStart, tuple_of_following_gatelabels )
         # and self.eval_order specifies the evaluation order.
         del self[:] #clear self (a list)
 
         #Final Indices
-        # The first len(gatestring_list) elements of the tree correspond
-        # to computing the gate strings requested in gatestring_list.  Doing
+        # The first len(circuit_list) elements of the tree correspond
+        # to computing the operation sequences requested in circuit_list.  Doing
         # this make later extraction much easier (views can be used), but
         # requires a non-linear order of evaluation, held in the eval_order list.
         self.eval_order = []
 
         #initialize self as a list of Nones
-        self.num_final_strs = len(gatestring_list)
+        self.num_final_strs = len(circuit_list)
         self[:] = [None]*self.num_final_strs
 
-        #Sort the gate strings "alphabetically" - not needed now, but may
+        #Sort the operation sequences "alphabetically" - not needed now, but may
         # be useful later for prefixing...
-        sorted_strs = sorted(list(enumerate(gatestring_list)),key=lambda x: x[1])
+        sorted_strs = sorted(list(enumerate(circuit_list)),key=lambda x: x[1])
 
-        for k,(iStr,gateString) in enumerate(sorted_strs):
+        for k,(iStr,circuit) in enumerate(sorted_strs):
             #Add info for this string
-            self[iStr] = gateString
+            self[iStr] = circuit
             self.eval_order.append(iStr)
 
         #Storage for polynomial expressions for probabilities and
@@ -117,12 +116,12 @@ class TermEvalTree(EvalTree):
         self.parentIndexMap = None
         self.original_index_lookup = None
         self.subTrees = [] #no subtrees yet
-        assert(self.generate_gatestring_list() == gatestring_list)
-        assert(None not in gatestring_list)
+        assert(self.generate_circuit_list() == circuit_list)
+        assert(None not in circuit_list)
 
-    def generate_gatestring_list(self, permute=True):
+    def generate_circuit_list(self, permute=True):
         """
-        Generate a list of the final gate strings this tree evaluates.
+        Generate a list of the final operation sequences this tree evaluates.
 
         This method essentially "runs" the tree and follows its
           prescription for sequentailly building up longer strings
@@ -135,9 +134,9 @@ class TermEvalTree(EvalTree):
         permute : bool, optional
            Whether to permute the returned list of strings into the 
            same order as the original list passed to initialize(...).
-           When False, the computed order of the gate strings is 
+           When False, the computed order of the operation sequences is 
            given, which is matches the order of the results from calls
-           to `GateSet` bulk operations.  Non-trivial permutation
+           to `Model` bulk operations.  Non-trivial permutation
            occurs only when the tree is split (in order to keep 
            each sub-tree result a contiguous slice within the parent
            result).
@@ -145,26 +144,26 @@ class TermEvalTree(EvalTree):
         Returns
         -------
         list of gate-label-tuples
-            A list of the gate strings evaluated by this tree, each
-            specified as a tuple of gate labels.
+            A list of the operation sequences evaluated by this tree, each
+            specified as a tuple of operation labels.
         """
-        gateStrings = [None]*len(self)
+        circuits = [None]*len(self)
 
         #Build rest of strings
         for i in self.get_evaluation_order():
-            gateStrings[i] = self[i]
+            circuits[i] = self[i]
             
         #Permute to get final list:
         nFinal = self.num_final_strings()
         if self.original_index_lookup is not None and permute == True:
-            finalGateStrings = [None]*nFinal
+            finalCircuits = [None]*nFinal
             for iorig,icur in self.original_index_lookup.items():
-                if iorig < nFinal: finalGateStrings[iorig] = gateStrings[icur]
-            assert(None not in finalGateStrings)
-            return finalGateStrings
+                if iorig < nFinal: finalCircuits[iorig] = circuits[icur]
+            assert(None not in finalCircuits)
+            return finalCircuits
         else:
-            assert(None not in gateStrings[0:nFinal])
-            return gateStrings[0:nFinal]
+            assert(None not in circuits[0:nFinal])
+            return circuits[0:nFinal]
 
         
     def split(self, elIndicesDict, maxSubTreeSize=None, numSubTrees=None, verbosity=0):
@@ -177,10 +176,10 @@ class TermEvalTree(EvalTree):
         Parameters
         ----------
         elIndicesDict : dict
-            A dictionary whose keys are integer original-gatestring indices
+            A dictionary whose keys are integer original-circuit indices
             and whose values are slices or index arrays of final-element-
             indices (typically this dict is returned by calling
-            :method:`GateSet.compile_gatestrings`).  Since splitting a 
+            :method:`Model.simplify_circuits`).  Since splitting a 
             tree often involves permutation of the raw string ordering
             and thereby the element ordering, an updated version of this
             dictionary, with all permutations performed, is returned.
@@ -202,7 +201,7 @@ class TermEvalTree(EvalTree):
         OrderedDict
             A updated version of elIndicesDict
         """
-        #dbList = self.generate_gatestring_list()
+        #dbList = self.generate_circuit_list()
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
 
@@ -321,7 +320,7 @@ class TermEvalTree(EvalTree):
         def permute_parent_element(perm, el):
             """Applies a permutation to an element of the tree """
             # perm[oldIndex] = newIndex
-            return el # no need to permute gate string
+            return el # no need to permute operation sequence
     
         def create_subtree(parentIndices, numFinal, fullEvalOrder, sliceIntoParentsFinalArray, parentTree):
             """ 
@@ -356,9 +355,9 @@ class TermEvalTree(EvalTree):
             subTree.myFinalToParentFinalMap = sliceIntoParentsFinalArray
             subTree.num_final_strs = numFinal
             subTree[:] = [None]*len(parentIndices)
-            subTree.p_polys = None
-            subTree.dp_polys = None
-            subTree.hp_polys = None
+            subTree.p_polys = {}
+            subTree.dp_polys = {}
+            subTree.hp_polys = {}
 
             mapParentIndxToSubTreeIndx = { k: ik for ik,k in enumerate(parentIndices) }
             curCacheSize = 0
@@ -366,30 +365,30 @@ class TermEvalTree(EvalTree):
     
             for ik in fullEvalOrder: #includes any initial indices
                 k = parentIndices[ik] #original tree index
-                gatestring = self[k] #original tree data
+                circuit = self[k] #original tree data
                 subTree.eval_order.append(ik)
                 assert(subTree[ik] is None)
-                subTree[ik] = gatestring
+                subTree[ik] = circuit
 
             subTree.parentIndexMap = parentIndices #parent index of each subtree index
-            subTree.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[k]
+            subTree.simplified_circuit_spamTuples = [ self.simplified_circuit_spamTuples[k]
                                                        for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
-            #subTree._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
+            #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
             
             final_el_startstops = []; i=0
-            for spamTuples in parentTree.compiled_gatestring_spamTuples:
+            for spamTuples in parentTree.simplified_circuit_spamTuples:
                 final_el_startstops.append( (i,i+len(spamTuples)) )
                 i += len(spamTuples)
             subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
                 [ _np.arange(*final_el_startstops[k])
                   for k in _slct.indices(subTree.myFinalToParentFinalMap) ] )
             #Note: myFinalToParentFinalMap maps only between *final* elements
-            #   (which are what is held in compiled_gatestring_spamTuples)
+            #   (which are what is held in simplified_circuit_spamTuples)
             
-            subTree.num_final_els = sum([len(v) for v in subTree.compiled_gatestring_spamTuples])
+            subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_spamTuples])
             subTree.recompute_spamtuple_indices(bLocal=False)
 
-            subTree.gateLabels = self._get_gateLabels( subTree.generate_gatestring_list(permute=False) )
+            subTree.opLabels = self._get_opLabels( subTree.generate_circuit_list(permute=False) )
 
             return subTree
     
@@ -415,20 +414,20 @@ class TermEvalTree(EvalTree):
     def get_p_polys(self, calc, rholabel, elabels, comm):
         """
         Get the compact-form polynomials that evaluate to the probabilities
-        corresponding to all this tree's gate sequences sandwiched between
+        corresponding to all this tree's operation sequences sandwiched between
         `rholabel` and each of the `elabels`.  The result is cached to speed
         up subsequent calls.
 
         Parameters
         ----------
-        calc : GateTermCalc
+        calc : TermForwardSimulator
             A calculator object for computing the raw polynomials (if necessary)
 
         rholabel : Label
-            The (compiled) state preparation label.
+            The (simplified) state preparation label.
 
         elabels : list
-            A list of (compiled) POVM effect labels.
+            A list of (simplified) POVM effect labels.
 
         comm : mpi4py.MPI.Comm
             When not None, an MPI communicator for distributing the computation
@@ -440,15 +439,15 @@ class TermEvalTree(EvalTree):
             A list of `len(elabels)` tuples.  Each tuple is a `(vtape,ctape)`
             2-tuple containing the concatenated compact-form tapes of all N
             polynomials for that (rholabel,elabel) pair, where N is the number
-            of gate strings in this tree.
+            of operation sequences in this tree.
         """
         #Check if everything is computed already
         if all([ ((rholabel,elabel) in self.p_polys) for elabel in elabels]):
             return [self.p_polys[(rholabel,elabel)] for elabel in elabels]
 
         #Otherwise compute poly
-        polys = [ calc.prs_as_compact_polys(rholabel,elabels, gstr, comm)
-                  for gstr in self.generate_gatestring_list(permute=False) ]
+        polys = [ calc.prs_as_compact_polys(rholabel,elabels, opstr, comm)
+                  for opstr in self.generate_circuit_list(permute=False) ]
 
         ret = []
         for i,elabel in enumerate(elabels):
@@ -483,14 +482,14 @@ class TermEvalTree(EvalTree):
 
         Parameters
         ----------
-        calc : GateTermCalc
+        calc : TermForwardSimulator
             A calculator object for computing the raw polynomials (if necessary)
 
         rholabel : Label
-            The (compiled) state preparation label.
+            The (simplified) state preparation label.
 
         elabels : list
-            A list of (compiled) POVM effect labels.
+            A list of (simplified) POVM effect labels.
 
         wrtSlice : slice
             The parameter slice to differentiate with respect to.
@@ -505,7 +504,7 @@ class TermEvalTree(EvalTree):
             A list of `len(elabels)` tuples.  Each tuple is a `(vtape,ctape)`
             2-tuple containing the concatenated compact-form tapes of all N*K
             polynomials for that (rholabel,elabel) pair, where N is the number
-            of gate strings in this tree and K is the number of parameters 
+            of operation sequences in this tree and K is the number of parameters 
             we've differentiated with respect to (~`len(wrtSlice)`).
         """
         slcTup = (wrtSlice.start,wrtSlice.stop,wrtSlice.step) \
@@ -550,14 +549,14 @@ class TermEvalTree(EvalTree):
 
         Parameters
         ----------
-        calc : GateTermCalc
+        calc : TermForwardSimulator
             A calculator object for computing the raw polynomials (if necessary)
 
         rholabel : Label
-            The (compiled) state preparation label.
+            The (simplified) state preparation label.
 
         elabels : list
-            A list of (compiled) POVM effect labels.
+            A list of (simplified) POVM effect labels.
 
         wrtSlice1, wrtSlice2 : slice
             The parameter slices to differentiate with respect to.
@@ -572,7 +571,7 @@ class TermEvalTree(EvalTree):
             A list of `len(elabels)` tuples.  Each tuple is a `(vtape,ctape)`
             2-tuple containing the concatenated compact-form tapes of all N*K1*K2
             polynomials for that (rholabel,elabel) pair, where N is the number
-            of gate strings in this tree and K1,K2 are the number of parameters
+            of operation sequences in this tree and K1,K2 are the number of parameters
             we've differentiated with respect to.
         """
         slcTup1 = (wrtSlice1.start,wrtSlice1.stop,wrtSlice1.step) \
@@ -587,13 +586,13 @@ class TermEvalTree(EvalTree):
             return [self.hp_polys[(rholabel,elabel,slcTup1,slcTup2)] for elabel in elabels]
 
         #Otherwise compute poly -- FUTURE: do this faster w/
-        # some self.prs_as_polys(rholabel, elabels, gatestring, ...) function
+        # some self.prs_as_polys(rholabel, elabels, circuit, ...) function
         #TODO: add use of caches & compact polys here -- this fn is OUTDATED
         ret = []
         for elabel in elabels:
             if (rholabel,elabel,slcTup1,slcTup2) not in self.hp_polys:
-                polys = [ calc.pr_as_poly((rholabel,elabel), gstr, comm)
-                          for gstr in self.generate_gatestring_list(permute=False) ]
+                polys = [ calc.pr_as_poly((rholabel,elabel), opstr, comm)
+                          for opstr in self.generate_circuit_list(permute=False) ]
                 dpolys = [ p.deriv(k) for p in polys for k in slcInds2 ]
                 tapes = [ dp.deriv(k).compact() for p in dpolys for k in slcInds1 ]
                 vtape = _np.concatenate( [ t[0] for t in tapes ] )

@@ -1,3 +1,9 @@
+from __future__ import print_function, unicode_literals
+
+import logging
+mpl_logger = logging.getLogger('matplotlib')
+mpl_logger.setLevel(logging.WARNING)
+
 import unittest
 import os,sys
 import numpy as np
@@ -23,35 +29,35 @@ sys.modules['pygsti.objects'].ObjDerivedFromStdType = ObjDerivedFromStdType
 class CodecsTestCase(BaseTestCase):
 
     def setUp(self):
-        std.gs_target._check_paramvec()
+        std.target_model()._check_paramvec()
         super(CodecsTestCase, self).setUp()
-        self.gateset = std.gs_target
+        self.model = std.target_model()
         
-        self.germs = pygsti.construction.gatestring_list( [('Gx',), ('Gy',) ] ) #abridged for speed
+        self.germs = pygsti.construction.circuit_list( [('Gx',), ('Gy',) ] ) #abridged for speed
         self.fiducials = std.fiducials
         self.maxLens = [1,2]
-        self.gateLabels = list(self.gateset.gates.keys())
+        self.opLabels = list(self.model.operations.keys())
         
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
-            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLens )
+            self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLens )
         
-        self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
+        self.datagen_gateset = self.model.depolarize(op_noise=0.05, spam_noise=0.1)
         test = self.datagen_gateset.copy()
         self.ds = pygsti.construction.generate_fake_data(
             self.datagen_gateset, self.lsgstStrings[-1],
             nSamples=1000,sampleError='binomial', seed=100)
         
-        #Make an gateset with instruments
+        #Make an model with instruments
         E = self.datagen_gateset.povms['Mdefault']['0']
         Erem = self.datagen_gateset.povms['Mdefault']['1']
         Gmz_plus = np.dot(E,E.T)
         Gmz_minus = np.dot(Erem,Erem.T)
-        self.gs_withInst = self.datagen_gateset.copy()
-        self.gs_withInst.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
-        self.gs_withInst.instruments['Iztp'] = pygsti.obj.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.mdl_withInst = self.datagen_gateset.copy()
+        self.mdl_withInst.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.mdl_withInst.instruments['Iztp'] = pygsti.obj.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         
         self.results = self.runSilent(pygsti.do_long_sequence_gst,
-                                     self.ds, std.gs_target, self.fiducials, self.fiducials,
+                                     self.ds, std.target_model(), self.fiducials, self.fiducials,
                                      self.germs, self.maxLens)
         
         #make a confidence region factory
@@ -64,7 +70,7 @@ class CodecsTestCase(BaseTestCase):
         self.ws = pygsti.report.create_standard_report(self.results, None, 
                                                        title="GST Codec TEST Report",
                                                        confidenceLevel=95)
-        std.gs_target._check_paramvec()
+        std.target_model()._check_paramvec()
         
         #create miscellaneous other objects
         self.miscObjects = []
@@ -97,29 +103,29 @@ class TestCodecs(CodecsTestCase):
         self.assertEqual(list(x.keys()), list(self.ds.keys()))
         self.assertEqual(x[('Gx',)].as_dict(), self.ds[('Gx',)].as_dict())
 
-        # GateSet
+        # Model
         s = json.dumps(self.datagen_gateset)
-        with open(temp_files + "/gateset.json",'w') as f:
+        with open(temp_files + "/model.json",'w') as f:
             json.dump(self.datagen_gateset, f)
-        with open(temp_files + "/gateset.json",'r') as f:
+        with open(temp_files + "/model.json",'r') as f:
             x = json.load(f)
-        s = json.dumps(self.gs_withInst)
+        s = json.dumps(self.mdl_withInst)
         x = json.loads(s)
-        self.assertAlmostEqual(self.gs_withInst.frobeniusdist(x),0)
+        self.assertAlmostEqual(self.mdl_withInst.frobeniusdist(x),0)
 
         #print(s)
         x._check_paramvec(True)
         self.assertAlmostEqual(self.datagen_gateset.frobeniusdist(x),0)
 
         # Results (containing confidence region)
-        std.gs_target._check_paramvec()
-        print("gs_target = ",id(std.gs_target))
-        print("rho0 parent = ",id(std.gs_target.preps['rho0'].parent))
+        std.target_model()._check_paramvec()
+        print("target_model = ",id(std.target_model()))
+        print("rho0 parent = ",id(std.target_model().preps['rho0'].parent))
         with open(temp_files + "/results.json",'w') as f:
             json.dump(self.results, f)
-        print("gs_target2 = ",id(std.gs_target))
-        print("rho0 parent2 = ",id(std.gs_target.preps['rho0'].parent))
-        std.gs_target._check_paramvec()            
+        print("mdl_target2 = ",id(std.target_model()))
+        print("rho0 parent2 = ",id(std.target_model().preps['rho0'].parent))
+        std.target_model()._check_paramvec()            
         with open(temp_files + "/results.json",'r') as f:
             x = json.load(f)
         self.assertEqual(list(x.estimates.keys()), list(self.results.estimates.keys()))
@@ -161,16 +167,16 @@ class TestCodecs(CodecsTestCase):
         self.assertEqual(list(x.keys()), list(self.ds.keys()))
         self.assertEqual(x[('Gx',)].as_dict(), self.ds[('Gx',)].as_dict())
 
-        # GateSet
+        # Model
         s = msgpack.dumps(self.datagen_gateset)
-        with open(temp_files + "/gateset.mpk",'wb') as f:
+        with open(temp_files + "/model.mpk",'wb') as f:
             msgpack.dump(self.datagen_gateset, f)
-        with open(temp_files + "/gateset.mpk",'rb') as f:
+        with open(temp_files + "/model.mpk",'rb') as f:
             x = msgpack.load(f)
         self.assertAlmostEqual(self.datagen_gateset.frobeniusdist(x),0)
-        s = msgpack.dumps(self.gs_withInst)
+        s = msgpack.dumps(self.mdl_withInst)
         x = msgpack.loads(s)
-        self.assertAlmostEqual(self.gs_withInst.frobeniusdist(x),0)
+        self.assertAlmostEqual(self.mdl_withInst.frobeniusdist(x),0)
 
         # Results (containing confidence region)
         with open(temp_files + "/results.mpk",'wb') as f:
@@ -216,16 +222,16 @@ class TestCodecs(CodecsTestCase):
         self.assertEqual(list(x.keys()), list(self.ds.keys()))
         self.assertEqual(x[('Gx',)].as_dict(), self.ds[('Gx',)].as_dict())
 
-        # GateSet
+        # Model
         s = pickle.dumps(self.datagen_gateset)
-        with open(temp_files + "/gateset.pickle",'wb') as f:
+        with open(temp_files + "/model.pickle",'wb') as f:
             pickle.dump(self.datagen_gateset, f)
-        with open(temp_files + "/gateset.pickle",'rb') as f:
+        with open(temp_files + "/model.pickle",'rb') as f:
             x = pickle.load(f)
         self.assertAlmostEqual(self.datagen_gateset.frobeniusdist(x),0)
-        s = pickle.dumps(self.gs_withInst)
+        s = pickle.dumps(self.mdl_withInst)
         x = pickle.loads(s)
-        self.assertAlmostEqual(self.gs_withInst.frobeniusdist(x),0)
+        self.assertAlmostEqual(self.mdl_withInst.frobeniusdist(x),0)
 
         # Results (containing confidence region)
         with open(temp_files + "/results.pickle",'wb') as f:
@@ -300,6 +306,27 @@ class TestCodecs(CodecsTestCase):
         pygsti.io.jsoncodec.tobin(b"Hi")
     
 
+    #Debugging, because there was some weird python3 vs 2 json incompatibility with string labels
+    # - turned out to be that the unit test files needed to import unicode_literals from __future__
+    #def test_labels(self):
+    #    strLabel = pygsti.obj.Label("Gi")
+    #    #strLabel = ("Gi",)
+    #    from pygsti.construction import std1Q_XYI as std
+    #
+    #    s = json.dumps(strLabel)
+    #    print("s = ",str(s))
+    #    x = msgpack.loads(s)
+    #    print("x = ",x)
+    #
+    #    print("-----------------------------")
+    #    
+    #    s = json.dumps(std.prepStrs[2])
+    #    print("s = ",s)
+    #    x = json.loads(s)
+    #    print("x = ",x)
+    #    assert(False),"STOP"
+        
+        
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

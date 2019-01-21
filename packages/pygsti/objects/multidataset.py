@@ -14,7 +14,8 @@ from collections import OrderedDict as _OrderedDict
 from ..tools import compattools as _compat
 
 from .dataset import DataSet as _DataSet
-from . import gatestring as _gs
+from . import circuit as _cir
+from . import labeldicts as _ld
 
 
 
@@ -37,7 +38,7 @@ class MultiDataSet_KeyValIterator(object):
             repData = None
 
         return datasetName, _DataSet(oliData, timeData, repData,
-                                     gateStringIndices=self.multidataset.gsIndex,
+                                     circuitIndices=self.multidataset.cirIndex,
                                      outcomeLabelIndices=self.multidataset.olIndex,
                                      collisionAction=self.multidataset.collisionActions[datasetName],
                                      bStatic=True)
@@ -64,7 +65,7 @@ class MultiDataSet_ValIterator(object):
             repData = None
 
         return _DataSet(oliData, timeData, repData,
-                        gateStringIndices=self.multidataset.gsIndex,
+                        circuitIndices=self.multidataset.cirIndex,
                         outcomeLabelIndices=self.multidataset.olIndex,
                         collisionAction=self.multidataset.collisionActions[datasetName],
                         bStatic=True)
@@ -75,7 +76,7 @@ class MultiDataSet_ValIterator(object):
 class MultiDataSet(object):
     """
     The MultiDataSet class allows for the combined access and storage of
-    several static DataSets that contain the same gate strings (in the same
+    several static DataSets that contain the same circuits (in the same
     order) AND the same time-dependence structure (if applicable).
 
     It is designed to behave similarly to a dictionary of DataSets, so that
@@ -87,7 +88,7 @@ class MultiDataSet(object):
     """
 
     def __init__(self, oliDict=None, timeDict=None, repDict=None,
-                 gateStringIndices=None,
+                 circuitIndices=None,
                  outcomeLabels=None, outcomeLabelIndices=None,
                  fileToLoadFrom=None, collisionActions=None,
                  comment=None, comments=None):
@@ -99,7 +100,7 @@ class MultiDataSet(object):
         oliDict : ordered dictionary, optional
           Keys specify dataset names.  Values are 1D numpy arrays which specify
           outcome label indices.  Each value is indexed by the values of
-          `gateStringIndices`.
+          `circuitIndices`.
 
         timeDict : ordered dictionary, optional
           Same format as `oliDict` except stores arrays of floating-point time
@@ -109,9 +110,9 @@ class MultiDataSet(object):
           Same format as `oliDict` except stores arrays of integer repetition
           counts (can be `None` if there are no repetitions)
 
-        gateStringIndices : ordered dictionary, optional
-          An OrderedDict with keys equal to gate strings (tuples of gate labels) and values equal to
-          integer indices associating a row/element of counts with the gate string.
+        circuitIndices : ordered dictionary, optional
+          An OrderedDict with keys equal to circuits (tuples of operation labels) and values equal to
+          integer indices associating a row/element of counts with the circuit.
 
         outcomeLabels : list of strings
           Specifies the set of spam labels for the DataSet.  Indices for the spam labels
@@ -129,7 +130,7 @@ class MultiDataSet(object):
           from a file (just like using the load(...) function).
 
         collisionActions : dictionary, optional
-            Specifies how duplicate gate sequences should be handled for the data
+            Specifies how duplicate circuits should be handled for the data
             sets.  Keys must match those of `oliDict` and values are "aggregate"
             or "keepseparate".  See documentation for :class:`DataSet`.  If None,
             then "aggregate" is used for all sets by default.
@@ -153,15 +154,15 @@ class MultiDataSet(object):
         #Optionally load from a file
         if fileToLoadFrom is not None:
             assert(oliDict is None and timeDict is None and repDict is None and
-                   gateStringIndices is None and outcomeLabels is None and outcomeLabelIndices is None)
+                   circuitIndices is None and outcomeLabels is None and outcomeLabelIndices is None)
             self.load(fileToLoadFrom)
             return
 
-        # self.gsIndex  :  Ordered dictionary where keys = gate strings (tuples), values = integer indices into counts
-        if gateStringIndices is not None:
-            self.gsIndex = gateStringIndices
+        # self.cirIndex  :  Ordered dictionary where keys = circuits (tuples), values = integer indices into counts
+        if circuitIndices is not None:
+            self.cirIndex = circuitIndices
         else:
-            self.gsIndex = None
+            self.cirIndex = None
 
 
                 # self.olIndex  :  Ordered dictionary where
@@ -171,14 +172,14 @@ class MultiDataSet(object):
         if outcomeLabelIndices is not None:
             self.olIndex = outcomeLabelIndices
         elif outcomeLabels is not None:
-            tup_outcomeLabels = [ ((ol,) if _compat.isstr(ol) else ol)
+            tup_outcomeLabels = [ _ld.OutcomeLabelDict.to_outcome(ol)
                                   for ol in outcomeLabels] #strings -> tuple outcome labels
             self.olIndex = _OrderedDict( [(ol,i) for (i,ol) in enumerate(tup_outcomeLabels) ] )
         else:
             self.olIndex = None
 
-        #if self.gsIndex:  #Note: tests if not none and nonempty
-        #    assert( min(self.gsIndex.values()) >= 0) # values are *slices* so can't test like this
+        #if self.cirIndex:  #Note: tests if not none and nonempty
+        #    assert( min(self.cirIndex.values()) >= 0) # values are *slices* so can't test like this
         if self.olIndex:  #Note: tests if not none and nonempty
             assert( min(self.olIndex.values()) >= 0)
 
@@ -252,7 +253,7 @@ class MultiDataSet(object):
         repData = self.repDict[datasetName] if self.repDict else None
         return _DataSet(self.oliDict[datasetName],
                         self.timeDict[datasetName], repData, 
-                        gateStringIndices=self.gsIndex,
+                        circuitIndices=self.cirIndex,
                         outcomeLabelIndices=self.olIndex, bStatic=True,
                         collisionAction=self.collisionActions[datasetName])
 
@@ -303,7 +304,7 @@ class MultiDataSet(object):
         #add data for each gate sequence to build up aggregate lists
         gstrSlices = _OrderedDict()
         agg_oli = []; agg_time = []; agg_rep = []; slc_i = 0
-        for gstr, slc in self.gsIndex.items():
+        for opstr, slc in self.cirIndex.items():
             concat_oli = _np.concatenate( [ self.oliDict[datasetName][slc]
                                             for datasetName in datasetNames ], axis=0 )
             concat_time = _np.concatenate( [ self.timeDict[datasetName][slc]
@@ -344,7 +345,7 @@ class MultiDataSet(object):
             agg_time.extend( sorted_time )
             agg_rep.extend( sorted_rep )
 
-            gstrSlices[gstr] = slice(slc_i, slc_i+len(sorted_oli))
+            gstrSlices[opstr] = slice(slc_i, slc_i+len(sorted_oli))
             slc_i += len(sorted_oli)
 
         agg_oli = _np.array(agg_oli, self.oliType)
@@ -353,7 +354,7 @@ class MultiDataSet(object):
         if _np.max(agg_rep) == 1: agg_rep = None #don't store trivial reps
 
         return _DataSet(agg_oli, agg_time, agg_rep,
-                        gateStringIndices=gstrSlices,
+                        circuitIndices=gstrSlices,
                         outcomeLabelIndices=self.olIndex, bStatic=True)
                         #leave collisionAction as default "aggregate"
 
@@ -361,7 +362,7 @@ class MultiDataSet(object):
     def add_dataset(self, datasetName, dataset):
         """
         Add a DataSet to this MultiDataSet.  The dataset
-        must be static and conform with the gate strings and
+        must be static and conform with the circuits and
         time-dependent structure passed upon construction or
         those inherited from the first dataset added.
 
@@ -378,11 +379,11 @@ class MultiDataSet(object):
         #Check if dataset is compatible
         if not dataset.bStatic:
             raise ValueError("Cannot add dataset: only static DataSets can be added to a MultiDataSet")
-        if self.gsIndex is not None and set(dataset.gsIndex.keys()) != set(self.gsIndex.keys()):
-            raise ValueError("Cannot add dataset: gate strings do not match")
+        if self.cirIndex is not None and set(dataset.cirIndex.keys()) != set(self.cirIndex.keys()):
+            raise ValueError("Cannot add dataset: circuits do not match")
 
-        if self.gsIndex is None:
-            self.gsIndex = dataset.gsIndex
+        if self.cirIndex is None:
+            self.cirIndex = dataset.cirIndex
 
         if self.olIndex is None:
             self.olIndex = dataset.olIndex
@@ -407,11 +408,11 @@ class MultiDataSet(object):
         self.comments[datasetName] = dataset.comment
 
         #Add dataset's data to self.oliDict, self.timeDict and self.repDict,
-        # updating gsIndex and existing data if needed
+        # updating cirIndex and existing data if needed
         if len(self.oliDict) == 0:
             # this is the first added DataSet, so we can just overwrite
-            # gsIndex even if it isn't None.
-            self.gsIndex = dataset.gsIndex
+            # cirIndex even if it isn't None.
+            self.cirIndex = dataset.cirIndex
 
             #And then add data:
             self.oliDict[datasetName] = ds_oliData
@@ -420,8 +421,8 @@ class MultiDataSet(object):
                 self.repDict = _OrderedDict() # OK since this is the first DataSet added
                 self.repDict[datasetName] = dataset.repData
 
-        elif dataset.gsIndex == self.gsIndex:
-            # self.gsIndex is fine as is - no need to reconcile anything 
+        elif dataset.cirIndex == self.cirIndex:
+            # self.cirIndex is fine as is - no need to reconcile anything 
             self.oliDict[datasetName] = ds_oliData
             self.timeDict[datasetName] = dataset.timeData
             if dataset.repData is not None:
@@ -433,7 +434,7 @@ class MultiDataSet(object):
                 self.repDict[datasetName] = dataset.repData
 
         else:
-            # Merge data due to differences in self.gsIndex and dataset.gsIndex, which can 
+            # Merge data due to differences in self.cirIndex and dataset.cirIndex, which can 
             # occur because dataset may have zeros in different places from self.
             firstKey =  list(self.oliDict.keys())[0]
             dataLen = len(self.oliDict[firstKey]) # current length of self's data arrays
@@ -453,18 +454,18 @@ class MultiDataSet(object):
             self.repDict[datasetName] = _np.zeros(dataLen, self.repType)
             
             #sort keys in order of increasing slice-start position (w.r.t. self)
-            sorted_gsIndex = sorted(list(self.gsIndex.items()),key=lambda x: x[1].start)
+            sorted_cirIndex = sorted(list(self.cirIndex.items()),key=lambda x: x[1].start)
 
             off = 0
-            for gs,slc in sorted_gsIndex:
-                other_slc = dataset.gsIndex[gs] # we know key exists from check above
+            for opstr,slc in sorted_cirIndex:
+                other_slc = dataset.cirIndex[opstr] # we know key exists from check above
                 l1 = slc.stop-slc.start; assert(slc.step is None)
                 l2 = other_slc.stop-other_slc.start; assert(slc.step is None)
 
-                #Update gsIndex - (expands slice if l2 > l1; adds in offset)
+                #Update cirIndex - (expands slice if l2 > l1; adds in offset)
                 l = max(l1,l2)
                 new_slc = slice(off + slc.start, off + slc.start + l)
-                self.gsIndex[gs] = new_slc
+                self.cirIndex[opstr] = new_slc
 
                 #Update existing data & new data arrays
                 if l2 > l1: # insert 0-reps into self's data arrays
@@ -501,26 +502,26 @@ class MultiDataSet(object):
 
                     
     def __str__(self):
-        s  = "MultiDataSet containing: %d datasets, each with %d strings\n" % (len(self), len(self.gsIndex) if self.gsIndex is not None else 0)
+        s  = "MultiDataSet containing: %d datasets, each with %d strings\n" % (len(self), len(self.cirIndex) if self.cirIndex is not None else 0)
         s += " Dataset names = " + ", ".join(list(self.keys())) + "\n"
         s += " Outcome labels = " + ", ".join(map(str,self.olIndex.keys()) if self.olIndex is not None else [])
-        if self.gsIndex is not None:
-            s += "\nGate strings: \n" + "\n".join( map(str,list(self.gsIndex.keys())) )
+        if self.cirIndex is not None:
+            s += "\nGate strings: \n" + "\n".join( map(str,list(self.cirIndex.keys())) )
         return s + "\n"
 
 
     def copy(self):
         """ Make a copy of this MultiDataSet """
         return MultiDataSet(self.oliDict, self.timeDict, self.repDict,
-                            gateStringIndices=_copy.deepcopy(self.gsIndex) if (self.gsIndex is not None) else None,
+                            circuitIndices=_copy.deepcopy(self.cirIndex) if (self.cirIndex is not None) else None,
                             outcomeLabelIndices=_copy.deepcopy(self.olIndex) if (self.olIndex is not None) else None,
                             collisionActions=self.collisionActions, comments=_copy.deepcopy(self.comments),
                             comment=(self.comment + " copy") if self.comment else None )
 
 
     def __getstate__(self):
-        toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))) if self.gsIndex else [],
-                     'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
+        toPickle = { 'cirIndexKeys': list(map(_cir.CompressedCircuit, list(self.cirIndex.keys()))) if self.cirIndex else [],
+                     'cirIndexVals': list(self.cirIndex.values()) if self.cirIndex else [],
                      'olIndex': self.olIndex,
                      'oliDict': self.oliDict,
                      'timeDict': self.timeDict,
@@ -531,8 +532,8 @@ class MultiDataSet(object):
         return toPickle
 
     def __setstate__(self, state_dict):
-        gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
-        self.gsIndex = _OrderedDict( list(zip(gsIndexKeys, state_dict['gsIndexVals'])) )
+        cirIndexKeys = [ cgs.expand() for cgs in state_dict['cirIndexKeys'] ]
+        self.cirIndex = _OrderedDict( list(zip(cirIndexKeys, state_dict['cirIndexVals'])) )
         self.olIndex = state_dict['olIndex']
         self.oliDict = state_dict['oliDict']
         self.timeDict = state_dict['timeDict']
@@ -552,8 +553,8 @@ class MultiDataSet(object):
             filename ends in ".gz", the file will be gzip compressed.
         """
 
-        toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))) if self.gsIndex else [],
-                     'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
+        toPickle = { 'cirIndexKeys': list(map(_cir.CompressedCircuit, list(self.cirIndex.keys()))) if self.cirIndex else [],
+                     'cirIndexVals': list(self.cirIndex.values()) if self.cirIndex else [],
                      'olIndex': self.olIndex,
                      'oliKeys': list(self.oliDict.keys()),
                      'timeKeys': list(self.timeDict.keys()),
@@ -609,17 +610,17 @@ class MultiDataSet(object):
 
         state_dict = _pickle.load(f)
         def expand(x): 
-            """ Expand a comproessed gate string """
-            assert isinstance(x,_gs.CompressedGateString)
+            """ Expand a comproessed circuit """
+            assert isinstance(x,_cir.CompressedCircuit)
             return x.expand()
             #else: #to be backward compatible
             #  _warnings.warn("Deprecated dataset format.  Please re-save " +
             #                 "this dataset soon to avoid future incompatibility.")
-            #  return _gs.GateString(_gs.CompressedGateString.expand_gate_label_tuple(x))
-        gsIndexKeys = [ expand(cgs) for cgs in state_dict['gsIndexKeys'] ]
+            #  return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x))
+        cirIndexKeys = [ expand(cgs) for cgs in state_dict['cirIndexKeys'] ]
 
-        #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
-        self.gsIndex = _OrderedDict( list(zip(gsIndexKeys, state_dict['gsIndexVals'])) )
+        #cirIndexKeys = [ cgs.expand() for cgs in state_dict['cirIndexKeys'] ]
+        self.cirIndex = _OrderedDict( list(zip(cirIndexKeys, state_dict['cirIndexVals'])) )
         self.olIndex = state_dict['olIndex']
         self.collisionActions = state_dict['collisionActions']
         self.comments = state_dict["comments"]

@@ -12,54 +12,56 @@ import warnings as _warnings
 import collections as _collections
 import itertools as _itertools
 
-from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
+from ..objects import labeldicts as _ld
 from ..baseobjs import label as _lbl
 from ..tools import compattools as _compat
-from . import gatestringconstruction as _gstrc
+from . import circuitconstruction as _gstrc
 
 from pprint import pprint
 
-def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
-                       sampleError="none", seed=None, randState=None,
+def generate_fake_data(modelOrDataset, circuit_list, nSamples,
+                       sampleError="multinomial", seed=None, randState=None,
                        aliasDict=None, collisionAction="aggregate",
                        comm=None, memLimit=None):
-    """Creates a DataSet using the probabilities obtained from a gateset.
+    """Creates a DataSet using the probabilities obtained from a model.
 
     Parameters
     ----------
-    gatesetOrDataset : GateSet or DataSet object
-        If a GateSet, the gate set whose probabilities generate the data.
+    modelOrDataset : Model or DataSet object
+        If a Model, the model whose probabilities generate the data.
         If a DataSet, the data set whose frequencies generate the data.
 
-    gatestring_list : list of (tuples or GateStrings) or None
-        Each tuple or GateString contains gate labels and
+    circuit_list : list of (tuples or Circuits) or None
+        Each tuple or Circuit contains operation labels and
         specifies a gate sequence whose counts are included
         in the returned DataSet. e.g. ``[ (), ('Gx',), ('Gx','Gy') ]``
 
     nSamples : int or list of ints or None
-        The simulated number of samples for each gate string.  This only has
+        The simulated number of samples for each operation sequence.  This only has
         effect when  ``sampleError == "binomial"`` or ``"multinomial"``.  If an
-        integer, all gate strings have this number of total samples. If a list,
+        integer, all operation sequences have this number of total samples. If a list,
         integer elements specify the number of samples for the corresponding
-        gate string.  If ``None``, then `gatesetOrDataset` must be a
+        operation sequence.  If ``None``, then `modelOrDataset` must be a
         :class:`~pygsti.objects.DataSet`, and total counts are taken from it
-        (on a per-gatestring basis).
+        (on a per-circuit basis).
 
     sampleError : string, optional
         What type of sample error is included in the counts.  Can be:
 
         - "none"  - no sample error: counts are floating point numbers such
           that the exact probabilty can be found by the ratio of count / total.
-        - "round" - same as "none", except counts are rounded to the nearest
+        - "clip" - no sample error, but clip probabilities to [0,1] so, e.g.,
+          counts are always positive.
+        - "round" - same as "clip", except counts are rounded to the nearest
           integer.
         - "binomial" - the number of counts is taken from a binomial
-          distribution.  Distribution has parameters p = probability of the
-          gate string and n = number of samples.  This can only be used when
-          there are exactly two SPAM labels in gatesetOrDataset.
+          distribution.  Distribution has parameters p = (clipped) probability
+          of the operation sequence and n = number of samples.  This can only be used
+          when there are exactly two SPAM labels in modelOrDataset.
         - "multinomial" - counts are taken from a multinomial distribution.
-          Distribution has parameters p_k = probability of the gate string
-          using the k-th SPAM label and n = number of samples.
+          Distribution has parameters p_k = (clipped) probability of the gate
+          string using the k-th SPAM label and n = number of samples.
 
     seed : int, optional
         If not ``None``, a seed for numpy's random number generator, which
@@ -72,13 +74,13 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         manually incrementing seeds between those calls.
 
     aliasDict : dict, optional
-        A dictionary mapping single gate labels into tuples of one or more
-        other gate labels which translate the given gate strings before values
-        are computed using `gatesetOrDataset`.  The resulting Dataset, however,
-        contains the *un-translated* gate strings as keys.
+        A dictionary mapping single operation labels into tuples of one or more
+        other operation labels which translate the given operation sequences before values
+        are computed using `modelOrDataset`.  The resulting Dataset, however,
+        contains the *un-translated* operation sequences as keys.
 
     collisionAction : {"aggregate", "keepseparate"}
-        Determines how duplicate gate sequences are handled by the resulting
+        Determines how duplicate operation sequences are handled by the resulting
         `DataSet`.  Please see the constructor documentation for `DataSet`.
 
     comm : mpi4py.MPI.Comm, optional
@@ -93,19 +95,19 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
     Returns
     -------
     DataSet
-       A static data set filled with counts for the specified gate strings.
+       A static data set filled with counts for the specified operation sequences.
 
     """
     NTOL = 10
     TOL = 1 / (10**-NTOL)
 
-    if isinstance(gatesetOrDataset, _ds.DataSet):
-        dsGen = gatesetOrDataset
+    if isinstance(modelOrDataset, _ds.DataSet):
+        dsGen = modelOrDataset
         gsGen = None
         dataset = _ds.DataSet( collisionAction=collisionAction,
                                outcomeLabelIndices = dsGen.olIndex ) # keep same outcome labels
     else:
-        gsGen = gatesetOrDataset
+        gsGen = modelOrDataset
         dsGen = None
         dataset = _ds.DataSet( collisionAction=collisionAction )
 
@@ -115,10 +117,10 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                       for ky,val in aliasDict.items() } # convert to use Labels
 
     if gsGen:
-        trans_gatestring_list = [ _gstrc.translate_gatestring(s, aliasDict)
-                                  for s in gatestring_list ]
-        all_probs = gsGen.bulk_probs(trans_gatestring_list, comm=comm, memLimit=memLimit)
-        #all_dprobs = gsGen.bulk_dprobs(gatestring_list) #DEBUG - not needed here!!!
+        trans_circuit_list = [ _gstrc.translate_circuit(s, aliasDict)
+                                  for s in circuit_list ]
+        all_probs = gsGen.bulk_probs(trans_circuit_list, comm=comm, memLimit=memLimit)
+        #all_dprobs = gsGen.bulk_dprobs(circuit_list) #DEBUG - not needed here!!!
 
     if comm is None or comm.Get_rank() == 0: # only root rank computes
                 
@@ -128,10 +130,10 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
             else:
                 rndm = randState
 
-        for k,s in enumerate(gatestring_list):
+        for k,s in enumerate(circuit_list):
 
-            #print("DB GEN %d of %d (len %d)" % (k,len(gatestring_list),len(s)))
-            trans_s = _gstrc.translate_gatestring(s, aliasDict)
+            #print("DB GEN %d of %d (len %d)" % (k,len(circuit_list),len(s)))
+            trans_s = _gstrc.translate_circuit(s, aliasDict)
             if gsGen:
                 ps = all_probs[trans_s]
 
@@ -182,11 +184,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                 except:
                     N = nSamples #if not indexable, nSamples should be a single number
 
-            #Weight the number of samples according to a WeightedGateString
-            if isinstance(s, _gs.WeightedGateString):
-                nWeightedSamples = int(round(s.weight * N))
-            else:
-                nWeightedSamples = N
+            nWeightedSamples = N
 
             counts = {} #don't use an ordered dict here - add_count_dict will sort keys
             labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1]) ]
@@ -208,8 +206,10 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                     counts[ol] = countsArray[0,i]
             else:
                 for outcomeLabel,p in ps.items():
-                    pc = _np.clip(p,0,1)
+                    pc = _np.clip(p,0,1) # Note: *not* used in "none" case
                     if sampleError == "none":
+                        counts[outcomeLabel] = float(nWeightedSamples * p)
+                    elif sampleError == "clip":
                         counts[outcomeLabel] = float(nWeightedSamples * pc)
                     elif sampleError == "round":
                         counts[outcomeLabel] = int(round(nWeightedSamples*pc))
@@ -233,7 +233,7 @@ def merge_outcomes(dataset,label_merge_dict):
     Parameters
     ----------
     dataset : DataSet object
-        The input DataSet whose results will be compiled according to the rules
+        The input DataSet whose results will be simplified according to the rules
         set forth in label_merge_dict
 
     label_merge_dict : dictionary
@@ -242,13 +242,17 @@ def merge_outcomes(dataset,label_merge_dict):
         if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
         we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
         {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
-        to use :function:`filter_qubits` which also updates the gate sequences.
+        to use :function:`filter_qubits` which also updates the operation sequences.
 
     Returns
     -------
     merged_dataset : DataSet object
         The DataSet with outcomes merged according to the rules given in label_merge_dict.
     """
+    # strings -> tuple outcome labels in keys and values of label_merge_dict
+    to_outcome = _ld.OutcomeLabelDict.to_outcome #shorthand
+    label_merge_dict = { to_outcome(key): list(map(to_outcome,val)) 
+                         for key,val in label_merge_dict.items() }
 
     new_outcomes = label_merge_dict.keys()
     merged_dataset = _ds.DataSet(outcomeLabels=new_outcomes)
@@ -256,7 +260,7 @@ def merge_outcomes(dataset,label_merge_dict):
     if not set(dataset.get_outcome_labels()).issubset( merge_dict_old_outcomes ):
         raise ValueError(("`label_merge_dict` must account for all the outcomes in original dataset."
                           " It's missing directives for:\n%s") % 
-                         '\n'.join(set(dataset.get_outcome_labels()) - set(merge_dict_old_outcomes)))
+                         '\n'.join(set(map(str,dataset.get_outcome_labels())) - set(map(str,merge_dict_old_outcomes))))
 
     for key in dataset.keys():
         linecounts = dataset[key].counts
@@ -337,18 +341,19 @@ def create_merge_dict(indices_to_keep, outcome_labels):
     return dict(merge_dict) # return a *normal* dict
 
 
-def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=None):
+def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,
+                   new_sectors=None, idle='Gi'):
     """
     Creates a DataSet that restricts is the restriction of `dataset`
     to the sectors identified by `sectors_to_keep`.
 
     More specifically, this function aggregates (sums) outcomes in `dataset`
     which differ only in sectors (usually qubits - see below)  *not* in 
-    `sectors_to_keep`, and removes any gate labels which act specifically on
+    `sectors_to_keep`, and removes any operation labels which act specifically on
     sectors not in `sectors_to_keep` (e.g. an idle gate acting on *all* 
     sectors because it's `.sslbls` is None will *not* be removed).
 
-    Here "sectors" are state-space labels, present in the gate strings of 
+    Here "sectors" are state-space labels, present in the operation sequences of 
     `dataset`.  Each sector also corresponds to a particular character position
     within the outcomes labels of `dataset`.  Thus, for this function to work,
     the outcome labels of `dataset` must all be 1-tuples whose sole element is
@@ -356,7 +361,7 @@ def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=Non
     a single sector.  If the state-space labels are integers, then they can
     serve as both a label and an outcome-string position.  The argument
     `new_sectors` may be given to rename the kept state-space labels in the
-    returned `DataSet`'s gate strings.
+    returned `DataSet`'s operation sequences.
 
     A typical case is when the state-space is that of *n* qubits, and the
     state space labels the intergers 0 to *n-1*.  As stated above, in this
@@ -380,21 +385,26 @@ def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=Non
         letter-positions, then this may be left as `None`.  For example, if the 
         outcome strings of `dataset` are '00','01','10',and '11' and the first
         position refers to qubit "Q1" and the second to qubit "Q2" (present in
-        gate labels), then to extract just "Q2" data `sectors_to_keep` should be
+        operation labels), then to extract just "Q2" data `sectors_to_keep` should be
         `["Q2"]` and `sindices_to_keep` should be `[1]`.
 
     new_sectors : list or tuple, optional
         New sectors names to map the elements of `sectors_to_keep` onto in the 
-        output DataSet's gate strings.  None means the labels are not renamed.
+        output DataSet's operation sequences.  None means the labels are not renamed.
         This can be useful if, for instance, you want to run a 2-qubit protocol
         that expects the qubits to be labeled "0" and "1" on qubits "4" and "5" 
         of a larger set.  Simply set `sectors_to_keep == [4,5]` and 
         `new_sectors == [0,1]`.
 
+    idle : string or Label, optional
+        The operation label to be used when there are no kept components of a 
+        "layer" (element) of a circuit.
+
+
     Returns
     -------
     filtered_dataset : DataSet object
-        The DataSet with outcomes and gate strings filtered as described above.
+        The DataSet with outcomes and operation sequences filtered as described above.
     """
     if sindices_to_keep is None:
         sindices_to_keep = sectors_to_keep
@@ -402,7 +412,7 @@ def filter_dataset(dataset,sectors_to_keep,sindices_to_keep=None,new_sectors=Non
     ds_merged = merge_outcomes(dataset, create_merge_dict(sindices_to_keep,
                                              dataset.get_outcome_labels()))
     ds_merged = ds_merged.copy_nonstatic()
-    ds_merged.process_gate_strings(lambda s: _gstrc.filter_gatestring(
-                                       s, sectors_to_keep, new_sectors))
+    ds_merged.process_circuits(lambda s: _gstrc.filter_circuit(
+        s, sectors_to_keep, new_sectors, idle), aggregate=True)
     ds_merged.done_adding_data()
     return ds_merged

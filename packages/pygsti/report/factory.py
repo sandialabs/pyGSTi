@@ -21,6 +21,7 @@ from ..tools   import timed_block as _timed_block
 from ..tools.mpitools import distribute_indices as _distribute_indices
 
 from .. import tools as _tools
+from .. import objects as _objs
 from .. import _version
 
 from . import workspace as _ws
@@ -28,6 +29,7 @@ from . import autotitle as _autotitle
 from . import merge_helpers as _merge
 from . import reportables as _reportables
 from .notebook import Notebook as _Notebook
+from ..baseobjs.label import Label as _Lbl
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
@@ -106,39 +108,39 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
     return running_lbls
 
 
-#def _robust_estimate_has_same_gatesets(estimates, est_lbl):
+#def _robust_estimate_has_same_models(estimates, est_lbl):
 #    lbl_robust = est_lbl+ROBUST_SUFFIX
 #    if lbl_robust not in estimates: return False #no robust estimate
 #
-#    for gs_lbl in list(estimates[est_lbl].goparameters.keys()) \
+#    for mdl_lbl in list(estimates[est_lbl].goparameters.keys()) \
 #        + ['final iteration estimate']:
-#        if gs_lbl not in estimates[lbl_robust].gatesets:
-#            return False #robust estimate is missing gs_lbl!
+#        if mdl_lbl not in estimates[lbl_robust].models:
+#            return False #robust estimate is missing mdl_lbl!
 #
-#        gs = estimates[lbl_robust].gatesets[gs_lbl]
-#        if estimates[est_lbl].gatesets[gs_lbl].frobeniusdist(gs) > 1e-8:
-#            return False #gateset mismatch!
+#        mdl = estimates[lbl_robust].models[mdl_lbl]
+#        if estimates[est_lbl].models[mdl_lbl].frobeniusdist(mdl) > 1e-8:
+#            return False #model mismatch!
 #
 #    return True
 
-def _get_viewable_crf(est, est_lbl, gs_lbl, verbosity=0):
+def _get_viewable_crf(est, est_lbl, mdl_lbl, verbosity=0):
     printer = _VerbosityPrinter.build_printer(verbosity)
 
-    if est.has_confidence_region_factory(gs_lbl, 'final'):
-        crf = est.get_confidence_region_factory(gs_lbl,'final')
+    if est.has_confidence_region_factory(mdl_lbl, 'final'):
+        crf = est.get_confidence_region_factory(mdl_lbl,'final')
         if crf.can_construct_views():
             return crf
         else:
             printer.log(
                 ("Note: Confidence interval factory for {estlbl}.{gslbl} "
-                 "gate set exists but cannot create views.  This could be "
+                 "model exists but cannot create views.  This could be "
                  "because you forgot to create a Hessian *projection*"
-                ).format(estlbl=est_lbl,gslbl=gs_lbl))
+                ).format(estlbl=est_lbl,gslbl=mdl_lbl))
     else:
         printer.log(
             ("Note: no factory to compute confidence "
-             "intervals for the '{estlbl}.{gslbl}' gate set."
-            ).format(estlbl=est_lbl,gslbl=gs_lbl))
+             "intervals for the '{estlbl}.{gslbl}' model."
+            ).format(estlbl=est_lbl,gslbl=mdl_lbl))
 
     return None
 
@@ -178,7 +180,7 @@ def create_offline_zip(outputDir="."):
     zipHandle.close()
 
 def _set_toggles(results_dict, brevity, combine_robust):
-    #Determine when to get gatestring weight (scaling) values and show via
+    #Determine when to get circuit weight (scaling) values and show via
     # ColorBoxPlots below by checking whether any estimate has "weights"
     # parameter (a dict) with > 0 entries.
     toggles = { }
@@ -200,7 +202,7 @@ def _set_toggles(results_dict, brevity, combine_robust):
 
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
                                nmthreshold, printer, fmt,
-                               combine_robust):
+                               combine_robust, idt_results_dict=None):
     """
     Creates the "master switchboard" used by several of the reports
     """
@@ -217,7 +219,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     for results in results_dict.values():
         est_labels = _add_new_estimate_labels(est_labels, results.estimates,
                                               combine_robust)
-        Ls = _add_new_labels(Ls, results.gatestring_structs['final'].Ls)
+        Ls = _add_new_labels(Ls, results.circuit_structs['final'].Ls)
         for est in results.estimates.values():
             gauge_opt_labels = _add_new_labels(gauge_opt_labels,
                                                list(est.goparameters.keys()))
@@ -276,6 +278,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("gssAllL",(0,))
     switchBd.add("gsFinalGrid",(2,))
 
+    switchBd.add("idtresults",(0,))
+
     if confidenceLevel is not None:
         switchBd.add("cri",(0,1,2))
         switchBd.add("criGIRep",(0,1))
@@ -284,18 +288,21 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
         results = results_dict[dslbl]
 
         switchBd.ds[d] = results.dataset
-        switchBd.prepStrs[d] = results.gatestring_lists['prep fiducials']
-        switchBd.effectStrs[d] = results.gatestring_lists['effect fiducials']
-        switchBd.strs[d] = (results.gatestring_lists['prep fiducials'],
-                            results.gatestring_lists['effect fiducials'])
-        switchBd.germs[d] = results.gatestring_lists['germs']
+        switchBd.prepStrs[d] = results.circuit_lists['prep fiducials']
+        switchBd.effectStrs[d] = results.circuit_lists['effect fiducials']
+        switchBd.strs[d] = (results.circuit_lists['prep fiducials'],
+                            results.circuit_lists['effect fiducials'])
+        switchBd.germs[d] = results.circuit_lists['germs']
 
-        switchBd.gssFinal[d] = results.gatestring_structs['final']
+        switchBd.gssFinal[d] = results.circuit_structs['final']
         for iL,L in enumerate(swLs): #allow different results to have different Ls
-            if L in results.gatestring_structs['final'].Ls:
-                k = results.gatestring_structs['final'].Ls.index(L)
-                switchBd.gss[d,iL] = results.gatestring_structs['iteration'][k]
-        switchBd.gssAllL[d] = results.gatestring_structs['iteration']
+            if L in results.circuit_structs['final'].Ls:
+                k = results.circuit_structs['final'].Ls.index(L)
+                switchBd.gss[d,iL] = results.circuit_structs['iteration'][k]
+        switchBd.gssAllL[d] = results.circuit_structs['iteration']
+
+        if idt_results_dict is not None:
+            switchBd.idtresults[d] = idt_results_dict.get(dslbl,None)
 
         for i,lbl in enumerate(est_labels):
             est = results.estimates.get(lbl,None)
@@ -329,7 +336,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             switchBd.clifford_compilation[d,i] = est.parameters.get("clifford compilation",'auto')
             if switchBd.clifford_compilation[d,i] == 'auto':
                 switchBd.clifford_compilation[d,i] = find_std_clifford_compilation(
-                    est.gatesets['target'],printer)
+                    est.models['target'],printer)
 
             switchBd.profiler[d,i] = est_modvi.parameters.get('profiler',None)
             switchBd.meta_stdout[d,i] = est_modvi.meta.get('stdout',[('LOG',1,"No standard output recorded")])
@@ -357,33 +364,33 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 switchBd.eff_ds[d,i] = NA
                 switchBd.scaledSubMxsDict[d,i] = NA
 
-            switchBd.gsTarget[d,i] = est.gatesets['target']
-            switchBd.gsGIRep[d,i] = est.gatesets[GIRepLbl]
+            switchBd.gsTarget[d,i] = est.models['target']
+            switchBd.gsGIRep[d,i] = est.models[GIRepLbl]
             try:
-                switchBd.gsGIRepEP[d,i] = _tools.project_to_target_eigenspace(est.gatesets[GIRepLbl],
-                                                                              est.gatesets['target'])
-            except NotImplementedError: # usually if not a "dense" gateset - todense is not impl
+                switchBd.gsGIRepEP[d,i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
+                                                                              est.models['target'])
+            except AttributeError: # Implicit models don't support everything, like set_all_parameterizations
                 switchBd.gsGIRepEP[d,i] = None
 
-            switchBd.gsFinal[d,i,:] = [ est.gatesets.get(l,NA) for l in gauge_opt_labels ]
+            switchBd.gsFinal[d,i,:] = [ est.models.get(l,NA) for l in gauge_opt_labels ]
             switchBd.gsTargetAndFinal[d,i,:] = \
-                        [ [est.gatesets['target'], est.gatesets[l]] if (l in est.gatesets) else NA
+                        [ [est.models['target'], est.models[l]] if (l in est.models) else NA
                           for l in gauge_opt_labels ]
             switchBd.goparams[d,i,:] = [ est.goparameters.get(l,NA) for l in gauge_opt_labels]
 
             for iL,L in enumerate(swLs): #allow different results to have different Ls
-                if L in results.gatestring_structs['final'].Ls:
-                    k = results.gatestring_structs['final'].Ls.index(L)
-                    switchBd.gsL[d,i,iL] = est.gatesets['iteration estimates'][k]
-                    switchBd.gsL_modvi[d,i,iL] = est_modvi.gatesets['iteration estimates'][k]
-            switchBd.gsAllL[d,i] = est.gatesets['iteration estimates']
-            switchBd.gsAllL_modvi[d,i] = est_modvi.gatesets['iteration estimates']
+                if L in results.circuit_structs['final'].Ls:
+                    k = results.circuit_structs['final'].Ls.index(L)
+                    switchBd.gsL[d,i,iL] = est.models['iteration estimates'][k]
+                    switchBd.gsL_modvi[d,i,iL] = est_modvi.models['iteration estimates'][k]
+            switchBd.gsAllL[d,i] = est.models['iteration estimates']
+            switchBd.gsAllL_modvi[d,i] = est_modvi.models['iteration estimates']
 
             if confidenceLevel is not None:
                 misfit_sigma = est.misfit_sigma(use_accurate_Np=True)
 
                 for il,l in enumerate(gauge_opt_labels):
-                    if l in est.gatesets:
+                    if l in est.models:
                         switchBd.cri[d,i,il] = None #default
                         crf = _get_viewable_crf(est, lbl, l, printer-2)
 
@@ -398,7 +405,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
                     else: switchBd.cri[d,i,il] = NA
 
-                # "Gauge Invariant Representation" gateset
+                # "Gauge Invariant Representation" model
                 # If we can't compute CIs for this, ignore SILENTLY, since any
                 #  relevant warnings/notes should have been given above.
                 switchBd.criGIRep[d,i] = None #default
@@ -412,35 +419,84 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     for i,gokey in enumerate(gauge_opt_labels):
         if multidataset:
             switchBd.gsFinalGrid[i] = [
-                [ (res.estimates[el].gatesets.get(gokey,None)
+                [ (res.estimates[el].models.get(gokey,None)
                    if el in res.estimates else None) for el in est_labels ]
                 for res in results_list ]
         else:
             switchBd.gsFinalGrid[i] = [
-                (results_list[0].estimates[el].gatesets.get(gokey,None)
+                (results_list[0].estimates[el].models.get(gokey,None)
                    if el in results_list[0].estimates else None) for el in est_labels ]
 
     if multidataset:
         switchBd.add_unswitched('gsTargetGrid', [
-            [ (res.estimates[el].gatesets.get('target',None)
+            [ (res.estimates[el].models.get('target',None)
                if el in res.estimates else None) for el in est_labels ]
             for res in results_list ])
     else:
         switchBd.add_unswitched('gsTargetGrid', [
-            (results_list[0].estimates[el].gatesets.get('target',None)
+            (results_list[0].estimates[el].models.get('target',None)
              if el in results_list[0].estimates else None) for el in est_labels])
 
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs
 
+def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
+    """ 
+    Constructs a dictionary of idle tomography results, parallel
+    to the GST results in `gst_results_dict`, where possible.
+    """
+    if idtPauliDicts is None: 
+        return {}
+
+    idt_results_dict = {}
+    GiStr = _objs.Circuit((idtIdleOp,))
+
+    from ..extras import idletomography as _idt
+    autodict = bool(idtPauliDicts == "auto")
+    for ky,results in gst_results_dict.items():
+
+        if autodict:
+            for est in results.estimates.values():
+                if 'target' in est.models:
+                    idt_target = est.models['target']
+                    break
+            else: continue # can't find any target models
+            idtPauliDicts = _idt.determine_paulidicts(idt_target)
+            if idtPauliDicts is None: 
+                continue # automatic creation failed -> skip
+
+        gss = results.circuit_structs['final']
+        if GiStr not in gss.germs: continue
+        
+        try: # to get a dimension -> nQubits
+            estLabels = list(results.estimates.keys())
+            estimate0 = results.estimates[estLabels[0]]
+            dim = estimate0.models['target'].dim
+            nQubits = int(round(_np.log2(dim)//2))
+        except:
+            printer.log(" ! Skipping idle tomography on %s dataset (can't get # qubits) !" % ky)
+            continue # skip if we can't get dimension
+
+        maxLengths = gss.Ls
+        plaq = gss.get_plaquette(maxLengths[0], GiStr) # just use "L0" (first maxLength) - all should have same fidpairs
+        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idtPauliDicts, nQubits)
+        idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
+        printer.log(" * Running idle tomography on %s dataset *" % ky)
+        idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idtPauliDicts,
+                                             maxweight=2, #HARDCODED for now (FUTURE)
+                                             advancedOptions=idt_advanced)
+        idt_results_dict[ky] = idtresults
+
+    return idt_results_dict
+
 
 def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
                                       dataset_labels, est_labels):
-    gate_labels = None
+    op_labels = None
     for results in results_dict.values():
         for est in results.estimates.values():
-            if 'target' in est.gatesets:
-                gate_labels = _add_new_labels(gate_labels,
-                                              list(est.gatesets['target'].gates.keys()))
+            if 'target' in est.models:
+                op_labels = _add_new_labels(op_labels,
+                                              list(est.models['target'].operations.keys()))
 
     if bGaugeInv:
         metric_abbrevs = ["evinf", "evagi","evnuinf","evnuagi","evdiamond",
@@ -448,19 +504,19 @@ def _create_single_metric_switchboard(ws, results_dict, bGaugeInv,
     else:
         metric_abbrevs = ["inf","agi","trace","diamond","nuinf","nuagi",
                           "frob"]
-    metric_names = [ _reportables.info_of_gatefn_by_name(abbrev)[0].replace('|',' ')
+    metric_names = [ _reportables.info_of_opfn_by_name(abbrev)[0].replace('|',' ')
                      for abbrev in metric_abbrevs ]
 
     if len(dataset_labels) > 1: # multidataset
         metric_switchBd = ws.Switchboard(
-            ["Metric", "Gate Label"], [metric_names, gate_labels],
+            ["Metric", "Operation"], [metric_names, op_labels],
             ["dropdown", "dropdown"], [0,0], show=[True,True] )
-        metric_switchBd.add("gateLabel",(1,))
+        metric_switchBd.add("opLabel",(1,))
         metric_switchBd.add("metric",(0,))
         metric_switchBd.add("cmpTableTitle",(0,1))
 
-        metric_switchBd.gateLabel[:] = gate_labels
-        for i,gl in enumerate(gate_labels):
+        metric_switchBd.opLabel[:] = op_labels
+        for i,gl in enumerate(op_labels):
             metric_switchBd.cmpTableTitle[:,i] = ["%s %s" % (gl,nm) for nm in metric_names]
 
     else:
@@ -595,9 +651,9 @@ def create_standard_report(results, filename, title="auto",
         - errgen_type: {"logG-logT", "logTiG", "logGTi"}
             The type of error generator to compute.  Allowed values are:
 
-            - "logG-logT" : errgen = log(gate) - log(target_gate)
-            - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
-            - "logGTi" : errgen = log( dot(gate, inv(target_gate)) )
+            - "logG-logT" : errgen = log(gate) - log(target_op)
+            - "logTiG" : errgen = log( dot(inv(target_op), gate) )
+            - "logGTi" : errgen = log( dot(gate, inv(target_op)) )
 
         - nmthreshold : float, optional
             The threshold, in units of standard deviations, that triggers the
@@ -632,6 +688,15 @@ def create_standard_report(results, filename, title="auto",
             tables will get confidence intervals (and reports will take longer
             to generate).
 
+        - idt_basis_dicts : tuple, optional
+            Tuple of (prepDict,measDict) pauli-basis dictionaries, which map
+            between 1-qubit Pauli basis strings (e.g. `'-X'` or `'Y'`) and tuples
+            of gate names (e.g. `('Gx','Gx')`).  If given, idle tomography will
+            be performed on the 'Gi' gate and included in the report.
+
+        - idt_idle_oplabel : Label, optional
+            The label identifying the idle gate (for use with idle tomography).
+
 
     verbosity : int, optional
        How much detail to send to stdout.
@@ -656,6 +721,8 @@ def create_standard_report(results, filename, title="auto",
     autosize = advancedOptions.get('autosize','initial')
     combine_robust = advancedOptions.get('combine_robust',True)
     ci_brevity = advancedOptions.get('confidence_interval_brevity',1)
+    idtPauliDicts = advancedOptions.get('idt_basis_dicts','auto')
+    idtIdleOp = advancedOptions.get('idt_idle_oplabel',_Lbl('Gi'))
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -709,6 +776,16 @@ def create_standard_report(results, filename, title="auto",
                ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__)]
     qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
 
+    # Perform idle tomography on datasets if desired (need to do
+    #  this before creating main switchboard)
+    try:
+        idt_results_dict = _construct_idtresults(idtIdleOp, idtPauliDicts,
+                                                 results_dict, printer)
+    except Exception as e:
+        _warnings.warn("Idle tomography failed:\n" + str(e))
+        idt_results_dict = {}        
+    toggles['IdleTomography'] = bool(len(idt_results_dict) > 0)
+
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
 
@@ -716,7 +793,7 @@ def create_standard_report(results, filename, title="auto",
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
             _create_master_switchboard(ws, results_dict, confidenceLevel,
                                        nmthreshold, printer, fmt,
-                                       combine_robust)
+                                       combine_robust, idt_results_dict)
     if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 or
                          len(gauge_opt_labels) > 1 or len(swLs) > 1):
         raise ValueError("PDF reports can only show a *single* dataset," +
@@ -799,17 +876,17 @@ def create_standard_report(results, filename, title="auto",
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'))
     addqty(3,'bestGermsEvalTable', ws.GateEigenvalueTable, gsGIRep, gsEP, criGIRep(1),
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'),
-           virtual_gates=germs)
+           virtual_ops=germs)
     #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri(1), display=('rel','log-rel'))
-    addqty(4,'bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
+    addqty(4,'bestGatesetVsTargetTable', ws.ModelVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
     addqty(4,'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
                                         display=('inf','agi','trace','diamond','nuinf','nuagi'))
     addqty(3,'bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(0),
-                                        display=('inf','trace','nuinf'), virtual_gates=germs)
+                                        display=('inf','trace','nuinf'), virtual_ops=germs)
     addqty(4,'bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsGIRep, gsTgt, criGIRep(1),
                                         display=('evinf','evagi','evnuinf','evnuagi','evdiamond','evnudiamond'))
     addqty(3,'bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, criGIRep(0),
-                                        display=('evdiamond','evnudiamond'), virtual_gates=germs)
+                                        display=('evdiamond','evnudiamond'), virtual_ops=germs)
     addqty(A,'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
                                          display=('inf','trace','diamond','evinf','evdiamond'))
 
@@ -832,10 +909,10 @@ def create_standard_report(results, filename, title="auto",
     if multidataset:
         addqty(4,'singleMetricTable_gv', ws.GatesSingleMetricTable, gvmetric_switchBd.metric,
                switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, dataset_labels,
-               gvmetric_switchBd.cmpTableTitle, gvmetric_switchBd.gateLabel, confidenceRegionInfo=None)
+               gvmetric_switchBd.cmpTableTitle, gvmetric_switchBd.opLabel, confidenceRegionInfo=None)
         addqty(4,'singleMetricTable_gi', ws.GatesSingleMetricTable, gimetric_switchBd.metric,
                switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, dataset_labels,
-               gimetric_switchBd.cmpTableTitle, gimetric_switchBd.gateLabel, confidenceRegionInfo=None)
+               gimetric_switchBd.cmpTableTitle, gimetric_switchBd.opLabel, confidenceRegionInfo=None)
 
     else:
         addqty(4,'singleMetricTable_gv', ws.GatesSingleMetricTable, gvmetric_switchBd.metric,
@@ -845,16 +922,24 @@ def create_standard_report(results, filename, title="auto",
                switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, None,
                gimetric_switchBd.cmpTableTitle, confidenceRegionInfo=None)
 
+    if len(idt_results_dict) > 0:
+        #Plots & tables for idle tomography tab
+        #idt_switchBd = _create_idle_tomography_switchboard(ws, idt_results_dict)
+        #qtys['idtSwitchboard'] = idt_switchBd
+        addqty(A,'idtIntrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, switchBd.idtresults)
+        addqty(3,'idtObservedRatesTable', ws.IdleTomographyObservedRatesTable, switchBd.idtresults,
+               20, gsGIRep) # HARDCODED - show only top 20 rates
+
     #Ls and Germs specific
     gss = switchBd.gss
     gsL = switchBd.gsL
     gsL_modvi = switchBd.gsL_modvi
     gssAllL = switchBd.gssAllL
-    addqty(2,'fiducialListTable', ws.GatestringTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
-    addqty(2,'prepStrListTable', ws.GatestringTable, prepStrs,"Preparation Fiducials")
-    addqty(2,'effectStrListTable', ws.GatestringTable, effectStrs,"Measurement Fiducials")
+    addqty(2,'fiducialListTable', ws.CircuitTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
+    addqty(2,'prepStrListTable', ws.CircuitTable, prepStrs,"Preparation Fiducials")
+    addqty(2,'effectStrListTable', ws.CircuitTable, effectStrs,"Measurement Fiducials")
     addqty(1,'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
-    addqty(2,'germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
+    addqty(2,'germList2ColTable', ws.CircuitTable, germs, "Germ", nCols=2)
     addqty(4,'progressTable', ws.FitComparisonTable,
            Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
 
@@ -964,7 +1049,7 @@ def create_standard_report(results, filename, title="auto",
     if multidataset:
         #check if data sets are comparable (if they have the same sequences)
         comparable = True
-        gstrCmpList = list(results_dict[ dataset_labels[0] ].dataset.keys()) #maybe use gatestring_lists['final']??
+        gstrCmpList = list(results_dict[ dataset_labels[0] ].dataset.keys()) #maybe use circuit_lists['final']??
         for dslbl in dataset_labels:
             if list(results_dict[dslbl].dataset.keys()) != gstrCmpList:
                 _warnings.warn("Not all data sets are comparable - no comparisions will be made.")
@@ -982,7 +1067,7 @@ def create_standard_report(results, filename, title="auto",
             dscmp_switchBd.add("refds",(0,))
 
             for d1, dslbl1 in enumerate(dataset_labels):
-                dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
+                dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].circuit_structs['final']
                 dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset #only used for #of spam labels below
 
             dsComp = dict()
@@ -1080,13 +1165,12 @@ def create_nqnoise_report(results, filename, title="auto",
                           advancedOptions=None, verbosity=1):
     """
     Creates a report designed to display results containing for n-qubit noisy
-    gate set estimates.
+    model estimates.
 
-    Such gate sets are characterized by the fact that gates and SPAM objects may
+    Such models are characterized by the fact that gates and SPAM objects may
     not have dense representations (or it may be very expensive to compute them)
-    , and that these gate sets likely have the particular structure given by
-    :function:`build_nqnoise_gateset`.
-
+    , and that these models are likely :class:`CloudNoiseModel` objects or have
+    similar structure.
 
     Parameters
     ----------
@@ -1221,6 +1305,8 @@ def create_nqnoise_report(results, filename, title="auto",
     autosize = advancedOptions.get('autosize','initial')
     combine_robust = advancedOptions.get('combine_robust',True) # REMOVE - also in docstring?
     ci_brevity = advancedOptions.get('confidence_interval_brevity',1)
+    idtPauliDicts = advancedOptions.get('idt_basis_dicts','auto')
+    idtIdleOp = advancedOptions.get('idt_idle_oplabel',_Lbl('Gi'))
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -1274,6 +1360,16 @@ def create_nqnoise_report(results, filename, title="auto",
                ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__)]
     qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
 
+    # Perform idle tomography on datasets if desired (need to do
+    #  this before creating main switchboard)
+    try:
+        idt_results_dict = _construct_idtresults(idtIdleOp, idtPauliDicts,
+                                                 results_dict, printer)
+    except Exception as e:
+        _warnings.warn("Idle tomography failed:\n" + str(e))
+        idt_results_dict = {}        
+    toggles['IdleTomography'] = bool(len(idt_results_dict) > 0)
+
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
 
@@ -1281,7 +1377,7 @@ def create_nqnoise_report(results, filename, title="auto",
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
             _create_master_switchboard(ws, results_dict, confidenceLevel,
                                        nmthreshold, printer, fmt,
-                                       combine_robust)
+                                       combine_robust, idt_results_dict)
     if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 or
                          len(gauge_opt_labels) > 1 or len(swLs) > 1):
         raise ValueError("PDF reports can only show a *single* dataset," +
@@ -1357,17 +1453,17 @@ def create_nqnoise_report(results, filename, title="auto",
     #X        display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'))
     #X addqty(3,'bestGermsEvalTable', ws.GateEigenvalueTable, gsGIRep, gsEP, criGIRep(1),
     #X        display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'),
-    #X        virtual_gates=germs)
+    #X        virtual_ops=germs)
     #X #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri(1), display=('rel','log-rel'))
-    #X addqty(4,'bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
+    #X addqty(4,'bestGatesetVsTargetTable', ws.ModelVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
     #X addqty(4,'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
     #X                                     display=('inf','agi','trace','diamond','nuinf','nuagi'))
     #X addqty(3,'bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(0),
-    #X                                     display=('inf','trace','nuinf'), virtual_gates=germs)
+    #X                                     display=('inf','trace','nuinf'), virtual_ops=germs)
     #X addqty(4,'bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsGIRep, gsTgt, criGIRep(1),
     #X                                     display=('evinf','evagi','evnuinf','evnuagi','evdiamond','evnudiamond'))
     #X addqty(3,'bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, criGIRep(0),
-    #X                                     display=('evdiamond','evnudiamond'), virtual_gates=germs)
+    #X                                     display=('evdiamond','evnudiamond'), virtual_ops=germs)
     #X addqty(A,'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
     #X                                      display=('inf','trace','diamond','evinf','evdiamond'))
 
@@ -1393,10 +1489,10 @@ def create_nqnoise_report(results, filename, title="auto",
     #X if multidataset:
     #X     addqty(4,'singleMetricTable_gv', ws.GatesSingleMetricTable, gvmetric_switchBd.metric,
     #X            switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, dataset_labels,
-    #X            gvmetric_switchBd.cmpTableTitle, gvmetric_switchBd.gateLabel, confidenceRegionInfo=None)
+    #X            gvmetric_switchBd.cmpTableTitle, gvmetric_switchBd.opLabel, confidenceRegionInfo=None)
     #X     addqty(4,'singleMetricTable_gi', ws.GatesSingleMetricTable, gimetric_switchBd.metric,
     #X            switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, dataset_labels,
-    #X            gimetric_switchBd.cmpTableTitle, gimetric_switchBd.gateLabel, confidenceRegionInfo=None)
+    #X            gimetric_switchBd.cmpTableTitle, gimetric_switchBd.opLabel, confidenceRegionInfo=None)
     #X 
     #X else:
     #X     addqty(4,'singleMetricTable_gv', ws.GatesSingleMetricTable, gvmetric_switchBd.metric,
@@ -1406,16 +1502,22 @@ def create_nqnoise_report(results, filename, title="auto",
     #X            switchBd.gsFinalGrid, switchBd.gsTargetGrid, est_labels, None,
     #X            gimetric_switchBd.cmpTableTitle, confidenceRegionInfo=None)
 
+    if len(idt_results_dict) > 0:
+        #Plots & tables for idle tomography tab
+        addqty(A,'idtIntrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, switchBd.idtresults)
+        addqty(3,'idtObservedRatesTable', ws.IdleTomographyObservedRatesTable, switchBd.idtresults,
+               20, gsGIRep) # HARDCODED - show only top 20 rates
+
     #Ls and Germs specific
     gss = switchBd.gss
     gsL = switchBd.gsL
     gsL_modvi = switchBd.gsL_modvi
     gssAllL = switchBd.gssAllL
-    #X addqty(2,'fiducialListTable', ws.GatestringTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
-    #X addqty(2,'prepStrListTable', ws.GatestringTable, prepStrs,"Preparation Fiducials")
-    #X addqty(2,'effectStrListTable', ws.GatestringTable, effectStrs,"Measurement Fiducials")
+    #X addqty(2,'fiducialListTable', ws.CircuitTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
+    #X addqty(2,'prepStrListTable', ws.CircuitTable, prepStrs,"Preparation Fiducials")
+    #X addqty(2,'effectStrListTable', ws.CircuitTable, effectStrs,"Measurement Fiducials")
     #X addqty(1,'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
-    addqty(2,'germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
+    addqty(2,'germList2ColTable', ws.CircuitTable, germs, "Germ", nCols=2)
     addqty(4,'progressTable', ws.FitComparisonTable,
            Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L', comm=comm)
 
@@ -1530,7 +1632,7 @@ def create_nqnoise_report(results, filename, title="auto",
     if multidataset:
         #check if data sets are comparable (if they have the same sequences)
         comparable = True
-        gstrCmpList = list(results_dict[ dataset_labels[0] ].dataset.keys()) #maybe use gatestring_lists['final']??
+        gstrCmpList = list(results_dict[ dataset_labels[0] ].dataset.keys()) #maybe use circuit_lists['final']??
         for dslbl in dataset_labels:
             if list(results_dict[dslbl].dataset.keys()) != gstrCmpList:
                 _warnings.warn("Not all data sets are comparable - no comparisions will be made.")
@@ -1548,7 +1650,7 @@ def create_nqnoise_report(results, filename, title="auto",
             dscmp_switchBd.add("refds",(0,))
 
             for d1, dslbl1 in enumerate(dataset_labels):
-                dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
+                dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].circuit_structs['final']
                 dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset #only used for #of spam labels below
 
             dsComp = dict()
@@ -1765,13 +1867,13 @@ def create_report_notebook(results, filename, title="auto",
         gopt      = '{goLabel}'
         ds        = results.dataset
 
-        gssFinal  = results.gatestring_structs['final']
-        Ls        = results.gatestring_structs['final'].Ls
-        gssPerIter = results.gatestring_structs['iteration'] #ALL_L
+        gssFinal  = results.circuit_structs['final']
+        Ls        = results.circuit_structs['final'].Ls
+        gssPerIter = results.circuit_structs['iteration'] #ALL_L
 
-        prepStrs = results.gatestring_lists['prep fiducials']
-        effectStrs = results.gatestring_lists['effect fiducials']
-        germs = results.gatestring_lists['germs']
+        prepStrs = results.circuit_lists['prep fiducials']
+        effectStrs = results.circuit_lists['effect fiducials']
+        germs = results.circuit_lists['germs']
         strs = (prepStrs, effectStrs)
 
         params = estimate.parameters
@@ -1785,14 +1887,13 @@ def create_report_notebook(results, filename, title="auto",
         effective_ds, scale_subMxs = estimate.get_effective_dataset(True)
         scaledSubMxsDict = {{'scaling': scale_subMxs, 'scaling.colormap': "revseq"}}
 
-        gatesets   = estimate.gatesets
-        gs         = gatesets[gopt] #FINAL
-        gs_final   = gatesets['final iteration estimate'] #ITER
-        gs_target  = gatesets['target']
-        gsPerIter  = gatesets['iteration estimates']
+        models       = estimate.models
+        mdl          = models[gopt] #FINAL
+        mdl_final    = models['final iteration estimate'] #ITER
+        target_model = models['target']
+        mdlPerIter   = models['iteration estimates']
 
-        gs_eigenspace_projected = \
-            pygsti.tools.project_to_target_eigenspace(gs, gs_target)
+        mdl_eigenspace_projected = pygsti.tools.project_to_target_eigenspace(mdl, target_model)
 
         goparams = estimate.goparameters[gopt]
 
@@ -1826,7 +1927,7 @@ def create_report_notebook(results, filename, title="auto",
         nb.add_code("""\
         dslbl1 = '{dsLbl1}'
         dslbl2 = '{dsLbl2}'
-        dscmp_gss = results_dict[dslbl1].gatestring_structs['final']
+        dscmp_gss = results_dict[dslbl1].circuit_structs['final']
         ds1 = results_dict[dslbl1].dataset
         ds2 = results_dict[dslbl2].dataset
         dscmp = pygsti.obj.DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
@@ -1848,15 +1949,15 @@ def create_report_notebook(results, filename, title="auto",
         nb.save_to(filename)
 
 
-def find_std_clifford_compilation(gateset, verbosity=0):
+def find_std_clifford_compilation(model, verbosity=0):
     """
-    Returns the standard Clifford compilation for `gateset`, if
+    Returns the standard Clifford compilation for `model`, if
     one exists.  Otherwise returns None.
 
     Parameters
     ----------
-    gateset : GateSet
-        The ideal (target) gate set of primitive gates.
+    model : Model
+        The ideal (target) model of primitive gates.
 
     verbosity : int, optional
         How much detail to send to stdout.
@@ -1867,6 +1968,9 @@ def find_std_clifford_compilation(gateset, verbosity=0):
         The Clifford compilation dictionary (if one can be found).
     """
     printer = _VerbosityPrinter.build_printer(verbosity)
+    if not isinstance(model,_objs.ExplicitOpModel):
+        return None # only match explicit models
+    
     std_modules = ("std1Q_XY",
                    "std1Q_XYI",
                    "std1Q_XYZI",
@@ -1887,38 +1991,40 @@ def find_std_clifford_compilation(gateset, verbosity=0):
     import importlib
     for module_name in std_modules:
         mod = importlib.import_module("pygsti.construction." + module_name)
-        if set(mod.gs_target.gates.keys()) == set(gateset.gates.keys()) and \
-           set(mod.gs_target.preps.keys()) == set(gateset.preps.keys()) and \
-           set(mod.gs_target.povms.keys()) == set(gateset.povms.keys()):
-            if mod.gs_target.frobeniusdist(gateset) < 1e-6:
+        target_model = mod.target_model()
+        if target_model.dim == model.dim and \
+           set(target_model.operations.keys()) == set(model.operations.keys()) and \
+           set(target_model.preps.keys()) == set(model.preps.keys()) and \
+           set(target_model.povms.keys()) == set(model.povms.keys()):
+            if target_model.frobeniusdist(model) < 1e-6:
                 if hasattr(mod,"clifford_compilation"):
                     printer.log("Found standard clifford compilation from %s" % module_name)
                     return mod.clifford_compilation
     return None
 
-##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
+##Scratch: SAVE!!! this code generates "projected" models which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.
-#        gateLabels = list(gateset.gates.keys())  # gate labels
-#        basis = gateset.basis
+#        opLabels = list(model.operations.keys())  # operation labels
+#        basis = model.basis
 #
-#        if basis.name != targetGateset.basis.name:
-#            raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
-#                                 % (basis.name, targetGateset.basis.name))
+#        if basis.name != targetModel.basis.name:
+#            raise ValueError("Basis mismatch between model (%s) and target (%s)!"\
+#                                 % (basis.name, targetModel.basis.name))
 #
 #        #Do computation first
 #        # Note: set to "full" parameterization so we can set the gates below
-#        #  regardless of what to fo parameterization the original gateset had.
-#        gsH = gateset.copy(); gsH.set_all_parameterizations("full"); Np_H = 0
-#        gsS = gateset.copy(); gsS.set_all_parameterizations("full"); Np_S = 0
-#        gsHS = gateset.copy(); gsHS.set_all_parameterizations("full"); Np_HS = 0
-#        gsLND = gateset.copy(); gsLND.set_all_parameterizations("full"); Np_LND = 0
-#        #gsHSCP = gateset.copy()
-#        gsLNDCP = gateset.copy(); gsLNDCP.set_all_parameterizations("full")
-#        for gl in gateLabels:
-#            gate = gateset.gates[gl]
-#            targetGate = targetGateset.gates[gl]
+#        #  regardless of what to fo parameterization the original model had.
+#        gsH = model.copy(); gsH.set_all_parameterizations("full"); Np_H = 0
+#        gsS = model.copy(); gsS.set_all_parameterizations("full"); Np_S = 0
+#        gsHS = model.copy(); gsHS.set_all_parameterizations("full"); Np_HS = 0
+#        gsLND = model.copy(); gsLND.set_all_parameterizations("full"); Np_LND = 0
+#        #gsHSCP = model.copy()
+#        gsLNDCP = model.copy(); gsLNDCP.set_all_parameterizations("full")
+#        for gl in opLabels:
+#            gate = model.operations[gl]
+#            targetOp = targetModel.operations[gl]
 #
-#            errgen = _tools.error_generator(gate, targetGate, genType)
+#            errgen = _tools.error_generator(gate, targetOp, genType)
 #            hamProj, hamGens = _tools.std_errgen_projections(
 #                errgen, "hamiltonian", basis.name, basis, True)
 #            stoProj, stoGens = _tools.std_errgen_projections(
@@ -1938,14 +2044,14 @@ def find_std_clifford_compilation(gateset, verbosity=0):
 #            sto_error_gen = _tools.change_basis(sto_error_gen,"std",basis)
 #            lnd_error_gen = _tools.change_basis(lnd_error_gen,"std",basis)
 #
-#            gsH.gates[gl]  = _tools.gate_from_error_generator(
-#                ham_error_gen, targetGate, genType)
-#            gsS.gates[gl]  = _tools.gate_from_error_generator(
-#                sto_error_gen, targetGate, genType)
-#            gsHS.gates[gl] = _tools.gate_from_error_generator(
-#                ham_error_gen+sto_error_gen, targetGate, genType)
-#            gsLND.gates[gl] = _tools.gate_from_error_generator(
-#                lnd_error_gen, targetGate, genType)
+#            gsH.operations[gl]  = _tools.operation_from_error_generator(
+#                ham_error_gen, targetOp, genType)
+#            gsS.operations[gl]  = _tools.operation_from_error_generator(
+#                sto_error_gen, targetOp, genType)
+#            gsHS.operations[gl] = _tools.operation_from_error_generator(
+#                ham_error_gen+sto_error_gen, targetOp, genType)
+#            gsLND.operations[gl] = _tools.operation_from_error_generator(
+#                lnd_error_gen, targetOp, genType)
 #
 #            #CPTP projection
 #
@@ -1953,8 +2059,8 @@ def find_std_clifford_compilation(gateset, verbosity=0):
 #            # but this doesn't always return the gate to being CPTP (maybe b/c of normalization)...
 #            #sto_error_gen_cp = _np.einsum('i,ijk', stoProj.clip(None,0), stoGens) #only negative stochastic projections OK
 #            #sto_error_gen_cp = _tools.std_to_pp(sto_error_gen_cp)
-#            #gsHSCP.gates[gl] = _tools.gate_from_error_generator(
-#            #    ham_error_gen, targetGate, genType) #+sto_error_gen_cp
+#            #gsHSCP.operations[gl] = _tools.operation_from_error_generator(
+#            #    ham_error_gen, targetOp, genType) #+sto_error_gen_cp
 #
 #            evals,U = _np.linalg.eig(OProj)
 #            pos_evals = evals.clip(0,1e100) #clip negative eigenvalues to 0
@@ -1963,8 +2069,8 @@ def find_std_clifford_compilation(gateset, verbosity=0):
 #                _np.einsum('ij,ijkl', OProj_cp, OGens)
 #            lnd_error_gen_cp = _tools.change_basis(lnd_error_gen_cp,"std",basis)
 #
-#            gsLNDCP.gates[gl] = _tools.gate_from_error_generator(
-#                lnd_error_gen_cp, targetGate, genType)
+#            gsLNDCP.operations[gl] = _tools.operation_from_error_generator(
+#                lnd_error_gen_cp, targetOp, genType)
 #
 #            Np_H += len(hamProj)
 #            Np_S += len(stoProj)
@@ -1972,7 +2078,7 @@ def find_std_clifford_compilation(gateset, verbosity=0):
 #            Np_LND += HProj.size + OProj.size
 #
 #        #DEBUG!!!
-#        #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_evals(gateset))
+#        #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_evals(model))
 #        #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_evals(gsLNDCP))
 #
 #        #Check for CPTP where expected
@@ -1980,8 +2086,8 @@ def find_std_clifford_compilation(gateset, verbosity=0):
 #        assert(_tools.sum_of_negative_choi_evals(gsLNDCP) < 1e-6)
 #
 #        # ...
-#        gatesets = (gateset, gsHS, gsH, gsS, gsLND, cptpGateset, gsLNDCP, gsHSCPTP)
-#        gatesetTyps = ("Full","H + S","H","S","LND","CPTP","LND CPTP","H + S CPTP")
+#        models = (model, gsHS, gsH, gsS, gsLND, cptpGateset, gsLNDCP, gsHSCPTP)
+#        modelTyps = ("Full","H + S","H","S","LND","CPTP","LND CPTP","H + S CPTP")
 #        Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND, Nng, Np_LND, Np_HS)
 
 

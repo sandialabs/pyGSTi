@@ -46,7 +46,7 @@ def hamiltonian_to_lindbladian(hamiltonian, sparse=False):
 
     for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
         rho1 = -1j*(_mt.safedot(hamiltonian,rho0) - _mt.safedot(rho0,hamiltonian))
-        lindbladian[:,i] = rho1.flatten()[:,None] if sparse else rho1.flatten()
+        lindbladian[:,i] = _np.real_if_close(rho1.flatten()[:,None] if sparse else rho1.flatten())
           # vectorize rho1 & set as linbladian column
 
     if sparse: lindbladian = lindbladian.tocsr()

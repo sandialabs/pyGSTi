@@ -1,768 +1,819 @@
+"""Core routines for detecting and characterizing drift with time-stamped data"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""Core integrated routines for detecting and characterizing drift with time-stamped data"""
 
+from . import results as _dresults
 from . import signal as _sig
-from . import objects as _obj
+from . import estimate as _est
+from . import model as _mdl
+from . import statistics as _stats
+
+from ... import objects as _obj
 from ...tools import hypothesis as _hyp
-from . import statistics as _stat
-from ... import objects as _objs
 
 import numpy as _np
+import warnings as _warnings
+import itertools as _itertools
+import copy as _copy
 
-def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=None,
-                                    marginalize = 'none', marginalize_dict = None,
-                                    outcomes=None, confidence=0.95, indices_to_sequences=None, 
-                                    multitest_compensation='class', verbosity=1, name=None):
+# def do_basic_drift_characterization(ds, significance=0.05, transform='auto', setting='fastest'):
+
+#     return 0
+
+# def do_oneQubit_drift_characterization(ds, significance=0.05, marginalize='auto', transform='DCT',
+#                                      spectrafrequencies='auto', testfrequencies='all', 
+#                                      enforceConstNumTimes='auto', control='FDR', 
+#                                      modelSelection='local', verbosity=1, name=None)
+
+
+#     do_general_drift_characterization(ds, significance=significance, marginalize=False, transform=transform,
+#                                       spectrafrequencies=spectrafrequencies, testfrequencies=testfrequencies,
+#                                       groupoutcomes=groupoutcomes, enforceConstNumTimes=enforceConstNumTimes,
+#                                       whichTests=(('avg','avg','avg'), ('avg','per','avg')), betweenClassCorrection=True, 
+#                                       inClassCorrection=('Bonferroni','BH','BH','BH'), 
+#                             modelSelection='perSeqPerEnt', verbosity=1, name=None)
+
+#     return 0
+
+# def do_rb_drift_characterization(ds, significance=0.05, transform='DCT', control='FDR'):
+
+#     return 0
+
+# def do_gst_drift_characterization(ds, significance=0.05, prepStrs=None, effectStrs=None, germList=None, 
+#                                   maxLengthList=None, transform='DCT', control='FDR'):
+
+#     """
+#     prepStrs : list of Circuits
+#         List of the preparation fiducial operation sequences, which follow state
+#         preparation.
+
+#     effectStrs : list of Circuits
+#         List of the measurement fiducial operation sequences, which precede
+#         measurement.
+
+#     germList : list of Circuits
+#         List of the germ operation sequences.
+
+#     maxLengthList : list of ints
+#         List of maximum lengths. A zero value in this list has special
+#         meaning, and corresponds to the LGST sequences.
+#     """
+#     return 0
+
+def do_drift_characterization(ds, significance=0.05, marginalize='auto', transform='DCT',
+                            spectrafrequencies='auto', testFreqInds=None,
+                            groupoutcomes=None, enforceConstNumTimes='auto',
+                            whichTests=(('avg','avg','avg'), ('per','avg','avg'), ('per','per','avg')), 
+                            betweenClassCorrection=True, inClassCorrection=('FWER','FWER','FDR','FDR'), 
+                            modelSelectionMethod=(('per','per','avg'),'detection'), estimator='FF-UAR', 
+                            verbosity=1, name=None):
     """
-    Implements a drift detection and characterization analysis on timeseries data.
-    
+    Todo : docstring update.
+
+    Implements drift detection and characterization analysis on timeseries data from any set of
+    quantum circuits (GST data is permissable but not required).
+
+    The default settings for this function should result in a reasonably fast analysis. Some of
+    the alternative settings will result in a much slower analsis. Moreover, note that additional
+    analyses can be added to the returned results object.
+
     Parameters
     ----------
-    ds : pyGSTi DataSet or numpy array
-        The time series data to analyze. If this is a DataSet it should contain time series
-        data (rather than, e.g., a total counts per-outcome per-GateString). If this is a
-        numpy array, it must again contain time series data and it may be either 1, 2, 3
-        or 4 dimensional. 
+    ds : DataSet
+        The time series data to analyze. This must contain time series data, rather than data that
+        is not time-resolved and contains only one set of counts for each outcome and each circuit.
+
+    significance : float, optional
+        The "global" statistical significance to use in the drift detection hypothesis testing, and
+        in the model selection required for estimating time-resolved probability trajectories.
+
+    marginalize : 'auto', True or False, optional
+        Whether or not to marginalize the data. (todo : add details).
+
+    transform : one of 'DCT', 'DFT' and 'LSP', optional
+        The type of spectral analysis to use. (todo : add details).
+
+    testing_method =
+        DoGlobalTest=False, DoPerEntityTest, PerSequence, PerSequencePerEntity, PerSequencePerEntityPerOutcome
         
-        The 4D case: the input array `ds` has ds[s,e,o,t] is the number of counts for outcome 
-        with index o on entity e, at the tth time that sequence s is  implemented. The 
-        entity index stores data for different "entities" that will be analyzed both independent
-        and jointly. E.g., the sequences could be on Q qubits, and each entity could be a single 
-        qubit with possible measurement outcomes '0' or '1' (i.e., the data for one qubit has 
-        been obtained from hmarginalizing over the other qubits). Note that the same raw data can
-        generally be arranged by entity and outcome in a range of different ways.
+        {PerEnt:'Bonferroni','none', 'PerSeq':'FDR-BH','Bon','Sidak','none'
+
+        PerOut:'Bonferroni','none', 'local':'FDR-BH','Bon','Sidak'}
         
-        The 3D case: As the 4D case, except that two-outcome measurements are assumed, and it is
-        assumed that the, for input array `ds`, ds[s,e,t] is the counts associated with the first
-        of the two measurement outcomes (this convention is only internally relevant if `outcomes`
-        is specified), and that the number of outcomes for the two measurements sum to `counts`,
-        at all time steps.
-        
-        The 2D case: As the 3D case, except that single-entity data is assumed (dropping the 2nd
-        index in the array from the 3D case).
-        
-        The 1D case: As the 2D case, except that single-sequence data is assumsed. That is the 
-        input array `ds` is a 1D array of counts, for the second out of two measurement outcomes
-        at a set of different times, from a single gate sequence.
-        
-    counts : int, optional
-        The total number of counts per-timestep, per-sequence and per-entity (i.e., the number
-        of times any of the measurement outcomes is obtained per-timestep, per-sequence and 
-        per-entity, which must be a constant). If `ds` is a DataSet, or it is a 4D numpy array, 
-        this parameter is not used as it is extracted from the data. If `ds` is a 1D, 2D or 
-        3D numpy array then this parameter is required.
-        
-    timestep : float, optional
-        The time, in seconds, between consecutive repeats of each set of `counts` repeats of a
-        each sequence. If `ds` is a DataSet this parameter is not used, as the timestep is extracted
-        from the timestamps in the DataSet object (which should be in seconds to obtain frequencies
-        in Hertz). If `ds` is a numpy array then it is necessary to specify this, if the user wants
-        the output frequencies to be given in terms of Hertz. If `ds` is a numpy array and this is
-        not specified all output frequencies are in 1/timestep with timestep defaulting to 1.
-               
-    timestamps : numpy array, optional
-        An array of timestamps associated with the repeats of each circuit. If `ds` is a DataSet
-        this is overwritten by the timestamps inside the DataSet. If `ds` is a numpy array these
-        timestamps are not used for any analysis, and are simply written into the results output 
-        object.
-        
-        #todo: add the ability to extract the timestep from timestamps.
-        
-    marginalize : str, optional
-    
-    marginalize_dict : dict, optional
-    
-    outcomes : list, optional 
-    
-    confidence : float, optional
-    
-    indices_to_sequences : list, optional
-        
-    multitest_compensation : str, optional
-        Allowed values are 'none', 'class'.
-     
-    verbosity : int, optional
-    
-    name : str, optional
-    
+        ModelSelection : 'PerSeq', 'PerEnt', 'PerSeqPerEnt' or 'Global'
+  
     Returns
     -------
-    results : DriftResults object
+    results : DriftResults
         The results of the drift analysis. This contains: power spectra, statistical test outcomes,
         drift frequencies, reconstructions of drifting probabilities, all of the input information.
+        See the docstrings of the .get... and .plot... methods in the returned object for information
+        on how to access the results.
 
-    """    
-    # ---------------- #
-    # Format the input #
-    # ---------------- #
-    
-    if type(ds) != _objs.dataset.DataSet:
-    
-        data_shape = _np.shape(ds)
-    
-        # Check that the input data is consistent with being counts in an array of an appropriate dimension
-        check1 = len(data_shape) == 1
-        check2 = len(data_shape) == 2
-        check3 = len(data_shape) == 3
-        check4 = len(data_shape) == 4
-        assert(check1 or check2 or check3 or check4), \
-        "Input data format is incorrect!If the input is a numpy array it must be 1, 2, 3 or 4 dimensional."
-        
-        # If the input is 1D, assume that it is single-sequence, single-entity, two-outcome data.
-        if len(data_shape) == 1:
-            
-            # There is no marginalizing possible for this data type (two-outcome data).
-            assert (marginalize == 'none')
-            assert(counts is not None), \
-            "This data format requires specifying `counts`, the number of counts per timestep!" 
-            
-            if verbosity > 0:
-                print("Due to input array format, analysis is defaulting to assuming:")
-                print("  - single-sequence data")
-                print("  - single entity data")
-                print("  - two-outcome measurements")               
-                print("")
-            
-            # Turn the data into the standard 4D format for the analysis.
-            data = _np.zeros((1,1,2,data_shape[0]),float)
-            data[0,0,0,:] = ds.copy()
-            data[0,0,1,:] = counts - ds.copy()
-                
-        # If the input is 2D, assume that it is multi-sequence, single-entity, two-outcome data.
-        if len(data_shape) == 2:
-            
-            # There is no marginalizing possible for this data type (two-outcome data).            
-            assert (marginalize == 'none')
-            assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!" 
-            
-            if verbosity > 0:
-                print("Due to input array format, analysis is defaulting to assuming:")
-                print("  - single entity data")
-                print("  - two-outcome measurements")
-                print("")   
-                
-            # Turn the data into the standard 4D format for the analysis.    
-            data = _np.zeros((data_shape[0],1,2,data_shape[1]),float)
-            data[:,0,0,:] = ds.copy()
-            data[:,0,1,:] = counts - ds.copy()
-            
-        # If the input is 3D, assume that it is multi-sequence, multi-entity, two-outcome data.
-        # Todo: perhaps it should default to single-entity data with the option to marginalize.
-        if len(data_shape) == 3:
-            
-            # There is no marginalizing possible for this data type (two-outcome data).                        
-            assert (marginalize == 'none')
-            assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!"
-            
-            if verbosity > 0:
-                print("Due to input array format, analysis is defaulting to assuming:")
-                print("  - two-outcome measurements")
-                print("")
-                
-            # Turn the data into the standard 4D format for the analysis.
-            data = _np.zeros((data_shape[0],data_shape[1],2,data_shape[2]),float)
-            data[:,:,0,:] = ds.copy()
-            data[:,:,1,:] = counts - ds.copy()
-            
-        # If the input is 4D, assume nothing about the data type.  
-        if len(data_shape) == 4:
-            
-            # Do not need to pad the input array, so just copy it.
-            data = ds.copy()
-            
-            # Check the total number of counts is independent of sequence, timestep and entity 
-            check_counts = _np.sum(data,axis=2)
-            assert(_np.std(check_counts) == 0.), \
-            "The total number of counts should be independent of sequence, timestep and entity"
-            
-            # Set the number of counts
-            counts = _np.sum(data[0,0,:,0])
-                     
-            # Currently only allows for standard or no marginalization
-            assert (marginalize == 'none' or marginalize == 'std')
-            
-            # If standard marginalization, [0,1] data on qubits, with the measurement outcomes
-            # input as bitstring, assumed.
-            if marginalize == 'std':
-                
-                # The marginalized set of outcomes is ['0','1']
-                outcomes = ['0','1']
-                num_outcomes = 2
-                
-                # We extract the number of qubits from the number of raw outcomes.
-                num_entities = int(_np.log2(len(data[0,0,:,0]))/1)
-                
-                data_shape = _np.shape(data)    
-                num_sequences = data_shape[0]
-                num_timesteps = data_shape[3] 
-                
-                # This stores the marginalized data.
-                data_marg = _np.zeros((num_sequences,num_entities,num_outcomes,num_timesteps),float)
-
-                for s in range(0,num_sequences):
-                    for e in range(0,num_entities):
-                        for raw_o in range(0,2**num_entities):
-                            
-                            # If the eth bit in the binary rep of the raw outcome is '0', then
-                            # the measurement outcome has the eth qubit in '0'.
-                            if _np.binary_repr(raw_o,width=num_entities)[e] == '0':
-                                data_marg[s,e,0,:] += data[s,0,raw_o,:]
-                            else:
-                                data_marg[s,e,1,:] += data[s,0,raw_o,:]
-                
-                # Replace the data with the marginalized version.
-                data = data_marg.copy()
-    
-        # Extract the number of sequences, entities, and timesteps from the shape of the data array
-        data_shape = _np.shape(data)    
-        num_sequences = data_shape[0]
-        num_entities = data_shape[1]
-        num_outcomes = data_shape[2]
-        num_timesteps = data_shape[3] 
-        
-    # This converts a DataSet to an array, as the code below uses arrays (for a good reason - as there is
-    # lots of averaging over different dimensions of the array). This bit of the code seems to be by far
-    # the slowest. Todo: improve this code, or the speed of access to a DataSet object.
-    if type(ds) == _objs.dataset.DataSet:
-        
-        # Warns the user if things have been specifed which are being overwritten.
-        if verbosity > 0:
-            if counts != None:
-                print("Warning: Input data is a pygsti DataSet, so `counts` is being overwritten!")
-            if timestamps != None:
-                print("Warning: Input data is a pygsti DataSet, so `timestamps` is being overwritten!")
-            if indices_to_sequences != None:
-                print("Warning: Input data is a pygsti DataSet, so `indices_to_sequences` is being overwritten!")
-        
-        num_sequences = len(list(ds.keys()))
-        indices_to_sequences = list(ds.keys())
-        sequences_to_indices = {}           
-        
-        num_timesteps = []
-        counts = []
-
-        for i in range(0,num_sequences):
-            # Find the set of all timestamps and total counts
-            t, c = ds[indices_to_sequences[i]].timeseries('all')
-            # Record the number of timestamps for this sequence
-            num_timesteps.append(len(t))
-            # Check that the number of clicks is constant over all timestamps
-            c = _np.array(c)
-            assert(_np.std(c) == 0), "Number of total clicks must be the same at every timestamp!"
-            # Record the counts-per-timestamp for this sequence
-            counts.append(c[0])
-    
-        # Check that the number of timesteps and counts is independent of sequence.
-        num_timesteps = _np.array(num_timesteps)
-        counts = _np.array(counts)
-        assert(_np.std(counts) == 0.), "Number of counts must be the same for all sequences!"
-        assert(_np.std(num_timesteps) == 0.), "Number of timestamps must be the same for all sequences!"
-
-        counts = counts[0]
-        num_timesteps = num_timesteps[0]
-        
-        # Check that the marginalize specification is ok.
-        assert(marginalize == 'none' or  marginalize == 'std' or marginalize == 'usr')
-        if marginalize == 'usr':   
-                assert(marginalize_dict is not None)
-                assert(outcomes is not None)
-        
-        # If we are not marginalizing, we can create the array slightly more efficiently, so we have a
-        # seperate code for this case. 
-        if marginalize == 'none':
-            
-            if outcomes != None:
-                print("Warning: Input data is a pygsti DataSet and marginalize == 'none', so `outcomes` is being overwritten!")
-            
-            # The number of outcomes, outcomes list, and number of entities.
-            num_outcomes = len(list(ds.get_outcome_labels()))
-            outcomes = list(ds.get_outcome_labels())
-            num_entities = 1
-            
-            # To store the data and timestamps arrays.
-            data = _np.zeros((num_sequences,num_entities,num_outcomes,num_timesteps),float)
-            timestamps = _np.zeros((num_sequences,num_timesteps),float)
-
-            for s in range(0,num_sequences):
-                
-                # Find the timestamps for the sequence
-                times_for_seq, junk = ds[indices_to_sequences[s]].timeseries('all')
-                # Write the timestamps into the timestamps array
-                timestamps[s,:] = _np.array(times_for_seq)
-                
-                for o in range(0,num_outcomes):                        
-                    # Record the timeseries data for sequence s and outcome o.
-                    junk, data[s,0,o,:] = _np.array(ds[indices_to_sequences[s]].timeseries(outcomes[o],timestamps[s,:]))
-        
-        # Go into this section if we are marginalizing the data.
-        else:
-            full_outcomes = ds.get_outcome_labels()
-      
-            if marginalize == 'std':            
-                outcomes = ['0','1']
-                
-            num_outcomes = len(outcomes)
-            num_entities = int(_np.log2(len(full_outcomes))/_np.log2(len(outcomes)))
-            
-            # If 'std' then create the marginalize dictionary, mapping full bit-string outcomes to elements of ['0','1']
-            if marginalize == 'std':         
-                marginalize_dict = {}
-                for fo in full_outcomes:
-                    marginalized_outcomes_list = []
-                    for i in fo[0]:
-                        marginalized_outcomes_list.append(i)
-             
-                    marginalize_dict[fo[0]] = tuple(marginalized_outcomes_list)
-            
-            if marginalize == 'usr':   
-                assert(marginalize_dict is not None)
-            
-            # Creat the inverse of the marginalize_dict, mapping (entity,outcome) pairs to full outcomes
-            marginalize_invdict = {}
-
-            for q in range(0,num_entities):
-                for o in outcomes:
-                    marginalize_invdict[q,o] = []
-                    for key in list(marginalize_dict.keys()):
-                        qopair = marginalize_dict[key]
-                        if qopair[q] == o:
-                            marginalize_invdict[q,o].append(key)
-            
-            data = _np.zeros((num_sequences,num_entities,num_outcomes,num_timesteps),float)
-            timestamps = _np.zeros((num_sequences,num_timesteps),float)
-
-            for s in range(0,num_sequences):
-                times_for_seq, junk = ds[indices_to_sequences[s]].timeseries('all')
-                timestamps[s,:] = _np.array(times_for_seq)
-                for e in range(0,num_entities):
-                    for o in range(0,num_outcomes):
-                        data[s,e,o,:] = _np.zeros((num_timesteps),float)
-                        for fo in marginalize_invdict[e,outcomes[o]]:
-                            junk, fodata = _np.array(ds[indices_to_sequences[s]].timeseries(fo,timestamps[s,:]))
-                            data[s,e,o,:] += fodata
-                        
-        all_time_steps = timestamps[:,1:] - timestamps[:,:num_timesteps-1]
-        if verbosity > 0:
-            if _np.std(all_time_steps) > 0.:
-                print("Warning: data is not *exactly* equally spaced.")
-              
-        # We only overwrite the timestep if it is None.
-        if timestep is None:
-            timestep = _np.mean(all_time_steps)
-        
-        data_shape = _np.shape(data)
-        
-    # --------------------------------------------------------- #
-    # Prepare a results object, and store the input information #
-    # --------------------------------------------------------- #
-    
-    # Initialize an empty results object.
-    results = _obj.DriftResults()
-    
-    # Records input information into the results object.
-    results.name = name
-    results.data = data
-    results.number_of_sequences = num_sequences
-    results.number_of_timesteps = num_timesteps
-    results.number_of_entities = num_entities
-    results.number_of_outcomes = num_outcomes   
-    results.number_of_counts = counts
-    results.outcomes = outcomes
-    results.timestamps = timestamps
-    results.timestep = timestep       
-    results.confidence = confidence
-    results.multitest_compensation = multitest_compensation
-    results.indices_to_sequences = indices_to_sequences
-    
-    if indices_to_sequences is not None:
-        sequences_to_indices = {}
-        for i in range(0,num_sequences):
-            sequences_to_indices[indices_to_sequences[i]] = i            
-        results.sequences_to_indices = sequences_to_indices
-        
-    # Provides a warning if the number of timesteps is low enough that the chi2 approximations used in this 
-    # function might not be good approximations.
-    if verbosity > 0:
-        if num_timesteps <=50:
-            string = "Warning: Number of timesteps is less than 50."
-            string += " The pvalues and statistical signficance thresholds may inaccurate"  
-            string +=  "\n"
-            print(string)
-                    
-    # Find the full set of frequencies, that all the power spectra are with respect to
-    if timestep is None:
-        # If the timestep is not provided, frequencies are given as integers in [0,1,..,1 - number of timesteps]
-        frequencies = _np.arange(0,num_timesteps)         
+    """ 
+    # If the input is already a DriftResults objected with the data pre-formated as necessary.
+    if isinstance(ds,_dresults.DriftResults):
+        results = ds
+        if verbosity > 0: 
+            print(" - data is pre-formatted as a DriftResults object, skippng the data formatting step.")
+    # The standard case of a DataSet input.
     else:
-        # If the timestep is provided (assumed in seconds), frequencies are given in Hertz.
-        frequencies = _np.zeros(num_timesteps,float)
-        frequencies = _sig.frequencies_from_timestep(timestep,num_timesteps)
-    
-    # Write the frequencies into the results object
-    results.frequencies = frequencies.copy()
-    
-    # ------------------------------------------------- #
-    #     Calculate the modes and power spectra         #
-    # ------------------------------------------------- #
-       
-    # Calculate the power spectra for all the sequencies and entities
-    pspepo_modes = _np.zeros(data_shape,float)
-    pspepo_power_spectrum = _np.zeros(data_shape,float)
-    
-    for s in range(0,num_sequences):
-        for q in range(0,num_entities): 
-            for o in range(0,num_outcomes):  
-                pspepo_modes[s,q,o,:] = _sig.DCT(data[s,q,o,:],counts=counts)
-    
-    # Calculate the power spectra
-    pspepo_power_spectrum = pspepo_modes**2
-    pspe_power_spectrum = _np.mean(pspepo_power_spectrum,axis=2)
-    ps_power_spectrum = _np.mean(pspe_power_spectrum,axis=1)
-    pe_power_spectrum = _np.mean(pspe_power_spectrum,axis=0)
-    global_power_spectrum = _np.mean(pe_power_spectrum,axis=0)
-    
-    # The significance threshold for the max power in each power spectrum. This is NOT adjusted
-    # to take account of the fact that we are testing multiple sequences on multiple entities.
-    
-    pspepo_dof = 1
-    pspe_dof = num_outcomes-1
-    ps_dof = num_entities*(num_outcomes-1)
-    pe_dof = num_sequences*(num_outcomes-1)
-    global_dof = num_sequences*num_entities*(num_outcomes-1)
-    
-    
-    global_dof_reduction = 0
-    for s in range(0,num_sequences):
-        if _np.sum(ps_power_spectrum[s,:]) < 1.:
-            global_dof_reduction+= 1
-            
-    global_dof = global_dof - global_dof_reduction
-    # Todo at some point: add a dof reduction for pspe, ps and pe analyses.
+        # Todo : add various asserts here. 
+        assert(isinstance(ds,_obj.dataset.DataSet)), "If the input is not pre-formatted data as a DriftResults object, it must be a pyGSTi DataSet!"
+        
+        # Work out what the 'auto' value should be for enforcing a fixed number of time stamps.
+        if isinstance(enforceConstNumTimes,str):
+            assert(enforceConstNumTimes == 'auto')
+            if transform == 'LSP':
+                enforceConstNumTimes = False
+            else:
+                enforceConstNumTimes = True
 
-    pspepo_significance_threshold_1test = _stat.maxpower_threshold_chi2(confidence, num_timesteps, pspepo_dof)
-    pspe_significance_threshold_1test = _stat.maxpower_threshold_chi2(confidence, num_timesteps, pspe_dof)
-    ps_significance_threshold_1test = _stat.maxpower_threshold_chi2(confidence, num_timesteps, ps_dof)
-    pe_significance_threshold_1test = _stat.maxpower_threshold_chi2(confidence,num_timesteps,pe_dof)
-    global_significance_threshold_1test = _stat.maxpower_threshold_chi2(confidence, num_timesteps,global_dof)
-    
-    pspepo_numtests = num_sequences*num_entities*(num_outcomes-1)
-    pspe_numtests = num_sequences*num_entities
-    ps_numtests = num_sequences
-    pe_numtests = num_entities
-    global_numtests = 1
-    
-    # Todo: change some of these to the sidak correction where appropriate
-    pspepo_confidence_classcompensation = _hyp.bonferroni_correction(confidence,pspepo_numtests)
-    pspe_confidence_classcompensation = _hyp.bonferroni_correction(confidence,pspe_numtests)    
-    ps_confidence_classcompensation = _hyp.bonferroni_correction(confidence,ps_numtests)
-    pe_confidence_classcompensation = _hyp.bonferroni_correction(confidence,pe_numtests)
-    global_confidence_classcompensation = _hyp.bonferroni_correction(confidence,global_numtests)
-    
-    pspepo_significance_threshold_classcompensation = _stat.maxpower_threshold_chi2(pspepo_confidence_classcompensation, 
-                                                                                    num_timesteps, pspepo_dof)
-    pspe_significance_threshold_classcompensation = _stat.maxpower_threshold_chi2(pspe_confidence_classcompensation,
-                                                                                  num_timesteps, pspe_dof)
-    ps_significance_threshold_classcompensation = _stat.maxpower_threshold_chi2(ps_confidence_classcompensation, num_timesteps, 
-                                                                                ps_dof)
-    pe_significance_threshold_classcompensation = _stat.maxpower_threshold_chi2(pe_confidence_classcompensation, 
-                                                                                num_timesteps,pe_dof)
-    global_significance_threshold_classcompensation = _stat.maxpower_threshold_chi2(global_confidence_classcompensation,
-                                                                                    num_timesteps,global_dof)
-    
-    #Perhaps uncomment and add in the "all" multitest_compensation option.
-    #total_numtests = global_numtests
-    #if num_outcomes > 1:
-    #    total_numtests += pspepo_numtests
-    #if num_entities > 1:
-    #    total_numtests += pspe_numtests
-    #    if num_sequences > 1:
-    #        total_numtests += pe_numtests
-    #if num_sequences > 1:
-    #    total_numtests += global_numtests
-    
-    if multitest_compensation == 'none':
+        if transform != 'LSP':
+            assert(enforceConstNumTimes), "Except for the LSP transform, the code currently requires that fixed T is enforced!"
 
-        pspepo_significance_threshold = pspepo_significance_threshold_1test
-        pspe_significance_threshold = pspe_significance_threshold_1test
-        ps_significance_threshold = ps_significance_threshold_1test
-        pe_significance_threshold = pe_significance_threshold_1test
-        global_significance_threshold = global_significance_threshold_1test
-        
-    if multitest_compensation == 'class':
-        
-        pspepo_significance_threshold = pspepo_significance_threshold_classcompensation 
-        pspe_significance_threshold = pspe_significance_threshold_classcompensation 
-        ps_significance_threshold = ps_significance_threshold_classcompensation 
-        pe_significance_threshold = pe_significance_threshold_classcompensation 
-        global_significance_threshold = global_significance_threshold_classcompensation 
+        if verbosity > 0: 
+            print(" - Formatting the data...",end='')
+        # Format the input, and record it inside the results object.
+        results = format_data(ds, marginalize=marginalize, enforceConstNumTimes=enforceConstNumTimes, name=name)
+        if verbosity > 0: print("complete.")
+           
+    if verbosity > 0: print(" - Calculating power spectra...",end='')
     
-    # Initialize arrays for the per-sequence, per-entity, per-outcome results
-    pspepo_max_power = _np.zeros((num_sequences,num_entities,num_outcomes),float)
-    pspepo_pvalue = _np.zeros((num_sequences,num_entities,num_outcomes),float)
-    pspepo_drift_detected = _np.zeros((num_sequences,num_entities,num_outcomes),bool)       
-    pspepo_drift_frequencies = {}   
-    pspepo_reconstruction = _np.zeros(data_shape,float)  
-    pspepo_reconstruction_uncertainty = _np.zeros((num_sequences,num_entities,num_outcomes),float) 
-    pspepo_reconstruction_power_spectrum = _np.zeros(data_shape,float)
+    # Calculate the power spectra: if we're not doing an LSP we can pass anything as the frequencies as it's just ignored.
+    calculate_power_spectra(results, transform=transform, frequenciesInHz=spectrafrequencies)
     
-    # Initialize arrays for the per-sequence, per-entity results
-    pspe_max_power = _np.zeros((num_sequences,num_entities),float)
-    pspe_pvalue = _np.zeros((num_sequences,num_entities),float)
-    pspe_drift_detected = _np.zeros((num_sequences,num_entities),bool)       
-    pspe_drift_frequencies = {}   
-    pspe_reconstruction_power_spectrum = _np.zeros(data_shape,float)
-    
-    # Initialize arrays for the per-sequence results
-    ps_max_power = _np.zeros((num_sequences),float)
-    ps_pvalue = _np.zeros((num_sequences),float)
-    ps_drift_detected = _np.zeros((num_sequences),bool)       
-    ps_drift_frequencies = {}   
-    ps_reconstruction_power_spectrum = _np.zeros(data_shape,float)
-    
-    # Temp arrays.
-    pspepo_raw_estimated_modes = pspepo_modes.copy()
-    pspepo_null = _np.zeros(data_shape,float)
+    if verbosity > 0: print("complete.")
 
-    for s in range(0,num_sequences):
-        for q in range(0,num_entities):
-            for o in range(0,num_outcomes):
-                
-                # --- analysis at the per-sequence per-entity per-outcome level --- #
-                
-                # Find the max power and associated pvalue
-                pspepo_max_power[s,q,o] = _np.max(pspepo_power_spectrum[s,q,o,:])
-                pspepo_pvalue[s,q,o] = _stat.maxpower_pvalue_chi2(pspepo_max_power[s,q,o],num_timesteps,1)
-            
-                # Find the significant frequencies using the standard thresholding
-                pspepo_drift_frequencies[s,q,o] = frequencies.copy()
-                indices = _np.zeros((num_timesteps),bool)
-                indices[pspepo_power_spectrum[s,q,o,:] > pspepo_significance_threshold] = True 
-                pspepo_drift_frequencies[s,q,o] = pspepo_drift_frequencies[s,q,o][indices]
-                num_kept_modes = 1 + len(pspepo_drift_frequencies[s,q,o])
-                
-                # Create the reconstructions, using the standard single-pass Fourier filter
-                pspepo_null[s,q,o,:] = _np.mean(data[s,q,o,:])*_np.ones(num_timesteps,float)/counts
-            
-                if pspepo_max_power[s,q,o] > pspepo_significance_threshold:
-                    pspepo_drift_detected[s,q,o] = True
-                    pspepo_raw_estimated_modes[pspepo_power_spectrum < pspepo_significance_threshold] = 0.
-                
-                    # Here divide by counts, to get something in 0,1 (in the noise free case).
-                    pspepo_reconstruction[s,q,o,:] = _sig.IDCT(pspepo_raw_estimated_modes[s,q,o,:], 
-                                                               null_hypothesis=pspepo_null[s,q,o,:],
-                                                               counts=counts)/counts
-                    # Todo: make this renormalizer makes sense with multi-outcome data. Currently
-                    # it does not, in so much as the summed probability does not add up to 1.
-                    pspepo_reconstruction[s,q,o,:] = _sig.renormalizer(pspepo_reconstruction[s,q,o,:],method='logistic')
-                    pspepo_reconstruction_power_spectrum[s,q,o,:] =  _sig.DCT(pspepo_reconstruction[s,q,o,:], 
-                                                                      null_hypothesis=pspepo_null[s,q,o,:],
-                                                                      counts=counts)   
-                else:
-                    pspepo_reconstruction[s,q,o,:] = pspepo_null[s,q,o,:]                
-                    pspepo_reconstruction_power_spectrum[s,q,o,:] = _np.zeros(num_timesteps,float)
-                    
-                pspepo_reconstruction_uncertainty[s,q,o] = _np.sqrt(num_kept_modes/num_timesteps)
-            
-            # --- analysis at the per-sequence per-entity level --- #
-                
-            # Find the max power and associated pvalue
-            pspe_max_power[s,q] = _np.max(pspe_power_spectrum[s,q,:])
-            pspe_pvalue[s,q] = _stat.maxpower_pvalue_chi2(pspe_max_power[s,q],num_timesteps,num_outcomes-1)
-            
-            # Find the significant frequencies using the standard thresholding
-            pspe_drift_frequencies[s,q] = frequencies.copy()
-            indices = _np.zeros((num_timesteps),bool)
-            indices[pspe_power_spectrum[s,q,:] > pspe_significance_threshold] = True 
-            pspe_drift_frequencies[s,q] = pspe_drift_frequencies[s,q][indices]
-            
-            if pspe_max_power[s,q] > pspe_significance_threshold:
-                pspe_drift_detected[s,q] = True
-        
-        # --- analysis at the per-sequence level --- #
-                
-        # Find the max power and associated pvalue
-        ps_max_power[s] = _np.max(ps_power_spectrum[s,:])
-        ps_pvalue[s] = _stat.maxpower_pvalue_chi2(ps_max_power[s],num_timesteps,num_entities*(num_outcomes-1))
-            
-        # Find the significant frequencies using the standard thresholding
-        ps_drift_frequencies[s] = frequencies.copy()
-        indices = _np.zeros((num_timesteps),bool)
-        indices[ps_power_spectrum[s,:] > ps_significance_threshold] = True 
-        ps_drift_frequencies[s] = ps_drift_frequencies[s][indices]
-            
-        if ps_max_power[s] > ps_significance_threshold:
-            ps_drift_detected[s] = True
-    
-    # --- analysis at the global level --- #
-                
-    # Find the max power and associated pvalue
-    global_max_power = _np.max(global_power_spectrum)
-    global_pvalue = _stat.maxpower_pvalue_chi2(global_max_power,num_timesteps,num_sequences*num_entities*(num_outcomes-1))    
-    
-    # Find the significant frequencies using the standard thresholding
-    global_drift_frequencies = frequencies.copy()
-    indices = _np.zeros((num_timesteps),bool)
-    indices[global_power_spectrum > global_significance_threshold] = True 
-    global_drift_frequencies = global_drift_frequencies[indices]
-    
-    if global_max_power > global_significance_threshold:
-        global_drift_detected = True
-    else:
-        global_drift_detected = False
+    if testFreqInds is not None:
+        assert(set(testFreqInds).issubset(set(_np.arange(len(results.frequenciesInHz))))), "Invalid frequency indices!"
 
-    # Calculate the power per timestep in the reconstruction. This is useful as this is an amount-of-data independent 
-    # metric for the detected drift power.
-    pspepo_reconstruction_powerpertimestep = _np.sum((pspepo_reconstruction-pspepo_null)**2,axis=3)/num_timesteps   
-    pspe_reconstruction_power_spectrum = _np.mean(pspepo_reconstruction_power_spectrum,axis=2)
-    pspe_reconstruction_powerpertimestep = _np.sum(pspepo_reconstruction_powerpertimestep,axis=2)
-    ps_reconstruction_power_spectrum = _np.mean(pspe_reconstruction_power_spectrum,axis=1)
-    ps_reconstruction_powerpertimestep = _np.mean(pspe_reconstruction_powerpertimestep,axis=1)
-    global_reconstruction_power_spectrum = _np.mean(ps_reconstruction_power_spectrum,axis=0)
-    global_reconstruction_powerpertimestep = _np.mean(ps_reconstruction_powerpertimestep,axis=0)
+    if verbosity > 0: 
+        print(" - Implementing statistical tests for drift detection...",end='')
+        if verbosity > 1: print('')
     
-    # Write the results for this analysis into the results object.
-    results.pspepo_modes = pspepo_modes
-    results.pspepo_power_spectrum = pspepo_power_spectrum
-    results.pspepo_drift_frequencies = pspepo_drift_frequencies
-    results.pspepo_max_power = pspepo_max_power
-    results.pspepo_pvalue = pspepo_pvalue
-    results.pspepo_confidence_classcompensation = pspepo_confidence_classcompensation
-    results.pspepo_significance_threshold = pspepo_significance_threshold
-    results.pspepo_significance_threshold_1test = pspepo_significance_threshold_1test
-    results.pspepo_significance_threshold_classcompensation = pspepo_significance_threshold_classcompensation
-    results.pspepo_drift_detected = pspepo_drift_detected
-    results.pspepo_reconstruction = pspepo_reconstruction
-    results.pspepo_reconstruction_uncertainty = pspepo_reconstruction_uncertainty
-    results.pspepo_reconstruction_power_spectrum = pspepo_reconstruction_power_spectrum
-    results.pspepo_reconstruction_powerpertimestep = pspepo_reconstruction_powerpertimestep
-    results.pspepo_dof = pspepo_dof
+    # Implement the drift detection with statistical hypothesis testing on the power spectra
+    implement_drift_detection(results, significance=significance, testFreqInds=testFreqInds, whichTests=whichTests, 
+                              betweenClassCorrection=betweenClassCorrection, inClassCorrection=inClassCorrection,
+                              verbosity=verbosity-1)
     
-    # Write the results for this analysis into the results object.
-    results.pspe_power_spectrum = pspe_power_spectrum
-    results.pspe_drift_frequencies = pspe_drift_frequencies
-    results.pspe_max_power = pspe_max_power
-    results.pspe_pvalue = pspe_pvalue
-    results.pspe_confidence_classcompensation = pspe_confidence_classcompensation
-    results.pspe_significance_threshold = pspe_significance_threshold
-    results.pspe_significance_threshold_1test = pspe_significance_threshold_1test
-    results.pspe_significance_threshold_classcompensation = pspe_significance_threshold_classcompensation
-    results.pspe_drift_detected = pspe_drift_detected
-    results.pspe_reconstruction_power_spectrum = pspe_reconstruction_power_spectrum
-    results.pspe_reconstruction_powerpertimestep = pspe_reconstruction_powerpertimestep
-    results.pspe_dof = pspe_dof
-    
-    # Write the results for this analysis into the results object.
-    results.ps_power_spectrum = ps_power_spectrum
-    results.ps_drift_frequencies = ps_drift_frequencies
-    results.ps_max_power = ps_max_power
-    results.ps_pvalue = ps_pvalue
-    results.ps_confidence_classcompensation = ps_confidence_classcompensation
-    results.ps_significance_threshold = ps_significance_threshold
-    results.ps_significance_threshold_1test = ps_significance_threshold_1test
-    results.ps_significance_threshold_classcompensation = ps_significance_threshold_classcompensation
-    results.ps_drift_detected = ps_drift_detected
-    results.ps_reconstruction_power_spectrum = ps_reconstruction_power_spectrum
-    results.ps_reconstruction_powerpertimestep = ps_reconstruction_powerpertimestep
-    results.ps_dof = ps_dof
-    
-    # Write the results for this analysis into the results object.
-    results.global_power_spectrum = global_power_spectrum
-    results.global_drift_frequencies = global_drift_frequencies
-    results.global_max_power = global_max_power
-    results.global_pvalue = global_pvalue
-    results.global_confidence_classcompensation = global_confidence_classcompensation
-    results.global_significance_threshold = global_significance_threshold
-    results.global_significance_threshold_1test = global_significance_threshold_1test
-    results.global_significance_threshold_classcompensation = global_significance_threshold_classcompensation
-    results.global_drift_detected = global_drift_detected
-    results.global_reconstruction_power_spectrum = global_reconstruction_power_spectrum
-    results.global_reconstruction_powerpertimestep = global_reconstruction_powerpertimestep
-    results.global_dof = global_dof
-    results.global_dof_reduction = global_dof_reduction
-    
-    # ------------------------------------ #
-    #         Per-entity analysis          #
-    # ------------------------------------ #
-    
-    # This analysis can't be implemented in 
-    # the loop above, so we do it here.
-    
-    # Calculate the power spectrum averaged over sequencies, but not entities
-    pe_max_power = _np.zeros((num_entities),float)
-    pe_pvalue = _np.zeros((num_entities),float)
-    pe_drift_detected = _np.zeros((num_entities),bool)       
-    pe_drift_frequencies = {}
-    
-    # Loop over entities, and analysis the per-entity spectra
-    for q in range(0,num_entities):
-        
-        # Find the max power and the related pvalue.
-        pe_max_power[q] = _np.max(pe_power_spectrum[q,:])
-        pe_pvalue[q] = _stat.maxpower_pvalue_chi2(pe_max_power[q],num_timesteps,num_sequences*(num_outcomes-1))
-        
-        # Find the drift frequencies
-        pe_drift_frequencies[q] = frequencies.copy()
-        indices = _np.zeros((num_timesteps),bool)
-        indices[pe_power_spectrum[q,:] > pe_significance_threshold] = True 
-        pe_drift_frequencies[q] = pe_drift_frequencies[q][indices]
-        
-        if pe_max_power[q] > pe_significance_threshold:
-            pe_drift_detected[q] = True 
+    if verbosity == 1: print("complete.")
 
-    pe_reconstruction_power_spectrum = _np.mean(pspe_reconstruction_power_spectrum,axis=0)
-    pe_reconstruction_powerpertimestep = _np.mean(pspe_reconstruction_powerpertimestep,axis=0)
+    if verbosity > 0: 
+        print(" - Estimating the probability trajectories...",end='')
+        if verbosity > 1: print('')
     
-    results.pe_power_spectrum = pe_power_spectrum
-    results.pe_confidence_classcompensation = pspepo_confidence_classcompensation
-    results.pe_significance_threshold = pe_significance_threshold
-    results.pe_significance_threshold_1test = pe_significance_threshold_1test
-    results.pe_significance_threshold_classcompensation = pe_significance_threshold_classcompensation 
-    results.pe_max_power = pe_max_power
-    results.pe_pvalue = pe_pvalue
-    results.pe_drift_detected = pe_drift_detected
-    results.pe_drift_frequencies = pe_drift_frequencies
-    results.pe_reconstruction_power_spectrum = pe_reconstruction_power_spectrum
-    results.pe_reconstruction_powerpertimestep = pe_reconstruction_powerpertimestep
-    results.pe_dof = pe_dof
+    # Estimate the drifting probabilities.
+    estimate_probability_trajectories(results, modelSelector=modelSelectionMethod, estimator=estimator, verbosity=verbosity-1)
     
-    # --------------------------------------------------------------------------- #
-    # Check whether drift is detected with a composite test at the set confidence #
-    # --------------------------------------------------------------------------- #
-    # Record whether drift is detected at `confidence` confidence level, using a c
-    # omposite hypothesis .... todo: details.
-    
-    if num_entities == 1 and num_sequences > 1:
-        weights = [1/2.,0.,1/2.]  
-    
-    elif num_entities > 1 and num_sequences == 1:
-             weights = [1/2.,1/2.,0.]
-            
-    elif num_entities == 1 and num_sequences == 1:
-             weights = [1.,0.,0.]      
-            
-    else:
-        weights = [1/3.,1/3.,1/3.]
-        
-    numtests = [1,num_entities,num_entities*num_sequences]
-    composite_confidence = _hyp.generalized_bonferroni_correction(confidence,weights,numtests=numtests)
+    if verbosity == 1: print("complete.")
 
-    pspe_minimum_pvalue = _np.min(pspe_pvalue)
-    pe_minimum_pvalue = _np.min(pe_pvalue)
-    
-    drift_detected = False
-    if global_pvalue < 1-composite_confidence[0]:
-        drift_detected = True
-    if pe_minimum_pvalue < 1-composite_confidence[1]:
-        drift_detected = True
-    if pspe_minimum_pvalue < 1-composite_confidence[2]:
-        drift_detected = True
-   
-    # Write whether the composite hypothesis test detects drift into the results object.
-    results.drift_detected = drift_detected 
-    
     return results
+
+def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes=False, name=None):
+    """"
+    Formats time-series data, in the form of DataSet containing time-series data, into the format 
+    required by a DriftResults object, writes this into an empty DriftResults object, and returns
+    this DriftResults object. This function performs a range of useful formattings of arbitrary
+    time-series data (e.g., marginalization), but does not cover all possible ways to format
+    the data *and* it requires that data to first be recorded into a DataSet, which is not strictly
+    necessary to perform the drift analysis. So it may sometimes be preferable to format the data 
+    manually, by creating an empty DriftResults object and using the .add_formatted_data() method.
+
+    Parameters
+    ----------
+    ds : DataSet object
+        The DataSet, which must contain time-series data, to format.
+
+    marginalize : {'auto',True,False}, optional
+        Todo.
+
+    groupoutcome : dict or None, optional
+        Todo: add this functionality in (currently it does not do anything).
+
+
+     enforceConstNumTimes : bool, optional
+        If True, if the number of data points varies between Circuits (i.e., the time series is
+        a different length for different sequences), then the ... todo
+
+    name : None or str.
+        Tdo.
+
+    Returns
+    -------
+    DriftResults object
+        A DriftResults object containing the formatted data, that can then be used to implement
+        spectral analysis of this formatted time-series data.
+    """
+    if groupoutcomes is not None:
+        assert(not marginalize == True), "Cannot marginalize the data *and* format the data according to a `groupoutcomes` dictionary!"
+
+    # Initialize an empty results object, with the name written in.
+    results = _dresults.DriftResults(name=name)
+
+    num_sequences = len(list(ds.keys()))
+    circuitlist = list(ds.keys())
+    
+    timestamps = []
+    num_timesteps = []
+    counts = []
+
+    # Find the timestamps for each sequence, and the total number of counts at each timestamp.
+    for i in range(num_sequences):
+        # Find the set of all timestamps and total counts
+        timesforseq, countsforseq = ds[circuitlist[i]].timeseries('all')
+        # Record the number of timestamps for this sequence
+        num_timesteps.append(len(timesforseq))
+        timestamps.append(timesforseq)
+        # Check that the number of clicks is constant over all timestamps
+        assert(_np.std(_np.array(countsforseq)) <= 1e-15), "The number of total clicks must be the same at every timestamp!"
+        # Record the counts-per-timestamp for this sequence
+        counts.append(countsforseq[0])
+    
+    # Check that the number of counts is independent of sequence. (we could drop this requirement if we need to).
+    counts = _np.array(counts)
+    assert(_np.std(counts) <= 1e-15), "Number of counts per time-step must be the same for all sequences!"
+    counts = counts[0]
+   
+    # Check whether the number of timesteps is independent of sequence.    
+    if _np.std(_np.array(num_timesteps)) > 1e-15:
+        constNumTimes = False
+    else:
+        constNumTimes = True
+        num_timesteps = num_timesteps[0]
+
+    # If we are demanding that the number of timestamps is independent of sequence, update the timestamps
+    # by dropping as many of the final timestamps as necessary to have a fixed number of timestamps.
+    if enforceConstNumTimes and not constNumTimes:
+        num_timesteps = min(num_timesteps)
+        #print("Fixing number of time-stamps to {}".format(num_timesteps))
+        timestamps = [timestamps[i][0:num_timesteps] for i in range(num_sequences)] 
+    else:
+        # We do this, because this gets recorded in the results as whether we *have* enforced this.
+        enforceConstNumTimes = False
+    
+    if isinstance(marginalize,str):
+        assert(marginalize == 'auto')
+        if len(list(ds.get_outcome_labels())) > 4:
+            marginalize = True
+        else:
+            marginalize = False
+
+    assert(marginalize == True or marginalize == False)
+
+    if marginalize:
+        if verbosity > 0:
+            print(" - marginalizing data...")
+        full_outcomes = ds.get_outcome_labels()
+        for s in full_outcomes[0][0]:
+            assert(s == '0' or s == '1'), "If marginalizing, this function assumes that the outcomes are strings of 0s and 1s!"
+            if len(s) == 1:
+                # Over-writes marginalize if the marginalization will be trivial
+                marginalize = False
+
+    if marginalize:
+        num_entities = len(full_outcomes[0][0])
+        outcomes = ['0','1']
+        timeseries = {}
+        for e in range(num_entities):
+            timeseries[e] = {}
+            tempdata = pygsti.construction.filter_dataset(ds,sectors_to_keep=i)
+            for s in range(num_sequences):
+                timeseries[e][s] = {}
+                for o in range(2):
+                    junk, timeseries[e][s][o] = tempdata[circuitlist[s]].timeseries(outcomes[o],timestamps[s])
+
+    else:
+        outcomes = ds.get_outcome_labels()
+        if len(outcomes) > 10:
+            _warnings.warn("There are more than 10 outcomes per sequence! Consider marginalizing the data.")
+
+        timeseries = {}
+        timeseries[0] = {}
+        for s in range(num_sequences):
+            timeseries[0][s] = {}
+            for o in outcomes:
+                #print(len(timestamps[s]))
+                junk, timeseries[0][s][o] = ds[circuitlist[s]].timeseries(o,timestamps[s])
+
+    results.add_formatted_data(timeseries, timestamps, circuitlist, outcomes, counts, constNumTimes, 
+                               enforcedConstNumTimes=enforceConstNumTimes, marginalized=marginalize)
+    return results
+
+def calculate_power_spectra(results, transform='DCT', frequenciesInHz='auto'):
+    """"
+    Calculates power spectra for all of the time-series data recorded in the `results`
+    DriftResults objects, and writes them into these results. These power spectra are
+    on the per-entity (e.g., per qubit, for marginalized data) per-sequence, per-outcome
+    level.
+
+    Parameters
+    ----------
+    results : DriftResults
+        A drift results object, containing data that has been formatted for a time-series
+        analysis, either manually or using the `format_data()` function. The power spectra
+        and Fourier modes calculated by this function are written into this results object.
+        Note that if this results object already contains power spectra and modes these will
+        be written over.
+
+    transform : str, optional
+        The type of Fourier transform to use. The allowed options are 'DCT', 'LSP' and 'DFT'.
+        The only tested option is currently 'DCT', and the code probably doesn't work for the
+        other options.
+
+    frequenciesInHz : list/array or str, optional
+        The frequencies to calculate the spectrum at. This is only used if `transform` is
+        'LSP', in which case the power can be calculated at any and any number of frequencies. 
+        For all other cases the frequencies, are defined by the transform and so this input
+        is ignored. In the default case of 'auto' the LSP frequencies are those of the DCT/DFT.
+        These frequencies should be stated in Hz, assuming that the time-stamps have been recoreded
+        into the results object in seconds.
+
+    Returns
+    -------
+    None
+        The spectra are written into the results object and are not returned.
+    """
+
+    shape = (results.number_of_entities,results.number_of_sequences,results.number_of_outcomes,results.maxnumber_of_timesteps)
+    spectra = _np.zeros(shape,float)
+    
+    if transform == 'DCT':
+
+        # Regardless of the input, we write over that and use the DCT frequencies
+        frequenciesInHz = _sig.frequencies_from_timestep(results.meantimestepGlobal, results.maxnumber_of_timesteps) 
+        # Todo : explain
+        assert(results.constNumTimes == True)
+        # We can store the modes and spectra in an array, because fixed-T must be enforced.
+        modes = _np.zeros(shape,float)
+        for qInd in range(results.number_of_entities): 
+            for sInd in range(results.number_of_sequences):
+                for oInd, out in enumerate(results.outcomes):
+                    x = results.timeseries[qInd][sInd][out] 
+                    modes[qInd,sInd,oInd,:] = _sig.DCT(x, counts=results.number_of_counts)
+
+        spectra = modes**2
+
+    elif transform == 'LSP':
+
+        if isinstance(frequenciesInHz,str):
+            assert(frequenciesInHz == 'auto')
+            # We default to the DCT/DFT frequencies. We could allow for different frequencies for different sequences,
+            # but that would prevent the spectrum averaging, so we don't.
+            frequenciesInHz = _sig.frequencies_from_timestep(results.meantimestepGlobal, results.maxnumber_of_timesteps)
+   
+        # We can store the modes and spectra in an array regardless of fixed T, because we calculate the
+        # periodgram at a fixed set of frequencies.
+        modes = None
+        for qInd in range(results.number_of_entities): 
+            for sInd in range(results.number_of_sequences):
+                for oInd, out in enumerate(results.outcomes):
+                    x = results.timeseries[qInd][sInd][out] 
+                    t = results.timestamps[qInd][sInd]
+                    specta[qInd,sInd,oInd,:] = _sig.LSP(t, x, frequenciesInHz, counts=results.number_of_counts)
+
+    results.add_spectra(frequenciesInHz, spectra, transform, modes)
+
+    return None
+
+def implement_drift_detection(results, significance=0.05, testFreqInds=None,
+                              whichTests=(('avg','avg','avg'), ('per','avg','avg'), 
+                              ('per','per','avg')), betweenClassCorrection=True, 
+                              inClassCorrection=('FWER','FWER','FDR','FDR'), name='detection',
+                              overwrite=False, verbosity=1):
+    """
+    
+    # {'global':True, 'perEnt':True, 'perSeq':False,'perSeqPerEnt':True,
+                              'perEntPerSeqPerOut':True}
+    #{'perEnt':'Bonferroni', 'perSeq':'BH', 'perOut':'BH', 'local':'BH'})
+
+    Parameters
+    ----------
+
+    significance : float, optional
+        The global significance level. This is ...
+
+    testfrequ
+    """
+
+    # These assumptions are not crucial *but* the current code will probably break without them
+    #
+    #
+    # Todo : we are violating these! In the updated test schedule.
+    #
+    #
+    validWhichTests = []
+    validWhichTests.append(('avg','avg','avg'))
+    validWhichTests.append(('per','avg','avg'))
+    validWhichTests.append(('per','per','avg'))
+    validWhichTests.append(('per','per','per'))
+
+    for test in whichTests: assert(test in validWhichTests)
+
+    # These assumptions are not crucial *but* the current code will probably break without them
+    validInClassCorrections = []
+    validInClassCorrections.append(('FWER','FDR','FDR','FDR'))
+    validInClassCorrections.append(('FWER','FWER','FDR','FDR'))
+    validInClassCorrections.append(('FWER','FWER','FWER','FDR'))
+    validInClassCorrections.append(('FWER','FWER','FWER','FWER'))
+
+    assert(inClassCorrection in validInClassCorrections)
+
+    # Work out which tests we're actually going to do.
+    #print(whichTests)
+    whichTestsPointers = {}
+
+    if results.number_of_entities == 1:
+        whichTestsPointers[0] = 'avg'
+    if results.number_of_sequences == 1:
+        whichTestsPointers[1] = 'avg'
+    if results.number_of_outcomes == 2:
+        whichTestsPointers[2] = 'avg'
+
+    #print(whichTestsPointers)
+
+    whichTestsUpdated = []
+    for test in whichTests:
+        equivalenttest = tuple([whichTestsPointers.get(i,test[i]) for i in range(3)])
+        if equivalenttest not in whichTestsUpdated:
+            whichTestsUpdated.append(equivalenttest)
+
+    #print(whichTestsUpdated)
+
+    existsPerTest = _np.array([False,False,False])
+    for test in whichTestsUpdated:
+        for i in range(3):
+            if not existsPerTest[i]:
+                if test[i] == 'per':
+                    existsPerTest[i] = True
+
+    # The points in the tuple to pad with 'avg'
+    avgpad = {}
+    for test in whichTestsUpdated:
+        avgpad[test] = _np.zeros(3,bool)
+        for i in range(3):
+            if test[i] == 'avg':
+                 avgpad[test][i] = True
+
+    control = 'gFWER'
+    if not betweenClassCorrection and len(whichTestsUpdated) > 1:
+        control = 'cFWER'
+    for i in range(4):
+        ctype = inClassCorrection[i]
+        if i == 3 or existsPerTest[i]:
+            #print("Adjusting for this ctype")
+            if ctype == 'none':
+                control = 'none'
+            elif control != 'none' and ctype == 'FDR':
+                control = control[0] + 'FDR'
+            #print(control)
+
+    #print(control)
+
+    if min(results.number_of_timesteps) <= 25: 
+        _warnings.warn('At least some sequences have very few timesteps (less than 25). ' + \
+            'This means that the statistical signficance thresholds and p-values, ' +\
+            'which rely on the central limit theorem to be valid, may be inaccurate.')
+
+    # The baseline degrees of freedom for each type of power spectra
+    #dofstuple = (results.number_of_entities,results.number_of_sequences,results.number_of_outcomes-1)
+    numteststuple = (results.number_of_entities,results.number_of_sequences,results.number_of_outcomes)
+
+    significancePerTestClass = {}
+    if betweenClassCorrection:
+        SPTC = significance/len(whichTestsUpdated)
+    else:
+        SPTC = significance
+    # Store in a dictionary, to allow for weights in future if we want them.
+    for test in whichTestsUpdated:
+        significancePerTestClass[test] = SPTC
+
+    # Todo: Deal with reducing the DOF appropriately here. Probably do when 
+    # running through the tests, as have to look at all the data to check.
+    # Reduce the global dofs for sequences ....    
+    # global_dof_reduction = 0
+    # for s in range(0,num_sequences):
+    #     if _np.sum(ps_power_spectrum[s,:]) < 1.:
+    #         global_dof_reduction+= 1
+            
+    # global_dof = global_dof - global_dof_reduction
+    # # Todo: add a dof reduction for pspe, ps and pe analyses.
+
+    if testFreqInds is not None:
+        testFreqInds = _np.sort(testFreqInds)
+        usedTestFreqInds = testFreqInds.copy()
+    else:
+        usedTestFreqInds = _np.arange(results.number_of_frequencies)
+
+    driftdetectedinClass = {}
+    driftdetected = False
+    power_significance_pseudothreshold = {}
+    sigFreqInds = {}
+
+    # Implement the statistical tests
+    for test in whichTestsUpdated:
+
+        sig = significancePerTestClass[test] 
+        dof = results.get_dof_per_spectrum_in_class(*test)
+        # The number of spectra tested, not the number of frequencies tested in total
+        numtest = results.get_number_of_spectra_in_class(*test)
+        numfreqs = len(usedTestFreqInds)
+        driftdetectedinClass[test] = False
+
+        if verbosity > 0:
+            print("   - Implementing statistical test at significance {} with structure: {}".format(sig,test))
+            print("      - In-class correction being used is {}".format(inClassCorrection))
+            print("      - Number of tests in class is {}".format(numtest))
+            print("      - Testing at {} frequencies".format(numfreqs))
+            print("      - Baseline degrees-of-freedom for the power spectrum is {}".format(dof))
+
+        spectra = results.get_spectra_set(test, freqInds=testFreqInds)
+
+        # If we are just doing Bonferroni corrections on everything, we do this using different code
+        # as it can be done faster.
+        if inClassCorrection == ('FWER','FWER','FWER','FWER'):
+
+            power_significance_pseudothreshold[test] = _stats.power_significance_threshold(sig, numtest*numfreqs, dof)
+            if verbosity > 0:
+                print("      - Power significance threshold is: {}".format(power_significance_pseudothreshold[test]))
+            it = []
+            shape = []
+            if test[0] == 'per':
+                it.append(range(results.number_of_entities))
+                shape.append(results.number_of_entities)
+            #else:
+            #    it.append(('avg',))
+            if test[1] == 'per':
+                it.append(range(results.number_of_sequences))
+                shape.append(results.number_of_sequences)
+            #else:
+            #    it.append(('avg',))
+            if test[2] == 'per':
+                it.append(range(results.number_of_outcomes))
+                shape.append(results.number_of_outcomes)
+            #else:
+            #    it.append(('avg',))
+            shape.append(len(usedTestFreqInds))
+            for tup in _itertools.product(*it):
+                #print(test, tup)
+                tupit = 0
+                paddedtup = []
+                for i in range(3):
+                    if avgpad[test][i]: paddedtup.append('avg')
+                    else:
+                        paddedtup.append(tup[tupit])
+                        tupit += 1
+                paddedtup = tuple(paddedtup)
+                #print(paddedtup)
+                sigFreqInds[paddedtup] = list(usedTestFreqInds.copy()[spectra[tup] > power_significance_pseudothreshold[test]])
+                if len(sigFreqInds[paddedtup]) > 0:
+                    driftdetectedinClass[test] = True
+                    driftdetected = True
+                #print(sigFreqInds[paddedtup])
+        
+        # If we're doing FDR control we go into this bit of code
+        else:
+            localsig = sig
+            fwernum = 1
+            itfwer = []
+            itfdr = []
+            for ind, t in enumerate(test):
+                if t == 'per':
+                    correction = inClassCorrection[ind]
+                    if correction == 'FWER':
+                        fwernum = fwernum*numteststuple[ind]
+                        itfwer.append(range(numteststuple[ind]))
+                    if correction == 'FDR':
+                        itfdr.append(range(numteststuple[ind]))
+            itfdr.append(range(len(usedTestFreqInds)))
+            # The number of test statistics we are doing the Ben-Hoch procedure for.
+            fdrnumtests = len(usedTestFreqInds)*numtest//fwernum
+            localsig = sig/fwernum
+
+            if verbosity > 0:
+                print("      - Implementing {} Benjamini-Hockberg procedure statistical tests each containing {} tests.".format(fwernum,fdrnumtests))
+                print("      - Local statistical significance for each Benjamini-Hockberg procedure is {}".format(localsig))
+
+            power_significance_pseudothreshold[test] = {}
+            
+            if verbosity > 0:
+                print("      - Generating Benjamini-Hockberg power quasi-threshold...",end='')
+                
+            quasithreshold = _stats.power_fdr_quasithreshold(localsig, fdrnumtests, dof)
+            
+            if verbosity > 0:
+                print("complete.")
+                print("      - Implementing the Benjamini-Hockberg procedures...",end='')
+                if verbosity >1:
+                    print('')
+
+            #fdrtuples = [tup for tup in _itertools.product(*itfdr)]
+            #print(fdrtuples)
+
+            # Goes through each FDR set, and implements the Benjamini-Hockberg procedure.
+            for tup in _itertools.product(*itfwer):
+
+                if len(_np.shape(spectra)) > 1:
+                    fdrPowers = spectra[tup].flatten()
+                else:
+                    fdrPowers = spectra[tup].copy()
+
+                # The labels that will go with the elements in the flattened spectra.
+                # This needs to be refreshed for each loop through with a new tuple.
+                fdrtuples = [tup for tup in _itertools.product(*itfdr)]
+
+                fdrPowers, fdrtuples = zip(*sorted(zip(fdrPowers,fdrtuples)))
+                fdrPowers = _np.array(list(fdrPowers))
+                #print(quasithreshold[0],quasithreshold[-1],fdrPowers[0],fdrPowers[-1])
+                #print(fdrtuples[-10:])
+                #print(fdrPowers[-10:])
+
+                dif = fdrPowers - quasithreshold
+                try: 
+                    ind = next(i for i,v in enumerate(dif) if v > 0.0)
+                    sigtuples = fdrtuples[ind:]
+                    if verbosity > 1:
+                        print("         - {} significant test statistics found for test-set {}!".format(fdrnumtests-ind,tup))
+                    driftdetectedinClass[test] = True
+                    driftdetected = True
+                    power_significance_pseudothreshold[test][tup] = quasithreshold[ind]
+
+                except:
+                    if verbosity > 1:
+                        print("         - 0 significant test statistics found for test-set {}.".format(tup))
+                    power_significance_pseudothreshold[test][tup] = quasithreshold[-1]
+                    sigtuples = []
+
+                for stup in sigtuples:
+                    tupit = 0
+                    tuprebuilt = tup+stup[:-1]
+                    paddedtup = []
+                    for i in range(3):
+                        if avgpad[test][i]: paddedtup.append('avg')
+                        else:
+                            paddedtup.append(tuprebuilt[tupit])
+                            tupit += 1
+                    paddedtup = tuple(paddedtup)
+                    try:
+                        sigFreqInds[paddedtup] += [stup[-1],]
+                        #print("Successfully added to", tup+stup[:-1])
+                    except:
+                        #print("First for", tup+stup[:-1])
+                        sigFreqInds[paddedtup] = [stup[-1],]              
+                
+
+            if verbosity == 1:
+                print("complete.")
+
+        if verbosity > 0:
+            if driftdetectedinClass[test]:
+                print("      - Drift detected! (Sufficient evidence to reject the no-drift null hypothesis).")
+            else:
+                print("      - Drift not detected. (Not sufficient evidence to reject the no-drift null hypothesis).")
+
+    if betweenClassCorrection:
+        betweenClassCorrection = 'bonferroni'
+    inClassCorrections = {test:inClassCorrection for test in whichTestsUpdated}
+
+    results.add_drift_detection_results(significance=significance, testClasses=whichTestsUpdated, 
+                                        betweenClassCorrection=betweenClassCorrection, 
+                                        inClassCorrections=inClassCorrections,
+                                        control=control, driftdetected=driftdetected, 
+                                        driftdetectedinClass=driftdetectedinClass,
+                                        testFreqInds=testFreqInds, sigFreqIndsinClass=sigFreqInds,
+                                        powerSignificancePseudothreshold=power_significance_pseudothreshold,
+                                        significanceForClass=significancePerTestClass, 
+                                        name=name, overwrite=overwrite)
+
+    return None
+
+def estimate_probability_trajectories(results, modelSelector=(('per','per','avg'),None), estimator='FF-UAR', 
+                                      estimatorSettings=[], verbosity=1, overwrite=True, setasDefault=True):
+    """
+    Todo:
+    """
+    testClass = modelSelector[0]
+    detectorkey = modelSelector[1]
+    transform = results.transform
+    outcomes = results.outcomes
+
+    if detectorkey is None:
+        detectorkey = results.defaultdetectorkey
+
+    assert(testClass[2] == 'avg'), "The model selection must use outcome-averaged model selection!"
+
+    if transform == 'DCT' or transform == 'DFT':
+        assert(estimator in ('FF-unbounded', 'FF-UAR', 'MLE')), "For the {} transform, the estimator must be FF-unbounded, FF-UAR or MLE!".format(transform)
+
+
+    for e, ent in enumerate(results.entitieslist):
+        for s, seq in enumerate(results.circuitlist):
+            
+            if verbosity > 0:
+                print("    - Generating estimates for entity {} and sequence {}".format(ent,seq))
+            # Get the time-series data for this entity and sequence, as a dict with keys from 0 to the
+            # number of possible measurement outcomes - 1.
+            timeseries = results.timeseries[e][s]
+            # Normalize the timeseries 
+            timeseries = {key:value/results.number_of_counts for key,value in timeseries.items()}
+            timestamps = results.timestamps[s] # Timestamps only indexed by sequence.
+
+            meandict = {o : _np.mean(results.timeseries[e][s][o])/results.number_of_counts for o in outcomes[:-1]}
+            #outcomeIndlist = list(range(results.number_of_outcomes))
+            nullmodel = _mdl.ProbabilityTrajectoryModel(outcomes, modeltype='null', 
+                                                        hyperparameters={'basisfunctionInds':[0.,]}, 
+                                                        parameters=meandict)
+
+            results.add_reconstruction(ent, seq, nullmodel, modelSelector='null', estimator='null', auxDict={}, 
+                                       overwrite=overwrite)
+
+            if testClass[0] == 'per': entkey = e
+            else: entkey = 'avg'
+
+            if testClass[1] == 'per': seqkey = s
+            else: seqkey = 'avg'
+                   
+            # The hyper-parameters for the DCT (or DFT) models are frequency indices,
+            # along with the start and end times.
+            if transform == 'DCT' or transform == 'DFT':
+
+                # Get the drift frequencies (doesn't include the zero frequency)
+                freqs = results.get_drift_frequency_indices(entity=entkey, sequence=seqkey, 
+                                                            outcome='avg', sort=True, detectorkey=detectorkey)
+
+                # Add in the zero frequency, as it's a hyper-parameter of the models
+                freqs.insert(0,0)
+                
+                # Flag specifying whether we only need the null hypothesis estimate of a constant frequency.
+                null = True
+                if len(freqs) > 1:
+                    null = False
+
+                # The hyper-parameters for the DCT model
+                hyperparameters = {"basisfunctionInds":freqs, 'starttime':results.timestamps[s][0], 
+                                   'timestep':results.meantimestepPerSeq[s], 'numsteps':results.number_of_timesteps[s]}
+                                   #starttime = hyperparameters['starttime']
+
+                # The parameters for the DCT filter without amplitude reduction model (a "raw" DCT filter). This
+                # is the basis for *all* the models, so we construct it and save it no matter what 
+                # estimator has been requested
+                parameters = _sig.amplitudes_at_frequencies(freqs, timeseries, transform=transform)
+                del parameters[outcomes[-1]]
+                # Creates the model, and records it into the results object with a standard 'key' to find it later.
+                ffmodel = _mdl.ProbabilityTrajectoryModel(outcomes, modeltype=transform, 
+                                                          hyperparameters=hyperparameters, parameters=parameters)
+                # Records this estimate.
+                results.add_reconstruction(ent, seq, ffmodel, modelSelector=modelSelector, estimator='FF-unbounded', 
+                                           auxDict={'null':null}, overwrite=overwrite)
+                
+                # If we are doing MLE or FF-UAR we now construct the FF-UAR estimate
+                if estimator in ('FF-UAR','MLE'):
+
+                    #ffmodel.get_probabilities(timeseries)
+
+                    # The uniform-amplitude-reduction model is the same as above, but with post-processing on the size of the amplitudes.
+                    ffmodelUniReduce = ffmodel.copy()
+                    ffmodelUniReduce, flag = _est.uniform_amplitude_compression(ffmodelUniReduce, timestamps)
+                    # Records this estimate.
+                    results.add_reconstruction(ent, seq, ffmodelUniReduce, modelSelector=modelSelector, estimator='FF-UAR', 
+                                               auxDict={'null':null, "reduction":flag}, overwrite=overwrite)
+     
+                # If we are doing MLE, we go in here and use the estimates above to seed it.
+                if estimator == 'MLE':
+
+                    if not null:
+                        # The MLE model uses the above UAR estimate as the seed, and then does MLE on the model.
+                        ffmodelmle = ffmodelUniReduce.copy()
+                        ffmodelmle, optout = _est.maximum_likelihood_model(ffmodelmle, timeseries, timestamps,
+                                                                           verbosity=verbosity-1, returnOptout=True)
+                    else:
+                        # If there are no significant frequencies the MLE model is necessarily equal to the "raw" Fourier 
+                        # filter (so just copy it and don't do any estimation), but not necessarily the UAR model (if the
+                        # data mean is v. close to 0 or 1). 
+                        ffmodelmle = ffmodel.copy()
+                        optout = None 
+                    
+                    # Records this estimate.
+                    results.add_reconstruction(ent, seq, ffmodelmle, modelSelector=modelSelector, estimator='MLE', 
+                                               auxDict={'null':null, 'optout':optout}, overwrite=overwrite)
+
+            else:
+                raise ValueError("Estimators based on the {} transform are not yet implemented!".format(transform))
+            
+            # Todo : the LPS estimators.
+            # The hyper-parameters for the LSP models are real-valued frequencies.
+            # elif results.transform == 'LSP':
+            #     freqs = results.get_drift_frequencies(entity=entkey, sequence=seqkey, 
+            #                                                 outcome='avg', sort=True)
+            #     # We need the 0. frequency as a hyper-parameter
+            #     freqs.insert(0,0.)
+            #     hyperparameters = {'freqs' : freqs}
+        
+            #params, recon, uncert, aux = _est.estimate_probability_trace(timeseries, timestamps, results.transform, estimator,
+            #                                                             hyperparameters, modes=modes, estimatorSettings)
+        
+    return None
