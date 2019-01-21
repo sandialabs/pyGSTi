@@ -2342,7 +2342,7 @@ class Circuit(object):
                 
                 #If gate.qubits is None, gate is assumed to be single-qubit gate
                 #acting in parallel on all qubits.  If the gate is a global idle, then 
-                #Pragma blocks are always inserted (for tests like idle tomography) even
+                #Pragma blocks are inserted (for tests like idle tomography) even
                 #if block_between_layers==False.  Set block_idles=False to disable this as well.
                 if gate.qubits is None:
                     if quil_for_gate == 'I':
@@ -2465,13 +2465,20 @@ class Circuit(object):
                 
                 # Find the openqasm for the gate.
                 openqasm_for_gate = gatename_conversion[gate.name]
-                for q in gate_qubits: 
-                    openqasm_for_gate += ' q[' + str(qubit_conversion[q])+']'
-                    if q != gate_qubits[-1]:
-                        openqasm_for_gate += ', '
-                openqasm_for_gate += ';\n'
+                
+                #If gate.qubits is None, gate is assumed to be single-qubit gate
+                #acting in parallel on all qubits.
+                if gate.qubits is None:
+                    for q in gate_qubits:
+                        openqasm += openqasm_for_gate + ' q[' + str(qubit_conversion[q])+'];\n'
+                else:                
+                    for q in gate_qubits: 
+                        openqasm_for_gate += ' q[' + str(qubit_conversion[q])+']'
+                        if q != gate_qubits[-1]:
+                            openqasm_for_gate += ', '
+                    openqasm_for_gate += ';\n'
                 # Add the openqasm for the gate to the openqasm string.
-                openqasm += openqasm_for_gate
+                    openqasm += openqasm_for_gate
                 
                 # Keeps track of the qubits that have been accounted for, and checks that hadn't been used
                 # although that should already be checked in the .get_layer(), which checks for its a valid 
