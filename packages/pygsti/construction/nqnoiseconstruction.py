@@ -1659,8 +1659,8 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
         gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
           # assume evotype is a densitymx or term type
 
-    return create_cloudnoise_sequences(nQubits, gatedict, availability, singleQfiducials,
-                                       maxLengths, geometry, maxIdleWeight, maxhops,
+    return create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
+                                       gatedict, availability, geometry, maxIdleWeight, maxhops,
                                        extraWeight1Hops, extraGateWeight, paramroot,
                                        sparse, verbosity, cache, idleOnly, 
                                        idtPauliDicts, algorithm)

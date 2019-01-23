@@ -36,7 +36,7 @@ PyGSTi is designed with a modular structure so as to be highly customizable
 and easily integrated to new or existing python software.  It runs using
 python2.7 or python3.  To faclilitate integration with software for running
 cloud-QIP experiments, pyGSTi `Circuit` objects can be converted to IBM's
-**QASM** and Rigetti Quantum Computing's **QUIL** circuit description languages.
+**OpenQASM** and Rigetti Quantum Computing's **Quil** circuit description languages.
 
 Installation
 ------------
