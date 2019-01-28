@@ -16,7 +16,7 @@ class ProbabilityTrajectoryModel(object):
     """
     todo
     """
-    def __init__(self, outcomes, modeltype, hyperparameters, parameters):
+    def __init__(self, outcomes, hyperparameters, parameters):
         """
         todo:
 
@@ -38,47 +38,14 @@ class ProbabilityTrajectoryModel(object):
         self.independent_outcomes = outcomes[:-1]
         self.constrained_outcome = outcomes[-1]
         self.numoutcomes = len(outcomes)
-        self.set_basisfunctions(modeltype, hyperparameters, parameters)
+        self.set_hyperparameters(hyperparameters, parameters)
+        #self.set_basisfunctions(modeltype, hyperparameters, parameters)
 
         return None        
     
-    def set_basisfunctions(self, modeltype, hyperparameters, parameters):
-        """
-        Todo:
-        """
-        self.modeltype = modeltype
+    def basisfunction(self):
 
-        if modeltype == 'null':
-            
-            self.fullmodelsize = 1            
-            def basisfunction(i, times):
-                if i < self.fullmodelsize:
-                    return _np.array([1 for t in times]) #_np.cos(freqIns[i]*_np.pi*(t-starttime+0.5)/timedif)
-                else:
-                    raise ValueError("Invalid basis function index!")
-        
-        elif modeltype == 'DCT':
-
-            try:
-                starttime = hyperparameters['starttime']
-                timestep = hyperparameters['timestep']
-                numsteps = hyperparameters['numsteps']
-                #timedif = endtime - starttime              
-            except:
-                raise ValueError("The hyperparameters are invalid for the model type! Need the start time and end time to creat the basis functions!")
-            
-            self.fullmodelsize = _np.inf         
-            def basisfunction(i, times):
-                #return _np.array([_np.cos(i*_np.pi*(t-starttime+0.5)/timedif) for t in times])
-                return _np.array([_np.cos(i*_np.pi*((t-starttime)/timestep+0.5)/numsteps) for t in times])
-        else:
-            raise ValueError("Invalid model type!")
-
-        self.basisfunction = basisfunction
-        # This sets the hyperparameters and parameters so that they agree with the new model.
-        self.set_hyperparameters(hyperparameters, parameters)
-
-        return None
+        raise NotImplementedError("This should be defined in derived classes!")
 
     def get_basis_function(self, i, times):
         """
@@ -90,14 +57,16 @@ class ProbabilityTrajectoryModel(object):
         """
         todo
         """
-        basisfunctionInds = list(hyperparameters['basisfunctionInds'])
-        basisfunctionInds.sort()
-        assert(max(basisfunctionInds) < self.fullmodelsize)
-        assert(0. in basisfunctionInds), "The constant function must be one of the basis functions!"
-        self.basisfunctionInds = basisfunctionInds
+        hyperparameters = list(hyperparameters)
+        hyperparameters.sort()
+        self.hyperparameters = hyperparameters
+        #assert(max(basisfunctionInds) < self.fullmodelsize)
+        #assert(0. in basisfunctionInds), "The constant function must be one of the basis functions!"
+        #self.basisfunctionInds = basisfunctionInds
         self.set_parameters(parameters)
-        self.modelsize_unconstrained = (self.numoutcomes-1)*len(basisfunctionInds)
-        self.modelsize_unconstrained_peroutcome= len(basisfunctionInds)
+        self.modelsize_unconstrained = (self.numoutcomes-1)*len(hyperparameters)
+        self.modelsize_unconstrained_peroutcome= len(hyperparameters)
+        
         return None
 
     def set_parameters(self, parameters):
@@ -111,7 +80,7 @@ class ProbabilityTrajectoryModel(object):
         """
         todo:
         """
-        numbasisfuncs = len(self.basisfunctionInds)
+        numbasisfuncs = len(self.hyperparameters)
         parameters = {o : parameterslist[oind:(1+oind)*numbasisfuncs] for oind,o in enumerate(self.independent_outcomes)}
         self.parameters = parameters
         return None
@@ -137,7 +106,7 @@ class ProbabilityTrajectoryModel(object):
         """ 
         p_for_constrained_outcome = _np.ones(len(times))
         for o in self.independent_outcomes:
-            p = _np.sum(_np.array([self.parameters[o][ind]*self.basisfunction(i,times) for ind, i in enumerate(self.basisfunctionInds)]), axis=0) 
+            p = _np.sum(_np.array([self.parameters[o][ind]*self.basisfunction(i,times) for ind, i in enumerate(self.hyperparameters)]), axis=0) 
             p_for_constrained_outcome = p_for_constrained_outcome - p
             probs = {o : p}    
         probs[self.constrained_outcome] = p_for_constrained_outcome 
@@ -147,7 +116,7 @@ class ProbabilityTrajectoryModel(object):
         """
         todo
         """
-        return {o : _np.sum(_np.array([self.parameters[o][ind]*self.basisfunction(i,times) for ind, i in enumerate(self.basisfunctionInds)]), axis=0) for o in self.independent_outcomes}
+        return {o : _np.sum(_np.array([self.parameters[o][ind]*self.basisfunction(i,times) for ind, i in enumerate(self.hyperparameters)]), axis=0) for o in self.independent_outcomes}
 
     #def get_probabilities(times):
     #               
@@ -155,3 +124,42 @@ class ProbabilityTrajectoryModel(object):
 
     def copy(self):
         return _copy.deepcopy(self)
+
+
+class NullProbabilityTrajectoryModel(ProbabilityTrajectoryModel):
+
+    def __init__(self, outcomes, hyperparameters, parameters):
+
+        self.fullmodelsize = 1
+        ProbabilityTrajectoryModel.__init__(self, outcomes, hyperparameters, parameters)          
+    
+    def basisfunction(self, i, times):
+        """
+        
+        """
+        if i < self.fullmodelsize:
+            return _np.array([1 for t in times]) #_np.cos(freqIns[i]*_np.pi*(t-starttime+0.5)/timedif)
+        else:
+            raise ValueError("Invalid basis function index!")
+
+class DCTProbabilityTrajectoryModel(ProbabilityTrajectoryModel):
+
+    def __init__(self, outcomes, hyperparameters, parameters, modelparameters):
+
+        try:
+            self.starttime = modelparameters['starttime']
+            self.timestep = modelparameters['timestep']
+            self.numsteps = modelparameters['numsteps']
+            #timedif = endtime - starttime              
+        except:
+            raise ValueError("The hyperparameters are invalid for the model type! Need the start time and end time to creat the basis functions!")
+            
+        self.fullmodelsize = _np.inf    
+
+        ProbabilityTrajectoryModel.__init__(self, outcomes, hyperparameters, parameters)            
+    
+    def basisfunction(self, i, times):
+        """
+        Todo
+        """            
+        return _np.array([_np.cos(i*_np.pi*((t-self.starttime)/self.timestep+0.5)/self.numsteps) for t in times])
