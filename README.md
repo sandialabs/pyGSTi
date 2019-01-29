@@ -4,90 +4,164 @@
 
 [![Build Status](https://travis-ci.org/pyGSTio/pyGSTi.svg?branch=master)](https://travis-ci.org/pyGSTio/pyGSTi)
 
-Overview:
---------
-This is the root directory of the pyGSTi software, which is a Python
- implementation of Gate Set Tomography.  pyGSTi free software, licensed
- under the GNU General Public License (GPL).  Copyright and license information
- can be found in ``license.txt``, and the GPL itself in ``COPYING``.
+pyGSTi
+------
+**pyGSTi** is an open-source software for *modeling and characterizing noisy quantum information processors*
+(QIPs), i.e., systems of one or more qubits.  It is licensed under the GNU General Public License (GPL).
+Copyright and license information can be found in ``license.txt``, and the GPL itself in ``COPYING``.
 
+There are three main objects in pyGSTi:
+- `Circuit`: a quantum circuit (can have many qubits).
+- `Model`: a description of a QIP's gate and SPAM operations (a noise model).
+- `DataSet`: a dictionary-like container holding experimental data.
+
+You can do various things by with these objects:
+
+- **Circuit simulation**: compute a the outcome probabilities of a `Circuit` using a `Model`.
+- **Data simulation**: simulate experimental data (a `DataSet`) using a `Model`.
+- **Model testing**: Test whether a given `Model` fits the data in a `DataSet`.
+- **Model estimation**: Estimate a `Model` from a `DataSet` (e.g. using GST).
+- **Model-less characterization**: Perform Randomized Benchmarking on a `DataSet`.
+
+In particular, there are a number of characterization protocols currently implemented in pyGSTi:
+- **Gate Set Tomography (GST)** is the most complex and is where the software derives its name
+ (a "python GST implementation").
+- **Randomized Benchmarking (RB)** is a well-known method for assessing the
+ quality of a QIP in an average sense.  PyGSTi implements standard "Clifford" RB
+ as well as the more scalable "Direct" RB methods.
+- **Robust Phase Estimation (RPE)** is a method designed for quickly learning
+ a few noise parameters of a QIP that particularly useful for tuning up qubits.
+
+PyGSTi is designed with a modular structure so as to be highly customizable
+and easily integrated to new or existing python software.  It runs using
+python2.7 or python3.  To faclilitate integration with software for running
+cloud-QIP experiments, pyGSTi `Circuit` objects can be converted to IBM's
+**OpenQASM** and Rigetti Quantum Computing's **Quil** circuit description languages.
+
+Installation
+------------
+Apart from several optional Cython modules, pyGSTi is written entirely in Python.
+To install pyGSTi and only its required dependencies run:
+
+``pip install pygsti``
+
+**Or**, to install pyGSTi with all its optional dependencies too, run:
+
+``pip install pygsti[complete]``
+
+The disadvantage to these approaches is that the numerous tutorials
+included in the package will then be buried within your Python's
+`site_packages` directory, which you'll likely want to access later on.
+**Alternatively**, you can **locally install** pyGSTi using the following commands:
+
+~~~
+cd <install_directory>
+git clone https://github.com/pyGSTio/pyGSTi.git
+cd pyGSTi
+pip install -e .[complete]
+~~~
+
+As above, you can leave off the `.[complete]` if you only went the minimal
+set of dependencies installed.  You could also replace the `git clone ...`
+command with `unzip pygsti-0.9.x.zip` where the latter file is a downloaded
+pyGSTi source archive.  Any of the above installations *should* build
+the set of optional Cython extension modules if a working C/C++ compiler
+and the `Cython` package are present.  If, however, compilation fails or
+you later decided to add Cython support, you can rebuild the extension
+modules (without reinstalling) if you've followed the local installation
+approach above using the command:
+
+`python setup.py build_ext --inplace`
+
+Finally, [Jupyter notebook](http://jupyter.org/) is highly recommended as
+it is generally convenient and the format of the included tutorials and
+examples.  It is installed automatically when `[complete]` is used, otherwise
+it can be installed separately.
+
+Getting Started
+---------------
+Here's a couple of simple examples to get you started.
+
+#### Circuit simulation
+To compute the outcome probabilities of a circuit, you just need to create
+a `Circuit` object (describing your circuit) and a `Model` object containing
+the operations contained in your circuit.  Here we use a "stock" single-qubit `Model`
+containing *Idle*, *X(&pi;/2)*, and *Y(&pi;/2)* gates labelled `Gi`, `Gx`,
+and `Gy`, respectively:
+~~~
+import pygsti
+from pygsti.construction import std1Q_XYI
+
+mycircuit = pygsti.obj.Circuit( ('Gx','Gy','Gx') )
+model = std1Q_XYI.target_model()
+outcome_probabilities = model.probs(mycircuit)
+~~~
+
+
+#### Gate Set Tomography
 Gate Set Tomography is used to characterize the operations performed by
 hardware designed to implement a (small) system of quantum bits (qubits).
 Here's the basic idea:
 
-  1. you tell pyGSTi what quantum operations you'd like to perform
-  2. pyGSTi tells you what sequences of operations it want's data for
+  1. you tell pyGSTi what gates you'd ideally like to perform
+  2. pyGSTi tells you what circuits it want's data for
   3. you perform the requested experiments and place the resulting
      data (outcome counts) into a text file that looks something like:
 
      ```
      ## Columns = 0 count, 1 count
-     {} 0 100
-     Gx 10 90
-     GxGy 40 60
-     Gx^4 20 80
+     {} 0 100  # the empty sequence (just prep then measure)
+     Gx 10 90  # prep, do a X(pi/2) gate, then measure
+     GxGy 40 60  # prep, do a X(pi/2) gate followed by a Y(pi/2), then measure
+     Gx^4 20 80  # etc...
      ```
 
   4. pyGSTi takes the data file and outputs a "report" - currently a
      HTML web page.
 
-There are numerous [Tutorial](https://github.com/pyGSTio/pyGSTi/tree/master/jupyter_notebooks/Tutorials)
-and [Example](https://github.com/pyGSTio/pyGSTi/tree/master/jupyter_notebooks/Examples)
-ipython notebooks (especially
-[Tutorial 0](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/Tutorials/00%20Getting%20Started.ipynb)
-) included in this repository that demonstrate pyGSTi's
-syntax and use, as well as a [FAQ](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/FAQ.ipynb).
+In code, running GST looks something like this:
+~~~
+import pygsti
+from pygsti.construction import std1Q_XYI
 
+# 1) get the ideal "target" Model (a "stock" model in this case)
+mdl_ideal = std1Q_XYI.target_model()
 
-Getting Started:
----------------
-pyGSTi is written almost entirely in Python.  Apart from a single optional
-Cython module, there's no compiling necessary. The first step is to install
-Python (and [Jupyter notebook](http://jupyter.org/) is highly recommended)
-if you haven't already.  In order to use pyGSTi you need to tell your Python
-distribution where pyGSTi lives, which can be done in one of several ways:
+# 2) get the building blocks needed to specify which circuits are needed
+prepfids, measfids, germs = std1Q_XYI.prepStrs, std1Q_XYI.effectStrs, std1Q_XYI.germs
+maxLengths = [1,2,4] # user-defined: how long do you want the circuits?
 
-* User-Only Installation
+# 3) generate a list of circuits for GST & write a data-set template
+listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
+    mdl_ideal, prepfids, measfids, germs, maxLengths)
+pygsti.io.write_empty_dataset("MyData.txt", listOfExperiments, "## Columns = 0 count, 1 count")
 
-    To install pyGSTi for the current user, you can run from the top-level
-    directory either ``pip install -e .`` or ``python install_locally.py``.
+# STOP! "MyData.txt" now has columns of zeros where actual data should go.
+# REPLACE THE ZEROS WITH ACTUAL DATA, then proceed with:
+ds = pygsti.io.load_dataset("MyData.txt") # load data -> DataSet object
 
-    This adds the current pyGSTi path to Python's list of search paths, and
-    doesn't require administrative access.  Typically you want to do this if
-    you've cloned the pyGSTi GitHub repository and want any changes you make to
-    your local file to have effect when you ``import pygsti`` from Python.
-    You'd also want to use this option if you'd like long-term access the
-    tutorial notebook files in the ``jupyter_notebooks`` directory under this
-    one, since this means you'll be keeping this directory around anyway.
-    The ``pip install -e .`` is slightly preferable since it will automatically
-    build the optional Cython extension.
+# 4) run GST
+results = pygsti.do_stdpractice_gst(ds, mdl_ideal, prepfids, measfids, germs, maxLengths)
 
-* System-Wide Installation
+# 5) Create a nice HTML report detailing the results
+pygsti.report.create_standard_report(results, filename="myReport", title="Sample Report")
+~~~
 
-  To install pyGSTi for all users, run: ``python setup.py install``
+Tutorials and Examples
+----------------------
+There are numerous tutorials (meant to be pedagogical) and examples (meant to be demonstrate
+how to do some particular thing) in the form of Jupyter notebooks beneath the `pyGSTi/jupyter_notebooks`
+directory.  The [START HERE](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/START_HERE.ipynb)
+notebook will direct you where to go based on what you're most interested in learning about.  One possible
+direction is to view the [FAQ](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/FAQ.ipynb), which
+addresses common issues.
 
-  This installs the pyGSTi Python package into one of the Python distribution's
-  search directories.  **This typically requires administrative privileges**,
-  and is the way most Python packages are installed.  Installing this way has
-  the advantage that it makes the package available to all users and then
-  allows you to move or delete the directory you're installing from.  If you
-  don't use this method **you must not delete this directory** so long as you
-  want to use pyGSTi.
-
-  Reasons you may **not** want to use this installation method are 
-  
-  - pyGSTi comes with (Jupyter notebook) tutorials that you may want to
-    access for weeks and years to come (i.e. you plan to *keep* this
-    pyGSTi directory around for a while).
-  - you've cloned the pyGSTi repository and want this local set of files
-    to be the one Python uses when you ``import pygsti``.
-
-Using pyGSTi
-------------
-
-After you've installed pyGSTi, you should be able to import the 
-`pygsti` Python package.  The next thing to do is take a look at
-the tutorials, which you do by:
+#### Running notebooks *locally*
+While it's possible to view the notebooks on GitHub using the links above, it's
+usually nicer to run them *locally* so you can mess around with the code as
+you step through it.  To do this, you'll need to start up a Jupyter notebook
+server using the following steps (this assumes you've followed the *local
+installation* directions above):
 
 * Changing to the notebook directory, by running:
     ``cd jupyter_notebooks/Tutorials/``
@@ -96,63 +170,21 @@ the tutorials, which you do by:
   ``jupyter notebook``
 
 The Jupyter server should open up your web browser to the server root, from
-where you can start the first "0th" tutorial notebook.  (Note that the key
+where you can start the first "START_HERE.ipynb" notebook.  Note that the key
 command to execute a cell within the Jupyter notebook is ``Shift+Enter``, not
-just ``Enter``.)  Example notebooks, found in the ``jupyter_notebooks/Examples/``
-directory, are focused on more specific tasks than the tutorials, and will be
-most useful for those looking to get a quick start using pyGSTi in a typical
-scenario.
-
-Congratulations!  You're up and running with pyGSTi!
-
+just ``Enter``.
 
 
 Documentation
 -------------
 Online documentation is hosted on [Read the Docs](http://pygsti.readthedocs.io).
-Instructions for building the documentation locally are contained in the file
-`doc/build/howToBuild.txt`.
 
-
+License
+-------
+PyGSTi is licensed under the [GNU General Public License (GPL)](https://github.com/pyGSTio/pyGSTi/blob/master/license.txt).
 
 
 Questions?
 ----------
 For help and support with pyGSTi, please contact the authors at
 pygsti@sandia.gov.
-
-
-
-
-
-Brief description of the directory structure:
---------------------------------------------
-```
-doc/  :  Directory containing the HTML documentation and other
-         reference documents.
-
-jupyter_notebooks/  : Parent directory of all Jupyter notebook tutorial
-		      files included with pyGSTi.  It is convenient to
-		      start an Jupyter notebook server from within this
-		      directory.
-
-packages/  :  Directory containing the (one) package provided by pyGSTi.
-	             All of the Python source code lies here.
-
-tests/  :  Directory containing pyGSTi unit tests.
-
-install_locally.py :  A Python script that sets up the software to run 
-                      from its current location within the file system.  This
-                      essentially adds the packages directory to the list of
-                      directories Python uses to search for packages in, so
-                      that ``import pygsti`` will work for any Python script,
-                      regardless of its location in the file system.  This
-                      action is local to the user running the script, and does
-                      not copy any files to any system directories, making it a
-                      good option for a user without administrative access.
-
-COPYING  :  A text version of the GNU General Public License.
-
-license.txt  :  A text file giving copyright and licensing information
-	        about pyGSTi.
-```
