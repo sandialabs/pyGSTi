@@ -365,8 +365,8 @@ namespace CReps {
 	if(i != _iActiveBlock) {
 	  for(j=0; j<_blocksizes[i]; j++) // identity op on this block
 	    outstate_data[offset+j] = state_data[offset+j];
-	  offset += _blocksizes[i];
 	}
+	offset += _blocksizes[i];
       }
     }
 
