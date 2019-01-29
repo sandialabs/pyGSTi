@@ -382,7 +382,8 @@ class StateSpaceLabels(object):
     spaces.
     """
 
-    def __init__(self, labelList, dims=None):
+    def __init__(self, labelList, dims=None,
+                 classicalLabelList=None, classicalDims=None):
         """
         Creates a new StateSpaceLabels object.
 
@@ -414,6 +415,17 @@ class StateSpaceLabels(object):
             - if the label starts with 'L', dim=1 (a single Level)
             - if the label starts with 'Q' OR is an int, dim=2 (a Qubit)
             - if the label starts with 'T', dim=3 (a quTrit)
+
+        classicalLabelList : iterable, optional
+            A list of classical-state labels. These labels must be strings,
+            e.g. `['C0','C1']`.  If `None`, then there is no classical
+            portion of the constructed state space.
+
+        classicalDims : iterable, optional
+            The dimension of each classical state space label.  Must be the
+            same size as `classicalLabelList`.  If `None`, then all the 
+            classical state-space labels are assumed to be bits, i.e., to
+            have dimension 2.
         """
 
         #Allow initialization via another StateSpaceLabels object
@@ -477,7 +489,17 @@ class StateSpaceLabels(object):
 
         self.dim = _Dim(tpb_dims) #Note: access tensor-prod-block dims via self.dim.blockDims
 
-    def num_tensor_prod_blocks(self):
+        # init classical space
+        if classicalLabelList is not None:
+            # the full state space is the quantum state space tensored with the classical space.
+            if classicalDims is None: classicalDims = [2]*len(classicalLabelList)
+            totClassicalDim = _np.product(classicalDims)
+            self.labels = self.labels * totClassicalDim
+            #TODO: update other member variables...
+            # may want to have labels for quantum and classical sides separately e.g. not label ['Q0_C0','Q0_C1'] for qubit+bit
+
+
+    def num_tensor_prod_blocks(self): # only in modelconstruction.py
         """
         Get the number of tensor-product blocks which are direct-summed
         to get the final state space.
@@ -488,7 +510,7 @@ class StateSpaceLabels(object):
         """
         return len(self.labels)
 
-    def tensor_product_block_labels(self, iTPB):
+    def tensor_product_block_labels(self, iTPB): # unused
         """
         Get the labels for the `iTBP`-th tensor-product block.
 
@@ -504,7 +526,7 @@ class StateSpaceLabels(object):
         """
         return self.labels[iTPB]
 
-    def tensor_product_block_dims(self, iTPB):
+    def tensor_product_block_dims(self, iTPB): # unused
         """
         Get the dimension corresponding to each label in the
         `iTBP`-th tensor-product block.  The dimension of the 
@@ -523,7 +545,7 @@ class StateSpaceLabels(object):
         return tuple((self.labeldims[lbl] for lbl in self.labels[iTPB]))
 
 
-    def product_dim(self, labels):
+    def product_dim(self, labels): # only in modelconstruction
         """
         Computes the product of the state-space dimensions associated with each
         label in `labels`.
