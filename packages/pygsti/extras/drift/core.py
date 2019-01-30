@@ -724,8 +724,7 @@ def estimate_probability_trajectories(results, modelSelector=(('per','per','avg'
 
             meandict = {o : _np.mean(results.timeseries[e][s][o])/results.number_of_counts for o in outcomes[:-1]}
             #outcomeIndlist = list(range(results.number_of_outcomes))
-            nullmodel = _mdl.ProbabilityTrajectoryModel(outcomes, modeltype='null', 
-                                                        hyperparameters={'basisfunctionInds':[0.,]}, 
+            nullmodel = _mdl.NullProbabilityTrajectoryModel(outcomes, hyperparameters=[0.,], 
                                                         parameters=meandict)
 
             results.add_reconstruction(ent, seq, nullmodel, modelSelector='null', estimator='null', auxDict={}, 
@@ -754,18 +753,19 @@ def estimate_probability_trajectories(results, modelSelector=(('per','per','avg'
                     null = False
 
                 # The hyper-parameters for the DCT model
-                hyperparameters = {"basisfunctionInds":freqs, 'starttime':results.timestamps[s][0], 
-                                   'timestep':results.meantimestepPerSeq[s], 'numsteps':results.number_of_timesteps[s]}
+                hyperparameters = freqs
                                    #starttime = hyperparameters['starttime']
-
+                modelparameters =  {'starttime':results.timestamps[s][0], 
+                                   'timestep':results.meantimestepPerSeq[s], 'numsteps':results.number_of_timesteps[s]}
                 # The parameters for the DCT filter without amplitude reduction model (a "raw" DCT filter). This
                 # is the basis for *all* the models, so we construct it and save it no matter what 
                 # estimator has been requested
                 parameters = _sig.amplitudes_at_frequencies(freqs, timeseries, transform=transform)
                 del parameters[outcomes[-1]]
                 # Creates the model, and records it into the results object with a standard 'key' to find it later.
-                ffmodel = _mdl.ProbabilityTrajectoryModel(outcomes, modeltype=transform, 
-                                                          hyperparameters=hyperparameters, parameters=parameters)
+                ffmodel = _mdl.DCTProbabilityTrajectoryModel(outcomes,
+                                                          hyperparameters=hyperparameters, parameters=parameters,
+                                                          modelparameters=modelparameters)
                 # Records this estimate.
                 results.add_reconstruction(ent, seq, ffmodel, modelSelector=modelSelector, estimator='FF-unbounded', 
                                            auxDict={'null':null}, overwrite=overwrite)
