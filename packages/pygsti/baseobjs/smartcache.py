@@ -196,15 +196,16 @@ class SmartCache(object):
             result = fn(*argVals, **kwargs)
             self.ineffectiveRequests[name_key] += 1
             self.misses[key] += 1
-            #DB: print(fn.__name__, " --> Ineffective!")
+            #DB: print(fn.__name__, " --> Ineffective!") # DB
         else:
             times = dict()
             with _timed_block('hash', times):
                 key = call_key(fn, tuple(argVals)+(kwargs,), self.customDigests) # cache by call key
             if key not in self.cache:
-                #DB: print(fn.__name__, " --> computing... (not found in %d keys)" % len(list(self.cache.keys())))
-                #DB: print("Key detail: ",key[0])
-                #DB: for a,k in zip(tuple(argVals)+(kwargs,),key[1:]): print(type(a),": ",repr(k))
+                #DB: if "_computeSubMxs" in fn.__name__:
+                #DB: print(fn.__name__, " --> computing... (not found in %d keys)" % len(list(self.cache.keys()))) # DB
+                #DB: print("Key detail: ",key[0]) # DB
+                #DB: for a,k in zip(tuple(argVals)+(kwargs,),key[1:]): print(type(a),": ",repr(k)) # DB
                 typesig = str(tuple(str(type(arg)) for arg in argVals)) + \
                         str({k : str(type(v)) for k, v in kwargs.items()})
                 self.typesigs[name_key] = typesig
@@ -224,8 +225,8 @@ class SmartCache(object):
                 self.hashTimes[name_key].append(hashtime)
                 self.callTimes[name_key].append(calltime)
             else:
-                #DB: print('The function {} experienced a cache hit'.format(name_key))
-                #DB: print(fn.__name__, " --> cache hit!")
+                #DB: print('The function {} experienced a cache hit'.format(name_key)) # DB
+                #DB: print(fn.__name__, " --> cache hit!") # DB
                 self.hits[key] += 1
                 self.fhits[name_key] += 1
 
