@@ -40,4 +40,19 @@ class ReportFigure(object):
         self.colormap = colormap
         self.pythonvalue = pythonValue
         self.metadata = dict(kwargs).copy()
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        if hasattr(self.plotlyfig,'to_dict'):
+            state['plotlyfig'] = {'__plotlydict__': self.plotlyfig.to_dict() }
+        return state
+
+    def __setstate__(self, state):
+        if isinstance(state['plotlyfig'],dict) and '__plotlydict__' in state['plotlyfig']:
+            import plotly.graph_objs as go
+            state['plotlyfig'] = go.Figure( state['plotlyfig']['__plotlydict__'] )
+        self.__dict__.update(state)
+                                            
+
+            
         

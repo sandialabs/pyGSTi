@@ -13,6 +13,7 @@ import numpy     as _np
 import inspect   as _inspect
 import pickle    as _pickle
 
+
 from collections import Counter, defaultdict
 
 from .opttools import timed_block as _timed_block
@@ -102,7 +103,7 @@ class SmartCache(object):
 
     def __getstate__(self):
         d = dict(self.__dict__)
-
+        
         def get_pickleable_dict(cacheDict):
             pickleableCache = dict()
             for k, v in cacheDict.items():
@@ -113,7 +114,7 @@ class SmartCache(object):
                     if isinstance(v,dict):
                         self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.keys())))
                     else:
-                        self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.__dict__.keys())))
+                        self.unpickleable.add(str(k[0]) + str(type(v)) + str(e)) # + str(list(v.__dict__.keys())))
                 except _pickle.PicklingError as e:
                     self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))
             return pickleableCache
@@ -121,6 +122,27 @@ class SmartCache(object):
         d['cache'] = get_pickleable_dict(self.cache)
         d['outargs'] = get_pickleable_dict(self.outargs)
         return d
+
+
+    def __pygsti_getstate__(self): #same but for json/msgpack
+        d = dict(self.__dict__)
+        from ..io.jsoncodec import encode_obj
+        
+        def get_jsonable_dict(cacheDict):
+
+            jsonableCache = dict()
+            for k, v in cacheDict.items():
+                try:
+                    encode_obj(v,False)
+                    jsonableCache[k] = v
+                except TypeError as e:
+                    self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))                    
+            return jsonableCache
+
+        d['cache'] = get_jsonable_dict(self.cache)
+        d['outargs'] = get_jsonable_dict(self.outargs)
+        return d
+
 
     def add_digest(self, custom):
         '''
