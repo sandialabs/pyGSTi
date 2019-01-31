@@ -151,10 +151,14 @@ Tutorials and Examples
 ----------------------
 There are numerous tutorials (meant to be pedagogical) and examples (meant to be demonstrate
 how to do some particular thing) in the form of Jupyter notebooks beneath the `pyGSTi/jupyter_notebooks`
-directory.  The [START HERE](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/START_HERE.ipynb)
-notebook will direct you where to go based on what you're most interested in learning about.  One possible
-direction is to view the [FAQ](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/FAQ.ipynb), which
+directory.  The root "START HERE" notebook will direct you where to go based on what you're most
+interested in learning about.  You can view the
+[read-only GitHub version of this notebook](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/START_HERE.ipynb) 
+or you can [explore the tutorials interactively](https://mybinder.org/v2/gh/pyGSTio/pyGSTi/master)
+using JupyterHub via Binder.  Note the existence of a
+[FAQ](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/FAQ.ipynb), which
 addresses common issues.
+
 
 #### Running notebooks *locally*
 While it's possible to view the notebooks on GitHub using the links above, it's

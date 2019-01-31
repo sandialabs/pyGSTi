@@ -1064,7 +1064,7 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._excalc().residuals(otherModel._excalc(), transformMx, itemWeights)
 
 
-    def jtracedist(self, otherModel, transformMx=None):
+    def jtracedist(self, otherModel, transformMx=None, include_spam=True):
         """
         Compute the Jamiolkowski trace distance between this
         model and otherModel, defined as the maximum
@@ -1083,14 +1083,18 @@ class ExplicitOpModel(_mdl.OpModel):
             This transformation is applied only for the difference and does
             not alter the values stored in this model.
 
+        include_spam : bool, optional
+            Whether to add to the max-trace-distance the frobenius distances
+            between corresponding SPAM vectors.
+
         Returns
         -------
         float
         """
-        return self._excalc().jtracedist(otherModel._excalc(), transformMx)
+        return self._excalc().jtracedist(otherModel._excalc(), transformMx, include_spam)
 
 
-    def diamonddist(self, otherModel, transformMx=None):
+    def diamonddist(self, otherModel, transformMx=None, include_spam=True):
         """
         Compute the diamond-norm distance between this
         model and otherModel, defined as the maximum
@@ -1109,11 +1113,16 @@ class ExplicitOpModel(_mdl.OpModel):
             This transformation is applied only for the difference and does
             not alter the values stored in this model.
 
+        include_spam : bool, optional
+            Whether to add to the max-diamond-distance the frobenius distances
+            between corresponding SPAM vectors.
+
+
         Returns
         -------
         float
         """
-        return self._excalc().diamonddist(otherModel._excalc(), transformMx)
+        return self._excalc().diamonddist(otherModel._excalc(), transformMx, include_spam)
 
 
     def tpdist(self):

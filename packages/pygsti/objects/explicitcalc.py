@@ -257,7 +257,7 @@ class ExplicitOpModel_Calc(object):
         resids = _np.concatenate(resids)
         return resids, nSummands
 
-    def jtracedist(self, otherCalc, transformMx=None):
+    def jtracedist(self, otherCalc, transformMx=None, include_spam=True):
         """
         Compute the Jamiolkowski trace distance between two
         models/calcs, defined as the maximum of the trace distances
@@ -275,6 +275,10 @@ class ExplicitOpModel_Calc(object):
             This transformation is applied only for the difference and does
             not alter the values stored in this model.
 
+        include_spam : bool, optional
+            Whether to add to the max-trace-distance the frobenius distances
+            between corresponding SPAM vectors.
+
         Returns
         -------
         float
@@ -290,15 +294,16 @@ class ExplicitOpModel_Calc(object):
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
-            for lbl,rhoV in self.preps.items():
-                d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
-                                         'prep', T, Ti)
-                nSummands += rhoV.dim
-
-            for lbl,Evec in self.effects.items():
-                d += Evec.frobeniusdist2(otherCalc.effects[lbl],
-                                         'effect', T, Ti)
-                nSummands += Evec.dim
+            if include_spam:
+                for lbl,rhoV in self.preps.items():
+                    d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                                             'prep', T, Ti)
+                    nSummands += rhoV.dim
+    
+                for lbl,Evec in self.effects.items():
+                    d += Evec.frobeniusdist2(otherCalc.effects[lbl],
+                                             'effect', T, Ti)
+                    nSummands += Evec.dim
                 
         else:
             dists = [ gate.jtracedist(otherCalc.operations[lbl])
@@ -306,21 +311,22 @@ class ExplicitOpModel_Calc(object):
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
-            for lbl,rhoV in self.preps.items():
-                d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
-                                         'prep')
-                nSummands += rhoV.dim
-
-            for lbl,Evec in self.effects.items():
-                d += Evec.frobeniusdist2(otherCalc.effects[lbl],
-                                         'effect')
-                nSummands += Evec.dim
+            if include_spam:
+                for lbl,rhoV in self.preps.items():
+                    d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                                             'prep')
+                    nSummands += rhoV.dim
+    
+                for lbl,Evec in self.effects.items():
+                    d += Evec.frobeniusdist2(otherCalc.effects[lbl],
+                                             'effect')
+                    nSummands += Evec.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
         return max(dists) + spamVal
 
 
-    def diamonddist(self, otherCalc, transformMx=None):
+    def diamonddist(self, otherCalc, transformMx=None, include_spam=True):
         """
         Compute the diamond-norm distance between two
         models/calcs, defined as the maximum
@@ -339,6 +345,10 @@ class ExplicitOpModel_Calc(object):
             This transformation is applied only for the difference and does
             not alter the values stored in this model.
 
+        include_spam : bool, optional
+            Whether to add to the max-diamond-distance the frobenius distances
+            between corresponding SPAM vectors.
+
         Returns
         -------
         float
@@ -354,15 +364,16 @@ class ExplicitOpModel_Calc(object):
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
-            for lbl,rhoV in self.preps.items():
-                d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
-                                         'prep', T, Ti)
-                nSummands += rhoV.dim
-
-            for lbl,Evec in self.effects.items():
-                d += Evec.frobeniusdist2(otherCalc.effects[lbl],
-                                         'effect', T, Ti)
-                nSummands += Evec.dim
+            if include_spam:
+                for lbl,rhoV in self.preps.items():
+                    d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                                             'prep', T, Ti)
+                    nSummands += rhoV.dim
+    
+                for lbl,Evec in self.effects.items():
+                    d += Evec.frobeniusdist2(otherCalc.effects[lbl],
+                                             'effect', T, Ti)
+                    nSummands += Evec.dim
                 
         else:
             dists = [ gate.diamonddist(otherCalc.operations[lbl])
@@ -370,15 +381,16 @@ class ExplicitOpModel_Calc(object):
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
-            for lbl,rhoV in self.preps.items():
-                d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
-                                         'prep')
-                nSummands += rhoV.dim
-
-            for lbl,Evec in self.effects.items():
-                d += Evec.frobeniusdist2(otherCalc.effects[lbl],
-                                         'effect')
-                nSummands += Evec.dim
+            if include_spam:
+                for lbl,rhoV in self.preps.items():
+                    d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                                             'prep')
+                    nSummands += rhoV.dim
+    
+                for lbl,Evec in self.effects.items():
+                    d += Evec.frobeniusdist2(otherCalc.effects[lbl],
+                                             'effect')
+                    nSummands += Evec.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
         return max(dists) + spamVal                

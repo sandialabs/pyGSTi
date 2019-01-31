@@ -525,7 +525,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
         nQubits = len(qubit_filter); nIters = len(singleQfiducials)**nQubits
         with printer.progress_logging(2):
             for itr,prep in enumerate(_itertools.product(*([singleQfiducials]*nQubits) )):
-                printer.show_progress(itr, nIters, prefix='--- Finding amped-polys for idle: ')
+                printer.show_progress(itr, nIters, prefix='--- Finding amped-polys for idle: ') # TODO: speed up / parallelize this loop
                 prepFid = _objs.Circuit(())
                 for i,el in enumerate(prep):
                     prepFid = prepFid + _onqubit(el,qubit_filter[i])

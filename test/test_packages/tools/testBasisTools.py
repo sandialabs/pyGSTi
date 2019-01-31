@@ -468,10 +468,11 @@ class BasisBaseTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(trans, np.identity(4,'d'))
         trans2 = sparsePP.transform_matrix(denseGM)
 
-        #test equality for large bases, which is too expensive so it always returns false
+        #test equality for large bases
         large_sparsePP = Basis("pp",16,sparse=True)
         large_sparsePP2 = Basis("pp",16,sparse=True)
-        self.assertNotEqual(large_sparsePP, large_sparsePP2)
+        self.assertEqual(large_sparsePP, large_sparsePP2)
+          #OLD: was too expensive so it always returns false; now compares names & dim...
         
 
         

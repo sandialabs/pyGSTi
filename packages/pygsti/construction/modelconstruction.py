@@ -1099,7 +1099,7 @@ def build_explicit_alias_model(mdl_primitives, alias_dict):
 def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=None, availability=None, 
                                     qubit_labels=None, geometry="line", parameterization='static',
                                     evotype="auto", sim_type="auto", on_construction_error='raise',
-                                    independent_gates=False, ensure_composed_gates=False):
+                                    independent_gates=False, ensure_composed_gates=False, globalIdle=None):
     """
     Creates a "standard" n-qubit local-noise model, usually of ideal gates.
 
@@ -1210,6 +1210,13 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
         If False, then the appropriately parameterized gate objects (often 
         dense gates) are used directly.
 
+    globalIdle : LinearOperator, optional
+        A global idle operation, which is performed once at the beginning
+        of every circuit layer.  If `None`, no such operation is performed.
+        If a 1-qubit operator is given and `nQubits > 1` the global idle
+        is the parallel application of this operator on each qubit line.
+        Otherwise the given operator must act on all `nQubits` qubits.
+
 
     Returns
     -------
@@ -1222,7 +1229,7 @@ def build_standard_localnoise_model(nQubits, gate_names, nonstd_gate_unitaries=N
     return _LocalNoiseModel.build_standard(nQubits, gate_names, nonstd_gate_unitaries, availability,
                                            qubit_labels, geometry, parameterization, evotype,
                                            sim_type, on_construction_error, independent_gates,
-                                           ensure_composed_gates)
+                                           ensure_composed_gates, globalIdle)
 
 
 ###SCRATCH

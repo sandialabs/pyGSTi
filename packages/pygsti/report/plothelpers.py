@@ -458,9 +458,9 @@ def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6,1e6),
 
 
 #@smart_cached
-def _computeSubMxs(gss, model, subMxCreationFn, dataset=None):
+def _computeSubMxs(gss, model, subMxCreationFn, dataset=None, subMxCreationFn_extra_arg=None):
     if model is not None: gss.simplify_plaquettes(model, dataset)
-    subMxs = [ [ subMxCreationFn(gss.get_plaquette(x,y),x,y)
+    subMxs = [ [ subMxCreationFn(gss.get_plaquette(x,y),x,y,subMxCreationFn_extra_arg)
                  for x in gss.used_xvals() ] for y in gss.used_yvals()]
     #Note: subMxs[y-index][x-index] is proper usage
     return subMxs
