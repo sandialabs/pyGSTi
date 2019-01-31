@@ -41,7 +41,7 @@ class LocalNoiseModel(_ImplicitOpModel):
     def build_standard(cls, nQubits, gate_names, nonstd_gate_unitaries=None, availability=None, 
                        qubit_labels=None, geometry="line", parameterization='static',
                        evotype="auto", sim_type="auto", on_construction_error='raise',
-                       independent_gates=False, ensure_composed_gates=False):
+                       independent_gates=False, ensure_composed_gates=False, globalIdle=None):
         """
         Creates a "standard" n-qubit model, usually of ideal gates, which 
         is capable of describing "local noise", that is, noise/error that only 
@@ -157,7 +157,13 @@ class LocalNoiseModel(_ImplicitOpModel):
             facilitate modifying the gate operations after the model is created.
             If False, then the appropriately parameterized gate objects (often 
             dense gates) are used directly.
-    
+
+        globalIdle : LinearOperator, optional
+            A global idle operation, which is performed once at the beginning
+            of every circuit layer.  If `None`, no such operation is performed.
+            If a 1-qubit operator is given and `nQubits > 1` the global idle
+            is the parallel application of this operator on each qubit line.
+            Otherwise the given operator must act on all `nQubits` qubits.
     
         Returns
         -------
@@ -187,13 +193,14 @@ class LocalNoiseModel(_ImplicitOpModel):
         return cls(nQubits, gatedict, availability, qubit_labels,
                    geometry, parameterization, evotype,
                    sim_type, on_construction_error,
-                   independent_gates, ensure_composed_gates)
+                   independent_gates, ensure_composed_gates, globalIdle)
 
 
     def __init__(self, nQubits, gatedict, availability=None, qubit_labels=None,
                  geometry="line", parameterization='static', evotype="auto",
                  sim_type="auto", on_construction_error='raise',
-                 independent_gates=False, ensure_composed_gates=False):
+                 independent_gates=False, ensure_composed_gates=False,
+                 globalIdle=None):
         """
         Creates a n-qubit model by embedding the *same* gates from `gatedict`
         as requested and creating a perfect 0-prep and z-basis POVM.
@@ -277,6 +284,13 @@ class LocalNoiseModel(_ImplicitOpModel):
             facilitate modifying the gate operations after the model is created.
             If False, then the appropriately parameterized gate objects (often 
             dense gates) are used directly.
+        
+        globalIdle : LinearOperator, optional
+            A global idle operation, which is performed once at the beginning
+            of every circuit layer.  If `None`, no such operation is performed.
+            If a 1-qubit operator is given and `nQubits > 1` the global idle
+            is the parallel application of this operator on each qubit line.
+            Otherwise the given operator must act on all `nQubits` qubits.
         """
         if qubit_labels is None:
             qubit_labels = tuple(range(nQubits))
@@ -454,6 +468,31 @@ class LocalNoiseModel(_ImplicitOpModel):
                     if on_construction_error in ('warn','ignore'): continue
                     else: raise e
 
+        if globalIdle is not None:
+            if not isinstance(globalIdle, _op.LinearOperator):
+                if parameterization == "static unitary": #assume gate dict is already unitary gates?
+                    globalIdle = _op.StaticDenseOp(globalIdle, "statevec")
+                else:
+                    globalIdle = _op.convert(_op.StaticDenseOp(globalIdle), parameterization, "pp")
+                    
+            globalIdle_nQubits = int(round(_np.log2(globalIdle.dim)/2)) \
+                if (evotype in ("densitymx","svterm","cterm")) \
+                   else int(round(_np.log2(globalIdle.dim))) # evotype in ("statevec","stabilizer")
+            
+            if nQubits > 1 and globalIdle_nQubits == 1: # auto create tensor-prod 1Q global idle
+                self.operation_blks['gates'][_Lbl('1QIdle')] = globalIdle
+                Embedded = _op.EmbeddedDenseOp if sim_type == "matrix" else _op.EmbeddedOp
+                globalIdle = Composed([ Embedded(self.state_space_labels, (qlbl,), globalIdle)
+                                        for qlbl in qubit_labels ])
+
+            globalIdle_nQubits = int(round(_np.log2(globalIdle.dim)/2)) \
+                if (evotype in ("densitymx","svterm","cterm")) \
+                else int(round(_np.log2(globalIdle.dim))) # evotype in ("statevec","stabilizer")
+            assert(globalIdle_nQubits == nQubits), \
+                "Global idle gate acts on %d qubits but should act on %d!" % (globalIdle_nQubits, nQubits)
+            self.operation_blks['layers'][_Lbl('globalIdle')] = globalIdle
+
+
         self.set_primitive_op_labels(primitive_ops)
         self.set_primitive_prep_labels(tuple(self.prep_blks['layers'].keys()))
         self.set_primitive_povm_labels(tuple(self.povm_blks['layers'].keys()))
@@ -478,10 +517,12 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
         dense = bool(self.model._sim_type == "matrix") # whether dense matrix gates should be created
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
+        bHasGlobalIdle = bool(_Lbl('globalIdle') in self.op_blks['layers'])
 
-        if len(components) == 1:
+        if len(components) == 1 and bHasGlobalIdle == False:
             return self.op_blks['layers'][components[0]]
         else:
+            gblIdle = [self.op_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
-            return Composed([self.op_blks['layers'][l] for l in components], dim=self.model.dim,
+            return Composed(gblIdle + [self.op_blks['layers'][l] for l in components], dim=self.model.dim,
                                 evotype=self.model._evotype)
