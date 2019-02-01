@@ -288,6 +288,7 @@ class Model(object):
         
         for attr,val in self.__dict__.items():
             if not hasattr(newModel,attr):
+                assert(attr != "uuid"), "Should not be copying UUID!"
                 setattr(newModel,attr,_copy.deepcopy(val))
 
         if OpModel._pcheck: newModel._check_paramvec()
@@ -2060,6 +2061,7 @@ class OpModel(Model):
         self._clean_paramvec() # make sure _paramvec is valid before copying (necessary?)
         copyInto._shlp = None # must be set by a derived-class _init_copy() method
         copyInto._need_to_rebuild = True # copy will have all gpindices = None, etc.
+        super(OpModel, self)._init_copy(copyInto)
 
 
     def copy(self):
