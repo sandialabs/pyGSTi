@@ -301,7 +301,7 @@ if _cvxpy:
             A = model.product(self.circuit)
             dm, W = _tools.diamonddist(A, self.B, model.basis,
                                        return_x=True)
-            self.W = W
+            self.W = W            
             return 0.5*dm
     
         def evaluate_nearby(self, nearby_model):
@@ -311,7 +311,7 @@ if _cvxpy:
                 nearby_model.product(self.circuit), mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             Jt = (JBstd-JAstd).T
-            return 0.5*_np.trace( Jt.real * self.W.real + Jt.imag * self.W.imag)
+            return 0.5*_np.trace( _np.dot(Jt.real,self.W.real) + _np.dot(Jt.imag,self.W.imag))
 
     #def circuit_half_diamond_norm(modelA, modelB, circuit):
     #    A = modelA.product(circuit) # "gate"
@@ -606,7 +606,7 @@ if _cvxpy:
                 nearby_model.operations[gl].todense(), mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             Jt = (JBstd-JAstd).T
-            return 0.5*_np.trace( Jt.real * self.W.real + Jt.imag * self.W.imag)
+            return 0.5*_np.trace( _np.dot(Jt.real,self.W.real) + _np.dot(Jt.imag,self.W.imag))
 
     def half_diamond_norm(A, B, mxBasis):
         return 0.5 * _tools.diamonddist(A, B, mxBasis)
