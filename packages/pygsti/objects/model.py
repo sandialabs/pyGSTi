@@ -43,6 +43,7 @@ from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Label as _Label
 
+
 class Model(object):
     """
     A predictive model for a Quantum Information Processor (QIP).
@@ -897,7 +898,8 @@ class OpModel(Model):
         # dataset.simplify -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
         # simplify all gsplaq strs -> elementIndices[(i,j)],
 
-        circuits = [ _cir.Circuit(opstr) for opstr in circuits ] # cast to Circuits
+        circuits = [ (opstr if isinstance(opstr,_cir.Circuit) else _cir.Circuit(opstr))
+                     for opstr in circuits ] # cast to Circuits
 
         #Indexed by raw operation sequence
         raw_spamTuples_dict = _collections.OrderedDict()  # final
@@ -959,7 +961,8 @@ class OpModel(Model):
                         assuming that raw_spamTuples_dict and raw_opOutcomes_dict
                         are already build (and won't be modified anymore).
             """
-            for i,op_label in enumerate(s[start:],start=start):
+            sub = s if start == 0 else s[start:]
+            for i,op_label in enumerate(sub,start=start):
 
                 # OLD: now allow "gate-level" labels which can contain
                 # multiple (parallel) instrument labels
@@ -1074,12 +1077,10 @@ class OpModel(Model):
         for s in list(raw_spamTuples_dict.keys()):
             raw_spamTuples_dict[s] = list(raw_spamTuples_dict[s].keys())
 
-
         #Step4: change lists/slices -> index arrays for user convenience
         elIndicesByParent = _collections.OrderedDict(
             [ (k, (v if isinstance(v,slice) else _np.array(v,_np.int64)) )
               for k,v in elIndicesByParent.items()] )
-
 
         ##DEBUG: SANITY CHECK
         #if len(circuits) > 1:
@@ -1659,7 +1660,8 @@ class OpModel(Model):
             `(outcome, p)` tuples, where `outcome` is a tuple of labels
             and `p` is the corresponding probability.
         """
-        circuit_list = [ _cir.Circuit(opstr) for opstr in circuit_list]  # cast to Circuits
+        circuit_list = [ opstr if isinstance(opstr,_cir.Circuit) else _cir.Circuit(opstr)
+                         for opstr in circuit_list]  # cast to Circuits
         evalTree, _, _, elIndices, outcomes = self.bulk_evaltree_from_resources(
             circuit_list, comm, memLimit, subcalls=['bulk_fill_probs'],
             dataset=dataset, verbosity=0) # FUTURE (maybe make verbosity into an arg?)
@@ -1722,7 +1724,8 @@ class OpModel(Model):
             if False, then `p` is not included in the tuples (so they're just
             `(outcome, dp)`).
         """
-        circuit_list = [ _cir.Circuit(opstr) for opstr in circuit_list]  # cast to Circuits
+        circuit_list = [ opstr if isinstance(opstr,_cir.Circuit) else _cir.Circuit(opstr)
+                         for opstr in circuit_list]  # cast to Circuits
         evalTree, elIndices, outcomes = self.bulk_evaltree(circuit_list, dataset=dataset)
         return self._fwdsim().bulk_dprobs(circuit_list, evalTree, elIndices,
                                         outcomes, returnPr,clipTo,
@@ -1787,7 +1790,8 @@ class OpModel(Model):
             If `returnPr` if False, then `p` is not included in the tuples.
             If `returnDeriv` if False, then `dp` is not included in the tuples.
         """
-        circuit_list = [ _cir.Circuit(opstr) for opstr in circuit_list]  # cast to Circuits
+        circuit_list = [ opstr if isinstance(opstr,_cir.Circuit) else _cir.Circuit(opstr)
+                         for opstr in circuit_list]  # cast to Circuits
         evalTree, elIndices, outcomes = self.bulk_evaltree(circuit_list, dataset=dataset)
         return self._fwdsim().bulk_hprobs(circuit_list, evalTree, elIndices,
                                         outcomes, returnPr, returnDeriv,
