@@ -13,6 +13,7 @@ from itertools    import product, chain
 import copy as _copy
 import numbers as _numbers
 import collections as _collections
+import warnings as _warnings
 
 from numpy.linalg import inv as _inv
 import numpy as _np
@@ -261,11 +262,25 @@ class Basis(object):
             return sum([ bd**2 for bd in self.dim.blockDims])
 
     def __eq__(self, other):
+
+        otherIsBasis = isinstance(other, Basis)
+                
+        if self._blockMatrices is None or self._matrices is None or \
+           (otherIsBasis and (other._blockMatrices is None or other._matrices is None)):
+            #One or both of the bases being compared hasn't generated its matrices yet.
+            # Instead of generating & then comparing them (which might take a lot of time
+            # and memory!) we'll test for equivalence based on the values that would be used
+            # to (lazily) generate the basis matrices
+            if otherIsBasis:
+                return (self.name == other.name) and (self.dim == other.dim) and (self.sparse == other.sparse)
+            else:
+                return self.name == other #assume other is a string
+
         if self.sparse and self.dim.opDim > 16:
+            _warnings.warn("Attempted comparison between bases with large sparse matrices!  Assuming not equal.")
             return False # to expensive to compare sparse matrices
         
-        otherIsBasis = isinstance(other, Basis)
-        if otherIsBasis and (self.sparse != other.sparse):
+        if otherIsBasis and (self.sparse != other.sparse): # sparseness mismatch => not equal
             return False
         
         if self.sparse:

@@ -553,7 +553,7 @@ def determine_paulidicts(model):
     #First, check that spam is prep/meas in Z basis (just check prep for now):
     try:
         prepLbls = list(model.preps.keys())
-        prep = model.preps['layers'][prepLbls[0]] # just take the first one (usually there's only one anyway)
+        prep = model.preps[prepLbls[0]] # just take the first one (usually there's only one anyway)
     except AttributeError: #HACK to work w/Implicit models
         prepLbls = list(model.prep_blks['layers'].keys())
         prep = model.prep_blks['layers'][prepLbls[0]]
@@ -642,7 +642,7 @@ def determine_paulidicts(model):
 
 
 def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
-                              idle_string = ('Gi',), include_hamiltonian=True,
+                              idle_string = ((),), include_hamiltonian=True,
                               include_stochastic=True, include_affine=True,
                               ham_tmpl="auto",preferred_prep_basis_signs="auto",
                               preferred_meas_basis_signs="auto"):
@@ -722,6 +722,93 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
             listOfExperiments.append( prepFid + GiStr*L + measFid )
                 
     return listOfExperiments
+
+
+def make_idle_tomography_lists(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
+                              idle_string = ((),), include_hamiltonian=True,
+                              include_stochastic=True, include_affine=True,
+                              ham_tmpl="auto",preferred_prep_basis_signs="auto",
+                              preferred_meas_basis_signs="auto"):
+    """
+    Construct lists of experiments, one for each maximum-length value, needed
+    to perform idle tomography.  This is potentiall useful for running GST on 
+    idle tomography data.
+
+    Parameters
+    ----------
+    nQubits : int
+        The number of qubits.
+
+    maxLengths : list
+        A list of maximum germ-power lengths. Each specifies a number many times
+        to repeat the idle gate, and typically this is a list of the powers of
+        2 preceded by zero, e.g. `[0,1,2,4,16]`.  The largest value in this 
+        list should be chosen to be the maximum number of idle gates you want to
+        perform in a row (typically limited by performance or time constraints).
+
+    pauliBasisDicts : tuple
+        A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries 
+        specifying the way to prepare and measure in Pauli bases.  See
+        :function:`preferred_signs_from_paulidict` for details on each
+        dictionary's format.
+
+    maxweight : int, optional
+        The maximum weight of errors to consider.
+
+    idle_string : Circuit-like, optional
+        A Circuit or tuple of operation labels that represents the idle
+        gate being characterized by idle tomography.
+
+    include_hamiltonian, include_stochastic, include_affine : bool, optional
+        Whether to include fiducial pairs for finding Hamiltonian-, Stochastic-,
+        and Affine-type errors.
+
+    ham_tmpl : tuple, optional
+        A tuple of length-`maxweight` Pauli strings (i.e. string w/letters "X",
+        "Y", or "Z"), describing how to construct the fiducial pairs used to
+        detect Hamiltonian errors.  The special (and default) value "auto"
+        uses `("X","Y","Z")` and `("ZY","ZX","XZ","YZ","YX","XY")` for 
+        `maxweight` equal to 1 and 2, repectively, and will generate an error
+        if `maxweight > 2`.
+
+    preferred_prep_basis_signs, preferred_meas_basis_signs: tuple, optional
+        A 3-tuple of "+" or "-" strings indicating which sign for preparing
+        or measuring in the X, Y, and Z bases is preferable.  Usually one
+        orientation if preferred because it's easier to achieve using the
+        native model.  Additionally, the special (and default) value "auto"
+        may be used, in which case :function:`preferred_signs_from_paulidict`
+        is used to choose preferred signs based on `pauliBasisDicts`.
+
+    Returns
+    -------
+    list
+        A list of lists of :class:`Circuit` objects, one list per max-L value.
+    """
+
+    prepDict,measDict = pauliBasisDicts
+    if preferred_prep_basis_signs == "auto":
+        preferred_prep_basis_signs = preferred_signs_from_paulidict(prepDict)
+    if preferred_meas_basis_signs == "auto":
+        preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
+        
+    GiStr = _objs.Circuit( idle_string, num_lines=nQubits )
+
+    pauli_fidpairs = idle_tomography_fidpairs(
+        nQubits, maxweight, include_hamiltonian, include_stochastic,
+        include_affine, ham_tmpl, preferred_prep_basis_signs,
+        preferred_meas_basis_signs)
+
+    fidpairs = [ (x.to_circuit(prepDict),y.to_circuit(measDict))
+                 for x,y in pauli_fidpairs ] # e.g. convert ("XY","ZX") to tuple of Circuits
+
+    listOfListsOfExperiments = []
+    for L in maxLengths:
+        expsForThisL = []
+        for prepFid,measFid in fidpairs: #list of fidpairs / configs (a prep/meas that gets I^L placed btwn it)
+            expsForThisL.append( prepFid + GiStr*L + measFid )
+        listOfListsOfExperiments.append(expsForThisL)
+                
+    return listOfListsOfExperiments
 
 
 # -----------------------------------------------------------------------------
@@ -927,7 +1014,7 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
 
 
 def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=2,
-                       idle_string=('Gi',), include_hamiltonian="auto",
+                       idle_string=((),), include_hamiltonian="auto",
                        include_stochastic="auto", include_affine="auto",
                        advancedOptions=None, verbosity=0, comm=None):
     """

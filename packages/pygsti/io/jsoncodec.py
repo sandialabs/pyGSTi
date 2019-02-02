@@ -48,6 +48,7 @@ def encode_obj(py_obj, binary):
     object
         A JSON-format compatible object.  Usually a dict, list, or string.
     """
+    #print("ENCODING ", str(type(py_obj)))
     is_pygsti_obj = hasattr(py_obj,'__class__') and \
                     hasattr(py_obj.__class__,'__module__') and \
                     py_obj.__class__.__module__.startswith('pygsti')
@@ -92,15 +93,16 @@ def encode_obj(py_obj, binary):
             else:
                 raise ValueError("Can't get state of %s object" % type(py_obj))
             
-
+        
         d = { k: encode_obj(v,binary) for k,v in state.items() }
 
         #DEBUG (instead of above line)
         #d = {}
-        ##print("DB: Encoding state for %s object:" % type(py_obj))
+        #print("DB: Encoding state for pyGSTi %s object:" % type(py_obj))
         #for k,v in state.items():
-        #    #print("Encoding key: ",k)
-        #    d[k] = encode_obj(v)
+        #    print(">>> Encoding key: ",k)
+        #    d[k] = encode_obj(v,binary)
+        #    print("<<< Done encoding key ",k)
         #    try: _json.dumps(d[k])
         #    except Exception as e:
         #        print("Cannot JSON %s key: " % k, d[k])
@@ -142,6 +144,7 @@ def encode_std_obj(py_obj, binary):
     Helper to :func:`encode_obj` that encodes only "standard" (non-pyGSTi) types
     """
     # Other builtin or standard object encoding
+    #print("Encoding std type: ",str(type(py_obj)))
     if isinstance(py_obj, tuple):
         return {'__tuple__': [encode_obj(v,binary) for v in py_obj]}
     elif isinstance(py_obj, list):
@@ -190,6 +193,7 @@ def encode_std_obj(py_obj, binary):
             kind = ''
             descr = tobin(py_obj.dtype.str) if binary else tostr(py_obj.dtype.str)
         data = py_obj.tobytes() if binary else tostr(_base64.b64encode(py_obj.tobytes()))
+        if(py_obj.dtype == _np.object): raise TypeError("Cannot serialize object ndarrays!")
         return {'__ndarray__': data,
                 'dtype': descr,
                 'kind': kind,

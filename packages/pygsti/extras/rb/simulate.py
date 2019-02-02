@@ -178,8 +178,9 @@ def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, psp
 
     add_to_outcome = _np.array([_np.random.binomial(1,p) for p in measurement_errors])
     output = tuple(_np.array(output) ^  add_to_outcome)
-
-    return output
+    outputasstring = ''
+    for s in output: outputasstring += str(s)
+    return outputasstring
 
 def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, filename=None, rbtype='DRB', 
                          rbspec =[], returndata=True, appenddata=False, verbosity=0):

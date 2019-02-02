@@ -187,7 +187,7 @@ def maximum_likelihood_model(model, data, times, min_p=1e-4, max_p=1-1e-6, metho
         return trajectoryNegLogLikelihood(p, data, min_p, max_p)
     
     options = {'disp':False}
-    numparams = len(model.basisfunctionInds)*len(model.independent_outcomes)
+    numparams = len(model.hyperparameters)*len(model.independent_outcomes)
     if verbosity > 0:
         print("      - Performing MLE over {} parameters...".format(numparams),end='')
     if verbosity > 1:
@@ -229,7 +229,7 @@ def uniform_amplitude_compression(model, times, epsilon=0.001, stepsize=0.005, v
 
     """
     newmodel = model.copy()
-    if len(newmodel.basisfunctionInds) <= 1:
+    if len(newmodel.hyperparameters) <= 1:
         return model, False
 
     pt = newmodel.get_probabilities(times)

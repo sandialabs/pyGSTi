@@ -13,6 +13,7 @@ import numpy     as _np
 import inspect   as _inspect
 import pickle    as _pickle
 
+
 from collections import Counter, defaultdict
 
 from .opttools import timed_block as _timed_block
@@ -102,7 +103,7 @@ class SmartCache(object):
 
     def __getstate__(self):
         d = dict(self.__dict__)
-
+        
         def get_pickleable_dict(cacheDict):
             pickleableCache = dict()
             for k, v in cacheDict.items():
@@ -113,7 +114,7 @@ class SmartCache(object):
                     if isinstance(v,dict):
                         self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.keys())))
                     else:
-                        self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.__dict__.keys())))
+                        self.unpickleable.add(str(k[0]) + str(type(v)) + str(e)) # + str(list(v.__dict__.keys())))
                 except _pickle.PicklingError as e:
                     self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))
             return pickleableCache
@@ -121,6 +122,27 @@ class SmartCache(object):
         d['cache'] = get_pickleable_dict(self.cache)
         d['outargs'] = get_pickleable_dict(self.outargs)
         return d
+
+
+    def __pygsti_getstate__(self): #same but for json/msgpack
+        d = dict(self.__dict__)
+        from ..io.jsoncodec import encode_obj
+        
+        def get_jsonable_dict(cacheDict):
+
+            jsonableCache = dict()
+            for k, v in cacheDict.items():
+                try:
+                    encode_obj(v,False)
+                    jsonableCache[k] = v
+                except TypeError as e:
+                    self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))                    
+            return jsonableCache
+
+        d['cache'] = get_jsonable_dict(self.cache)
+        d['outargs'] = get_jsonable_dict(self.outargs)
+        return d
+
 
     def add_digest(self, custom):
         '''
@@ -196,15 +218,16 @@ class SmartCache(object):
             result = fn(*argVals, **kwargs)
             self.ineffectiveRequests[name_key] += 1
             self.misses[key] += 1
-            #DB: print(fn.__name__, " --> Ineffective!")
+            #DB: print(fn.__name__, " --> Ineffective!") # DB
         else:
             times = dict()
             with _timed_block('hash', times):
                 key = call_key(fn, tuple(argVals)+(kwargs,), self.customDigests) # cache by call key
             if key not in self.cache:
-                #DB: print(fn.__name__, " --> computing... (not found in %d keys)" % len(list(self.cache.keys())))
-                #DB: print("Key detail: ",key[0])
-                #DB: for a,k in zip(tuple(argVals)+(kwargs,),key[1:]): print(type(a),": ",repr(k))
+                #DB: if "_computeSubMxs" in fn.__name__:
+                #DB: print(fn.__name__, " --> computing... (not found in %d keys)" % len(list(self.cache.keys()))) # DB
+                #DB: print("Key detail: ",key[0]) # DB
+                #DB: for a,k in zip(tuple(argVals)+(kwargs,),key[1:]): print(type(a),": ",repr(k)) # DB
                 typesig = str(tuple(str(type(arg)) for arg in argVals)) + \
                         str({k : str(type(v)) for k, v in kwargs.items()})
                 self.typesigs[name_key] = typesig
@@ -224,8 +247,8 @@ class SmartCache(object):
                 self.hashTimes[name_key].append(hashtime)
                 self.callTimes[name_key].append(calltime)
             else:
-                #DB: print('The function {} experienced a cache hit'.format(name_key))
-                #DB: print(fn.__name__, " --> cache hit!")
+                #DB: print('The function {} experienced a cache hit'.format(name_key)) # DB
+                #DB: print(fn.__name__, " --> cache hit!") # DB
                 self.hits[key] += 1
                 self.fhits[name_key] += 1
 

@@ -153,9 +153,10 @@ class Circuit(object):
 
         check : bool, optional
             Whether `stringrep` should be checked against `layer_labels` to 
-            ensure they are consistent.  The only reason you'd want to set 
-            this to `False` is if you're absolutely sure `stringrep` is
-            consistent and want to save computation time.
+            ensure they are consistent, and whether the labels in `layer_labels`
+            are a subset of `line_labels`.  The only reason you'd want to set 
+            this to `False` is if you're absolutely sure `stringrep` and 
+            `line_labels` are consistent and want to save computation time.
         """
         toLabel = lambda x : x if isinstance(x,_Label) else _Label(x) #helper
 
@@ -192,8 +193,8 @@ class Circuit(object):
             # Convert layer_labels into a tuple of Labels (not nec. simple)
             self._labels = tuple(map(toLabel,layer_labels))
 
-        explicit_lbls = _accumulate_explicit_sslbls(self._labels)
         if line_labels == 'auto':
+            explicit_lbls = _accumulate_explicit_sslbls(self._labels)
             if len(explicit_lbls) == 0:
                 if num_lines is not None:
                     assert(num_lines >= 0), "`num_lines` must be >= 0!"
@@ -207,6 +208,7 @@ class Circuit(object):
             else:
                 self.line_labels = tuple(sorted(explicit_lbls))
         else:
+            explicit_lbls = None
             self.line_labels = tuple(line_labels)
 
         if (num_lines is not None) and (num_lines != len(self.line_labels)):
@@ -216,8 +218,10 @@ class Circuit(object):
             else:
                 raise ValueError("`num_lines` was expected to be %d but equals %d!" % (len(self.line_labels),num_lines))
 
-        if not set(explicit_lbls).issubset(self.line_labels):
-            raise ValueError("line labels must contain at least %s" % str(explicit_lbls))
+        if check:
+            if explicit_lbls is None: explicit_lbls = _accumulate_explicit_sslbls(self._labels)
+            if not set(explicit_lbls).issubset(self.line_labels):
+                raise ValueError("line labels must contain at least %s" % str(explicit_lbls))
 
         self._str = stringrep #can be None (lazy generation)
         self._times = None # for FUTURE expansion
@@ -490,7 +494,7 @@ class Circuit(object):
         layers = self._proc_layers_arg(layers)
         lines = self._proc_lines_arg(lines)
         if len(layers) == 0 or len(lines) == 0:
-            return Circuit((), lines, None, not self._static, stringrep=None) \
+            return Circuit((), lines, None, not self._static, stringrep=None, check=False) \
                 if nonint_layers else None # zero-area region
         
         ret = []
@@ -517,7 +521,7 @@ class Circuit(object):
 
         if nonint_layers:
             if not strict: lines = "auto" # since we may have included lbls on other lines
-            return Circuit(ret, lines, None, not self._static, stringrep=None) # don't worry about string rep for now...
+            return Circuit(ret, lines, None, not self._static, stringrep=None, check=False) # don't worry about string rep for now...
         else:
             return _Label(ret[0])
     
@@ -1063,7 +1067,7 @@ class Circuit(object):
         for lbl in self.tup:
             for c in lbl.components:
                 serial_lbls.append(c)
-        return Circuit(serial_lbls, self.line_labels, editable=False)
+        return Circuit(serial_lbls, self.line_labels, editable=False, check=False)
 
     
     def parallelize(self, can_break_labels=True, adjacent_only=False):
@@ -1147,7 +1151,7 @@ class Circuit(object):
                 else:
                     for k in lbl.sslbls: first_free[k] = pos+1
                     
-        return Circuit(parallel_lbls, self.line_labels, editable=False)
+        return Circuit(parallel_lbls, self.line_labels, editable=False, check=False)
 
         
     

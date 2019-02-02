@@ -355,6 +355,10 @@ def diamonddist(A, B, mxBasis='pp', return_x=False):
         _warnings.warn("CVXOPT failed (uknown err) - diamonddist returning -2!")
         return (-2, _np.zeros((dim,dim))) if return_x else -2
 
+    #Validate result
+    #assert( abs(_np.trace(_np.dot(K.T,Y.value) + _np.dot(L.T,Z.value))-prob.value) < 1e-6 ), \
+    #    "Diamondnorm mismatch"
+    
     if return_x:
         X = Y.value + 1j*Z.value #encodes state at which maximum trace-distance occurs
         return prob.value, X
