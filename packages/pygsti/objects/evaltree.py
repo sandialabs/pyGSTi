@@ -13,6 +13,7 @@ from ..tools import slicetools as _slct
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 import numpy as _np
+import warnings as _warnings
 #import time as _time #DEBUG TIMERS
 
 class EvalTree(list):
@@ -564,7 +565,11 @@ class EvalTree(list):
                     iFirstNonFinal = iLastFinal # move boundary to make k's new location non-final
 
             subTreeNumFinal = iFirstNonFinal # the final <-> non-final boundary
-            if subTreeNumFinal == 0: continue # this subtree only contributes non-final elements -> skip
+            if subTreeNumFinal == 0: 
+                _warnings.warn(("A 'dummy' subtree was created that doesn't compute any "
+                                "actual ('final') elements.  This is fine, but usually "
+                                "means you're using more processors than you need to."))
+                #OLD: continue # this subtree only contributes non-final elements -> skip
 
             parentIndexRevPerm.extend( subTreeIndices[0:subTreeNumFinal] )
             subTreeIndicesList.append( subTreeIndices )
@@ -769,14 +774,16 @@ def _compute_spamtuple_indices(simplified_circuit_spamTuples,
             spamtuple_indices[spamTuple][1].append(i)
         el_off += len(spamTuples)
 
-    def to_slice(x):
+    def to_slice(x, maxLen=None):
         s = _slct.list_to_slice(x,array_ok=True,require_contiguous=False)
-        if isinstance(s, slice) and (s.start,s.stop,s.step) == \
-           (0,len(simplified_circuit_spamTuples),None):
+        if maxLen is not None and isinstance(s, slice) and (s.start,s.stop,s.step) == (0,maxLen,None):
             return slice(None,None) #check for entire range
         else:
             return s
 
+    nRawSequences = len(simplified_circuit_spamTuples)
+    nElements = el_off if (subtreeFinalElsToParentFinalElsMap is None) \
+                else None # (we don't know how many els the parent has!)
     return _collections.OrderedDict(
-        [ (spamTuple, (to_slice(fInds), to_slice(gInds)))
+        [ (spamTuple, (to_slice(fInds, nElements), to_slice(gInds, nRawSequences)) ) 
           for spamTuple,(fInds,gInds) in spamtuple_indices.items() ] )
