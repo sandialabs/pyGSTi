@@ -25,7 +25,8 @@ from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
 from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
-from ..baseobjs import Basis as _Basis
+from ..baseobjs import BuiltinBasis as _BuiltinBasis
+from ..baseobjs import ExplicitBasis as _ExplicitBasis
 from ..baseobjs import Dim as _Dim
 from ..baseobjs import Label as _Lbl
 
@@ -497,8 +498,6 @@ class CloudNoiseModel(_ImplicitOpModel):
         cloud_maxhops = max( [mx for wt,mx in weight_maxhops_tuples_1Q] ) # max of max-hops
     
         ssAllQ = [tuple(qubit_labels)] # also node-names of qubitGraph ?
-        #basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse)
-        basisAllQ_dim = _Dim(2**qubitGraph.nqubits)
 
         EmbeddedDenseOp = _op.EmbeddedDenseOp if sim_type == "matrix" else _op.EmbeddedOp
         StaticDenseOp = _get_Static_factory(sim_type, parameterization) # always a *gate*
@@ -511,7 +510,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                 #Target operations
                 printer.log("Creating 1Q %s gate on qubit %s!!" % (gn,str(i)))
                 self.operation_blks['layers'][_Lbl(gn,i)] = EmbeddedDenseOp(
-                    ssAllQ, [i], embedded_gate, basisAllQ_dim)
+                    ssAllQ, [i], embedded_gate)
                 primitive_ops.append(_Lbl(gn,i))
                         
                 self.operation_blks['cloudnoise'][_Lbl(gn,i)] = _build_nqn_cloud_noise(
@@ -535,7 +534,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             for (i,j) in availList: # so 'i' and 'j' are target qubit labels
                 printer.log("Creating %s gate between qubits %s and %s!!" % (gn,str(i),str(j)))
                 self.operation_blks['layers'][_Lbl(gn,(i,j))] = EmbeddedDenseOp(
-                    ssAllQ, [i,j], embedded_gate, basisAllQ_dim)
+                    ssAllQ, [i,j], embedded_gate)
                 self.operation_blks['cloudnoise'][_Lbl(gn,(i,j))] = _build_nqn_cloud_noise(
                     (i,j), qubitGraph, weight_maxhops_tuples_2Q,
                     errcomp_type=errcomp_type, sparse=sparse, sim_type=sim_type,
@@ -558,7 +557,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         elif spamtype == "tensorproduct": 
     
             _warnings.warn("`spamtype == 'tensorproduct'` is deprecated!")
-            basis1Q = _Basis("pp",2)
+            basis1Q = _BuiltinBasis("pp",4)
             prep_factors = []; povm_factors = []
     
             v0 = _basis_build_vector("0", basis1Q)
@@ -755,8 +754,6 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
     
     termops = [] # gates or error generators to compose
     ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nqubits)])]
-    #basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse) # TODO: remove - all we need is its 'dim' below
-    basisAllQ_dim = _Dim(2**qubitGraph.nqubits)
     
     nQubits = qubitGraph.nqubits
     possible_err_qubit_inds = _np.arange(nQubits)
@@ -769,7 +766,7 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
         elif errcomp_type == "errorgens":
             wtNoErr = _sps.csr_matrix((4**wt,4**wt)) if sparse else  _np.zeros((4**wt,4**wt),'d')
         else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-        wtBasis = _Basis('pp', 2**wt, sparse=sparse)
+        wtBasis = _BuiltinBasis('pp', 4**wt, sparse=sparse)
         
         for err_qubit_inds in _itertools.combinations(possible_err_qubit_inds, wt):
             if len(err_qubit_inds) == 2 and not qubitGraph.is_directly_connected(err_qubit_inds[0],err_qubit_inds[1]):
@@ -782,12 +779,11 @@ def _build_nqn_global_noise(qubitGraph, maxWeight, sparse=False, sim_type="matri
                 errbasis.append(basisEl)
 
             printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_inds,len(errbasis)), 3)
-            errbasis = _Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
+            errbasis = _ExplicitBasis(errbasis, real=True, sparse=sparse) #single element basis (plus identity)
             termErr = Lindblad(wtNoErr, proj_basis=errbasis, mxBasis=wtBasis)
         
             err_qubit_global_inds = err_qubit_inds
-            fullTermErr = Embedded(ssAllQ, [('Q%d'%i) for i in err_qubit_global_inds],
-                                   termErr, basisAllQ_dim)
+            fullTermErr = Embedded(ssAllQ, [('Q%d'%i) for i in err_qubit_global_inds], termErr)
             assert(fullTermErr.num_params() == termErr.num_params())
             printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                         (termErr.dim, termErr.num_params(), fullTermErr.dim))
@@ -888,8 +884,6 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
         
     loc_noise_termops = [] #list of gates to compose
     ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nqubits)])]
-    #basisAllQ = _Basis('pp', 2**qubitGraph.nqubits, sparse=sparse) # TODO: remove - all we need is its 'dim' below
-    basisAllQ_dim = _Dim(2**qubitGraph.nqubits)
     
     for wt, maxHops in weight_maxhops_tuples:
             
@@ -903,7 +897,7 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
         elif errcomp_type == "errorgens":
             wtNoErr = _sps.csr_matrix((4**wt,4**wt)) if sparse else  _np.zeros((4**wt,4**wt),'d')
         else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-        wtBasis = _Basis('pp', 2**wt, sparse=sparse)
+        wtBasis = _BuiltinBasis('pp', 4**wt, sparse=sparse)
 
         printer.log("Weight %d, max-hops %d: %d possible qubits" % (wt,maxHops,nPossible),3)
         #print("DB: possible qubits = ",possible_err_qubit_inds, " (radius of %d around %s)" % (maxHops,str(target_qubit_inds)))
@@ -920,11 +914,10 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubitGraph, weight_maxhops_tuples,
 
             err_qubit_global_inds = possible_err_qubit_inds[list(err_qubit_local_inds)]
             printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_global_inds,len(errbasis)), 4)
-            errbasis = _Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
+            errbasis = _ExplicitBasis(errbasis, real=True, sparse=sparse) #single element basis (plus identity)
             termErr = Lindblad(wtNoErr, proj_basis=errbasis, mxBasis=wtBasis, relative=True)
     
-            fullTermErr = Embedded(ssAllQ, ['Q%d'%i for i in err_qubit_global_inds],
-                                   termErr, basisAllQ_dim)
+            fullTermErr = Embedded(ssAllQ, ['Q%d'%i for i in err_qubit_global_inds], termErr)
             assert(fullTermErr.num_params() == termErr.num_params())
             printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                         (termErr.dim, termErr.num_params(), fullTermErr.dim))

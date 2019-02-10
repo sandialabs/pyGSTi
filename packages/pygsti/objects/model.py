@@ -41,6 +41,7 @@ from . import explicitcalc as _explicitcalc
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
+from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Label as _Label
 
 
@@ -292,7 +293,6 @@ class Model(object):
                 assert(attr != "uuid"), "Should not be copying UUID!"
                 setattr(newModel,attr,_copy.deepcopy(val))
 
-        if OpModel._pcheck: newModel._check_paramvec()
         return newModel
 
     def __str__(self):
@@ -397,10 +397,10 @@ class OpModel(Model):
     @basis.setter
     def basis(self, basis):
         if isinstance(basis, _Basis):
-            assert(basis.dim == self.state_space_labels.dim)
+            assert(basis.dim == self.state_space_labels.dim) #TODO update this...
             self._basis = basis
-        else: #create a basis with the proper dimension
-            self._basis = _Basis(basis, self.state_space_labels.dim)
+        else: #create a basis with the proper structure & dimension
+            self._basis = _Basis.cast(basis, self.state_space_labels.dim)
 
             
     def set_simtype(self, sim_type, calc_cache=None):
@@ -452,7 +452,7 @@ class OpModel(Model):
         "Forgets" the current basis, so that
         self.basis becomes a dummy Basis w/name "unknown".
         """
-        self._basis = _Basis('unknown', None)
+        self._basis = _BuiltinBasis('unknown', 0)
 
     def set_state_space(self, lbls, basis="pp"):
         """
@@ -477,15 +477,12 @@ class OpModel(Model):
         if isinstance(lbls, _ld.StateSpaceLabels):
             self._state_space_labels = lbls
         else:
-            self._state_space_labels = _ld.StateSpaceLabels(lbls)
+            self._state_space_labels = _ld.StateSpaceLabels(lbls, evotype=self._evotype)
         self.basis = basis # invokes basis setter to set self._basis
 
         #Operator dimension of this Model
-        if self._evotype in ("densitymx","svterm","cterm"):
-            self._dim = self.state_space_labels.dim.opDim
-        else:
-            self._dim = self.state_space_labels.dim.dmDim #operator dim for *state* vectors
-            # FUTURE: have a Basis for state *vectors*?
+        self._dim = self.state_space_labels.dim
+          #e.g. 4 for 1Q (densitymx) or 2 for 1Q (statevec)
 
     @property
     def dim(self):
@@ -2079,5 +2076,8 @@ class OpModel(Model):
         """
         self._clean_paramvec() # ensure _paramvec is rebuilt if needed
         if OpModel._pcheck: self._check_paramvec()
-        return Model.copy(self)
+        ret = Model.copy(self)
+        if OpModel._pcheck: ret._check_paramvec()
+        return ret
+            
     

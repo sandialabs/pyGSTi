@@ -3592,7 +3592,7 @@ class EmbeddedOp(LinearOperator):
     subspace of its contained gate, where it acts as the contained gate does.
     """
     
-    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None): # TODO: remove basisdim as arg
+    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed):
         """
         Initialize an EmbeddedOp object.
 
@@ -3616,29 +3616,14 @@ class EmbeddedOp(LinearOperator):
         gate_to_embed : LinearOperator
             The gate object that is to be contained within this gate, and
             that specifies the only non-trivial action of the EmbeddedOp.
-
-        basisdim : Dim, optional
-            Specifies the basis dimension for the *entire* density-matrix
-            space described by `stateSpaceLabels`.  Thus, this must be the
-            same dimension and direct-sum structure given by the
-            `stateSpaceLabels`.  If None, then this dimension is assumed.
         """
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
-        self.state_space_labels = _StateSpaceLabels(stateSpaceLabels)
+        self.state_space_labels = _StateSpaceLabels(stateSpaceLabels,
+                                                    evotype=gate_to_embed._evotype)
         self.targetLabels = targetLabels
         self.embedded_op = gate_to_embed
-        self.basisdim = basisdim
 
         labels = targetLabels
-
-        blockDims = self.state_space_labels.dim.blockDims
-        if basisdim: 
-            if blockDims != basisdim.blockDims:
-                raise ValueError("State labels %s for tensor product blocks have dimensions %s != given dimensions %s" \
-                                 % (stateSpaceLabels, str(blockDims), str(basisdim.blockdims)))
-        else:
-            self.basisdim = _Dim(blockDims)
-        dmDim, superOpDim, _ = self.basisdim
 
         evotype = gate_to_embed._evotype
         if evotype in ("densitymx","statevec"):
@@ -3652,33 +3637,26 @@ class EmbeddedOp(LinearOperator):
             tensorProdBlkLabels = self.state_space_labels.labels[iTensorProdBlk]
             basisInds = [] # list of possible *density-matrix-space* indices of each component of the tensor product block
             for l in tensorProdBlkLabels:
-                if evotype == "densitymx":
-                    basisInds.append( list(range(self.state_space_labels.labeldims[l]**2)) ) # e.g. [0,1,2,3] for qubits (I, X, Y, Z)
-                else: # evotype == "statevec"
-                    basisInds.append( list(range(self.state_space_labels.labeldims[l])) ) # e.g. [0,1] for qubits (std *complex* basis)
+                basisInds.append( list(range(self.state_space_labels.labeldims[l])) )
+                  # e.g. [0,1,2,3] for densitymx qubits (I, X, Y, Z) OR [0,1] for statevec qubits (std *complex* basis)
 
             self.numBasisEls = _np.array(list(map(len,basisInds)),_np.int64)
             self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one
 
             #offset into "active" tensor product block
-            if evotype == "densitymx":
-                self.offset = sum( [ blockDims[i]**2 for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
-            else: # evotype == "statevec"
-                self.offset = sum( [ blockDims[i] for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
+            blockDims = self.state_space_labels.tpb_dims
+            self.offset = sum( [ blockDims[i] for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
     
             divisor = 1
             self.divisors = []
             for l in labels:
                 self.divisors.append(divisor)
-                if evotype == "densitymx":
-                    divisor *= self.state_space_labels.labeldims[l]**2 # e.g. 4 for qubits
-                else: # evotype == "statevec"
-                    divisor *= self.state_space_labels.labeldims[l] # e.g. 2 for qubits
+                divisor *= self.state_space_labels.labeldims[l] # e.g. 4 or 2 for qubits (depending on evotype)
     
             # multipliers to go from per-label indices to tensor-product-block index
             # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
             self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
-                reversed(list(map(len,basisInds[:-1]))))) ), _np.int64)
+                reversed(list(map(len,basisInds[1:]))))) ), _np.int64)
     
             # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
             labelIndices = [ tensorProdBlkLabels.index(label) for label in labels ]
@@ -3725,8 +3703,7 @@ class EmbeddedOp(LinearOperator):
         else:
             self.qubit_indices = None # (unused)
 
-        opDim = dmDim if evotype in ("statevec","stabilizer") else superOpDim
-          # ("densitymx","svterm","cterm") all use super-op dimension
+        opDim = self.state_space_labels.dim
         LinearOperator.__init__(self, opDim, evotype)
         
 
@@ -3764,7 +3741,7 @@ class EmbeddedOp(LinearOperator):
         # parent reset correctly.
         cls = self.__class__ # so that this method works for derived classes too
         copyOfMe = cls(self.state_space_labels, self.targetLabels,
-                       self.embedded_op.copy(parent), self.basisdim)
+                       self.embedded_op.copy(parent))
         return self._copy_gpindices(copyOfMe, parent)
         
         
@@ -3836,29 +3813,27 @@ class EmbeddedOp(LinearOperator):
             raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
                              (self._evotype, self.__class__.__name__))
 
-        nBlocks = len(self.state_space_labels.labels)
+        nBlocks = self.state_space_labels.num_tensor_prod_blocks()
         iActiveBlock = self.iTensorProdBlk
         nComponents = len(self.state_space_labels.labels[iActiveBlock])
         embeddedDim = self.embedded_op.dim
-        _, _, blockDims = self.basisdim # dmDim, opDim, blockDims
+        blocksizes = _np.array(self.state_space_labels.tpb_dims, _np.int64)
         
         if self._evotype == "statevec":
-            blocksizes = _np.array(blockDims,_np.int64)
             return replib.SVOpRep_Embedded(self.embedded_op.torep(),
-                                             self.numBasisEls, self.actionInds, blocksizes,
-                                             embeddedDim, nComponents, iActiveBlock, nBlocks, self.dim)
+                                           self.numBasisEls, self.actionInds, blocksizes,
+                                           embeddedDim, nComponents, iActiveBlock, nBlocks,
+                                           self.dim)
         else:
-            blocksizes = _np.array(blockDims,_np.int64)**2
             return replib.DMOpRep_Embedded(self.embedded_op.torep(),
-                                             self.numBasisEls, self.actionInds, blocksizes,
-                                             embeddedDim, nComponents, iActiveBlock, nBlocks, self.dim)
+                                           self.numBasisEls, self.actionInds, blocksizes,
+                                           embeddedDim, nComponents, iActiveBlock, nBlocks,
+                                           self.dim)
 
     def tosparse(self):
         """ Return the operation as a sparse matrix """
-        dmDim, superOpDim, blockDims = self.basisdim
         embedded_sparse = self.embedded_op.tosparse().tolil()
-        dim = superOpDim if self._evotype != "statevec" else dmDim
-        finalOp = _sps.identity( dim, embedded_sparse.dtype, format='lil' )
+        finalOp = _sps.identity( self.dim, embedded_sparse.dtype, format='lil' )
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
@@ -3881,10 +3856,8 @@ class EmbeddedOp(LinearOperator):
         #                                            self.embedded_op.svector,
         #                                            self.qubit_indices,len(qubitLabels))        
         
-        dmDim, superOpDim, blockDims = self.basisdim
         embedded_dense = self.embedded_op.todense()
-        dim = superOpDim if self._evotype != "statevec" else dmDim
-        finalOp = _np.identity( dim, embedded_dense.dtype ) # operates on entire state space (direct sum of tensor prod. blocks)
+        finalOp = _np.identity( self.dim, embedded_dense.dtype ) # operates on entire state space (direct sum of tensor prod. blocks)
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
@@ -3919,8 +3892,11 @@ class EmbeddedOp(LinearOperator):
         list
             A list of :class:`RankOneTerm` objects.
         """
-        return [ _term.embed_term(t, self.state_space_labels,
-                                  self.targetLabels, self.basisdim)
+        #Reduce labeldims b/c now working on *state-space* instead of density mx:
+        sslbls = self.state_space_labels.copy()
+        for lbl,dim in self.state_space_labels.labeldims.items(): #HACK!! TODO FIX
+            sslbls.labeldims[lbl] = int(_np.sqrt(dim))
+        return [ _term.embed_term(t, sslbls, self.targetLabels)
                  for t in self.embedded_op.get_order_terms(order) ]
 
     
@@ -4098,7 +4074,7 @@ class EmbeddedDenseOp(EmbeddedOp, DenseOperator):
     An EmbeddedDenseOp acts as the identity on all of its domain except the 
     subspace of its contained gate, where it acts as the contained gate does.
     """
-    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None):
+    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed):
         """
         Initialize a EmbeddedDenseOp object.
 
@@ -4122,15 +4098,9 @@ class EmbeddedDenseOp(EmbeddedOp, DenseOperator):
         gate_to_embed : DenseOperator
             The gate object that is to be contained within this gate, and
             that specifies the only non-trivial action of the EmbeddedDenseOp.
-
-        basisdim : Dim, optional
-            Specifies the basis dimension for the *entire* density-matrix
-            space described by `stateSpaceLabels`.  Thus, this must be the
-            same dimension and direct-sum structure given by the
-            `stateSpaceLabels`.  If None, then this dimension is assumed.
         """
         EmbeddedOp.__init__(self, stateSpaceLabels, targetLabels,
-                                 gate_to_embed, basisdim) # sets self.dim & self._evotype
+                                 gate_to_embed) # sets self.dim & self._evotype
         DenseOperator.__init__(self, _np.identity(self.dim), self._evotype) # type irrelevant - just a dummy
         self._construct_matrix()
 
@@ -4757,7 +4727,7 @@ class EmbeddedErrorgen(EmbeddedOp):
     subspace of its contained error generator, where it acts as the contained item does.
     """
     
-    def __init__(self, stateSpaceLabels, targetLabels, errgen_to_embed, basisdim=None): # TODO: remove basisdim as arg
+    def __init__(self, stateSpaceLabels, targetLabels, errgen_to_embed):
         """
         Initialize an EmbeddedErrorgen object.
 
@@ -4782,14 +4752,8 @@ class EmbeddedErrorgen(EmbeddedOp):
             The error generator object that is to be contained within this
             error generator, and that specifies the only non-trivial action
             of the EmbeddedErrorgen.
-
-        basisdim : Dim, optional
-            Specifies the basis dimension for the *entire* density-matrix
-            space described by `stateSpaceLabels`.  Thus, this must be the
-            same dimension and direct-sum structure given by the
-            `stateSpaceLabels`.  If None, then this dimension is assumed.
         """
-        EmbeddedOp.__init__(self, stateSpaceLabels, targetLabels, errgen_to_embed, basisdim)
+        EmbeddedOp.__init__(self, stateSpaceLabels, targetLabels, errgen_to_embed)
 
         # set "API" error-generator members (to interface properly w/other objects)
         # FUTURE: create a base class that defines this interface (maybe w/properties?)
@@ -4800,8 +4764,8 @@ class EmbeddedErrorgen(EmbeddedOp):
         if _compat.isstr(embedded_matrix_basis):
             self.matrix_basis = embedded_matrix_basis
         else: # assume a Basis object
-            my_basis_dim = self.state_space_labels.dim.dmDim # density matrix dimension
-            self.matrix_basis = _Basis(embedded_matrix_basis.name, my_basis_dim)
+            my_basis_dim = self.state_space_labels.dim # density matrix dimension TODO FIX
+            self.matrix_basis = _Basis.cast(embedded_matrix_basis.name, my_basis_dim, sparse=True)
 
             #OLD: constructs a subset of this errorgen's full mxbasis, but not the whole thing:
             #self.matrix_basis = _Basis(
@@ -5002,8 +4966,8 @@ class LindbladErrorgen(LinearOperator):
         """
 
         d2 = errgen.shape[0]
-        d = int(round(_np.sqrt(d2)))
-        if d*d != d2: raise ValueError("Error generator dim must be a perfect square")
+        #d = int(round(_np.sqrt(d2)))  # OLD TODO REMOVE
+        #if d*d != d2: raise ValueError("Error generator dim must be a perfect square")
         
         #Determine whether we're using sparse bases or not
         sparse = None
@@ -5018,17 +4982,9 @@ class LindbladErrorgen(LinearOperator):
         if sparse is None: sparse = False #the default
 
         #Create or convert bases to appropriate sparsity
-        if isinstance(ham_basis, _Basis) or _compat.isstr(ham_basis):
-            ham_basis = _Basis(ham_basis,d,sparse=sparse)
-        else: # ham_basis is a list of matrices
-            ham_basis = _Basis(matrices=ham_basis,dim=d,sparse=sparse)
-        
-        if isinstance(nonham_basis, _Basis) or _compat.isstr(nonham_basis):
-            other_basis = _Basis(nonham_basis,d,sparse=sparse)
-        else: # ham_basis is a list of matrices
-            other_basis = _Basis(matrices=nonham_basis,dim=d,sparse=sparse)
-        
-        matrix_basis = _Basis(mxBasis,d,sparse=sparse)
+        ham_basis = _Basis.cast(ham_basis,d2,sparse=sparse)
+        other_basis = _Basis.cast(nonham_basis,d2,sparse=sparse)
+        matrix_basis = _Basis.cast(mxBasis,d2,sparse=sparse)
 
         # errgen + bases => coeffs
         hamC, otherC = \
@@ -5121,8 +5077,8 @@ class LindbladErrorgen(LinearOperator):
 
         # Store superop dimension
         d2 = dim
-        d = int(round(_np.sqrt(d2)))
-        assert(d*d == d2), "Dimension must be a perfect square"
+        #d = int(round(_np.sqrt(d2))) #OLD TODO REMOVE
+        #assert(d*d == d2), "Dimension must be a perfect square"
 
         self.nonham_mode = nonham_mode
         self.param_mode = param_mode
@@ -5131,7 +5087,7 @@ class LindbladErrorgen(LinearOperator):
         # but maybe we want Ltermdict, basisdict => basis + projections/coeffs, then projections/coeffs => paramvals?
         # since the latter is what set_errgen needs
         hamC, otherC, self.ham_basis, self.other_basis, hamBInds, otherBInds = \
-            _gt.lindblad_terms_to_projections(Ltermdict, basisdict, d, self.nonham_mode)
+            _gt.lindblad_terms_to_projections(Ltermdict, basisdict, d2, self.nonham_mode)
 
         self.ham_basis_size = len(self.ham_basis)
         self.other_basis_size = len(self.other_basis)
@@ -5140,7 +5096,7 @@ class LindbladErrorgen(LinearOperator):
         elif self.other_basis_size > 0: self.sparse = _sps.issparse(self.other_basis[0])
         else: self.sparse = False
 
-        self.matrix_basis = _Basis(mxBasis,d,sparse=self.sparse)
+        self.matrix_basis = _Basis.cast(mxBasis,d2,sparse=self.sparse)
 
         self.paramvals = _gt.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
@@ -5209,14 +5165,14 @@ class LindbladErrorgen(LinearOperator):
         assert(d*d == d2), "Errorgen dim must be a perfect square"
 
         # Get basis transfer matrix
-        mxBasisToStd = _bt.transform_matrix(self.matrix_basis, "std", d)
+        mxBasisToStd = self.matrix_basis.transform_matrix("std")
         leftTrans  = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
                           else _np.linalg.inv(mxBasisToStd)
         rightTrans = mxBasisToStd
 
         
-        hamBasisMxs = _basis_matrices(self.ham_basis, d, sparse=self.sparse)
-        otherBasisMxs = _basis_matrices(self.other_basis, d, sparse=self.sparse)
+        hamBasisMxs = _basis_matrices(self.ham_basis, d2, sparse=self.sparse)
+        otherBasisMxs = _basis_matrices(self.other_basis, d2, sparse=self.sparse)
         hamGens, otherGens = _gt.lindblad_error_generators(
             hamBasisMxs,otherBasisMxs,normalize=False,
             other_mode=self.nonham_mode) # in std basis
@@ -5388,7 +5344,7 @@ class LindbladErrorgen(LinearOperator):
                 #  (all but "I/d" component of rho are annihilated by pauli sum; for the I/d component, all
                 #   d^2 of the terms in the sum is P/sqrt(d) * I/d * P/sqrt(d) == I/d^2, so the result is just "I")
                 L = basisdict[termLbl[1]]
-                Bmxs = _bt.basis_matrices("pp",d, sparse=False) #Note: only works when `d` corresponds to integral # of qubits!
+                Bmxs = _bt.basis_matrices("pp",d2, sparse=False) #Note: only works when `d` corresponds to integral # of qubits!
 
                 for B in Bmxs: # Note: *include* identity! (see pauli scratch notebook for details)
                     Lterms.append( _term.RankOneTerm(_Polynomial({(k,): 1.0} ), _np.dot(L,B), B, tt) ) # /(d2-1.)
