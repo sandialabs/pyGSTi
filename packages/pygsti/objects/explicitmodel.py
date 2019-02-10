@@ -1485,7 +1485,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         #For now, just create a dumb default state space labels and basis for the new model:
         sslbls = [('L%d'%i,) for i in range(newDimension)] # interpret as independent classical levels
-        dumb_basis = _Basis('gm',[1]*newDimension) # act on diagonal density mx to get appropriate
+        dumb_basis = _DirectSumBasis( [_BuiltinBasis('gm',1)]*newDimension) # - just act on diagonal density mx
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                               self.operations._prefix, self.povms._prefix,
                               self.instruments._prefix, self._sim_type)
@@ -1554,7 +1554,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         #For now, just create a dumb default state space labels and basis for the new model:
         sslbls = [('L%d'%i,) for i in range(newDimension)] # interpret as independent classical levels
-        dumb_basis = _Basis('gm',[1]*newDimension) # act on diagonal density mx to get appropriate
+        dumb_basis = _DirectSumBasis( [_BuiltinBasis('gm',1)]*newDimension) # - just act on diagonal density mx
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                               self.operations._prefix, self.povms._prefix,
                               self.instruments._prefix, self._sim_type)

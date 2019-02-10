@@ -763,11 +763,11 @@ def read_model(filename):
 
     if basis_dim is not None:
         # then specfy a dimensionful basis at the outset
-        basis = _objs.Basis(basis_abbrev, basis_dims)
+        basis = _objs.BuiltinBasis(basis_abbrev, basis_dim**2) # basis_dims should be just a single int now that the *matrix* dimension
     else:
         # otherwise we'll try to infer one from state space labels
         if state_space_labels is not None:
-            basis = _objs.Basis(basis_abbrev, state_space_labels.dim)
+            basis = _objs.Basis.cast(basis_abbrev, state_space_labels.dim)
         else:
             raise ValueError("Cannot infer basis dimension!")
 

@@ -25,7 +25,7 @@ from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
 from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
-from ..baseobjs import Basis as _Basis
+from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Dim as _Dim
 from ..baseobjs import Label as _Lbl
 
@@ -321,7 +321,7 @@ class LocalNoiseModel(_ImplicitOpModel):
     
         if evotype in ("densitymx","svterm","cterm"):
             from ..construction import basis_build_vector as _basis_build_vector 
-            basis1Q = _Basis("pp",2)
+            basis1Q = _BuiltinBasis("pp",4)
             v0 = _basis_build_vector("0", basis1Q)
             v1 = _basis_build_vector("1", basis1Q)
         elif evotype == "statevec":

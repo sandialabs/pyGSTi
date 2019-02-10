@@ -15,7 +15,7 @@ import collections as _collections
 import numpy as _np
 
 from ..baseobjs import Dim
-from ..baseobjs import Basis
+from ..baseobjs import Basis, BuiltinBasis, DirectSumBasis
 
 ## Import base-object routines, which can act as "tools" too
 ## (note these are *not* imported by baseobjs.__init__.py)
@@ -29,7 +29,7 @@ def is_sparse_basis(nameOrBasis):
           # (could test for a sparse matrix list in the FUTURE)
         return False
 
-def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
+def change_basis(mx, from_basis, to_basis):
     """
     Convert a operation matrix from one basis of a density matrix space
     to another.
@@ -44,11 +44,6 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
 
-    dimOrBlockDims : int or list of ints, optional
-        Structure of the density-matrix space. If None, then assume
-        mx operates on a single-block density matrix space,
-        i.e. on K x K density matrices with K == sqrt( mx.shape[0] ).
-
     Returns
     -------
     numpy array
@@ -58,30 +53,40 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
     if len(mx.shape) not in (1, 2):
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
-    #Get `dim` for constructing Basis objects below
-    if dimOrBlockDims is None:
-        if not (isinstance(from_basis,Basis) and isinstance(to_basis,Basis)):
-            #then we need to get dim for construction
-            dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
-            assert( dimOrBlockDims**2 == mx.shape[0] )
-            dim = Dim(dimOrBlockDims)
-        else:
-            # we don't need dim - can leave it as None, which is preferable b/c
-            # the int(round()) method above assumes a *single* tensor-prod-block
-            dim = None
+    #Build Basis objects from to_basis and from_basis as needed.
+    from_is_basis = isinstance(from_basis,Basis)
+    to_is_basis = isinstance(to_basis,Basis)
+    dim = mx.shape[0]
+    if from_is_basis == False and to_is_basis == False:
+        #Case1: no Basis objects, so just construct builtin bases based on `mx` dim
+        if from_basis == to_basis: return mx.copy() # (shortcut)
+        from_basis = BuiltinBasis(from_basis, dim, sparse=False)
+        to_basis = BuiltinBasis(to_basis, dim, sparse=False)
+        
+    elif from_is_basis == True and to_is_basis == True:
+        #Case2: both Basis objects.  Just make sure they agree :)
+        assert(from_basis.dim == to_basis.dim == dim), "Dimension mismatch: %d,%d,%d" % (from_basis.dim,to_basis.dim,dim)
     else:
-        dim = Dim(dimOrBlockDims)
+        # If one is just a string, then use the .equivalent of the
+        # other basis, since there can be desired structure (in the
+        # other basis) that we want to preserve and which would be
+        # lost if we just created a new BuiltinBasis with the correct
+        # overall dimension.
+        if from_is_basis:
+            assert(from_basis.dim == dim)
+            #to_basis = from_basis.equivalent(to_basis) #Don't to this b/c we take strings to always mean *simple* bases, not "equivalent" ones
+            to_basis = BuiltinBasis(to_basis,dim,sparse=from_basis.sparse)
+        else:
+            assert(to_basis.dim == dim)
+            #from_basis = to_basis.equivalent(from_basis)
+            from_basis = BuiltinBasis(from_basis,dim,sparse=to_basis.sparse)
 
-    #if either basis is sparse, attempt to construct sparse bases
-    try_for_sparse = is_sparse_basis(from_basis) or is_sparse_basis(to_basis)
-    from_basis = Basis(from_basis, dim, sparse=try_for_sparse)
-    to_basis   = Basis(to_basis, dim, sparse=try_for_sparse)
     #TODO: check for 'unknown' basis here and display meaningful warning - otherwise just get 0-dimensional basis...
 
-    if from_basis.dim.opDim != to_basis.dim.opDim:
+    if from_basis.dim != to_basis.dim:
         raise ValueError('Automatic basis expanding/contracting is disabled: use flexible_change_basis')
-
-    if from_basis.name == to_basis.name:
+    
+    if from_basis == to_basis:
         return mx.copy()
 
     toMx   = from_basis.transform_matrix(to_basis)
@@ -103,36 +108,36 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
                          (_mt.safenorm(ret,'imag'), from_basis, to_basis, ret))
     return _mt.safereal(ret)
 
-def transform_matrix(from_basis, to_basis, dimOrBlockDims=None, sparse=False):
-    '''
-    Compute the transformation matrix between two bases
-
-    Parameters
-    ----------
-    from_basis : Basis or str
-        Basis being converted from
-
-    to_basis : Basis or str
-        Basis being converted to
-
-    dimOrBlockDims : int or list of ints
-        if strings provided as bases, the dimension of basis to use.
-
-    sparse : bool, optional
-        Whether to construct a sparse or dense transform matrix
-        when this isn't specified already by `from_basis` or
-        `to_basis` (e.g. when these are both strings).
-
-    Returns
-    -------
-    Basis
-        the composite basis created
-    '''
-    if dimOrBlockDims is None:
-        assert isinstance(from_basis, Basis)
-    else:
-        from_basis = Basis(from_basis, dimOrBlockDims, sparse=sparse)
-    return from_basis.transform_matrix(to_basis)
+#def transform_matrix(from_basis, to_basis, dimOrBlockDims=None, sparse=False):
+#    '''
+#    Compute the transformation matrix between two bases
+#
+#    Parameters
+#    ----------
+#    from_basis : Basis or str
+#        Basis being converted from
+#
+#    to_basis : Basis or str
+#        Basis being converted to
+#
+#    dimOrBlockDims : int or list of ints
+#        if strings provided as bases, the dimension of basis to use.
+#
+#    sparse : bool, optional
+#        Whether to construct a sparse or dense transform matrix
+#        when this isn't specified already by `from_basis` or
+#        `to_basis` (e.g. when these are both strings).
+#
+#    Returns
+#    -------
+#    Basis
+#        the composite basis created
+#    '''
+#    if dimOrBlockDims is None:
+#        assert isinstance(from_basis, Basis)
+#    else:
+#        from_basis = Basis(from_basis, dimOrBlockDims, sparse=sparse)
+#    return from_basis.transform_matrix(to_basis)
 
 
 def build_basis_pair(mx, from_basis, to_basis):
@@ -159,18 +164,19 @@ def build_basis_pair(mx, from_basis, to_basis):
     -------
     from_basis, to_basis : Basis
     """
-    if isinstance(from_basis, Basis) and not isinstance(to_basis, Basis):
+    dim = mx.shape[0]
+    a = isinstance(from_basis, Basis)
+    b = isinstance(to_basis, Basis)
+    if a and b:
+        pass  # no Basis creation needed
+    elif a and not b: # only from_basis is a Basis
         to_basis = from_basis.equivalent(to_basis)
-    elif isinstance(to_basis, Basis) and not isinstance(from_basis, Basis):
+    elif b and not a: # only to_basis is a Basis
         from_basis = to_basis.equivalent(from_basis)
-    else: # neither or both from_basis & to_basis are Basis objects - so
-          # no need to worry about setting sparse flag in construction
-        if not isinstance(from_basis, Basis): # then *neither* are Basis objs
-            dimOrBlockDims = int(round(_np.sqrt(mx.shape[0]))) # so infer dimension
-        else: dimOrBlockDims = None # not needed and int(round()) only works for
-                                    # the *single* tensor-product-block case
-        to_basis = Basis(to_basis, dimOrBlockDims)
-        from_basis = Basis(from_basis, dimOrBlockDims)
+    else: #neither ar Basis objects (assume they're strings)
+        to_basis = BuiltinBasis(to_basis, dim)
+        from_basis = BuiltinBasis(from_basis, dim)
+    assert(from_basis.dim == to_basis.dim == dim), "Dimension mismatch!"
     return from_basis, to_basis
 
 
@@ -196,9 +202,12 @@ def build_basis_for_matrix(mx, basis):
     -------
     Basis
     """
-    dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
-    return Basis(basis, dimOrBlockDims)
-
+    dim = mx.shape[0]
+    if isinstance(basis,Basis):
+        assert(basis.dim == dim), "Supplied Basis has wrong dimension!"
+        return basis
+    else: # assume basis is a string name of a builtin basis
+        return BuiltinBasis(basis, dim)
 
 
 def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
@@ -236,19 +245,19 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     -------
     numpy.ndarray
     """
-    assert stdBasis1.dim.embedDim == stdBasis2.dim.embedDim
-    if stdBasis1.dim.opDim == stdBasis2.dim.opDim:
+    assert(stdBasis1.elsize == stdBasis2.elsize),'"embedded" space dimensions differ!'
+    if stdBasis1.dim == stdBasis2.dim:
         return mx
     #print('{}ing {} to {}'.format(resize, stdBasis1, stdBasis2))
     #print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
     if resize == 'expand':
-        assert stdBasis1.dim.opDim < stdBasis2.dim.opDim
-        right = _np.dot(mx, stdBasis1.get_expand_mx())
-        mid   = _np.dot(stdBasis1.get_contract_mx(), right)
+        assert stdBasis1.dim < stdBasis2.dim
+        right = _np.dot(mx, stdBasis1.get_from_simple_std())       #  (expdim,dim) (dim,dim) (dim,expdim) => expdim,expdim
+        mid   = _np.dot(stdBasis1.get_to_simple_std(), right)  #  want Ai st.   Ai * A = I(dim)
     elif resize == 'contract':
-        assert stdBasis1.dim.opDim > stdBasis2.dim.opDim
-        right = _np.dot(mx, stdBasis2.get_contract_mx())
-        mid = _np.dot(stdBasis2.get_expand_mx(), right)
+        assert stdBasis1.dim > stdBasis2.dim
+        right = _np.dot(mx, stdBasis2.get_to_simple_std()) #  (dim,dim) (dim,expdim) => dim,expdim
+        mid = _np.dot(stdBasis2.get_from_simple_std(), right)  # (dim, expdim) (expdim, dim) => expdim, expdim
     return mid
 
 def flexible_change_basis(mx, startBasis, endBasis):
@@ -268,14 +277,14 @@ def flexible_change_basis(mx, startBasis, endBasis):
     -------
     numpy.ndarray
     """
-    if startBasis.dim.opDim == endBasis.dim.opDim:
+    if startBasis.dim == endBasis.dim: # normal case
         return change_basis(mx, startBasis, endBasis)
-    if startBasis.dim.opDim < endBasis.dim.opDim:
+    if startBasis.dim < endBasis.dim:
         resize = 'expand'
     else:
         resize = 'contract'
-    stdBasis1 = startBasis.std_equivalent()
-    stdBasis2 = endBasis.std_equivalent()
+    stdBasis1 = startBasis.equivalent('std')
+    stdBasis2 = endBasis.equivalent('std')
     #start = change_basis(mx, startBasis, stdBasis1)
     mid   = resize_std_mx(mx, resize, stdBasis1, stdBasis2)
     end   = change_basis(mid, stdBasis2, endBasis)
@@ -295,7 +304,8 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None):
         of the density matrix space, i.e. sum( dimOrBlockDims_i^2 )
 
     dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.
+        Structure of the density-matrix space.  Gives the *matrix* 
+        dimensions of each block.
 
     resize : {'expand','contract'}
         Whether `mx` should be expanded or contracted.
@@ -307,12 +317,15 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None):
     #FUTURE: add a sparse flag?
     if dimOrBlockDims is None:
         return mx
+    blkBasis = DirectSumBasis( [ BuiltinBasis('std',d**2) for d in dimOrBlockDims ] )
+    simpleBasis = BuiltingBasis('std', sum(dimOrBlockDims)**2)
+    
     if resize == 'expand':
-        a = Basis('std', dimOrBlockDims)
-        b = Basis('std', sum(dimOrBlockDims))
+        a = blkBasis
+        b = simpleBasis
     else:
-        a = Basis('std', sum(dimOrBlockDims))
-        b = Basis('std', dimOrBlockDims)
+        a = simpleBasis
+        b = blkBasis
     return resize_std_mx(mx, resize, a, b)
 
 
@@ -372,10 +385,9 @@ def vec_to_stdmx(v, basis, keep_complex=False):
         The matrix, 2x2 or 4x4 depending on nqubits
     """
     if not isinstance(basis,Basis):
-        dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
-        basis = Basis(basis, dim)
-    ret = _np.zeros( (basis.dim.dmDim, basis.dim.dmDim), 'complex' )
-    for i, mx in enumerate(basis.matrices):
+        basis = BuiltinBasis(basis, len(v))
+    ret = _np.zeros( basis.elshape, 'complex' )
+    for i, mx in enumerate(basis.elements):
         if keep_complex:
             ret += v[i]*mx
         else:
@@ -406,10 +418,9 @@ def stdmx_to_vec(m, basis):
     """
 
     assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
-    dim = m.shape[0]
-    basis = Basis(basis, dim)
-    v = _np.empty((dim**2,1))
-    for i, mx in enumerate(basis.matrices):
+    basis = Basis.cast(basis, m.shape[0]**2)
+    v = _np.empty((basis.size,1))
+    for i, mx in enumerate(basis.elements):
         if basis.real:
             v[i,0] = _np.real(_mt.trace(_np.dot(mx,m)))
         else:

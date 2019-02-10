@@ -380,17 +380,17 @@ def write_model(mdl,filename,title=None):
             output.write("STATESPACE: " + str(mdl.state_space_labels) + "\n")
               # StateSpaceLabels.__str__ formats the output properly
 
-        dims = mdl.basis.dim.blockDims
-        if dims is None:
+        basisdim = mdl.basis.dim
+        
+        if basisdim is None:
             output.write("BASIS: %s\n" % mdl.basis.name)
         else:
-            if type(dims) != int:
+            if mdl.basis.name not in ('std','pp','gm','qt'): # a "fancy" basis
                 assert(mdl.state_space_labels is not None), \
                     "Must set a Model's state space labels when using fancy a basis!"
                 output.write("BASIS: %s\n" % mdl.basis.name) # don't write the dim - the state space labels will cover this.
             else:
-                dimStr = str(dims)
-                output.write("BASIS: %s %s\n" % (mdl.basis.name, dimStr))
+                output.write("BASIS: %s %d\n" % (mdl.basis.name, basisdim))
 
         if isinstance(mdl.default_gauge_group, _objs.FullGaugeGroup):
             output.write("GAUGEGROUP: Full\n")

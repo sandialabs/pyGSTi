@@ -179,7 +179,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     if svdTruncateTo is None or svdTruncateTo == targetModel.dim: #use target sslbls and basis
         lgstModel = _objs.ExplicitOpModel(targetModel.state_space_labels, targetModel.basis)
     else: # construct a default basis for the requested dimension 
-        dumb_basis = _objs.Basis('gm',[1]*svdTruncateTo) # - just act on diagonal density mx
+        dumb_basis = _objs.DirectSumBasis( [_objs.BuiltinBasis('gm',1)]*svdTruncateTo) # - just act on diagonal density mx
         lgstModel = _objs.ExplicitOpModel([('L%d'%i,) for i in range(svdTruncateTo)], dumb_basis)
         
     for opLabel in opLabelsToEstimate:
@@ -3054,7 +3054,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape ( _spam_penalty_size(mdl), nParams).
     """
-    BMxs = opBasis.get_composite_matrices() #shape [mdl.dim, dmDim, dmDim]
+    BMxs = opBasis.elements #shape [mdl.dim, dmDim, dmDim]
     ddenMxdV = dEMxdV = BMxs.conjugate() # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
       #NOTE: conjugate() above is because ddenMxdV and dEMxdV will get *elementwise*
       # multiplied (einsum below) by another complex matrix (sgndm or sgnE) and summed
