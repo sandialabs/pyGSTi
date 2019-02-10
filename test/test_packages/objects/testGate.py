@@ -149,7 +149,7 @@ class GateTestCase(BaseTestCase):
             ham_basis="pp", nonham_basis="pp", param_mode="cptp",
             nonham_mode="diagonal", truncate=True, mxBasis="pp") )
 
-        ppBasis = pygsti.obj.Basis("pp",2)
+        ppBasis = pygsti.obj.Basis.cast("pp",4)
         gates_to_test.append( pygsti.objects.LindbladDenseOp.from_operation_matrix(
             mx,unitaryPostfactor=mx,
             ham_basis=ppBasis, nonham_basis=ppBasis, param_mode="unconstrained",
@@ -319,7 +319,7 @@ class GateTestCase(BaseTestCase):
             ham_basis="pp", nonham_basis="pp", param_mode="cptp",
             nonham_mode="all", truncate=True, mxBasis="pp") )
 
-        ppBasis = pygsti.obj.Basis("pp",2)
+        ppBasis = pygsti.obj.Basis.cast("pp",4)
         gates_to_test.append( pygsti.objects.LindbladOp.from_operation_matrix(
             densemx,unitaryPostfactor=None,
             ham_basis=ppBasis, nonham_basis=ppBasis, param_mode="unconstrained",
@@ -346,7 +346,7 @@ class GateTestCase(BaseTestCase):
         gates_to_test.append( dummyGS.operations['Gembed'] )
 
         dummyGS2 = pygsti.objects.ExplicitOpModel([('Q0',),('Q1',)]) # b/c will have different dim from dummyGS
-        ppBasis2x2 = pygsti.obj.Basis("pp",(2,2))
+        ppBasis2x2 = pygsti.obj.Basis.cast("pp",(4,4))
         embedGate2 = pygsti.objects.EmbeddedOp( [('Q0',),('Q1',)], ['Q0'], testGate) # 2 blocks
         dummyGS2.operations['Gembed2'] = embedGate2 # so to/from vector work in tests below
         gates_to_test.append( dummyGS2.operations['Gembed2'] )
@@ -428,7 +428,7 @@ class GateTestCase(BaseTestCase):
                             [0,0,0,1],
                             [0,0,-1,0]],'d')
 
-        basis = pygsti.obj.Basis("pp",2)
+        basis = pygsti.obj.Basis.cast("pp",4)
         lndgate = pygsti.objects.LindbladDenseOp.from_operation_matrix(
             densemx,unitaryPostfactor=densemx,
             ham_basis=basis, nonham_basis=basis, param_mode="cptp",

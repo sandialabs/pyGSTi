@@ -247,8 +247,8 @@ class NQubitTestCase(BaseTestCase):
     def test_SPAM(self):
         nQubits = 3
         factorPOVMs = []
-        basis1Q = pygsti.obj.Basis("pp",2)
-        basisNQ = pygsti.obj.Basis("pp",2**nQubits)
+        basis1Q = pygsti.obj.Basis.cast("pp",4)
+        basisNQ = pygsti.obj.Basis.cast("pp",4**nQubits)
         for i in range(nQubits):
             effects = [ (l,pygsti.construction.basis_build_vector(l, basis1Q)) for l in ["0","1"] ]
             factorPOVMs.append( pygsti.obj.TPPOVM(effects) )

@@ -336,8 +336,8 @@ class IDTTestCase(BaseTestCase):
 
         #In FUTURE, we shouldn't need to set need to set the basis of our nQ GST results in order to make a report
         for estkey in gstresults.estimates: # 'default'
-            gstresults.estimates[estkey].models['go0'].basis = pygsti.obj.Basis("pp",4)
-            gstresults.estimates[estkey].models['target'].basis = pygsti.obj.Basis("pp",4)
+            gstresults.estimates[estkey].models['go0'].basis = pygsti.obj.Basis.cast("pp",16)
+            gstresults.estimates[estkey].models['target'].basis = pygsti.obj.Basis.cast("pp",16)
         #pygsti.report.create_standard_report(gstresults, temp_files + "/gstWithIdleTomogTestReport", 
         #                                    "Test GST Report w/Idle Tomography Tab",
         #                                    verbosity=3, auto_open=False)

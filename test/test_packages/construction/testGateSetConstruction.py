@@ -304,7 +304,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
     def test_build_basis_gateset(self):
         modelA = pygsti.construction.build_explicit_model([('Q0',)], ['Gi','Gx','Gy'],
                                                      [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
-        modelB = pygsti.construction.basis_build_explicit_model([('Q0',)], pygsti.Basis('gm', 2),
+        modelB = pygsti.construction.basis_build_explicit_model([('Q0',)], pygsti.Basis.cast('gm', 4),
                                                      ['Gi','Gx','Gy'], [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
         self.assertAlmostEqual(modelA.frobeniusdist(modelB), 0)
 
@@ -1079,7 +1079,7 @@ GAUGEGROUP: Full
             static_spamvec.depolarize(0.9)
 
         #Test conversions to own type (not tested elsewhere)
-        basis = pygsti.obj.Basis("pp",2)
+        basis = pygsti.obj.Basis.cast("pp",4)
         conv = pygsti.obj.spamvec.convert(full_spamvec, "full", basis)
         conv = pygsti.obj.spamvec.convert(tp_spamvec, "TP", basis)
         conv = pygsti.obj.spamvec.convert(static_spamvec, "static", basis)
