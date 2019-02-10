@@ -290,9 +290,9 @@ namespace CReps {
   \****************************************************************************/
 
   DMOpCRep_Embedded::DMOpCRep_Embedded(DMOpCRep* embedded_gate_crep, INT* noop_incrementers,
-					   INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
-					   INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
-					   INT nBlocks, INT dim)
+				       INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
+				       INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
+				       INT nBlocks, INT dim)
     :DMOpCRep(dim)
   {
     _embedded_gate_crep = embedded_gate_crep;
@@ -934,9 +934,9 @@ namespace CReps {
   \****************************************************************************/
 
   SVOpCRep_Embedded::SVOpCRep_Embedded(SVOpCRep* embedded_gate_crep, INT* noop_incrementers,
-					   INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
-					   INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
-					   INT nBlocks, INT dim)
+				       INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
+				       INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
+				       INT nBlocks, INT dim)
     :SVOpCRep(dim)
   {
     _embedded_gate_crep = embedded_gate_crep;

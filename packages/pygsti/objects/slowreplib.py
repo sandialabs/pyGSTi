@@ -240,13 +240,13 @@ class DMOpRep_Embedded(DMOpRep):
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
         self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
-                                      reversed(list(numBasisEls[:-1])))) ), _np.int64)
+                                      reversed(list(numBasisEls[1:])))) ), _np.int64)
         self.basisInds_action = [ list(range(numBasisEls[i])) for i in actionInds ]
 
         self.embeddedDim = embedded_dim
-        self.nComponents = nComponentsInActiveBlock
         self.iActiveBlock = iActiveBlock
         self.nBlocks = nBlocks
+        self.offset = sum(blocksizes[0:iActiveBlock])
         super(DMOpRep_Embedded,self).__init__(dim)
 
     def _acton_other_blocks_trivially(self, output_state,state):
@@ -258,7 +258,7 @@ class DMOpRep_Embedded(DMOpRep):
 
     def acton(self, state):
         output_state = DMStateRep( _np.zeros(state.data.shape, 'd') )
-        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
+        offset = self.offset #if relToBlock else self.offset (relToBlock == False here)
 
         #print("DB REPLIB ACTON: ",self.basisInds_noop_blankaction)
         #print("DB REPLIB ACTON: ",self.basisInds_action)
@@ -284,7 +284,7 @@ class DMOpRep_Embedded(DMOpRep):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
         output_state = DMStateRep( _np.zeros(state.data.shape, 'd') )
-        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
+        offset = self.offset #if relToBlock else self.offset (relToBlock == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
@@ -557,13 +557,14 @@ class SVOpRep_Embedded(SVOpRep):
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
         self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
-                                      reversed(list(numBasisEls[:-1])))) ), _np.int64)
+                                      reversed(list(numBasisEls[1:])))) ), _np.int64)
         self.basisInds_action = [ list(range(numBasisEls[i])) for i in actionInds ]
 
         self.embeddedDim = embedded_dim
         self.nComponents = nComponentsInActiveBlock
         self.iActiveBlock = iActiveBlock
         self.nBlocks = nBlocks
+        self.offset = sum(blocksizes[0:iActiveBlock])
         super(SVOpRep_Embedded,self).__init__(dim)
 
     def _acton_other_blocks_trivially(self, output_state,state):
@@ -575,7 +576,7 @@ class SVOpRep_Embedded(SVOpRep):
 
     def acton(self, state):
         output_state = SVStateRep( _np.zeros(state.data.shape, complex) )
-        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
+        offset = self.offset #if relToBlock else self.offset (relToBlock == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
@@ -598,7 +599,7 @@ class SVOpRep_Embedded(SVOpRep):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
         output_state = SVStateRep( _np.zeros(state.data.shape, complex) )
-        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
+        offset = self.offset #if relToBlock else self.offset (relToBlock == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))

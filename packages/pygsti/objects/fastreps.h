@@ -123,9 +123,9 @@ namespace CReps {
     
     
     DMOpCRep_Embedded(DMOpCRep* embedded_gate_crep, INT* noop_incrementers,
-			INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
-			INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
-			INT nBlocks, INT dim);
+		      INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
+		      INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
+		      INT nBlocks, INT dim);
     virtual ~DMOpCRep_Embedded();
     virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
@@ -277,9 +277,9 @@ namespace CReps {
     
     
     SVOpCRep_Embedded(SVOpCRep* embedded_gate_crep, INT* noop_incrementers,
-			INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
-			INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
-			INT nBlocks, INT dim);
+		      INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
+		      INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
+		      INT nBlocks, INT dim);
     virtual ~SVOpCRep_Embedded();
     virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
     virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);

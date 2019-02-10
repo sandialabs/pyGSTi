@@ -473,7 +473,7 @@ cdef class DMOpRep_Embedded(DMOpRep):
         cdef np.ndarray tmp = np.empty(nComponentsInActiveBlock,np.int64)
         tmp[0] = 1
         for i in range(1,nComponentsInActiveBlock):
-            tmp[i] = numBasisEls[nComponentsInActiveBlock-1-i]
+            tmp[i] = numBasisEls[nComponentsInActiveBlock-i]
         multipliers = np.array( np.flipud( np.cumprod(tmp) ), np.int64)
         
         # noop_incrementers[i] specifies how much the overall vector index
@@ -722,7 +722,7 @@ cdef class SVOpRep_Embedded(SVOpRep):
         cdef np.ndarray tmp = np.empty(nComponentsInActiveBlock,np.int64)
         tmp[0] = 1
         for i in range(1,nComponentsInActiveBlock):
-            tmp[i] = numBasisEls[nComponentsInActiveBlock-1-i]
+            tmp[i] = numBasisEls[nComponentsInActiveBlock-i]
         multipliers = np.array( np.flipud( np.cumprod(tmp) ), np.int64)
         
         # noop_incrementers[i] specifies how much the overall vector index
