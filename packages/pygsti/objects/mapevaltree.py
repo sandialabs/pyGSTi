@@ -556,7 +556,6 @@ class MapEvalTree(EvalTree):
                         
                 iteration += 1
                 assert(iteration < 100), "Unsuccessful splitting for 100 iterations!"
-                        
 
         else: # maxSubTreeSize is not None
             subTreeSetList, totalCost = create_subtrees(
@@ -640,11 +639,14 @@ class MapEvalTree(EvalTree):
             for spamTuples in parentTree.simplified_circuit_spamTuples:
                 final_el_startstops.append( (i,i+len(spamTuples)) )
                 i += len(spamTuples)
-            subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
-                [ _np.arange(*final_el_startstops[k])
-                  for k in _slct.indices(subTree.myFinalToParentFinalMap) ] )
-            #Note: myFinalToParentFinalMap maps only between *final* elements
-            #   (which are what is held in simplified_circuit_spamTuples)
+            if len(_slct.indices(subTree.myFinalToParentFinalMap)) > 0:
+                subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
+                    [ _np.arange(*final_el_startstops[k])
+                      for k in _slct.indices(subTree.myFinalToParentFinalMap) ] )
+                #Note: myFinalToParentFinalMap maps only between *final* elements
+                #   (which are what is held in simplified_circuit_spamTuples)
+            else: # no final elements (a "dummy" tree, useful just to keep extra procs busy)
+                subTree.myFinalElsToParentFinalElsMap = _np.arange(0,0) # empty array
             
             subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_spamTuples])
             subTree.recompute_spamtuple_indices(bLocal=False)
