@@ -236,7 +236,7 @@ class SPAMVecTestCase(BaseTestCase):
         E0 = model.povms['Mdefault']['0']
         E1 = model.povms['Mdefault']['1']
         Ec = pygsti.obj.ComplementSPAMVec(
-            pygsti.construction.build_identity_vec([2],"pp"),
+            pygsti.construction.build_identity_vec([4],"pp"),
             [E0])
         print(Ec.gpindices)
 

@@ -18,7 +18,7 @@ class JamiolkowskiTestCase(unittest.TestCase):
 
 
         # density matrix == 3x3 block diagonal matrix: a 2x2 block followed by a 1x1 block
-        self.stateSpaceDims = [4,1]
+        self.stateSpaceDims = [(4,),(1,)]
         self.std = pygsti.Basis.cast('std', 9)
         self.gm  = pygsti.Basis.cast('gm',  9)
         self.stdSmall = pygsti.Basis.cast('std', [4, 1])

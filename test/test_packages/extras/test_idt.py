@@ -291,7 +291,7 @@ class IDTTestCase(BaseTestCase):
         # To run idle tomography, we need "pauli fiducial pairs", so
         #  get fiducial pairs for Gi germ from gss and convert 
         #  to "Pauli fidicual pairs" (which pauli state/basis is prepared or measured)
-        GiStr = pygsti.obj.Circuit(('Gi',))
+        GiStr = pygsti.obj.Circuit(((),), num_lines=nQubits)
         self.assertTrue(GiStr in gss.germs)
         self.assertTrue(gss.Ls == maxLengths)
         L0 = maxLengths[0] # all lengths should have same fidpairs, just take first one

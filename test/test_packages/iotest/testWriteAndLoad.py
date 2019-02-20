@@ -196,7 +196,7 @@ UnitaryMx
  0   -1j
 1j    0
 
-BASIS: pp 2
+BASIS: pp 4
 GAUGEGROUP: Full
 """
         with open(temp_files + "/formatExample.model","w") as output:
@@ -204,10 +204,10 @@ GAUGEGROUP: Full
         mdl_formats = pygsti.io.load_model(temp_files + "/formatExample.model")
         #print mdl_formats
 
-        rotXPi   = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi,Q0)")
-        rotYPi   = pygsti.construction.build_operation( [2],[('Q0',)], "Y(pi,Q0)")
-        rotXPiOv2   = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2   = pygsti.construction.build_operation( [2],[('Q0',)], "Y(pi/2,Q0)")
+        rotXPi   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "X(pi,Q0)")
+        rotYPi   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "Y(pi,Q0)")
+        rotXPiOv2   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "Y(pi/2,Q0)")
 
         self.assertArraysAlmostEqual(mdl_formats.operations['Gi'], np.identity(4,'d'))
         self.assertArraysAlmostEqual(mdl_formats.operations['Gx'], rotXPiOv2)

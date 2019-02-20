@@ -426,7 +426,7 @@ LiouvilleMx
 0 0 1 0
 0 -1 0 0
 
-BASIS: pp 2
+BASIS: pp 4
 """
 
         gatesetfile_test2 = \
@@ -467,7 +467,7 @@ UnitaryMxExp
 0          pi/2
 pi/2      0
 
-BASIS: pp 2
+BASIS: pp 4
 GAUGEGROUP: Full
 """
 
@@ -489,7 +489,7 @@ DensityMx
 0 1 0
 0 0 1
 
-BASIS: pp 2
+BASIS: pp 4
 """
 
         gatesetfile_test5 = \
@@ -500,7 +500,7 @@ GATE: G1
 UnitaryMx
  1/sqrt(2)   -1j/sqrt(2)
 
-BASIS: pp 2
+BASIS: pp 4
 """
 
         gatesetfile_test6 = \
@@ -512,7 +512,7 @@ UnitaryMxExp
 0           -1j*pi/4.0 0.0
 1j*pi/4.0  0           0.0
 
-BASIS: pp 2
+BASIS: pp 4
 """
 
         gatesetfile_test7 = \
@@ -523,7 +523,7 @@ FooBar
 0   1
 1   0
 
-BASIS: pp 2
+BASIS: pp 4
 """
 
         gatesetfile_test8 = \
@@ -568,7 +568,7 @@ UnitaryMxExp
 0          0           1 0
 0          0           0 1
 
-BASIS: pp 4
+BASIS: pp 16
 GAUGEGROUP: Full
 """
 
@@ -651,7 +651,7 @@ LiouvilleMx
 
 END Instrument
 
-BASIS: pp 2
+BASIS: pp 4
 GAUGEGROUP: full
 
 POVM: Mdefault
@@ -671,7 +671,7 @@ UnitaryMx
  1 0
  0 1
 
-BASIS: pp 2
+BASIS: pp 4
 GAUGEGROUP: Foobar
 """
 
@@ -684,7 +684,7 @@ UnitaryMx
  1 0
  0 1
 
-BASIS: pp 2
+BASIS: pp 4
 GAUGEGROUP: full
 """
 
@@ -741,7 +741,7 @@ BASIS: pp
             pygsti.io.read_model(temp_files + "/sip_test.gateset3")
         with self.assertRaises(ValueError):
             pygsti.io.read_model(temp_files + "/sip_test.gateset4")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             pygsti.io.read_model(temp_files + "/sip_test.gateset5")
         with self.assertRaises(ValueError):
             pygsti.io.read_model(temp_files + "/sip_test.gateset6")
@@ -762,9 +762,9 @@ BASIS: pp
         #print " ==> model1:\n", gs1
         #print " ==> model2:\n", gs2
 
-        rotXPi   = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi,Q0)")
-        rotXPiOv2   = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2   = pygsti.construction.build_operation( [2],[('Q0',)], "Y(pi/2,Q0)")
+        rotXPi   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "X(pi,Q0)")
+        rotXPiOv2   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "Y(pi/2,Q0)")
 
         self.assertArraysAlmostEqual(gs1.operations['G1'],rotXPiOv2)
         self.assertArraysAlmostEqual(gs1.operations['G2'],rotYPiOv2)

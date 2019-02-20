@@ -101,7 +101,7 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         #warnings.simplefilter('error',DeprecationWarning)
         
         sparsePP = pygsti.objects.Basis.cast("pp",16,sparse=True)
-        mxs = sparsePP.get_composite_matrices()
+        mxs = sparsePP.elements
         #for lbl,mx in zip(sparsePP.labels,mxs):
         #    print(lbl,":",mx.shape,"matrix with",mx.nnz,"nonzero entries (of",
         #          mx.shape[0]*mx.shape[1],"total)")

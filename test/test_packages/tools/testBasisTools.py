@@ -7,7 +7,7 @@ import pygsti
 import pygsti.tools.basistools    as bt
 import pygsti.tools.lindbladtools as lindbladtools
 
-from pygsti.baseobjs import Basis, ExplicitBasis, Dim, DirectSumBasis
+from pygsti.baseobjs import Basis, ExplicitBasis, DirectSumBasis
 
 from functools import partial
 
@@ -233,8 +233,8 @@ class BasisBaseTestCase(BaseTestCase):
         self.assertArraysAlmostEqual( stdMx, stdMx2 )
 
     def test_basis_misc(self):
-        with self.assertRaises(TypeError):
-            Dim("FooBar") #arg should be a list,tuple,or int
+        #with self.assertRaises(TypeError):
+        #    Dim("FooBar") #arg should be a list,tuple,or int
         bt.pp_matrices(1) # was [1] but this shouldn't be allowed
 
     def test_basis_longname(self):
@@ -435,9 +435,9 @@ class BasisBaseTestCase(BaseTestCase):
         ppMax1 = bt.pp_matrices(2,maxWeight=1) #using maxWeight
         qutrit1 = bt.qt_matrices(1) #special case when dim==1
 
-        #Cover invalid Dim construction
-        with self.assertRaises(TypeError):
-            pygsti.baseobjs.Dim(1.2)
+        #Cover invalid Dim construction (DIM REMOVED)
+        #with self.assertRaises(TypeError):
+        #    pygsti.baseobjs.Dim(1.2)
 
         
     def test_sparse_basis(self):
