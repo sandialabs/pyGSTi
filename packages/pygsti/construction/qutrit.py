@@ -181,7 +181,7 @@ def make_qutrit_model(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
     E1final = change_basis(_np.reshape(E1,(9,1)), "std", basis)
     E2final = change_basis(_np.reshape(E2,(9,1)), "std", basis)
 
-    sslbls = _objs.StateSpaceLabels(['QT'],[3])
+    sslbls = _objs.StateSpaceLabels(['QT'],[9])
     qutritMDL = _objs.ExplicitOpModel(sslbls, Basis.cast(basis,9))
     qutritMDL.preps['rho0'] = rho0final
     qutritMDL.povms['Mdefault'] = _objs.UnconstrainedPOVM([('0bright',E0final),

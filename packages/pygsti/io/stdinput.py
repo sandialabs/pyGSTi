@@ -763,7 +763,7 @@ def read_model(filename):
 
     if basis_dim is not None:
         # then specfy a dimensionful basis at the outset
-        basis = _objs.BuiltinBasis(basis_abbrev, basis_dim**2) # basis_dims should be just a single int now that the *matrix* dimension
+        basis = _objs.BuiltinBasis(basis_abbrev, basis_dim) # basis_dims should be just a single int now that the *vector-space* dimension
     else:
         # otherwise we'll try to infer one from state space labels
         if state_space_labels is not None:
@@ -775,7 +775,7 @@ def read_model(filename):
         assert(basis_dim is not None) # b/c of logic above
         state_space_labels = _objs.StateSpaceLabels(['*'], [basis_dim])
           # special '*' state space label w/entire dimension inferred from BASIS line
-        
+
     mdl = _objs.ExplicitOpModel(state_space_labels, basis)
 
     state = "look for label or property"

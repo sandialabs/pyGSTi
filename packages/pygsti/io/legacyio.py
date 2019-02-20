@@ -61,17 +61,35 @@ def enable_old_object_unpickling():
                                                         evotype=state['_evotype'])
         self.__dict__.update(g.__dict__)
 
+
+    class dummy_Basis(object):
+        def __new__(cls):
+            replacement_obj = _baseobjs.basis.BuiltinBasis.__new__(_baseobjs.basis.BuiltinBasis)
+            return replacement_obj
+        def __setstate__(self,state):
+            return Basis_setstate(self,state)
+        
     def Basis_setstate(self,state):
         if "labels" in state: # .label was replaced with ._label
             state['_labels'] = state['labels']
             del state['labels']
-        self.__dict__.update(state)
 
-    def Dim_setstate(self,state):
-        if "gateDim" in state: # .label was replaced with ._label
-            state['opDim'] = state['gateDim']
-            del state['gateDim']
-        self.__dict__.update(state)
+        if "name" in state and state['name'] in ('pp','std','gm','qt','unknown') and 'dim' in state:
+            dim = state['dim'].opDim if hasattr(state['dim'],'opDim') else state['dim']
+            assert(isinstance(dim,int))
+            sparse = state['sparse'] if ('sparse' in state) else False
+            newBasis = _objs.BuiltinBasis(state['name'], dim, sparse)
+            self.__class__ = _baseobjs.basis.BuiltinBasis
+            self.__dict__.update(newBasis.__dict__)
+        else:
+            raise ValueError("Can only load old *builtin* basis objects!")
+
+    class dummy_Dim(object):
+        def __setstate__(self,state): # was Dim_setstate
+            if "gateDim" in state: # .label was replaced with ._label
+                state['opDim'] = state['gateDim']
+                del state['gateDim']
+            self.__dict__.update(state)
 
     def ModelMember_setstate(self,state):
         if "dirty" in state: # .dirty was replaced with ._dirty
@@ -137,8 +155,14 @@ def enable_old_object_unpickling():
 
     _sys.modules['pygsti.objects.gatestringstructure'] = gatestringstructure
 
+    dim = _ModuleType("dim")
+    dim.Dim = dummy_Dim
+    _sys.modules['pygsti.baseobjs.dim'] = dim
+    #_baseobjs.dim.Dim.__setstate__ = Dim_setstate
+
+    #_baseobjs.basis.saved_Basis = _baseobjs.basis.Basis
+    #_baseobjs.basis.Basis = dummy_Basis
     _baseobjs.basis.Basis.__setstate__ = Basis_setstate
-    _baseobjs.dim.Dim.__setstate__ = Dim_setstate
     _objs.modelmember.ModelMember.__setstate__ = ModelMember_setstate
 
     yield # body of context-manager block
@@ -154,6 +178,7 @@ def enable_old_object_unpickling():
     del _sys.modules['pygsti.objects.gatematrixcalc']
     del _sys.modules['pygsti.objects.autogator']
     del _sys.modules['pygsti.objects.gatestringstructure']
+    del _sys.modules['pygsti.baseobjs.dim']
 
     del _sys.modules['pygsti.objects.spamvec'].LindbladParameterizedSPAMVec
     del _sys.modules['pygsti.objects.spamvec'].FullyParameterizedSPAMVec
@@ -166,5 +191,9 @@ def enable_old_object_unpickling():
     delattr(_objs.Circuit,'__setstate__')
     delattr(_objs.LindbladDenseOp,'__setstate__')
     delattr(_baseobjs.Basis,'__setstate__')
-    delattr(_baseobjs.Dim,'__setstate__')
+    #delattr(_baseobjs.Dim,'__setstate__')
     delattr(_objs.modelmember.ModelMember,'__setstate__')
+
+    #_baseobjs.basis.Basis = _baseobjs.basis.saved_Basis
+    #del _sys.modules['pygsti.baseobjs.basis'].saved_Basis
+

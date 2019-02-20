@@ -2214,12 +2214,12 @@ class StandardErrgenTable(WorkspaceTable):
         topright = "%s \\ %s" % (ylabel,xlabel) if (len(ylabel) > 0) else ""
         colHeadings=[topright] + \
             [("%s" % x) if len(x) else "" \
-                 for x in _tools.basis_element_labels(projection_basis,xd)]
+                 for x in _tools.basis_element_labels(projection_basis,xd**2)]
         rowLabels=[("%s" % x) if len(x) else "" \
-                     for x in _tools.basis_element_labels(projection_basis,yd)]
+                     for x in _tools.basis_element_labels(projection_basis,yd**2)]
 
-        xLabels = _tools.basis_element_labels(projection_basis,xd)
-        yLabels = _tools.basis_element_labels(projection_basis,yd)
+        xLabels = _tools.basis_element_labels(projection_basis,xd**2)
+        yLabels = _tools.basis_element_labels(projection_basis,yd**2)
 
         table = _ReportTable(colHeadings,["Conversion"]+[None]*(len(colHeadings)-1))
 

@@ -153,7 +153,13 @@ class Basis(object):
                 else:
                     return DirectSumBasis(tpbBases)
             elif isinstance(dim, (list,tuple)): # list/tuple of block dimensions
-                tpbBases = [ BuiltinBasis(name, tpbDim, sparse) for tpbDim in dim ]
+                tpbBases = []
+                for tpbDim in dim:
+                    if isinstance(tpbDim, (list,tuple)): # list/tuple of tensor-product dimensions
+                        tpbBases.append(
+                            TensorProdBasis([ BuiltinBasis(name, factorDim, sparse) for factorDim in tpbDim ]))
+                    else:
+                        tpbBases.append(BuiltinBasis(name, tpbDim, sparse))
                 return DirectSumBasis(tpbBases)
             else:
                 return BuiltinBasis(name, dim, sparse)
@@ -584,7 +590,7 @@ class BuiltinBasis(LazyBasis):
 
     def _lazy_build_elements(self):
         f = _basisConstructorDict[self.name].constructor
-        self._elements = f(**self.cargs) # a list of (dense) mxs - supply sparse in future?
+        self._elements = _np.array( f(**self.cargs) ) # a list of (dense) mxs -> ndarray (possibly sparse in future?)
         assert(len(self._elements) == self.size), "Logic error: wrong number of elements were created!"
 
     def _lazy_build_labels(self):
@@ -849,7 +855,6 @@ class TensorProdBasis(LazyBasis):
         #Take kronecker product of *natural* reps of component-basis elements
         # then reshape to vectors at the end.  This requires that the vector-
         # dimension of the component spaces equals the "natural space" dimension.
-        self._elements = []
         comp_els = [ c.elements for c in self.component_bases ]
         for i,factors in enumerate(_itertools.product(*comp_els)):
             M = _np.identity(1,'complex')

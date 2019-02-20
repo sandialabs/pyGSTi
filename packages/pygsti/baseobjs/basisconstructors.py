@@ -102,6 +102,32 @@ class MatrixBasisConstructor(object):
         d = self.matrix_dim(dim); elshape = (d,d)
         return nElements, basisDim, elshape
 
+
+class VectorBasisConstructor(object):
+    def __init__(self, longname, vectorgen_fn, labelgen_fn, real):
+        """ TODO: docstring - note function expect *matrix* dimension as arg"""
+        self.vectorgen_fn = vectorgen_fn
+        self.labelgen_fn= labelgen_fn
+        self.longname = longname
+        self.real = real
+        
+    def labeler(self, dim, sparse):
+        """ TODO: docstring - dim is *vector-space* dimension """
+        return self.labelgen_fn(dim)
+
+    def constructor(self, dim, sparse):
+        """ TODO: docstring - dim is *vector-space* dimension """
+        els = self.vectorgen_fn(dim)
+        assert(not sparse), "Sparse vector bases not supported (yet)"
+        return els
+    
+    def sizes(self, dim, sparse):
+        """ TODO: docstring """
+        nElements = dim # the number of matrices in the basis
+        basisDim = dim # the dimension of the vector space this basis
+        elshape = (dim,) # the shape of the (vector) elements
+        return nElements, basisDim, elshape
+
      
 def std_matrices(matrix_dim):
     """
@@ -147,6 +173,7 @@ def std_matrices(matrix_dim):
 
 def std_labels(matrix_dim):
     """ TODO: docstring - dim is *matrix* dimension """
+    if matrix_dim == 0: return []
     if matrix_dim == 1: return [''] # special case - use empty label instead of "I"
     return [ "(%d,%d)" % (i,j) for i in range(matrix_dim) for j in range(matrix_dim) ]
 
@@ -194,6 +221,7 @@ def gm_matrices_unnormalized(matrix_dim):
         equal to sum( block_dim_i^2 ).
     """
     _check_dim(matrix_dim)
+    if matrix_dim == 0: return []
     if isinstance(matrix_dim, _numbers.Integral):
         d = matrix_dim
         #Identity Mx
@@ -255,6 +283,7 @@ def gm_matrices(matrix_dim):
     return mxs
 
 def gm_labels(matrix_dim):
+    if matrix_dim == 0: return []
     if matrix_dim == 1: return [''] # special case - use empty label instead of "I"
     if matrix_dim == 2: #Special case of Pauli's
         return ["I","X","Y","Z"]
@@ -323,13 +352,14 @@ def pp_matrices(matrix_dim, maxWeight=None):
     """
     _check_dim(matrix_dim)
     sigmaVec = (id2x2/sqrt2, sigmax/sqrt2, sigmay/sqrt2, sigmaz/sqrt2)
+    if matrix_dim == 0: return []
 
     def _is_integer(x):
         return bool( abs(x - round(x)) < 1e-6 )
     
     nQubits = _np.log2(matrix_dim)
     if not _is_integer(nQubits):
-        raise ValueError("Dimension for Pauli tensor product matrices must be an integer *power of 2*")
+        raise ValueError("Dimension for Pauli tensor product matrices must be an integer *power of 2* (not %d)" % matrix_dim)
     nQubits = int(round(nQubits))
 
     if nQubits == 0: #special case: return single 1x1 identity mx
@@ -352,6 +382,7 @@ def pp_matrices(matrix_dim, maxWeight=None):
 def pp_labels(matrix_dim):
     def _is_integer(x):
         return bool( abs(x - round(x)) < 1e-6 )
+    if matrix_dim == 0: return []
     if matrix_dim == 1: return [''] # special case - use empty label instead of "I"
     
     nQubits = _np.log2(matrix_dim)
@@ -422,9 +453,75 @@ def qt_matrices(matrix_dim, selected_pp_indices=[0,5,10,11,1,2,3,6,7]):
 
 def qt_labels(matrix_dim):
     """ TODO: docstring """
+    if matrix_dim == 0: return []
     if matrix_dim == 1: return [''] # special case
     assert(matrix_dim == 3), "Qutrit basis must have matrix_dim == 3!"
     return ['II', 'X+Y', 'X-Y', 'YZ', 'IX', 'IY', 'IZ', 'XY', 'XZ']
+
+
+def cl_vectors(dim):
+    """
+    Get the elements (vectors) of the classical basis with 
+    dimension `dim` - i.e. the `dim` standard unit vectors
+    of length `dim`.
+
+    Parameters
+    ----------
+    dim: int
+        dimension of the vector space.
+
+    Returns
+    -------
+    list
+        A list of `dim` numpy arrays each of shape (dim,).
+    """
+    vecList = []
+    for i in range(dim):
+        v = _np.zeros(dim,'d'); v[i] = 1.0
+        vecList.append(v)
+    return vecList
+
+def cl_labels(dim):
+    """ TODO: docstring """
+    if dim == 0: return []
+    if dim == 1: return [''] # special case - use empty label instead of "0"
+    return [ "%d" % i for i in range(dim)]
+
+
+def sv_vectors(dim):
+    """
+    Get the elements (vectors) of the complex state-vectro basis with
+    dimension `dim` - i.e. the `dim` standard complex unit vectors
+    of length `dim`.
+
+    Parameters
+    ----------
+    dim: int
+        dimension of the vector space.
+
+    Returns
+    -------
+    list
+        A list of `dim` numpy arrays each of shape (dim,).
+    """
+    vecList = []
+    for i in range(dim):
+        v = _np.zeros(dim,complex); v[i] = 1.0
+        vecList.append(v)
+    return vecList
+
+def sv_labels(dim):
+    """ TODO: docstring """
+    if dim == 0: return []
+    if dim == 1: return [''] # special case - use empty label instead of "0"
+    return [ "|%d>" % i for i in range(dim)]
+
+def unknown_els(dim):
+    assert(dim == 0), "Unknown basis must have dimension 0!"
+    return []
+
+def unknown_labels(dim):
+    return []
 
 
 _basisConstructorDict = dict() # global dict holding all builtin basis constructors (used by Basis objects)
@@ -433,4 +530,6 @@ _basisConstructorDict['gm_unnormalized'] = MatrixBasisConstructor('Unnormalized 
 _basisConstructorDict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_matrices, gm_labels, True)
 _basisConstructorDict['pp'] = MatrixBasisConstructor('Pauli-Product basis', pp_matrices, pp_labels, True)
 _basisConstructorDict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True)
-
+_basisConstructorDict['cl'] = VectorBasisConstructor('Classical basis', cl_vectors, cl_labels, True)
+_basisConstructorDict['sv'] = VectorBasisConstructor('State-vector basis', sv_vectors, sv_labels, False)
+_basisConstructorDict['unknown'] = VectorBasisConstructor('Unknown (0-dim) basis', unknown_els, unknown_labels, False)

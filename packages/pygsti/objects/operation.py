@@ -30,7 +30,6 @@ from . import gaugegroup as _gaugegroup
 from . import modelmember as _modelmember
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from ..baseobjs import Basis as _Basis
-from ..baseobjs import Dim as _Dim
 from ..baseobjs.basis import basis_matrices as _basis_matrices
 
 from . import term as _term
@@ -4982,19 +4981,23 @@ class LindbladErrorgen(LinearOperator):
         if sparse is None: sparse = False #the default
 
         #Create or convert bases to appropriate sparsity
-        ham_basis = _Basis.cast(ham_basis,d2,sparse=sparse)
-        other_basis = _Basis.cast(nonham_basis,d2,sparse=sparse)
-        matrix_basis = _Basis.cast(mxBasis,d2,sparse=sparse)
+        if not isinstance(ham_basis, _Basis): # needed b/c ham_basis could be a Basis w/dim=0 which can't be cast as dim=d2
+            ham_basis = _Basis.cast(ham_basis,d2,sparse=sparse)
+        if not isinstance(nonham_basis, _Basis):
+            nonham_basis = _Basis.cast(nonham_basis,d2,sparse=sparse)
+        if not isinstance(mxBasis, _Basis):
+            matrix_basis = _Basis.cast(mxBasis,d2,sparse=sparse)
+        else: matrix_basis = mxBasis
 
         # errgen + bases => coeffs
         hamC, otherC = \
             _gt.lindblad_errgen_projections(
-                errgen, ham_basis, other_basis, matrix_basis, normalize=False,
+                errgen, ham_basis, nonham_basis, matrix_basis, normalize=False,
                 return_generators=False, other_mode=nonham_mode, sparse=sparse)
 
         # coeffs + bases => Ltermdict, basisdict
         Ltermdict, basisdict = _gt.projections_to_lindblad_terms(
-            hamC, otherC, ham_basis, other_basis, nonham_mode)
+            hamC, otherC, ham_basis, nonham_basis, nonham_mode)
         
         return cls(d2, Ltermdict, basisdict,
                    param_mode, nonham_mode, truncate,
@@ -5170,9 +5173,12 @@ class LindbladErrorgen(LinearOperator):
                           else _np.linalg.inv(mxBasisToStd)
         rightTrans = mxBasisToStd
 
+        hamBasisMxs = self.ham_basis.elements 
+        otherBasisMxs = self.other_basis.elements
+        #OLD: these don't work if basis is empty (dim=0)
+        # OLD REMOVE: _basis_matrices(self.ham_basis, d2, sparse=self.sparse)
+        # OLD REMOVE: _basis_matrices(self.other_basis, d2, sparse=self.sparse)
         
-        hamBasisMxs = _basis_matrices(self.ham_basis, d2, sparse=self.sparse)
-        otherBasisMxs = _basis_matrices(self.other_basis, d2, sparse=self.sparse)
         hamGens, otherGens = _gt.lindblad_error_generators(
             hamBasisMxs,otherBasisMxs,normalize=False,
             other_mode=self.nonham_mode) # in std basis

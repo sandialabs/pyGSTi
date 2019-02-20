@@ -373,7 +373,7 @@ class OpModel(Model):
         self._need_to_rebuild = True #whether we call _rebuild_paramvec() in to_vector() or num_params()
         self.dirty = False #indicates when objects and _paramvec may be out of sync
         
-        super(OpModel, self).__init__(state_space_labels)
+        super(OpModel, self).__init__(self.state_space_labels)
 
     ##########################################
     ## Get/Set methods
@@ -397,10 +397,11 @@ class OpModel(Model):
     @basis.setter
     def basis(self, basis):
         if isinstance(basis, _Basis):
-            assert(basis.dim == self.state_space_labels.dim) #TODO update this...
+            assert(basis.dim == self.state_space_labels.dim), \
+                "Cannot set basis w/dim=%d when sslbls dim=%d!" % (basis.dim, self.state_space_labels.dim)
             self._basis = basis
         else: #create a basis with the proper structure & dimension
-            self._basis = _Basis.cast(basis, self.state_space_labels.dim)
+            self._basis = _Basis.cast(basis, self.state_space_labels)
 
             
     def set_simtype(self, sim_type, calc_cache=None):
@@ -447,12 +448,13 @@ class OpModel(Model):
             cache = calc_cache if (calc_cache is not None) else {} # make a temp cache if none is given
             self._sim_args.append(cache) # add calculation cache as another argument
 
-    def reset_basis(self):
-        """
-        "Forgets" the current basis, so that
-        self.basis becomes a dummy Basis w/name "unknown".
-        """
-        self._basis = _BuiltinBasis('unknown', 0)
+    #TODO REMOVE
+    #def reset_basis(self):
+    #    """
+    #    "Forgets" the current basis, so that
+    #    self.basis becomes a dummy Basis w/name "unknown".
+    #    """
+    #    self._basis = _BuiltinBasis('unknown', 0)
 
     def set_state_space(self, lbls, basis="pp"):
         """
@@ -745,7 +747,7 @@ class OpModel(Model):
         return self._paramvec
 
 
-    def from_vector(self, v, reset_basis=False):
+    def from_vector(self, v):
         """
         The inverse of to_vector.  Loads values of gates and rho and E vecs from
         from the vector `v`.  Note that `v` does not specify the number of
@@ -761,8 +763,8 @@ class OpModel(Model):
             obj.from_vector( v[obj.gpindices] )
             obj.dirty = False #object is known to be consistent with _paramvec
 
-        if reset_basis:
-            self.reset_basis() 
+        #if reset_basis:
+        #    self.reset_basis() 
             # assume the vector we're loading isn't producing gates & vectors in
             # a known basis.
         if OpModel._pcheck: self._check_paramvec()

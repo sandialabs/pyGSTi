@@ -27,7 +27,6 @@ from ..objects.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from ..baseobjs import label as _label
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import DirectSumBasis as _DirectSumBasis
-from ..baseobjs import Dim as _Dim
 
 
 #############################################
@@ -91,7 +90,8 @@ def basis_build_vector(vecExpr, basis):
     #hackstd = BuiltinBasis('std',opDim)
     #return _bt.change_basis(vecInReducedStdBasis, hackstd, basis)
     
-    return _bt.change_basis(vecInReducedStdBasis, std_basis, basis)
+    vec = _bt.change_basis(vecInReducedStdBasis, std_basis, basis)
+    return vec.reshape(-1,1)
 
 def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
     """
@@ -117,12 +117,17 @@ def basis_build_identity_vec(basis):
     numpy array
         The identity vector in the desired basis.
     """
-    _, opDim, blockDims = basis.dim 
+    opDim = basis.dim
+    if isinstance(basis, _DirectSumBasis):
+        blockDims = [ c.dim for c in basis.component_bases ]
+    else: blockDims = [opDim]
+
     vecInReducedStdBasis = _np.zeros( (opDim,1), 'd' ) # assume index given as vecExpr refers to a Hilbert-space state index, so "reduced-std" basis
 
     #set all diagonal elements of density matrix to 1.0 (end result = identity density mx)
     start = 0; vecIndex = 0
-    for blockDim in blockDims:
+    for blockVecDim in blockDims:
+        blockDim = int(_np.sqrt(blockVecDim)) # vec -> matrix dim
         for i in range(start,start+blockDim):
             for j in range(start,start+blockDim):
                 if i == j: vecInReducedStdBasis[ vecIndex, 0 ] = 1.0  #set diagonal element of density matrix
@@ -151,228 +156,230 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
     """
     return basis_build_identity_vec(_Basis.cast(basis, stateSpaceDims))
 
-def _oldBuildGate(stateSpaceDims, stateSpaceLabels, opExpr, basis="gm"):
-#coherentStateSpaceBlockDims
-    """
-    Build a operation matrix from an expression
-
-    Parameters
-    ----------
-    stateSpaceDims : a list of integers specifying the dimension of each block
-    of a block-diagonal the density matrix
-    stateSpaceLabels : a list of tuples, each one corresponding to a block of
-    the density matrix.  Elements of the tuple are user-defined labels
-    beginning with "L" (single level) or "Q" (two-level; qubit) which interpret
-    the states within the block as a tensor product structure between the
-    labelled constituent systems.
-
-    opExpr : string containing an expression for the gate to build
-
-    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
-        The source and destination basis, respectively.  Allowed
-        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-        and Qutrit (qt) (or a custom basis object).
-    """
-    # opExpr can contain single qubit ops: X(theta) ,Y(theta) ,Z(theta)
-    #                      two qubit ops: CNOT
-    #                      clevel qubit ops: Leak
-    #                      two clevel opts: Flip
-    #  each of which is given additional parameters specifying which indices it acts upon
-
-
-    #Operator matrix will be in matrix unit basis, which we order by vectorizing
-    # (by concatenating rows) each block of coherent states in the order given.
-    dmDim, _ , _ = _Dim(stateSpaceDims)
-    fullOpDim = dmDim**2
-
-    #Working with a StateSpaceLabels object gives us access to all the info we'll need later
-    sslbls = _ld.StateSpaceLabels(stateSpaceLabels)
-    if sslbls.dim != _Dim(stateSpaceDims):
-        raise ValueError("Dimension mismatch!")
-
-    #Store each tensor product block's start index (within the density matrix)
-    startIndex = []; M = 0
-    for tpb_dim in sslbls.dim.blockDims:
-        startIndex.append(M); M += tpb_dim
-
-    #print "DB: dim = ",dim, " dmDim = ",dmDim
-    opInStdBasis = _np.identity( fullOpDim, 'complex' )
-      # in full basis of matrix units, which we later reduce to the
-      # that basis of matrix units corresponding to the allowed non-zero
-      #  elements of the density matrix.
-
-    exprTerms = opExpr.split(':')
-    for exprTerm in exprTerms:
-
-        opTermInStdBasis = _np.identity( fullOpDim, 'complex' )
-        l = exprTerm.index('('); r = exprTerm.index(')')
-        opName = exprTerm[0:l]
-        argsStr = exprTerm[l+1:r]
-        args = argsStr.split(',')
-
-        if opName == "I":
-            pass
-
-        elif opName in ('X','Y','Z'): #single-qubit gate names
-            assert(len(args) == 2) # theta, qubit-index
-            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-            label = args[1].strip(); assert(sslbls.labeldims[label] == 2)
-
-            if opName == 'X': ex = -1j * theta*_bt.sigmax/2
-            elif opName == 'Y': ex = -1j * theta*_bt.sigmay/2
-            elif opName == 'Z': ex = -1j * theta*_bt.sigmaz/2
-            Uop = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
-
-            iTensorProdBlk = sslbls.tpb_index[label] # index of tensor product block (of state space) this bit label is part of
-            cohBlk = sslbls.labels[iTensorProdBlk]
-            basisInds = []
-            for l in cohBlk:
-                basisInds.append(list(range(sslbls.labeldims[l])))
-
-            tensorBlkBasis = list(_itertools.product(*basisInds))
-            K = cohBlk.index(label)
-            N = len(tensorBlkBasis)
-            UcohBlk = _np.identity( N, 'complex' ) # unitary matrix operating on relevant tensor product block part of state
-            for i,b1 in enumerate(tensorBlkBasis):
-                for j,b2 in enumerate(tensorBlkBasis):
-                    if (b1[:K]+b1[K+1:]) == (b2[:K]+b2[K+1:]):   #if all part of tensor prod match except for qubit we're operating on
-                        UcohBlk[i,j] = Uop[ b1[K], b2[K] ] # then fill in element
-
-            opBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
-
-            #Map opBlk's basis into final gate basis
-            mapBlk = []
-            s = startIndex[iTensorProdBlk] #within state space (i.e. row or col of density matrix)
-            cohBlkSize = UcohBlk.shape[0]
-            for i in range(cohBlkSize):
-                for j in range(cohBlkSize):
-                    vec_ij_index = (s+i)*dmDim + (s+j) #vectorize by concatenating rows
-                    mapBlk.append( vec_ij_index ) #build list of vector indices of each element of opBlk mx
-            for i,fi in enumerate(mapBlk):
-                for j,fj in enumerate(mapBlk):
-                    opTermInStdBasis[fi,fj] = opBlk[i,j]
-
-
-        elif opName in ('CX','CY','CZ','CNOT','CPHASE'): #two-qubit gate names
-
-            if opName in ('CX','CY','CZ'):
-                assert(len(args) == 3) # theta, qubit-label1, qubit-label2
-                theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-                label1, label2 = args[1:]
-
-                if opName == 'CX': ex = -1j * theta*_bt.sigmax/2
-                elif opName == 'CY': ex = -1j * theta*_bt.sigmay/2
-                elif opName == 'CZ': ex = -1j * theta*_bt.sigmaz/2
-                Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
-                
-            else: # opName in ('CNOT','CPHASE')
-                assert(len(args) == 2) # qubit-label1, qubit-label2
-                label1, label2 = args
-                if opName == 'CNOT':
-                    Utarget = _np.array( [[0, 1],
-                                          [1, 0]], 'd')
-                elif opName == 'CPHASE':
-                    Utarget = _np.array( [[1, 0],
-                                          [0,-1]], 'd')
-
-            Uop = _np.identity(4, 'complex'); Uop[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
-
-            assert(sslbls.labeldims[label1] == 2 and sslbls.labeldims[label2] == 2)
-            iTensorProdBlk = sslbls.tpb_index[label1] # index of tensor product block (of state space) this bit label is part of
-            assert( iTensorProdBlk == sslbls.tpb_index[label2] ) #labels must be members of the same tensor product block
-            cohBlk = sslbls.labels[iTensorProdBlk]
-            basisInds = []
-            for l in cohBlk:
-                basisInds.append(list(range(sslbls.labeldims[l])))
-
-            tensorBlkBasis = list(_itertools.product(*basisInds))
-            K1 = cohBlk.index(label1)
-            K2 = cohBlk.index(label2)
-            N = len(tensorBlkBasis)
-            UcohBlk = _np.identity( N, 'complex' ) # unitary matrix operating on relevant tensor product block part of state
-            for i,b1 in enumerate(tensorBlkBasis):
-                for j,b2 in enumerate(tensorBlkBasis):
-                    b1p = list(b1); del b1p[max(K1,K2)]; del b1p[min(K1,K2)] # b1' -- remove basis indices for tensor
-                    b2p = list(b2); del b2p[max(K1,K2)]; del b2p[min(K1,K2)] # b2'      product parts we operate on
-                    if b1p == b2p:   #if all parts of tensor product match except for qubits we're operating on
-                        UcohBlk[i,j] = Uop[ 2*b1[K1]+b1[K2], 2*b2[K1]+b2[K2] ] # then fill in element
-
-            #print "UcohBlk = \n",UcohBlk
-
-            opBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
-
-            #Map opBlk's basis into final gate basis
-            mapBlk = []
-            s = startIndex[iTensorProdBlk] #within state space (i.e. row or col of density matrix)
-            cohBlkSize = UcohBlk.shape[0]
-            for i in range(cohBlkSize):
-                for j in range(cohBlkSize):
-                    vec_ij_index = (s+i)*dmDim + (s+j) #vectorize by concatenating rows
-                    mapBlk.append( vec_ij_index ) #build list of vector indices of each element of opBlk mx
-            for i,fi in enumerate(mapBlk):
-                for j,fj in enumerate(mapBlk):
-                    opTermInStdBasis[fi,fj] = opBlk[i,j]
-
-        elif opName == "LX":  #TODO - better way to describe leakage?
-            assert(len(args) == 3) # theta, dmIndex1, dmIndex2 - X rotation between any two density matrix basis states
-            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-            i1 = int(args[1])
-            i2 = int(args[2])
-            ex = -1j * theta*_bt.sigmax/2
-            Uop = _spl.expm(ex) # 2x2 unitary matrix operating on the i1-th and i2-th states of the state space basis
-            Utot = _np.identity(dmDim, 'complex')
-            Utot[ i1,i1 ] = Uop[0,0]
-            Utot[ i1,i2 ] = Uop[0,1]
-            Utot[ i2,i1 ] = Uop[1,0]
-            Utot[ i2,i2 ] = Uop[1,1]
-
-            opBlk = _gt.unitary_to_process_mx(Utot) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
-
-            #Map opBlk's basis (vectorized 2x2) into final gate basis
-            mapBlk = [] #note: "start index" is effectively zero since we're mapping all the blocs
-            for i in range(dmDim):
-                for j in range(dmDim):
-                    vec_ij_index = (i)*dmDim + (j) #vectorize by concatenating rows
-                    mapBlk.append( vec_ij_index ) #build list of vector indices of each element of opBlk mx
-            for i,fi in enumerate(mapBlk):
-                for j,fj in enumerate(mapBlk):
-                    opTermInStdBasis[fi,fj] = opBlk[i,j]
-
-            #sq = startIndex[qbIndex]; sc = startIndex[clIndex]  #sq,sc are density matrix start indices
-            #vsq = dmiToVi[ (sq,sq) ]; vsc = dmiToVi[ (sc,sc) ]  # vector indices of (sq,sq) and (sc,sc) density matrix elements
-            #vsq1 = dmiToVi[ (sq,sq+1) ]; vsq2 = dmiToVi[ (sq+1,sq) ]  # vector indices of qubit coherences
-            #
-            ## action = swap (sq,sq) and (sc,sc) elements of a d.mx. and destroy coherences within qubit
-            #opTermInStdBasis[vsq,vsc] = opTermInStdBasis[vsc,vsq] = 1.0
-            #opTermInStdBasis[vsq,vsq] = opTermInStdBasis[vsc,vsc] = 0.0
-            #opTermInStdBasis[vsq1,vsq1] = opTermInStdBasis[vsq2,vsq2] = 0.0
-
-
-#        elif opName == "Flip":
-#            assert(len(args) == 2) # clevel-index0, clevel-index1
-#            indx0 = int(args[0])
-#            indx1 = int(args[1])
-#            assert(indx0 != indx1)
-#            assert(bitLabels[indx0] == 'L' and bitLabels[indx1] == 'L')
+#OLD TODO REMOVE
+#def _oldBuildGate(stateSpaceDims, stateSpaceLabels, opExpr, basis="gm"):
+##coherentStateSpaceBlockDims
+#    """
+#    Build a operation matrix from an expression
 #
-#            s0 = startIndex[indx0]; s1 = startIndex[indx1] #density matrix indices
-#            vs0 = dmiToVi[ (s0,s0) ]; vs1 = dmiToVi[ (s1,s1) ]  # vector indices of (s0,s0) and (s1,s1) density matrix elements
+#    Parameters
+#    ----------
+#    stateSpaceDims : a list of integers specifying the dimension of each block
+#    of a block-diagonal the density matrix
+#    stateSpaceLabels : a list of tuples, each one corresponding to a block of
+#    the density matrix.  Elements of the tuple are user-defined labels
+#    beginning with "L" (single level) or "Q" (two-level; qubit) which interpret
+#    the states within the block as a tensor product structure between the
+#    labelled constituent systems.
 #
-#            # action = swap (s0,s0) and (s1,s1) elements of a d.mx.
-#            opTermInStdBasis[vs0,vs1] = opTermInStdBasis[vs1,vs0] = 1.0
-#            opTermInStdBasis[vs0,vs0] = opTermInStdBasis[vs1,vs1] = 0.0
-
-        else: raise ValueError("Invalid gate name: %s" % opName)
-
-        opInStdBasis = _np.dot(opInStdBasis, opTermInStdBasis)
-
-    #Pare down opInStdBasis to only include those matrix unit basis elements that are allowed to be nonzero
-    opInReducedStdBasis = _bt.resize_mx(opInStdBasis, stateSpaceDims, resize='contract')
-
-    #Change from std (mx unit) basis to another if requested
-    opMxInFinalBasis = _bt.change_basis(opInReducedStdBasis, "std", basis, stateSpaceDims)
-    
-    return _op.FullDenseOp(opMxInFinalBasis)
+#    opExpr : string containing an expression for the gate to build
+#
+#    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+#        The source and destination basis, respectively.  Allowed
+#        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+#        and Qutrit (qt) (or a custom basis object).
+#    """
+#    # opExpr can contain single qubit ops: X(theta) ,Y(theta) ,Z(theta)
+#    #                      two qubit ops: CNOT
+#    #                      clevel qubit ops: Leak
+#    #                      two clevel opts: Flip
+#    #  each of which is given additional parameters specifying which indices it acts upon
+#
+#
+#    #Operator matrix will be in matrix unit basis, which we order by vectorizing
+#    # (by concatenating rows) each block of coherent states in the order given.
+#    raise NotImplementedError("TODO: REMOVE this function")
+#    dmDim, _ , _ = _Dim(stateSpaceDims)
+#    fullOpDim = dmDim**2
+#
+#    #Working with a StateSpaceLabels object gives us access to all the info we'll need later
+#    sslbls = _ld.StateSpaceLabels(stateSpaceLabels)
+#    if sslbls.dim != _Dim(stateSpaceDims):
+#        raise ValueError("Dimension mismatch!")
+#
+#    #Store each tensor product block's start index (within the density matrix)
+#    startIndex = []; M = 0
+#    for tpb_dim in sslbls.dim.blockDims:
+#        startIndex.append(M); M += tpb_dim
+#
+#    #print "DB: dim = ",dim, " dmDim = ",dmDim
+#    opInStdBasis = _np.identity( fullOpDim, 'complex' )
+#      # in full basis of matrix units, which we later reduce to the
+#      # that basis of matrix units corresponding to the allowed non-zero
+#      #  elements of the density matrix.
+#
+#    exprTerms = opExpr.split(':')
+#    for exprTerm in exprTerms:
+#
+#        opTermInStdBasis = _np.identity( fullOpDim, 'complex' )
+#        l = exprTerm.index('('); r = exprTerm.index(')')
+#        opName = exprTerm[0:l]
+#        argsStr = exprTerm[l+1:r]
+#        args = argsStr.split(',')
+#
+#        if opName == "I":
+#            pass
+#
+#        elif opName in ('X','Y','Z'): #single-qubit gate names
+#            assert(len(args) == 2) # theta, qubit-index
+#            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
+#            label = args[1].strip(); assert(sslbls.labeldims[label] == 2)
+#
+#            if opName == 'X': ex = -1j * theta*_bt.sigmax/2
+#            elif opName == 'Y': ex = -1j * theta*_bt.sigmay/2
+#            elif opName == 'Z': ex = -1j * theta*_bt.sigmaz/2
+#            Uop = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
+#
+#            iTensorProdBlk = sslbls.tpb_index[label] # index of tensor product block (of state space) this bit label is part of
+#            cohBlk = sslbls.labels[iTensorProdBlk]
+#            basisInds = []
+#            for l in cohBlk:
+#                basisInds.append(list(range(sslbls.labeldims[l])))
+#
+#            tensorBlkBasis = list(_itertools.product(*basisInds))
+#            K = cohBlk.index(label)
+#            N = len(tensorBlkBasis)
+#            UcohBlk = _np.identity( N, 'complex' ) # unitary matrix operating on relevant tensor product block part of state
+#            for i,b1 in enumerate(tensorBlkBasis):
+#                for j,b2 in enumerate(tensorBlkBasis):
+#                    if (b1[:K]+b1[K+1:]) == (b2[:K]+b2[K+1:]):   #if all part of tensor prod match except for qubit we're operating on
+#                        UcohBlk[i,j] = Uop[ b1[K], b2[K] ] # then fill in element
+#
+#            opBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+#
+#            #Map opBlk's basis into final gate basis
+#            mapBlk = []
+#            s = startIndex[iTensorProdBlk] #within state space (i.e. row or col of density matrix)
+#            cohBlkSize = UcohBlk.shape[0]
+#            for i in range(cohBlkSize):
+#                for j in range(cohBlkSize):
+#                    vec_ij_index = (s+i)*dmDim + (s+j) #vectorize by concatenating rows
+#                    mapBlk.append( vec_ij_index ) #build list of vector indices of each element of opBlk mx
+#            for i,fi in enumerate(mapBlk):
+#                for j,fj in enumerate(mapBlk):
+#                    opTermInStdBasis[fi,fj] = opBlk[i,j]
+#
+#
+#        elif opName in ('CX','CY','CZ','CNOT','CPHASE'): #two-qubit gate names
+#
+#            if opName in ('CX','CY','CZ'):
+#                assert(len(args) == 3) # theta, qubit-label1, qubit-label2
+#                theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
+#                label1, label2 = args[1:]
+#
+#                if opName == 'CX': ex = -1j * theta*_bt.sigmax/2
+#                elif opName == 'CY': ex = -1j * theta*_bt.sigmay/2
+#                elif opName == 'CZ': ex = -1j * theta*_bt.sigmaz/2
+#                Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
+#                
+#            else: # opName in ('CNOT','CPHASE')
+#                assert(len(args) == 2) # qubit-label1, qubit-label2
+#                label1, label2 = args
+#                if opName == 'CNOT':
+#                    Utarget = _np.array( [[0, 1],
+#                                          [1, 0]], 'd')
+#                elif opName == 'CPHASE':
+#                    Utarget = _np.array( [[1, 0],
+#                                          [0,-1]], 'd')
+#
+#            Uop = _np.identity(4, 'complex'); Uop[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
+#
+#            assert(sslbls.labeldims[label1] == 2 and sslbls.labeldims[label2] == 2)
+#            iTensorProdBlk = sslbls.tpb_index[label1] # index of tensor product block (of state space) this bit label is part of
+#            assert( iTensorProdBlk == sslbls.tpb_index[label2] ) #labels must be members of the same tensor product block
+#            cohBlk = sslbls.labels[iTensorProdBlk]
+#            basisInds = []
+#            for l in cohBlk:
+#                basisInds.append(list(range(sslbls.labeldims[l])))
+#
+#            tensorBlkBasis = list(_itertools.product(*basisInds))
+#            K1 = cohBlk.index(label1)
+#            K2 = cohBlk.index(label2)
+#            N = len(tensorBlkBasis)
+#            UcohBlk = _np.identity( N, 'complex' ) # unitary matrix operating on relevant tensor product block part of state
+#            for i,b1 in enumerate(tensorBlkBasis):
+#                for j,b2 in enumerate(tensorBlkBasis):
+#                    b1p = list(b1); del b1p[max(K1,K2)]; del b1p[min(K1,K2)] # b1' -- remove basis indices for tensor
+#                    b2p = list(b2); del b2p[max(K1,K2)]; del b2p[min(K1,K2)] # b2'      product parts we operate on
+#                    if b1p == b2p:   #if all parts of tensor product match except for qubits we're operating on
+#                        UcohBlk[i,j] = Uop[ 2*b1[K1]+b1[K2], 2*b2[K1]+b2[K2] ] # then fill in element
+#
+#            #print "UcohBlk = \n",UcohBlk
+#
+#            opBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+#
+#            #Map opBlk's basis into final gate basis
+#            mapBlk = []
+#            s = startIndex[iTensorProdBlk] #within state space (i.e. row or col of density matrix)
+#            cohBlkSize = UcohBlk.shape[0]
+#            for i in range(cohBlkSize):
+#                for j in range(cohBlkSize):
+#                    vec_ij_index = (s+i)*dmDim + (s+j) #vectorize by concatenating rows
+#                    mapBlk.append( vec_ij_index ) #build list of vector indices of each element of opBlk mx
+#            for i,fi in enumerate(mapBlk):
+#                for j,fj in enumerate(mapBlk):
+#                    opTermInStdBasis[fi,fj] = opBlk[i,j]
+#
+#        elif opName == "LX":  #TODO - better way to describe leakage?
+#            assert(len(args) == 3) # theta, dmIndex1, dmIndex2 - X rotation between any two density matrix basis states
+#            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
+#            i1 = int(args[1])
+#            i2 = int(args[2])
+#            ex = -1j * theta*_bt.sigmax/2
+#            Uop = _spl.expm(ex) # 2x2 unitary matrix operating on the i1-th and i2-th states of the state space basis
+#            Utot = _np.identity(dmDim, 'complex')
+#            Utot[ i1,i1 ] = Uop[0,0]
+#            Utot[ i1,i2 ] = Uop[0,1]
+#            Utot[ i2,i1 ] = Uop[1,0]
+#            Utot[ i2,i2 ] = Uop[1,1]
+#
+#            opBlk = _gt.unitary_to_process_mx(Utot) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+#
+#            #Map opBlk's basis (vectorized 2x2) into final gate basis
+#            mapBlk = [] #note: "start index" is effectively zero since we're mapping all the blocs
+#            for i in range(dmDim):
+#                for j in range(dmDim):
+#                    vec_ij_index = (i)*dmDim + (j) #vectorize by concatenating rows
+#                    mapBlk.append( vec_ij_index ) #build list of vector indices of each element of opBlk mx
+#            for i,fi in enumerate(mapBlk):
+#                for j,fj in enumerate(mapBlk):
+#                    opTermInStdBasis[fi,fj] = opBlk[i,j]
+#
+#            #sq = startIndex[qbIndex]; sc = startIndex[clIndex]  #sq,sc are density matrix start indices
+#            #vsq = dmiToVi[ (sq,sq) ]; vsc = dmiToVi[ (sc,sc) ]  # vector indices of (sq,sq) and (sc,sc) density matrix elements
+#            #vsq1 = dmiToVi[ (sq,sq+1) ]; vsq2 = dmiToVi[ (sq+1,sq) ]  # vector indices of qubit coherences
+#            #
+#            ## action = swap (sq,sq) and (sc,sc) elements of a d.mx. and destroy coherences within qubit
+#            #opTermInStdBasis[vsq,vsc] = opTermInStdBasis[vsc,vsq] = 1.0
+#            #opTermInStdBasis[vsq,vsq] = opTermInStdBasis[vsc,vsc] = 0.0
+#            #opTermInStdBasis[vsq1,vsq1] = opTermInStdBasis[vsq2,vsq2] = 0.0
+#
+#
+##        elif opName == "Flip":
+##            assert(len(args) == 2) # clevel-index0, clevel-index1
+##            indx0 = int(args[0])
+##            indx1 = int(args[1])
+##            assert(indx0 != indx1)
+##            assert(bitLabels[indx0] == 'L' and bitLabels[indx1] == 'L')
+##
+##            s0 = startIndex[indx0]; s1 = startIndex[indx1] #density matrix indices
+##            vs0 = dmiToVi[ (s0,s0) ]; vs1 = dmiToVi[ (s1,s1) ]  # vector indices of (s0,s0) and (s1,s1) density matrix elements
+##
+##            # action = swap (s0,s0) and (s1,s1) elements of a d.mx.
+##            opTermInStdBasis[vs0,vs1] = opTermInStdBasis[vs1,vs0] = 1.0
+##            opTermInStdBasis[vs0,vs0] = opTermInStdBasis[vs1,vs1] = 0.0
+#
+#        else: raise ValueError("Invalid gate name: %s" % opName)
+#
+#        opInStdBasis = _np.dot(opInStdBasis, opTermInStdBasis)
+#
+#    #Pare down opInStdBasis to only include those matrix unit basis elements that are allowed to be nonzero
+#    opInReducedStdBasis = _bt.resize_mx(opInStdBasis, stateSpaceDims, resize='contract')
+#
+#    #Change from std (mx unit) basis to another if requested
+#    opMxInFinalBasis = _bt.change_basis(opInReducedStdBasis, "std", basis, stateSpaceDims)
+#    
+#    return _op.FullDenseOp(opMxInFinalBasis)
 
 def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization="full"):
     """
@@ -412,21 +419,15 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
           an x-rotation between states with integer indices i0 and i1 followed
           by complete decoherence between the states.
 
-    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
-        The source and destination basis, respectively.  Allowed
-        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-        and Qutrit (qt) (or a custom basis object).
+    basis : Basis object
+        The basis the returned operation should be represented in.
 
-    parameterization : {"full","TP","static","linear","linearTP"}, optional
+    parameterization : {"full","TP","static"}, optional
         How to parameterize the resulting gate.
 
         - "full" = return a FullDenseOp.
         - "TP" = return a TPDenseOp.
         - "static" = return a StaticDenseOp.
-        - "linear" = if possible, return a LinearlyParamDenseOp that
-          parameterizes only the pieces explicitly present in opExpr.
-        - "linearTP" = if possible, return a LinearlyParamDenseOp that
-          parameterizes only the TP pieces explicitly present in opExpr.
 
     Returns
     -------
@@ -443,7 +444,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
       #fullOpDim = dmDim**2
     
     #Working with a StateSpaceLabels object gives us access to all the info we'll need later
-    sslbls = _ld.StateSpaceLabels(stateSpaceLabels)    
+    sslbls = _ld.StateSpaceLabels(stateSpaceLabels)
     assert(sslbls.dim == basis.dim), \
         "State space labels dim (%s) != basis dim (%s)" % (sslbls.dim, basis.dim)
 
@@ -690,6 +691,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
       #default indices to parameterize (I2P) - used only when 
       # creating parameterized gates
 
+    opTermsInFinalBasis = []
     exprTerms = opExpr.split(':')
     for exprTerm in exprTerms:
 
@@ -701,7 +703,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
         if opName == "I":
             labels = to_labels(args) # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
             stateSpaceDim = sslbls.product_dim(labels)
-            pp_opMx = _op.StaticDenseOp(_np.identity(stateSpaceDim, 'd')) # *real* 4x4 mx in Pauli-product basis -- still just the identity!
+            pp_opMx = _op.StaticDenseOp(_np.identity(stateSpaceDim, 'd'), evotype='densitymx') # *real* 4x4 mx in Pauli-product basis -- still just the identity!
             opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, labels, pp_opMx)
 
         elif opName == "D":  #like 'I', but only parameterize the diagonal elements - so can be a depolarization-type map
@@ -732,7 +734,7 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
 
             Uop = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
             operationMx = _gt.unitary_to_process_mx(Uop) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp')) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype='densitymx') # *real* 4x4 mx in Pauli-product basis -- better for parameterization
             opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, [label], pp_opMx)
 
         elif opName == 'N': #more general single-qubit gate
@@ -742,12 +744,12 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
             syCoeff = eval( args[2], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
             szCoeff = eval( args[3], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
             label = to_label(args[4])
-            assert(sslbls.labeldims[label] == 2), "%s gate must act on qubits!" % opName
+            assert(sslbls.labeldims[label] == 4), "%s gate must act on qubits!" % opName
 
             ex = -1j * theta * ( sxCoeff * _bt.sigmax/2. + syCoeff * _bt.sigmay/2. + szCoeff * _bt.sigmaz/2.)
             Uop = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
             operationMx = _gt.unitary_to_process_mx(Uop) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp')) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype='densitymx') # *real* 4x4 mx in Pauli-product basis -- better for parameterization
             opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, [label], pp_opMx)
                 
         elif opName in ('CX','CY','CZ','CNOT','CPHASE'): #two-qubit gate names
@@ -774,12 +776,11 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
                                           [0,-1]], 'd')
 
             Uop = _np.identity(4, 'complex'); Uop[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
-
             assert(sslbls.labeldims[label1] == 4 and sslbls.labeldims[label2] == 4), \
                 "%s gate must act on qubits!" % opName
             
             operationMx = _gt.unitary_to_process_mx(Uop) # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
-            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp')) # *real* 16x16 mx in Pauli-product basis -- better for parameterization
+            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype='densitymx') # *real* 16x16 mx in Pauli-product basis -- better for parameterization
             opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, [label1,label2], pp_opMx)
 
         elif opName == "LX":  #TODO - better way to describe leakage?
@@ -795,32 +796,47 @@ def basis_build_operation(stateSpaceLabels, opExpr, basis="gm", parameterization
             if isinstance(basis, _DirectSumBasis):
                 blockDims = [ c.dim for c in basis.component_bases ]
             else: blockDims = [opDim]
+            
             Utot = _np.identity(dmDim, 'complex')
             Utot[ i1,i1 ] = Uop[0,0]
             Utot[ i1,i2 ] = Uop[0,1]
             Utot[ i2,i1 ] = Uop[1,0]
             Utot[ i2,i2 ] = Uop[1,1]
             opTermInStdBasis = _gt.unitary_to_process_mx(Utot) # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
-            print(blockDims)
+
             # contract [3] to [2, 1]
             embedded_std_basis =_Basis.cast('std', 9) # [2]
-            std_basis = _Basis.cast('std', blockDims) # std basis w/blockdim structure, i.e. [2,1]
+            std_basis = _Basis.cast('std', blockDims) # std basis w/blockdim structure, i.e. [4,1]
             opTermInReducedStdBasis = _bt.resize_std_mx(opTermInStdBasis, 'contract', 
                                                         embedded_std_basis, std_basis)
 
             opMxInFinalBasis = _bt.change_basis(opTermInReducedStdBasis, std_basis, basis)
-            opTermInFinalBasis = _op.FullDenseOp(opMxInFinalBasis)
+            opTermInFinalBasis = _op.FullDenseOp(opMxInFinalBasis, evotype='densitymx')
 
         else: raise ValueError("Invalid gate name: %s" % opName)
-        
-        if opInFinalBasis is None:
-            opInFinalBasis = opTermInFinalBasis
-        else:
-            #opInFinalBasis = _op.compose( opInFinalBasis, opTermInFinalBasis, basis) REMOVE
-            opInFinalBasis = _op.ComposedDenseOp( (opInFinalBasis, opTermInFinalBasis) )
 
-    return _op.FullDenseOp(opInFinalBasis.todense()) # a LinearOperator object
-      #TODO: work out parameterization options?
+        opTermsInFinalBasis.append(opTermInFinalBasis)
+
+        
+    opInFinalBasis = opTermsInFinalBasis[0] if len(opTermsInFinalBasis) == 1 \
+        else _op.ComposedDenseOp( list(reversed(opTermsInFinalBasis)) )
+        #Note: expressions are listed in "matrix composition order" (reverse for ComposedDenseOp)
+
+    finalOpMx = opInFinalBasis.todense()
+    if basis.real:
+        assert(_np.linalg.norm(finalOpMx.imag) < 1e-6), "Operation matrix should be real but isn't!"
+        finalOpMx = _np.real(finalOpMx)
+
+    if parameterization == "full":
+        return _op.FullDenseOp(finalOpMx)
+    if parameterization == "static":
+        return _op.StaticDenseOp(finalOpMx)
+    if parameterization == "TP":
+        return _op.TPDenseOp(finalOpMx)    
+
+    raise ValueError("Invalid 'parameterization' parameter: " +
+                     "%s (must by 'full', 'TP', 'static')"
+                     % parameterization)    
 
 def build_operation(stateSpaceDims, stateSpaceLabels, opExpr, basis="gm", parameterization="full"):
     """
@@ -828,9 +844,9 @@ def build_operation(stateSpaceDims, stateSpaceLabels, opExpr, basis="gm", parame
     """
     _warnings.warn(("This function is deprecated and will be removed in the"
                     " future.  Please use `basis_build_operation` instead."))
-    return basis_build_operation(stateSpaceLabels, opExpr, _Basis.cast(basis, stateSpaceDims),
+    sslbls = _ld.StateSpaceLabels(stateSpaceLabels,stateSpaceDims)
+    return basis_build_operation(sslbls, opExpr, _Basis.cast(basis, stateSpaceDims),
                                  parameterization)
-      #HERE FIX - build basis from statespacelabels
 
 
 def basis_build_explicit_model(stateSpaceLabels, basis,
@@ -898,7 +914,7 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
         only a single POVM is created and the format of `effectLabels` and
         `effectExpressions` is simplified (see above).
 
-    parameterization : {"full","TP","linear","linearTP"}, optional
+    parameterization : {"full","TP","static"}, optional
         How to parameterize the gates of the resulting Model (see
         documentation for :meth:`build_operation`).
 
@@ -908,14 +924,22 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
         The created model.
     """
     dmDim = int(_np.sqrt(basis.dim)) # "densitymx" assumed... FIX?
-    defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
+    #defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
     stateSpaceLabels = _ld.StateSpaceLabels(stateSpaceLabels)
 
-    ret = _emdl.ExplicitOpModel(stateSpaceLabels, basis.copy(), default_param=defP)
+    ret = _emdl.ExplicitOpModel(stateSpaceLabels, basis.copy(), default_param=parameterization)
                  #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
 
     for label,rhoExpr in zip(prepLabels, prepExpressions):
-        ret.preps[label] = basis_build_vector(rhoExpr, basis)
+        vec = basis_build_vector(rhoExpr, basis)
+        if parameterization == "full":
+            ret.preps[label] = _spamvec.FullSPAMVec(vec, 'densitymx')
+        elif parameterization == "TP":
+            ret.preps[label] = _spamvec.TPSPAMVec(vec)
+        elif parameterization == "static":
+            ret.preps[label] = _spamvec.StaticSPAMVec(vec, 'densitymx')
+        else:
+            raise ValueError("Invalid parameterization: %s" % parameterization)
 
     if _compat.isstr(povmLabels):
         povmLabels = [ povmLabels ]
@@ -938,10 +962,14 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
             EExprs = list(map(str,range(dmDim))) #standard = 0,1,...,dmDim
 
         for label,EExpr in zip(ELbls,EExprs):
-            effects.append( (label,basis_build_vector(EExpr, basis)) )
+            evec = basis_build_vector(EExpr, basis)
+            if parameterization == "static":
+                effects.append( (label,_spamvec.StaticSPAMVec(evec,'densitymx')) )
+            else:
+                effects.append( (label,_spamvec.FullSPAMVec(evec,'densitymx')) )
 
         if len(effects) > 0: # don't add POVMs with 0 effects
-            if defP == "TP":
+            if parameterization == "TP":
                 ret.povms[povmLbl] = _povm.TPPOVM(effects)
             else:
                 ret.povms[povmLbl] = _povm.UnconstrainedPOVM(effects)
@@ -1034,7 +1062,7 @@ def build_explicit_model(stateSpaceLabels,
         - "auto" = "pp" if possible (integer num of qubits), "qt" if density
           matrix dim == 3, and "gm" otherwise.
 
-    parameterization : {"full","TP","linear","linearTP"}, optional
+    parameterization : {"full","TP"}, optional
         How to parameterize the gates of the resulting Model (see
         documentation for :meth:`build_operation`).
 
@@ -1044,20 +1072,21 @@ def build_explicit_model(stateSpaceLabels,
         The created model.
     """
 
-    stateSpaceLabels = _ld.StateSpaceLabels(stateSpaceLabels)
-    stateSpaceDims = [stateSpaceLabels.dim]
+    #Note: so far, all allowed `parameterization` values => densitymx evotype
+    stateSpaceLabels = _ld.StateSpaceLabels(stateSpaceLabels, evotype="densitymx")
+    stateSpaceDim = stateSpaceLabels.dim
+    # Note: what about stateSpaceLabels.tpb_dims?
 
-    if basis == "auto": #HERE FIX
-        if len(stateSpaceDims) == 1 and \
-           _np.isclose(_np.log2(stateSpaceDims[0]),
-                       round(_np.log2(stateSpaceDims[0]))):
+    if basis == "auto": 
+        if _np.isclose(_np.log2(stateSpaceDim)/2,
+                       round(_np.log2(stateSpaceDim)/2)):
             basis = "pp"
-        elif len(stateSpaceDims) == 1 and stateSpaceDims[0] == 3:
+        elif stateSpaceDim == 9:
             basis = "qt"
         else: basis = "gm"
 
     return basis_build_explicit_model(stateSpaceLabels,
-                  _Basis.cast(basis, stateSpaceLabels), #FIX HERE - create a basis from a StateSpaceLabels
+                  _Basis.cast(basis, stateSpaceLabels),
                   opLabels, opExpressions,
                   prepLabels, prepExpressions,
                   effectLabels, effectExpressions,

@@ -27,7 +27,6 @@ from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import ExplicitBasis as _ExplicitBasis
-from ..baseobjs import Dim as _Dim
 from ..baseobjs import Label as _Lbl
 
 from ..baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz

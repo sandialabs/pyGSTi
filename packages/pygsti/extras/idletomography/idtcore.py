@@ -599,7 +599,7 @@ def determine_paulidicts(model):
                 raise ValueError("LinearOperator acts nontrivially on a space other than that in its label!")
     
     #Get several standard 1-qubit pi/2 rotations in Pauli basis:
-    pp = _objs.Basis('pp',2)
+    pp = _objs.BuiltinBasis('pp',4)
     Gx = _cnst.basis_build_operation([('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static").todense()
     Gy = _cnst.basis_build_operation([('Q0',)], "Y(pi/2,Q0)", basis=pp, parameterization="static").todense()
 

@@ -14,7 +14,6 @@ import collections as _collections
 
 import numpy as _np
 
-from ..baseobjs import Dim
 from ..baseobjs import Basis, BuiltinBasis, DirectSumBasis
 
 ## Import base-object routines, which can act as "tools" too
@@ -73,11 +72,11 @@ def change_basis(mx, from_basis, to_basis):
         # lost if we just created a new BuiltinBasis with the correct
         # overall dimension.
         if from_is_basis:
-            assert(from_basis.dim == dim)
+            assert(from_basis.dim == dim), "src-basis dimension mismatch: %d != %d" % (from_basis.dim, dim)
             #to_basis = from_basis.equivalent(to_basis) #Don't to this b/c we take strings to always mean *simple* bases, not "equivalent" ones
             to_basis = BuiltinBasis(to_basis,dim,sparse=from_basis.sparse)
         else:
-            assert(to_basis.dim == dim)
+            assert(to_basis.dim == dim), "dest-basis dimension mismatch: %d != %d" % (to_basis.dim, dim)
             #from_basis = to_basis.equivalent(from_basis)
             from_basis = BuiltinBasis(from_basis,dim,sparse=to_basis.sparse)
 
