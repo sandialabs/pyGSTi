@@ -27,7 +27,6 @@ from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
-from ..baseobjs import Dim as _Dim
 from ..baseobjs import Label as _Lbl
 
 from . import circuitconstruction as _gsc
@@ -1670,7 +1669,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                 gatedict, availability, geometry, maxIdleWeight=1, maxhops=0,
                                 extraWeight1Hops=0, extraGateWeight=0, paramroot="H+S",
                                 sparse=False, verbosity=0, cache=None, idleOnly=False, 
-                                idtPauliDicts=None, algorithm="greedy"):
+                                idtPauliDicts=None, algorithm="greedy", idleOpStr=((),)):
     """ 
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
@@ -1809,7 +1808,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                              # for testing for synthetic idles - so no " terms"
     
     Np = model.num_params()
-    idleOpStr = _objs.Circuit(("Gi",))
+    idleOpStr = _objs.Circuit(idleOpStr, num_lines=nQubits)
     prepLbl = _Lbl("rho0")
     effectLbls = [ _Lbl("Mdefault_%s" % l) for l in model._shlp.get_effect_labels_for_povm('Mdefault')]
 
