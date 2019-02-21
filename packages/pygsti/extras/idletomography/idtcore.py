@@ -642,7 +642,7 @@ def determine_paulidicts(model):
 
 
 def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
-                              idle_string = ('Gi',), include_hamiltonian=True,
+                              idle_string = ((),), include_hamiltonian=True,
                               include_stochastic=True, include_affine=True,
                               ham_tmpl="auto",preferred_prep_basis_signs="auto",
                               preferred_meas_basis_signs="auto"):
@@ -725,7 +725,7 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
 
 
 def make_idle_tomography_lists(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
-                              idle_string = ('Gi',), include_hamiltonian=True,
+                              idle_string = ((),), include_hamiltonian=True,
                               include_stochastic=True, include_affine=True,
                               ham_tmpl="auto",preferred_prep_basis_signs="auto",
                               preferred_meas_basis_signs="auto"):
@@ -1014,7 +1014,7 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
 
 
 def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=2,
-                       idle_string=('Gi',), include_hamiltonian="auto",
+                       idle_string=((),), include_hamiltonian="auto",
                        include_stochastic="auto", include_affine="auto",
                        advancedOptions=None, verbosity=0, comm=None):
     """

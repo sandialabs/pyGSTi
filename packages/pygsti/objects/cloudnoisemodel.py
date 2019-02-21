@@ -973,8 +973,8 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         #      (('matrix' if dense else 'map'), str(oplabel), self.errcomp_type) )
         
         components = layerlbl.components
-        if len(components) == 0 or layerlbl == 'Gi': # idle!
-            return self.op_blks['layers']['globalIdle']
+        if len(components) == 0: #or layerlbl == 'Gi': # OLD: special case: 'Gi' acts as global idle!
+            return self.op_blks['layers']['globalIdle'] # idle!
 
         #Compose target operation from layer's component labels, which correspond
         # to the perfect (embedded) target ops in op_blks

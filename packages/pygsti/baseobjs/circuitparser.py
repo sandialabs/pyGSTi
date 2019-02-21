@@ -210,6 +210,10 @@ class CircuitParser(object):
         '''expable : OPENBR layer CLOSEBR'''
         p[0] = p[2], # -> tuple
 
+    @staticmethod
+    def p_expable_empty_layer(p):
+        '''expable : OPENBR CLOSEBR'''
+        p[0] = ((),) # -> empty layer tuple
         
     @staticmethod
     def p_expable_single(p):

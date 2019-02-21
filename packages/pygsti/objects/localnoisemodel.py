@@ -492,7 +492,6 @@ class LocalNoiseModel(_ImplicitOpModel):
                 "Global idle gate acts on %d qubits but should act on %d!" % (globalIdle_nQubits, nQubits)
             self.operation_blks['layers'][_Lbl('globalIdle')] = globalIdle
 
-
         self.set_primitive_op_labels(primitive_ops)
         self.set_primitive_prep_labels(tuple(self.prep_blks['layers'].keys()))
         self.set_primitive_povm_labels(tuple(self.povm_blks['layers'].keys()))
@@ -519,6 +518,11 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
         components = layerlbl.components
         bHasGlobalIdle = bool(_Lbl('globalIdle') in self.op_blks['layers'])
 
+        # OLD: special case: 'Gi' acts as global idle!
+        #if hasGlobalIdle and layerlbl == 'Gi' and \
+        #   'Gi' not in self.op_blks['layers'])): 
+        #    return self.op_blks['layers'][_Lbl('globalIdle')]
+        
         if len(components) == 1 and bHasGlobalIdle == False:
             return self.op_blks['layers'][components[0]]
         else:
