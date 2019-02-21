@@ -3893,8 +3893,7 @@ class EmbeddedOp(LinearOperator):
         """
         #Reduce labeldims b/c now working on *state-space* instead of density mx:
         sslbls = self.state_space_labels.copy()
-        for lbl,dim in self.state_space_labels.labeldims.items(): #HACK!! TODO FIX
-            sslbls.labeldims[lbl] = int(_np.sqrt(dim))
+        sslbls.reduce_dims_densitymx_to_state()
         return [ _term.embed_term(t, sslbls, self.targetLabels)
                  for t in self.embedded_op.get_order_terms(order) ]
 
@@ -4763,7 +4762,7 @@ class EmbeddedErrorgen(EmbeddedOp):
         if _compat.isstr(embedded_matrix_basis):
             self.matrix_basis = embedded_matrix_basis
         else: # assume a Basis object
-            my_basis_dim = self.state_space_labels.dim # density matrix dimension TODO FIX
+            my_basis_dim = self.state_space_labels.dim
             self.matrix_basis = _Basis.cast(embedded_matrix_basis.name, my_basis_dim, sparse=True)
 
             #OLD: constructs a subset of this errorgen's full mxbasis, but not the whole thing:

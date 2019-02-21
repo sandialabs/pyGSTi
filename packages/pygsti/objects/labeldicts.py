@@ -428,6 +428,7 @@ class StateSpaceLabels(object):
 
         #Allow initialization via another StateSpaceLabels object
         if isinstance(labelList, StateSpaceLabels):
+            assert(dims is None and types is None), "Clobbering non-None 'dims' and/or 'types' arguments"
             dims = [ tuple((labelList.labeldims[lbl] for lbl in tpbLbls))
                      for tpbLbls in labelList.labels ]
             types = [ tuple((labelList.labeltypes[lbl] for lbl in tpbLbls))
@@ -464,6 +465,17 @@ class StateSpaceLabels(object):
                 if not isLabel(lbl):
                     raise ValueError("'%s' is an invalid state-space label (must be a string or integer)" % lbl)
 
+        # Get the type of each labeled space
+        self.labeltypes = {}
+        if types is None: # use defaults
+            for tpbLabels in self.labels: #loop over tensor-prod-blocks
+                for lbl in tpbLabels:
+                    self.labeltypes[lbl] = 'C' if lbl.startswith('C') else 'Q' #default
+        else:
+            for tpbLabels,tpbTypes in zip(self.labels,types):
+                for lbl,typ in zip(tpbLabels,tpbTypes):
+                    self.labeltypes[lbl] = typ
+
         # Get the dimension of each labeled space
         self.labeldims = {}
         if dims is None:
@@ -473,25 +485,16 @@ class StateSpaceLabels(object):
                     elif lbl.startswith('T'): d = 3 # qutrit
                     elif lbl.startswith('Q'): d = 2 # qubits
                     elif lbl.startswith('L'): d = 1 # single level
+                    elif lbl.startswith('C'): d = 2 # classical bits
                     else: raise ValueError("Cannot determine state-space dimension from '%s'" % lbl)
-                    if evotype not in ('statevec','stabilizer'): d = d**2 # density-matrix spaces have squared dim
-                      # ("densitymx","svterm","cterm") all use super-ops
+                    if evotype not in ('statevec','stabilizer') and self.labeltypes[lbl] == 'Q':
+                        d = d**2 # density-matrix spaces have squared dim
+                                 # ("densitymx","svterm","cterm") all use super-ops
                     self.labeldims[lbl] = d
         else:
             for tpbLabels,tpbDims in zip(self.labels,dims):
                 for lbl,dim in zip(tpbLabels,tpbDims):
                     self.labeldims[lbl] = dim
-
-        # Get the type of each labeled space
-        self.labeltypes = {}
-        if types is None: # use defaults
-            for tpbLabels in self.labels: #loop over tensor-prod-blocks
-                for lbl in tpbLabels:
-                    self.labeltypes[lbl] = 'Q' #default
-        else:
-            for tpbLabels,tpbTypes in zip(self.labels,types):
-                for lbl,typ in zip(tpbLabels,tpbTypes):
-                    self.labeltypes[lbl] = typ
 
         # Store the starting index (within the density matrix / state vec) of
         # each tensor-product-block (TPB), and which labels belong to which TPB
@@ -502,6 +505,18 @@ class StateSpaceLabels(object):
             self.tpb_dims.append( int(_np.product( [ self.labeldims[lbl] for lbl in tpbLabels ] )))
             self.tpb_index.update( { lbl: iTPB for lbl in tpbLabels } )
 
+        self.dim = sum(self.tpb_dims)
+
+    def reduce_dims_densitymx_to_state(self):
+        for lbl in self.labeldims:
+            if self.labeltypes[lbl] == 'Q':
+                self.labeldims[lbl] = int(_np.sqrt(self.labeldims[lbl]))
+
+        #update tensor-product-block dims and overall dim too:
+        self.tpb_dims = []
+        for iTPB, tpbLabels in enumerate(self.labels):
+            self.tpb_dims.append( int(_np.product( [ self.labeldims[lbl] for lbl in tpbLabels ] )))
+            self.tpb_index.update( { lbl: iTPB for lbl in tpbLabels } )
         self.dim = sum(self.tpb_dims)
         
 

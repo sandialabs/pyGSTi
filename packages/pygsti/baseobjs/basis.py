@@ -124,7 +124,7 @@ class Basis(object):
     '''
 
     @classmethod
-    def cast(cls, nameOrBasisOrMatrices, dim=None, sparse=None):
+    def cast(cls, nameOrBasisOrMatrices, dim=None, sparse=None, classicalName='cl'):
         #print("DB: CAST = ",nameOrBasisOrMatrices,dim)
         from ..objects.labeldicts import StateSpaceLabels as _SSLs
         if nameOrBasisOrMatrices is None: #special case of empty basis
@@ -144,10 +144,12 @@ class Basis(object):
                 tpbBases = []
                 for tpbLabels in sslbls.labels:
                     if len(tpbLabels) == 1:
-                        tpbBases.append( BuiltinBasis(name, sslbls.labeldims[tpbLabels[0]], sparse) )
+                        nm = name if (sslbls.labeltypes[tpbLabels[0]] == 'Q') else classicalName
+                        tpbBases.append( BuiltinBasis(nm, sslbls.labeldims[tpbLabels[0]], sparse) )
                     else:
                         tpbBases.append( TensorProdBasis( [
-                            BuiltinBasis(name, sslbls.labeldims[l], sparse) for l in tpbLabels] ) )
+                            BuiltinBasis(name if (sslbls.labeltypes[l] == 'Q') else classicalName,
+                                         sslbls.labeldims[l], sparse) for l in tpbLabels] ) )
                 if len(tpbBases) == 1:
                     return tpbBases[0]
                 else:

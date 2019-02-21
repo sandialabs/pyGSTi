@@ -923,7 +923,6 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
     Model
         The created model.
     """
-    dmDim = int(_np.sqrt(basis.dim)) # "densitymx" assumed... FIX?
     #defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
     stateSpaceLabels = _ld.StateSpaceLabels(stateSpaceLabels)
 
@@ -946,6 +945,7 @@ def basis_build_explicit_model(stateSpaceLabels, basis,
         effectLabels = [ effectLabels ]
         effectExpressions = [ effectExpressions ]
 
+    dmDim = int(_np.sqrt(basis.dim)) # "densitymx" evotype assumed... FIX?
     for povmLbl, ELbls, EExprs in zip(povmLabels,
                                       effectLabels, effectExpressions):
         effects = []
