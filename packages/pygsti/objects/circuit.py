@@ -662,7 +662,7 @@ class Circuit(object):
             for i in range(numToInsert):
                 self._labels.insert(insertBefore, [])
         else: #insert layers only on given lines - shift existing labels to right
-            for i in numToInsert:
+            for i in range(numToInsert):
                 self._labels.append([]) #add blank layers at end
             for i in range(insertBefore,insertBefore+numToInsert):
                 # move labels on `lines` to layer i+numToInsert
