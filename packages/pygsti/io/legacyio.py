@@ -21,7 +21,7 @@ def enable_old_object_unpickling(old_version="0.9.6"):
     Returns a context manager which enables the unpickling of old-version (0.9.6
     and sometimes prior) objects.
     """
-    totup = lambda(v): tuple(map(int,v.split('.')))
+    totup = lambda v: tuple(map(int,v.split('.')))
     old_version = totup(old_version)
 
     if old_version < totup("0.9.6"):
@@ -166,6 +166,34 @@ def enable_old_object_unpickling(old_version="0.9.6"):
                     del state['gateDim']
                 self.__dict__.update(state)
 
+        def StateSpaceLabels_setstate(self,state):
+            squared_labeldims = { k:int(d**2) for k,d in state['labeldims'].items() }
+            squared_dims = [ tuple((squared_labeldims[lbl] for lbl in tpbLbls))
+                     for tpbLbls in state['labels'] ]
+            sslbls = _objs.StateSpaceLabels(state['labels'], squared_dims)
+            self.__dict__.update(sslbls.__dict__)
+            
+            #DEBUG!!!
+            #print("!!setstate:")
+            #print(state)
+            #assert(False),"STOP"
+            
+        def Circuit_setstate(self,state):
+            if old_version == totup("0.9.6"): # b/c this clobbers older-version upgrade
+                GateString_setstate(self,state)
+                
+            if state['_str']: #then rely on string rep to init new circuit
+                c = _objs.Circuit(None,state['line_labels'],editable=not state['_static'], stringrep=state['_str'])
+            else:
+                c = _objs.Circuit(state['_labels'],state['line_labels'],editable=not state['_static'])
+                
+            self.__dict__.update(c.__dict__)
+
+        def Hack_CompressedCircuit_expand(self):
+            """ Hacked version to rely on string rep & re-parse if it's there """
+            tup = None if self._str else CompressedCircuit.expand_op_label_tuple(self._tup)
+            return _objs.Circuit(None, self.line_labels, editable=False, stringrep=self._str)
+
 
         dim = _ModuleType("dim")
         dim.Dim = dummy_Dim
@@ -175,10 +203,14 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         #_baseobjs.basis.saved_Basis = _baseobjs.basis.Basis
         #_baseobjs.basis.Basis = dummy_Basis
         _baseobjs.basis.Basis.__setstate__ = Basis_setstate
-
+        _objs.circuit.Circuit.__setstate__ = Circuit_setstate
+        _objs.labeldicts.StateSpaceLabels.__setstate__ = StateSpaceLabels_setstate
+        _objs.circuit.CompressedCircuit.saved_expand = _objs.circuit.CompressedCircuit.expand
+        _objs.circuit.CompressedCircuit.expand = Hack_CompressedCircuit_expand
 
 
     yield # body of context-manager block
+    
 
     if old_version <= totup("0.9.6"):
         del _sys.modules['pygsti.objects.gatestring']
@@ -207,4 +239,10 @@ def enable_old_object_unpickling(old_version="0.9.6"):
     if old_version <= totup("0.9.7.1"):
         del _sys.modules['pygsti.baseobjs.dim']
         delattr(_baseobjs.Basis,'__setstate__')
+        delattr(_objs.labeldicts.StateSpaceLabels,'__setstate__')
+        if hasattr(_objs.Circuit,'__setstate__'): # b/c above block may have already deleted this
+            delattr(_objs.Circuit,'__setstate__')
+        _objs.circuit.CompressedCircuit.expand = _objs.circuit.CompressedCircuit.saved_expand
+        delattr(_objs.circuit.CompressedCircuit,'saved_expand')
+
 
