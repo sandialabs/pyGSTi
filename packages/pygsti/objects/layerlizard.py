@@ -43,6 +43,7 @@ from . import explicitcalc as _explicitcalc
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Label as _Label
+from ..baseobjs.label import CircuitLabel as _CircuitLabel
 
 
 class LayerLizard(object):
@@ -114,7 +115,23 @@ class ExplicitLayerLizard(LayerLizard):
         -------
         LinearOperator
         """
-        return self.ops[layerlbl]
+        if isinstance(layerlbl,_CircuitLabel):
+            #need to build an op for this circuit - a composed op (of sub-circuit) composed N times, where N=#of repetitions
+            dense = bool(self.model._sim_type == "matrix") # whether dense matrix gates should be created
+            Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
+            if len(layerlbl.components) != 1: #works for 0 components too
+                subCircuitOp = Composed([self.ops[l] for l in layerlbl.components],
+                                        dim=self.model.dim, evotype=self.model._evotype)
+            else:
+                subCircuitOp = self.ops[layerlbl.components[0]]
+            if layerlbl.reps != 1:
+                finalOp = Composed([subCircuitOp]*layerlbl.reps,
+                                   dim=self.model.dim, evotype=self.model._evotype)
+            else:
+                finalOp = subCircuitOp
+            return finalOp
+        else:
+            return self.ops[layerlbl]
 
     def from_vector(self, v):
         """

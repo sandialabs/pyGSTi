@@ -393,7 +393,9 @@ class LsGermsStructure(CircuitStructure):
         plaq = self.create_plaquette(basestr, fidpairs)
         self.allstrs.extend( [ _gstrc.manipulate_circuit(opstr,self.sequenceRules)
                                for i,j,opstr in plaq ] )
-        _lt.remove_duplicates_in_place(self.allstrs)
+
+        if False and len(self.allstrs) < 8000: # TEST DEBUG
+            _lt.remove_duplicates_in_place(self.allstrs)
 
         self._plaquettes[(L,germ)] = plaq
 
@@ -427,10 +429,11 @@ class LsGermsStructure(CircuitStructure):
             and therefore not added.
         """
         from ..construction import circuitconstruction as _gstrc #maybe move used routines to a circuittools.py?
+        if dsfilter and len(dsfilter) > 8000: dsfilter = None # TEST DEBUG - remove dsfilter check
 
         missing_list = []
         for opstr in gsList:
-            if opstr not in self.allstrs:
+            if True or len(self.allstrs) > 8000 or (opstr not in self.allstrs): # TEST DEBUG
                 if dsfilter:
                     trans_opstr = _gstrc.translate_circuit(opstr, self.aliases)
                     if trans_opstr not in dsfilter:
@@ -547,8 +550,8 @@ class LsGermsStructure(CircuitStructure):
 
         elements = [ (j,i,self.prepStrs[i] + baseStr + self.effectStrs[j])
                      for i,j in fidpairs ] #note preps are *cols* not rows
-
         real_fidpairs = [(self.prepStrs[i],self.effectStrs[j]) for i,j in fidpairs] # strings, not just indices
+
         return CircuitPlaquette(baseStr, len(self.effectStrs),
                                    len(self.prepStrs), elements,
                                    self.aliases, real_fidpairs)
@@ -687,7 +690,7 @@ class LsGermsSerialStructure(CircuitStructure):
         missing_list = []
         from ..construction import circuitconstruction as _gstrc #maybe move used routines to a circuittools.py?
 
-        if dsfilter:
+        if dsfilter and len(dsfilter) < 8000: # TEST DEBUG
             inds_to_remove = []
             for k,(prepStr,effectStr) in enumerate(fidpairs):
                 el = prepStr + basestr + effectStr
@@ -704,7 +707,8 @@ class LsGermsSerialStructure(CircuitStructure):
         plaq = self.create_plaquette(basestr, fidpairs)
         self.allstrs.extend( [ _gstrc.manipulate_circuit(opstr,self.sequenceRules)
                                for i,j,opstr in plaq ] )
-        _lt.remove_duplicates_in_place(self.allstrs)
+        if False and len(self.allstrs) < 8000: # TEST DEBUG
+            _lt.remove_duplicates_in_place(self.allstrs)
 
         self._plaquettes[(L,germ)] = plaq
 

@@ -38,6 +38,7 @@ ppstring  :: pstring [ povm ]
 
 from ply import lex, yacc
 from .label import Label as _Label
+from .label import CircuitLabel as _CircuitLabel
 
 class CircuitLexer:
     """ Lexer for matching and interpreting text-format operation sequences """
@@ -230,7 +231,11 @@ class CircuitParser(object):
     @staticmethod
     def p_expdstr_expop(p):
         '''expdstr : expable EXPOP INTEGER'''
-        p[0] = p[1] * p[3]  # tuple repetition
+        #p[0] = p[1] * p[3]  # tuple repetition
+        plbl = _Label(p[1]) # just for total sslbls
+        #print("HERE p[1] = ",p[1], ' plbl = ',repr(plbl)) #DEBUG
+        p[0] = _CircuitLabel('',p[1],plbl.sslbls,p[3]),
+
 
     @staticmethod
     def p_expdstr(p):
