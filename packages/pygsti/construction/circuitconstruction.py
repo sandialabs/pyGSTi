@@ -756,7 +756,7 @@ def manipulate_circuit_list(circuitList, sequenceRules, line_labels="auto"):
         return [ manipulate_circuit(opstr, sequenceRules, line_labels) for opstr in circuitList ]
 
 
-def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle='Gi'):
+def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle=() ):
     """
     Removes any labels from `circuits` whose state-space labels are not
     entirely in `sslbls_to_keep`.  If a gates label's state-space labels
@@ -805,7 +805,7 @@ def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle=
         return [filter_circuit(s,sslbls_to_keep,new_sslbls,idle) for s in circuits]
     
 
-def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle='Gi'):
+def filter_circuit(circuit, sslbls_to_keep, new_sslbls=None, idle=() ):
     """ 
     Removes any labels from `circuit` whose state-space labels are not
     entirely in `sslbls_to_keep`.  If a gates label's state-space labels
