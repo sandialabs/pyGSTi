@@ -666,10 +666,7 @@ class CircuitLabel(Label,tuple):
         -------
         bool
         """
-        if self.name is None:
-            return False
-        else:
-            return self.name.startswith(prefix)
+        return self.name.startswith(prefix)
 
     
     def map_state_space_labels(self, mapper):
@@ -701,8 +698,12 @@ class CircuitLabel(Label,tuple):
         """
         Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2
         """
-        name = self.name if (self.name is not None) else "SubCircuit"
-        s = "%s[" % name + "".join([str(lbl) for lbl in self.components]) + "]"
+        if len(self.name) > 0:
+            s = self.name
+        else:
+            s = "".join([str(lbl) for lbl in self.components])
+            if len(self.components) > 1:
+                s = "(" + s + ")" # add parenthesis
         if self[2] != 1: s += "^%d" % self[2]
         return s
 
