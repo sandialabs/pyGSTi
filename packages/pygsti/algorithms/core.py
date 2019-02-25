@@ -2437,6 +2437,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
             v = _np.where( minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
                     #special handling for f == 0 terms using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+            #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
             v = _np.sqrt( v )
             v.shape = [KM] #reshape ensuring no copy is needed
             if cptp_penalty_factor != 0:
@@ -2534,6 +2535,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
             v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
             v = _np.where( minusCntVecMx == 0, 0.0, v)
+            #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
             v = _np.sqrt( v )
             assert(v.shape == (KM,)) #reshape ensuring no copy is needed
 
