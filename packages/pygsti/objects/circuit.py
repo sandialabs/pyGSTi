@@ -2818,7 +2818,7 @@ class CompressedCircuit(object):
                 self._str = state_dict['str'] # backwards compatibility
             else:
                 self.__dict__[k] = v
-        if 'line_labels' not in state_dict:
+        if '_line_labels' not in state_dict:
             self._line_labels = ('*',)
 
     def expand(self):
@@ -2830,7 +2830,7 @@ class CompressedCircuit(object):
         Circuit
         """
         tup = CompressedCircuit.expand_op_label_tuple(self._tup)
-        return Circuit(tup, self.line_labels, editable=False, stringrep=self._str)
+        return Circuit(tup, self._line_labels, editable=False, stringrep=self._str)
 
     @staticmethod
     def _getNumPeriods(circuit, periodLen):
