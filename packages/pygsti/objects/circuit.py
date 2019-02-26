@@ -92,9 +92,9 @@ def toLabel(x):
     if isinstance(x,_Label): return x
     #elif isinstance(x,Circuit): return x.to_circuit_label() # do this manually when desired, as it "boxes" a circuit being inserted
     else: return _Label(x)
-
     
 
+default_expand_subcircuits = True
 class Circuit(object):
     """
     A Circuit represents a quantum circuit, consisting of state preparation,
@@ -105,9 +105,10 @@ class Circuit(object):
     created with 'editable=True', a rich set of operations may be used to 
     construct the circuit in place, after which `done_editing()` should be 
     called so that the Circuit can be properly hashed as needed.
-    """   
+    """
+    
     def __init__(self, layer_labels=(), line_labels='auto', num_lines=None, editable=False,
-                 stringrep=None, name='', check=True):
+                 stringrep=None, name='', check=True, expand_subcircuits=default_expand_subcircuits):
         """
         TODO: docstring update
         Creates a new Circuit object, encapsulating a quantum circuit.
@@ -172,17 +173,26 @@ class Circuit(object):
         """
         layer_labels_objs = None # layer_labels elements as Label objects (only if needed)
 
+        if expand_subcircuits and layer_labels is not None:
+            layer_labels_objs = tuple(_itertools.chain(*[x.expand_subcircuits() for x in map(toLabel,layer_labels)]))
+            #print("DB: Layer labels = ",layer_labels_objs)
+        
         #Parse stringrep if needed
         if stringrep is not None and (layer_labels is None or check==True):
             cparser = _CircuitParser()
             cparser.lookup = None #lookup - functionality removed as it wasn't used
             chk,chk_labels = cparser.parse(stringrep) # tuple of Labels
+            if expand_subcircuits and chk is not None:
+                chk = tuple(_itertools.chain(*[x.expand_subcircuits() for x in map(toLabel,chk)]))
+                #print("DB: Check Layer labels = ",chk)
+
             if layer_labels is None:
                 layer_labels = chk
             else: # check == True
                 if layer_labels_objs is None:
                     layer_labels_objs = tuple(map(toLabel,layer_labels)) 
-                if layer_labels_objs != chk:
+                if layer_labels_objs != tuple(chk):
+                    #print("DB: ",layer_labels_objs,"VS",tuple(chk))
                     raise ValueError(("Error intializing Circuit: "
                                       " `layer_labels` and `stringrep` do not match: %s != %s\n"
                                       "(set `layer_labels` to None to infer it from `stringrep`)")
@@ -374,12 +384,11 @@ class Circuit(object):
         else: s = "{}"
         if mylines is not None:
             s += "@" + mylines # add line labels
-        if x > 1:
+        if x > 1 and Circuit.use_subcircuits:
             reppedCircuitLbl = self.as_label(nreps=x)
             return Circuit( (reppedCircuitLbl,) , self.line_labels, None, not self._static, s, check=False)
         else:
             return Circuit(self.tup * x, self.line_labels, None, not self._static, s, check=False) # just adds parens to string rep & copies
-        #return Circuit(self.tup * x, self.line_labels, None, not self._static, s, check=False)
 
     def __pow__(self,x): #same as __mul__()
         return self.__mul__(x)
@@ -2330,7 +2339,7 @@ class Circuit(object):
             nqubits = len(lbl_qubits)
             if nqubits == 1 and lbl.name is not None:
                 if isinstance(lbl,_CircuitLabel): # HACK
-                    return str(lbl)
+                    return "|"+str(lbl)+"|"
                 else:
                     return lbl.name
             elif lbl.name in ('CNOT','Gcnot') and nqubits == 2: # qubit indices = (control,target)
@@ -2344,6 +2353,8 @@ class Circuit(object):
                 else:
                     otherqubit = lbl_qubits[0]
                 return Ctxt + str(otherqubit)
+            elif isinstance(lbl,_CircuitLabel):
+                return "|"+str(lbl)+"|"
             else:
                 return str(lbl)
 
