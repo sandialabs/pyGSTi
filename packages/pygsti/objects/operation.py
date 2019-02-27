@@ -361,10 +361,12 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
 
 class LinearOperator(_modelmember.ModelMember):
     """ Base class for all gate representations """
+    cache_reps = False
     
     def __init__(self, dim, evotype):
         """ Initialize a new LinearOperator """
         super(LinearOperator, self).__init__(dim, evotype)
+        self._cachedrep = None
 
     @property
     def size(self):
@@ -410,10 +412,29 @@ class LinearOperator(_modelmember.ModelMember):
         if self._evotype == "statevec":
             return replib.SVOpRep_Dense(_np.ascontiguousarray(self.todense(),complex) )
         elif self._evotype == "densitymx":
-            return replib.DMOpRep_Dense(_np.ascontiguousarray(self.todense(),'d'))
+            if LinearOperator.cache_reps: # cache reps to avoid recomputation
+                if self._cachedrep is None:
+                    self._cachedrep = replib.DMOpRep_Dense(_np.ascontiguousarray(self.todense(),'d'))
+                return self._cachedrep
+            else:
+                return replib.DMOpRep_Dense(_np.ascontiguousarray(self.todense(),'d'))
         else:
             raise NotImplementedError("torep(%s) not implemented for %s objects!" %
                                       (self._evotype, self.__class__.__name__))            
+
+    @property
+    def dirty(self):
+        return _modelmember.ModelMember.dirty.fget(self) # call base class
+
+    @dirty.setter
+    def dirty(self, value):
+        if value == True: self._cachedrep = None # clear cached rep
+        _modelmember.ModelMember.dirty.fset(self, value) # call base class setter
+
+    def copy(self, parent=None):
+        self._cachedrep = None # deepcopy in ModelMember.copy can't copy CReps!
+        return _modelmember.ModelMember.copy(self,parent)
+
 
     def tosparse(self):
         """
@@ -3325,6 +3346,8 @@ class ComposedOp(LinearOperator):
         OpRep
         """
         factor_op_reps = [ gate.torep() for gate in self.factorops ]
+        #FUTURE? factor_op_reps = [ repmemo.get(id(gate), gate.torep(debug_time_dict)) for gate in self.factorops ] #something like this?
+
         if self._evotype == "densitymx":
             return replib.DMOpRep_Composed(factor_op_reps, self.dim)
         elif self._evotype == "statevec":
@@ -3451,6 +3474,134 @@ class ComposedOp(LinearOperator):
         for i,gate in enumerate(self.factorops):
             s += "Factor %d:\n" % i
             s += str(gate)
+        return s
+
+
+class ExponentiatedOp(ComposedOp):
+    """
+    A gate map that is the composition of a number of map-like factors (possibly
+    other `LinearOperator`s)
+    """
+    
+    def __init__(self, op_to_exponentiate, power, evotype="auto"):
+        """
+        TODO: docstring
+        Creates a new ComposedOp.
+
+        Parameters
+        ----------
+        ops_to_compose : list
+            List of `LinearOperator`-derived objects
+            that are composed to form this gate map.  Elements are composed
+            with vectors  in  *left-to-right* ordering, maintaining the same
+            convention as operation sequences in pyGSTi.  Note that this is
+            *opposite* from standard matrix multiplication order.
+            
+        dim : int or "auto"
+            Dimension of this operation.  Can be set to `"auto"` to take dimension
+            from `ops_to_compose[0]` *if* there's at least one gate being
+            composed.
+
+        evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
+            The evolution type of this operation.  Can be set to `"auto"` to take
+            the evolution type of `ops_to_compose[0]` *if* there's at least
+            one gate being composed.
+        """
+        #We may not actually need to save these, since they can be inferred easily
+        self.exponentiated_op = op_to_exponentiate
+        self.power = power
+
+        dim = op_to_exponentiate.dim
+
+        if evotype == "auto":
+            evotype = op_to_exponentiate._evotype
+        
+        ComposedOp.__init__(self, [self.exponentiated_op]*power, dim, evotype)
+
+    def submembers(self):
+        """
+        Get the ModelMember-derived objects contained in this one.
+        
+        Returns
+        -------
+        list
+        """
+        return [ self.exponentiated_op ]
+
+    def copy(self, parent=None):
+        """
+        Copy this object.
+
+        Returns
+        -------
+        LinearOperator
+            A copy of this object.
+        """
+        # We need to override this method so that factor gates have their 
+        # parent reset correctly.
+        cls = self.__class__ # so that this method works for derived classes too
+        copyOfMe = cls(self.exponentiated_op.copy(parent), self.power, self._evotype)
+        return self._copy_gpindices(copyOfMe, parent)
+
+
+    def torep(self):
+        """
+        Return a "representation" object for this gate.
+
+        Such objects are primarily used internally by pyGSTi to compute
+        things like probabilities more efficiently.
+
+        Returns
+        -------
+        OpRep
+        """
+        if self._evotype == "densitymx":
+            return replib.DMOpRep_Exponentiated(self.exponentiated_op.torep(), self.power, self.dim)
+        elif self._evotype == "statevec":
+            factor_op_reps = [ self.exponentiated_op.torep() ]*self.power #TODO: make an exponentiated rep for state vecs
+            return replib.SVOpRep_Composed(factor_op_reps, self.dim)
+        elif self._evotype == "stabilizer":
+            factor_op_reps = [ self.exponentiated_op.torep() ]*self.power #TODO: make an exponentiated rep for stabilizer states
+            nQubits = int(round(_np.log2(self.dim))) # "stabilizer" is a unitary-evolution type mode
+            return replib.SBOpRep_Composed(factor_op_reps, nQubits)
+        assert(False), "Invalid internal _evotype: %s" % self._evotype
+
+
+    def to_vector(self):
+        """
+        Get the gate parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The gate parameters as a 1D array with length num_params().
+        """
+        return self.exponentiated_op.to_vector()
+
+
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == self.num_params())
+        self.exponentiated_op.from_vector(v)
+        self.dirty = True
+
+
+    def __str__(self):
+        """ Return string representation """
+        s = "Exponentiated gate that raise the below op to the %d power\n" % self.power
+        s += str(self.exponentiated_op)
         return s
 
     

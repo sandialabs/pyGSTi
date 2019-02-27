@@ -149,6 +149,18 @@ namespace CReps {
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
   };
 
+  class DMOpCRep_Exponentiated :public DMOpCRep{
+    public:
+    DMOpCRep* _exponentiated_gate_crep;
+    INT _power;
+    
+    DMOpCRep_Exponentiated(DMOpCRep* exponentiated_gate_crep, INT power, INT dim);
+    virtual ~DMOpCRep_Exponentiated();
+    virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
+    virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
+  };
+
+
   class DMOpCRep_Lindblad :public DMOpCRep{
     public:
     DMOpCRep* _errgen_rep;

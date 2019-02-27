@@ -125,8 +125,9 @@ class ExplicitLayerLizard(LayerLizard):
             else:
                 subCircuitOp = self.ops[layerlbl.components[0]]
             if layerlbl.reps != 1:
-                finalOp = Composed([subCircuitOp]*layerlbl.reps,
-                                   dim=self.model.dim, evotype=self.model._evotype)
+                #finalOp = Composed([subCircuitOp]*layerlbl.reps,
+                #                   dim=self.model.dim, evotype=self.model._evotype)
+                finalOp = _op.ExponentiatedOp(subCircuitOp,layerlbl.reps, evotype=self.model._evotype)
             else:
                 finalOp = subCircuitOp
             return finalOp

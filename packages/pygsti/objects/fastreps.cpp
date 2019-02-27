@@ -574,6 +574,91 @@ namespace CReps {
     return out_state;
   }
 
+  /****************************************************************************\
+  |* DMOpCRep_Exponentiated                                                   *|
+  \****************************************************************************/
+
+  DMOpCRep_Exponentiated::DMOpCRep_Exponentiated(DMOpCRep* exponentiated_gate_crep, INT power, INT dim)
+    :DMOpCRep(dim)
+  {
+    _exponentiated_gate_crep = exponentiated_gate_crep;
+    _power = power;
+  }
+
+  DMOpCRep_Exponentiated::~DMOpCRep_Exponentiated() { }
+
+  DMStateCRep* DMOpCRep_Exponentiated::acton(DMStateCRep* state, DMStateCRep* out_state) {
+
+    DEBUG(std::cout << "Exponentiated acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    DMStateCRep *tmp2, *tmp1 = out_state; //tmp1 already alloc'd
+    DMStateCRep* t; // for swapping
+
+    //if power is 0 just copy state --> outstate
+    if(_power == 0) {
+      out_state->copy_from(state);
+      return out_state;
+    }
+
+    //Act with first gate: output in tmp1
+    _exponentiated_gate_crep->acton(state, tmp1);
+    
+    if(_power > 1) {
+      DMStateCRep temp_state(_dim); tmp2 = &temp_state;
+
+      //Act with additional gates: tmp1 -> tmp2 then swap, so output in tmp1
+      for(INT i=1; i < _power; i++) {
+	_exponentiated_gate_crep->acton(tmp1,tmp2);
+	t = tmp1; tmp1 = tmp2; tmp2 = t;
+      }
+      
+      //tmp1 holds the output state now; if tmp1 == out_state
+      // we're in luck, otherwise we need to copy it into out_state.
+      if(tmp1 != out_state) {
+	out_state->copy_from(tmp1);
+      }
+    }
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
+  DMStateCRep* DMOpCRep_Exponentiated::adjoint_acton(DMStateCRep* state, DMStateCRep* out_state) {
+
+    DEBUG(std::cout << "Exponentiated adjoint_acton called!" << std::endl);
+    DEBUG(state->print("INPUT"));
+    DMStateCRep *tmp2, *tmp1 = out_state; //tmp1 already alloc'd
+    DMStateCRep* t; // for swapping
+
+    //Note: same as acton(...) but perform adjoint_acton
+    //if power is 0 just copy state --> outstate
+    if(_power == 0) {
+      out_state->copy_from(state);
+      return out_state;
+    }
+
+    //Act with first gate: output in tmp1
+    _exponentiated_gate_crep->adjoint_acton(state, tmp1);
+    
+    if(_power > 1) {
+      DMStateCRep temp_state(_dim); tmp2 = &temp_state;
+
+      //Act with additional gates: tmp1 -> tmp2 then swap, so output in tmp1
+      for(INT i=1; i < _power; i++) {
+	_exponentiated_gate_crep->adjoint_acton(tmp1,tmp2);
+	t = tmp1; tmp1 = tmp2; tmp2 = t;
+      }
+      
+      //tmp1 holds the output state now; if tmp1 == out_state
+      // we're in luck, otherwise we need to copy it into out_state.
+      if(tmp1 != out_state) {
+	out_state->copy_from(tmp1);
+      }
+    }
+    DEBUG(out_state->print("OUTPUT"));
+    return out_state;
+  }
+
+
 
   /****************************************************************************\
   |* DMOpCRep_Lindblad                                                      *|
