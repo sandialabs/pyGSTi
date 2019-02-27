@@ -392,7 +392,7 @@ class Circuit(object):
         else: s = "{}"
         if mylines is not None:
             s += "@" + mylines # add line labels
-        if ntimes > 1 and expand==False
+        if ntimes > 1 and expand==False:
             reppedCircuitLbl = self.as_label(nreps=ntimes)
             return Circuit( (reppedCircuitLbl,) , self.line_labels, None, not self._static, s, check=False)
         else:
