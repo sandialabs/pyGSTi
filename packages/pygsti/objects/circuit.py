@@ -82,10 +82,14 @@ def _accumulate_explicit_sslbls(obj):
 def _opSeqToStr(seq, line_labels):
     """ Used for creating default string representations. """
     if len(seq) == 0: return "{}" #special case of empty operation sequence
+    process_lists = lambda el: el if not isinstance(el,list) else \
+        ('[%s]' % ''.join(map(str,el)) if (len(el) != 1) else str(el[0]))
+
     if line_labels is None or line_labels == ('*',):
-        return ''.join(map(str,seq))
+        return ''.join(map(str,map(process_lists,seq)))
     else:
-        return ''.join(map(str,seq)) + "@(" + ','.join(map(str,line_labels)) + ")"
+        return ''.join(map(str,map(process_lists,seq))) \
+            + "@(" + ','.join(map(str,line_labels)) + ")"
 
 def toLabel(x):
     """ Helper function for converting `x` to a single Label object """
@@ -260,7 +264,7 @@ class Circuit(object):
         self._static = not editable
         #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
         self._name = name #can be None
-        self._str = stringrep #can be None (lazy generation)
+        self._str = stringrep if self._static else None #can be None (lazy generation)
         self._times = None # for FUTURE expansion
         self.auxinfo = {} # for FUTURE expansion / user metadata
 
@@ -312,8 +316,12 @@ class Circuit(object):
     def str(self):
         """ The Python string representation of this Circuit."""
         if self._str is None:
-            self._str = _opSeqToStr(self._labels, self.line_labels) # lazy generation
-        return self._str
+            generated_str = _opSeqToStr(self._labels, self.line_labels) # lazy generation
+            if self._static: # if we're read-only then cache the string one and for all,
+                self._str = generated_str  # otherwise keep generating it as needed (unless it's set by the user?)
+            return generated_str
+        else:
+            return self._str
 
     def _labels_lines_str(self):
         """ Split the string representation up into layer-labels & line-labels parts """
@@ -384,7 +392,7 @@ class Circuit(object):
         else: s = "{}"
         if mylines is not None:
             s += "@" + mylines # add line labels
-        if x > 1 and Circuit.use_subcircuits:
+        if x > 1 and not default_expand_subcircuits:
             reppedCircuitLbl = self.as_label(nreps=x)
             return Circuit( (reppedCircuitLbl,) , self.line_labels, None, not self._static, s, check=False)
         else:
@@ -392,7 +400,7 @@ class Circuit(object):
 
     def __pow__(self,x): #same as __mul__()
         return self.__mul__(x)
-
+    
     def __eq__(self,x):
         if x is None: return False
         xtup = x.tup if isinstance(x,Circuit) else tuple(x)
@@ -1515,7 +1523,6 @@ class Circuit(object):
             return newobj
 
         self._labels = replace(self._labels)
-        self._str = None # so string rep gets regenerated
 
 
     def replace_gatename(self, old_gatename, new_gatename):
