@@ -122,6 +122,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     for k in range(max_iter): #outer loop
         # assume x, f, fnorm hold valid values
 
+        #t0 = _time.time() # REMOVE
         if len(msg) > 0: 
             break #exit outer loop if an exit-message has been set
 
@@ -134,6 +135,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         if profiler: profiler.mem_check("custom_leastsq: begin outer iter *before de-alloc*")
         Jac = None; JTJ = None; JTf = None
 
+        #printer.log("PT1: %.3fs" % (_time.time()-t0)) # REMOVE
         if profiler: profiler.mem_check("custom_leastsq: begin outer iter")
         if k >= num_fd_iters:
             Jac = jac_fn(x)
@@ -144,6 +146,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 x_plus_dx = x.copy()
                 x_plus_dx[i] += eps
                 Jac[:,i] = (obj_fn(x_plus_dx)-f)/eps
+        #printer.log("PT2: %.3fs" % (_time.time()-t0)) # REMOVE
 
         #DEBUG: compare with analytic jacobian (need to uncomment num_fd_iters DEBUG line above too)
         #Jac_analytic = jac_fn(x)
@@ -171,8 +174,11 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         tm = _time.time()
         if my_cols_slice is None:
             my_cols_slice = _mpit.distribute_for_dot(Jac.shape[0], comm)
+        #printer.log("PT3: %.3fs" % (_time.time()-t0)) # REMOVE
         JTJ = _mpit.mpidot(Jac.T,Jac,my_cols_slice,comm)   #_np.dot(Jac.T,Jac)
+        #printer.log("PT4: %.3fs" % (_time.time()-t0)) # REMOVE
         JTf = _np.dot(Jac.T,f)
+        #printer.log("PT5: %.3fs" % (_time.time()-t0)) # REMOVE
         if profiler: profiler.add_time("custom_leastsq: dotprods",tm)
         #assert(not _np.isnan(JTJ).any()), "NaN in JTJ!" # NaNs tracking
         #assert(not _np.isinf(JTJ).any()), "inf in JTJ! norm Jac = %g" % _np.linalg.norm(Jac) # NaNs tracking
@@ -183,6 +189,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         norm_JTf = _np.linalg.norm(JTf,ord=_np.inf)
         norm_x = _np.dot(x,x) # _np.linalg.norm(x)**2
         undampled_JTJ_diag = JTJ.diagonal().copy()
+        #printer.log("PT6: %.3fs" % (_time.time()-t0)) # REMOVE
 
         if norm_JTf < jac_norm_tol:
             msg = "norm(jacobian) is at most %g" % jac_norm_tol
@@ -294,6 +301,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             
             JTJ[idiag] = undampled_JTJ_diag #restore diagonal
         #end of inner loop
+
+        #printer.log("PT7: %.3fs" % (_time.time()-t0)) # REMOVE
     #end of outer loop
     else:
         #if no break stmt hit, then we've exceeded maxIter
