@@ -2830,7 +2830,7 @@ class CompressedCircuit(object):
         Circuit
         """
         tup = CompressedCircuit.expand_op_label_tuple(self._tup)
-        return Circuit(tup, self.line_labels, editable=False, stringrep=self._str)
+        return Circuit(tup, self._line_labels, editable=False, stringrep=self._str,check=False)
 
     @staticmethod
     def _getNumPeriods(circuit, periodLen):
