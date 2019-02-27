@@ -404,7 +404,7 @@ class OpModel(Model):
             self._basis = _Basis.cast(basis, self.state_space_labels)
 
             
-    def set_simtype(self, sim_type, calc_cache=None):
+    def set_simtype(self, sim_type, calc_cache=None, max_cache_size=None):
         """
         Reset the forward simulation type of this model.
 
@@ -447,6 +447,8 @@ class OpModel(Model):
         if sim_type == "termorder":
             cache = calc_cache if (calc_cache is not None) else {} # make a temp cache if none is given
             self._sim_args.append(cache) # add calculation cache as another argument
+        elif sim_type == "map":
+            self._sim_args.append(max_cache_size) # add cache size as another argument
 
     #TODO REMOVE
     #def reset_basis(self):
@@ -787,6 +789,8 @@ class OpModel(Model):
         if self._sim_type == "termorder":
             kwargs['max_order'] = int(self._sim_args[0])
             kwargs['cache'] = self._sim_args[-1] # always the list argument
+        if self._sim_type == "map":
+            kwargs['max_cache_size'] =  self._sim_args[0]
 
         assert(self._calcClass is not None), "Model does not have a calculator setup yet!"
         return self._calcClass(self._dim, layer_lizard, self._paramvec, **kwargs) #fwdsim class
@@ -1331,7 +1335,7 @@ class OpModel(Model):
                     if ng not in evt_cache:
                         evt_cache[ng] = self.bulk_evaltree(
                             circuit_list, minSubtrees=ng, numSubtreeComms=Ng,
-                            dataset=dataset)                        
+                            dataset=dataset, verbosity=printer)                        
                         # FUTURE: make a _bulk_evaltree_presimplified version that takes simplified
                         # operation sequences as input so don't have to re-simplify every time we hit this line.
                     cacheSize = max([s.cache_size() for s in evt_cache[ng][0].get_sub_trees()])
@@ -1586,19 +1590,18 @@ class OpModel(Model):
         simplified_circuits, elIndices, outcomes, nEls = \
                             self.simplify_circuits(circuit_list, dataset)
 
-        evalTree = self._fwdsim().construct_evaltree()
-        evalTree.initialize(simplified_circuits, numSubtreeComms)
+        evalTree = self._fwdsim().construct_evaltree(simplified_circuits, numSubtreeComms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
                     (len(circuit_list),_time.time()-tm)); tm = _time.time()
 
         if maxTreeSize is not None:
-            elIndices = evalTree.split(elIndices, maxTreeSize, None, printer) # won't split if unnecessary
+            elIndices = evalTree.split(elIndices, maxTreeSize, None, printer-1) # won't split if unnecessary
 
         if minSubtrees is not None:
             if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
                 evalTree.original_index_lookup = None # reset this so we can re-split TODO: cleaner
-                elIndices = evalTree.split(elIndices, None, minSubtrees, printer)
+                elIndices = evalTree.split(elIndices, None, minSubtrees, printer-1)
                 if maxTreeSize is not None and \
                         any([ len(sub)>maxTreeSize for sub in evalTree.get_sub_trees()]):
                     _warnings.warn("Could not create a tree with minSubtrees=%d" % minSubtrees
