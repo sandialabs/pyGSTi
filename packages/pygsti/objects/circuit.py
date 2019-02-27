@@ -82,19 +82,23 @@ def _accumulate_explicit_sslbls(obj):
 def _opSeqToStr(seq, line_labels):
     """ Used for creating default string representations. """
     if len(seq) == 0: return "{}" #special case of empty operation sequence
+    process_lists = lambda el: el if not isinstance(el,list) else \
+        ('[%s]' % ''.join(map(str,el)) if (len(el) != 1) else str(el[0]))
+
     if line_labels is None or line_labels == ('*',):
-        return ''.join(map(str,seq))
+        return ''.join(map(str,map(process_lists,seq)))
     else:
-        return ''.join(map(str,seq)) + "@(" + ','.join(map(str,line_labels)) + ")"
+        return ''.join(map(str,map(process_lists,seq))) \
+            + "@(" + ','.join(map(str,line_labels)) + ")"
 
 def toLabel(x):
     """ Helper function for converting `x` to a single Label object """
     if isinstance(x,_Label): return x
     #elif isinstance(x,Circuit): return x.to_circuit_label() # do this manually when desired, as it "boxes" a circuit being inserted
     else: return _Label(x)
-
     
 
+default_expand_subcircuits = True
 class Circuit(object):
     """
     A Circuit represents a quantum circuit, consisting of state preparation,
@@ -105,9 +109,10 @@ class Circuit(object):
     created with 'editable=True', a rich set of operations may be used to 
     construct the circuit in place, after which `done_editing()` should be 
     called so that the Circuit can be properly hashed as needed.
-    """   
+    """
+    
     def __init__(self, layer_labels=(), line_labels='auto', num_lines=None, editable=False,
-                 stringrep=None, name='', check=True):
+                 stringrep=None, name='', check=True, expand_subcircuits=default_expand_subcircuits):
         """
         TODO: docstring update
         Creates a new Circuit object, encapsulating a quantum circuit.
@@ -172,17 +177,26 @@ class Circuit(object):
         """
         layer_labels_objs = None # layer_labels elements as Label objects (only if needed)
 
+        if expand_subcircuits and layer_labels is not None:
+            layer_labels_objs = tuple(_itertools.chain(*[x.expand_subcircuits() for x in map(toLabel,layer_labels)]))
+            #print("DB: Layer labels = ",layer_labels_objs)
+        
         #Parse stringrep if needed
         if stringrep is not None and (layer_labels is None or check==True):
             cparser = _CircuitParser()
             cparser.lookup = None #lookup - functionality removed as it wasn't used
             chk,chk_labels = cparser.parse(stringrep) # tuple of Labels
+            if expand_subcircuits and chk is not None:
+                chk = tuple(_itertools.chain(*[x.expand_subcircuits() for x in map(toLabel,chk)]))
+                #print("DB: Check Layer labels = ",chk)
+
             if layer_labels is None:
                 layer_labels = chk
             else: # check == True
                 if layer_labels_objs is None:
                     layer_labels_objs = tuple(map(toLabel,layer_labels)) 
-                if layer_labels_objs != chk:
+                if layer_labels_objs != tuple(chk):
+                    #print("DB: ",layer_labels_objs,"VS",tuple(chk))
                     raise ValueError(("Error intializing Circuit: "
                                       " `layer_labels` and `stringrep` do not match: %s != %s\n"
                                       "(set `layer_labels` to None to infer it from `stringrep`)")
@@ -250,7 +264,7 @@ class Circuit(object):
         self._static = not editable
         #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
         self._name = name #can be None
-        self._str = stringrep #can be None (lazy generation)
+        self._str = stringrep if self._static else None #can be None (lazy generation)
         self._times = None # for FUTURE expansion
         self.auxinfo = {} # for FUTURE expansion / user metadata
 
@@ -302,8 +316,12 @@ class Circuit(object):
     def str(self):
         """ The Python string representation of this Circuit."""
         if self._str is None:
-            self._str = _opSeqToStr(self._labels, self.line_labels) # lazy generation
-        return self._str
+            generated_str = _opSeqToStr(self._labels, self.line_labels) # lazy generation
+            if self._static: # if we're read-only then cache the string one and for all,
+                self._str = generated_str  # otherwise keep generating it as needed (unless it's set by the user?)
+            return generated_str
+        else:
+            return self._str
 
     def _labels_lines_str(self):
         """ Split the string representation up into layer-labels & line-labels parts """
@@ -366,24 +384,26 @@ class Circuit(object):
         return Circuit(self.tup + x.tup, new_line_labels,
                        None, editable, s, check=False)
 
-    def __mul__(self,x):
-        assert( (_compat.isint(x) or _np.issubdtype(x,int)) and x >= 0)
+    def repeat(self,ntimes,expand=default_expand_subcircuits):
+        assert( (_compat.isint(ntimes) or _np.issubdtype(ntimes,int)) and ntimes >= 0)
         mystr,mylines = self._labels_lines_str()
-        if x > 1: s = "(%s)^%d" % (mystr,x)
-        elif x == 1: s = "(%s)" % mystr
+        if ntimes > 1: s = "(%s)^%d" % (mystr,ntimes)
+        elif ntimes == 1: s = "(%s)" % mystr
         else: s = "{}"
         if mylines is not None:
             s += "@" + mylines # add line labels
-        if x > 1:
-            reppedCircuitLbl = self.as_label(nreps=x)
+        if ntimes > 1 and expand==False
+            reppedCircuitLbl = self.as_label(nreps=ntimes)
             return Circuit( (reppedCircuitLbl,) , self.line_labels, None, not self._static, s, check=False)
         else:
-            return Circuit(self.tup * x, self.line_labels, None, not self._static, s, check=False) # just adds parens to string rep & copies
-        #return Circuit(self.tup * x, self.line_labels, None, not self._static, s, check=False)
+            return Circuit(self.tup * ntimes, self.line_labels, None, not self._static, s, check=False) # just adds parens to string rep & copies
+        
+    def __mul__(self,x):
+        return self.repeat(x)
 
     def __pow__(self,x): #same as __mul__()
         return self.__mul__(x)
-
+    
     def __eq__(self,x):
         if x is None: return False
         xtup = x.tup if isinstance(x,Circuit) else tuple(x)
@@ -1506,7 +1526,6 @@ class Circuit(object):
             return newobj
 
         self._labels = replace(self._labels)
-        self._str = None # so string rep gets regenerated
 
 
     def replace_gatename(self, old_gatename, new_gatename):
@@ -2330,7 +2349,7 @@ class Circuit(object):
             nqubits = len(lbl_qubits)
             if nqubits == 1 and lbl.name is not None:
                 if isinstance(lbl,_CircuitLabel): # HACK
-                    return str(lbl)
+                    return "|"+str(lbl)+"|"
                 else:
                     return lbl.name
             elif lbl.name in ('CNOT','Gcnot') and nqubits == 2: # qubit indices = (control,target)
@@ -2344,6 +2363,8 @@ class Circuit(object):
                 else:
                     otherqubit = lbl_qubits[0]
                 return Ctxt + str(otherqubit)
+            elif isinstance(lbl,_CircuitLabel):
+                return "|"+str(lbl)+"|"
             else:
                 return str(lbl)
 
@@ -2818,7 +2839,7 @@ class CompressedCircuit(object):
                 self._str = state_dict['str'] # backwards compatibility
             else:
                 self.__dict__[k] = v
-        if 'line_labels' not in state_dict:
+        if '_line_labels' not in state_dict:
             self._line_labels = ('*',)
 
     def expand(self):

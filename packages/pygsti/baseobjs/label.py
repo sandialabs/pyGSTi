@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numbers as _numbers
 import sys as _sys
+import itertools as _itertools
 
 import os,inspect
 debug_record = {}
@@ -98,6 +99,10 @@ class Label(object):
     @property
     def reps(self):
         return 1 # most labels have only reps==1
+
+    def expand_subcircuits(self):
+        """TODO: docstring - returns a list/tuple of labels """
+        return (self,) # most labels just expand to themselves
 
 
 
@@ -595,6 +600,26 @@ class LabelTupTup(Label,tuple):
         if len(self.components) == 0: return 1 # still depth 1 even if empty
         return max([x.depth() for x in self.components])
 
+    def expand_subcircuits(self):
+        """TODO: docstring - returns a list/tuple of labels """
+        ret = []
+        expanded_comps = [ x.expand_subcircuits() for x in self.components ]
+        
+        #DEBUG TODO REMOVE
+        #print("DB: expaned comps:") 
+        #for i,x in enumerate(expanded_comps):
+        #    print(i,": ",x)
+        
+        for i in range(self.depth()): # depth == # of layers when expanded
+            ec = []
+            for expanded_comp in expanded_comps:
+                if i < len(expanded_comp):
+                    ec.extend( expanded_comp[i].components ) # .components = vertical expansion
+            #assert(len(ec) > 0), "Logic error!" #this is ok (e.g. an idle subcircuit)
+            ret.append( LabelTupTup(ec) )
+        return tuple(ret)
+
+
 
     __hash__ = tuple.__hash__ # this is why we derive from tuple - using the
                               # native tuple.__hash__ directly == speed boost
@@ -666,10 +691,7 @@ class CircuitLabel(Label,tuple):
         -------
         bool
         """
-        if self.name is None:
-            return False
-        else:
-            return self.name.startswith(prefix)
+        return self.name.startswith(prefix)
 
     
     def map_state_space_labels(self, mapper):
@@ -701,8 +723,12 @@ class CircuitLabel(Label,tuple):
         """
         Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2
         """
-        name = self.name if (self.name is not None) else "SubCircuit"
-        s = "%s[" % name + "".join([str(lbl) for lbl in self.components]) + "]"
+        if len(self.name) > 0:
+            s = self.name
+        else:
+            s = "".join([str(lbl) for lbl in self.components])
+            if len(self.components) > 1:
+                s = "(" + s + ")" # add parenthesis
         if self[2] != 1: s += "^%d" % self[2]
         return s
 
@@ -757,6 +783,11 @@ class CircuitLabel(Label,tuple):
     def depth(self):
         return sum([x.depth() for x in self.components])*self.reps
 
+    def expand_subcircuits(self):
+        """TODO: docstring - returns a list/tuple of labels """
+        #REMOVE print("Expanding subcircuit components: ",self.components)
+        #REMOVE print(" --> ",[ x.expand_subcircuits() for x in self.components ])
+        return tuple(_itertools.chain(*[x.expand_subcircuits() for x in self.components]))*self.reps
 
     __hash__ = tuple.__hash__ # this is why we derive from tuple - using the
                               # native tuple.__hash__ directly == speed boost
