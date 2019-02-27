@@ -384,19 +384,22 @@ class Circuit(object):
         return Circuit(self.tup + x.tup, new_line_labels,
                        None, editable, s, check=False)
 
-    def __mul__(self,x):
-        assert( (_compat.isint(x) or _np.issubdtype(x,int)) and x >= 0)
+    def repeat(self,ntimes,expand=default_expand_subcircuits):
+        assert( (_compat.isint(ntimes) or _np.issubdtype(ntimes,int)) and ntimes >= 0)
         mystr,mylines = self._labels_lines_str()
-        if x > 1: s = "(%s)^%d" % (mystr,x)
-        elif x == 1: s = "(%s)" % mystr
+        if ntimes > 1: s = "(%s)^%d" % (mystr,ntimes)
+        elif ntimes == 1: s = "(%s)" % mystr
         else: s = "{}"
         if mylines is not None:
             s += "@" + mylines # add line labels
-        if x > 1 and not default_expand_subcircuits:
-            reppedCircuitLbl = self.as_label(nreps=x)
+        if ntimes > 1 and expand==False
+            reppedCircuitLbl = self.as_label(nreps=ntimes)
             return Circuit( (reppedCircuitLbl,) , self.line_labels, None, not self._static, s, check=False)
         else:
-            return Circuit(self.tup * x, self.line_labels, None, not self._static, s, check=False) # just adds parens to string rep & copies
+            return Circuit(self.tup * ntimes, self.line_labels, None, not self._static, s, check=False) # just adds parens to string rep & copies
+        
+    def __mul__(self,x):
+        return self.repeat(x)
 
     def __pow__(self,x): #same as __mul__()
         return self.__mul__(x)
