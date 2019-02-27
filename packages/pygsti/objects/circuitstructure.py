@@ -316,6 +316,7 @@ class LsGermsStructure(CircuitStructure):
 
 
         self.allstrs = []
+        self.allstrs_set = set()
         self.unindexed = [] # unindexed strings
         self._plaquettes = {}
         self._firsts = []
@@ -391,11 +392,12 @@ class LsGermsStructure(CircuitStructure):
                     del fidpairs[i]
 
         plaq = self.create_plaquette(basestr, fidpairs)
-        self.allstrs.extend( [ _gstrc.manipulate_circuit(opstr,self.sequenceRules)
-                               for i,j,opstr in plaq ] )
 
-        if False and len(self.allstrs) < 8000: # TEST DEBUG
-            _lt.remove_duplicates_in_place(self.allstrs)
+        for x in (_gstrc.manipulate_circuit(opstr,self.sequenceRules) for i,j,opstr in plaq):
+            if x not in self.allstrs_set:
+                self.allstrs_set.add(x)
+                self.allstrs.append(x)
+        #_lt.remove_duplicates_in_place(self.allstrs) # above block does this more efficiently
 
         self._plaquettes[(L,germ)] = plaq
 
@@ -429,16 +431,17 @@ class LsGermsStructure(CircuitStructure):
             and therefore not added.
         """
         from ..construction import circuitconstruction as _gstrc #maybe move used routines to a circuittools.py?
-        if dsfilter and len(dsfilter) > 8000: dsfilter = None # TEST DEBUG - remove dsfilter check
+        #if dsfilter and len(dsfilter) > 8000: dsfilter = None # TEST DEBUG - remove dsfilter check
 
         missing_list = []
         for opstr in gsList:
-            if True or len(self.allstrs) > 8000 or (opstr not in self.allstrs): # TEST DEBUG
+            if opstr not in self.allstrs_set:
                 if dsfilter:
                     trans_opstr = _gstrc.translate_circuit(opstr, self.aliases)
                     if trans_opstr not in dsfilter:
                         missing_list.append( opstr )
                         continue
+                self.allstrs_set.add(opstr)
                 self.allstrs.append(opstr)
                 self.unindexed.append(opstr)
         return missing_list
@@ -574,6 +577,7 @@ class LsGermsStructure(CircuitStructure):
         cpy = LsGermsStructure(self.Ls, self.germs, self.prepStrs,
                                self.effectStrs, self.aliases, self.sequenceRules)
         cpy.allstrs = self.allstrs[:]
+        cpy.allstrs_set = self.allstrs_set.copy()
         cpy.unindexed = self.unindexed[:]
         cpy._plaquettes = { k: v.copy() for k,v in self._plaquettes.items() }
         cpy._firsts = self._firsts[:]
@@ -627,6 +631,7 @@ class LsGermsSerialStructure(CircuitStructure):
 
 
         self.allstrs = []
+        self.allstrs_set = set()
         self.unindexed = []
         self._plaquettes = {}
         self._firsts = []
@@ -690,7 +695,7 @@ class LsGermsSerialStructure(CircuitStructure):
         missing_list = []
         from ..construction import circuitconstruction as _gstrc #maybe move used routines to a circuittools.py?
 
-        if dsfilter and len(dsfilter) < 8000: # TEST DEBUG
+        if dsfilter: # and len(dsfilter) < 8000: # TEST DEBUG
             inds_to_remove = []
             for k,(prepStr,effectStr) in enumerate(fidpairs):
                 el = prepStr + basestr + effectStr
@@ -705,10 +710,12 @@ class LsGermsSerialStructure(CircuitStructure):
                     del fidpairs[i]
 
         plaq = self.create_plaquette(basestr, fidpairs)
-        self.allstrs.extend( [ _gstrc.manipulate_circuit(opstr,self.sequenceRules)
-                               for i,j,opstr in plaq ] )
-        if False and len(self.allstrs) < 8000: # TEST DEBUG
-            _lt.remove_duplicates_in_place(self.allstrs)
+
+        for x in (_gstrc.manipulate_circuit(opstr,self.sequenceRules) for i,j,opstr in plaq):
+            if x not in self.allstrs_set:
+                self.allstrs_set.add(x)
+                self.allstrs.append(x)
+        # _lt.remove_duplicates_in_place(self.allstrs) # above block does this more efficiently
 
         self._plaquettes[(L,germ)] = plaq
 
@@ -745,12 +752,13 @@ class LsGermsSerialStructure(CircuitStructure):
 
         missing_list = []
         for opstr in gsList:
-            if opstr not in self.allstrs:
+            if opstr not in self.allstrs_set:
                 if dsfilter:
                     trans_opstr = _gstrc.translate_circuit(opstr, self.aliases)
                     if trans_opstr not in dsfilter:
                         missing_list.append( opstr )
                         continue
+                self.allstrs_set.add(opstr)
                 self.allstrs.append(opstr)
                 self.unindexed.append(opstr)
         return missing_list
@@ -906,6 +914,7 @@ class LsGermsSerialStructure(CircuitStructure):
         cpy = LsGermsSerialStructure(self.Ls, self.germs, self.nMinorRows,
                                      self.nMinorCols, self.aliases, self.sequenceRules)
         cpy.allstrs = self.allstrs[:]
+        cpy.allstrs_set = self.allstrs_set.copy()
         cpy.unindexed = self.unindexed[:]
         cpy._plaquettes = { k: v.copy() for k,v in self._plaquettes.items() }
         cpy._firsts = self._firsts[:]
