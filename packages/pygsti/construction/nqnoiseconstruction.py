@@ -886,7 +886,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
     #            % (len(idle_gatename_fidpair_lists), maxWt, len(gatename_fidpair_lists),
     #               nQubits, len(gatename_fidpair_lists)*(3**(2*nCore)), nCore, 3**(2*nQubits)))
     #print("DB: over %d qubits -> template w/%d els" % (nQubits, len(tmpl)))
-    printer.log("Testing %d fidpairs for %d-wt idle -> %d after %dQ tiling"
+    printer.log("Testing %d fidpairs for %d-wt idle -> %d fidpairs after tiling onto %d qubits"
                 % (len(idle_gatename_fidpair_lists), maxWt, len(gatename_fidpair_lists),nQubits))
 
 
@@ -1946,7 +1946,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
             if gl.sslbls is None: continue # gates that act on everything (usually just the identity Gi gate)
             if set(gl.sslbls) == set(core_qubits):
                 pure_op_labels.append(gl)
-                wrtParams.update( _slct.as_array(model.operation_blks['layers'][gl].gpindices) )
+                wrtParams.update( _slct.as_array(model.operation_blks['cloudnoise'][gl].gpindices) )
         pure_op_params = wrtParams - Gi_params # (Gi params don't count)
         wrtParams = _slct.list_to_slice( sorted(list(pure_op_params)), array_ok=True )
         Ngp = _slct.length(wrtParams) # number of "pure gate" params that we want to amplify
