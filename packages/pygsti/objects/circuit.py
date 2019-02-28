@@ -98,7 +98,6 @@ def toLabel(x):
     else: return _Label(x)
     
 
-default_expand_subcircuits = True
 class Circuit(object):
     """
     A Circuit represents a quantum circuit, consisting of state preparation,
@@ -110,9 +109,10 @@ class Circuit(object):
     construct the circuit in place, after which `done_editing()` should be 
     called so that the Circuit can be properly hashed as needed.
     """
-    
+    default_expand_subcircuits = True
+
     def __init__(self, layer_labels=(), line_labels='auto', num_lines=None, editable=False,
-                 stringrep=None, name='', check=True, expand_subcircuits=default_expand_subcircuits):
+                 stringrep=None, name='', check=True, expand_subcircuits="default"):
         """
         TODO: docstring update
         Creates a new Circuit object, encapsulating a quantum circuit.
@@ -176,7 +176,8 @@ class Circuit(object):
             `line_labels` are consistent and want to save computation time.
         """
         layer_labels_objs = None # layer_labels elements as Label objects (only if needed)
-
+        if expand_subcircuits == "default":
+            expand_subcircuits = Circuit.default_expand_subcircuits
         if expand_subcircuits and layer_labels is not None:
             layer_labels_objs = tuple(_itertools.chain(*[x.expand_subcircuits() for x in map(toLabel,layer_labels)]))
             #print("DB: Layer labels = ",layer_labels_objs)
@@ -384,7 +385,8 @@ class Circuit(object):
         return Circuit(self.tup + x.tup, new_line_labels,
                        None, editable, s, check=False)
 
-    def repeat(self,ntimes,expand=default_expand_subcircuits):
+    def repeat(self,ntimes,expand="default"):
+        if expand == "default": expand=Circuit.default_expand_subcircuits
         assert( (_compat.isint(ntimes) or _np.issubdtype(ntimes,int)) and ntimes >= 0)
         mystr,mylines = self._labels_lines_str()
         if ntimes > 1: s = "(%s)^%d" % (mystr,ntimes)
@@ -1151,6 +1153,8 @@ class Circuit(object):
         """
         serial_lbls = []
         for lbl in self.tup:
+            if len(lbl.components) == 0: #special case of an empty-layer label,
+                serial_lbls.append(lbl)  # which we serialize as an atomic object
             for c in lbl.components:
                 serial_lbls.append(c)
         return Circuit(serial_lbls, self.line_labels, editable=False, check=False)
@@ -2838,8 +2842,9 @@ class CompressedCircuit(object):
             elif k == 'str':
                 self._str = state_dict['str'] # backwards compatibility
             else:
+                if k == "line_labels": k = "_line_labels" # add underscore
                 self.__dict__[k] = v
-        if '_line_labels' not in state_dict:
+        if '_line_labels' not in state_dict and "line_labels" not in state_dict:
             self._line_labels = ('*',)
 
     def expand(self):
