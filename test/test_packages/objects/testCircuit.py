@@ -177,7 +177,7 @@ class CircuitTestCase(BaseTestCase):
         # Test changing a gate name
         circuit = Circuit( None, stringrep="[Gx:Q0Gy:Q1][Gy:Q0Gx:Q1]Gx:Q0Gi:Q1")
         c = pygsti.obj.Circuit(layer_labels=circuit,line_labels=['Q0','Q1'],editable=True)
-        c.replace_gatename('Gx','Gz')
+        c.replace_gatename_inplace('Gx','Gz')
         circuit = Circuit( None, stringrep="[Gz:Q0Gy:Q1][Gy:Q0Gz:Q1]Gz:Q0Gi:Q1" )
         c2 = pygsti.obj.Circuit(layer_labels=circuit,line_labels=['Q0','Q1'])
         self.assertEqual(c, c2)

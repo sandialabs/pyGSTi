@@ -50,8 +50,11 @@ class TestStdInputParser(BaseTestCase):
         for s,expected in string_tests:
             #print "%s ==> " % s, result
             result,line_labels = std.parse_circuit(s, lookup=lkup)
-            self.assertEqual(result, expected)
             self.assertEqual(line_labels, None)
+            circuit_result = pygsti.obj.Circuit(result,line_labels="auto",expand_subcircuits=True)
+              #use "auto" line labels since none are parsed.
+            self.assertEqual(circuit_result.tup, expected)
+
 
         with self.assertRaises(ValueError):
             std.parse_circuit("FooBar")
@@ -82,9 +85,12 @@ class TestStdInputParser(BaseTestCase):
 
         std = pygsti.io.StdInputParser()
 
+        from pygsti.objects import Label as L
+        from pygsti.objects import CircuitLabel as CL
+        
         self.assertEqual( std.parse_dataline(dataline_tests[0]), (('G1', 'G2', 'G3'), 'G1G2G3', None, [0.1, 100.0]))
         self.assertEqual( std.parse_dataline(dataline_tests[1]), (('G1', 'G2', 'G3'), 'G1 G2 G3', None, [0.798, 100.0]))
-        self.assertEqual( std.parse_dataline(dataline_tests[2]), (('G1', 'G2', 'G3', 'G2', 'G3', 'G4'), 'G1 (G2 G3)^2 G4', None, [1.0, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[2]), (('G1', CL('',('G2', 'G3'),None,2), 'G4'), 'G1 (G2 G3)^2 G4', None, [1.0, 100.0]))
         self.assertEqual( std.parse_dataline("G1G2G3 0.1 100 2.0", expectedCounts=2),
                           (('G1', 'G2', 'G3'), 'G1G2G3', None, [0.1, 100.0])) #extra col ignored
 
@@ -95,7 +101,8 @@ class TestStdInputParser(BaseTestCase):
 
 
         self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None))
-        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', ('G1', 'G2', 'G1', 'G2', 'G1', 'G2'), '(G1G2)^3', None))
+        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', (CL('',('G1', 'G2'),None,3),) , '(G1G2)^3', None))
+          # OLD (before subcircuit parsing) the above result should have been: ('G1', 'G2', 'G1', 'G2', 'G1', 'G2')
 
         #print "Dataline Tests:"
         #for dl in dataline_tests:

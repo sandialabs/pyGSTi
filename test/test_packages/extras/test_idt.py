@@ -282,6 +282,9 @@ class IDTTestCase(BaseTestCase):
         gss = pygsti.construction.create_XYCNOT_cloudnoise_sequences(
             nQubits, maxLengths, 'line', [(0,1)], maxIdleWeight=2,
             idleOnly=False, paramroot="H+S", cache=c, verbosity=3)
+        #print("GSS STRINGS: ")
+        #print('\n'.join(["%s: %s" % (s.str,str(s.tup)) for s in gss.allstrs]))
+        
         gss_strs = gss.allstrs
         print("%.1fs" % (time.time()-t))
         if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"):
@@ -315,6 +318,9 @@ class IDTTestCase(BaseTestCase):
         #This *only* (re)sets Gi errors...
         idt.set_idle_errors(nQubits, mdl_datagen, {}, rand_default=0.001,
                   hamiltonian=True, stochastic=True, affine=True) # no seed? FUTURE?
+        problemStr = pygsti.obj.Circuit([()], num_lines=nQubits)
+        print("Problem: ",problemStr.str)
+        assert(problemStr in gss.allstrs)
         ds = pygsti.construction.generate_fake_data(mdl_datagen, gss.allstrs, 1000, 'multinomial', seed=1234)
 
         # ----- Run idle tomography with our custom (GST) set of pauli fiducial pairs ----
