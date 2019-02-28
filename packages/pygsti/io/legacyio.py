@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import #, unicode_lite
 
 import sys as _sys
 import numpy as _np
+import numbers as _numbers
 from types import ModuleType as _ModuleType
 from contextlib import contextmanager as _contextmanager
 
@@ -36,7 +37,8 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         def GateString_setstate(self,state):
             s = state['_str'] if '_str' in state else state['str']
             c = _objs.Circuit(state['_tup'], stringrep=s)
-            self.__dict__.update(c.__dict__)
+            #OLD: self.__dict__.update(c.__dict__)
+            return c.__dict__ # now just return updated Circuit state
     
         class dummy_CompressedGateString(object):
             def __new__(cls):
@@ -82,7 +84,7 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         gatestring.GateString = dummy_GateString
         gatestring.CompressedGateString = dummy_CompressedGateString
         _sys.modules['pygsti.objects.gatestring'] = gatestring
-        _objs.circuit.Circuit.__setstate__ = GateString_setstate
+        #_objs.circuit.Circuit.__setstate__ = GateString_setstate Never needed now
     
         gateset = _ModuleType("gateset")
         gateset.GateSet = dummy_GateSet
@@ -151,9 +153,9 @@ def enable_old_object_unpickling(old_version="0.9.6"):
     
             if "name" in state and state['name'] in ('pp','std','gm','qt','unknown') and 'dim' in state:
                 dim = state['dim'].opDim if hasattr(state['dim'],'opDim') else state['dim']
-                assert(isinstance(dim,int))
+                assert(isinstance(dim,_numbers.Integral))
                 sparse = state['sparse'] if ('sparse' in state) else False
-                newBasis = _objs.BuiltinBasis(state['name'], dim, sparse)
+                newBasis = _objs.BuiltinBasis(state['name'], int(dim), sparse)
                 self.__class__ = _baseobjs.basis.BuiltinBasis
                 self.__dict__.update(newBasis.__dict__)
             else:
@@ -180,19 +182,27 @@ def enable_old_object_unpickling(old_version="0.9.6"):
             
         def Circuit_setstate(self,state):
             if old_version == totup("0.9.6"): # b/c this clobbers older-version upgrade
-                GateString_setstate(self,state)
-                
+                state = GateString_setstate(self,state)
+
+            if 'line_labels' in state:  line_labels = state['line_labels']
+            elif '_line_labels' in state: line_labels = state['_line_labels']
+            else: raise ValueError("Cannot determing line labels from old Circuit state: %s" % str(state.keys()))
+            
             if state['_str']: #then rely on string rep to init new circuit
-                c = _objs.Circuit(None,state['line_labels'],editable=not state['_static'], stringrep=state['_str'])
+                c = _objs.Circuit(None,line_labels,editable=not state['_static'], stringrep=state['_str'])
             else:
-                c = _objs.Circuit(state['_labels'],state['line_labels'],editable=not state['_static'])
+
+                if 'labels' in state:  labels = state['labels']
+                elif '_labels' in state: labels = state['_labels']
+                else: raise ValueError("Cannot determing labels from old Circuit state: %s" % str(state.keys()))
+                c = _objs.Circuit(labels,line_labels,editable=not state['_static'])
                 
             self.__dict__.update(c.__dict__)
 
         def Hack_CompressedCircuit_expand(self):
             """ Hacked version to rely on string rep & re-parse if it's there """
             tup = None if self._str else CompressedCircuit.expand_op_label_tuple(self._tup)
-            return _objs.Circuit(None, self.line_labels, editable=False, stringrep=self._str)
+            return _objs.Circuit(None, self._line_labels, editable=False, stringrep=self._str)
 
 
         dim = _ModuleType("dim")
