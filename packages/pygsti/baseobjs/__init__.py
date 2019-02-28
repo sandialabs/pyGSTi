@@ -15,7 +15,7 @@ from .profiler import DummyProfiler
 from .protectedarray import ProtectedArray
 from .circuitparser import CircuitParser
 from .verbosityprinter import VerbosityPrinter
-from .label import Label
+from .label import Label, CircuitLabel
 
 from .basis import Basis,BuiltinBasis,ExplicitBasis,TensorProdBasis,DirectSumBasis
 from .parameterized import parameterized
