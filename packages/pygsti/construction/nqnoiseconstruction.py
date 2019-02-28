@@ -1566,8 +1566,9 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                          availability=None, geometry="line",
                                          maxIdleWeight=1, maxhops=0, extraWeight1Hops=0, extraGateWeight=0,
                                          paramroot="H+S", sparse=False, verbosity=0, cache=None, idleOnly=False, 
-                                         idtPauliDicts=None, algorithm="greedy"):
+                                         idtPauliDicts=None, algorithm="greedy", idleOpStr=((),)):
     """
+    TODO: docstring - add idleOpStr
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
     arguments of this function to :function:`build_standard_cloudnoise_model`.
@@ -1662,7 +1663,7 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                        gatedict, availability, geometry, maxIdleWeight, maxhops,
                                        extraWeight1Hops, extraGateWeight, paramroot,
                                        sparse, verbosity, cache, idleOnly, 
-                                       idtPauliDicts, algorithm)
+                                       idtPauliDicts, algorithm, idleOpStr)
     
 
 def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
@@ -1671,6 +1672,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                 sparse=False, verbosity=0, cache=None, idleOnly=False, 
                                 idtPauliDicts=None, algorithm="greedy", idleOpStr=((),)):
     """ 
+    TODO: docstring - add idleOpStr
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
     arguments of this function to :function:`build_standard_cloudnoise_model`.
@@ -2251,7 +2253,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     #Post processing: convert sequence tuples to a operation sequence structure
     Ls = set()
     germs = _collections.OrderedDict()
-    
+
     for opstr,L,germ,prepFid,measFid in sequences:
         Ls.add(L)
         if germ not in germs: germs[germ] = {}
@@ -2270,8 +2272,8 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                        aliases=None,sequenceRules=None)
     
     for germ,gdict in germs.items():
+        serial_germ = germ.serialize() #must serialize to get correct count
         for L,fidpairs in gdict.items():            
-            serial_germ = germ.serialize() #must serialize to get correct count
             germ_power = _gsc.repeat_with_max_length(serial_germ,L)
             gss.add_plaquette(germ_power, L, germ, fidpairs) #returns 'missing_list'; useful if using dsfilter arg
             
