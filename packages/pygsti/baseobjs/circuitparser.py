@@ -255,7 +255,10 @@ class CircuitParser(object):
     def p_expdstr_expop(p):
         '''expdstr : expable EXPOP INTEGER'''
         plbl = _Label(p[1]) # just for total sslbls
-        p[0] = _CircuitLabel('',p[1],plbl.sslbls,p[3]),
+        if len(p[1]) > 0:
+            p[0] = _CircuitLabel('',p[1],plbl.sslbls,p[3]),
+        else:
+            p[0] = () # special case of {}^power => remain empty
         #OLD (before subcircuits) p[0] = p[1] * p[3]  # tuple repetition
 
     @staticmethod
