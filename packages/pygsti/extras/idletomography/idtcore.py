@@ -1085,7 +1085,16 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
         advancedOptions = {}
 
     prepDict,measDict = pauliBasisDicts
-    GiStr = _objs.Circuit( idle_string )
+    if nQubits == 1: #special case where line-labels may be ('*',)
+        if len(dataset) > 0:
+            first_circuit = list(dataset.keys())[0]
+            line_labels = first_circuit.line_labels
+        else:
+            line_labels = (0,)
+        GiStr = _objs.Circuit( idle_string, line_labels=line_labels )
+        print("Dataset has ",dataset)
+    else:
+        GiStr = _objs.Circuit( idle_string, num_lines=nQubits )
 
     jacmode = advancedOptions.get("jacobian mode", "separate")
     sto_aff_jac = None; sto_aff_obs_err_rates = None
