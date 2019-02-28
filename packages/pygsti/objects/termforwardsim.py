@@ -447,6 +447,7 @@ class TermForwardSimulator(ForwardSimulator):
         """
         evTree = _TermEvalTree()
         evTree.initialize(simplified_circuits, numSubtreeComms)
+        return evTree
 
 
 
