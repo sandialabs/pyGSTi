@@ -470,7 +470,7 @@ class StateSpaceLabels(object):
         if types is None: # use defaults
             for tpbLabels in self.labels: #loop over tensor-prod-blocks
                 for lbl in tpbLabels:
-                    self.labeltypes[lbl] = 'C' if lbl.startswith('C') else 'Q' #default
+                    self.labeltypes[lbl] = 'C' if (_compat.isstr(lbl) and lbl.startswith('C')) else 'Q' #default
         else:
             for tpbLabels,tpbTypes in zip(self.labels,types):
                 for lbl,typ in zip(tpbLabels,tpbTypes):
