@@ -178,6 +178,12 @@ cdef extern from "fastreps.h" namespace "CReps":
         SVStateCRep* acton(SVStateCRep*, SVStateCRep*)
         SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
 
+    cdef cppclass SVOpCRep_Exponentiated(SVOpCRep):
+        SVOpCRep_Exponentiated(SVOpCRep*, INT, INT) except +
+        SVStateCRep* acton(SVStateCRep*, SVStateCRep*)
+        SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
+
+
         
     # Stabilizer state (SB) propagation classes
     cdef cppclass SBStateCRep:
@@ -218,6 +224,11 @@ cdef extern from "fastreps.h" namespace "CReps":
 
     cdef cppclass SBOpCRep_Sum(SBOpCRep):
         SBOpCRep_Sum(vector[SBOpCRep*], INT) except +
+        SBStateCRep* acton(SBStateCRep*, SBStateCRep*)
+        SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
+
+    cdef cppclass SBOpCRep_Exponentiated(SBOpCRep):
+        SBOpCRep_Exponentiated(SBOpCRep*, INT, INT) except +
         SBStateCRep* acton(SBStateCRep*, SBStateCRep*)
         SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
 
@@ -528,15 +539,6 @@ cdef class DMOpRep_Composed(DMOpRep):
             gate_creps[i] = (<DMOpRep?>factor_op_reps[i]).c_gate
         self.c_gate = new DMOpCRep_Composed(gate_creps, dim)
 
-cdef class DMOpRep_Exponentiated(DMOpRep):
-    cdef DMOpRep exponentiated_op
-    cdef INT power
-
-    def __cinit__(self, DMOpRep exponentiated_op_rep, INT power, INT dim):
-        self.exponentiated_op = exponentiated_op_rep
-        self.power = power
-        self.c_gate = new DMOpCRep_Exponentiated(exponentiated_op_rep.c_gate, power, dim)
-
 
 cdef class DMOpRep_Sum(DMOpRep):
     cdef object list_of_factors # list of DMOpRep objs?
@@ -549,6 +551,16 @@ cdef class DMOpRep_Sum(DMOpRep):
         for i in range(nfactors):
             factor_creps[i] = (<DMOpRep?>factor_reps[i]).c_gate
         self.c_gate = new DMOpCRep_Sum(factor_creps, dim)
+
+
+cdef class DMOpRep_Exponentiated(DMOpRep):
+    cdef DMOpRep exponentiated_op
+    cdef INT power
+
+    def __cinit__(self, DMOpRep exponentiated_op_rep, INT power, INT dim):
+        self.exponentiated_op = exponentiated_op_rep
+        self.power = power
+        self.c_gate = new DMOpCRep_Exponentiated(exponentiated_op_rep.c_gate, power, dim)
 
 
 cdef class DMOpRep_Lindblad(DMOpRep):
@@ -799,6 +811,16 @@ cdef class SVOpRep_Sum(SVOpRep):
             factor_creps[i] = (<SVOpRep?>factor_reps[i]).c_gate
         self.c_gate = new SVOpCRep_Sum(factor_creps, dim)
 
+cdef class SVOpRep_Exponentiated(SVOpRep):
+    cdef SVOpRep exponentiated_op
+    cdef INT power
+
+    def __cinit__(self, SVOpRep exponentiated_op_rep, INT power, INT dim):
+        self.exponentiated_op = exponentiated_op_rep
+        self.power = power
+        self.c_gate = new SVOpCRep_Exponentiated(exponentiated_op_rep.c_gate, power, dim)
+
+
         
 # Stabilizer state (SB) propagation wrapper classes
 cdef class SBStateRep: #(StateRep):
@@ -930,6 +952,16 @@ cdef class SBOpRep_Sum(SBOpRep):
         for i in range(nfactors):
             factor_creps[i] = (<SBOpRep?>factor_reps[i]).c_gate
         self.c_gate = new SBOpCRep_Sum(factor_creps, n)
+
+cdef class SBOpRep_Exponentiated(SBOpRep):
+    cdef SBOpRep exponentiated_op
+    cdef INT power
+
+    def __cinit__(self, SBOpRep exponentiated_op_rep, INT power, INT n):
+        self.exponentiated_op = exponentiated_op_rep
+        self.power = power
+        self.c_gate = new SBOpCRep_Exponentiated(exponentiated_op_rep.c_gate, power, n)
+
 
 
 cdef class SBOpRep_Clifford(SBOpRep):

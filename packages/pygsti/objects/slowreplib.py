@@ -344,6 +344,24 @@ class DMOpRep_Sum(DMOpRep):
             output_state.data += f.adjoint_acton(state).data
         return output_state
 
+class DMOpRep_Exponentiated(DMOpRep):
+    def __init__(self, exponentiated_op_rep, power, dim):
+        self.exponentiated_op = exponentiated_op_rep
+        self.power = power
+        super(DMOpRep_Exponentiated,self).__init__(dim)
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        for i in range(self.power):
+            state = self.exponentiated_op.acton(state)
+        return state
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this operation matrix on an input state """
+        for i in range(self.power):
+            state = self.exponentiated_op.adjoint_acton(state)
+        return state
+
 
 class DMOpRep_Lindblad(DMOpRep):
     def __init__(self, errgen_rep,
@@ -661,6 +679,24 @@ class SVOpRep_Sum(SVOpRep):
             output_state.data += f.adjoint_acton(state).data
         return output_state
 
+class SVOpRep_Exponentiated(SVOpRep):
+    def __init__(self, exponentiated_op_rep, power, dim):
+        self.exponentiated_op = exponentiated_op_rep
+        self.power = power
+        super(SVOpRep_Exponentiated,self).__init__(dim)
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        for i in range(self.power):
+            state = self.exponentiated_op.acton(state)
+        return state
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this operation matrix on an input state """
+        for i in range(self.power):
+            state = self.exponentiated_op.adjoint_acton(state)
+        return state
+
 
 
 # Stabilizer state (SB) propagation wrapper classes
@@ -770,7 +806,25 @@ class SBOpRep_Sum(SBOpRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
         # need further stabilizer frame support to represent the sum of stabilizer states
-        raise NotImplementedError() 
+        raise NotImplementedError()
+
+class SBOpRep_Exponentiated(SBOpRep):
+    def __init__(self, exponentiated_op_rep, power, n):
+        self.exponentiated_op = exponentiated_op_rep
+        self.power = power
+        super(SBOpRep_Exponentiated,self).__init__(n)
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        for i in range(self.power):
+            state = self.exponentiated_op.acton(state)
+        return state
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this operation matrix on an input state """
+        for i in range(self.power):
+            state = self.exponentiated_op.adjoint_acton(state)
+        return state
 
 
 class SBOpRep_Clifford(SBOpRep):

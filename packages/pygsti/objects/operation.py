@@ -3558,12 +3558,10 @@ class ExponentiatedOp(ComposedOp):
         if self._evotype == "densitymx":
             return replib.DMOpRep_Exponentiated(self.exponentiated_op.torep(), self.power, self.dim)
         elif self._evotype == "statevec":
-            factor_op_reps = [ self.exponentiated_op.torep() ]*self.power #TODO: make an exponentiated rep for state vecs
-            return replib.SVOpRep_Composed(factor_op_reps, self.dim)
+            return replib.SVOpRep_Exponentiated(self.exponentiated_op.torep(), self.power, self.dim)
         elif self._evotype == "stabilizer":
-            factor_op_reps = [ self.exponentiated_op.torep() ]*self.power #TODO: make an exponentiated rep for stabilizer states
             nQubits = int(round(_np.log2(self.dim))) # "stabilizer" is a unitary-evolution type mode
-            return replib.SBOpRep_Composed(factor_op_reps, nQubits)
+            return replib.SVOpRep_Exponentiated(self.exponentiated_op.torep(), self.power, nQubits)
         assert(False), "Invalid internal _evotype: %s" % self._evotype
 
 
