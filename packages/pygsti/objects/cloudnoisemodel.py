@@ -954,6 +954,10 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         return self.effect_blks['layers'][layerlbl] # effect_blks['layers'] are full effect ops
     def get_operation(self,layerlbl):
         dense = bool(self.model._sim_type == "matrix") # whether dense matrix gates should be created
+
+        if isinstance(layerlbl,_CircuitLabel):
+            return self.get_circuitlabel_op(layerlbl, dense)
+        
         add_idle_noise = self.model._lizardArgs['add_idle_noise']
         errcomp_type = self.model._lizardArgs['errcomp_type']
         sparse_expm = self.model._lizardArgs['sparse_expm']
@@ -971,9 +975,9 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
         #Compose target operation from layer's component labels, which correspond
         # to the perfect (embedded) target ops in op_blks
         if len(components) > 1:
-            targetOp = Composed([self.op_blks['layers'][l] for l in components], dim=self.model.dim,
+            targetOp = Composed([self.get_layer_component_targetop(l) for l in components], dim=self.model.dim,
                                 evotype=self.model._evotype)
-        else: targetOp = self.op_blks['layers'][components[0]]
+        else: targetOp = self.get_layer_component_targetop(components[0])
         ops_to_compose = [targetOp]
 
         if errcomp_type == "gates":
@@ -1008,3 +1012,14 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
                            evotype=self.model._evotype)
         self.model._init_virtual_obj(ret) # so ret's gpindices get set
         return ret
+
+    def get_layer_component_targetop(self,complbl):
+        if isinstance(complbl,_CircuitLabel):
+            raise NotImplementedError("Cloud noise models cannot simulate circuits with partial-layer subcircuits.")
+            # In the FUTURE, could easily implement this for errcomp_type == "gates", but it's unclear what to
+            #  do for the "errorgens" case - how do we gate an error generator of an entire (mulit-layer) sub-circuit?
+            # Maybe we just need to expand the label and create a composition of those layers?
+        else:
+            return op_blks['layers'][complbl]
+    
+

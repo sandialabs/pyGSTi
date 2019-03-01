@@ -522,11 +522,18 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
         #if hasGlobalIdle and layerlbl == 'Gi' and \
         #   'Gi' not in self.op_blks['layers'])): 
         #    return self.op_blks['layers'][_Lbl('globalIdle')]
-        
+
         if len(components) == 1 and bHasGlobalIdle == False:
-            return self.op_blks['layers'][components[0]]
+            return self.get_layer_component_operation(components[0],dense)
         else:
             gblIdle = [self.op_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
-            return Composed(gblIdle + [self.op_blks['layers'][l] for l in components], dim=self.model.dim,
+            return Composed(gblIdle + [self.get_layer_component_operation(l,dense) for l in components], dim=self.model.dim,
                                 evotype=self.model._evotype)
+
+    def get_layer_component_operation(self,complbl,dense):
+        if isinstance(complbl,_CircuitLabel):
+            return self.get_circuitlabel_op(complbl, dense)
+        else:
+            return op_blks['layers'][complbl]
+        
