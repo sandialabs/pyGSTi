@@ -431,6 +431,11 @@ class LinearOperator(_modelmember.ModelMember):
         if value == True: self._cachedrep = None # clear cached rep
         _modelmember.ModelMember.dirty.fset(self, value) # call base class setter
 
+    def __getstate__(self):
+        st = self.__dict__.copy()
+        st['_cachedrep'] = None # can't pickle this!
+        return st
+
     def copy(self, parent=None):
         self._cachedrep = None # deepcopy in ModelMember.copy can't copy CReps!
         return _modelmember.ModelMember.copy(self,parent)
