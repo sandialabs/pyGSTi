@@ -62,7 +62,7 @@ class LayerLizard(object):
         self.model = model
 
     #Helper functions for derived classes:
-    def get_circuitlabel_op(circuitlbl, dense):
+    def get_circuitlabel_op(self, circuitlbl, dense):
         """TODO: docstring
            build an op for this circuit label - a composed op (of sub-circuit)
            exponentiated to the power N, where N=#of repetitions
