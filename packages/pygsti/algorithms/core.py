@@ -2687,7 +2687,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
                        verbosity=0, check=False, circuitWeightsDict=None,
                        opLabelAliases=None, memLimit=None,
                        profiler=None, comm=None, distributeMethod = "deriv",
-                       alwaysPerformMLE=False, evaltree_cache=None):
+                       alwaysPerformMLE=False, onlyPerformMLE=False, evaltree_cache=None):
     """
     Performs Iterative Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
@@ -2806,6 +2806,10 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
         not just the final one.  When False, chi2 minimization is used for all
         except the final iteration (for improved numerical stability).
 
+    onlyPerformMLE : bool, optional
+        When True, `alwaysPerformMLE` must also be true, and in this case only 
+        a ML optimization is performed for each iteration.
+
     evaltree_cache : dict, optional
         An empty dictionary which gets filled with the *final* computed EvalTree
         (and supporting info) used in this computation.
@@ -2823,6 +2827,9 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
         of the i-th iteration.
     """
 
+    if onlyPerformMLE:
+        assert(alwaysPerformMLE), "Must set `alwaysPerformMLE` to True whenever `onlyPerformMLE` is True."
+        
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
 
@@ -2864,12 +2871,13 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
             num_fd = fditer if (i == 0) else 0
 
             evt_cache = {} # get the eval tree that's created so we can reuse it
-            _, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
-                                      maxiter, maxfev, num_fd, tol, cptp_penalty_factor,
-                                      spam_penalty_factor, minProbClip, probClipInterval,
-                                      useFreqWeightedChiSq, 0,printer-1, check,
-                                      check, circuitWeights, opLabelAliases,
-                                      memLimit, comm, distributeMethod, profiler, evt_cache)
+            if not onlyPerformMLE:
+                _, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
+                                        maxiter, maxfev, num_fd, tol, cptp_penalty_factor,
+                                        spam_penalty_factor, minProbClip, probClipInterval,
+                                        useFreqWeightedChiSq, 0,printer-1, check,
+                                        check, circuitWeights, opLabelAliases,
+                                        memLimit, comm, distributeMethod, profiler, evt_cache)
 
             if alwaysPerformMLE:
                 _, mleModel = do_mlgst(dataset, mleModel, stringsToEstimate,
