@@ -432,7 +432,7 @@ class LinearOperator(_modelmember.ModelMember):
         _modelmember.ModelMember.dirty.fset(self, value) # call base class setter
 
     def __getstate__(self):
-        st = self.__dict__.copy()
+        st = super(LinearOperator, self).__getstate__()
         st['_cachedrep'] = None # can't pickle this!
         return st
 

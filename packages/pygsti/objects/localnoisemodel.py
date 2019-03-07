@@ -27,6 +27,7 @@ from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Label as _Lbl
+from ..baseobjs import CircuitLabel as _CircuitLabel
 
 from ..baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
@@ -535,5 +536,5 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
         if isinstance(complbl,_CircuitLabel):
             return self.get_circuitlabel_op(complbl, dense)
         else:
-            return op_blks['layers'][complbl]
+            return self.op_blks['layers'][complbl]
         

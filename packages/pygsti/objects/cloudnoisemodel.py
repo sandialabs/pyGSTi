@@ -28,6 +28,7 @@ from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import ExplicitBasis as _ExplicitBasis
 from ..baseobjs import Label as _Lbl
+from ..baseobjs import CircuitLabel as _CircuitLabel
 
 from ..baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
@@ -1020,6 +1021,6 @@ class CloudNoiseLayerLizard(_ImplicitLayerLizard):
             #  do for the "errorgens" case - how do we gate an error generator of an entire (mulit-layer) sub-circuit?
             # Maybe we just need to expand the label and create a composition of those layers?
         else:
-            return op_blks['layers'][complbl]
+            return self.op_blks['layers'][complbl]
     
 
