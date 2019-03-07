@@ -5321,7 +5321,8 @@ class LindbladErrorgen(LinearOperator):
         assert(d*d == d2), "Errorgen dim must be a perfect square"
 
         # Get basis transfer matrix
-        mxBasisToStd = self.matrix_basis.transform_matrix("std")
+        mxBasisToStd = self.matrix_basis.transform_matrix(self.matrix_basis.simple_equivalent("std"))
+          # use simple-equivalent("std") instead of just "std" in case matrix_basis is a TensorProdBasis
         leftTrans  = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
                           else _np.linalg.inv(mxBasisToStd)
         rightTrans = mxBasisToStd
@@ -5586,7 +5587,8 @@ class LindbladErrorgen(LinearOperator):
                     lnd_error_gen += _np.tensordot(otherCoeffs, self.otherGens, ((0,1),(0,1)))
 
 
-        assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0))
+        assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0)), \
+            "Imaginary error gen norm: %g" % _mt.safenorm(lnd_error_gen,'imag')
         #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)        
         self.err_gen_mx = _mt.safereal(lnd_error_gen, inplace=True)
 
