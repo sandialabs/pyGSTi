@@ -246,7 +246,9 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     """
     assert(stdBasis1.elsize == stdBasis2.elsize),'"embedded" space dimensions differ!'
     if stdBasis1.dim == stdBasis2.dim:
-        return mx
+        return change_basis(mx, stdBasis1, stdBasis2) # don't just 'return mx' here
+         # - need to change bases if bases are different (e.g. if one is a Tensorprod of std components)
+        
     #print('{}ing {} to {}'.format(resize, stdBasis1, stdBasis2))
     #print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
     if resize == 'expand':
