@@ -30,6 +30,7 @@ from . import gaugegroup as _gaugegroup
 from . import modelmember as _modelmember
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from ..baseobjs import Basis as _Basis
+from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs.basis import basis_matrices as _basis_matrices
 
 from . import term as _term
@@ -5321,8 +5322,8 @@ class LindbladErrorgen(LinearOperator):
         assert(d*d == d2), "Errorgen dim must be a perfect square"
 
         # Get basis transfer matrix
-        mxBasisToStd = self.matrix_basis.transform_matrix(self.matrix_basis.simple_equivalent("std"))
-          # use simple-equivalent("std") instead of just "std" in case matrix_basis is a TensorProdBasis
+        mxBasisToStd = self.matrix_basis.transform_matrix(_BuiltinBasis("std",self.matrix_basis.dim))
+          # use BuiltinBasis("std") instead of just "std" in case matrix_basis is a TensorProdBasis
         leftTrans  = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
                           else _np.linalg.inv(mxBasisToStd)
         rightTrans = mxBasisToStd
