@@ -293,7 +293,7 @@ def create_qubit_merge_dict(nQubits, qubits_to_keep):
     -------
     dict
     """
-    outcome_labels = [''.join(map(str,t)) for t in itertools.product([0,1], repeat=nQubits)]
+    outcome_labels = [''.join(map(str,t)) for t in _itertools.product([0,1], repeat=nQubits)]
     return create_merge_dict(qubits_to_keep, outcome_labels)
 
 
