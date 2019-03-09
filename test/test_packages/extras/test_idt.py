@@ -3,7 +3,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest
 import numpy as np
 import pickle
-import time, os
+import time, os, warnings
 
 import pygsti
 from pygsti.extras import idletomography as idt
@@ -263,6 +263,13 @@ class IDTTestCase(BaseTestCase):
                                              verbosity=3, auto_open=False)
 
     def test_idletomog_gstdata_nQ(self):
+        
+        try: from pygsti.objects import fastreplib
+        except ImportError:
+            warnings.warn("Skipping test_idletomog_gstdata_nQ b/c no fastreps!")
+            return
+
+        
         #Global dicts describing how to prep and measure in various bases
         prepDict = { 'X': ('Gy',), 'Y': ('Gx',)*3, 'Z': (),
                      '-X': ('Gy',)*3, '-Y': ('Gx',), '-Z': ('Gx','Gx')}
