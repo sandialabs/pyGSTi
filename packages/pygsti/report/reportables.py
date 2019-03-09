@@ -18,6 +18,7 @@ import warnings as _warnings
 from .. import tools as _tools
 from .. import algorithms as _alg
 from ..baseobjs import Basis as _Basis
+from ..baseobjs import DirectSumBasis as _DirectSumBasis
 from ..baseobjs import Label as _Lbl
 from ..objects.reportableqty import ReportableQty as _ReportableQty
 from ..objects import modelfunction as _modf
@@ -632,7 +633,7 @@ def eigenvalue_unitarity(A,B):
     
 def nonunitary_entanglement_infidelity(A, B, mxBasis):
     """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the unitarity of A*B^{-1} """
-    if isinstance(mxBasis,_Basis) and len(mxBasis.dim.blockDims) > 1: return -1 # deal w/block-dims later
+    if isinstance(mxBasis,_DirectSumBasis): return -1 # deal w/block-dims later
     d2 = A.shape[0]; U = std_unitarity(A,B,mxBasis)
     return (d2-1.0)/d2 * (1.0 - _np.sqrt(U))
 Nonunitary_entanglement_infidelity = _modf.opsfn_factory(nonunitary_entanglement_infidelity)
@@ -641,7 +642,7 @@ Nonunitary_entanglement_infidelity = _modf.opsfn_factory(nonunitary_entanglement
 
 def nonunitary_avg_gate_infidelity(A, B, mxBasis):
     """ Returns (d - 1)/d * (1 - sqrt(U)), where U is the unitarity of A*B^{-1} """
-    if isinstance(mxBasis,_Basis) and len(mxBasis.dim.blockDims) > 1: return -1 # deal w/block-dims later
+    if isinstance(mxBasis,_DirectSumBasis): return -1 # deal w/block-dims later
     d2 = A.shape[0]; d = int(round(_np.sqrt(d2)))
     U = std_unitarity(A,B,mxBasis)
     return (d-1.0)/d * (1.0 - _np.sqrt(U))
@@ -878,7 +879,7 @@ def robust_logGTi_and_projections(modelA, modelB, syntheticIdleStrs):
     for ptype in ("hamiltonian","stochastic","affine"):
         lindbladMxs = _tools.std_error_generators(modelA.dim, ptype,
                                                   mxBasis)
-        lindbladMxBasis = _Basis(mxBasis, int(round(_np.sqrt(modelA.dim))))
+        lindbladMxBasis = _Basis.cast(mxBasis, modelA.dim)
         
         lindbladMxs = lindbladMxs[1:] #skip [0] == Identity
         lbls = lindbladMxBasis.labels[1:]
@@ -1050,7 +1051,7 @@ def general_decomposition(modelA, modelB):
         # to *twice* this coefficient (e.g. a X(pi/2) rotn is exp( i pi/4 X ) ),
         # thus the factor of 2.0 above.
     
-        basis_mxs = mxBasis.get_composite_matrices()
+        basis_mxs = mxBasis.elements
         scalings = [ ( _np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
                        if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0 )
                      for i,mx in enumerate(basis_mxs) ]

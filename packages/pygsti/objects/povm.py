@@ -339,9 +339,9 @@ class _BasePOVM(POVM):
 
         #Add a complement effect if desired
         if self.complement_label is not None:  # len(items) > 0 by assert
-            non_comp_effects = [v for k,v in items]
-            identity_for_complement = _np.array(sum(non_comp_effects) +
-                                                comp_val, 'd')
+            non_comp_effects = [v for k,v in items] 
+            identity_for_complement = _np.array(sum([v.reshape(comp_val.shape) for v in non_comp_effects]) +
+                                                comp_val, 'd') #ensure shapes match before summing
             complement_effect = _sv.ComplementSPAMVec(
                 identity_for_complement, non_comp_effects)
             complement_effect.set_gpindices(slice(0,self.Np), self) #all parameters

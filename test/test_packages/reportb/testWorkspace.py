@@ -144,8 +144,8 @@ class TestWorkspace(ReportBaseCase):
         gsMultiSpam.povms['Msecondpovm'] = self.mdl.povms['Mdefault'].copy()
         gsTP = self.tgt.depolarize(0.01,0.01); gsTP.set_all_parameterizations("TP")
         gsCPTP = self.tgt.depolarize(0.01,0.01); gsCPTP.set_all_parameterizations("CPTP")
-        gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.obj.Basis("gm",2)
-        gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.obj.Basis("std",2)
+        gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.obj.Basis.cast("gm",4)
+        gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.obj.Basis.cast("std",4)
         gsQT = stdQT_XYIMS.target_model().depolarize(0.01,0.01)
 
         #Construct confidence regions

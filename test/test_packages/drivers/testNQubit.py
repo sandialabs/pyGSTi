@@ -9,7 +9,7 @@ from pygsti.construction import std1Q_XY
 from pygsti.construction import std2Q_XYICNOT
 from pygsti.objects import Label as L
 import pygsti.construction as pc
-import sys, os
+import sys, os, warnings
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -54,6 +54,13 @@ class NQubitTestCase(BaseTestCase):
         #      (len(mdl_test.operations),mdl_test.dim,mdl_test.num_params(), np.linalg.norm(mdl_test.to_vector()) ))
 
     def test_sequential_sequenceselection(self):
+
+        #only test when reps are fast (b/c otherwise this test is slow!)
+        try: from pygsti.objects import fastreplib
+        except ImportError:
+            warnings.warn("Skipping test_sequential_sequenceselection b/c no fastreps!")
+            return
+
         nQubits = 2
         maxLengths = [1,2]
         cnot_edges = [(i,i+1) for i in range(nQubits-1)] #only single direction
@@ -119,6 +126,12 @@ class NQubitTestCase(BaseTestCase):
         
     def test_2Q(self):
 
+        #only test when reps are fast (b/c otherwise this test is slow!)
+        try: from pygsti.objects import fastreplib
+        except ImportError:
+            warnings.warn("Skipping test_2Q b/c no fastreps!")
+            return
+        
         gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
         expList = gss.allstrs
 
@@ -145,6 +158,12 @@ class NQubitTestCase(BaseTestCase):
                                                    advancedOptions={'tolerance': 1e-2}, verbosity=4)
 
     def test_2Q_terms(self):
+
+        #only test when reps are fast (b/c otherwise this test is slow!)
+        try: from pygsti.objects import fastreplib
+        except ImportError:
+            warnings.warn("Skipping test_2Q_terms b/c no fastreps!")
+            return
 
         gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
         expList = gss.allstrs
@@ -185,6 +204,12 @@ class NQubitTestCase(BaseTestCase):
         
         
     def test_3Q(self):
+
+        #only test when reps are fast (b/c otherwise this test is slow!)
+        try: from pygsti.objects import fastreplib
+        except ImportError:
+            warnings.warn("Skipping test_3Q b/c no fastreps!")
+            return
 
         nQubits = 3
         print("Constructing Target LinearOperator Set")
@@ -247,8 +272,8 @@ class NQubitTestCase(BaseTestCase):
     def test_SPAM(self):
         nQubits = 3
         factorPOVMs = []
-        basis1Q = pygsti.obj.Basis("pp",2)
-        basisNQ = pygsti.obj.Basis("pp",2**nQubits)
+        basis1Q = pygsti.obj.Basis.cast("pp",4)
+        basisNQ = pygsti.obj.Basis.cast("pp",4**nQubits)
         for i in range(nQubits):
             effects = [ (l,pygsti.construction.basis_build_vector(l, basis1Q)) for l in ["0","1"] ]
             factorPOVMs.append( pygsti.obj.TPPOVM(effects) )

@@ -685,7 +685,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl_pre, mdl_post,
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape (_spam_penalty_size(mdl), gaugeGroupEl.num_params()).
     """
-    BMxs = opBasis.get_composite_matrices() #shape [mdl.dim, dmDim, dmDim]
+    BMxs = opBasis.elements #shape [mdl.dim, dmDim, dmDim]
     ddenMxdV = dEMxdV = BMxs.conjugate() # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
       #NOTE: conjugate() above is because ddenMxdV and dEMxdV will get *elementwise*
       # multiplied (einsum below) by another complex matrix (sgndm or sgnE) and summed

@@ -41,6 +41,7 @@ from . import explicitcalc as _explicitcalc
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
+from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Label as _Label
 
 
@@ -292,7 +293,6 @@ class Model(object):
                 assert(attr != "uuid"), "Should not be copying UUID!"
                 setattr(newModel,attr,_copy.deepcopy(val))
 
-        if OpModel._pcheck: newModel._check_paramvec()
         return newModel
 
     def __str__(self):
@@ -373,7 +373,7 @@ class OpModel(Model):
         self._need_to_rebuild = True #whether we call _rebuild_paramvec() in to_vector() or num_params()
         self.dirty = False #indicates when objects and _paramvec may be out of sync
         
-        super(OpModel, self).__init__(state_space_labels)
+        super(OpModel, self).__init__(self.state_space_labels)
 
     ##########################################
     ## Get/Set methods
@@ -397,13 +397,14 @@ class OpModel(Model):
     @basis.setter
     def basis(self, basis):
         if isinstance(basis, _Basis):
-            assert(basis.dim == self.state_space_labels.dim)
+            assert(basis.dim == self.state_space_labels.dim), \
+                "Cannot set basis w/dim=%d when sslbls dim=%d!" % (basis.dim, self.state_space_labels.dim)
             self._basis = basis
-        else: #create a basis with the proper dimension
-            self._basis = _Basis(basis, self.state_space_labels.dim)
+        else: #create a basis with the proper structure & dimension
+            self._basis = _Basis.cast(basis, self.state_space_labels)
 
             
-    def set_simtype(self, sim_type, calc_cache=None):
+    def set_simtype(self, sim_type, calc_cache=None, max_cache_size=None):
         """
         Reset the forward simulation type of this model.
 
@@ -446,13 +447,16 @@ class OpModel(Model):
         if sim_type == "termorder":
             cache = calc_cache if (calc_cache is not None) else {} # make a temp cache if none is given
             self._sim_args.append(cache) # add calculation cache as another argument
+        elif sim_type == "map":
+            self._sim_args.append(max_cache_size) # add cache size as another argument
 
-    def reset_basis(self):
-        """
-        "Forgets" the current basis, so that
-        self.basis becomes a dummy Basis w/name "unknown".
-        """
-        self._basis = _Basis('unknown', None)
+    #TODO REMOVE
+    #def reset_basis(self):
+    #    """
+    #    "Forgets" the current basis, so that
+    #    self.basis becomes a dummy Basis w/name "unknown".
+    #    """
+    #    self._basis = _BuiltinBasis('unknown', 0)
 
     def set_state_space(self, lbls, basis="pp"):
         """
@@ -477,15 +481,12 @@ class OpModel(Model):
         if isinstance(lbls, _ld.StateSpaceLabels):
             self._state_space_labels = lbls
         else:
-            self._state_space_labels = _ld.StateSpaceLabels(lbls)
+            self._state_space_labels = _ld.StateSpaceLabels(lbls, evotype=self._evotype)
         self.basis = basis # invokes basis setter to set self._basis
 
         #Operator dimension of this Model
-        if self._evotype in ("densitymx","svterm","cterm"):
-            self._dim = self.state_space_labels.dim.opDim
-        else:
-            self._dim = self.state_space_labels.dim.dmDim #operator dim for *state* vectors
-            # FUTURE: have a Basis for state *vectors*?
+        self._dim = self.state_space_labels.dim
+          #e.g. 4 for 1Q (densitymx) or 2 for 1Q (statevec)
 
     @property
     def dim(self):
@@ -748,7 +749,7 @@ class OpModel(Model):
         return self._paramvec
 
 
-    def from_vector(self, v, reset_basis=False):
+    def from_vector(self, v):
         """
         The inverse of to_vector.  Loads values of gates and rho and E vecs from
         from the vector `v`.  Note that `v` does not specify the number of
@@ -764,8 +765,8 @@ class OpModel(Model):
             obj.from_vector( v[obj.gpindices] )
             obj.dirty = False #object is known to be consistent with _paramvec
 
-        if reset_basis:
-            self.reset_basis() 
+        #if reset_basis:
+        #    self.reset_basis() 
             # assume the vector we're loading isn't producing gates & vectors in
             # a known basis.
         if OpModel._pcheck: self._check_paramvec()
@@ -788,6 +789,8 @@ class OpModel(Model):
         if self._sim_type == "termorder":
             kwargs['max_order'] = int(self._sim_args[0])
             kwargs['cache'] = self._sim_args[-1] # always the list argument
+        if self._sim_type == "map":
+            kwargs['max_cache_size'] =  self._sim_args[0]
 
         assert(self._calcClass is not None), "Model does not have a calculator setup yet!"
         return self._calcClass(self._dim, layer_lizard, self._paramvec, **kwargs) #fwdsim class
@@ -1332,7 +1335,7 @@ class OpModel(Model):
                     if ng not in evt_cache:
                         evt_cache[ng] = self.bulk_evaltree(
                             circuit_list, minSubtrees=ng, numSubtreeComms=Ng,
-                            dataset=dataset)                        
+                            dataset=dataset, verbosity=printer)                        
                         # FUTURE: make a _bulk_evaltree_presimplified version that takes simplified
                         # operation sequences as input so don't have to re-simplify every time we hit this line.
                     cacheSize = max([s.cache_size() for s in evt_cache[ng][0].get_sub_trees()])
@@ -1587,19 +1590,18 @@ class OpModel(Model):
         simplified_circuits, elIndices, outcomes, nEls = \
                             self.simplify_circuits(circuit_list, dataset)
 
-        evalTree = self._fwdsim().construct_evaltree()
-        evalTree.initialize(simplified_circuits, numSubtreeComms)
+        evalTree = self._fwdsim().construct_evaltree(simplified_circuits, numSubtreeComms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
                     (len(circuit_list),_time.time()-tm)); tm = _time.time()
 
         if maxTreeSize is not None:
-            elIndices = evalTree.split(elIndices, maxTreeSize, None, printer) # won't split if unnecessary
+            elIndices = evalTree.split(elIndices, maxTreeSize, None, printer-1) # won't split if unnecessary
 
         if minSubtrees is not None:
             if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
                 evalTree.original_index_lookup = None # reset this so we can re-split TODO: cleaner
-                elIndices = evalTree.split(elIndices, None, minSubtrees, printer)
+                elIndices = evalTree.split(elIndices, None, minSubtrees, printer-1)
                 if maxTreeSize is not None and \
                         any([ len(sub)>maxTreeSize for sub in evalTree.get_sub_trees()]):
                     _warnings.warn("Could not create a tree with minSubtrees=%d" % minSubtrees
@@ -2079,5 +2081,8 @@ class OpModel(Model):
         """
         self._clean_paramvec() # ensure _paramvec is rebuilt if needed
         if OpModel._pcheck: self._check_paramvec()
-        return Model.copy(self)
+        ret = Model.copy(self)
+        if OpModel._pcheck: ret._check_paramvec()
+        return ret
+            
     

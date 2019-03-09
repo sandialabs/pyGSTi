@@ -252,7 +252,7 @@ def matrix_sign(M):
     #U,_,Vt = _np.linalg.svd(M)
     #return _np.dot(U,Vt)
 
-def print_mx(mx, width=9, prec=4):
+def print_mx(mx, width=9, prec=4, withbrackets=False):
     """
     Print matrix in pretty format.
 
@@ -270,10 +270,13 @@ def print_mx(mx, width=9, prec=4):
     prec : int optional
         the precision (in characters) of each printed element
 
+    withbrackets : bool, optional
+        whether to print brackets and commas to make the result
+        something that Python can read back in.
     """
-    print(mx_to_string(mx, width, prec))
+    print(mx_to_string(mx, width, prec, withbrackets))
 
-def mx_to_string(m, width=9, prec=4):
+def mx_to_string(m, width=9, prec=4, withbrackets=False):
     """
     Generate a "pretty-format" string for a matrix.
 
@@ -291,6 +294,10 @@ def mx_to_string(m, width=9, prec=4):
     prec : int optional
         the precision (in characters) of each converted element
 
+    withbrackets : bool, optional
+        whether to print brackets and commas to make the result
+        something that Python can read back in.
+
     Returns
     -------
     string
@@ -301,10 +308,14 @@ def mx_to_string(m, width=9, prec=4):
         return mx_to_string_complex(m, width, width, prec)
 
     if len(m.shape) == 1: m = _np.array(m)[None,:] # so it works w/vectors too
+    if withbrackets: s += "["
     for i in range(m.shape[0]):
+        if withbrackets: s += " [" if i > 0 else "["
         for j in range(m.shape[1]):
             if abs(m[i,j]) < tol: s += '{0: {w}.0f}'.format(0,w=width)
             else: s += '{0: {w}.{p}f}'.format(m[i,j].real,w=width,p=prec)
+            if withbrackets and j+1 < m.shape[1]: s += ","
+        if withbrackets: s += "]," if i+1 < m.shape[0] else "]]"
         s += "\n"
     return s
 

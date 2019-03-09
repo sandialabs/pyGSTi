@@ -1129,17 +1129,16 @@ class NQubitErrgenTable(WorkspaceTable):
                     displayed_params.update(params)
 
                     Ldict, basisDict = gate.get_errgen_coeffs()
-                    basisdim = int(round(_np.sqrt(gate.dim)))
                     if len(basisDict) > 0:
                         sparse = _sps.issparse(list(basisDict.values())[0])
                     else: sparse = False
     
                     #Try to find good labels for these basis elements
                     # (so far, just try to match with "pp" basis els)
-                    ref_basis = _objs.Basis("pp", basisdim, sparse=sparse)
+                    ref_basis = _objs.BuiltinBasis("pp", gate.dim, sparse=sparse)
                     basisLbls = {}
                     for bl1,mx in basisDict.items():
-                        for bl2,mx2 in zip(ref_basis.labels, ref_basis.get_composite_matrices()):
+                        for bl2,mx2 in zip(ref_basis.labels, ref_basis.elements):
                             if (sparse and _tools.sparse_equal(mx,mx2)) or (not sparse and _np.allclose(mx,mx2)):
                                 basisLbls[bl1] = bl2; break
                         else:
@@ -2215,12 +2214,12 @@ class StandardErrgenTable(WorkspaceTable):
         topright = "%s \\ %s" % (ylabel,xlabel) if (len(ylabel) > 0) else ""
         colHeadings=[topright] + \
             [("%s" % x) if len(x) else "" \
-                 for x in _tools.basis_element_labels(projection_basis,xd)]
+                 for x in _tools.basis_element_labels(projection_basis,xd**2)]
         rowLabels=[("%s" % x) if len(x) else "" \
-                     for x in _tools.basis_element_labels(projection_basis,yd)]
+                     for x in _tools.basis_element_labels(projection_basis,yd**2)]
 
-        xLabels = _tools.basis_element_labels(projection_basis,xd)
-        yLabels = _tools.basis_element_labels(projection_basis,yd)
+        xLabels = _tools.basis_element_labels(projection_basis,xd**2)
+        yLabels = _tools.basis_element_labels(projection_basis,yd**2)
 
         table = _ReportTable(colHeadings,["Conversion"]+[None]*(len(colHeadings)-1))
 

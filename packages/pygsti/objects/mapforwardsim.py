@@ -41,7 +41,7 @@ class MapForwardSimulator(ForwardSimulator):
     -- parameterizations of operation matrices and SPAM vectors) access to these
     fundamental operations.
     """    
-    def __init__(self, dim, simplified_op_server, paramvec):
+    def __init__(self, dim, simplified_op_server, paramvec, max_cache_size=None):
         """
         Construct a new MapForwardSimulator object.
 
@@ -63,6 +63,7 @@ class MapForwardSimulator(ForwardSimulator):
             An auto-gator object that may be used to construct virtual gates
             for use in computations.
         """
+        self.max_cache_size = max_cache_size
         super(MapForwardSimulator, self).__init__(
             dim, simplified_op_server, paramvec)
         if self.evotype not in ("statevec","densitymx","stabilizer"):
@@ -455,11 +456,14 @@ class MapForwardSimulator(ForwardSimulator):
         return int( 0.7 * nCircuits )
 
     
-    def construct_evaltree(self):
+    def construct_evaltree(self, simplified_circuits, numSubtreeComms):
         """
+        TODO: docstring (update)
         Constructs an EvalTree object appropriate for this calculator.
         """
-        return _MapEvalTree()
+        evTree = _MapEvalTree()
+        evTree.initialize(simplified_circuits, numSubtreeComms, self.max_cache_size)
+        return evTree
 
 
     def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,

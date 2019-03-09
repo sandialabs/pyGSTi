@@ -7,7 +7,7 @@ import pygsti
 import pygsti.tools.basistools    as bt
 import pygsti.tools.lindbladtools as lindbladtools
 
-from pygsti.baseobjs import Basis, Dim
+from pygsti.baseobjs import Basis, ExplicitBasis, DirectSumBasis
 
 from functools import partial
 
@@ -22,12 +22,12 @@ class BasisBaseTestCase(BaseTestCase):
                                  [3,0,0,4]],'d')
 
         # Reduce to a matrix operating on a density matrix space with 2 1x1 blocks (hence [1,1])
-        begin = Basis('std', [1,1])
-        end   = Basis('std', 2)
+        begin = Basis.cast('std', [1,1])
+        end   = Basis.cast('std', 4)
         
         mxInReducedBasis = bt.resize_std_mx(mxInStdBasis, 'contract', end, begin)
         #mxInReducedBasis = bt.change_basis(mxInStdBasis, begin, end)
-        notReallyContracted = bt.change_basis(mxInStdBasis, 'std', 'std', 4)
+        notReallyContracted = bt.change_basis(mxInStdBasis, 'std', 'std') # 4
         correctAnswer = np.array([[ 1.0,  2.0],
                                   [ 3.0,  4.0]])
         #self.assertArraysAlmostEqual( mxInReducedBasis, correctAnswer )
@@ -35,7 +35,7 @@ class BasisBaseTestCase(BaseTestCase):
 
         expandedMx = bt.resize_std_mx(mxInReducedBasis, 'expand', begin, end)
         #expandedMx = bt.change_basis(mxInReducedBasis, end, begin)
-        expandedMxAgain = bt.change_basis(expandedMx, 'std', 'std', 4)
+        expandedMxAgain = bt.change_basis(expandedMx, 'std', 'std') #, 4)
         self.assertArraysAlmostEqual( expandedMx, mxInStdBasis )
         self.assertArraysAlmostEqual( expandedMxAgain, mxInStdBasis )
 
@@ -107,7 +107,7 @@ class BasisBaseTestCase(BaseTestCase):
         with self.assertRaises(TypeError):
             pygsti.pp_matrices("Foobar") #dim must be an int
         with self.assertRaises(ValueError):
-            pygsti.pp_matrices(3) #dim must be a power of 2
+            pygsti.pp_matrices(3) #dim must be a power of 4
 
         specialCase = pygsti.pp_matrices(1) #single 1x1 identity mx
         self.assertEqual( specialCase, [ np.identity(1,'complex') ] )
@@ -233,13 +233,13 @@ class BasisBaseTestCase(BaseTestCase):
         self.assertArraysAlmostEqual( stdMx, stdMx2 )
 
     def test_basis_misc(self):
-        with self.assertRaises(TypeError):
-            Dim("FooBar") #arg should be a list,tuple,or int
-        bt.pp_matrices([1])
+        #with self.assertRaises(TypeError):
+        #    Dim("FooBar") #arg should be a list,tuple,or int
+        bt.pp_matrices(1) # was [1] but this shouldn't be allowed
 
     def test_basis_longname(self):
         longnames = {bt.basis_longname(b) for b in {'gm', 'std', 'pp', 'qt'}}
-        self.assertEqual(longnames, {'Gell-Mann', 'Matrix-unit', 'Pauli-Product', 'Qutrit'})
+        self.assertEqual(longnames, {'Gell-Mann basis', 'Matrix-unit basis', 'Pauli-Product basis', 'Qutrit basis'})
         with self.assertRaises(KeyError):
             bt.basis_longname('not a basis')
 
@@ -254,22 +254,22 @@ class BasisBaseTestCase(BaseTestCase):
         ['I', 'X', 'Y', 'Z'],
         ['(0,0)', '(0,1)', '(1,0)', '(1,1)'],
         ['I', 'X', 'Y', 'Z']]
-        labels = [bt.basis_element_labels(basisname, 2)  for basisname in basisnames]
+        labels = [bt.basis_element_labels(basisname, 4)  for basisname in basisnames]
         self.assertEqual(labels, expectedLabels)
 
-        with self.assertRaises(NotImplementedError):
-            bt.basis_element_labels('asdklfasdf', 2)
+        with self.assertRaises(AssertionError):
+            bt.basis_element_labels('asdklfasdf', 4)
 
         # Non power of two for pp labels:
         with self.assertRaises(ValueError):
-            label = bt.basis_element_labels('pp', 3)
+            label = bt.basis_element_labels('pp', 9)
 
         # Single list arg for pp labels
-        self.assertEqual(bt.basis_element_labels('pp', [2]), ['I', 'X', 'Y', 'Z'])
+        self.assertEqual(bt.basis_element_labels('pp',4), ['I', 'X', 'Y', 'Z'])
 
         # Four dimensional+
-        expectedLabels = [['I^{(0)}', 'X^{(0)}_{0,1}', 'X^{(0)}_{0,2}', 'X^{(0)}_{0,3}', 'X^{(0)}_{1,2}', 'X^{(0)}_{1,3}', 'X^{(0)}_{2,3}', 'Y^{(0)}_{0,1}', 'Y^{(0)}_{0,2}', 'Y^{(0)}_{0,3}', 'Y^{(0)}_{1,2}', 'Y^{(0)}_{1,3}', 'Y^{(0)}_{2,3}', 'Z^{(0)}_{1}', 'Z^{(0)}_{2}', 'Z^{(0)}_{3}'], ['(0,0)', '(0,1)', '(0,2)', '(0,3)', '(1,0)', '(1,1)', '(1,2)', '(1,3)', '(2,0)', '(2,1)', '(2,2)', '(2,3)', '(3,0)', '(3,1)', '(3,2)', '(3,3)'], ['II', 'IX', 'IY', 'IZ', 'XI', 'XX', 'XY', 'XZ', 'YI', 'YX', 'YY', 'YZ', 'ZI', 'ZX', 'ZY', 'ZZ']]
-        labels = [bt.basis_element_labels(basisname, 4)  for basisname in basisnames]
+        expectedLabels = [['I', 'X_{0,1}', 'X_{0,2}', 'X_{0,3}', 'X_{1,2}', 'X_{1,3}', 'X_{2,3}', 'Y_{0,1}', 'Y_{0,2}', 'Y_{0,3}', 'Y_{1,2}', 'Y_{1,3}', 'Y_{2,3}', 'Z_{1}', 'Z_{2}', 'Z_{3}'], ['(0,0)', '(0,1)', '(0,2)', '(0,3)', '(1,0)', '(1,1)', '(1,2)', '(1,3)', '(2,0)', '(2,1)', '(2,2)', '(2,3)', '(3,0)', '(3,1)', '(3,2)', '(3,3)'], ['II', 'IX', 'IY', 'IZ', 'XI', 'XX', 'XY', 'XZ', 'YI', 'YX', 'YY', 'YZ', 'ZI', 'ZX', 'ZY', 'ZZ']]
+        labels = [bt.basis_element_labels(basisname, 16)  for basisname in basisnames]
         self.assertEqual(expectedLabels, labels)
 
     def test_hamiltonian_to_lindbladian(self):
@@ -283,40 +283,40 @@ class BasisBaseTestCase(BaseTestCase):
                                      expectedLindbladian)
 
     def test_vec_to_stdmx(self):
-        vec = np.zeros(shape=(2,))
+        vec = np.zeros(shape=(4,))
         for b in {'gm', 'pp', 'std'}:
             bt.vec_to_stdmx(vec, b)
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(AssertionError):
             bt.vec_to_stdmx(vec, 'akdfj;ladskf')
 
     def test_composite_basis(self):
-        comp = Basis([('std', 2,), ('std', 1)])
+        comp = Basis.cast([('std', 4,), ('std', 1)])
 
-        a = Basis([('std', 2), ('std', 2)])
-        b = Basis('std', [2,2])
+        a = Basis.cast([('std', 4), ('std', 4)])
+        b = Basis.cast('std', [4,4])
         self.assertEqual(len(a), len(b))
-        self.assertArraysAlmostEqual(np.array(a.matrices), np.array(b.matrices))
+        self.assertArraysAlmostEqual(np.array(a.elements), np.array(b.elements))
 
     def test_auto_expand(self):
-        comp = Basis(matrices=[('std', 2,), ('std', 1)])
-        std  = Basis('std', 3)
+        comp = Basis.cast([('std', 4,), ('std', 1)])
+        std  = Basis.cast('std', 9)
         mxStd = np.identity(5)
         test   = bt.resize_std_mx(mxStd, 'expand', comp, std)
         test2  = bt.resize_std_mx(test, 'contract', std, comp)
         self.assertArraysAlmostEqual(test2, mxStd)
 
     def test_flexible_change_basis(self):
-        comp  = Basis(matrices=[('gm', 2,), ('gm', 1)])
-        std   = Basis('std', 3)
+        comp  = Basis.cast([('gm', 4,), ('gm', 1)])
+        std   = Basis.cast('std', 9)
         mx    = np.identity(5)
         test  = bt.flexible_change_basis(mx, comp, std)
-        self.assertEqual(test.shape[0], sum(comp.dim.blockDims) ** 2)
+        self.assertEqual(test.shape[0], comp.elsize)
         test2 = bt.flexible_change_basis(test, std, comp)
         self.assertArraysAlmostEqual(test2, mx)
 
     def test_change_between_composites(self):
-        a = Basis('std', [2, 1])
-        b = Basis('gm',  [2, 1])
+        a = Basis.cast('std', [4, 1])
+        b = Basis.cast('gm',  [4, 1])
         mxStd = np.identity(5)
         test = bt.change_basis(mxStd, a, b)
         self.assertEqual(test.shape, mxStd.shape)
@@ -324,47 +324,47 @@ class BasisBaseTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(test2, mxStd)
 
     def test_qt(self):
-        qt = Basis('qt', 3)
-        qt = Basis('qt', [3])
+        qt = Basis.cast('qt', 9)
+        qt = Basis.cast('qt', [9])
 
     def test_general(self):
-        Basis('pp', 2)
-        Basis('std', [2, 1])
-        Basis([('std', 2), ('gm', 2)])
+        Basis.cast('pp', 4)
+        Basis.cast('std', [4, 1])
+        with self.assertRaises(AssertionError):
+            Basis.cast([('std', 16), ('gm', 4)]) # inconsistent .real values of components!
 
-        std  = Basis('std', 2)
-        std4  = Basis('std', 4)
-        std2x2 = Basis([('std', 2), ('std', 2)])
-        gm   = Basis('gm', 2)
-        ungm = Basis('gm_unnormalized', 2)
-        empty = Basis([]) #special "empty" basis
+        std  = Basis.cast('std', 4)
+        std4  = Basis.cast('std', 16)
+        std2x2 = Basis.cast([('std', 4), ('std', 4)])
+        gm   = Basis.cast('gm', 4)
+        ungm = Basis.cast('gm_unnormalized', 4)
+        empty = Basis.cast([]) #special "empty" basis
         self.assertEqual(empty.name, "*Empty*")
 
         from_basis,to_basis = pygsti.tools.build_basis_pair(np.identity(4,'d'),"std","gm")
         from_basis,to_basis = pygsti.tools.build_basis_pair(np.identity(4,'d'),std,"gm")
         from_basis,to_basis = pygsti.tools.build_basis_pair(np.identity(4,'d'),"std",gm)
 
-        gm_mxs = gm.get_composite_matrices()
-        unnorm = Basis(matrices=[ gm_mxs[0], 2*gm_mxs[1] ])
+        gm_mxs = gm.elements
+        unnorm = ExplicitBasis([ gm_mxs[0], 2*gm_mxs[1] ])
 
         std[0]
-        std.get_sub_basis_matrices(0)
+        #std.get_sub_basis_matrices(0)
 
-        print(gm.get_composite_matrices())
+        #print(gm.elements)
         self.assertTrue(gm.is_normalized())
         self.assertFalse(ungm.is_normalized())
         self.assertFalse(unnorm.is_normalized())
 
-        transMx = bt.transform_matrix(std, gm)
+        #transMx = bt.transform_matrix(std, gm) #REMOVED
 
-        composite = Basis([std, gm])
+        composite = DirectSumBasis([gm, gm])
 
-        comp = Basis(matrices=[std, gm], name='comp', longname='CustomComposite')
+        comp = DirectSumBasis([gm, gm], name='comp', longname='CustomComposite')
 
         #comp.labels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] #read-only
-        comp = Basis(matrices=[std, gm], name='comp', longname='CustomComposite', labels=[
-                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'
-            ])
+        comp = DirectSumBasis([gm, gm], name='comp', longname='CustomComposite')
+        comp._labels=['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] # TODO: make a set_labels?
 
         std2x2Matrices = np.array([
             [[1, 0],
@@ -380,13 +380,12 @@ class BasisBaseTestCase(BaseTestCase):
              [0, 1]]
         ],'complex')
 
-        empty = Basis(matrices=[])
-        alt_standard = Basis(matrices=std2x2Matrices)
-        print("MXS = \n",alt_standard._matrices)
-        alt_standard = Basis(matrices=std2x2Matrices,
-                             name='std',
-                             longname='Standard'
-                            )
+        empty = ExplicitBasis([])
+        alt_standard = ExplicitBasis(std2x2Matrices)
+        print("MXS = \n",alt_standard.elements)
+        alt_standard = ExplicitBasis(std2x2Matrices,
+                                     name='std',
+                                     longname='Standard')
         self.assertEqual(alt_standard, std2x2Matrices)
 
         mx = np.array([
@@ -404,7 +403,7 @@ class BasisBaseTestCase(BaseTestCase):
         I4 = bt.flexible_change_basis(I2x2, std2x2, std4)
         self.assertArraysAlmostEqual(bt.flexible_change_basis(I4, std4, std2x2), I2x2)
         
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             bt.change_basis(mx, std, std4) # basis size mismatch
         
         
@@ -413,21 +412,21 @@ class BasisBaseTestCase(BaseTestCase):
                                  [0,0,0,0],
                                  [3,0,0,4]],'d')
 
-        begin = Basis('std', [1,1])
-        end   = Basis('std', 2)
+        begin = Basis.cast('std', [1,1])
+        end   = Basis.cast('std', 4)
         mxInReducedBasis = bt.resize_std_mx(mxInStdBasis, 'contract', end, begin)
         original         = bt.resize_std_mx(mxInReducedBasis, 'expand', begin, end)
 
     def test_basis_object(self):
         #test a few aspects of a Basis object that other tests miss...
-        b = Basis("pp",2)
-        beq = b.expanded_equivalent()
+        b = Basis.cast("pp",4)
+        beq = b.simple_equivalent()
         longnm = bt.basis_longname(b)
-        lbls = bt.basis_element_labels(b)
+        lbls = bt.basis_element_labels(b,None)
 
-        raw_mxs = bt.basis_matrices("pp",2)
-        with self.assertRaises(NotImplementedError):
-            bt.basis_matrices("foobar",2) #invalid basis name
+        raw_mxs = bt.basis_matrices("pp",4)
+        with self.assertRaises(AssertionError):
+            bt.basis_matrices("foobar",4) #invalid basis name
 
         print("Dim = ", repr(b.dim) ) # calls Dim.__repr__
 
@@ -436,26 +435,26 @@ class BasisBaseTestCase(BaseTestCase):
         ppMax1 = bt.pp_matrices(2,maxWeight=1) #using maxWeight
         qutrit1 = bt.qt_matrices(1) #special case when dim==1
 
-        #Cover invalid Dim construction
-        with self.assertRaises(TypeError):
-            pygsti.baseobjs.Dim(1.2)
+        #Cover invalid Dim construction (DIM REMOVED)
+        #with self.assertRaises(TypeError):
+        #    pygsti.baseobjs.Dim(1.2)
 
         
     def test_sparse_basis(self):
-        sparsePP = Basis("pp",2,sparse=True)
-        sparsePP2 = Basis("pp",2,sparse=True)
-        sparseBlockPP = Basis("pp",[2,2],sparse=True)
-        sparsePP_2Q = Basis("pp",4,sparse=True)
-        sparseGM_2Q = Basis("gm",2,sparse=True) #different sparsity structure than PP 2Q
-        denseGM = Basis("gm",2,sparse=False)
+        sparsePP = Basis.cast("pp",4,sparse=True)
+        sparsePP2 = Basis.cast("pp",4,sparse=True)
+        sparseBlockPP = Basis.cast("pp",[4,4],sparse=True)
+        sparsePP_2Q = Basis.cast("pp",16,sparse=True)
+        sparseGM_2Q = Basis.cast("gm",4,sparse=True) #different sparsity structure than PP 2Q
+        denseGM = Basis.cast("gm",4,sparse=False)
         
-        mxs = sparsePP.get_composite_matrices()
-        block_mxs = sparseBlockPP.get_composite_matrices()
+        mxs = sparsePP.elements
+        block_mxs = sparseBlockPP.elements
 
-        expeq = sparsePP.expanded_equivalent()
-        block_expeq = sparseBlockPP.expanded_equivalent()
+        expeq = sparsePP.simple_equivalent()
+        block_expeq = sparseBlockPP.simple_equivalent()
 
-        raw_mxs = bt.basis_matrices("pp",2,sparse=True)
+        raw_mxs = bt.basis_matrices("pp",4,sparse=True)
         
         #test equality of bases with other bases and matrices
         self.assertEqual(sparsePP, sparsePP2)
@@ -469,8 +468,8 @@ class BasisBaseTestCase(BaseTestCase):
         trans2 = sparsePP.transform_matrix(denseGM)
 
         #test equality for large bases
-        large_sparsePP = Basis("pp",16,sparse=True)
-        large_sparsePP2 = Basis("pp",16,sparse=True)
+        large_sparsePP = Basis.cast("pp",256,sparse=True)
+        large_sparsePP2 = Basis.cast("pp",256,sparse=True)
         self.assertEqual(large_sparsePP, large_sparsePP2)
           #OLD: was too expensive so it always returns false; now compares names & dim...
         

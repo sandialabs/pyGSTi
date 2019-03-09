@@ -153,7 +153,7 @@ class GateBaseTestCase(BaseTestCase):
             optools.std_error_generators(4, "foobar", 'gm')
 
     def test_lind_errgens(self):
-        basis = pygsti.obj.Basis('gm',2)
+        basis = pygsti.obj.Basis.cast('gm',4)
 
         normalize = False
         other_mode = "all"
@@ -177,8 +177,8 @@ class GateBaseTestCase(BaseTestCase):
         optools.lindblad_error_generators(None, None, normalize, other_mode)
 
 
-        basis = pygsti.obj.Basis('gm',4)
-        mxBasis = pygsti.obj.Basis('gm',4)
+        basis = pygsti.obj.Basis.cast('gm',16)
+        mxBasis = pygsti.obj.Basis.cast('gm',16)
         errgen = np.identity(16,'d')
         optools.lindblad_errgen_projections(errgen, basis, basis, mxBasis, 
                                     normalize=True, return_generators=False, 
@@ -191,7 +191,7 @@ class GateBaseTestCase(BaseTestCase):
                                     normalize=True, return_generators=True, 
                                     other_mode="diagonal", sparse=False)
 
-        basisMxs = pygsti.tools.basis_matrices('gm', 4, sparse=False) 
+        basisMxs = pygsti.tools.basis_matrices('gm', 16, sparse=False) 
         optools.lindblad_errgen_projections(errgen, basisMxs, basisMxs, mxBasis, 
                                     normalize=True, return_generators=False, 
                                     other_mode="all", sparse=False)
@@ -212,7 +212,7 @@ class GateBaseTestCase(BaseTestCase):
 
         with self.assertRaises(ValueError):
             mdl_target_gm = std2Q_XXYYII.target_model()
-            mdl_target_gm.basis = pygsti.obj.Basis("gm",4)
+            mdl_target_gm.basis = pygsti.obj.Basis.cast("gm",16)
             optools.project_model(
                 mdl, mdl_target_gm, projectionTypes, genType) # basis mismatch
 

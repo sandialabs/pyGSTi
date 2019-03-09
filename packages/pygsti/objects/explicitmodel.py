@@ -43,7 +43,8 @@ from . import simplifierhelper as _sh
 from . import layerlizard as _ll
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
-from ..baseobjs import Basis as _Basis
+from ..baseobjs import BuiltinBasis as _BuiltinBasis
+from ..baseobjs import DirectSumBasis as _DirectSumBasis
 from ..baseobjs import Label as _Label
 
 
@@ -60,7 +61,7 @@ class ExplicitOpModel(_mdl.OpModel):
     #Whether access to gates & spam vecs via Model indexing is allowed
     _strict = False
 
-    def __init__(self, state_space_labels, basis="pp", default_param="full",
+    def __init__(self, state_space_labels, basis="auto", default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
                  povm_prefix="M", instrument_prefix="I", sim_type="auto",
                  evotype="densitymx"):
@@ -76,7 +77,7 @@ class ExplicitOpModel(_mdl.OpModel):
             and imposed structure.  If a list or tuple is given, it must be 
             of a from that can be passed to `StateSpaceLabels.__init__`.
 
-        basis : Basis
+        basis : {"auto","pp","gm","qt","std","sv"} or Basis
             The basis used for the state space by dense operator representations.
 
         default_param : {"full", "TP", "CPTP", etc.}, optional
@@ -127,6 +128,10 @@ class ExplicitOpModel(_mdl.OpModel):
         
         self._default_gauge_group = None
 
+        if basis == "auto":
+            basis = "pp" if evotype in ("densitymx","svterm","cterm") \
+                else "sv" # ( if evotype in ("statevec","stabilizer") )
+            
         chelper = _sh.MemberDictSimplifierHelper(self.preps, self.povms, self.instruments)
         super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, chelper, sim_type)
 
@@ -1485,12 +1490,12 @@ class ExplicitOpModel(_mdl.OpModel):
 
         #For now, just create a dumb default state space labels and basis for the new model:
         sslbls = [('L%d'%i,) for i in range(newDimension)] # interpret as independent classical levels
-        dumb_basis = _Basis('gm',[1]*newDimension) # act on diagonal density mx to get appropriate
+        dumb_basis = _DirectSumBasis( [_BuiltinBasis('gm',1)]*newDimension, name="Unknown") # - just act on diagonal density mx
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                               self.operations._prefix, self.povms._prefix,
                               self.instruments._prefix, self._sim_type)
         #new_model._dim = newDimension # dim will be set when elements are added
-        new_model.reset_basis() #FUTURE: maybe user can specify how increase is being done?
+        #new_model.reset_basis() #FUTURE: maybe user can specify how increase is being done?
 
         addedDim = newDimension-curDim
         vec_zeroPad = _np.zeros( (addedDim,1), 'd')
@@ -1554,12 +1559,12 @@ class ExplicitOpModel(_mdl.OpModel):
 
         #For now, just create a dumb default state space labels and basis for the new model:
         sslbls = [('L%d'%i,) for i in range(newDimension)] # interpret as independent classical levels
-        dumb_basis = _Basis('gm',[1]*newDimension) # act on diagonal density mx to get appropriate
+        dumb_basis = _DirectSumBasis( [_BuiltinBasis('gm',1)]*newDimension, name="Unknown") # - just act on diagonal density mx
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
                               self.operations._prefix, self.povms._prefix,
                               self.instruments._prefix, self._sim_type)
         #new_model._dim = newDimension # dim will be set when elements are added
-        new_model.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
+        #new_model.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 
         #Decrease dimension of rhoVecs and EVecs by truncation
         for lbl,rhoVec in self.preps.items():

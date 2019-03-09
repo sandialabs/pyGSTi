@@ -260,26 +260,27 @@ class TestDriversMethods(DriversTestCase):
                                              verbosity=2)
 
 
-    def test_longSequenceGST_linearGates(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
-        ts = "whole germ powers"
-
-        target_model = pygsti.construction.build_explicit_model([('Q0',)], ['Gi','Gx','Gy'],
-                                                      [ "D(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                      parameterization="linear")
-
-        maxLens = self.maxLens
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-                                ds, target_model, std.fiducials, std.fiducials,
-                                std.germs, maxLens,
-                                advancedOptions={'truncScheme': ts, 'tolerance':1e-4} )
-                                #decrease tolerance
-                                # b/c this problem seems hard to converge at the very end
-                                # very small changes (~0.0001) to the total chi^2.
-
-        #create a report...
-        pygsti.report.create_standard_report(result, temp_files + "/full_report_LPGates",
-                                             "LPGates report", verbosity=2)
+    #We're removing linear gates - at least building them
+    #def test_longSequenceGST_linearGates(self):
+    #    ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
+    #    ts = "whole germ powers"
+    #
+    #    target_model = pygsti.construction.build_explicit_model([('Q0',)], ['Gi','Gx','Gy'],
+    #                                                  [ "D(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
+    #                                                  parameterization="linear")
+    #
+    #    maxLens = self.maxLens
+    #    result = self.runSilent(pygsti.do_long_sequence_gst,
+    #                            ds, target_model, std.fiducials, std.fiducials,
+    #                            std.germs, maxLens,
+    #                            advancedOptions={'truncScheme': ts, 'tolerance':1e-4} )
+    #                            #decrease tolerance
+    #                            # b/c this problem seems hard to converge at the very end
+    #                            # very small changes (~0.0001) to the total chi^2.
+    #
+    #    #create a report...
+    #    pygsti.report.create_standard_report(result, temp_files + "/full_report_LPGates",
+    #                                         "LPGates report", verbosity=2)
 
 
     def test_longSequenceGST_CPTP(self):

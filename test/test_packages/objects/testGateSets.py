@@ -1219,6 +1219,12 @@ class TestGateSetMethods(GateSetTestCase):
         with open(temp_files + "/repickle_old_gateset.pkl.%s" % vs,'wb') as f:
             pickle.dump(mdl, f)
 
+        with pygsti.io.enable_old_object_unpickling("0.9.7"):
+            with open(compare_files + "/pygsti0.9.7.gateset.pkl.%s" % vs,'rb') as f:
+                mdl = pickle.load(f)
+        with open(temp_files + "/repickle_old_gateset.pkl.%s" % vs,'wb') as f:
+            pickle.dump(mdl, f)
+
         #OLD: we don't do this anymore (_calcClass has been removed)
         #also test automatic setting of _calcClass
         #mdl = self.model.copy()
@@ -1228,9 +1234,9 @@ class TestGateSetMethods(GateSetTestCase):
 
 
     def test_base_fwdsim(self):
-        class TEMP_COS(object):
+        class TEMP_SOS(object): # SOS = Simplified Op Server
             def get_evotype(self): return "densitymx"
-        rawCalc = pygsti.objects.forwardsim.ForwardSimulator(4, TEMP_COS(), np.zeros(16,'d'))
+        rawCalc = pygsti.objects.forwardsim.ForwardSimulator(4, TEMP_SOS(), np.zeros(16,'d'))
 
         #Lots of things that derived classes implement
         #with self.assertRaises(NotImplementedError):
@@ -1244,7 +1250,7 @@ class TestGateSetMethods(GateSetTestCase):
         #with self.assertRaises(NotImplementedError):
         #    rawCalc.hproduct(('Gx',))
         with self.assertRaises(NotImplementedError):
-            rawCalc.construct_evaltree()
+            rawCalc.construct_evaltree(None,None)
         #with self.assertRaises(NotImplementedError):
         #    rawCalc.bulk_product(None)
         #with self.assertRaises(NotImplementedError):

@@ -179,7 +179,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetModel, opLabels=None, opLabelAl
     if svdTruncateTo is None or svdTruncateTo == targetModel.dim: #use target sslbls and basis
         lgstModel = _objs.ExplicitOpModel(targetModel.state_space_labels, targetModel.basis)
     else: # construct a default basis for the requested dimension 
-        dumb_basis = _objs.Basis('gm',[1]*svdTruncateTo) # - just act on diagonal density mx
+        dumb_basis = _objs.DirectSumBasis( [_objs.BuiltinBasis('gm',1)]*svdTruncateTo) # - just act on diagonal density mx
         lgstModel = _objs.ExplicitOpModel([('L%d'%i,) for i in range(svdTruncateTo)], dumb_basis)
         
     for opLabel in opLabelsToEstimate:
@@ -2437,6 +2437,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
             v = _np.where( minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
                     #special handling for f == 0 terms using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+            #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
             v = _np.sqrt( v )
             v.shape = [KM] #reshape ensuring no copy is needed
             if cptp_penalty_factor != 0:
@@ -2534,6 +2535,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
             v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
             v = _np.where( minusCntVecMx == 0, 0.0, v)
+            #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
             v = _np.sqrt( v )
             assert(v.shape == (KM,)) #reshape ensuring no copy is needed
 
@@ -2687,7 +2689,7 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
                        verbosity=0, check=False, circuitWeightsDict=None,
                        opLabelAliases=None, memLimit=None,
                        profiler=None, comm=None, distributeMethod = "deriv",
-                       alwaysPerformMLE=False, evaltree_cache=None):
+                       alwaysPerformMLE=False, onlyPerformMLE=False, evaltree_cache=None):
     """
     Performs Iterative Maximum Likelihood Estimation Gate Set Tomography on the dataset.
 
@@ -2806,6 +2808,10 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
         not just the final one.  When False, chi2 minimization is used for all
         except the final iteration (for improved numerical stability).
 
+    onlyPerformMLE : bool, optional
+        When True, `alwaysPerformMLE` must also be true, and in this case only 
+        a ML optimization is performed for each iteration.
+
     evaltree_cache : dict, optional
         An empty dictionary which gets filled with the *final* computed EvalTree
         (and supporting info) used in this computation.
@@ -2823,6 +2829,9 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
         of the i-th iteration.
     """
 
+    if onlyPerformMLE:
+        assert(alwaysPerformMLE), "Must set `alwaysPerformMLE` to True whenever `onlyPerformMLE` is True."
+        
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
 
@@ -2864,12 +2873,13 @@ def do_iterative_mlgst(dataset, startModel, circuitSetsToUseInEstimation,
             num_fd = fditer if (i == 0) else 0
 
             evt_cache = {} # get the eval tree that's created so we can reuse it
-            _, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
-                                      maxiter, maxfev, num_fd, tol, cptp_penalty_factor,
-                                      spam_penalty_factor, minProbClip, probClipInterval,
-                                      useFreqWeightedChiSq, 0,printer-1, check,
-                                      check, circuitWeights, opLabelAliases,
-                                      memLimit, comm, distributeMethod, profiler, evt_cache)
+            if not onlyPerformMLE:
+                _, mleModel = do_mc2gst(dataset, mleModel, stringsToEstimate,
+                                        maxiter, maxfev, num_fd, tol, cptp_penalty_factor,
+                                        spam_penalty_factor, minProbClip, probClipInterval,
+                                        useFreqWeightedChiSq, 0,printer-1, check,
+                                        check, circuitWeights, opLabelAliases,
+                                        memLimit, comm, distributeMethod, profiler, evt_cache)
 
             if alwaysPerformMLE:
                 _, mleModel = do_mlgst(dataset, mleModel, stringsToEstimate,
@@ -3054,7 +3064,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, mdl, prefactor, opBasis):
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape ( _spam_penalty_size(mdl), nParams).
     """
-    BMxs = opBasis.get_composite_matrices() #shape [mdl.dim, dmDim, dmDim]
+    BMxs = opBasis.elements #shape [mdl.dim, dmDim, dmDim]
     ddenMxdV = dEMxdV = BMxs.conjugate() # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
       #NOTE: conjugate() above is because ddenMxdV and dEMxdV will get *elementwise*
       # multiplied (einsum below) by another complex matrix (sgndm or sgnE) and summed

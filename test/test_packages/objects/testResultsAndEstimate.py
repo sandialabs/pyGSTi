@@ -165,6 +165,13 @@ class ResultsEstimateTestCase(BaseTestCase):
             #pickle.dump(results.estimates['TP'].models['single'], f) # Debug
             pickle.dump(results, f)
 
+        with pygsti.io.enable_old_object_unpickling("0.9.7"):
+            with open(compare_files + "/pygsti0.9.7.results.pkl.%s" % vs,'rb') as f:
+                results = pickle.load(f)
+        with open(temp_files + "/repickle_old_results.pkl.%s" % vs,'wb') as f:
+            pickle.dump(results, f)
+
+
         
 if __name__ == '__main__':
     unittest.main(verbosity=2)

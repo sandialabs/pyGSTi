@@ -251,7 +251,7 @@ def set_idle_errors(nQubits, model, errdict, rand_default=None,
     return _np.array(rand_rates,'d') # the random rates that were chosen (to keep track of them for later)
 
 
-def get_idle_errors(nQubits, model, hamiltonian=True, stochastic=True, affine=True):
+def get_idle_errors(nQubits, model, hamiltonian=True, stochastic=True, affine=True, scale_for_idt=True):
     """ 
     Get error rates on the global idle operation withina :class:`CloudNoiseModel` object.
 
@@ -267,6 +267,12 @@ def get_idle_errors(nQubits, model, hamiltonian=True, stochastic=True, affine=Tr
         Whether `model` includes Hamiltonian, Stochastic, and/or Affine
         errors (e.g. if the model was built with "H+S" parameterization,
         then only `hamiltonian` and `stochastic` should be set to True).
+
+    scale_for_idt : bool, optional
+        Whether rates should be scaled to match the intrinsic rates 
+        output by idle tomography.  If `False`, then the rates are 
+        simply the coefficients of corresponding terms in the 
+        error generator.
 
     Returns
     -------
@@ -291,18 +297,25 @@ def get_idle_errors(nQubits, model, hamiltonian=True, stochastic=True, affine=Tr
         if stochastic:  stochastic_sub_v = sub_v[bsH-1:bsH-1+bsO-1]
         if affine:      affine_sub_v = sub_v[bsH-1+bsO-1:bsH-1+2*(bsO-1)]
 
+        nTargetQubits = len(factor.targetLabels)
+        
         for k,tup in enumerate(nontrivial_paulis( len(factor.targetLabels) )):
             lst = ['I']*nQubits
             for ii,i in enumerate(factor.targetLabels):
                 lst[int(i[1:])] = tup[ii] # i is something like "Q0" so int(i[1:]) extracts the 0
             label = "".join(lst)
 
+            #For explanation of why `scale` is set as it is, see comments in
+            # the `predicted_intrinsic_rates(...)` function.
             if hamiltonian and abs(hamiltonian_sub_v[k]) > 1e-6:
-                ham_rates[label] = hamiltonian_sub_v[k]
+                scale = _np.sqrt(2**(2-nTargetQubits)) if scale_for_idt else 1.0
+                ham_rates[label] = hamiltonian_sub_v[k] * scale
             if stochastic and abs(stochastic_sub_v[k]) > 1e-6:
-                sto_rates[label] = stochastic_sub_v[k]**2
+                scale = 1./(2**nTargetQubits) if scale_for_idt else 1.0
+                sto_rates[label] = stochastic_sub_v[k]**2 * scale
             if affine and abs(affine_sub_v[k]) > 1e-6:
-                aff_rates[label] = affine_sub_v[k]
+                scale = 1./(_np.sqrt(2)**nTargetQubits ) if scale_for_idt else 1.0
+                aff_rates[label] = affine_sub_v[k] * scale
 
     return ham_rates, sto_rates, aff_rates
 

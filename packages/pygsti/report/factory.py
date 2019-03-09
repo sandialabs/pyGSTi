@@ -472,6 +472,7 @@ def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
             estimate0 = results.estimates[estLabels[0]]
             dim = estimate0.models['target'].dim
             nQubits = int(round(_np.log2(dim)//2))
+            idStr = ('Gi',) if 'Gi' in estimate0.models['target'].get_primitive_op_labels() else ((),)
         except:
             printer.log(" ! Skipping idle tomography on %s dataset (can't get # qubits) !" % ky)
             continue # skip if we can't get dimension
@@ -483,7 +484,7 @@ def _construct_idtresults(idtIdleOp, idtPauliDicts, gst_results_dict, printer):
         printer.log(" * Running idle tomography on %s dataset *" % ky)
         idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idtPauliDicts,
                                              maxweight=2, #HARDCODED for now (FUTURE)
-                                             advancedOptions=idt_advanced)
+                                             idle_string=idStr, advancedOptions=idt_advanced)
         idt_results_dict[ky] = idtresults
 
     return idt_results_dict

@@ -32,7 +32,7 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         # so far no gpindices have been set...
         
         ss3Q = [('Q0','Q1','Q2')] #3Q state space
-        basis3Q = pygsti.objects.Basis('pp', 2**nQubits) #3Q basis
+        basis3Q = pygsti.objects.Basis.cast('pp', 4**nQubits) #3Q basis
         Giii = ComposedDenseOp([ EmbeddedDenseOp(ss3Q, ('Q0',), idleErr0),
                               EmbeddedDenseOp(ss3Q, ('Q1',), idleErr1),
                               EmbeddedDenseOp(ss3Q, ('Q2',), idleErr2)
@@ -100,8 +100,8 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         #warnings.simplefilter('error',SparseEfficiencyWarning)
         #warnings.simplefilter('error',DeprecationWarning)
         
-        sparsePP = pygsti.objects.Basis("pp",4,sparse=True)
-        mxs = sparsePP.get_composite_matrices()
+        sparsePP = pygsti.objects.Basis.cast("pp",16,sparse=True)
+        mxs = sparsePP.elements
         #for lbl,mx in zip(sparsePP.labels,mxs):
         #    print(lbl,":",mx.shape,"matrix with",mx.nnz,"nonzero entries (of",
         #          mx.shape[0]*mx.shape[1],"total)")
