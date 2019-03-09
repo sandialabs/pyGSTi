@@ -517,8 +517,9 @@ class EvalTree(list):
             None if bLocal else self.myFinalElsToParentFinalElsMap)
         
 
-    def _finish_split(self, elIndicesDict, subTreeSetList, permute_parent_element, create_subtree):
+    def _finish_split(self, elIndicesDict, subTreeSetList, permute_parent_element, create_subtree, all_final=False):
         # Create subtrees from index sets
+        import time as _time
         need_to_compute = _np.zeros( len(self), 'bool' ) #flags so we don't duplicate computation of needed quantities
         need_to_compute[0:self.num_final_strings()] = True #  b/c multiple subtrees need them as intermediates
 
@@ -532,51 +533,57 @@ class EvalTree(list):
         parentIndexRevPerm = [] # parentIndexRevPerm[newIndex] = currentIndex (i.e. oldIndex)
         subTreeIndicesList = []
         numFinalList = []
+        #t0 = _time.time() #REMOVE
         for subTreeSet in subTreeSetList:
             subTreeIndices = list(subTreeSet)
             #if bDebug: print("SUBTREE0: %s (len=%d)" % (str(subTreeIndices),len(subTreeIndices)))
             #if bDebug: print("  NEED: %s" % ",".join([ "1" if b else "0" for b in need_to_compute]))
             subTreeIndices.sort() # order subtree circuits (really just their indices) so
                                   # that all "final" strings come first.
-            #Compute # of "final" strings in this subtree (count # of indices < num_final_strs)
-            subTreeNumFinal = _np.sum(_np.array(subTreeIndices) < self.num_final_strings())
 
-            #Swap the indices of "final" strings that have already been computed past the end
-            # of the "final strings" region of the subtree's list (i.e. the subtree itself).
-            # (some "required"/"final"strings may have already been computed by a previous subtree)
-            already_computed = _np.logical_not( need_to_compute[ subTreeIndices[0:subTreeNumFinal] ] )
-            already_computed_inds = _np.nonzero(already_computed)[0] # (sorted ascending)
-            #if bDebug: print("SUBTREE1: %s (nFinal=%d - %d)" % (str(subTreeIndices),
-            #                                         subTreeNumFinal, len(already_computed_inds)))
-            #if bDebug: print("  - already computed = ", [subTreeIndices[i] for i in already_computed_inds])
-
-            iFirstNonFinal = subTreeNumFinal
-            for k in already_computed_inds:
-                if k >= iFirstNonFinal: continue #already a non-final el
-                elif k == iFirstNonFinal-1: #index is last "final" el - just shift boundary
-                    iFirstNonFinal -= 1 #now index is "non-final"
-                else: # k < iFirstNonFinal-1, so find a desired "final" el at boundary to swap it with
-                    iLastFinal = iFirstNonFinal-1
-                    while iLastFinal > k and (iLastFinal in already_computed_inds):
-                        iLastFinal -= 1 #the element at iLastFinal happens to be one that we wanted to be non-final, so remove it
-                    if iLastFinal != k:
-                        subTreeIndices[iLastFinal],subTreeIndices[k] = \
-                            subTreeIndices[k],subTreeIndices[iLastFinal] #Swap k <-> iLastFinal
-                    iFirstNonFinal = iLastFinal # move boundary to make k's new location non-final
-
-            subTreeNumFinal = iFirstNonFinal # the final <-> non-final boundary
-            if subTreeNumFinal == 0: 
-                _warnings.warn(("A 'dummy' subtree was created that doesn't compute any "
-                                "actual ('final') elements.  This is fine, but usually "
-                                "means you're using more processors than you need to."))
-                #OLD: continue # this subtree only contributes non-final elements -> skip
-
+            if all_final:
+                subTreeNumFinal = len(subTreeIndices)
+            else:
+                #Compute # of "final" strings in this subtree (count # of indices < num_final_strs)
+                subTreeNumFinal = _np.sum(_np.array(subTreeIndices) < self.num_final_strings())
+    
+                #Swap the indices of "final" strings that have already been computed past the end
+                # of the "final strings" region of the subtree's list (i.e. the subtree itself).
+                # (some "required"/"final"strings may have already been computed by a previous subtree)
+                already_computed = _np.logical_not( need_to_compute[ subTreeIndices[0:subTreeNumFinal] ] )
+                already_computed_inds = _np.nonzero(already_computed)[0] # (sorted ascending)
+                #if bDebug: print("SUBTREE1: %s (nFinal=%d - %d)" % (str(subTreeIndices),
+                #                                         subTreeNumFinal, len(already_computed_inds)))
+                #if bDebug: print("  - already computed = ", [subTreeIndices[i] for i in already_computed_inds])
+    
+                iFirstNonFinal = subTreeNumFinal
+                for k in already_computed_inds:
+                    if k >= iFirstNonFinal: continue #already a non-final el
+                    elif k == iFirstNonFinal-1: #index is last "final" el - just shift boundary
+                        iFirstNonFinal -= 1 #now index is "non-final"
+                    else: # k < iFirstNonFinal-1, so find a desired "final" el at boundary to swap it with
+                        iLastFinal = iFirstNonFinal-1
+                        while iLastFinal > k and (iLastFinal in already_computed_inds):
+                            iLastFinal -= 1 #the element at iLastFinal happens to be one that we wanted to be non-final, so remove it
+                        if iLastFinal != k:
+                            subTreeIndices[iLastFinal],subTreeIndices[k] = \
+                                subTreeIndices[k],subTreeIndices[iLastFinal] #Swap k <-> iLastFinal
+                        iFirstNonFinal = iLastFinal # move boundary to make k's new location non-final
+    
+                subTreeNumFinal = iFirstNonFinal # the final <-> non-final boundary
+                if subTreeNumFinal == 0: 
+                    _warnings.warn(("A 'dummy' subtree was created that doesn't compute any "
+                                    "actual ('final') elements.  This is fine, but usually "
+                                    "means you're using more processors than you need to."))
+                    #OLD: continue # this subtree only contributes non-final elements -> skip
+    
             parentIndexRevPerm.extend( subTreeIndices[0:subTreeNumFinal] )
             subTreeIndicesList.append( subTreeIndices )
             numFinalList.append( subTreeNumFinal )
             need_to_compute[ subTreeIndices[0:subTreeNumFinal] ] = False
             #if bDebug: print("FINAL SUBTREE: %s (nFinal=%d)" % (str(subTreeIndices),subTreeNumFinal))
                     
+        #print("PT1 = %.3fs" % (_time.time()-t0)); t0 = _time.time() # REMOVE
         #Permute parent tree indices according to parentIndexPerm
         # parentIndexRevPerm maps: newIndex -> currentIndex, so looking at it as a list
         #  gives the new (permuted) elements
@@ -591,6 +598,7 @@ class EvalTree(list):
         assert( None not in parentIndexPerm) #all indices should be mapped somewhere!
         assert( self.original_index_lookup is None )
         self.original_index_lookup = { icur: inew for inew,icur in enumerate(parentIndexRevPerm) }
+        #print("PT2 = %.3fs" % (_time.time()-t0)); t0 = _time.time()  # REMOVE
 
         #print("DEBUG: PERM REV MAP = ", parentIndexRevPerm,
         #      "(first %d are 'final')" % self.num_final_strings())
@@ -601,6 +609,7 @@ class EvalTree(list):
         self.eval_order = [ parentIndexPerm[iCur] for iCur in self.eval_order ]
         self[:] = [ permute_parent_element(parentIndexPerm, self[iCur])
                     for iCur in parentIndexRevPerm ]
+        #print("PT3 = %.3fs" % (_time.time()-t0)); t0 = _time.time()  # REMOVE
 
 
         # Setting simplified_circuit_spamTuples, (re)sets the element ordering,
@@ -619,6 +628,7 @@ class EvalTree(list):
         #print("DEBUG: old_finalStrToEls = ",old_finalStringToElsMap)
         #print("DEBUG: permute_newToOld = ",permute_newToOld)
         #print("DEBUG: permute_oldToNew = ",permute_oldToNew)
+        #print("PT4 = %.3fs" % (_time.time()-t0)); t0 = _time.time() # REMOVE
 
         updated_elIndices = _collections.OrderedDict()
         for ky,indices in elIndicesDict.items():
@@ -630,6 +640,7 @@ class EvalTree(list):
         self.simplified_circuit_spamTuples = [ self.simplified_circuit_spamTuples[iCur]
                                                 for iCur in parentIndexRevPerm[0:self.num_final_strings()] ]
         self.recompute_spamtuple_indices(bLocal=True) #bLocal shouldn't matter here - just for clarity
+        #print("PT5 = %.3fs" % (_time.time()-t0)); t0 = _time.time() # REMOVE
 
         #Assert this tree (self) is *not* split
         assert(self.myFinalToParentFinalMap is None)
@@ -647,20 +658,22 @@ class EvalTree(list):
             sStart += numFinal #increment slice start position
         subTreeIndicesList = newList # => subTreeIndicesList is now permuted
 
+        #print("PT6 = %.3fs" % (_time.time()-t0)); t0 = _time.time() # REMOVE
         #Now (finally) create the actual subtrees, which requires
         # taking parent-indices and mapping them the subtree-indices
+        fullEvalOrder_lookup = { k:i for i,k in enumerate(self.init_indices + self.eval_order) } #list concatenation
         for iSubTree,(subTreeIndices,subTreeNumFinal,slc) \
                 in enumerate(zip(subTreeIndicesList,numFinalList,finalSlices)):
 
-            fullEvalOrder = self.init_indices + self.eval_order #list concatenation
             subTreeEvalOrder = sorted(range(len(subTreeIndices)),
-                                      key=lambda j: fullEvalOrder.index(subTreeIndices[j]))
+                                      key=lambda j: fullEvalOrder_lookup[subTreeIndices[j]])
 
             subtree = create_subtree(subTreeIndices, subTreeNumFinal, subTreeEvalOrder, slc, self)
             self.subTrees.append( subtree )
             #if bDebug: print("NEW SUBTREE: indices=%s, len=%d, nFinal=%d"  %
             #                  (subTree.parentIndexMap, len(subTree), subTree.num_final_strings()))
 
+        # print("PT7 = %.3fs" % (_time.time()-t0)); t0 = _time.time() # REMOVE
         #dbList2 = self.generate_circuit_list()
         #if bDebug: print("DBLIST = ",dbList)
         #if bDebug: print("DBLIST2 = ",dbList2)
@@ -739,9 +752,9 @@ class EvalTree(list):
             print("Size of original circuit_list = %d" % self.num_final_strings())
             print("Tree is split into %d sub-trees" % len(self.subTrees))
             print("Sub-tree lengths = ", list(map(len,self.subTrees)), " (Sum = %d)" % sum(map(len,self.subTrees)))
-            for i,t in enumerate(self.subTrees):
-                print(">> sub-tree %d: " % i)
-                t.print_analysis()
+            #for i,t in enumerate(self.subTrees):
+            #    print(">> sub-tree %d: " % i)
+            #    t.print_analysis()
 
                 
 def _compute_spamtuple_indices(simplified_circuit_spamTuples,

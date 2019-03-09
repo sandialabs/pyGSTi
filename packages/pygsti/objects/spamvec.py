@@ -1261,10 +1261,10 @@ class CPTPSPAMVec(DenseSPAMVec):
             be truncated to force a successful construction.
         """
         vector = SPAMVec.convert_to_vector(vec)
-        basis = _Basis(basis, int(round(_np.sqrt(len(vector)))))
+        basis = _Basis.cast(basis, len(vector))
 
         self.basis = basis
-        self.basis_mxs = basis.get_composite_matrices()   #shape (len(vec), dmDim, dmDim)
+        self.basis_mxs = basis.elements   #shape (len(vec), dmDim, dmDim)
         self.basis_mxs = _np.rollaxis(self.basis_mxs,0,3) #shape (dmDim, dmDim, len(vec))
         assert( self.basis_mxs.shape[-1] == len(vector) )
 

@@ -219,12 +219,13 @@ class InstrumentTestCase(BaseTestCase):
         #    prepLabels=["rho0"], prepExpressions=["0"],
         #    effectLabels=["0","1"], effectExpressions=["0","complement"])
         
-        v0 = pygsti.construction.basis_build_vector("0", pygsti.obj.Basis("pp",2))
-        v1 = pygsti.construction.basis_build_vector("1", pygsti.obj.Basis("pp",2))
+        v0 = pygsti.construction.basis_build_vector("0", pygsti.obj.Basis.cast("pp",4))
+        v1 = pygsti.construction.basis_build_vector("1", pygsti.obj.Basis.cast("pp",4))
         P0 = np.dot(v0,v0.T)
         P1 = np.dot(v1,v1.T)
-        #print("v0 = ",v0)
-        #print("P0 = ",P0)
+        print("v0 = ",v0)
+        print("P0 = ",P0)
+        print("P1 = ",P0)
         #print("P0+P1 = ",P0+P1)
         
         model.instruments["Itest"] = pygsti.obj.Instrument( [('0',P0),('1',P1)] )

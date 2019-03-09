@@ -25,9 +25,9 @@ from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
 from .layerlizard import ImplicitLayerLizard as _ImplicitLayerLizard
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
-from ..baseobjs import Basis as _Basis
-from ..baseobjs import Dim as _Dim
+from ..baseobjs import BuiltinBasis as _BuiltinBasis
 from ..baseobjs import Label as _Lbl
+from ..baseobjs import CircuitLabel as _CircuitLabel
 
 from ..baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
@@ -321,16 +321,17 @@ class LocalNoiseModel(_ImplicitOpModel):
     
         if evotype in ("densitymx","svterm","cterm"):
             from ..construction import basis_build_vector as _basis_build_vector 
-            basis1Q = _Basis("pp",2)
+            basis1Q = _BuiltinBasis("pp",4)
             v0 = _basis_build_vector("0", basis1Q)
             v1 = _basis_build_vector("1", basis1Q)
         elif evotype == "statevec":
-            basis1Q = None
+            basis1Q = _BuiltinBasis("sv",2)
             v0 = _np.array([[1],[0]],complex)
             v1 = _np.array([[0],[1]],complex)
         else:
+            basis1Q = _BuiltinBasis("sv",2)
             assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
-            basis1Q = v0 = v1 = None # then we shouldn't use these
+            v0 = v1 = None # then we shouldn't use these
     
         if sim_type == "auto":
             if evotype == "densitymx":
@@ -341,7 +342,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 sim_type = "map" # use map as default for stabilizer-type evolutions
             else: assert(False) # should be unreachable
 
-        super(LocalNoiseModel,self).__init__(qubit_labels, "pp", {}, SimpleCompLayerLizard, {},
+        super(LocalNoiseModel,self).__init__(qubit_labels, basis1Q.name, {}, SimpleCompLayerLizard, {},
                                              sim_type=sim_type, evotype=evotype)
 
         flags = { 'auto_embed': False, 'match_parent_dim': False,
@@ -522,11 +523,18 @@ class SimpleCompLayerLizard(_ImplicitLayerLizard):
         #if hasGlobalIdle and layerlbl == 'Gi' and \
         #   'Gi' not in self.op_blks['layers'])): 
         #    return self.op_blks['layers'][_Lbl('globalIdle')]
-        
+
         if len(components) == 1 and bHasGlobalIdle == False:
-            return self.op_blks['layers'][components[0]]
+            return self.get_layer_component_operation(components[0],dense)
         else:
             gblIdle = [self.op_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
-            return Composed(gblIdle + [self.op_blks['layers'][l] for l in components], dim=self.model.dim,
+            return Composed(gblIdle + [self.get_layer_component_operation(l,dense) for l in components], dim=self.model.dim,
                                 evotype=self.model._evotype)
+
+    def get_layer_component_operation(self,complbl,dense):
+        if isinstance(complbl,_CircuitLabel):
+            return self.get_circuitlabel_op(complbl, dense)
+        else:
+            return self.op_blks['layers'][complbl]
+        

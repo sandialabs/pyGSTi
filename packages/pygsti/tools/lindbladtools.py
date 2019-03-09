@@ -44,7 +44,7 @@ def hamiltonian_to_lindbladian(hamiltonian, sparse=False):
     else:
         lindbladian = _np.empty( (d**2,d**2), dtype=hamiltonian.dtype )
 
-    for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
+    for i,rho0 in enumerate(basis_matrices('std',d**2)): #rho0 == input density mx
         rho1 = -1j*(_mt.safedot(hamiltonian,rho0) - _mt.safedot(rho0,hamiltonian))
         lindbladian[:,i] = _np.real_if_close(rho1.flatten()[:,None] if sparse else rho1.flatten())
           # vectorize rho1 & set as linbladian column
@@ -88,7 +88,7 @@ def stochastic_lindbladian(Q, sparse=False):
     else:
         lindbladian = _np.empty( (d**2,d**2), dtype=Q.dtype )
 
-    for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
+    for i,rho0 in enumerate(basis_matrices('std',d**2)): #rho0 == input density mx
         rho1 = _mt.safedot(Q,_mt.safedot(rho0,Qdag))
         lindbladian[:,i] = rho1.flatten()[:,None] if sparse else rho1.flatten()
           # vectorize rho1 & set as linbladian column
@@ -131,7 +131,7 @@ def affine_lindbladian(Q, sparse=False):
     else:
         lindbladian = _np.empty( (d**2,d**2), dtype=Q.dtype )
 
-    for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
+    for i,rho0 in enumerate(basis_matrices('std',d**2)): #rho0 == input density mx
         rho1 = Q * _mt.safedot(Id,rho0.flatten()) # get |Q>><Id|rho0
         lindbladian[:,i] = rho1.todense().flatten().T if sparse else rho1.flatten() #weird that need .T here
           # vectorize rho1 & set as linbladian column
@@ -179,7 +179,7 @@ def nonham_lindbladian(Lm,Ln,sparse=False):
         lindbladian = _np.empty( (d**2,d**2), dtype=Lm.dtype )
         
 #    print("BEGIN VERBOSE") #DEBUG!!!
-    for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
+    for i,rho0 in enumerate(basis_matrices('std',d**2)): #rho0 == input density mx
         rho1 = _mt.safedot(Ln,_mt.safedot(rho0,Lm_dag)) - 0.5 * (
             _mt.safedot(rho0,_mt.safedot(Lm_dag,Ln))+_mt.safedot(_mt.safedot(Lm_dag,Ln),rho0))
 #        print("rho0[%d] = \n" % i,rho0)

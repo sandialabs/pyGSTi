@@ -123,9 +123,9 @@ namespace CReps {
     
     
     DMOpCRep_Embedded(DMOpCRep* embedded_gate_crep, INT* noop_incrementers,
-			INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
-			INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
-			INT nBlocks, INT dim);
+		      INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
+		      INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
+		      INT nBlocks, INT dim);
     virtual ~DMOpCRep_Embedded();
     virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
@@ -148,6 +148,18 @@ namespace CReps {
     virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
     virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
   };
+
+  class DMOpCRep_Exponentiated :public DMOpCRep{
+    public:
+    DMOpCRep* _exponentiated_gate_crep;
+    INT _power;
+    
+    DMOpCRep_Exponentiated(DMOpCRep* exponentiated_gate_crep, INT power, INT dim);
+    virtual ~DMOpCRep_Exponentiated();
+    virtual DMStateCRep* acton(DMStateCRep* state, DMStateCRep* out_state);
+    virtual DMStateCRep* adjoint_acton(DMStateCRep* state, DMStateCRep* out_state);
+  };
+
 
   class DMOpCRep_Lindblad :public DMOpCRep{
     public:
@@ -277,9 +289,9 @@ namespace CReps {
     
     
     SVOpCRep_Embedded(SVOpCRep* embedded_gate_crep, INT* noop_incrementers,
-			INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
-			INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
-			INT nBlocks, INT dim);
+		      INT* numBasisEls_noop_blankaction, INT* baseinds, INT* blocksizes,
+		      INT embedded_dim, INT nComponentsInActiveBlock, INT iActiveBlock,
+		      INT nBlocks, INT dim);
     virtual ~SVOpCRep_Embedded();
     virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
     virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
@@ -299,6 +311,17 @@ namespace CReps {
     std::vector<SVOpCRep*> _factor_creps;
     SVOpCRep_Sum(std::vector<SVOpCRep*> factor_creps, INT dim);
     virtual ~SVOpCRep_Sum();
+    virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
+    virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
+  };
+
+  class SVOpCRep_Exponentiated :public SVOpCRep{
+    public:
+    SVOpCRep* _exponentiated_gate_crep;
+    INT _power;
+    
+    SVOpCRep_Exponentiated(SVOpCRep* exponentiated_gate_crep, INT power, INT dim);
+    virtual ~SVOpCRep_Exponentiated();
     virtual SVStateCRep* acton(SVStateCRep* state, SVStateCRep* out_state);
     virtual SVStateCRep* adjoint_acton(SVStateCRep* state, SVStateCRep* out_state);
   };
@@ -392,6 +415,17 @@ namespace CReps {
     public:
     SBOpCRep_Sum(std::vector<SBOpCRep*> factor_creps, INT n);
     virtual ~SBOpCRep_Sum();
+    virtual SBStateCRep* acton(SBStateCRep* state, SBStateCRep* out_state);
+    virtual SBStateCRep* adjoint_acton(SBStateCRep* state, SBStateCRep* out_state);
+  };
+
+  class SBOpCRep_Exponentiated :public SBOpCRep{
+    public:
+    SBOpCRep* _exponentiated_gate_crep;
+    INT _power;
+    
+    SBOpCRep_Exponentiated(SBOpCRep* exponentiated_gate_crep, INT power, INT n);
+    virtual ~SBOpCRep_Exponentiated();
     virtual SBStateCRep* acton(SBStateCRep* state, SBStateCRep* out_state);
     virtual SBStateCRep* adjoint_acton(SBStateCRep* state, SBStateCRep* out_state);
   };

@@ -998,14 +998,14 @@ def opmatrix_color_boxplot(opMatrix, m, M, mxBasis=None, mxBasisY=None,
 
     if _tools.isstr(mxBasis):
         if mxBasisY is None:
-            mxBasisY = _objs.Basis(mxBasis, int(round(_np.sqrt(opMatrix.shape[0]))))
-        mxBasis = _objs.Basis(mxBasis, int(round(_np.sqrt(opMatrix.shape[1]))))
+            mxBasisY = _objs.BuiltinBasis(mxBasis, opMatrix.shape[0])
+        mxBasis = _objs.BuiltinBasis(mxBasis, opMatrix.shape[1])
     else:
         if mxBasisY is None and opMatrix.shape[0] == opMatrix.shape[1]:
             mxBasisY = mxBasis #can use mxBasis, whatever it is
 
     if _tools.isstr(mxBasisY):
-        mxBasisY = _objs.Basis(mxBasisY, int(round(_np.sqrt(opMatrix.shape[0]))))
+        mxBasisY = _objs.BuiltinBasis(mxBasisY, opMatrix.shape[0])
                 
     if mxBasis is not None:
         xlabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasis.labels]
@@ -2272,26 +2272,26 @@ class ProjectionsBoxPlot(WorkspacePlot):
         if EBmatrix is not None:
             EBmatrix = EBmatrix.reshape( projections.shape )
     
-        xd = int(round(_np.sqrt(projections.shape[1]))) #x-basis-dim
-        yd = int(round(_np.sqrt(projections.shape[0]))) #y-basis-dim
+        xd = projections.shape[1] #x-basis-dim
+        yd = projections.shape[0] #y-basis-dim
 
         if isinstance(projection_basis, _objs.Basis):
-            if xd == projection_basis.dim.dmDim and yd == 1:
+            if xd == projection_basis.dim and yd == 1:
                 basis_for_xlabels = projection_basis
                 basis_for_ylabels = None
-            elif xd == yd == projection_basis.dim.dmDim:
+            elif xd == yd == projection_basis.dim:
                 basis_for_xlabels = projection_basis
                 basis_for_ylabels = projection_basis
             else:
                 try:
-                    basis_for_xlabels = _objs.Basis(projection_basis.name,xd)
-                    basis_for_ylabels = _objs.Basis(projection_basis.name,yd)
+                    basis_for_xlabels = _objs.BuiltinBasis(projection_basis.name,xd)
+                    basis_for_ylabels = _objs.BuiltinBasis(projection_basis.name,yd)
                 except:
                     basis_for_xlabels = basis_for_ylabels = None
         else:
             try:
-                basis_for_xlabels = _objs.Basis(projection_basis,xd)
-                basis_for_ylabels = _objs.Basis(projection_basis,yd)
+                basis_for_xlabels = _objs.BuiltinBasis(projection_basis,xd)
+                basis_for_ylabels = _objs.BuiltinBasis(projection_basis,yd)
             except:
                 basis_for_xlabels = basis_for_ylabels = None
 

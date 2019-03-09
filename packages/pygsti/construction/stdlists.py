@@ -407,7 +407,8 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
 
     truncFn = _getTruncFunction(truncScheme)
 
-    empty_germ = _Circuit( (), "{}" )
+    #TODO: if an empty germ list, base line_labels off of fiducials?
+    empty_germ = _Circuit( (), germList[0].line_labels, stringrep="{}" )
     if includeLGST: germList = [empty_germ] + germList
 
     #running structure of all strings so far (LGST strings or empty)
@@ -424,9 +425,10 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
     lsgst_listOfStructs = [ ] # list of operation sequence structures to return
     missing_list = []
     totStrs = len(running_gss.allstrs)
+    #import time as _time; t0=_time.time() # DEBUG
 
     for i,maxLen in enumerate(maxLengthList):
-
+        #print("Maxlen = ",maxLen, " %.2fs" % (_time.time()-t0)) # DEBUG - and remove import time above
         if nest: #add to running_gss and copy at end
             gss = running_gss #don't copy (yet)
             gss.Ls.append(maxLen)
@@ -443,9 +445,11 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
                 missing_list.extend( gss.add_plaquette(empty_germ, maxLen, empty_germ,
                                                        allPossiblePairs, dscheck) )
                 missing_lgst = gss.add_unindexed(lgst_list, dscheck) # only adds those not already present
+                #assert(('Gx','Gi0','Gi0') not in gss.allstrs) # DEBUG
 
             #Typical case of germs repeated to maxLen using Rfn
-            for germ in germList:
+            for ii,germ in enumerate(germList):
+                #if ii % 100 == 0: print("germ %d of %d: %.2fs" % (ii,len(germList),_time.time()-t0)) DEBUG - and remove ii 
                 if germ == empty_germ: continue #handled specially above
                 if maxLen > germLengthLimits.get(germ,1e100): continue
                 germ_power = truncFn(germ,maxLen)
@@ -488,6 +492,7 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
         lsgst_listOfStructs.append( gss )
         totStrs += len(gss.allstrs) #only relevant for non-nested case
 
+        
     if nest: #then totStrs computation about overcounts -- just take string count of final stage
         totStrs = len(running_gss.allstrs)
 
@@ -497,9 +502,12 @@ def make_lsgst_structs(opLabelSrc, prepStrs, effectStrs, germList, maxLengthList
         printer.log(" Dataset has %d entries: %d utilized, %d requested sequences were missing"
                     % (len(dscheck), totStrs, len(missing_list)), 2)
     if len(missing_list) > 0 or len(missing_lgst) > 0:
+        MAX = 10 #Maximum missing-seq messages to display
         missing_msgs = ["Prep: %s, Germ: %s, L: %d, Meas: %s, Seq: %s" % tup
-                        for tup in missing_list] + \
-                       ["LGST Seq: %s" % opstr for opstr in missing_lgst ]
+                        for tup in missing_list[0:MAX+1] ] + \
+                       ["LGST Seq: %s" % opstr for opstr in missing_lgst[0:MAX+1] ]
+        if len(missing_list) > MAX or len(missing_lgst) > MAX:
+            missing_msgs.append(" ... (more missing sequences not show) ... ")
         printer.log("The following sequences were missing from the dataset:",4)
         printer.log("\n".join(missing_msgs), 4)
         if actionIfMissing == "raise":

@@ -43,6 +43,7 @@ from . import explicitcalc as _explicitcalc
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Label as _Label
+from ..baseobjs.label import CircuitLabel as _CircuitLabel
 
 
 class LayerLizard(object):
@@ -52,7 +53,33 @@ class LayerLizard(object):
     of as a "server" of simplified operations for a forward simulator
     which pieces together layer operations from components.
     """
-    pass # TODO docstring - add not-implemented members & docstrings?
+    # TODO docstring - add not-implemented members & docstrings?
+    
+    def __init__(self, model):
+        """
+        TODO: docstring
+        """
+        self.model = model
+
+    #Helper functions for derived classes:
+    def get_circuitlabel_op(self, circuitlbl, dense):
+        """TODO: docstring
+           build an op for this circuit label - a composed op (of sub-circuit)
+           exponentiated to the power N, where N=#of repetitions
+        """
+        Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
+        if len(circuitlbl.components) != 1: #works for 0 components too
+            subCircuitOp = Composed([self.get_operation(l) for l in circuitlbl.components],
+                                    dim=self.model.dim, evotype=self.model._evotype)
+        else:
+            subCircuitOp = self.get_operation(circuitlbl.components[0])
+        if circuitlbl.reps != 1:
+            #finalOp = Composed([subCircuitOp]*circuitlbl.reps,
+            #                   dim=self.model.dim, evotype=self.model._evotype)
+            finalOp = _op.ExponentiatedOp(subCircuitOp,circuitlbl.reps, evotype=self.model._evotype)
+        else:
+            finalOp = subCircuitOp
+        return finalOp
 
     
 class ExplicitLayerLizard(LayerLizard):
@@ -74,7 +101,7 @@ class ExplicitLayerLizard(LayerLizard):
             The model associated with the simplified operations.
         """
         self.preps, self.ops, self.effects = preps,ops,effects
-        self.model = model
+        super(ExplicitLayerLizard,self).__init__(model)
         
     def get_evotype(self):
         """ 
@@ -114,7 +141,11 @@ class ExplicitLayerLizard(LayerLizard):
         -------
         LinearOperator
         """
-        return self.ops[layerlbl]
+        if isinstance(layerlbl,_CircuitLabel):
+            dense = bool(self.model._sim_type == "matrix") # whether dense matrix gates should be created
+            return self.get_circuitlabel_op(layerlbl, dense)
+        else:
+            return self.ops[layerlbl]
 
     def from_vector(self, v):
         """
@@ -152,7 +183,7 @@ class ImplicitLayerLizard(LayerLizard):
             The model associated with the simplified operations.
         """
         self.prep_blks, self.op_blks, self.effect_blks = preps,ops,effects
-        self.model = model
+        super(ImplicitLayerLizard,self).__init__(model)
         
     def get_prep(self,layerlbl):
         """

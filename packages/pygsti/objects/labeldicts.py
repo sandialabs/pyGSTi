@@ -15,7 +15,6 @@ from . import spamvec as _sv
 from . import operation as _op
 from . import modelmember as _gm
 from ..tools import compattools as _compat
-from ..baseobjs import Dim as _Dim
 from ..baseobjs import Label as _Label
 
 
@@ -382,7 +381,7 @@ class StateSpaceLabels(object):
     spaces.
     """
 
-    def __init__(self, labelList, dims=None):
+    def __init__(self, labelList, dims=None, types=None, evotype="densitymx"):
         """
         Creates a new StateSpaceLabels object.
 
@@ -414,13 +413,28 @@ class StateSpaceLabels(object):
             - if the label starts with 'L', dim=1 (a single Level)
             - if the label starts with 'Q' OR is an int, dim=2 (a Qubit)
             - if the label starts with 'T', dim=3 (a quTrit)
+
+        types : str or iterable, optional
+            A list of label types, either `'Q'` or `'C'` for "quantum" and
+            "classical" respectively, indicating the type of state-space
+            associated with each label.  Like `dims`, `types` must match 
+            the structure of `labelList`.  A quantum state space of dimension
+            `d` is a `d`-by-`d` density matrix, whereas a classical state space
+            of dimension d is a vector of `d` probabilities.  If `None`, then
+            all labels are assumed to be quantum.
+
+        TODO: docstring evotype - used just for default dimensions
         """
 
         #Allow initialization via another StateSpaceLabels object
         if isinstance(labelList, StateSpaceLabels):
+            assert(dims is None and types is None), "Clobbering non-None 'dims' and/or 'types' arguments"
             dims = [ tuple((labelList.labeldims[lbl] for lbl in tpbLbls))
                      for tpbLbls in labelList.labels ]
+            types = [ tuple((labelList.labeltypes[lbl] for lbl in tpbLbls))
+                     for tpbLbls in labelList.labels ]
             labelList = labelList.labels
+            
 
         #Step1: convert labelList (and dims, if given) to a list of 
         # elements describing each "tensor product block" - each of
@@ -432,6 +446,7 @@ class StateSpaceLabels(object):
         if isLabel(labelList):
             labelList = [ (labelList,) ]
             if dims is not None: dims = [ (dims,) ]
+            if types is not None: types = [ (types,) ]
         else:
             #labelList must be iterable if it's not a string
             labelList = list(labelList)
@@ -440,6 +455,7 @@ class StateSpaceLabels(object):
             # assume we've just been give the labels for a single tensor-prod-block 
             labelList = [ labelList ]
             if dims is not None: dims = [ dims ]
+            if types is not None: types = [ types ]
             
         self.labels = tuple([ tuple(tpbLabels) for tpbLabels in labelList])
 
@@ -449,35 +465,62 @@ class StateSpaceLabels(object):
                 if not isLabel(lbl):
                     raise ValueError("'%s' is an invalid state-space label (must be a string or integer)" % lbl)
 
-        # Get the dimension of each labeled space
-        self.labeldims = {} 
-        if dims is None: # try to determine dims from label naming conventions
+        # Get the type of each labeled space
+        self.labeltypes = {}
+        if types is None: # use defaults
             for tpbLabels in self.labels: #loop over tensor-prod-blocks
                 for lbl in tpbLabels:
+                    self.labeltypes[lbl] = 'C' if (_compat.isstr(lbl) and lbl.startswith('C')) else 'Q' #default
+        else:
+            for tpbLabels,tpbTypes in zip(self.labels,types):
+                for lbl,typ in zip(tpbLabels,tpbTypes):
+                    self.labeltypes[lbl] = typ
+
+        # Get the dimension of each labeled space
+        self.labeldims = {}
+        if dims is None:
+            for tpbLabels in self.labels: #loop over tensor-prod-blocks
+                for lbl in tpbLabels:            
                     if isinstance(lbl,_numbers.Integral): d = 2 # ints = qubits
                     elif lbl.startswith('T'): d = 3 # qutrit
                     elif lbl.startswith('Q'): d = 2 # qubits
                     elif lbl.startswith('L'): d = 1 # single level
+                    elif lbl.startswith('C'): d = 2 # classical bits
                     else: raise ValueError("Cannot determine state-space dimension from '%s'" % lbl)
+                    if evotype not in ('statevec','stabilizer') and self.labeltypes[lbl] == 'Q':
+                        d = d**2 # density-matrix spaces have squared dim
+                                 # ("densitymx","svterm","cterm") all use super-ops
                     self.labeldims[lbl] = d
         else:
             for tpbLabels,tpbDims in zip(self.labels,dims):
                 for lbl,dim in zip(tpbLabels,tpbDims):
-                    assert(isinstance(dim,_numbers.Integral)), "Dimensions must be integers!"
                     self.labeldims[lbl] = dim
 
         # Store the starting index (within the density matrix / state vec) of
         # each tensor-product-block (TPB), and which labels belong to which TPB
         self.tpb_index = {}
 
-        tpb_dims = []
+        self.tpb_dims = []
         for iTPB, tpbLabels in enumerate(self.labels):
-            tpb_dims.append(_np.product( [ self.labeldims[lbl] for lbl in tpbLabels ] ))
+            self.tpb_dims.append( int(_np.product( [ self.labeldims[lbl] for lbl in tpbLabels ] )))
             self.tpb_index.update( { lbl: iTPB for lbl in tpbLabels } )
 
-        self.dim = _Dim(tpb_dims) #Note: access tensor-prod-block dims via self.dim.blockDims
+        self.dim = sum(self.tpb_dims)
 
-    def num_tensor_prod_blocks(self):
+    def reduce_dims_densitymx_to_state(self):
+        for lbl in self.labeldims:
+            if self.labeltypes[lbl] == 'Q':
+                self.labeldims[lbl] = int(_np.sqrt(self.labeldims[lbl]))
+
+        #update tensor-product-block dims and overall dim too:
+        self.tpb_dims = []
+        for iTPB, tpbLabels in enumerate(self.labels):
+            self.tpb_dims.append( int(_np.product( [ self.labeldims[lbl] for lbl in tpbLabels ] )))
+            self.tpb_index.update( { lbl: iTPB for lbl in tpbLabels } )
+        self.dim = sum(self.tpb_dims)
+        
+
+    def num_tensor_prod_blocks(self): # only in modelconstruction.py
         """
         Get the number of tensor-product blocks which are direct-summed
         to get the final state space.
@@ -488,7 +531,7 @@ class StateSpaceLabels(object):
         """
         return len(self.labels)
 
-    def tensor_product_block_labels(self, iTPB):
+    def tensor_product_block_labels(self, iTPB): # unused
         """
         Get the labels for the `iTBP`-th tensor-product block.
 
@@ -504,7 +547,7 @@ class StateSpaceLabels(object):
         """
         return self.labels[iTPB]
 
-    def tensor_product_block_dims(self, iTPB):
+    def tensor_product_block_dims(self, iTPB): # unused
         """
         Get the dimension corresponding to each label in the
         `iTBP`-th tensor-product block.  The dimension of the 
@@ -523,7 +566,7 @@ class StateSpaceLabels(object):
         return tuple((self.labeldims[lbl] for lbl in self.labels[iTPB]))
 
 
-    def product_dim(self, labels):
+    def product_dim(self, labels): # only in modelconstruction
         """
         Computes the product of the state-space dimensions associated with each
         label in `labels`.
@@ -542,9 +585,13 @@ class StateSpaceLabels(object):
     def __str__(self):
         if len(self.labels) == 0: return "ZeroDimSpace"
         return ' + '.join(
-            [ '*'.join(["%s(%d)" % (lbl,self.labeldims[lbl]) for lbl in tpb])
-              for tpb in self.labels ] )
+            [ '*'.join(["%s(%d%s)" % (lbl,self.labeldims[lbl],'c' if (self.labeltypes[lbl]=='C') else '')
+                        for lbl in tpb]) for tpb in self.labels ] )
 
     def __repr__(self):
         return "StateSpaceLabels[" + str(self) + "]"
-    
+
+    def copy(self):
+        """ Return a copy of this StateSpaceLabels. """
+        return _copy.deepcopy(self)
+

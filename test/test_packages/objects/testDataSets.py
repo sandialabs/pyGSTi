@@ -790,6 +790,13 @@ Gy 11001100
         with open(temp_files + "/repickle_old_dataset.pkl.%s" % vs,'wb') as f:
             pickle.dump(ds, f)
 
+        with pygsti.io.enable_old_object_unpickling("0.9.7"):
+            with open(compare_files + "/pygsti0.9.7.dataset.pkl.%s" % vs,'rb') as f:
+                ds = pickle.load(f)
+        with open(temp_files + "/repickle_old_dataset.pkl.%s" % vs,'wb') as f:
+            pickle.dump(ds, f)
+
+
     def test_auxinfo(self):
         # creating and loading a text-format dataset file w/auxiliary info
         dataset_txt = \

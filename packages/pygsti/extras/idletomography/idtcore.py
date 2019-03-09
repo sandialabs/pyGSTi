@@ -599,7 +599,7 @@ def determine_paulidicts(model):
                 raise ValueError("LinearOperator acts nontrivially on a space other than that in its label!")
     
     #Get several standard 1-qubit pi/2 rotations in Pauli basis:
-    pp = _objs.Basis('pp',2)
+    pp = _objs.BuiltinBasis('pp',4)
     Gx = _cnst.basis_build_operation([('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static").todense()
     Gy = _cnst.basis_build_operation([('Q0',)], "Y(pi/2,Q0)", basis=pp, parameterization="static").todense()
 
@@ -1085,7 +1085,16 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
         advancedOptions = {}
 
     prepDict,measDict = pauliBasisDicts
-    GiStr = _objs.Circuit( idle_string )
+    if nQubits == 1: #special case where line-labels may be ('*',)
+        if len(dataset) > 0:
+            first_circuit = list(dataset.keys())[0]
+            line_labels = first_circuit.line_labels
+        else:
+            line_labels = (0,)
+        GiStr = _objs.Circuit( idle_string, line_labels=line_labels )
+        print("Dataset has ",dataset)
+    else:
+        GiStr = _objs.Circuit( idle_string, num_lines=nQubits )
 
     jacmode = advancedOptions.get("jacobian mode", "separate")
     sto_aff_jac = None; sto_aff_obs_err_rates = None

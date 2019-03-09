@@ -27,7 +27,6 @@ from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
-from ..baseobjs import Dim as _Dim
 from ..baseobjs import Label as _Lbl
 
 from . import circuitconstruction as _gsc
@@ -887,7 +886,7 @@ def find_amped_polys_for_clifford_syntheticidle(qubit_filter, core_filter, trueI
     #            % (len(idle_gatename_fidpair_lists), maxWt, len(gatename_fidpair_lists),
     #               nQubits, len(gatename_fidpair_lists)*(3**(2*nCore)), nCore, 3**(2*nQubits)))
     #print("DB: over %d qubits -> template w/%d els" % (nQubits, len(tmpl)))
-    printer.log("Testing %d fidpairs for %d-wt idle -> %d after %dQ tiling"
+    printer.log("Testing %d fidpairs for %d-wt idle -> %d fidpairs after tiling onto %d qubits"
                 % (len(idle_gatename_fidpair_lists), maxWt, len(gatename_fidpair_lists),nQubits))
 
 
@@ -1567,8 +1566,9 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                          availability=None, geometry="line",
                                          maxIdleWeight=1, maxhops=0, extraWeight1Hops=0, extraGateWeight=0,
                                          paramroot="H+S", sparse=False, verbosity=0, cache=None, idleOnly=False, 
-                                         idtPauliDicts=None, algorithm="greedy"):
+                                         idtPauliDicts=None, algorithm="greedy", idleOpStr=((),)):
     """
+    TODO: docstring - add idleOpStr
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
     arguments of this function to :function:`build_standard_cloudnoise_model`.
@@ -1663,15 +1663,16 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                        gatedict, availability, geometry, maxIdleWeight, maxhops,
                                        extraWeight1Hops, extraGateWeight, paramroot,
                                        sparse, verbosity, cache, idleOnly, 
-                                       idtPauliDicts, algorithm)
+                                       idtPauliDicts, algorithm, idleOpStr)
     
 
 def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                 gatedict, availability, geometry, maxIdleWeight=1, maxhops=0,
                                 extraWeight1Hops=0, extraGateWeight=0, paramroot="H+S",
                                 sparse=False, verbosity=0, cache=None, idleOnly=False, 
-                                idtPauliDicts=None, algorithm="greedy"):
+                                idtPauliDicts=None, algorithm="greedy", idleOpStr=((),)):
     """ 
+    TODO: docstring - add idleOpStr
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
     arguments of this function to :function:`build_standard_cloudnoise_model`.
@@ -1809,7 +1810,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                              # for testing for synthetic idles - so no " terms"
     
     Np = model.num_params()
-    idleOpStr = _objs.Circuit(("Gi",))
+    idleOpStr = _objs.Circuit(idleOpStr, num_lines=nQubits)
     prepLbl = _Lbl("rho0")
     effectLbls = [ _Lbl("Mdefault_%s" % l) for l in model._shlp.get_effect_labels_for_povm('Mdefault')]
 
@@ -1947,7 +1948,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
             if gl.sslbls is None: continue # gates that act on everything (usually just the identity Gi gate)
             if set(gl.sslbls) == set(core_qubits):
                 pure_op_labels.append(gl)
-                wrtParams.update( _slct.as_array(model.operation_blks['layers'][gl].gpindices) )
+                wrtParams.update( _slct.as_array(model.operation_blks['cloudnoise'][gl].gpindices) )
         pure_op_params = wrtParams - Gi_params # (Gi params don't count)
         wrtParams = _slct.list_to_slice( sorted(list(pure_op_params)), array_ok=True )
         Ngp = _slct.length(wrtParams) # number of "pure gate" params that we want to amplify
@@ -2252,7 +2253,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     #Post processing: convert sequence tuples to a operation sequence structure
     Ls = set()
     germs = _collections.OrderedDict()
-    
+
     for opstr,L,germ,prepFid,measFid in sequences:
         Ls.add(L)
         if germ not in germs: germs[germ] = {}
@@ -2271,8 +2272,8 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                        aliases=None,sequenceRules=None)
     
     for germ,gdict in germs.items():
+        serial_germ = germ.serialize() #must serialize to get correct count
         for L,fidpairs in gdict.items():            
-            serial_germ = germ.serialize() #must serialize to get correct count
             germ_power = _gsc.repeat_with_max_length(serial_germ,L)
             gss.add_plaquette(germ_power, L, germ, fidpairs) #returns 'missing_list'; useful if using dsfilter arg
             

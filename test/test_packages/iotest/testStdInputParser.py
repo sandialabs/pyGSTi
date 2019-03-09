@@ -50,8 +50,11 @@ class TestStdInputParser(BaseTestCase):
         for s,expected in string_tests:
             #print "%s ==> " % s, result
             result,line_labels = std.parse_circuit(s, lookup=lkup)
-            self.assertEqual(result, expected)
             self.assertEqual(line_labels, None)
+            circuit_result = pygsti.obj.Circuit(result,line_labels="auto",expand_subcircuits=True)
+              #use "auto" line labels since none are parsed.
+            self.assertEqual(circuit_result.tup, expected)
+
 
         with self.assertRaises(ValueError):
             std.parse_circuit("FooBar")
@@ -82,9 +85,12 @@ class TestStdInputParser(BaseTestCase):
 
         std = pygsti.io.StdInputParser()
 
+        from pygsti.objects import Label as L
+        from pygsti.objects import CircuitLabel as CL
+        
         self.assertEqual( std.parse_dataline(dataline_tests[0]), (('G1', 'G2', 'G3'), 'G1G2G3', None, [0.1, 100.0]))
         self.assertEqual( std.parse_dataline(dataline_tests[1]), (('G1', 'G2', 'G3'), 'G1 G2 G3', None, [0.798, 100.0]))
-        self.assertEqual( std.parse_dataline(dataline_tests[2]), (('G1', 'G2', 'G3', 'G2', 'G3', 'G4'), 'G1 (G2 G3)^2 G4', None, [1.0, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[2]), (('G1', CL('',('G2', 'G3'),None,2), 'G4'), 'G1 (G2 G3)^2 G4', None, [1.0, 100.0]))
         self.assertEqual( std.parse_dataline("G1G2G3 0.1 100 2.0", expectedCounts=2),
                           (('G1', 'G2', 'G3'), 'G1G2G3', None, [0.1, 100.0])) #extra col ignored
 
@@ -95,7 +101,8 @@ class TestStdInputParser(BaseTestCase):
 
 
         self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None))
-        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', ('G1', 'G2', 'G1', 'G2', 'G1', 'G2'), '(G1G2)^3', None))
+        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', (CL('',('G1', 'G2'),None,3),) , '(G1G2)^3', None))
+          # OLD (before subcircuit parsing) the above result should have been: ('G1', 'G2', 'G1', 'G2', 'G1', 'G2')
 
         #print "Dataline Tests:"
         #for dl in dataline_tests:
@@ -426,7 +433,7 @@ LiouvilleMx
 0 0 1 0
 0 -1 0 0
 
-BASIS: pp 2
+BASIS: pp 4
 """
 
         gatesetfile_test2 = \
@@ -467,7 +474,7 @@ UnitaryMxExp
 0          pi/2
 pi/2      0
 
-BASIS: pp 2
+BASIS: pp 4
 GAUGEGROUP: Full
 """
 
@@ -489,7 +496,7 @@ DensityMx
 0 1 0
 0 0 1
 
-BASIS: pp 2
+BASIS: pp 4
 """
 
         gatesetfile_test5 = \
@@ -500,7 +507,7 @@ GATE: G1
 UnitaryMx
  1/sqrt(2)   -1j/sqrt(2)
 
-BASIS: pp 2
+BASIS: pp 4
 """
 
         gatesetfile_test6 = \
@@ -512,7 +519,7 @@ UnitaryMxExp
 0           -1j*pi/4.0 0.0
 1j*pi/4.0  0           0.0
 
-BASIS: pp 2
+BASIS: pp 4
 """
 
         gatesetfile_test7 = \
@@ -523,7 +530,7 @@ FooBar
 0   1
 1   0
 
-BASIS: pp 2
+BASIS: pp 4
 """
 
         gatesetfile_test8 = \
@@ -568,7 +575,7 @@ UnitaryMxExp
 0          0           1 0
 0          0           0 1
 
-BASIS: pp 4
+BASIS: pp 16
 GAUGEGROUP: Full
 """
 
@@ -651,7 +658,7 @@ LiouvilleMx
 
 END Instrument
 
-BASIS: pp 2
+BASIS: pp 4
 GAUGEGROUP: full
 
 POVM: Mdefault
@@ -671,7 +678,7 @@ UnitaryMx
  1 0
  0 1
 
-BASIS: pp 2
+BASIS: pp 4
 GAUGEGROUP: Foobar
 """
 
@@ -684,7 +691,7 @@ UnitaryMx
  1 0
  0 1
 
-BASIS: pp 2
+BASIS: pp 4
 GAUGEGROUP: full
 """
 
@@ -741,7 +748,7 @@ BASIS: pp
             pygsti.io.read_model(temp_files + "/sip_test.gateset3")
         with self.assertRaises(ValueError):
             pygsti.io.read_model(temp_files + "/sip_test.gateset4")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             pygsti.io.read_model(temp_files + "/sip_test.gateset5")
         with self.assertRaises(ValueError):
             pygsti.io.read_model(temp_files + "/sip_test.gateset6")
@@ -762,9 +769,9 @@ BASIS: pp
         #print " ==> model1:\n", gs1
         #print " ==> model2:\n", gs2
 
-        rotXPi   = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi,Q0)")
-        rotXPiOv2   = pygsti.construction.build_operation( [2],[('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2   = pygsti.construction.build_operation( [2],[('Q0',)], "Y(pi/2,Q0)")
+        rotXPi   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "X(pi,Q0)")
+        rotXPiOv2   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2   = pygsti.construction.build_operation( [(4,)],[('Q0',)], "Y(pi/2,Q0)")
 
         self.assertArraysAlmostEqual(gs1.operations['G1'],rotXPiOv2)
         self.assertArraysAlmostEqual(gs1.operations['G2'],rotYPiOv2)

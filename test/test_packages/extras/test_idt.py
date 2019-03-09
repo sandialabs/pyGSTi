@@ -3,7 +3,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest
 import numpy as np
 import pickle
-import time, os
+import time, os, warnings
 
 import pygsti
 from pygsti.extras import idletomography as idt
@@ -263,6 +263,13 @@ class IDTTestCase(BaseTestCase):
                                              verbosity=3, auto_open=False)
 
     def test_idletomog_gstdata_nQ(self):
+        
+        try: from pygsti.objects import fastreplib
+        except ImportError:
+            warnings.warn("Skipping test_idletomog_gstdata_nQ b/c no fastreps!")
+            return
+
+        
         #Global dicts describing how to prep and measure in various bases
         prepDict = { 'X': ('Gy',), 'Y': ('Gx',)*3, 'Z': (),
                      '-X': ('Gy',)*3, '-Y': ('Gx',), '-Z': ('Gx','Gx')}
@@ -282,6 +289,9 @@ class IDTTestCase(BaseTestCase):
         gss = pygsti.construction.create_XYCNOT_cloudnoise_sequences(
             nQubits, maxLengths, 'line', [(0,1)], maxIdleWeight=2,
             idleOnly=False, paramroot="H+S", cache=c, verbosity=3)
+        #print("GSS STRINGS: ")
+        #print('\n'.join(["%s: %s" % (s.str,str(s.tup)) for s in gss.allstrs]))
+        
         gss_strs = gss.allstrs
         print("%.1fs" % (time.time()-t))
         if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true","v2"):
@@ -291,7 +301,7 @@ class IDTTestCase(BaseTestCase):
         # To run idle tomography, we need "pauli fiducial pairs", so
         #  get fiducial pairs for Gi germ from gss and convert 
         #  to "Pauli fidicual pairs" (which pauli state/basis is prepared or measured)
-        GiStr = pygsti.obj.Circuit(('Gi',))
+        GiStr = pygsti.obj.Circuit(((),), num_lines=nQubits)
         self.assertTrue(GiStr in gss.germs)
         self.assertTrue(gss.Ls == maxLengths)
         L0 = maxLengths[0] # all lengths should have same fidpairs, just take first one
@@ -315,6 +325,9 @@ class IDTTestCase(BaseTestCase):
         #This *only* (re)sets Gi errors...
         idt.set_idle_errors(nQubits, mdl_datagen, {}, rand_default=0.001,
                   hamiltonian=True, stochastic=True, affine=True) # no seed? FUTURE?
+        problemStr = pygsti.obj.Circuit([()], num_lines=nQubits)
+        print("Problem: ",problemStr.str)
+        assert(problemStr in gss.allstrs)
         ds = pygsti.construction.generate_fake_data(mdl_datagen, gss.allstrs, 1000, 'multinomial', seed=1234)
 
         # ----- Run idle tomography with our custom (GST) set of pauli fiducial pairs ----
@@ -336,8 +349,8 @@ class IDTTestCase(BaseTestCase):
 
         #In FUTURE, we shouldn't need to set need to set the basis of our nQ GST results in order to make a report
         for estkey in gstresults.estimates: # 'default'
-            gstresults.estimates[estkey].models['go0'].basis = pygsti.obj.Basis("pp",4)
-            gstresults.estimates[estkey].models['target'].basis = pygsti.obj.Basis("pp",4)
+            gstresults.estimates[estkey].models['go0'].basis = pygsti.obj.Basis.cast("pp",16)
+            gstresults.estimates[estkey].models['target'].basis = pygsti.obj.Basis.cast("pp",16)
         #pygsti.report.create_standard_report(gstresults, temp_files + "/gstWithIdleTomogTestReport", 
         #                                    "Test GST Report w/Idle Tomography Tab",
         #                                    verbosity=3, auto_open=False)

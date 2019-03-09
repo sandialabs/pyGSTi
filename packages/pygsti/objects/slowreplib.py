@@ -240,13 +240,13 @@ class DMOpRep_Embedded(DMOpRep):
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
         self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
-                                      reversed(list(numBasisEls[:-1])))) ), _np.int64)
+                                      reversed(list(numBasisEls[1:])))) ), _np.int64)
         self.basisInds_action = [ list(range(numBasisEls[i])) for i in actionInds ]
 
         self.embeddedDim = embedded_dim
-        self.nComponents = nComponentsInActiveBlock
         self.iActiveBlock = iActiveBlock
         self.nBlocks = nBlocks
+        self.offset = sum(blocksizes[0:iActiveBlock])
         super(DMOpRep_Embedded,self).__init__(dim)
 
     def _acton_other_blocks_trivially(self, output_state,state):
@@ -258,7 +258,7 @@ class DMOpRep_Embedded(DMOpRep):
 
     def acton(self, state):
         output_state = DMStateRep( _np.zeros(state.data.shape, 'd') )
-        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
+        offset = self.offset #if relToBlock else self.offset (relToBlock == False here)
 
         #print("DB REPLIB ACTON: ",self.basisInds_noop_blankaction)
         #print("DB REPLIB ACTON: ",self.basisInds_action)
@@ -284,7 +284,7 @@ class DMOpRep_Embedded(DMOpRep):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
         output_state = DMStateRep( _np.zeros(state.data.shape, 'd') )
-        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
+        offset = self.offset #if relToBlock else self.offset (relToBlock == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
@@ -343,6 +343,24 @@ class DMOpRep_Sum(DMOpRep):
         for f in self.factors:
             output_state.data += f.adjoint_acton(state).data
         return output_state
+
+class DMOpRep_Exponentiated(DMOpRep):
+    def __init__(self, exponentiated_op_rep, power, dim):
+        self.exponentiated_op = exponentiated_op_rep
+        self.power = power
+        super(DMOpRep_Exponentiated,self).__init__(dim)
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        for i in range(self.power):
+            state = self.exponentiated_op.acton(state)
+        return state
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this operation matrix on an input state """
+        for i in range(self.power):
+            state = self.exponentiated_op.adjoint_acton(state)
+        return state
 
 
 class DMOpRep_Lindblad(DMOpRep):
@@ -557,13 +575,14 @@ class SVOpRep_Embedded(SVOpRep):
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
         self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
-                                      reversed(list(numBasisEls[:-1])))) ), _np.int64)
+                                      reversed(list(numBasisEls[1:])))) ), _np.int64)
         self.basisInds_action = [ list(range(numBasisEls[i])) for i in actionInds ]
 
         self.embeddedDim = embedded_dim
         self.nComponents = nComponentsInActiveBlock
         self.iActiveBlock = iActiveBlock
         self.nBlocks = nBlocks
+        self.offset = sum(blocksizes[0:iActiveBlock])
         super(SVOpRep_Embedded,self).__init__(dim)
 
     def _acton_other_blocks_trivially(self, output_state,state):
@@ -575,7 +594,7 @@ class SVOpRep_Embedded(SVOpRep):
 
     def acton(self, state):
         output_state = SVStateRep( _np.zeros(state.data.shape, complex) )
-        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
+        offset = self.offset #if relToBlock else self.offset (relToBlock == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
@@ -598,7 +617,7 @@ class SVOpRep_Embedded(SVOpRep):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
         output_state = SVStateRep( _np.zeros(state.data.shape, complex) )
-        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
+        offset = self.offset #if relToBlock else self.offset (relToBlock == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
@@ -659,6 +678,24 @@ class SVOpRep_Sum(SVOpRep):
         for f in self.factors:
             output_state.data += f.adjoint_acton(state).data
         return output_state
+
+class SVOpRep_Exponentiated(SVOpRep):
+    def __init__(self, exponentiated_op_rep, power, dim):
+        self.exponentiated_op = exponentiated_op_rep
+        self.power = power
+        super(SVOpRep_Exponentiated,self).__init__(dim)
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        for i in range(self.power):
+            state = self.exponentiated_op.acton(state)
+        return state
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this operation matrix on an input state """
+        for i in range(self.power):
+            state = self.exponentiated_op.adjoint_acton(state)
+        return state
 
 
 
@@ -769,7 +806,25 @@ class SBOpRep_Sum(SBOpRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
         # need further stabilizer frame support to represent the sum of stabilizer states
-        raise NotImplementedError() 
+        raise NotImplementedError()
+
+class SBOpRep_Exponentiated(SBOpRep):
+    def __init__(self, exponentiated_op_rep, power, n):
+        self.exponentiated_op = exponentiated_op_rep
+        self.power = power
+        super(SBOpRep_Exponentiated,self).__init__(n)
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        for i in range(self.power):
+            state = self.exponentiated_op.acton(state)
+        return state
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this operation matrix on an input state """
+        for i in range(self.power):
+            state = self.exponentiated_op.adjoint_acton(state)
+        return state
 
 
 class SBOpRep_Clifford(SBOpRep):

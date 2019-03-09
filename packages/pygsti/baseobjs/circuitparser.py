@@ -27,7 +27,8 @@ povm      :: povm [':' integer ]*
 prep      :: prep [':' integer ]*
 strref    :: 'S' '<' reflbl '>'
 slcref    :: strref [ '[' integer ':' integer ']' ]
-layerable :: gate | instrmt
+subcircuit:: '[' layer ']' | '(' string ')'
+layerable :: gate | instrmt | subcircuit [ expop integer ]*
 layer     :: layerable [ [ multop ] layerable ]*
 expable   :: gate | instrmt | '[' layer ']' | slcref | '(' string ')' | nop
 expdstr   :: expable [ expop integer ]*
@@ -38,6 +39,7 @@ ppstring  :: pstring [ povm ]
 
 from ply import lex, yacc
 from .label import Label as _Label
+from .label import CircuitLabel as _CircuitLabel
 
 class CircuitLexer:
     """ Lexer for matching and interpreting text-format operation sequences """
@@ -150,7 +152,7 @@ class CircuitParser(object):
         self._lexer = lex.lex(object=lexer_object if lexer_object else CircuitLexer())
         self._parser = yacc.yacc(module=self, start="ppstring", debug=False,
                                  tabmodule='pygsti.baseobjs.parsetab_string')
-
+        
     @property
     def lookup(self):
         """ The lookup dictionary for expanding references """
@@ -180,10 +182,32 @@ class CircuitParser(object):
         p[0] = p[1]
 
     @staticmethod
+    def p_subcircuit_singlelayer(p):
+        '''subcircuit : OPENBR layer CLOSEBR'''
+        p[0] = p[2], # subcircuit should be a tuple of layers - and p[2] is a *single* layer
+
+    @staticmethod
+    def p_subcircuit_string(p):
+        '''subcircuit : LPAREN layer RPAREN'''
+        p[0] = p[2]
+
+    @staticmethod
     def p_layerable(p):
         '''layerable : GATE
                      | INSTRMT '''
         p[0] = p[1]
+
+    @staticmethod
+    def p_layerable_subcircuit(p):
+        '''layerable : subcircuit '''
+        plbl = _Label( (p[1],) ) # just for total sslbls
+        p[0] = _CircuitLabel('',p[1],plbl.sslbls,1),
+
+    @staticmethod
+    def p_layerable_subcircuit_expop(p):
+        '''layerable : subcircuit EXPOP INTEGER'''
+        plbl = _Label(p[1]) # just for total sslbls
+        p[0] = _CircuitLabel('',p[1],plbl.sslbls,p[3]),
 
     @staticmethod
     def p_layer_layerable(p):
@@ -230,7 +254,12 @@ class CircuitParser(object):
     @staticmethod
     def p_expdstr_expop(p):
         '''expdstr : expable EXPOP INTEGER'''
-        p[0] = p[1] * p[3]  # tuple repetition
+        plbl = _Label(p[1]) # just for total sslbls
+        if len(p[1]) > 0:
+            p[0] = _CircuitLabel('',p[1],plbl.sslbls,p[3]),
+        else:
+            p[0] = () # special case of {}^power => remain empty
+        #OLD (before subcircuits) p[0] = p[1] * p[3]  # tuple repetition
 
     @staticmethod
     def p_expdstr(p):
