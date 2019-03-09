@@ -5322,7 +5322,7 @@ class LindbladErrorgen(LinearOperator):
         assert(d*d == d2), "Errorgen dim must be a perfect square"
 
         # Get basis transfer matrix
-        mxBasisToStd = self.matrix_basis.transform_matrix(_BuiltinBasis("std",self.matrix_basis.dim))
+        mxBasisToStd = self.matrix_basis.transform_matrix(_BuiltinBasis("std",self.matrix_basis.dim, self.sparse))
           # use BuiltinBasis("std") instead of just "std" in case matrix_basis is a TensorProdBasis
         leftTrans  = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
                           else _np.linalg.inv(mxBasisToStd)
