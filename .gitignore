@@ -47,6 +47,7 @@ packages/pygsti.egg-info
 packages/pygsti/baseobjs/parsetab_string.py
 packages/pygsti/objects/fastgatecalc.cpp
 packages/pygsti/objects/fastreplib.cpp
+packages/pygsti/objects/fastopcalc.cpp
 packages/pygsti/tools/fastcalc.c
 
 
