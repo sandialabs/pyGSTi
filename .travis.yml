@@ -10,15 +10,18 @@ branches:
     - master
     - beta
     - develop
+    - /^feature-.*$/
+    - /^bugfix-.*$/
 
 env:
+  matrix:
     - Drivers=True    # First in build mx because long duration
-    - Algorithms=True 
+    - Algorithms=True
     - AlgorithmsB=True
     - Default=True    # construction, io, objects, tools, optimize
-    - Report=True      
+    - Report=True
     - ReportB=True
-    - MPI=True        
+    - MPI=True
 
 before_install:
   - sudo apt-get -qq update
@@ -32,7 +35,7 @@ before_install:
 install:
   - pip install zmq coverage >/dev/null
   - pip install -e .[travisci]
-  
+
 cache:
   pip: true
   timeout: 1000
@@ -53,7 +56,6 @@ jobs:
       script: python CI/deploy
 
 notifications:
-    email:
-        on_success: change
-        on_failure: always
-
+  email:
+    on_success: change
+    on_failure: always
