@@ -42,7 +42,6 @@ before_install:
 
 # Install python package dependencies
 install:
-  - pip install zmq coverage >/dev/null
   - pip install -e .[travisci]
 
 # Default `test' stage script
