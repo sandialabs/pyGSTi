@@ -15,7 +15,7 @@ branches:
 
 env:
   global:
-    - NOSEOPTS_DEFAULT="-v --with-timer --with-id"
+    - NOSEOPTS_DEFAULT="-v --with-timer --with-id --rednose"
     - NOSEOPTS_PARALLEL="--processes=-1 --process-timeout=2400" # timeout after 40 minutes (travis job timeout is 50 minutes)
     - NOSEOPTS_ALL="$NOSEOPTS_DEFAULT $NOSEOPTS_PARALLEL"
   matrix:
