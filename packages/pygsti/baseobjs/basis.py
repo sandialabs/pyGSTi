@@ -221,7 +221,7 @@ class Basis(object):
     @property
     def vector_elements(self):
         if self.sparse:
-            return [ _sps.lil_matrix(el.reshape(-1,1)) for el in self.elements ]
+            return [ _sps.lil_matrix(el).reshape((self.elsize,1)) for el in self.elements ]
         else:
             return [ el.flatten() for el in self.elements ]
 
