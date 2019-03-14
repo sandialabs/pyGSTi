@@ -2077,6 +2077,26 @@ class Circuit(object):
 
     def get_layer(self,j):
         """
+        Returns a tuple of the *components*, i.e. the (non-identity) gates,
+        in the layer at depth `j`.
+
+        These are the `.components` of the :class:`Label` returned by indexing
+        this Circuit (using square brackets) with `j`, i.e. this returns
+        `this_circuit[j].components`.
+    
+        Parameters
+        ----------
+        j : int
+            The index (depth) of the layer to be returned
+    
+        Returns
+        -------
+        tuple
+        """
+        return tuple(self.get_layer_label(j).components)
+
+    def get_layer_label(self,j):
+        """
         Returns the layer, as a :class:`Label`, at depth j. This label contains
         as components all the (non-identity) gates in the layer..
     
@@ -2092,8 +2112,26 @@ class Circuit(object):
         assert(j >= 0 and j < self.num_layers()), "Circuit layer label invalid! Circuit is only of depth {}".format(self.num_layers())
         return self[j]
 
-    
+
     def get_layer_with_idles(self,j,idleGateName='I'):
+        """
+        Returns a tuple of the components of the layer at depth `j`,
+        *including* `idleGateName` gates wherever there is an 
+        identity operation.
+
+        Parameters
+        ----------
+        j : int
+            The index (depth) of the layer to be returned
+
+        Returns
+        -------
+        tuple
+        """
+        return tuple(self.get_layer_label_with_idles(j,idleGateName).components)
+
+    
+    def get_layer_label_with_idles(self,j,idleGateName='I'):
         """
         Returns the layer, as a :class:`Label`, at depth j. This list contains
         all the gates in the layer *including* `idleGateName` gates wherever 
@@ -2108,7 +2146,7 @@ class Circuit(object):
         -------
         Label
         """
-        layer_lbl = self.get_layer(j) # (a Label)
+        layer_lbl = self.get_layer_label(j) # (a Label)
         if layer_lbl.sslbls is None:
             return layer_lbl # all qubits used - no idles to pad
         
@@ -2524,7 +2562,7 @@ class Circuit(object):
         for l in range(depth):
             
             # Get the layer, without identity gates and containing each gate only once.
-            layer = self.get_layer(l)
+            layer = self.get_layer_label(l)
             # For keeping track of which qubits have a gate on them in the layer.
             qubits_used = []
             
@@ -2562,7 +2600,7 @@ class Circuit(object):
                     quil += quil_for_gate
                 
                 # Keeps track of the qubits that have been accounted for, and checks that hadn't been used
-                # although that should already be checked in the .get_layer(), which checks for its a valid 
+                # although that should already be checked in the .get_layer_label(), which checks for its a valid 
                 # circuit layer.
                 assert(not set(gate_qubits).issubset(set(qubits_used)))
                 qubits_used.extend(gate_qubits)
@@ -2651,7 +2689,7 @@ class Circuit(object):
         for l in range(depth):
             
             # Get the layer, without identity gates and containing each gate only once.
-            layer = self.get_layer(l)
+            layer = self.get_layer_label(l)
             # For keeping track of which qubits have a gate on them in the layer.
             qubits_used = []
             
@@ -2678,7 +2716,7 @@ class Circuit(object):
                     openqasm += openqasm_for_gate
                 
                 # Keeps track of the qubits that have been accounted for, and checks that hadn't been used
-                # although that should already be checked in the .get_layer(), which checks for its a valid 
+                # although that should already be checked in the .get_layer_label(), which checks for its a valid 
                 # circuit layer.
                 assert(not set(gate_qubits).issubset(set(qubits_used)))
                 qubits_used.extend(gate_qubits)

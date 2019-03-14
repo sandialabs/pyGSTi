@@ -1043,7 +1043,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     for i in range(0,depth):     
         # This relies on the circuit having a valid self.identity identifier -- as those gates are
         # not returned in the layer. Note that the layer contains each gate only once.   
-        layer = circuit.get_layer(i)
+        layer = circuit.get_layer_label(i)
         # future : update so that we don't use this function, because it slower than necessary (possibly much slower).
         layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict)
         s, p = compose_cliffords(s, p, layer_s, layer_p)
