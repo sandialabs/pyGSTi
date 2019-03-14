@@ -3971,7 +3971,7 @@ class EmbeddedOp(LinearOperator):
         iActiveBlock = self.iTensorProdBlk
         nComponents = len(self.state_space_labels.labels[iActiveBlock])
         embeddedDim = self.embedded_op.dim
-        blocksizes = _np.array(self.state_space_labels.tpb_dims, _np.int64)
+        blocksizes = _np.array([ _np.product(self.state_space_labels.tensor_product_block_dims(k)) for k in range(nBlocks)], _np.int64)
         
         if self._evotype == "statevec":
             return replib.SVOpRep_Embedded(self.embedded_op.torep(),

@@ -1003,10 +1003,10 @@ def opmatrix_color_boxplot(opMatrix, m, M, mxBasis=None, mxBasisY=None,
     else:
         if mxBasisY is None and opMatrix.shape[0] == opMatrix.shape[1]:
             mxBasisY = mxBasis #can use mxBasis, whatever it is
-
+    
     if _tools.isstr(mxBasisY):
         mxBasisY = _objs.BuiltinBasis(mxBasisY, opMatrix.shape[0])
-                
+    
     if mxBasis is not None:
         xlabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasis.labels]
     else:
@@ -1198,7 +1198,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
 
     #Set plot size and margins
     lmargin = rmargin = tmargin = bmargin = 20
-    if title: tmargin += 25
+    if title: tmargin += 30
     if xlabel: tmargin += 30
     if ylabel: lmargin += 30
     max_xl = max([len(xl) for xl in xlabels])
@@ -2276,7 +2276,11 @@ class ProjectionsBoxPlot(WorkspacePlot):
         yd = projections.shape[0] #y-basis-dim
 
         if isinstance(projection_basis, _objs.Basis):
-            if xd == projection_basis.dim and yd == 1:
+            if isinstance(projection_basis, _objs.TensorProdBasis) and len(projection_basis.component_bases) == 2 \
+               and xd == projection_basis.component_bases[0].dim and yd == projection_basis.component_bases[1].dim:
+                basis_for_xlabels = projection_basis.component_bases[0]
+                basis_for_ylabels = projection_basis.component_bases[1]
+            elif xd == projection_basis.dim and yd == 1:
                 basis_for_xlabels = projection_basis
                 basis_for_ylabels = None
             elif xd == yd == projection_basis.dim:

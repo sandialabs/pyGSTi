@@ -790,7 +790,7 @@ class OpModel(Model):
             kwargs['max_order'] = int(self._sim_args[0])
             kwargs['cache'] = self._sim_args[-1] # always the list argument
         if self._sim_type == "map":
-            kwargs['max_cache_size'] =  self._sim_args[0]
+            kwargs['max_cache_size'] = self._sim_args[0] if len(self._sim_args) > 0 else None # backward compat
 
         assert(self._calcClass is not None), "Model does not have a calculator setup yet!"
         return self._calcClass(self._dim, layer_lizard, self._paramvec, **kwargs) #fwdsim class
