@@ -2428,7 +2428,10 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             tm = _time.time()
             mdl.from_vector(vectorGS)
             mdl.bulk_fill_probs(probs, evTree, probClipInterval,
-                               check, comm)
+                                check, comm)
+            return _objective_func_probs(tm)
+                        
+        def _objective_func_probs(tm):
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p + totalCntVec
             S2 = -0.5 * minusCntVecMx / (min_p**2)
@@ -2528,6 +2531,9 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             tm = _time.time()
             mdl.from_vector(vectorGS)
             mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
+            return _objective_func_probs(tm)
+
+        def _objective_func_probs(tm):
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p
             S2 = -0.5 * minusCntVecMx / (min_p**2)
@@ -2634,12 +2640,103 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     full_minErrVec = _objective_func(opt_x)  #note: calls mdl.from_vector(opt_x,...) so don't need to call this again
     minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  #don't include "extra" regularization terms
-    deltaLogL = sum([x**2 for x in minErrVec]) # upperBoundLogL - logl (a positive number)
+    deltaLogL_terms = minErrVec**2
+    deltaLogL = sum(deltaLogL_terms) # upperBoundLogL - logl (a positive number)
 
-    #HERE - add wildcard budget
-    #Wvec = [0.01] # ?? TODO
-    #mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
-    #update_probs_with_wildcard_budget(probs, probs, circuitsToUse, lookup, Wvec)
+    add_wildcard_budget = True
+    if add_wildcard_budget:
+        print("******************* Adding Wildcard Budget **************************")
+        
+        # Approach: we create an objective function that, for a given Wvec, computes:
+        # (amt_of_2DLogL over threshold) + (amt of "red-box": per-outcome 2DlogL over threshold) + eta*|Wvec|_1
+        # and minimize this for different eta (binary search) to find that largest eta for which the
+        # first two terms is are zero.  This Wvec is our keeper.
+
+        nCircuits = len(circuitsToUse)
+        nDataParams  = dataset.get_degrees_of_freedom(dsCircuitsToUse) #number of independent parameters
+                                                                       # in dataset (max. model # of params)
+        nModelParams = mdl.num_params() #just use total number of params
+        percentile = 0.05; nBoxes = len(probs)
+        twoDeltaLogL_threshold = _stats.chi2.ppf(1 - percentile, nDataParams-nModelParams)
+        redbox_threshold = _stats.chi2.ppf(1 - percentile / nBoxes, 1)
+        eta = 0.01
+
+        if 2*deltaLogL <= twoDeltaLogL_threshold and sum(_np.clip(2*deltaLogL_terms-redbox_threshold,0,None)) < 1e-6:
+            print("No need to add budget!")
+            Wvec = _np.zeros(1) # ?? TODO
+        else:
+            mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
+            orig_probs = probs.copy()
+                    
+            def _wildcard_objective_firstTerms(Wv):
+                update_probs_with_wildcard_budget(orig_probs, probs, freqs, circuitsToUse, lookup, Wv)
+                mev = _objective_func_probs(_time.time())
+                mev = mev[0:-ex] if (ex > 0) else mev  #don't include "extra" regularization terms
+                twoDeltaLogL_terms = 2*mev**2
+                twoDeltaLogL = sum(twoDeltaLogL_terms)
+                return max(0,twoDeltaLogL - twoDeltaLogL_threshold) + sum(_np.clip(twoDeltaLogL_terms-redbox_threshold,0,None))
+    
+            def _wildcard_objective(Wv):
+                return _wildcard_objective_firstTerms(Wv) + eta*_np.linalg.norm(Wv,ord=1)
+    
+            
+            Wvec_init = _np.array([0.01]) # ?? TODO
+            nIters = 0; eta_lower_bound = eta_upper_bound = None
+            while nIters < 100:
+                soln = _spo.minimize(_wildcard_objective,Wvec_init,method='L-BFGS-B',callback=None, tol=1e-4)
+                Wvec = soln.x
+                meets_conditions = bool(_wildcard_objective_firstTerms(Wvec) < 1e-6) # some zero-tolerance here
+                #print("Value = ",_wildcard_objective_firstTerms(Wvec),_wildcard_objective(Wvec),Wvec)
+                if meets_conditions: # try larger eta
+                    eta_lower_bound = eta
+                    if eta_upper_bound is not None:
+                        eta = (eta_upper_bound + eta_lower_bound)/2
+                    else: eta *= 2
+                else: # try smaller eta
+                    eta_upper_bound = eta
+                    if eta_lower_bound is not None:
+                        eta = (eta_upper_bound + eta_lower_bound)/2
+                    else: eta /= 2
+    
+                print("Interval [%s,%s]: eta = %g" % (str(eta_upper_bound),str(eta_lower_bound),eta))
+                if eta_upper_bound is not None and eta_lower_bound is not None and \
+                   (eta_upper_bound - eta_lower_bound)/eta_upper_bound < 1e-3:
+                    print("Converged after %d iters!" % nIters)
+                    break
+                nIters += 1
+    
+        print("Wildcard budget found for Wvec = ",Wvec)
+                
+        #print("Wvec_dir = ",Wvec_dir)
+        #Wvec_dir /= _np.linalg.norm(Wvec_dir) # normalize
+        #print(" -> Normalized = ",Wvec_dir)
+        #
+        #
+        #
+        #alpha = 0
+        #while True:
+        #    Wvec = alpha*Wvec_dir
+        #    
+        #    update_probs_with_wildcard_budget(orig_probs, probs, freqs, circuitsToUse, lookup, Wvec)
+        #    mev = _objective_func_probs(_time.time())
+        #    mev = mev[0:-ex] if (ex > 0) else mev  #don't include "extra" regularization terms
+        #    twoDeltaLogL_terms = 2*mev**2
+        #    twoDeltaLogL = sum(twoDeltaLogL_terms)
+        #    pvalue = 1.0 - _stats.chi2.cdf(twoDeltaLogL,nDataParams-nModelParams)
+        #    # twoDeltaLobL = ppf(1-pval, n-k)
+        #
+        #    percentile = 0.05; dof = 1; nBoxes=len(twoDeltaLogL_terms)
+        #    from scipy.stats import chi2 as _chi2
+        #    trans = _chi2.ppf(1 - percentile / nBoxes, dof) # _np.ceil
+        #    print("TRANS = ",trans)
+        #    nRedBoxes = _np.count_nonzero(twoDeltaLogL_terms > trans) # test agains k=1.0 (maybe should be 1.0/nBoxes?)
+        #
+        #    print("LOOP: alpha=",alpha, " Wvec=",Wvec, " 2DLogL=", twoDeltaLogL, " pval=",pvalue, " nRed=",nRedBoxes)
+        #    if (pvalue >= 0.05 and nRedBoxes == 0) or alpha > 1.0:
+        #        break
+        #    
+        #    alpha += 0.001 # ratchet up (TODO better)
+            
 
 
     #if constrainType == 'projection':
@@ -2684,36 +2781,56 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     profiler.add_time("do_mlgst: total time",tStart)
     return (logL_upperbound - deltaLogL), mdl
 
+
 #HERE
 def update_probs_with_wildcard_budget(probs_in, probs_out, freqs, circuits, elIndices, Wvec):
 
     def compute_circuit_wildcard_budget(c, Wvec):
         #raise NotImplementedError("TODO!!!")
         #for now, assume Wvec is a length-1 vector
-        return Wvec[0] * len(c)
+        return abs(Wvec[0]) * len(c)
     
-    def computeTVD(A,B,alpha,q,f):
-        return sum(q[A]-alpha*f[A]) + sum(beta*f[B] - q[B])
+    def computeTVD(A,B,alpha,beta,q,f):
+        ret = 0.5*(sum(q[A]-alpha*f[A]) + sum(beta*f[B] - q[B]))
+        #print("computeTVD: ",q,f," = ",ret, " (",alpha,beta,A,B,q[A],alpha*f[A],sum(q[A]-alpha*f[A]),sum(beta*f[B] - q[B]),")")
+        return ret
 
     def compute_alpha(A,B,C,TVD,q,f):
         # beta = (1-alpha*SA - SC)/SB
-        # TVD = qA - alpha*SA + [(1-alpha*SA - SC)/SB]*SB - qB
-        # TVD = qA - alpha(SA + SA) + (1-SC) - qB
-        # alpha = [ qA-qB + (1-SC) - TVD ] / 2*SA
-        return ( sum(q[A]) - sum(q[B]) + 1.0 - sum(f[C]) - TVD ) / (2*sum(f[A]))
+        # 2*TVD = qA - alpha*SA + [(1-alpha*SA - SC)/SB]*SB - qB
+        # 2*TVD = qA - alpha(SA + SA) + (1-SC) - qB
+        # alpha = [ qA-qB + (1-SC) - 2*TVD ] / 2*SA
+        return ( sum(q[A]) - sum(q[B]) + 1.0 - sum(f[C]) - 2*TVD ) / (2*sum(f[A]))
 
-    def fill_pvec(p,alpha,A,B,C,q,f):
-        beta = beta_fn(alpha,A,B,C,f)
+    def compute_beta(A,B,C,TVD,q,f):
+        # alpha = (1-beta*SB - SC)/SA
+        # 2*TVD = qA - [(1-beta*SB - SC)/SA]*SA + beta*SB - qB
+        # 2*TVD = qA - (1-SC) + beta(SB + SB) - qB
+        # beta = -[ qA-qB - (1-SC) - 2*TVD ] / 2*SB
+        return -( sum(q[A]) - sum(q[B]) - 1.0 + sum(f[C]) - 2*TVD ) / (2*sum(f[B]))
+
+    def compute_pvec(alpha,beta,A,B,C,q,f):
+        p = f.copy()
+        #print("Fill pvec alpha=%g, beta=%g" % (alpha,beta))
+        #print("f = ",f, " A = ",A, "B=",B," C=",C)
         p[A] = alpha*f[A]
         p[B] = beta*f[B]
         p[C] = q[C]
-
+        return p
 
     def alpha_fn(beta,A,B,C,f):
         return (1.0 - beta*sum(f[B]) - sum(f[C])) / sum(f[A])
 
     def beta_fn(alpha,A,B,C,f):
         return (1.0 - alpha*sum(f[A]) - sum(f[C])) / sum(f[B])
+    
+    #Special case where f_k=0 - then don't bother wasting any TVD on
+    # these since the corresponding p_k doesn't enter the likelihood.
+    # => treat these components as if f_k == q_k (ratio = 1)
+    zero_inds = _np.where(freqs == 0.0)[0]
+    if len(zero_inds) > 0:
+        freqs = freqs.copy() # copy for now instead of doing something more clever
+        freqs[zero_inds] = probs_in[zero_inds]
     
     for i,circ in enumerate(circuits):
         elInds = elIndices[i]
@@ -2722,44 +2839,76 @@ def update_probs_with_wildcard_budget(probs_in, probs_out, freqs, circuits, elIn
         fvec = freqs[elInds]
 
         W = compute_circuit_wildcard_budget(circ,Wvec) # TODO
-        A = _np.where(qvec > fvec)
-        B = _np.where(qvec < fvec)
-        C = _np.where(qvec == fvec)
+        
+        initialTVD = 0.5*sum(_np.abs(qvec-fvec))
+        if initialTVD <= W: # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
+            _tools.matrixtools._fas(probs_out, (elInds,), fvec)
+            continue
+
+        A = _np.where(qvec > fvec)[0]
+        B = _np.where(qvec < fvec)[0]
+        C = _np.where(qvec == fvec)[0]
+
+        #print("Circuit %d: %s" % (i,circ))
+        #print(" inds = ",elInds, "q = ",qvec, " f = ",fvec)
+        #print(" budget = ",W, " A=",A," B=",B," C=",C)
 
         #Note: need special case for fvec == 0
         ratio_vec = qvec / fvec # TODO: replace with more complex condition:
+        #print("  Ratio vec = ", ratio_vec)
 
-        alpha_breaks = []
-        for i,r in enumerate(ratio_vec):
-            if i in A:
+        breaks = []
+        for k,r in enumerate(ratio_vec):
+            if k in A:
                 alpha_break = r
+                beta_break = beta_fn(alpha_break, A,B,C, fvec)
+                #print("alpha-break = %g -> beta-break = %g" % (alpha_break,beta_break))
                 AorB = True
-            elif i in B:
+            elif k in B:
                 beta_break = r
                 alpha_break = alpha_fn(beta_break, A,B,C, fvec)
+                #print("beta-break = %g -> alpha-break = %g" % (beta_break,alpha_break))
                 AorB = False
-            alpha_breaks.append( (i,alpha_break,AorB) )
+            breaks.append( (k,alpha_break,beta_break,AorB) )
+        #print("Breaks = ",breaks)
         
-        sorted_breaks = sorted( alpha_breaks, key=lambda x: x[1])
-        for j,alpha0,AorB in sorted_breaks:
-            TVD_at_breakpt = computeTVD(A,B,alpha0,qvec,fvec) # will keep getting smaller with each iteration
+        sorted_breaks = sorted( breaks, key=lambda x: x[1])
+        for j,alpha0,beta0,AorB in sorted_breaks:
+            TVD_at_breakpt = computeTVD(A,B,alpha0,beta0,qvec,fvec) # will keep getting smaller with each iteration
               #Note: does't matter if we move j from A or B -> C before calling this, as alpha0 is set so results is the same
-            if TVD_at_breakpt < W:
+
+            #print("break: j=",j," alpha=",alpha0," beta=",beta0," A?=",AorB, " TVD = ",TVD_at_breakpt)
+            tol = 1e-6 # for instance, when W==0 and TVD_at_breakpt is 1e-17
+            if TVD_at_breakpt <= W+tol:
                 break # exit loop
 
             #Move
             if AorB: # A
-                A.remove(j); C.add(j) # move A -> C
+                Alst = list(A); del Alst[Alst.index(j)]; A = _np.array(Alst,int)
+                Clst = list(C); Clst.append(j); C = _np.array(Clst,int) # move A -> C
             else: # B
-                B.remove(j); C.add(j) # move A -> C
+                Blst = list(B); del Blst[Blst.index(j)]; B = _np.array(Blst,int)
+                Clst = list(C); Clst.append(j); C = _np.array(Clst,int) # move B -> C
+                #B.remove(j); C.add(j) # move A -> C
+            #print(" --> A=",A," B=",B," C=",C)
         else:
             assert(False), "TVD should eventually reach zero (I think)!"
 
         #Now A,B,C are fixed to what they need to be for our given W
-        alpha = compute_alpha(A,B,C,W,qvec,fvec)
-        fill_pvec(probs_out[elInds] ,alpha,A,B,C,qvec,fvec)
+        if len(A) > 0:
+            alpha = compute_alpha(A,B,C,W,qvec,fvec)
+            beta = beta_fn(alpha,A,B,C,fvec)
+        else: # fall back to this when len(A) == 0
+            beta = compute_beta(A,B,C,W,qvec,fvec)
+            alpha = alpha_fn(beta,A,B,C,fvec)
+        _tools.matrixtools._fas(probs_out, (elInds,), compute_pvec(alpha,beta,A,B,C,qvec,fvec))
+        #print("TVD = ",computeTVD(A,B,alpha,beta_fn(alpha,A,B,C,fvec),qvec,fvec))
+        compTVD = computeTVD(A,B,alpha,beta,qvec,fvec)
+        #print("compare: ",W,compTVD)
+        assert(abs(W-compTVD) < 1e-3), "TVD mismatch!"
+        #assert(_np.isclose(W, compTVD)), "TVD mismatch!"
         
-    #HERE - now probs_post_wildcard can be used in place of probs in objective function        
+        #print("final alpha = ",alpha," beta=",beta, " inds=",elInds, " --> probs_out[cur_inds]: ", probs_out[elInds])
     return
 
 
