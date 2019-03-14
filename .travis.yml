@@ -10,8 +10,10 @@ branches:
     - master
     - beta
     - develop
-    - /^feature-.*$/
-    - /^bugfix-.*$/
+
+# Hold off testing feature & bugfix branches in case this competes w/other testing.
+#    - /^feature-.*$/
+#    - /^bugfix-.*$/
 
 env:
   global:
