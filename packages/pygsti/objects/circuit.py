@@ -2091,10 +2091,9 @@ class Circuit(object):
     
         Returns
         -------
-        Label
+        tuple
         """
-        assert(j >= 0 and j < self.num_layers()), "Circuit layer label invalid! Circuit is only of depth {}".format(self.num_layers())
-        return tuple(self[j].components)
+        return tuple(self.get_layer_label(j).components)
 
     def get_layer_label(self,j):
         """
@@ -2112,6 +2111,24 @@ class Circuit(object):
         """
         assert(j >= 0 and j < self.num_layers()), "Circuit layer label invalid! Circuit is only of depth {}".format(self.num_layers())
         return self[j]
+
+
+    def get_layer_with_idles(self,j,idleGateName='I'):
+        """
+        Returns a tuple of the components of the layer at depth `j`,
+        *including* `idleGateName` gates wherever there is an 
+        identity operation.
+
+        Parameters
+        ----------
+        j : int
+            The index (depth) of the layer to be returned
+
+        Returns
+        -------
+        tuple
+        """
+        return tuple(self.get_layer_label_with_idles(j,idleGateName).components)
 
     
     def get_layer_label_with_idles(self,j,idleGateName='I'):
