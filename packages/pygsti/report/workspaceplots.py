@@ -1623,14 +1623,14 @@ class ColorBoxPlot(WorkspacePlot):
                 linlog_color = "yellow"
                 ytitle="chi<sup>2</sup>"
                 mx_fn = _mx_fn_directchi2 # use a *global* function so cache can tell it's the same
-                extra_arg = (dataset, directGSTmodels, minProbClipForWeighting)
+                extra_arg = (dataset, directGSTmodels, minProbClipForWeighting, gss)
 
             elif ptyp == "directlogl":
                 colormapType = "linlog"
                 linlog_color = "yellow"
                 ytitle="Direct 2 log(L ratio)"
                 mx_fn = _mx_fn_directlogl # use a *global* function so cache can tell it's the same
-                extra_arg = (dataset, directGSTmodels, minProbClipForWeighting)
+                extra_arg = (dataset, directGSTmodels, minProbClipForWeighting, gss)
 
             elif ptyp == "dscmp":
                 assert(dscomparator is not None), \
@@ -1818,13 +1818,13 @@ def _mx_fn_errorrate(plaq,x,y,directGSTmodels): #error rate as 1x1 matrix which 
     return _np.array( [[ _ph.small_eigval_err_rate(plaq.base, directGSTmodels) ]] )
 
 def _mx_fn_directchi2(plaq,x,y,extra):
-    dataset, directGSTmodels, minProbClipForWeighting = extra
+    dataset, directGSTmodels, minProbClipForWeighting, gss = extra
     return _ph.direct_chi2_matrix(
         plaq, gss, dataset, directGSTmodels.get(plaq.base,None),
         minProbClipForWeighting)
 
 def _mx_fn_directlogl(plaq,x,y,extra):
-    dataset, directGSTmodels, minProbClipForWeighting = extra
+    dataset, directGSTmodels, minProbClipForWeighting, gss = extra
     return _ph.direct_logl_matrix(
         plaq, gss, dataset, directGSTmodels.get(plaq.base,None),
         minProbClipForWeighting)
