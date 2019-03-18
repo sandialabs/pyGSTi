@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import os as _os
+from plotly import __version__ as _plotly_version
 from plotly import tools as _plotlytools
 from plotly.offline.offline import _plot_html
 #from plotly.offline.offline import get_plotlyjs
@@ -99,12 +100,17 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     config['showLink'] = show_link
     config['linkText'] = link_text
 
+    #Add version-dependent kwargs to _plot_html call below
+    kwargs = {}
+    if tuple(map(int,_plotly_version.split('.'))) >= (3,7,0): # then auto_play arg exists
+        kwargs['auto_play'] = False
+    
     #Note: removing width and height from layout above causes default values to
-    # be used (the '100%'s hardcoded below) which subsequently trigger adding a resize script.
+    # be used (the '100%'s hardcoded below) which subsequently trigger adding a resize script.        
     plot_html, plotdivid, _, _ = _plot_html(
         fig, config, validate, '100%', '100%',
-        global_requirejs=False) #no need for global_requirejs here 
-                                #since we now extract js and remake full script.
+        global_requirejs=False, #no need for global_requirejs here 
+        **kwargs)               #since we now extract js and remake full script.
 
     if orig_width: fig['layout']['width'] = orig_width
     if orig_height: fig['layout']['height'] = orig_height
