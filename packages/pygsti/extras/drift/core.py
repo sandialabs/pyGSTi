@@ -14,6 +14,7 @@ from . import statistics as _stats
 
 from ... import objects as _obj
 from ...tools import hypothesis as _hyp
+from ...tools import compattools as _compat
 
 import numpy as _np
 import warnings as _warnings
@@ -256,7 +257,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
         # We do this, because this gets recorded in the results as whether we *have* enforced this.
         enforceConstNumTimes = False
     
-    if isinstance(marginalize,str):
+    if _compat.isstr(marginalize):
         assert(marginalize == 'auto')
         if len(list(ds.get_outcome_labels())) > 4:
             marginalize = True
