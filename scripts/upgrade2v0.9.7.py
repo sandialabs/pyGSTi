@@ -442,6 +442,7 @@ replacements = {
 "gateset" : "model",
 "GateMap" : "MapOperator",
 "GateRep" : "OpRep",
+"pyquil.gates" : "pyquil.gates",
 ".gates" : ".operations",
 "dgate" : "doperation",
 "hgate" : "hoperation",
