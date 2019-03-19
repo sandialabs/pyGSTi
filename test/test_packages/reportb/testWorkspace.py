@@ -333,9 +333,10 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc2) )
 
         tds = pygsti.io.load_tddataset(compare_files + "/timeseries_data_trunc.txt")
-        driftresults = drift.do_basic_drift_characterization(tds)
-        plts.append( w.ColorBoxPlot(("driftpv","driftpwr"), self.gss, self.ds, self.mdl, boxLabels=False,
-                                    hoverInfo=True, sumUp=True, invert=False, driftresults=driftresults) )
+        #OLD: driftresults = drift.do_basic_drift_characterization(tds)
+        results_gst = drift.do_drift_characterization(tds)
+        plts.append( w.ColorBoxPlot(("driftpwr",), self.gss, self.ds, self.mdl, boxLabels=False,
+                                    hoverInfo=True, sumUp=True, invert=False, driftresults=(results_gst,None)) ) #"driftpv",
 
         with self.assertRaises(ValueError):
             w.ColorBoxPlot(("foobar",), self.gss, self.ds, self.mdl)

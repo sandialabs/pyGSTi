@@ -367,7 +367,7 @@ class RBTestCase(BaseTestCase):
 
         from pygsti.report import workspace
         w = workspace.Workspace()
-        w.init_notebook_mode(connected=False)
+        #w.init_notebook_mode(connected=False)
         plt = w.RandomizedBenchmarkingPlot(out)
 
         # TravisCI doesn't install matplotlib
