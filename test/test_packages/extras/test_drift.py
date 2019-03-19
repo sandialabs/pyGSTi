@@ -44,7 +44,7 @@ class DriftTestCase(BaseTestCase):
         gssList = pygsti.construction.make_lsgst_structs(std1Q_XYI.gates, fiducials, fiducials, germs, max_lengths)
 
         w = pygsti.report.Workspace()
-        w.init_notebook_mode(connected=False, autodisplay=True)
+        #w.init_notebook_mode(connected=False, autodisplay=True)
 
         # Create a boxplot of the maximum power in the power spectra for each sequence.
         w.ColorBoxPlot('driftpwr', gssList[-1], None, None, driftresults = (results_gst,None))
