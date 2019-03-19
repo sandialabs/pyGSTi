@@ -2384,7 +2384,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     freqs = cntVecMx / totalCntVec
     freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
-    
+
     if poissonPicture:
         freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 )
     else:
@@ -2640,104 +2640,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     full_minErrVec = _objective_func(opt_x)  #note: calls mdl.from_vector(opt_x,...) so don't need to call this again
     minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  #don't include "extra" regularization terms
-    deltaLogL_terms = minErrVec**2
-    deltaLogL = sum(deltaLogL_terms) # upperBoundLogL - logl (a positive number)
-
-    add_wildcard_budget = True
-    if add_wildcard_budget:
-        print("******************* Adding Wildcard Budget **************************")
-        
-        # Approach: we create an objective function that, for a given Wvec, computes:
-        # (amt_of_2DLogL over threshold) + (amt of "red-box": per-outcome 2DlogL over threshold) + eta*|Wvec|_1
-        # and minimize this for different eta (binary search) to find that largest eta for which the
-        # first two terms is are zero.  This Wvec is our keeper.
-
-        nCircuits = len(circuitsToUse)
-        nDataParams  = dataset.get_degrees_of_freedom(dsCircuitsToUse) #number of independent parameters
-                                                                       # in dataset (max. model # of params)
-        nModelParams = mdl.num_params() #just use total number of params
-        percentile = 0.05; nBoxes = len(probs)
-        twoDeltaLogL_threshold = _stats.chi2.ppf(1 - percentile, nDataParams-nModelParams)
-        redbox_threshold = _stats.chi2.ppf(1 - percentile / nBoxes, 1)
-        eta = 0.01
-
-        if 2*deltaLogL <= twoDeltaLogL_threshold and sum(_np.clip(2*deltaLogL_terms-redbox_threshold,0,None)) < 1e-6:
-            print("No need to add budget!")
-            Wvec = _np.zeros(1) # ?? TODO
-        else:
-            mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
-            orig_probs = probs.copy()
-                    
-            def _wildcard_objective_firstTerms(Wv):
-                update_probs_with_wildcard_budget(orig_probs, probs, freqs, circuitsToUse, lookup, Wv)
-                mev = _objective_func_probs(_time.time())
-                mev = mev[0:-ex] if (ex > 0) else mev  #don't include "extra" regularization terms
-                twoDeltaLogL_terms = 2*mev**2
-                twoDeltaLogL = sum(twoDeltaLogL_terms)
-                return max(0,twoDeltaLogL - twoDeltaLogL_threshold) + sum(_np.clip(twoDeltaLogL_terms-redbox_threshold,0,None))
-    
-            def _wildcard_objective(Wv):
-                return _wildcard_objective_firstTerms(Wv) + eta*_np.linalg.norm(Wv,ord=1)
-    
-            
-            Wvec_init = _np.array([0.01]) # ?? TODO
-            nIters = 0; eta_lower_bound = eta_upper_bound = None
-            while nIters < 100:
-                soln = _spo.minimize(_wildcard_objective,Wvec_init,method='L-BFGS-B',callback=None, tol=1e-4)
-                Wvec = soln.x
-                meets_conditions = bool(_wildcard_objective_firstTerms(Wvec) < 1e-6) # some zero-tolerance here
-                #print("Value = ",_wildcard_objective_firstTerms(Wvec),_wildcard_objective(Wvec),Wvec)
-                if meets_conditions: # try larger eta
-                    eta_lower_bound = eta
-                    if eta_upper_bound is not None:
-                        eta = (eta_upper_bound + eta_lower_bound)/2
-                    else: eta *= 2
-                else: # try smaller eta
-                    eta_upper_bound = eta
-                    if eta_lower_bound is not None:
-                        eta = (eta_upper_bound + eta_lower_bound)/2
-                    else: eta /= 2
-    
-                print("Interval [%s,%s]: eta = %g" % (str(eta_upper_bound),str(eta_lower_bound),eta))
-                if eta_upper_bound is not None and eta_lower_bound is not None and \
-                   (eta_upper_bound - eta_lower_bound)/eta_upper_bound < 1e-3:
-                    print("Converged after %d iters!" % nIters)
-                    break
-                nIters += 1
-    
-        print("Wildcard budget found for Wvec = ",Wvec)
-                
-        #print("Wvec_dir = ",Wvec_dir)
-        #Wvec_dir /= _np.linalg.norm(Wvec_dir) # normalize
-        #print(" -> Normalized = ",Wvec_dir)
-        #
-        #
-        #
-        #alpha = 0
-        #while True:
-        #    Wvec = alpha*Wvec_dir
-        #    
-        #    update_probs_with_wildcard_budget(orig_probs, probs, freqs, circuitsToUse, lookup, Wvec)
-        #    mev = _objective_func_probs(_time.time())
-        #    mev = mev[0:-ex] if (ex > 0) else mev  #don't include "extra" regularization terms
-        #    twoDeltaLogL_terms = 2*mev**2
-        #    twoDeltaLogL = sum(twoDeltaLogL_terms)
-        #    pvalue = 1.0 - _stats.chi2.cdf(twoDeltaLogL,nDataParams-nModelParams)
-        #    # twoDeltaLobL = ppf(1-pval, n-k)
-        #
-        #    percentile = 0.05; dof = 1; nBoxes=len(twoDeltaLogL_terms)
-        #    from scipy.stats import chi2 as _chi2
-        #    trans = _chi2.ppf(1 - percentile / nBoxes, dof) # _np.ceil
-        #    print("TRANS = ",trans)
-        #    nRedBoxes = _np.count_nonzero(twoDeltaLogL_terms > trans) # test agains k=1.0 (maybe should be 1.0/nBoxes?)
-        #
-        #    print("LOOP: alpha=",alpha, " Wvec=",Wvec, " 2DLogL=", twoDeltaLogL, " pval=",pvalue, " nRed=",nRedBoxes)
-        #    if (pvalue >= 0.05 and nRedBoxes == 0) or alpha > 1.0:
-        #        break
-        #    
-        #    alpha += 0.001 # ratchet up (TODO better)
-            
-
+    deltaLogL = sum(minErrVec**2) # upperBoundLogL - logl (a positive number)
 
     #if constrainType == 'projection':
     #    if cpPenalty != 0: d,mdl = _contractToCP_direct(mdl,verbosity=0,TPalso=not opt_G0,maxiter=100)
@@ -2782,13 +2685,12 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
     return (logL_upperbound - deltaLogL), mdl
 
 
-#HERE
-def update_probs_with_wildcard_budget(probs_in, probs_out, freqs, circuits, elIndices, Wvec):
+def update_probs_with_wildcard_budget(probs_in, probs_out, freqs, circuits, elIndices, Wvec, budget_comp_fn):
 
-    def compute_circuit_wildcard_budget(c, Wvec):
-        #raise NotImplementedError("TODO!!!")
-        #for now, assume Wvec is a length-1 vector
-        return abs(Wvec[0]) * len(c)
+    #def compute_circuit_wildcard_budget(c, Wvec):
+    #    #raise NotImplementedError("TODO!!!")
+    #    #for now, assume Wvec is a length-1 vector
+    #    return abs(Wvec[0]) * len(c)
     
     def computeTVD(A,B,alpha,beta,q,f):
         ret = 0.5*(sum(q[A]-alpha*f[A]) + sum(beta*f[B] - q[B]))
@@ -2838,7 +2740,8 @@ def update_probs_with_wildcard_budget(probs_in, probs_out, freqs, circuits, elIn
         qvec = probs_in[elInds]
         fvec = freqs[elInds]
 
-        W = compute_circuit_wildcard_budget(circ,Wvec) # TODO
+        #W = compute_circuit_wildcard_budget(circ,Wvec)
+        W = budget_comp_fn(circ,Wvec)
         
         initialTVD = 0.5*sum(_np.abs(qvec-fvec))
         if initialTVD <= W: # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
