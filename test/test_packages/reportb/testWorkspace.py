@@ -144,8 +144,8 @@ class TestWorkspace(ReportBaseCase):
         gsMultiSpam.povms['Msecondpovm'] = self.mdl.povms['Mdefault'].copy()
         gsTP = self.tgt.depolarize(0.01,0.01); gsTP.set_all_parameterizations("TP")
         gsCPTP = self.tgt.depolarize(0.01,0.01); gsCPTP.set_all_parameterizations("CPTP")
-        gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.obj.Basis("gm",2)
-        gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.obj.Basis("std",2)
+        gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.obj.Basis.cast("gm",4)
+        gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.obj.Basis.cast("std",4)
         gsQT = stdQT_XYIMS.target_model().depolarize(0.01,0.01)
 
         #Construct confidence regions
@@ -333,9 +333,10 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc2) )
 
         tds = pygsti.io.load_tddataset(compare_files + "/timeseries_data_trunc.txt")
-        driftresults = drift.do_basic_drift_characterization(tds)
-        plts.append( w.ColorBoxPlot(("driftpv","driftpwr"), self.gss, self.ds, self.mdl, boxLabels=False,
-                                    hoverInfo=True, sumUp=True, invert=False, driftresults=driftresults) )
+        #OLD: driftresults = drift.do_basic_drift_characterization(tds)
+        results_gst = drift.do_drift_characterization(tds)
+        plts.append( w.ColorBoxPlot(("driftpwr",), self.gss, self.ds, self.mdl, boxLabels=False,
+                                    hoverInfo=True, sumUp=True, invert=False, driftresults=(results_gst,None)) ) #"driftpv",
 
         with self.assertRaises(ValueError):
             w.ColorBoxPlot(("foobar",), self.gss, self.ds, self.mdl)

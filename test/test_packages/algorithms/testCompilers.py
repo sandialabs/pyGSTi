@@ -1,3 +1,7 @@
+import logging
+mpl_logger = logging.getLogger('matplotlib')
+mpl_logger.setLevel(logging.WARNING)
+
 import unittest
 import pygsti
 from pygsti.objects import Circuit

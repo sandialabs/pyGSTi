@@ -998,15 +998,15 @@ def opmatrix_color_boxplot(opMatrix, m, M, mxBasis=None, mxBasisY=None,
 
     if _tools.isstr(mxBasis):
         if mxBasisY is None:
-            mxBasisY = _objs.Basis(mxBasis, int(round(_np.sqrt(opMatrix.shape[0]))))
-        mxBasis = _objs.Basis(mxBasis, int(round(_np.sqrt(opMatrix.shape[1]))))
+            mxBasisY = _objs.BuiltinBasis(mxBasis, opMatrix.shape[0])
+        mxBasis = _objs.BuiltinBasis(mxBasis, opMatrix.shape[1])
     else:
         if mxBasisY is None and opMatrix.shape[0] == opMatrix.shape[1]:
             mxBasisY = mxBasis #can use mxBasis, whatever it is
-
+    
     if _tools.isstr(mxBasisY):
-        mxBasisY = _objs.Basis(mxBasisY, int(round(_np.sqrt(opMatrix.shape[0]))))
-                
+        mxBasisY = _objs.BuiltinBasis(mxBasisY, opMatrix.shape[0])
+    
     if mxBasis is not None:
         xlabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasis.labels]
     else:
@@ -1198,7 +1198,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
 
     #Set plot size and margins
     lmargin = rmargin = tmargin = bmargin = 20
-    if title: tmargin += 25
+    if title: tmargin += 30
     if xlabel: tmargin += 30
     if ylabel: lmargin += 30
     max_xl = max([len(xl) for xl in xlabels])
@@ -1536,39 +1536,7 @@ class ColorBoxPlot(WorkspacePlot):
         fig = None
         addl_hover_info_fns = _collections.OrderedDict()
 
-        def outcome_to_str(x): #same function as in writers.py
-            if _tools.isstr(x): return x
-            else: return ":".join([str(i) for i in x])
-
-        # Begin "Additional sub-matrix" functions for adding more info to hover text
-        def _separate_outcomes_matrix(plaq, elements, fmt="%.3g"):
-            list_mx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
-            for i,j,_,elIndices,_ in plaq.iter_simplified():
-                list_mx[i,j] = ", ".join(["NaN" if _np.isnan(x) else
-                                          (fmt%x) for x in elements[elIndices]])
-            return list_mx
-
-        def _addl_mx_fn_sl(plaq,x,y):
-            slmx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
-            for i,j,opstr,elIndices,outcomes in plaq.iter_simplified():
-                slmx[i,j] = ", ".join([ outcome_to_str(ol) for ol in outcomes ])
-            return slmx
-
-        def _addl_mx_fn_p(plaq,x,y):
-            probs = _ph.probability_matrices( plaq, model,
-                                            probs_precomp_dict)
-            return _separate_outcomes_matrix(plaq, probs, "%.5g")
-
-        def _addl_mx_fn_f(plaq,x,y):
-            plaq_ds = plaq.expand_aliases(dataset, circuit_simplifier=model)
-            freqs = _ph.frequency_matrices( plaq_ds, dataset)
-            return _separate_outcomes_matrix(plaq, freqs, "%.5g")
-
-        def _addl_mx_fn_cnt(plaq,x,y):
-            plaq_ds = plaq.expand_aliases(dataset, circuit_simplifier=model)
-            cnts = _ph.total_count_matrix(plaq_ds, dataset)
-            return _separate_outcomes_matrix(plaq, cnts, "%d")
-
+        #TODO REMOVE?
             # Could do this to get counts for all spam labels
             #spamlabels = model.get_spam_labels()
             #cntMxs  = _ph.count_matrices( plaq_ds, dataset, spamlabels)
@@ -1591,104 +1559,89 @@ class ColorBoxPlot(WorkspacePlot):
         if _tools.isstr(plottypes):
             plottypes = [plottypes]
 
+        plottypes_that_need_precomp = ('chi2','logl','tvd')
+        if any([ (t in plottypes) for t in plottypes_that_need_precomp]): #bulk-compute probabilities for performance
+            probs_precomp_dict = self._ccompute( _ph._computeProbabilities,
+                                                 gss, model, dataset,
+                                                 comm=comm, smartc=self.ws.smartCache)
+
         for ptyp in plottypes:
             if ptyp == "chi2":
-                precomp=True
                 colormapType = "linlog"
                 linlog_color = "red"
                 ytitle="chi<sup>2</sup>"
-                
-                def _mx_fn(plaq,x,y):
-                    return _ph.chi2_matrix( plaq, dataset, model, minProbClipForWeighting,
-                                            probs_precomp_dict)
+                mx_fn = _mx_fn_chi2 # use a *global* function so cache can tell it's the same
+                extra_arg = (dataset, model, minProbClipForWeighting, probs_precomp_dict)
 
-                addl_hover_info_fns['outcomes'] = _addl_mx_fn_sl
-                addl_hover_info_fns['p'] = _addl_mx_fn_p
-                addl_hover_info_fns['f'] = _addl_mx_fn_f
-                addl_hover_info_fns['total counts'] = _addl_mx_fn_cnt
+                # (function, extra_arg) tuples
+                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_sl,None)
+                addl_hover_info_fns['p'] = (_addl_mx_fn_p, (model, probs_precomp_dict))
+                addl_hover_info_fns['f'] = (_addl_mx_fn_f, (model, dataset, self.ws.smartCache))
+                addl_hover_info_fns['total counts'] = (_addl_mx_fn_cnt, (model,dataset, self.ws.smartCache))
 
             elif ptyp == "logl":
-                precomp=True
                 colormapType = "linlog"
                 linlog_color = "red"
                 ytitle="2 log(L ratio)"
-                
-                def _mx_fn(plaq,x,y):
-                    return _ph.logl_matrix( plaq, dataset, model, minProbClipForWeighting,
-                                            probs_precomp_dict)
+                mx_fn = _mx_fn_logl # use a *global* function so cache can tell it's the same
+                extra_arg = (dataset, model, minProbClipForWeighting, probs_precomp_dict)
 
-                addl_hover_info_fns['outcomes'] = _addl_mx_fn_sl
-                addl_hover_info_fns['p'] = _addl_mx_fn_p
-                addl_hover_info_fns['f'] = _addl_mx_fn_f
-                addl_hover_info_fns['total counts'] = _addl_mx_fn_cnt
+                # (function, extra_arg) tuples
+                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_sl,None)
+                addl_hover_info_fns['p'] = (_addl_mx_fn_p, (model, probs_precomp_dict))
+                addl_hover_info_fns['f'] = (_addl_mx_fn_f, (model, dataset, self.ws.smartCache))
+                addl_hover_info_fns['total counts'] = (_addl_mx_fn_cnt, (model,dataset, self.ws.smartCache))
                 #DEBUG: addl_hover_info_fns['chk'] = _addl_mx_fn_chk
 
             elif ptyp == "tvd":
-                precomp=True
                 colormapType = "blueseq"
                 ytitle="Total Variational Distance (TVD)"
-                
-                def _mx_fn(plaq,x,y):
-                    return _ph.tvd_matrix( plaq, dataset, model,
-                                           probs_precomp_dict)
+                mx_fn = _mx_fn_tvd # use a *global* function so cache can tell it's the same
+                extra_arg = (dataset, model, probs_precomp_dict)
 
-                addl_hover_info_fns['outcomes'] = _addl_mx_fn_sl
-                addl_hover_info_fns['p'] = _addl_mx_fn_p
-                addl_hover_info_fns['f'] = _addl_mx_fn_f
-                addl_hover_info_fns['total counts'] = _addl_mx_fn_cnt
+                # (function, extra_arg) tuples
+                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_sl,None)
+                addl_hover_info_fns['p'] = (_addl_mx_fn_p, (model, probs_precomp_dict))
+                addl_hover_info_fns['f'] = (_addl_mx_fn_f, (model, dataset, self.ws.smartCache))
+                addl_hover_info_fns['total counts'] = (_addl_mx_fn_cnt, (model,dataset, self.ws.smartCache))
 
             elif ptyp == "blank":
-                precomp=False
                 colormapType = "trivial"
                 ytitle = ""
-
-                def _mx_fn(plaq,x,y):
-                    return _np.nan * _np.zeros( (len(gss.minor_yvals()),
-                                                 len(gss.minor_xvals())), 'd')
+                mx_fn = _mx_fn_blank # use a *global* function so cache can tell it's the same
+                extra_arg = gss
 
             elif ptyp == "errorrate":
-                precomp=False
                 colormapType = "seq"
                 ytitle="error rate"
-
+                mx_fn = _mx_fn_errorrate # use a *global* function so cache can tell it's the same
+                extra_arg = directGSTmodels
                 assert(sumUp == True),"Can only use 'errorrate' plot with sumUp == True"
-                def _mx_fn(plaq,x,y): #error rate as 1x1 matrix which we have plotting function sum up
-                    return _np.array( [[ _ph.small_eigval_err_rate(plaq.base, directGSTmodels) ]] )
 
             elif ptyp == "directchi2":
-                precomp=False
                 colormapType = "linlog"
                 linlog_color = "yellow"
                 ytitle="chi<sup>2</sup>"
-                
-                def _mx_fn(plaq,x,y):
-                    return _ph.direct_chi2_matrix(
-                        plaq, gss, dataset,
-                        directGSTmodels.get(plaq.base,None),
-                        minProbClipForWeighting)
+                mx_fn = _mx_fn_directchi2 # use a *global* function so cache can tell it's the same
+                extra_arg = (dataset, directGSTmodels, minProbClipForWeighting, gss)
 
             elif ptyp == "directlogl":
-                precomp=False
                 colormapType = "linlog"
                 linlog_color = "yellow"
                 ytitle="Direct 2 log(L ratio)"
-                
-                def _mx_fn(plaq,x,y):
-                    return _ph.direct_logl_matrix(
-                        plaq, gss, dataset,
-                        directGSTmodels.get(plaq.base,None),
-                        minProbClipForWeighting)
+                mx_fn = _mx_fn_directlogl # use a *global* function so cache can tell it's the same
+                extra_arg = (dataset, directGSTmodels, minProbClipForWeighting, gss)
 
             elif ptyp == "dscmp":
-
                 assert(dscomparator is not None), \
                     "Must specify `dscomparator` argument to create `dscmp` plot!"
-                precomp=False
                 colormapType = "manuallinlog"
                 linlog_color = "green"
                 linlog_trans = dscomparator.get_LLR_pseudothreshold()
                 ytitle="2 log(L ratio)"
-
+                mx_fn = _mx_fn_dscmp # use a *global* function so cache can tell it's the same
+                extra_arg = dscomparator
+                
                 # if dataset is None: # then set dataset to be first compared dataset (for
                 #                     # extracting # degrees of freedom below)
                 #     if isinstance(dscomparator.dataset_list_or_multidataset,list):
@@ -1697,9 +1650,6 @@ class ColorBoxPlot(WorkspacePlot):
                 #         key0 = list(dscomparator.dataset_list_or_multidataset.keys())[0]
                 #         dataset = dscomparator.dataset_list_or_multidataset[key0]
 
-                def _mx_fn(plaq,x,y):
-                    return _ph.dscompare_llr_matrices(plaq, dscomparator)                
-
             elif ptyp == "driftpv":
                 assert(driftresults is not None), \
                     "Must specify `driftresults` argument to create `driftpv` plot!"
@@ -1707,14 +1657,12 @@ class ColorBoxPlot(WorkspacePlot):
                 driftresults = driftresults[0]
                 assert(driftresults.number_of_entities == 1), \
                     "Currently cannot create a box-plot for multi-entity DriftResults!"
-                precomp=False
                 colormapType = "manuallinlog"
                 linlog_color = "green"
                 linlog_trans = _np.log10(1/driftresults.get_power_pvalue_significance_threshold(sequence='per',detectorkey=detectorkey))
                 ytitle="1 / pvalue"
-                    
-                def _mx_fn(plaq,x,y):
-                    return _ph.drift_oneoverpvalue_matrices(plaq, driftresults)
+                mx_fn = _mx_fn_driftpv # use a *global* function so cache can tell it's the same
+                extra_arg = driftresults
                             
             elif ptyp == "driftpwr":
                 assert(driftresults is not None), \
@@ -1723,37 +1671,30 @@ class ColorBoxPlot(WorkspacePlot):
                 driftresults = driftresults[0]
                 assert(driftresults.number_of_entities == 1), \
                     "Currently cannot create a box-plot for multi-entity DriftResults!"
-                precomp=False
                 colormapType = "manuallinlog"
                 linlog_color = "green"
                 linlog_trans = driftresults.get_power_significance_threshold(sequence='per', detectorkey=detectorkey)
                 ytitle="Maximum power in spectrum"
-                
-                def _mx_fn(plaq,x,y):
-                    return _ph.drift_maxpower_matrices(plaq, driftresults)
+                mx_fn = _mx_fn_driftpwr # use a *global* function so cache can tell it's the same
+                extra_arg = driftresults                
                             
             elif (submatrices is not None) and ptyp in submatrices:
-                precomp = False; ytitle = ptyp
+                ytitle = ptyp
                 colormapType = submatrices.get(ptyp + ".colormap","seq")            
             else:
                 raise ValueError("Invalid plot type: %s" % ptyp)
 
-            if precomp and probs_precomp_dict is None: #bulk-compute probabilities for performance
-                probs_precomp_dict = self._ccompute( _ph._computeProbabilities,
-                                                     gss, model, dataset,
-                                                     comm=comm, smartc=self.ws.smartCache)
-
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp] # "custom" type -- all mxs precomputed by user
             else:
-                subMxs = _ph._computeSubMxs(gss,model,_mx_fn,dataset)
+                subMxs = self._ccompute( _ph._computeSubMxs, gss,model, mx_fn, dataset, extra_arg)
 
             addl_hover_info = _collections.OrderedDict()
-            for lbl,addl_mx_fn in addl_hover_info_fns.items():
+            for lbl,(addl_mx_fn,addl_extra_arg) in addl_hover_info_fns.items():
                 if (submatrices is not None) and lbl in submatrices:
                     addl_subMxs = submatrices[lbl] #ever useful?
                 else:
-                    addl_subMxs = _ph._computeSubMxs(gss,model,addl_mx_fn,dataset)
+                    addl_subMxs = self._ccompute( _ph._computeSubMxs, gss,model,addl_mx_fn,dataset,addl_extra_arg)
                 addl_hover_info[lbl] = addl_subMxs
 
             if colormapType == "linlog":
@@ -1852,6 +1793,88 @@ class ColorBoxPlot(WorkspacePlot):
         #fig['layout'].update(
         #    )
         return fig
+
+#Helper function for ColorBoxPlot matrix computation
+def _mx_fn_chi2(plaq,x,y,extra):
+    dataset, model, minProbClipForWeighting, probs_precomp_dict = extra
+    return _ph.chi2_matrix( plaq, dataset, model, minProbClipForWeighting,
+                            probs_precomp_dict)
+
+def _mx_fn_logl(plaq,x,y,extra):
+    dataset, model, minProbClipForWeighting, probs_precomp_dict = extra
+    return _ph.logl_matrix( plaq, dataset, model, minProbClipForWeighting,
+                            probs_precomp_dict)
+
+def _mx_fn_tvd(plaq,x,y,extra):
+    dataset, model, probs_precomp_dict = extra
+    return _ph.tvd_matrix( plaq, dataset, model,
+                           probs_precomp_dict)
+
+def _mx_fn_blank(plaq,x,y,gss):
+    return _np.nan * _np.zeros( (len(gss.minor_yvals()),
+                                 len(gss.minor_xvals())), 'd')
+
+def _mx_fn_errorrate(plaq,x,y,directGSTmodels): #error rate as 1x1 matrix which we have plotting function sum up
+    return _np.array( [[ _ph.small_eigval_err_rate(plaq.base, directGSTmodels) ]] )
+
+def _mx_fn_directchi2(plaq,x,y,extra):
+    dataset, directGSTmodels, minProbClipForWeighting, gss = extra
+    return _ph.direct_chi2_matrix(
+        plaq, gss, dataset, directGSTmodels.get(plaq.base,None),
+        minProbClipForWeighting)
+
+def _mx_fn_directlogl(plaq,x,y,extra):
+    dataset, directGSTmodels, minProbClipForWeighting, gss = extra
+    return _ph.direct_logl_matrix(
+        plaq, gss, dataset, directGSTmodels.get(plaq.base,None),
+        minProbClipForWeighting)
+
+def _mx_fn_dscmp(plaq,x,y,dscomparator):
+    return _ph.dscompare_llr_matrices(plaq, dscomparator)
+
+def _mx_fn_driftpv(plaq,x,y,driftresults):
+    return _ph.drift_oneoverpvalue_matrices(plaq, driftresults)
+                
+def _mx_fn_driftpwr(plaq,x,y,driftresults):
+    return _ph.drift_maxpower_matrices(plaq, driftresults)
+
+# Begin "Additional sub-matrix" functions for adding more info to hover text
+def _separate_outcomes_matrix(plaq, elements, fmt="%.3g"):
+    list_mx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
+    for i,j,_,elIndices,_ in plaq.iter_simplified():
+        list_mx[i,j] = ", ".join(["NaN" if _np.isnan(x) else
+                                  (fmt%x) for x in elements[elIndices]])
+    return list_mx
+
+def _outcome_to_str(x): #same function as in writers.py
+    if _tools.isstr(x): return x
+    else: return ":".join([str(i) for i in x])
+
+def _addl_mx_fn_sl(plaq,x,y,extra):
+    slmx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
+    for i,j,opstr,elIndices,outcomes in plaq.iter_simplified():
+        slmx[i,j] = ", ".join([ _outcome_to_str(ol) for ol in outcomes ])
+    return slmx
+
+def _addl_mx_fn_p(plaq,x,y,extra):
+    model, probs_precomp_dict = extra
+    probs = _ph.probability_matrices( plaq, model,
+                                    probs_precomp_dict)
+    return _separate_outcomes_matrix(plaq, probs, "%.5g")
+
+def _addl_mx_fn_f(plaq,x,y,extra):
+    model, dataset, smartc = extra
+    plaq_ds = smartc.cached_compute( plaq.expand_aliases,
+                                     (dataset,), dict(circuit_simplifier=model))[1] #doesn't seem to work yet...
+    freqs = _ph.frequency_matrices( plaq_ds, dataset)
+    return _separate_outcomes_matrix(plaq, freqs, "%.5g")
+
+def _addl_mx_fn_cnt(plaq,x,y,extra):
+    model, dataset, smartc = extra
+    plaq_ds = smartc.cached_compute( plaq.expand_aliases,
+                                     (dataset,), dict(circuit_simplifier=model))[1]
+    cnts = _ph.total_count_matrix(plaq_ds, dataset)
+    return _separate_outcomes_matrix(plaq, cnts, "%d")
 
     
 #def gate_matrix_boxplot(opMatrix, size=None, m=-1.0, M=1.0,
@@ -2249,26 +2272,30 @@ class ProjectionsBoxPlot(WorkspacePlot):
         if EBmatrix is not None:
             EBmatrix = EBmatrix.reshape( projections.shape )
     
-        xd = int(round(_np.sqrt(projections.shape[1]))) #x-basis-dim
-        yd = int(round(_np.sqrt(projections.shape[0]))) #y-basis-dim
+        xd = projections.shape[1] #x-basis-dim
+        yd = projections.shape[0] #y-basis-dim
 
         if isinstance(projection_basis, _objs.Basis):
-            if xd == projection_basis.dim.dmDim and yd == 1:
+            if isinstance(projection_basis, _objs.TensorProdBasis) and len(projection_basis.component_bases) == 2 \
+               and xd == projection_basis.component_bases[0].dim and yd == projection_basis.component_bases[1].dim:
+                basis_for_xlabels = projection_basis.component_bases[0]
+                basis_for_ylabels = projection_basis.component_bases[1]
+            elif xd == projection_basis.dim and yd == 1:
                 basis_for_xlabels = projection_basis
                 basis_for_ylabels = None
-            elif xd == yd == projection_basis.dim.dmDim:
+            elif xd == yd == projection_basis.dim:
                 basis_for_xlabels = projection_basis
                 basis_for_ylabels = projection_basis
             else:
                 try:
-                    basis_for_xlabels = _objs.Basis(projection_basis.name,xd)
-                    basis_for_ylabels = _objs.Basis(projection_basis.name,yd)
+                    basis_for_xlabels = _objs.BuiltinBasis(projection_basis.name,xd)
+                    basis_for_ylabels = _objs.BuiltinBasis(projection_basis.name,yd)
                 except:
                     basis_for_xlabels = basis_for_ylabels = None
         else:
             try:
-                basis_for_xlabels = _objs.Basis(projection_basis,xd)
-                basis_for_ylabels = _objs.Basis(projection_basis,yd)
+                basis_for_xlabels = _objs.BuiltinBasis(projection_basis,xd)
+                basis_for_ylabels = _objs.BuiltinBasis(projection_basis,yd)
             except:
                 basis_for_xlabels = basis_for_ylabels = None
 

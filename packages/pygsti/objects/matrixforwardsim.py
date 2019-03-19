@@ -1147,11 +1147,15 @@ class MatrixForwardSimulator(ForwardSimulator):
         return int( 1.3 * nCircuits )
     
 
-    def construct_evaltree(self):
+    def construct_evaltree(self, simplified_circuits, numSubtreeComms):
         """
+        TODO: docstring (update)
         Constructs an EvalTree object appropriate for this calculator.
         """
-        return _MatrixEvalTree()
+        evTree = _MatrixEvalTree()
+        evTree.initialize(simplified_circuits, numSubtreeComms)
+        return evTree
+
 
     
     def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,

@@ -490,8 +490,9 @@ class ForwardSimulator(object):
         return ret
 
 
-    def construct_evaltree(self):
+    def construct_evaltree(self, simplified_circuits, numSubtreeComms):
         """
+        TODO: docstring (update)
         Constructs an EvalTree object appropriate for this calculator.
         """
         raise NotImplementedError("construct_evaltree(...) is not implemented!")

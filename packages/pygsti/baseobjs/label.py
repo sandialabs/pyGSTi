@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numbers as _numbers
 import sys as _sys
+import itertools as _itertools
 
 import os,inspect
 debug_record = {}
@@ -91,6 +92,18 @@ class Label(object):
         else:
             if timestamp is None: return LabelTup(name, stateSpaceLabels)
             else: return TimestampedLabelTup(name, stateSpaceLabels, timestamp)
+
+    def depth(self):
+        return 1 #most labels are depth=1
+
+    @property
+    def reps(self):
+        return 1 # most labels have only reps==1
+
+    def expand_subcircuits(self):
+        """TODO: docstring - returns a list/tuple of labels """
+        return (self,) # most labels just expand to themselves
+
 
 
 class LabelTup(Label,tuple):
@@ -284,6 +297,16 @@ class LabelTup(Label,tuple):
         """
         return tuple(self)
 
+    def replacename(self,oldname,newname):
+        """ Returns a label with `oldname` replaced by `newname`."""
+        return LabelTup(newname,self.sslbls) if (self.name == oldname) else self
+
+    def issimple(self):
+        """ Whether this is a "simple" (opaque w/a true name, from a
+            circuit perspective) label or not """
+        return True
+
+
     __hash__ = tuple.__hash__ # this is why we derive from tuple - using the
                               # native tuple.__hash__ directly == speed boost
 
@@ -398,6 +421,16 @@ class LabelStr(Label,strlittype):
             faster serialization.
         """
         return strlittype(self)
+
+    def replacename(self,oldname,newname):
+        """ Returns a label with `oldname` replaced by `newname`."""
+        return LabelStr(newname) if (self.name == oldname) else self
+
+    def issimple(self):
+        """ Whether this is a "simple" (opaque w/a true name, from a
+            circuit perspective) label or not """
+        return True
+    
 
     __hash__ = strlittype.__hash__ # this is why we derive from tuple - using the
                               # native tuple.__hash__ directly == speed boost
@@ -554,9 +587,217 @@ class LabelTupTup(Label,tuple):
         """
         return tuple((x.tonative() for x in self))
 
+    def replacename(self,oldname,newname):
+        """ Returns a label with `oldname` replaced by `newname`."""
+        return LabelTupTup( tuple((x.replacename(oldname,newname) for x in self)) )
+
+    def issimple(self):
+        """ Whether this is a "simple" (opaque w/a true name, from a
+            circuit perspective) label or not """
+        return False
+
+    def depth(self):
+        if len(self.components) == 0: return 1 # still depth 1 even if empty
+        return max([x.depth() for x in self.components])
+
+    def expand_subcircuits(self):
+        """TODO: docstring - returns a list/tuple of labels """
+        ret = []
+        expanded_comps = [ x.expand_subcircuits() for x in self.components ]
+        
+        #DEBUG TODO REMOVE
+        #print("DB: expaned comps:") 
+        #for i,x in enumerate(expanded_comps):
+        #    print(i,": ",x)
+        
+        for i in range(self.depth()): # depth == # of layers when expanded
+            ec = []
+            for expanded_comp in expanded_comps:
+                if i < len(expanded_comp):
+                    ec.extend( expanded_comp[i].components ) # .components = vertical expansion
+            #assert(len(ec) > 0), "Logic error!" #this is ok (e.g. an idle subcircuit)
+            ret.append( LabelTupTup(ec) )
+        return tuple(ret)
+
+
 
     __hash__ = tuple.__hash__ # this is why we derive from tuple - using the
                               # native tuple.__hash__ directly == speed boost
+
+class CircuitLabel(Label,tuple):
+    def __new__(cls,name,tupOfTups,stateSpaceLabels,reps=1): # timestamp??
+        """
+        Creates a new Model-item label, which is a tuple of tuples of simple
+        string labels and tuples specifying the part of the Hilbert space upon
+        which that item acts (often just qubit indices).
+
+        TODO: docstring!
+        
+        Parameters
+        ----------
+        tupOfTups : tuple
+            The item data - a tuple of (string, state-space-labels) tuples
+            which labels a parallel layer/level of a circuit.
+        """
+        #if name is None: name = '' # backward compatibility (temporary - TODO REMOVE)
+        assert(isinstance(reps, _numbers.Integral) and isstr(name)), "Invalid name or reps: %s %s" % (str(name),str(reps))
+        tupOfLabels = tuple((Label(tup) for tup in tupOfTups)) # Note: tup can also be a Label obj
+        return tuple.__new__(cls, (name,stateSpaceLabels,reps) + tupOfLabels) # creates a CircuitLabel object using tuple's __new__
+
+
+    @property
+    def name(self):
+        return self[0]
+
+    @property
+    def sslbls(self):
+        return self[1]
+
+    @property
+    def reps(self):
+        return self[2]
+
+    @property
+    def time(self):
+        raise NotImplementedError("TODO!")
+    
+    @property
+    def components(self):
+        return self[3:]
+        
+    @property
+    def qubits(self): #Used in Circuit
+        """An alias for sslbls, since commonly these are just qubit indices"""
+        return self.sslbls
+
+    @property
+    def number_of_qubits(self): #Used in Circuit
+        return len(self.sslbls) if (self.sslbls is not None) else None
+
+    def has_prefix(self, prefix, typ="all"):
+        """
+        Whether this label has the given `prefix`.  Usually used to test whether
+        the label names a given type.
+
+        Parameters
+        ----------
+        prefix : str
+            The prefix to check for.
+
+        typ : {"any","all"}
+            Whether, when there are multiple parts to the label, the prefix
+            must occur in any or all of the parts.
+
+        Returns
+        -------
+        bool
+        """
+        return self.name.startswith(prefix)
+
+    
+    def map_state_space_labels(self, mapper):
+        """
+        Return a copy of this Label with all of the state-space-labels
+        (often just qubit labels) updated according to a mapping function.
+
+        For example, calling this function with `mapper = {0: 1, 1: 3}`
+        on the Label "Gcnot:0:1" would return "Gcnot:1:3".
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing state-space-label values
+            and whose value are the new labels, or a function which takes a
+            single (existing label) argument and returns a new label.
+
+        Returns
+        -------
+        Label
+        """
+        if isinstance(mapper, dict):
+            mapped_sslbls = [ mapper[sslbl] for sslbl in self.sslbls ]
+        else: # assume mapper is callable
+            mapped_sslbls = [ mapper(sslbl) for sslbl in self.sslbls ]
+        return CircuitLabel(self.name, tuple((lbl.map_state_space_labels(mapper) for lbl in self.components)), mapped_sslbls, self[2])
+
+    def __str__(self):
+        """
+        Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2
+        """
+        if len(self.name) > 0:
+            s = self.name
+        else:
+            s = "".join([str(lbl) for lbl in self.components])
+            if len(self.components) > 1:
+                s = "(" + s + ")" # add parenthesis
+        if self[2] != 1: s += "^%d" % self[2]
+        return s
+
+    def __repr__(self):
+        return "CircuitLabel[" + str(self) + "]"
+    
+    def __add__(self, s):
+        raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
+    
+    def __eq__(self,other):
+        """
+        Defines equality between gates, so that they are equal if their values
+        are equal.
+        """
+        #Unnecessary now that we have a separate LabelStr
+        #if isstr(other):
+        #    if self.sslbls: return False # tests for None and len > 0
+        #    return self.name == other
+
+        return tuple.__eq__(self,other)
+        #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
+
+    def __lt__(self,x):
+        return tuple.__lt__(self,tuple(x))
+
+    def __gt__(self,x):
+        return tuple.__gt__(self,tuple(x))
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
+    def __reduce__(self):
+        # Need to tell serialization logic how to create a new Label since it's derived
+        # from the immutable tuple type (so cannot have its state set after creation)
+        return (CircuitLabel, (self[0],self[3:],self[1],self[2]), None)
+
+    def tonative(self):
+        """ Returns this label as native python types.  Useful for 
+            faster serialization.
+        """
+        return self[0:3] + tuple((x.tonative() for x in self.components))
+
+    def replacename(self,oldname,newname):
+        """ Returns a label with `oldname` replaced by `newname`."""
+        return CircuitLabel(self.name, tuple((x.replacename(oldname,newname) for x in self.components)),self.sslbls, self[2])
+
+    def issimple(self):
+        """ Whether this is a "simple" (opaque w/a true name, from a
+            circuit perspective) label or not """
+        return True # still true - even though can have components!
+
+    def depth(self):
+        return sum([x.depth() for x in self.components])*self.reps
+
+    def expand_subcircuits(self):
+        """TODO: docstring - returns a list/tuple of labels """
+        #REMOVE print("Expanding subcircuit components: ",self.components)
+        #REMOVE print(" --> ",[ x.expand_subcircuits() for x in self.components ])
+        return tuple(_itertools.chain(*[x.expand_subcircuits() for x in self.components]))*self.reps
+
+    __hash__ = tuple.__hash__ # this is why we derive from tuple - using the
+                              # native tuple.__hash__ directly == speed boost
+
+
+
+#class NamedLabelTupTup(Label,tuple):
+#    def __new__(cls,name,tupOfTups):
+#        pass
 
 
 class TimestampedLabelTup(Label,tuple):
@@ -742,6 +983,17 @@ class TimestampedLabelTup(Label,tuple):
         """
         return tuple(self)
 
+    def replacename(self,oldname,newname):
+        """ Returns a label with `oldname` replaced by `newname`."""
+        return TimestampledLabelTup(newname,self.sslbls,self[0]) if (self.name == oldname) else self
+
+    def issimple(self):
+        """ Whether this is a "simple" (opaque w/a true name, from a
+            circuit perspective) label or not """
+        return True
+
+
+
     __hash__ = tuple.__hash__ # this is why we derive from tuple - using the
                               # native tuple.__hash__ directly == speed boost
 
@@ -899,6 +1151,19 @@ class TimestampedLabelTupTup(Label,tuple):
             faster serialization.
         """
         return (self[0],) + tuple((x.tonative() for x in self[1:]))
+
+    def replacename(self,oldname,newname):
+        """ Returns a label with `oldname` replaced by `newname`."""
+        return TimestampedLabelTupTup( tuple((x.replacename(oldname,newname) for x in self[1:])), self[0] )
+
+    def issimple(self):
+        """ Whether this is a "simple" (opaque w/a true name, from a
+            circuit perspective) label or not """
+        return False
+
+    def depth(self):
+        if len(self.components) == 0: return 1 # still depth 1 even if empty
+        return max([x.depth() for x in self.components])
 
 
     __hash__ = tuple.__hash__ # this is why we derive from tuple - using the

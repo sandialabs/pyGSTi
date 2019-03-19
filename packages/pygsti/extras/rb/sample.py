@@ -786,6 +786,19 @@ def simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimina
 
     return circuit, idealout
 
+def _get_setting(l, circuitindex, substructure, lengths, circuits_per_length, structure):
+
+    lind = lengths.index(l)
+    settingDict = {}
+
+    for s in structure: 
+        if s in substructure:
+            settingDict[s] =  len(lengths) + lind*circuits_per_length + circuitindex
+        else:
+            settingDict[s] =  lind
+
+    return settingDict
+
 def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length, structure='1Q', sampler='Qelimination', samplerargs=[], addlocal=False,
                                             lsargs=[], set_isolated=True, setcomplement_isolated=False,
                                             descriptor='A set of simultaneous random circuits', verbosity=1):
@@ -876,6 +889,8 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
     experiment_dict['spec']['addlocal'] = addlocal
     experiment_dict['spec']['lsargs'] = lsargs
     experiment_dict['spec']['descriptor'] = descriptor
+    experiment_dict['spec']['createdby'] = 'extras.rb.sample.simultaneous_random_circuits_experiment'
+
 
     if isinstance(structure,str):
         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
@@ -895,6 +910,7 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
     experiment_dict['spec']['structure'] = structure
     experiment_dict['circuits'] = {}
     experiment_dict['probs'] = {}
+    experiment_dict['settings'] = {}
 
     for lnum, l in enumerate(lengths):
         if verbosity > 0:
@@ -907,23 +923,36 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
             if (not set_isolated) and (not setcomplement_isolated):
                 experiment_dict['circuits'][l,j] = circuit
                 experiment_dict['probs'][l,j] = idealout
+                experiment_dict['settings'][l,j] = {s: len(lengths) + lnum*circuits_per_length + j for s in tuple(structure)}
             else:
                 experiment_dict['circuits'][l,j] = {}
                 experiment_dict['probs'][l,j] = {}
+                experiment_dict['settings'][l,j] = {}
                 experiment_dict['circuits'][l,j][tuple(structure)] = circuit
-                experiment_dict['probs'][l,j][tuple(structure)] = idealout
-
+                experiment_dict['probs'][l,j][tuple(structure)] = idealout           
+                experiment_dict['settings'][l,j][tuple(structure)] = _get_setting(l, j, structure, lengths, circuits_per_length, 
+                                                                                    structure)
             if set_isolated:
                 for subset_ind, subset in enumerate(structure):
                     subset_circuit = circuit.copy(editable=True)
-                    print(subset)
+                    #print(subset)
                     for q in circuit.line_labels:
                         if q not in subset:
-                            print(subset_circuit, q)
+                            #print(subset_circuit, q)
                             subset_circuit.replace_with_idling_line(q)
                     subset_circuit.done_editing()
                     experiment_dict['circuits'][l,j][(tuple(subset),)] = subset_circuit
                     experiment_dict['probs'][l,j][(tuple(subset),)] = idealout[subset_ind]
+                    # setting = {}
+                    # for s in structure: 
+                    #     if s in subset:
+                    #         setting[s] =  len(lengths) + lnum*circuits_per_length + j
+                    #     else:
+                    #         setting[s] =  lnum
+                    experiment_dict['settings'][l,j][(tuple(subset),)] = _get_setting(l, j, (tuple(subset),), lengths, circuits_per_length, 
+                                                                                    structure)
+                    # print(subset)
+                    # print(_get_setting(l, j, subset, lengths, circuits_per_length, structure))
             
             if setcomplement_isolated:
                 for subset_ind, subset in enumerate(structure):
@@ -940,6 +969,15 @@ def simultaneous_random_circuits_experiment(pspec, lengths, circuits_per_length,
                         subsetcomplement_idealout  = tuple(subsetcomplement_idealout)
                         experiment_dict['circuits'][l,j][subsetcomplement] = subsetcomplement_circuit
                         experiment_dict['probs'][l,j][subsetcomplement] = subsetcomplement_idealout
+
+                        # for s in structure: 
+                        #     if s in subsetcomplement:
+                        #         setting[s] =  len(lengths) + lnum*circuits_per_length + j
+                        #     else:
+                        #         setting[s] =  lnum
+                        experiment_dict['settings'][l,j][subsetcomplement] = _get_setting(l, j, subsetcomplement, lengths, circuits_per_length, 
+                                                                                    structure)
+
 
             if verbosity > 0: print(j+1,end=',')
         if verbosity >0: print('')
@@ -1636,7 +1674,7 @@ def simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler='Qelim
     inversion_circuit.done_editing()
 
     if cliffordtwirl:
-        full_circuit = initial_circuit.copy()
+        full_circuit = initial_circuit.copy(editable=True)
         full_circuit.append_circuit(circuit)
         full_circuit.append_circuit(inversion_circuit)
     else:
@@ -1845,6 +1883,7 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
     experiment_dict['spec']['compilerargs'] = compilerargs
     experiment_dict['spec']['partitioned'] = partitioned
     experiment_dict['spec']['descriptor'] = descriptor
+    experiment_dict['spec']['createdby'] = 'extras.rb.sample.simultaneous_direct_rb_experiment'
 
     if isinstance(structure,str):
         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
@@ -1864,6 +1903,7 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
     experiment_dict['spec']['structure'] = structure
     experiment_dict['circuits'] = {}
     experiment_dict['idealout'] = {}
+    experiment_dict['settings'] = {}
 
     for subsetQs in structure:
         subgraph = pspec.qubitgraph.subgraph(list(subsetQs))
@@ -1886,24 +1926,32 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
             else:
                 experiment_dict['circuits'][l,j] = {}
                 experiment_dict['idealout'][l,j] = {}
+                experiment_dict['settings'][l,j] = {}
                 experiment_dict['circuits'][l,j][tuple(structure)] = circuit
                 experiment_dict['idealout'][l,j][tuple(structure)] = idealout 
+                experiment_dict['settings'][l,j][tuple(structure)] = _get_setting(l, j, structure, lengths, circuits_per_length, 
+                                                                                    structure)
 
             if set_isolated:
                 for subset_ind, subset in enumerate(structure):
-                    subset_circuit = circuit.copy()
+                    subset_circuit = circuit.copy(editable=True)
                     for q in circuit.line_labels:
                         if q not in subset:
                             subset_circuit.replace_with_idling_line(q)
+                    subset_circuit.done_editing()
                     experiment_dict['circuits'][l,j][(tuple(subset),)] = subset_circuit
                     experiment_dict['idealout'][l,j][(tuple(subset),)] = (idealout[subset_ind],)
+                    experiment_dict['settings'][l,j][(tuple(subset),)] = _get_setting(l, j, (tuple(subset),), lengths, circuits_per_length, 
+                                                                                    structure)
+
             
             if setcomplement_isolated:
                 for subset_ind, subset in enumerate(structure):
-                        subsetcomplement_circuit = circuit.copy()
+                        subsetcomplement_circuit = circuit.copy(editable=True)
                         for q in circuit.line_labels:
                             if q in subset:
                                 subsetcomplement_circuit.replace_with_idling_line(q)
+                        subsetcomplement_circuit.done_editing()
                         subsetcomplement = list(_copy.copy(structure))
                         subsetcomplement_idealout = list(_copy.copy(idealout))
                         del subsetcomplement[subset_ind]
@@ -1912,6 +1960,8 @@ def simultaneous_direct_rb_experiment(pspec, lengths, circuits_per_length, struc
                         subsetcomplement_idealout  = tuple(subsetcomplement_idealout)
                         experiment_dict['circuits'][l,j][subsetcomplement] = subsetcomplement_circuit
                         experiment_dict['idealout'][l,j][subsetcomplement] = subsetcomplement_idealout
+                        experiment_dict['settings'][l,j][subsetcomplement] = _get_setting(l, j, subsetcomplement, lengths, circuits_per_length, 
+                                                                                    structure)
         
             if verbosity > 0: print(j+1,end=',')
         if verbosity >0: print('')

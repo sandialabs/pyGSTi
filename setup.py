@@ -28,14 +28,14 @@ try:
                   #libraries=['m'] #math lib?
                   ),
         Extension("pygsti.objects.fastopcalc",
-                  sources=["packages/pygsti/objects/fastopcalc.pyx"], 
+                  sources=["packages/pygsti/objects/fastopcalc.pyx"],
                   include_dirs=['.', np.get_include()],
                   language="c++",
                   extra_compile_args=["-std=c++11"], #,"-stdlib=libc++"
                   extra_link_args=["-std=c++11"]
                   ),
         Extension("pygsti.objects.fastreplib",
-                  sources=["packages/pygsti/objects/fastreplib.pyx", "packages/pygsti/objects/fastreps.cpp"], 
+                  sources=["packages/pygsti/objects/fastreplib.pyx", "packages/pygsti/objects/fastreps.cpp"],
                   include_dirs=['.', np.get_include()],
                   language="c++",
                   extra_compile_args=["-std=c++11"], #,"-stdlib=libc++"
@@ -47,7 +47,7 @@ try:
 except ImportError: # if Cython isn't available (e.g. in readthedocs) just skip
     #print warning??
     ext_modules = []
-    
+
 
 classifiers = """\
 Development Status :: 4 - Beta
@@ -102,11 +102,14 @@ setup(name='pyGSTi',
            'generating PDFs of report figures': ['matplotlib'],
            'generating report notebooks': ['ipython','notebook'],
            'read/write message pack format': ['msgpack'],
-	   'extension modules': ['cython'],
-           'complete': ['nose','cython','cvxpy','cvxopt','psutil','mpi4py','pandas','matplotlib','ipython','notebook','msgpack'],
-           'travisci': ['nose','nose-timer','cython','cvxpy','cvxopt','psutil','mpi4py','pandas','msgpack']
+           'extension modules': ['cython'],
+           'complete': ['nose','nose-timer','cython','cvxpy','cvxopt','psutil',
+                        'mpi4py','pandas','matplotlib','ipython','notebook',
+                        'msgpack','coverage','zmq','rednose'],
+           'travisci': ['nose','nose-timer','cython','cvxpy','cvxopt','psutil',
+                        'mpi4py','pandas','msgpack','coverage','zmq','rednose']
       },
-      platforms = ["any"],      
+      platforms = ["any"],
       url = 'http://www.pygsti.info',
       download_url = 'https://github.com/pyGSTio/pyGSTi/tarball/master',
       keywords = ['pygsti', 'tomography', 'gate set', 'pigsty', 'pig', 'quantum', 'qubit'],

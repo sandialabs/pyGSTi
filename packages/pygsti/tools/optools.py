@@ -19,6 +19,8 @@ from . import lindbladtools as _lt
 from . import compattools as _compat
 from . import basistools as _bt
 from ..baseobjs import Basis as _Basis
+from ..baseobjs import ExplicitBasis as _ExplicitBasis
+from ..baseobjs import DirectSumBasis as _DirectSumBasis
 from ..baseobjs.basis import basis_matrices as _basis_matrices
 
     
@@ -355,6 +357,10 @@ def diamonddist(A, B, mxBasis='pp', return_x=False):
         _warnings.warn("CVXOPT failed (uknown err) - diamonddist returning -2!")
         return (-2, _np.zeros((dim,dim))) if return_x else -2
 
+    #Validate result
+    #assert( abs(_np.trace(_np.dot(K.T,Y.value) + _np.dot(L.T,Z.value))-prob.value) < 1e-6 ), \
+    #    "Diamondnorm mismatch"
+    
     if return_x:
         X = Y.value + 1j*Z.value #encodes state at which maximum trace-distance occurs
         return prob.value, X
@@ -545,7 +551,7 @@ def unitarity(A, mxBasis="gm"):
         
     """
     d = int(round(_np.sqrt(A.shape[0])))
-    basisMxs = _basis_matrices(mxBasis, d)
+    basisMxs = _basis_matrices(mxBasis, A.shape[0])
 
     if _np.allclose( basisMxs[0], _np.identity(d,'d') ):
         B = A
@@ -640,23 +646,22 @@ def get_povm_map(model, povmlbl):
         The matrix of the "POVM map" in the `model.basis` basis.
     """
     povmVectors = [v.todense()[:,None] for v in model.povms[povmlbl].values()]
-    if model.basis is not None:
-        d = model.basis.dim.dmDim # density matrix is dxd
-        blkDims = model.basis.dim.blockDims
-    else: # old case when models didn't always have a basis (for backward compat)
-        d = int(round(_np.sqrt(model.dim))) # density matrix is dxd
-        blkDims = [d]
+    if isinstance(model.basis,_DirectSumBasis): #HACK - need to get this to work with general bases
+        blkDims = [int(_np.sqrt(comp.dim)) for comp in model.basis.component_bases]
+    else:
+        blkDims = [ int(round(_np.sqrt(model.dim))) ] # [d] where density matrix is dxd
+    
     nV = len(povmVectors)
     #assert(d**2 == model.dim), "Model dimension (%d) is not a perfect square!" % model.dim
     #assert( nV**2 == d ), "Can only compute POVM metrics when num of effects == H space dimension"
     #   I don't think above assert is needed - should work in general (Robin?)
-    povm_mx = _np.concatenate( povmVectors, axis=1 ).T # "povm map" ( B(H) -> S_k )
+    povm_mx = _np.concatenate( povmVectors, axis=1 ).T # "povm map" ( B(H) -> S_k ) (shape= nV,model.dim)
     
     Sk_embedding_in_std = _np.zeros( (model.dim, nV) )
     for i in range(nV):
         Sk_embedding_in_std[:,i] = _flat_mut_blks(i,i,blkDims)
-
-    std_to_basis = _bt.transform_matrix("std", model.basis, blkDims)
+            
+    std_to_basis = model.basis.reverse_transform_matrix("std") #_bt.transform_matrix("std", model.basis, blkDims)
     assert(std_to_basis.shape == (model.dim,model.dim))
 
     return _np.dot(std_to_basis, _np.dot(Sk_embedding_in_std, povm_mx))
@@ -1286,7 +1291,7 @@ def std_error_generators(dim, projection_type, projection_basis):
     d = int(_np.sqrt(d2))
 
     #Get a list of the basis matrices
-    mxs = _basis_matrices(projection_basis, d)
+    mxs = _basis_matrices(projection_basis, d2)
 
     assert(len(mxs) <= d2) # OK if there are fewer basis matrices (e.g. for bases w/multiple blocks)
     assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
@@ -1367,16 +1372,15 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
       Only returned when `return_scale_fctr == True`.  A mulitplicative
       scaling constant that *has already been applied* to `projections`.
     """
-
+      
     if isinstance(mxBasis,_Basis):
-        dims = mxBasis.dim.blockDims
-        errgen_std = _bt.change_basis(errgen, mxBasis, "std", dims)
+        errgen_std = _bt.change_basis(errgen, mxBasis, mxBasis.equivalent('std'))
 
         #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
-        errgen_std = _bt.resize_std_mx(errgen_std, 'expand', mxBasis.std_equivalent(),
-                                       mxBasis.expanded_std_equivalent())
+        errgen_std = _bt.resize_std_mx(errgen_std, 'expand', mxBasis.equivalent('std'),
+                                       mxBasis.simple_equivalent('std'))
     else:
-        errgen_std = _bt.change_basis(errgen, mxBasis, "std", None)
+        errgen_std = _bt.change_basis(errgen, mxBasis, "std")
     
     d2 = errgen_std.shape[0]
     d = int(_np.sqrt(d2))
@@ -1733,19 +1737,19 @@ def lindblad_errgen_projections(errgen, ham_basis,
     #Get a list of the generators in corresspondence with the
     #  specified basis elements.
     if isinstance(ham_basis, _Basis):
-        hamBasisMxs = ham_basis.get_composite_matrices()
+        hamBasisMxs = ham_basis.elements
     elif _compat.isstr(ham_basis):
-        hamBasisMxs = _basis_matrices(ham_basis, d, sparse=sparse)
+        hamBasisMxs = _basis_matrices(ham_basis, d2, sparse=sparse)
     else: 
         hamBasisMxs = ham_basis
         
     if isinstance(other_basis, _Basis):
-        otherBasisMxs = other_basis.get_composite_matrices()
+        otherBasisMxs = other_basis.elements
     elif _compat.isstr(other_basis):
-        otherBasisMxs = _basis_matrices(other_basis, d, sparse=sparse)
+        otherBasisMxs = _basis_matrices(other_basis, d2, sparse=sparse)
     else: 
         otherBasisMxs = other_basis
-        
+
     hamGens, otherGens = lindblad_error_generators(
         hamBasisMxs,otherBasisMxs,normalize,other_mode) # in std basis
 
@@ -1949,7 +1953,7 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
         return nxt_blbl-1, nxt_blbl # <assigned basis lbl>, <new next-basis-label>
 
     #Add Hamiltonian error elements
-    ham_mxs = ham_basis.get_composite_matrices() #can be sparse
+    ham_mxs = ham_basis.elements #can be sparse
     assert(len(ham_mxs[1:]) == len(hamProjs))
     for coeff, bmx in zip(hamProjs,ham_mxs[1:]): # skip identity
         Ltermdict[('H',nextLbl)] = coeff
@@ -1957,7 +1961,7 @@ def projections_to_lindblad_terms(hamProjs, otherProjs, ham_basis, other_basis,
         nextLbl += 1
 
     #Add "other" error elements
-    other_mxs = other_basis.get_composite_matrices() #can be sparse
+    other_mxs = other_basis.elements #can be sparse
     if other_mode == "diagonal":
         assert(len(other_mxs[1:]) == len(otherProjs))
         for coeff, bmx in zip(otherProjs,other_mxs[1:]): # skip identity
@@ -2015,7 +2019,7 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_mode="al
         matrices).
 
     basisdim : int
-        The dimension of the basis elements (2 for single-qubit).  Required
+        The dimension of the basis elements (4 for single-qubit).  Required
         for the case when `basisdict` is empty.
 
     other_mode : {"diagonal", "diag_affine", "all"}
@@ -2027,12 +2031,12 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_mode="al
     Returns
     -------
     hamProjs : numpy.ndarray
-        An array of length `basisdim^2-1`, giving the projections onto a 
+        An array of length `basisdim-1`, giving the projections onto a 
         full set of the Hamiltonian-type Lindblad terms (onto each element of
         `ham_basis`).
 
     otherProjs : numpy.ndarray
-        An array of shape (d-1,d-1), (2,d-1), or (d-1,), where d=`basisdim^2`
+        An array of shape (d-1,d-1), (2,d-1), or (d-1,), where d=`basisdim`
         for `other_mode` equal to `"all"`, `"diag_affine"`, or `"diagonal"`,
         respectively.  Values give the projections onto the non-Hamiltonian
         -type Lindblad terms.
@@ -2057,7 +2061,7 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_mode="al
         `other_mode!="all"`).
     """
 
-    d = basisdim
+    d2 = basisdim
 
     #Separately enumerate the (distinct) basis elements used for Hamiltonian
     # and Stochasitic error terms
@@ -2102,6 +2106,8 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_mode="al
     # to non-empty bases (empty bases stay empty!) to be consistent with the
     # rest of the framework (bases *have* Ids)
     # TODO: could assert this?
+    d = int(round(_np.sqrt(d2)))
+    assert(d*d == d2), "Dimension must be a perfect square"
     Id = _sps.identity(d,'complex','csr')/_np.sqrt(d) if sparse \
          else _np.identity(d,'complex')/_np.sqrt(d)
     if len(ham_basis_mxs) > 0: ham_basis_mxs = [Id] + ham_basis_mxs
@@ -2110,16 +2116,17 @@ def lindblad_terms_to_projections(Ltermdict, basisdict, basisdim, other_mode="al
     #Special check: update basis name to "pp" if we have a Pauli Basis 
     # (for small d when this isn't too expensive)
     if d in (2,4,8,16) and all([_mt.safenorm(b0-b1) < 1e-8 for b0,b1 in
-                        zip(_basis_matrices("pp",d,sparse),ham_basis_mxs)]):
+                        zip(_basis_matrices("pp",d2,sparse),ham_basis_mxs)]):
         ham_name = "pp"
     else: ham_name = None
+    
     if d in (2,4,8,16) and all([_mt.safenorm(b0-b1) < 1e-8 for b0,b1 in
-                        zip(_basis_matrices("pp",d,sparse),other_basis_mxs)]):
+                        zip(_basis_matrices("pp",d2,sparse),other_basis_mxs)]):
         other_name = "pp"
     else: other_name = None
     
-    ham_basis = _Basis(ham_name,matrices=ham_basis_mxs,dim=d,sparse=sparse)
-    other_basis = _Basis(other_name,matrices=other_basis_mxs,dim=d,sparse=sparse)
+    ham_basis = _ExplicitBasis(ham_basis_mxs,name=ham_name,real=True,sparse=sparse)
+    other_basis = _ExplicitBasis(other_basis_mxs,name=other_name,real=True,sparse=sparse)
     bsH, bsO = len(ham_basis), len(other_basis)
 
     #Create projection (term coefficient) arrays - or return None if
@@ -2492,7 +2499,7 @@ def rotation_gate_mx(r, mxBasis="gm"):
     assert(d**2 == len(r)+1), "Invalid number of rotation angles"
 
     #get Pauli-product matrices (in std basis)
-    pp = _basis_matrices('pp', d)
+    pp = _basis_matrices('pp', d**2)
     assert(len(r) == len(pp[1:]))
 
     #build unitary (in std basis)
@@ -2502,7 +2509,7 @@ def rotation_gate_mx(r, mxBasis="gm"):
     U = _spl.expm(-1j * ex)
     stdGate = unitary_to_process_mx(U)
 
-    ret = _bt.change_basis(stdGate, 'std', mxBasis, None)
+    ret = _bt.change_basis(stdGate, 'std', mxBasis)
 
     return ret
 
@@ -2552,6 +2559,15 @@ def project_model(model, targetModel,
     
     opLabels = list(model.operations.keys())  # operation labels
     basis = model.basis
+
+    #The projection basis needs to be a basis for density matrices
+    # (i.e. 2x2 mxs in 1Q case) rather than superoperators (4x4 mxs
+    # in 1Q case) - whcih is what model.basis is.  So, we just extract
+    # a builtin basis name for the projection basis.
+    if basis.name in ('pp','gm','std','qt'):
+        proj_basis_name = basis.name
+    else:
+        proj_basis_name = 'pp' # model.basis is weird so just use paulis as projection basis
     
     if basis.name != targetModel.basis.name:
         raise ValueError("Basis mismatch between model (%s) and target (%s)!"\
@@ -2574,14 +2590,14 @@ def project_model(model, targetModel,
     for gl,errgen in zip(opLabels,errgens):
         if ('H' in projectiontypes) or ('H+S' in projectiontypes):
             hamProj, hamGens = std_errgen_projections(
-                errgen, "hamiltonian", basis.name, basis, True)
+                errgen, "hamiltonian", proj_basis_name, basis, True)
             #ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
             ham_error_gen = _np.tensordot(hamProj, hamGens, (0,0))
             ham_error_gen = _bt.change_basis(ham_error_gen,"std",basis)
             
         if ('S' in projectiontypes) or ('H+S' in projectiontypes):
             stoProj, stoGens = std_errgen_projections(
-                errgen, "stochastic", basis.name, basis, True)
+                errgen, "stochastic", proj_basis_name, basis, True)
             #sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
             sto_error_gen = _np.tensordot(stoProj, stoGens, (0,0))
             sto_error_gen = _bt.change_basis(sto_error_gen,"std",basis)
@@ -2589,7 +2605,7 @@ def project_model(model, targetModel,
         if ('LND' in projectiontypes) or ('LNDF' in projectiontypes):
             HProj, OProj, HGens, OGens = \
                 lindblad_errgen_projections(
-                    errgen, basis.name, basis.name, basis, normalize=False,
+                    errgen, proj_basis_name, proj_basis_name, basis, normalize=False,
                     return_generators=True)
             #Note: return values *can* be None if an empty/None basis is given
             #lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \

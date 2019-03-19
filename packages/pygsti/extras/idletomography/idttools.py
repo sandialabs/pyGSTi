@@ -251,6 +251,75 @@ def set_idle_errors(nQubits, model, errdict, rand_default=None,
     return _np.array(rand_rates,'d') # the random rates that were chosen (to keep track of them for later)
 
 
+def get_idle_errors(nQubits, model, hamiltonian=True, stochastic=True, affine=True, scale_for_idt=True):
+    """ 
+    Get error rates on the global idle operation withina :class:`CloudNoiseModel` object.
+
+    Parameters
+    ----------
+    nQubits : int
+        The number of qubits.
+
+    model : CloudNoiseModel
+        The model, to get the idle errors of.
+        
+    hamiltonian, stochastic, affine : bool, optional
+        Whether `model` includes Hamiltonian, Stochastic, and/or Affine
+        errors (e.g. if the model was built with "H+S" parameterization,
+        then only `hamiltonian` and `stochastic` should be set to True).
+
+    scale_for_idt : bool, optional
+        Whether rates should be scaled to match the intrinsic rates 
+        output by idle tomography.  If `False`, then the rates are 
+        simply the coefficients of corresponding terms in the 
+        error generator.
+
+    Returns
+    -------
+    hamiltonian_rates, stochastic_rates, affine_rates : dict
+        Dictionaries of error rates.  Keys are Pauli labels of length `nQubits`,
+        e.g. `"XIX"`, `"IIX"`, `"XZY"`.  Only nonzero rates are returned.
+    """
+    ham_rates = {}
+    sto_rates = {}
+    aff_rates = {}
+    v = model.to_vector()
+    #assumes Implicit model w/'globalIdle' as a composed gate...
+    for i,factor in enumerate(model.operation_blks['layers']['globalIdle'].factorops):
+        # each factor applies to some set of the qubits (of size 1 to the max-error-weight)
+        
+        #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
+        assert(isinstance(factor, _objs.EmbeddedOp)), "Expected Gi to be a composition of embedded gates!"
+        sub_v = v[factor.gpindices]
+        bsH = factor.embedded_op.errorgen.ham_basis_size
+        bsO = factor.embedded_op.errorgen.other_basis_size
+        if hamiltonian: hamiltonian_sub_v = sub_v[0:bsH-1] # -1s b/c bsH, bsO include identity in basis
+        if stochastic:  stochastic_sub_v = sub_v[bsH-1:bsH-1+bsO-1]
+        if affine:      affine_sub_v = sub_v[bsH-1+bsO-1:bsH-1+2*(bsO-1)]
+
+        nTargetQubits = len(factor.targetLabels)
+        
+        for k,tup in enumerate(nontrivial_paulis( len(factor.targetLabels) )):
+            lst = ['I']*nQubits
+            for ii,i in enumerate(factor.targetLabels):
+                lst[int(i[1:])] = tup[ii] # i is something like "Q0" so int(i[1:]) extracts the 0
+            label = "".join(lst)
+
+            #For explanation of why `scale` is set as it is, see comments in
+            # the `predicted_intrinsic_rates(...)` function.
+            if hamiltonian and abs(hamiltonian_sub_v[k]) > 1e-6:
+                scale = _np.sqrt(2**(2-nTargetQubits)) if scale_for_idt else 1.0
+                ham_rates[label] = hamiltonian_sub_v[k] * scale
+            if stochastic and abs(stochastic_sub_v[k]) > 1e-6:
+                scale = 1./(2**nTargetQubits) if scale_for_idt else 1.0
+                sto_rates[label] = stochastic_sub_v[k]**2 * scale
+            if affine and abs(affine_sub_v[k]) > 1e-6:
+                scale = 1./(_np.sqrt(2)**nTargetQubits ) if scale_for_idt else 1.0
+                aff_rates[label] = affine_sub_v[k] * scale
+
+    return ham_rates, sto_rates, aff_rates
+
+
 def predicted_intrinsic_rates(nQubits, maxweight, model,
                               hamiltonian=True, stochastic=True, affine=True):
     """

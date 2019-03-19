@@ -30,6 +30,7 @@ from .operation import EmbeddedOp
 from .operation import EmbeddedDenseOp
 from .operation import ComposedOp
 from .operation import ComposedDenseOp
+from .operation import ExponentiatedOp
 from .operation import CliffordOp
 from .operation import LindbladErrorgen
 from .operation import ComposedErrorgen
@@ -88,4 +89,4 @@ from .results import Results
 from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params
 
 #Important Base Objects
-from ..baseobjs import VerbosityPrinter, Profiler, SmartCache, Basis, Label
+from ..baseobjs import VerbosityPrinter, Profiler, SmartCache, Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis, Label, CircuitLabel

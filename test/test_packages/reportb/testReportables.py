@@ -180,12 +180,18 @@ class TestReportables(BaseTestCase):
         opstr = pygsti.obj.Circuit( ('Gx','Gx') )
         
         fn = rptbl.Half_diamond_norm(gs1,gs2,'Gx')
-        fn.evaluate(gs1)
-        fn.evaluate_nearby(gs1)        
+        if fn is not None:
+            fn.evaluate(gs1)
+            fn.evaluate_nearby(gs1)
+        else:
+            warnings.warn("Can't test Half_diamond_norm! (probably b/c cvxpy isn't available)")
         
         fn = rptbl.Circuit_half_diamond_norm(gs1,gs2,opstr)
-        fn.evaluate(gs1)
-        fn.evaluate_nearby(gs1)
+        if fn is not None:
+            fn.evaluate(gs1)
+            fn.evaluate_nearby(gs1)
+        else:
+            warnings.warn("Can't test Circuit_half_diamond_norm! (probably b/c cvxpy isn't available)")
 
     def test_closest_unitary(self):
         gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)

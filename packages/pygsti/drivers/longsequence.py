@@ -365,6 +365,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetModelFilenameOrObj,
         - check = True / False (default)
         - opLabelAliases = dict (default = None)
         - alwaysPerformMLE = bool (default = False)
+        - onlyPerformMLE = bool (default = False)
         - truncScheme = "whole germ powers" (default) or "truncated germ powers"
                         or "length as exponent"
         - appendTo = Results (default = None)
@@ -708,6 +709,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
         args['minProbClip'] = advancedOptions.get('minProbClip',1e-4)
         args['radius'] = advancedOptions.get('radius',1e-4)
         args['alwaysPerformMLE'] = advancedOptions.get('alwaysPerformMLE',False)
+        args['onlyPerformMLE'] = advancedOptions.get('onlyPerformMLE',False)
         mdl_lsgst_list = _alg.do_iterative_mlgst(**args)
     elif objective == "lgst":
         assert(startingPt == "LGST"), "Can only set objective=\"lgst\" for parameterizations compatible with LGST"

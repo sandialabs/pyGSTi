@@ -89,7 +89,7 @@ def exp_terms(terms, orders, postterm=None):
             
     return final_terms
 
-def embed_term(term, stateSpaceLabels, targetLabels, basisdim=None): #TODO: REMOVE basisdim arg?
+def embed_term(term, stateSpaceLabels, targetLabels):
     """
     Embed a term to it acts within a larger state space.
 
@@ -117,9 +117,9 @@ def embed_term(term, stateSpaceLabels, targetLabels, basisdim=None): #TODO: REMO
     """
     from . import operation as _op
     ret = RankOneTerm(term.coeff, None, None, term.typ)
-    ret.pre_ops = [ _op.EmbeddedOp(stateSpaceLabels, targetLabels, op, basisdim)
+    ret.pre_ops = [ _op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
                     for op in term.pre_ops ]
-    ret.post_ops = [ _op.EmbeddedOp(stateSpaceLabels, targetLabels, op, basisdim)
+    ret.post_ops = [ _op.EmbeddedOp(stateSpaceLabels, targetLabels, op)
                      for op in term.post_ops ]
     return ret
 

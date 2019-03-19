@@ -18,11 +18,11 @@ class JamiolkowskiTestCase(unittest.TestCase):
 
 
         # density matrix == 3x3 block diagonal matrix: a 2x2 block followed by a 1x1 block
-        self.stateSpaceDims = [2,1]
-        self.std = pygsti.Basis('std', 3)
-        self.gm  = pygsti.Basis('gm',  3)
-        self.stdSmall = pygsti.Basis('std', [2, 1])
-        self.gmSmall  = pygsti.Basis('gm',  [2, 1])
+        self.stateSpaceDims = [(4,),(1,)]
+        self.std = pygsti.Basis.cast('std', 9)
+        self.gm  = pygsti.Basis.cast('gm',  9)
+        self.stdSmall = pygsti.Basis.cast('std', [4, 1])
+        self.gmSmall  = pygsti.Basis.cast('gm',  [4, 1])
 
         #labels which give a tensor product interp. for the states within each density matrix block
         self.stateSpaceLabels = [('Qhappy',),('Lsad',)]
@@ -42,6 +42,7 @@ class JamiolkowskiTestCase(unittest.TestCase):
                                        choiMxBasis=cmb)
         Jmx2 = pygsti.jamiolkowski_iso(self.testGateGM_mx, opMxBasis=self.gmSmall,
                                        choiMxBasis=cmb)
+        print("Jmx1.shape = ",Jmx1.shape)
 
         #Make sure these yield the same trace == 1 matrix
         self.assertArraysAlmostEqual(Jmx1,Jmx2)
@@ -50,6 +51,7 @@ class JamiolkowskiTestCase(unittest.TestCase):
         #Op on expanded gate in std and gm bases
         JmxExp1 = pygsti.jamiolkowski_iso(self.expTestGate_mx,opMxBasis=self.std,choiMxBasis=cmb)
         JmxExp2 = pygsti.jamiolkowski_iso(self.expTestGateGM_mx,opMxBasis=self.gm,choiMxBasis=cmb)
+        print("JmxExp1.shape = ",JmxExp1.shape)
 
         #Make sure these are the same as operating on the contracted basis
         self.assertArraysAlmostEqual(Jmx1,JmxExp1)
@@ -57,7 +59,7 @@ class JamiolkowskiTestCase(unittest.TestCase):
 
         #Reverse transform should yield back the operation matrix
         revTestGate_mx = pygsti.jamiolkowski_iso_inv(Jmx1,choiMxBasis=cmb,
-                                                                   opMxBasis=self.gmSmall)
+                                                     opMxBasis=self.gmSmall)
         self.assertArraysAlmostEqual(revTestGate_mx, self.testGateGM_mx)
 
         #Reverse transform without specifying stateSpaceDims, then contraction, should yield same result
@@ -73,17 +75,19 @@ class JamiolkowskiTestCase(unittest.TestCase):
 class TestJamiolkowskiMethods(JamiolkowskiTestCase):
 
     def test_std_basis(self):
-        cmb = Basis('std', sum(self.stateSpaceDims))
+        #mx_dim = sum([ int(np.sqrt(d)) for d in ])
+        cmb = Basis.cast('std', self.stateSpaceDims)
         self.checkBasis(cmb)
 
     def test_gm_basis(self):
-        cmb = Basis('gm', sum(self.stateSpaceDims))
+        #mx_dim = sum([ int(np.sqrt(d)) for d in self.stateSpaceDims])
+        cmb = Basis.cast('gm', self.stateSpaceDims)
         self.checkBasis(cmb)
 
     def test_jamiolkowski_ops(self):
-        gm  = Basis('gm', 2)
-        pp  = Basis('pp', 2)
-        std = Basis('std', 2)
+        gm  = Basis.cast('gm', 4)
+        pp  = Basis.cast('pp', 4)
+        std = Basis.cast('std', 4)
         mxGM  = np.array([[1, 0, 0, 0],
                           [0, 0, 1, 0],
                           [0,-1, 0, 0],

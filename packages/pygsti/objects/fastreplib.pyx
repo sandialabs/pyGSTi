@@ -92,6 +92,11 @@ cdef extern from "fastreps.h" namespace "CReps":
         DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
         DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
 
+    cdef cppclass DMOpCRep_Exponentiated(DMOpCRep):
+        DMOpCRep_Exponentiated(DMOpCRep*, INT, INT) except +
+        DMStateCRep* acton(DMStateCRep*, DMStateCRep*)
+        DMStateCRep* adjoint_acton(DMStateCRep*, DMStateCRep*)
+
     cdef cppclass DMOpCRep_Lindblad(DMOpCRep):
         DMOpCRep_Lindblad(DMOpCRep* errgen_rep,
 			    double mu, double eta, INT m_star, INT s, INT dim,
@@ -173,6 +178,12 @@ cdef extern from "fastreps.h" namespace "CReps":
         SVStateCRep* acton(SVStateCRep*, SVStateCRep*)
         SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
 
+    cdef cppclass SVOpCRep_Exponentiated(SVOpCRep):
+        SVOpCRep_Exponentiated(SVOpCRep*, INT, INT) except +
+        SVStateCRep* acton(SVStateCRep*, SVStateCRep*)
+        SVStateCRep* adjoint_acton(SVStateCRep*, SVStateCRep*)
+
+
         
     # Stabilizer state (SB) propagation classes
     cdef cppclass SBStateCRep:
@@ -213,6 +224,11 @@ cdef extern from "fastreps.h" namespace "CReps":
 
     cdef cppclass SBOpCRep_Sum(SBOpCRep):
         SBOpCRep_Sum(vector[SBOpCRep*], INT) except +
+        SBStateCRep* acton(SBStateCRep*, SBStateCRep*)
+        SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
+
+    cdef cppclass SBOpCRep_Exponentiated(SBOpCRep):
+        SBOpCRep_Exponentiated(SBOpCRep*, INT, INT) except +
         SBStateCRep* acton(SBStateCRep*, SBStateCRep*)
         SBStateCRep* adjoint_acton(SBStateCRep*, SBStateCRep*)
 
@@ -473,7 +489,7 @@ cdef class DMOpRep_Embedded(DMOpRep):
         cdef np.ndarray tmp = np.empty(nComponentsInActiveBlock,np.int64)
         tmp[0] = 1
         for i in range(1,nComponentsInActiveBlock):
-            tmp[i] = numBasisEls[nComponentsInActiveBlock-1-i]
+            tmp[i] = numBasisEls[nComponentsInActiveBlock-i]
         multipliers = np.array( np.flipud( np.cumprod(tmp) ), np.int64)
         
         # noop_incrementers[i] specifies how much the overall vector index
@@ -535,6 +551,16 @@ cdef class DMOpRep_Sum(DMOpRep):
         for i in range(nfactors):
             factor_creps[i] = (<DMOpRep?>factor_reps[i]).c_gate
         self.c_gate = new DMOpCRep_Sum(factor_creps, dim)
+
+
+cdef class DMOpRep_Exponentiated(DMOpRep):
+    cdef DMOpRep exponentiated_op
+    cdef INT power
+
+    def __cinit__(self, DMOpRep exponentiated_op_rep, INT power, INT dim):
+        self.exponentiated_op = exponentiated_op_rep
+        self.power = power
+        self.c_gate = new DMOpCRep_Exponentiated(exponentiated_op_rep.c_gate, power, dim)
 
 
 cdef class DMOpRep_Lindblad(DMOpRep):
@@ -722,7 +748,7 @@ cdef class SVOpRep_Embedded(SVOpRep):
         cdef np.ndarray tmp = np.empty(nComponentsInActiveBlock,np.int64)
         tmp[0] = 1
         for i in range(1,nComponentsInActiveBlock):
-            tmp[i] = numBasisEls[nComponentsInActiveBlock-1-i]
+            tmp[i] = numBasisEls[nComponentsInActiveBlock-i]
         multipliers = np.array( np.flipud( np.cumprod(tmp) ), np.int64)
         
         # noop_incrementers[i] specifies how much the overall vector index
@@ -784,6 +810,16 @@ cdef class SVOpRep_Sum(SVOpRep):
         for i in range(nfactors):
             factor_creps[i] = (<SVOpRep?>factor_reps[i]).c_gate
         self.c_gate = new SVOpCRep_Sum(factor_creps, dim)
+
+cdef class SVOpRep_Exponentiated(SVOpRep):
+    cdef SVOpRep exponentiated_op
+    cdef INT power
+
+    def __cinit__(self, SVOpRep exponentiated_op_rep, INT power, INT dim):
+        self.exponentiated_op = exponentiated_op_rep
+        self.power = power
+        self.c_gate = new SVOpCRep_Exponentiated(exponentiated_op_rep.c_gate, power, dim)
+
 
         
 # Stabilizer state (SB) propagation wrapper classes
@@ -916,6 +952,16 @@ cdef class SBOpRep_Sum(SBOpRep):
         for i in range(nfactors):
             factor_creps[i] = (<SBOpRep?>factor_reps[i]).c_gate
         self.c_gate = new SBOpCRep_Sum(factor_creps, n)
+
+cdef class SBOpRep_Exponentiated(SBOpRep):
+    cdef SBOpRep exponentiated_op
+    cdef INT power
+
+    def __cinit__(self, SBOpRep exponentiated_op_rep, INT power, INT n):
+        self.exponentiated_op = exponentiated_op_rep
+        self.power = power
+        self.c_gate = new SBOpCRep_Exponentiated(exponentiated_op_rep.c_gate, power, n)
+
 
 
 cdef class SBOpRep_Clifford(SBOpRep):
@@ -1249,7 +1295,10 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     rhorep = calc.sos.get_prep(rholabel).torep('prep')
     ereps = [ calc.sos.get_effect(el).torep('effect') for el in elabels]
     operation_lookup = { lbl:i for i,lbl in enumerate(evalTree.opLabels) } # operation labels -> ints for faster lookup
-    operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
+    operations = { i:calc.sos.get_operation(lbl) for lbl,i in operation_lookup.items() } # it should be safe to do this *once*
+    operationreps = { i:op.torep() for i,op in operations.items() }
+    #OLD: operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
+    #print("compute_dpr_cache has %d operations" % len(operation_lookup))
     
     # convert to C-mode:  evaltree, operation_lookup, operationreps
     cdef c_evalTree = convert_evaltree(evalTree, operation_lookup)
@@ -1274,35 +1323,51 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     # final index within dpr_cache
     iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
 
+    #tStart = time.time(); #REMOVE
+    #t_pr = 0; t_reps = 0; t_conv=0; t_copy=0; t_fromvec=0; t_gather=0;   #REMOVE
+    #time_dict = {'expon':0.0, 'composed': 0.0, 'dense':0.0, 'lind': 0.0} #REMOVE
     orig_vec = calc.to_vector().copy()
     for i in range(calc.Np):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
+            # t1 = time.time() # REMOVE
             vec = orig_vec.copy(); vec[i] += eps
+            #t_copy += time.time()-t1; t1 = time.time() # REMOVE
             calc.from_vector(vec)
+            #t_fromvec += time.time()-t1; t1 = time.time() # REMOVE
 
             #rebuild reps (not evaltree or operation_lookup)
             rhorep = calc.sos.get_prep(rholabel).torep('prep')
             ereps = [ calc.sos.get_effect(el).torep('effect') for el in elabels]
-            operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
+            operationreps = { i:op.torep() for i,op in operations.items() } 
+            #REMOVE: note - used torep(time_dict) in profiling, when torep calls could all their timing info
+            #OLD: operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
+            #t_reps += time.time()-t1; t1 = time.time() #REMOVE
             c_rho = convert_rhorep(rhorep)
             c_ereps = convert_ereps(ereps)
             c_gatereps = convert_gatereps(operationreps)
+            #t_conv += time.time()-t1; t1 = time.time() #REMOVE
 
             dm_compute_pr_cache(pCache_delta, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
             dpr_cache[:,:,iFinal] = (pCache_delta - pCache)/eps
+            #t_pr += time.time()-t1 #REMOVE
 
     calc.from_vector(orig_vec)
     free_rhocache(rho_cache)
     
     #Now each processor has filled the relavant parts of dpr_cache,
     # so gather together:
+    #t3 = time.time() #REMOVE
     _mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=2, comm=comm)
+    #t_gather = time.time()-t3 #REMOVE
     
-    # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
+    # DEBUG LINE USED FOR MONITORING N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" % 
-    #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
+    #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), time.time()-tStart)) #DEBUG
+
+    # DEBUG FOR PROFILING THIS FUNCTION
+    #print("dpr_cache tot=%.3fs, reps=%.3fs, conv=%.3fs, pr_cache=%.3fs, copy=%.3fs, fromvec=%.3fs, gather=%.3fs, rep_expon=%.3fs rep_comp=%.3fs rep_dense=%.3fs rep_lind=%.3fs" % (time.time()-tStart, t_reps, t_conv, t_pr, t_copy, t_fromvec, t_gather, time_dict['expon'], time_dict['composed'],time_dict['dense'],time_dict['lind']))
 
     return dpr_cache
 

@@ -91,30 +91,30 @@ class MapEvalTree(EvalTree):
         #DEBUG
         #print("SORTED"); print("\n".join(map(str,sorted_strs)))
 
-
         #PASS1: figure out what's worth keeping in the cache:
-        curCacheSize = 0
-        cacheIndices = [] #indices into circuit_list/self of the strings to cache
-        dummy_self = [None]*self.num_final_strs; cache_hits = {}
-        for k,(iStr,circuit) in enumerate(sorted_strs):
-            L = len(circuit)
-            for i in range(curCacheSize-1,-1,-1): #from curCacheSize-1 -> 0
-                candidate = circuit_list[ cacheIndices[i] ]
-                Lc = len(candidate)
-                if L >= Lc > 0 and circuit[0:Lc] == candidate:
-                    iStart = i
-                    remaining = circuit[Lc:]
-                    if iStr in cache_hits: cache_hits[cacheIndices[i]] += 1  #tally cache hit
-                    else: cache_hits[cacheIndices[i]] = 1  #TODO: use default dict?
-                    break
-            else: #no break => no prefix
-                iStart = None
-                remaining = circuit[:]
-
-            cacheIndices.append(iStr)
-            iCache = curCacheSize
-            curCacheSize += 1; assert(len(cacheIndices) == curCacheSize)
-            dummy_self[iStr] = (iStart, remaining, iCache)
+        if maxCacheSize is None or maxCacheSize > 0:
+            curCacheSize = 0
+            cacheIndices = [] #indices into circuit_list/self of the strings to cache
+            dummy_self = [None]*self.num_final_strs; cache_hits = {}
+            for k,(iStr,circuit) in enumerate(sorted_strs):
+                L = len(circuit)
+                for i in range(curCacheSize-1,-1,-1): #from curCacheSize-1 -> 0
+                    candidate = circuit_list[ cacheIndices[i] ]
+                    Lc = len(candidate)
+                    if L >= Lc > 0 and circuit[0:Lc] == candidate:
+                        iStart = i
+                        remaining = circuit[Lc:]
+                        if iStr in cache_hits: cache_hits[cacheIndices[i]] += 1  #tally cache hit
+                        else: cache_hits[cacheIndices[i]] = 1  #TODO: use default dict?
+                        break
+                else: #no break => no prefix
+                    iStart = None
+                    remaining = circuit[:]
+    
+                cacheIndices.append(iStr)
+                iCache = curCacheSize
+                curCacheSize += 1; assert(len(cacheIndices) == curCacheSize)
+                dummy_self[iStr] = (iStart, remaining, iCache)
             
         #PASS #2: for real this time: construct tree but only cache items w/hits
         curCacheSize = 0
@@ -423,6 +423,14 @@ class MapEvalTree(EvalTree):
         printer.log("EvalTree.split done initial prep in %.0fs" %
                     (_time.time()-tm)); tm = _time.time()
 
+        def nocache_create_equal_size_subtrees():
+            """ A shortcut for special case when there is no cache so each
+                circuit can be evaluated independently """
+            N = len(self)
+            subTrees = [ set(range(i,N,numSubTrees)) for i in range(numSubTrees) ]
+            totalCost = N
+            return subTrees, totalCost
+
         def create_subtrees(maxCost, maxCostRate=0, costMetric="size"):
             """ 
             Find a set of subtrees by iterating through the tree
@@ -498,8 +506,14 @@ class MapEvalTree(EvalTree):
         ##################################################################
         # Part I: find a list of where the current tree should be broken #
         ##################################################################
-                        
-        if numSubTrees is not None:
+
+        if numSubTrees is not None and self.cache_size() == 0:
+            #print("Split: EQUAL SUBTREES!") #REMOVE
+            subTreeSetList, totalCost = nocache_create_equal_size_subtrees()
+            #printer.log("EvalTree.split PT1 %.1fs" %
+            #            (_time.time()-tm)); tm = _time.time()  #REMOVE
+
+        elif numSubTrees is not None:
 
             #OLD METHOD: optimize max-cost to get the right number of trees
             # (but this can yield trees with unequal lengths or cache sizes,
@@ -556,7 +570,6 @@ class MapEvalTree(EvalTree):
                         
                 iteration += 1
                 assert(iteration < 100), "Unsuccessful splitting for 100 iterations!"
-                        
 
         else: # maxSubTreeSize is not None
             subTreeSetList, totalCost = create_subtrees(
@@ -602,6 +615,7 @@ class MapEvalTree(EvalTree):
             parentTree : EvalTree
                 The parent tree itself.
             """
+            #t0 = _time.time() #REMOVE
             subTree = MapEvalTree()
             subTree.myFinalToParentFinalMap = sliceIntoParentsFinalArray
             subTree.num_final_strs = numFinal
@@ -630,32 +644,52 @@ class MapEvalTree(EvalTree):
                 assert(subTree[ik] is None)
                 subTree[ik] = (iStart,remainder,iCache)
 
+            #t1 = _time.time()  #REMOVE
             subTree.cachesize = curCacheSize
             subTree.parentIndexMap = parentIndices #parent index of each subtree index
             subTree.simplified_circuit_spamTuples = [ self.simplified_circuit_spamTuples[k]
                                                        for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
             #subTree._compute_finalStringToEls() #depends on simplified_circuit_spamTuples
             
+            #t2 = _time.time() #REMOVE
             final_el_startstops = []; i=0
             for spamTuples in parentTree.simplified_circuit_spamTuples:
                 final_el_startstops.append( (i,i+len(spamTuples)) )
                 i += len(spamTuples)
-            subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
-                [ _np.arange(*final_el_startstops[k])
-                  for k in _slct.indices(subTree.myFinalToParentFinalMap) ] )
-            #Note: myFinalToParentFinalMap maps only between *final* elements
-            #   (which are what is held in simplified_circuit_spamTuples)
+            #t3 = _time.time() #REMOVE
+            if len(_slct.indices(subTree.myFinalToParentFinalMap)) > 0:
+                subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
+                    [ _np.arange(*final_el_startstops[k])
+                      for k in _slct.indices(subTree.myFinalToParentFinalMap) ] )
+                #Note: myFinalToParentFinalMap maps only between *final* elements
+                #   (which are what is held in simplified_circuit_spamTuples)
+            else: # no final elements (a "dummy" tree, useful just to keep extra procs busy)
+                subTree.myFinalElsToParentFinalElsMap = _np.arange(0,0) # empty array
             
+            #t4 = _time.time() #REMOVE
             subTree.num_final_els = sum([len(v) for v in subTree.simplified_circuit_spamTuples])
+            #t5 = _time.time() #REMOVE
             subTree.recompute_spamtuple_indices(bLocal=False)
+            #t6 = _time.time() #REMOVE
 
             subTree.trim_nonfinal_els()
+            #t7 = _time.time() #REMOVE
             subTree.opLabels = self._get_opLabels( subTree.generate_circuit_list(permute=False) )
+            #t8 = _time.time() #REMOVE
+            #print("DB: create_subtree timing: t1=%.3fs, t2=%.3fs, t3=%.3fs, t4=%.3fs, t5=%.3fs, t6=%.3fs, t7=%.3fs, t8=%.3fs"
+            #      % (t1-t0,t2-t1,t3-t2,t4-t3,t5-t4,t6-t5,t7-t6,t8-t7))
 
             return subTree
     
+        #printer.log("EvalTree.split PT2 %.1fs" %
+        #            (_time.time()-tm)); tm = _time.time()  #REMOVE
+
         updated_elIndices = self._finish_split(elIndicesDict, subTreeSetList,
-                                               permute_parent_element, create_subtree)
+                                               permute_parent_element, create_subtree,
+                                               all_final = bool(self.cache_size() == 0))
+        #printer.log("EvalTree.split PT3 %.1fs" %
+        #            (_time.time()-tm)); tm = _time.time() #REMOVE
+
         printer.log("EvalTree.split done second pass in %.0fs" %
                     (_time.time()-tm)); tm = _time.time()
         return updated_elIndices

@@ -1771,7 +1771,18 @@ class DataSet(object):
         else:
             f = fileOrFilename
 
-        state_dict = _pickle.load(f)
+        try:
+            state_dict = _pickle.load(f)
+        except AttributeError:
+            # HACK TO ALLOW UUIDs saved on python3.7 work with earlier python versions that don't have uuid.SafeUUID
+            # HACK - maybe move this to leagacyio to deal with Python 3 versions < 3.7 not having SafeUUID?
+            class dummy_SafeUUID(object): 
+                def __new__(self,*args):  
+                    return _uuid.UUID.__new__(uuid.UUID,*args)
+            _sys.modules['uuid'].SafeUUID = dummy_SafeUUID
+            state_dict = _pickle.load(f)
+            del _sys.modules['uuid'].SafeUUID
+            
 
         if "gsIndexKeys" in state_dict:
             _warnings.warn("Loading a deprecated-format DataSet.  Please re-save asap.")
@@ -1838,3 +1849,35 @@ class DataSet(object):
             self.cnt_cache = None
 
         if bOpen: f.close()
+
+    def rename_outcome_labels(self, old_to_new_dict):
+        """
+        Replaces existing output labels with new ones as per `old_to_new_dict`.
+
+        Parameters
+        ----------
+        old_to_new_dict : dict
+            A mapping from old/existing outcome labels to new ones.  Strings
+            in keys or values are automatically converted to 1-tuples.  Missing
+            outcome labels are left unaltered.
+
+        Returns
+        -------
+        None
+        """
+        mapdict = {}
+        for old,new in old_to_new_dict.items():
+            if _compat.isstr(old): old = (old,)
+            if _compat.isstr(new): new = (new,)
+            mapdict[old] = new
+            
+        new_olIndex = _OrderedDict()
+        for ol,i in self.olIndex.items():
+            if ol in mapdict:
+                new_olIndex[mapdict[ol]] = i
+            else:
+                new_olIndex[ol] = i
+
+        #Note: rebuild reverse-dict self.ol:
+        self.olIndex = new_olIndex
+        self.ol = _OrderedDict( [(i,ol) for (ol,i) in self.olIndex.items()] )

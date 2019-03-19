@@ -15,29 +15,30 @@ class GateTestCase(BaseTestCase):
     def setUp(self):
         super(GateTestCase, self).setUp()
 
-    def test_lpg_deriv(self):
-        mdl_target_lp = pc.build_explicit_model(
-            [('Q0',)],['Gi','Gx'], [ "D(Q0)","X(pi/2,Q0)" ],
-            basis="pp", parameterization="linear" )
-
-    
-        mdl_target_lp2 = pc.build_explicit_model(
-            [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'], 
-            [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
-            basis="pp", parameterization="linearTP" )
-
-        mdl_target_lp2.preps['rho0'] = pygsti.objects.TPSPAMVec(mdl_target_lp2.preps['rho0'])
-        #because there's no easy way to specify this TP parameterization...
-        # (above is leftover from a longer feature test)
-        
-        check = pygsti.objects.operation.check_deriv_wrt_params
-        testDeriv = check(mdl_target_lp.operations['Gi'])
-        testDeriv = check(mdl_target_lp.operations['Gx'])
-        testDeriv = check(mdl_target_lp2.operations['Gix'])
-        testDeriv = check(mdl_target_lp2.operations['Giy'])
-        testDeriv = check(mdl_target_lp2.operations['Gxi'])
-        testDeriv = check(mdl_target_lp2.operations['Gyi'])
-        testDeriv = check(mdl_target_lp2.operations['Gcnot'])
+    #REMOVED linear parameterization
+    #def test_lpg_deriv(self):
+    #    mdl_target_lp = pc.build_explicit_model(
+    #        [('Q0',)],['Gi','Gx'], [ "I(Q0)","X(pi/2,Q0)" ],
+    #        basis="pp", parameterization="linear" ) # 'I' was 'D' but we've remoed this
+    #
+    #
+    #    mdl_target_lp2 = pc.build_explicit_model(
+    #        [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'], 
+    #        [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
+    #        basis="pp", parameterization="linearTP" )
+    #
+    #    mdl_target_lp2.preps['rho0'] = pygsti.objects.TPSPAMVec(mdl_target_lp2.preps['rho0'])
+    #    #because there's no easy way to specify this TP parameterization...
+    #    # (above is leftover from a longer feature test)
+    #    
+    #    check = pygsti.objects.operation.check_deriv_wrt_params
+    #    testDeriv = check(mdl_target_lp.operations['Gi'])
+    #    testDeriv = check(mdl_target_lp.operations['Gx'])
+    #    testDeriv = check(mdl_target_lp2.operations['Gix'])
+    #    testDeriv = check(mdl_target_lp2.operations['Giy'])
+    #    testDeriv = check(mdl_target_lp2.operations['Gxi'])
+    #    testDeriv = check(mdl_target_lp2.operations['Gyi'])
+    #    testDeriv = check(mdl_target_lp2.operations['Gcnot'])
 
     def test_gate_base(self):
         #check that everything is not implemented
@@ -149,7 +150,7 @@ class GateTestCase(BaseTestCase):
             ham_basis="pp", nonham_basis="pp", param_mode="cptp",
             nonham_mode="diagonal", truncate=True, mxBasis="pp") )
 
-        ppBasis = pygsti.obj.Basis("pp",2)
+        ppBasis = pygsti.obj.Basis.cast("pp",4)
         gates_to_test.append( pygsti.objects.LindbladDenseOp.from_operation_matrix(
             mx,unitaryPostfactor=mx,
             ham_basis=ppBasis, nonham_basis=ppBasis, param_mode="unconstrained",
@@ -228,7 +229,10 @@ class GateTestCase(BaseTestCase):
             self.assertAlmostEqual( gate.frobeniusdist2(gate), 0.0 )
             self.assertAlmostEqual( gate.frobeniusdist(gate), 0.0 )
             self.assertAlmostEqual( gate.jtracedist(gate), 0.0 )
-            self.assertAlmostEqual( gate.diamonddist(gate), 0.0 )
+            try:
+                self.assertAlmostEqual( gate.diamonddist(gate), 0.0 )
+            except ImportError,AttributeError:
+                pass # CVXPY not installed
 
             nP = gate.num_params()
             op2 = gate.copy()
@@ -283,7 +287,7 @@ class GateTestCase(BaseTestCase):
 
             with self.assertRaises(ValueError):
                 gate.set_value( np.random.random((4,2)) )
-            with self.assertRaises(ValueError):
+            with self.assertRaises((ValueError,AssertionError)):
                 gate.set_value( np.identity(5,'d') )
 
 
@@ -319,7 +323,7 @@ class GateTestCase(BaseTestCase):
             ham_basis="pp", nonham_basis="pp", param_mode="cptp",
             nonham_mode="all", truncate=True, mxBasis="pp") )
 
-        ppBasis = pygsti.obj.Basis("pp",2)
+        ppBasis = pygsti.obj.Basis.cast("pp",4)
         gates_to_test.append( pygsti.objects.LindbladOp.from_operation_matrix(
             densemx,unitaryPostfactor=None,
             ham_basis=ppBasis, nonham_basis=ppBasis, param_mode="unconstrained",
@@ -346,7 +350,7 @@ class GateTestCase(BaseTestCase):
         gates_to_test.append( dummyGS.operations['Gembed'] )
 
         dummyGS2 = pygsti.objects.ExplicitOpModel([('Q0',),('Q1',)]) # b/c will have different dim from dummyGS
-        ppBasis2x2 = pygsti.obj.Basis("pp",(2,2))
+        ppBasis2x2 = pygsti.obj.Basis.cast("pp",(4,4))
         embedGate2 = pygsti.objects.EmbeddedOp( [('Q0',),('Q1',)], ['Q0'], testGate) # 2 blocks
         dummyGS2.operations['Gembed2'] = embedGate2 # so to/from vector work in tests below
         gates_to_test.append( dummyGS2.operations['Gembed2'] )
@@ -428,7 +432,7 @@ class GateTestCase(BaseTestCase):
                             [0,0,0,1],
                             [0,0,-1,0]],'d')
 
-        basis = pygsti.obj.Basis("pp",2)
+        basis = pygsti.obj.Basis.cast("pp",4)
         lndgate = pygsti.objects.LindbladDenseOp.from_operation_matrix(
             densemx,unitaryPostfactor=densemx,
             ham_basis=basis, nonham_basis=basis, param_mode="cptp",

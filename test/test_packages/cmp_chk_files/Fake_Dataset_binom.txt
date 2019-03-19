@@ -40,5 +40,5 @@ Gy(Gy)^3Gy  402  598
 Gy(Gy)^3GxGx  505  495
 GxGx(Gy)^3  580  420
 GxGx(Gy)^3Gx  486  514
-GxGx(Gy)^3Gy  488  512
+GxGx(Gy)^3Gy  512  488
 GxGx(Gy)^3GxGx  444  556
