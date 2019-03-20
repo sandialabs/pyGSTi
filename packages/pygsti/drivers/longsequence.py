@@ -20,6 +20,7 @@ from .. import construction as _construction
 from .. import objects as _objs
 from .. import io as _io
 from .. import tools as _tools
+from ..objects import wildcardbudget as _wild
 from ..tools import compattools as _compat
 from ..baseobjs import DummyProfiler as _DummyProfiler
 
@@ -1361,7 +1362,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
             pc = 0.95 #hardcoded confidence level for now -- make into advanced option w/default
 
             for scale_typ in onBadFit:
-                gsWeights = {}
+                gsWeights = {}; wildcardBudget = None
                 if scale_typ in ("robust","Robust"):
                     # Robust scaling V1: drastically scale down weights of especially bad sequences
                     threshold = _np.ceil(_chi2.ppf(1 - pc/nboxes, dof_per_box))
@@ -1436,14 +1437,19 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                     twoDeltaLogL = sum(twoDeltaLogL_terms)
                     #print("DB2: ",twoDeltaLogL,twoDeltaLogL_threshold, sum(_np.clip(twoDeltaLogL_terms-redbox_threshold,0,None)))
                     
+                    budget = _wild.PrimitiveOpsWildcardBudget(mdl.get_primitive_op_labels())
+                    
                     if twoDeltaLogL <= twoDeltaLogL_threshold and sum(_np.clip(twoDeltaLogL_terms-redbox_threshold,0,None)) < 1e-6:
                         print("No need to add budget!")
                         Wvec = _np.zeros(nPrimOps)
                     else:
                         mdl.bulk_fill_probs(probs, evTree, advancedOptions.get('probClipInterval',(-1e6,1e6)), False, comm)
                         orig_probs = probs.copy()
+
+                        pci = advancedOptions.get('probClipInterval',(-1e6,1e6))
                         min_p = advancedOptions.get('minProbClip',1e-4)
                         a = advancedOptions.get('radius',1e-4)
+
                         minusCntVecMx = -1.0 * cntVecMx
                         freqs = cntVecMx / totalCntVec
                         freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
@@ -1451,31 +1457,27 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                         # freqTerm = cntVecMx * _np.log(freqs_nozeros) # non-poisson pitcure
                         freqTerm[ cntVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
 
-                        #print("DB2: ",min_p,a)
-
-                        def _compute_circuit_wildcard_budget(c, Wvec):
-                            budget = 0
-                            for layer in c:
-                                for component in layer.components:
-                                    budget += abs(Wvec[primOpLookup[component]])
-                            return budget
-    
-                        def _two_delta_logl_terms():
-                            pos_probs = _np.where(probs < min_p, min_p, probs)
-                            S = minusCntVecMx / min_p + totalCntVec
-                            S2 = -0.5 * minusCntVecMx / (min_p**2)
-                            v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec*pos_probs # dims K x M (K = nSpamLabels, M = nCircuits)
-                            v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
-                            v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-                            v = _np.where( minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
-                                    #special handling for f == 0 terms using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
-                            #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
-                            assert(v.ndim == 1)#v.shape = [KM] #reshape ensuring no copy is needed
-                            return 2*v #Note: no test for whether probs is in [0,1] so no guarantee that
+                        #print("DB2: ",min_p,a)    
+                        #def _two_delta_logl_terms():
+                        #    pos_probs = _np.where(probs < min_p, min_p, probs)
+                        #    S = minusCntVecMx / min_p + totalCntVec
+                        #    S2 = -0.5 * minusCntVecMx / (min_p**2)
+                        #    v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec*pos_probs # dims K x M (K = nSpamLabels, M = nCircuits)
+                        #    v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+                        #    v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
+                        #    v = _np.where( minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
+                        #            #special handling for f == 0 terms using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+                        #    #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
+                        #    assert(v.ndim == 1)#v.shape = [KM] #reshape ensuring no copy is needed
+                        #    return 2*v #Note: no test for whether probs is in [0,1] so no guarantee that
                         
                         def _wildcard_objective_firstTerms(Wv):
-                            _alg.core.update_probs_with_wildcard_budget(orig_probs, probs, freqs, circuitsToUse, lookup, Wv, _compute_circuit_wildcard_budget)
-                            twoDLogL_terms = _two_delta_logl_terms()
+                            # _alg.core.update_probs_with_wildcard_budget(orig_probs, probs, freqs, circuitsToUse, lookup, Wv, _compute_circuit_wildcard_budget)
+                            #twoDLogL_terms = _two_delta_logl_terms()
+                            budget.from_vector(Wv)
+                            twoDLogL_terms = _tools.two_delta_logl_terms(mdl, ds, circuitsToUse, min_p, pci, a,
+                                                                         poissonPicture=True, evaltree_cache=evaltree_cache,
+                                                                         wildcard=budget)
                             twoDLogL = sum(twoDLogL_terms)
                             return max(0,twoDLogL - twoDeltaLogL_threshold) + sum(_np.clip(twoDLogL_terms-redbox_threshold,0,None))
                 
@@ -1483,7 +1485,8 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                             return _wildcard_objective_firstTerms(Wv) + eta*_np.linalg.norm(Wv,ord=1)
                 
                         
-                        Wvec = _np.array([0.01]*nPrimOps) + 0.001 *_np.arange(nPrimOps) # 2nd term to slightly offset initial values
+                        #Wvec = _np.array([0.01]*nPrimOps) + 0.001 *_np.arange(nPrimOps) # 2nd term to slightly offset initial values
+                        Wvec = budget.to_vector()
                         nIters = 0; eta_lower_bound = eta_upper_bound = None
                         while nIters < 100:
                             soln = _spo.minimize(_wildcard_objective,Wvec,method='L-BFGS-B',callback=None, tol=1e-6)
@@ -1510,9 +1513,11 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                                 break
                             nIters += 1
                 
-                    print("Wildcard budget found for Wvec = ",Wvec)
-                    
-                    gsWeights = Wvec # store in slot for weights for now... (HACK)
+                    #print("Wildcard budget found for Wvec = ",Wvec)
+                    budget.from_vector(Wvec)
+                    print("Wildcard budget = ",budget)
+                    wildcardBudget = budget
+                    gsWeights = None
                     reopt = False
 
                 elif scale_typ == "do nothing":
@@ -1525,6 +1530,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
 
                 scale_params = parameters.copy()
                 scale_params['weights'] = gsWeights
+                scale_params['unmodeled_error'] = wildcardBudget
 
                 if reopt and (opt_args is not None):
                     #convert weights dict to an array for do_XXX methods below

@@ -106,7 +106,7 @@ TOL = 1e-20
 def logl_terms(model, dataset, circuit_list=None,
                minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
                poissonPicture=True, check=False, opLabelAliases=None,
-               evaltree_cache=None, comm=None, smartc=None):
+               evaltree_cache=None, comm=None, smartc=None, wildcard=None):
     """
     The vector of log-likelihood contributions for each operation sequence, 
     aggregated over outcomes.
@@ -184,6 +184,9 @@ def logl_terms(model, dataset, circuit_list=None,
     #freqTerm[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
 
     smart(model.bulk_fill_probs, probs, evalTree, probClipInterval, check, comm, _filledarrays=(0,))
+    if wildcard:
+        probs_in = probs.copy()
+        wildcard.update_probs(probs_in, probs, countVecMx / totalCntVec, circuit_list, lookup)
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
     if poissonPicture:
@@ -224,7 +227,7 @@ def logl_terms(model, dataset, circuit_list=None,
 def logl(model, dataset, circuit_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
          poissonPicture=True, check=False, opLabelAliases=None,
-         evaltree_cache=None, comm=None, smartc=None):
+         evaltree_cache=None, comm=None, smartc=None, wildcard=None):
     """
     The log-likelihood function.
 
@@ -288,6 +291,7 @@ def logl(model, dataset, circuit_list=None,
         A cache object to cache & use previously cached values inside this
         function.
 
+    wildcard : TODO: docstring
 
     Returns
     -------
@@ -297,7 +301,7 @@ def logl(model, dataset, circuit_list=None,
     v = logl_terms(model, dataset, circuit_list,
                    minProbClip, probClipInterval, radius,
                    poissonPicture, check, opLabelAliases,
-                   evaltree_cache, comm, smartc)
+                   evaltree_cache, comm, smartc, wildcard)
     return _np.sum(v) # sum over *all* dimensions
 
 
@@ -1109,7 +1113,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
                    minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
                    poissonPicture=True, check=False, opLabelAliases=None,
                    evaltree_cache=None, comm=None, dof_calc_method=None,
-                   smartc=None):
+                   smartc=None, wildcard=None):
     """
     Twice the difference between the maximum and actual log-likelihood, 
     optionally along with Nsigma (# std deviations from mean) and p-value
@@ -1189,6 +1193,8 @@ def two_delta_logl(model, dataset, circuit_list=None,
         A cache object to cache & use previously cached values inside this
         function.
 
+    wildcard : TODO: docstring
+
 
     Returns
     -------
@@ -1203,7 +1209,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
                        logl(model, dataset, circuit_list,
                             minProbClip, probClipInterval, radius,
                             poissonPicture, check, opLabelAliases,
-                            evaltree_cache, comm, smartc))
+                            evaltree_cache, comm, smartc, wildcard))
 
     if dof_calc_method is None: return twoDeltaLogL
     elif dof_calc_method == "all": mdl_dof = model.num_params()
@@ -1225,7 +1231,82 @@ def two_delta_logl(model, dataset, circuit_list=None,
     Nsigma = (twoDeltaLogL-k)/_np.sqrt(2*k)
     pvalue = 1.0 - _stats.chi2.cdf(twoDeltaLogL,k)
     return twoDeltaLogL, Nsigma, pvalue
-    
+
+
+
+
+
+def two_delta_logl_terms(model, dataset, circuit_list=None,
+                         minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
+                         poissonPicture=True, check=False, opLabelAliases=None,
+                         evaltree_cache=None, comm=None, dof_calc_method=None,
+                         smartc=None, wildcard=None):
+    """
+    TODO: docstring - similar to two_delta_logl params - may need to add 'wildcard'
+
+    Returns
+    -------
+    twoDeltaLogL_terms : numpy.ndarray
+    Nsigma, pvalue : numpy.ndarray
+        Only returned when `dof_calc_method` is not None.
+    """
+    twoDeltaLogL_terms =  2*(logl_max_terms(model, dataset, circuit_list, poissonPicture,
+                                            opLabelAliases, evaltree_cache, smartc) - 
+                             logl_terms(model, dataset, circuit_list,
+                                        minProbClip, probClipInterval, radius,
+                                        poissonPicture, check, opLabelAliases,
+                                        evaltree_cache, comm, smartc, wildcard))
+
+
+    if dof_calc_method is None: return twoDeltaLogL_terms
+    elif dof_calc_method == "all": mdl_dof = model.num_params()
+    elif dof_calc_method == "nongauge": mdl_dof = model.num_nongauge_params()
+    else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
+
+    if circuit_list is not None:
+        if opLabelAliases is not None:
+            ds_strs = _tools.find_replace_tuple_list(
+                circuit_list, opLabelAliases)
+        else:
+            ds_strs = circuit_list
+    else: ds_strs = None
+
+    Ns = dataset.get_degrees_of_freedom(ds_strs)
+    k = max(Ns - mdl_dof, 1)
+    k = int(_np.ceil(k / (1.0*len(circuit_list)))) # HACK - just take a single average #dof per circuit to use as chi_k distribution!
+
+    Nsigma = (twoDeltaLogL_terms-k)/_np.sqrt(2*k)
+    pvalue = _np.array([1.0 - _stats.chi2.cdf(x,k) for x in twoDeltaLogL_terms],'d')
+    return twoDeltaLogL, Nsigma, pvalue
+
+
+
+
+
+#                        min_p = advancedOptions.get('minProbClip',1e-4)
+#                        a = advancedOptions.get('radius',1e-4)
+#                        minusCntVecMx = -1.0 * cntVecMx
+#                        freqs = cntVecMx / totalCntVec
+#                        freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
+#                        freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 ) # poisson picture
+#                        # freqTerm = cntVecMx * _np.log(freqs_nozeros) # non-poisson pitcure
+#                        freqTerm[ cntVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
+#
+#def two_delta_logl_terms():
+#    #HERE
+#                            pos_probs = _np.where(probs < min_p, min_p, probs)
+#                            S = minusCntVecMx / min_p + totalCntVec
+#                            S2 = -0.5 * minusCntVecMx / (min_p**2)
+#                            v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec*pos_probs # dims K x M (K = nSpamLabels, M = nCircuits)
+#                            v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
+#                            v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
+#                            v = _np.where( minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
+#                                    #special handling for f == 0 terms using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
+#                            #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
+#                            assert(v.ndim == 1)#v.shape = [KM] #reshape ensuring no copy is needed
+#                            return 2*v #Note: no test for whether probs is in [0,1] so no guarantee that
+
+                        
 
 def forbidden_prob(model, dataset):
     """
