@@ -1778,7 +1778,7 @@ class DataSet(object):
             # HACK - maybe move this to leagacyio to deal with Python 3 versions < 3.7 not having SafeUUID?
             class dummy_SafeUUID(object): 
                 def __new__(self,*args):  
-                    return _uuid.UUID.__new__(uuid.UUID,*args)
+                    return _uuid.UUID.__new__(_uuid.UUID,*args)
             _sys.modules['uuid'].SafeUUID = dummy_SafeUUID
             state_dict = _pickle.load(f)
             del _sys.modules['uuid'].SafeUUID
