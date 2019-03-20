@@ -1430,7 +1430,8 @@ class ColorBoxPlot(WorkspacePlot):
                  sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
                  directGSTmodels=None, dscomparator=None, driftresults=None,
-                 submatrices=None, typ="boxes", scale=1.0, comm=None):
+                 submatrices=None, typ="boxes", scale=1.0, comm=None,
+                 wildcard=None):
         """
         Create a plot displaying the value of per-circuit quantities.
 
@@ -1518,19 +1519,21 @@ class ColorBoxPlot(WorkspacePlot):
         comm : mpi4py.MPI.Comm, optional
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
+
+        wildcard : TODO: docstring
         """
         # separate in rendering/saving: save_to=None, ticSize=20, scale=1.0 (?)
         super(ColorBoxPlot,self).__init__(ws, self._create, plottype, gss, dataset, model,
                                           prec, sumUp, boxLabels, hoverInfo,
                                           invert, linlg_pcntle, minProbClipForWeighting,
                                           directGSTmodels, dscomparator, driftresults, 
-                                          submatrices, typ, scale, comm)
+                                          submatrices, typ, scale, comm, wildcard)
 
     def _create(self, plottypes, gss, dataset, model,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
                 directGSTmodels, dscomparator, driftresults, submatrices,
-                typ, scale, comm):
+                typ, scale, comm, wildcard):
 
         probs_precomp_dict = None
         fig = None
@@ -1563,7 +1566,8 @@ class ColorBoxPlot(WorkspacePlot):
         if any([ (t in plottypes) for t in plottypes_that_need_precomp]): #bulk-compute probabilities for performance
             probs_precomp_dict = self._ccompute( _ph._computeProbabilities,
                                                  gss, model, dataset,
-                                                 comm=comm, smartc=self.ws.smartCache)
+                                                 comm=comm, smartc=self.ws.smartCache,
+                                                 wildcard=wildcard)
 
         for ptyp in plottypes:
             if ptyp == "chi2":
@@ -2492,7 +2496,7 @@ class FitComparisonBarPlot(WorkspacePlot):
     """ Bar plot showing the overall (aggregate) goodness of fit
         (along one dimension)"""
     def __init__(self, ws, Xs, gssByX, modelByX, datasetByX,
-                 objective="logl", Xlabel='L', NpByX=None, scale=1.0, comm=None):
+                 objective="logl", Xlabel='L', NpByX=None, scale=1.0, comm=None, wildcard=None):
         """
         Creates a bar plot showing the overall (aggregate) goodness of fit
         for one or more model estimates to corresponding data sets.
@@ -2531,13 +2535,16 @@ class FitComparisonBarPlot(WorkspacePlot):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
+        wildcard : TODO: docstring
+
         """
         super(FitComparisonBarPlot,self).__init__(ws, self._create,
                                                   Xs, gssByX, modelByX, datasetByX,
-                                                  objective, Xlabel, NpByX, scale, comm)
+                                                  objective, Xlabel, NpByX, scale,
+                                                  comm, wildcard)
         
     def _create(self, Xs, gssByX, modelByX, datasetByX, objective, Xlabel,
-                NpByX, scale, comm):
+                NpByX, scale, comm, wildcard):
 
         xs = list(range(len(Xs)))
         xtics = []; ys = []; colors = []; texts=[]
@@ -2561,7 +2568,8 @@ class FitComparisonBarPlot(WorkspacePlot):
             else:
                 Nsig, rating, _,_,_,_ = self._ccompute( _ph.ratedNsigma, dataset, mdl,
                                                         gss, objective, Np, returnAll=True,
-                                                        comm=comm, smartc=self.ws.smartCache)
+                                                        comm=comm, smartc=self.ws.smartCache,
+                                                        wildcard=wildcard)
                   #Note: don't really need returnAll=True, but helps w/caching b/c other fns use it.
                 
             if   rating==5: color="darkgreen"
@@ -2637,7 +2645,8 @@ class FitComparisonBoxPlot(WorkspacePlot):
     """ Box plot showing the overall (aggregate) goodness of fit
         (along 2 dimensions)"""
     def __init__(self, ws, Xs, Ys, gssByYthenX, modelByYthenX, datasetByYthenX,
-                 objective="logl", Xlabel=None, Ylabel=None, scale=1.0, comm=None):
+                 objective="logl", Xlabel=None, Ylabel=None, scale=1.0, comm=None,
+                 wildcard=None):
         """
         Creates a box plot showing the overall (aggregate) goodness of fit
         for one or more model estimates to their respective  data sets.
@@ -2672,13 +2681,15 @@ class FitComparisonBoxPlot(WorkspacePlot):
         comm : mpi4py.MPI.Comm, optional
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
+
+        wildcard : TODO: docstring
         """
         super(FitComparisonBoxPlot,self).__init__(
             ws, self._create, Xs, Ys, gssByYthenX, modelByYthenX,
-            datasetByYthenX, objective, Xlabel, Ylabel, scale, comm)
+            datasetByYthenX, objective, Xlabel, Ylabel, scale, comm, wildcard)
         
     def _create(self, Xs, Ys, gssByYX, modelByYX, datasetByYX, objective,
-                    Xlabel, Ylabel, scale, comm):
+                    Xlabel, Ylabel, scale, comm, wildcard):
 
         xs = list(range(len(Xs)))
         ys = list(range(len(Ys)))
@@ -2705,7 +2716,8 @@ class FitComparisonBoxPlot(WorkspacePlot):
 
                 Nsig, rating, _,_,_,_ = self._ccompute(
                     _ph.ratedNsigma, dataset, mdl, gss, objective,
-                    returnAll=True, comm=comm, smartc=self.ws.smartCache)
+                    returnAll=True, comm=comm, smartc=self.ws.smartCache,
+                    wildcard=wildcard)
                 NsigMx[iY][iX] = Nsig
 
         return matrix_color_boxplot(

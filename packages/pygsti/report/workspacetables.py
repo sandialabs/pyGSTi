@@ -582,7 +582,7 @@ class GatesVsTargetTable(WorkspaceTable):
     """ Table comparing a Model's gates to those of a target model """
     def __init__(self, ws, model, targetModel, confidenceRegionInfo=None,
                  display=('inf','agi','trace','diamond','nuinf','nuagi'),
-                 virtual_ops=None):
+                 virtual_ops=None, wildcard=None):
         """
         Create a table comparing a model's gates to a target model using
         metrics such as the  infidelity, diamond-norm distance, and trace distance.
@@ -613,11 +613,14 @@ class GatesVsTargetTable(WorkspaceTable):
             - "evdiamond" : eigenvalue 1/2 diamond norm distance
             - "evnudiamond" : eigenvalue non-unitary 1/2 diamond norm distance
             - "frob" :    frobenius distance
+            - "unmodeled" : unmodeled "wildcard" budget
 
         virtual_ops : list, optional
             If not None, a list of `Circuit` objects specifying additional "gates"
             (i.e. processes) to compute eigenvalues of.  Length-1 operation sequences are
             automatically discarded so they are not displayed twice.
+
+        wildcard: TODO: docstring
 
         Returns
         -------
@@ -625,10 +628,10 @@ class GatesVsTargetTable(WorkspaceTable):
         """
         super(GatesVsTargetTable,self).__init__(ws, self._create, model,
                                                 targetModel, confidenceRegionInfo,
-                                                display, virtual_ops)
+                                                display, virtual_ops, wildcard)
 
     def _create(self, model, targetModel, confidenceRegionInfo,
-                display, virtual_ops):
+                display, virtual_ops, wildcard):
 
         opLabels  = model.get_primitive_op_labels() # operation labels
         assert(isinstance(model,_objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
@@ -660,6 +663,11 @@ class GatesVsTargetTable(WorkspaceTable):
             row_data = [ str(gl) ]
 
             for disp in display:
+                if disp == "unmodeled": # a special case for now
+                    row_data.append( _objs.reportableqty.ReportableQty(
+                        wildcard.get_op_budget(gl) ) )
+                    continue
+                
                 #import time as _time #DEBUG
                 #tStart = _time.time() #DEBUG
                 qty = _reportables.evaluate_opfn_by_name(
@@ -1817,7 +1825,7 @@ class DataSetOverviewTable(WorkspaceTable):
 class FitComparisonTable(WorkspaceTable):
     """ Table showing how the goodness-of-fit evolved over GST iterations """
     def __init__(self, ws, Xs, gssByX, modelByX, dataset, objective="logl",
-                 Xlabel='L', NpByX=None, comm=None):
+                 Xlabel='L', NpByX=None, comm=None, wildcard=None):
         """
         Create a table showing how the chi^2 or log-likelihood changed with
         successive GST iterations.
@@ -1852,15 +1860,17 @@ class FitComparisonTable(WorkspaceTable):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
+        wildcard : TODO: docstring
+
 
         Returns
         -------
         ReportTable
         """
         super(FitComparisonTable,self).__init__(ws, self._create, Xs, gssByX, modelByX,
-                                                dataset, objective, Xlabel, NpByX, comm)
+                                                dataset, objective, Xlabel, NpByX, comm, wildcard)
 
-    def _create(self, Xs, gssByX, modelByX, dataset, objective, Xlabel, NpByX, comm):
+    def _create(self, Xs, gssByX, modelByX, dataset, objective, Xlabel, NpByX, comm, wildcard):
 
         if objective == "chi2":
             colHeadings = {
@@ -1908,7 +1918,7 @@ class FitComparisonTable(WorkspaceTable):
         for X,mdl,gss,Np in zip(Xs,modelByX,gssByX,NpByX):
             Nsig, rating, fitQty, k, Ns, Np = self._ccompute( 
                 _ph.ratedNsigma, dataset, mdl, gss,
-                objective, Np, returnAll=True,
+                objective, Np, wildcard, returnAll=True,
                 comm=comm, smartc=self.ws.smartCache)
             table.addrow((str(X),fitQty,k,fitQty-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
                          (None,'Normal','Normal','Normal','Normal','Rounded','Normal','Normal','Conversion'))

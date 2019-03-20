@@ -1161,6 +1161,7 @@ def info_of_opfn_by_name(name):
         - "evdiamond" : eigenvalue 1/2 diamond norm distance
         - "evnudiamond" : eigenvalue non-unitary 1/2 diamond norm distance
         - "frob" :    frobenius distance
+        - "unmodeled" : unmodeled "wildcard" budget
 
     Returns
     -------
@@ -1206,6 +1207,9 @@ def info_of_opfn_by_name(name):
     elif name == "frob":
         niceName = "Frobenius|Distance"
         tooltip = "sqrt( sum( (A_ij - B_ij)^2 ) )"
+    elif name == "unmodeled":
+        niceName = "Un-modeled|Error"
+        tooltip = "The per-operation budget used to account for un-modeled errors (model violation)"
     else: raise ValueError("Invalid name: %s" % name)
     return niceName, tooltip
 
