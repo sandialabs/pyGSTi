@@ -1394,7 +1394,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                 elif scale_typ == "wildcard":
                     # Find wildcard budget - maybe need addtional user-defined params re: how to parameterize wildcard budget?
                     # output -> wildcard vector W_vec
-                    print("******************* Adding Wildcard Budget **************************")
+                    printer.log("******************* Adding Wildcard Budget **************************")
                     
                     # Approach: we create an objective function that, for a given Wvec, computes:
                     # (amt_of_2DLogL over threshold) + (amt of "red-box": per-outcome 2DlogL over threshold) + eta*|Wvec|_1
@@ -1406,31 +1406,20 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                         #use cache dictionary to speed multiple calls which use
                         # the same model, operation sequences, comm, memlim, etc.
                         evTree = evaltree_cache['evTree']
-                        wrtBlkSize = evaltree_cache['wrtBlkSize']
-                        lookup = evaltree_cache['lookup']
-                        outcomes_lookup = evaltree_cache['outcomes_lookup']
-                        cntVecMx = evaltree_cache['cntVecMx']
-                        totalCntVec = evaltree_cache['totalCntVec']
                     else:
                         raise NotImplementedError("Need to have a valid evaltree at this point - creating one is not implemented!")
                     
                     mdl = mdl_lsgst_list[-1]
                     circuitsToUse = rawLists[-1]
-                    probs = _np.empty( evTree.num_final_elements(), 'd')
-                    
                     nCircuits = len(circuitsToUse)
                     nDataParams  = ds.get_degrees_of_freedom(circuitsToUse) #number of independent parameters
                                                                             # in dataset (max. model # of params)
                     nModelParams = mdl.num_params() #just use total number of params
-                    percentile = 0.05; nBoxes = len(probs)
+                    percentile = 0.05; nBoxes = evTree.num_final_elements()
                     twoDeltaLogL_threshold = _chi2.ppf(1 - percentile, nDataParams-nModelParams)
                     redbox_threshold = _chi2.ppf(1 - percentile / nBoxes, 1)
-                    eta = 120000.0 # TODO: things work best when we start with high enough eta to give a nonzero objective
+                    eta = 1000.0 # some default starting value - this *shouldn't* really matter
                     #print("DB2: ",twoDeltaLogL_threshold,redbox_threshold)
-
-                    primOpLookup = { lbl: i for i,lbl in enumerate(mdl.get_primitive_op_labels()) }
-                    nPrimOps = len(primOpLookup)
-                    #print("DB: primOpLookup = ",primOpLookup)
 
                     assert(objective == "logl"), "Can only use wildcard scaling with 'logl' objective!"
                     twoDeltaLogL_terms = fitQty
@@ -1440,40 +1429,14 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                     budget = _wild.PrimitiveOpsWildcardBudget(mdl.get_primitive_op_labels())
                     
                     if twoDeltaLogL <= twoDeltaLogL_threshold and sum(_np.clip(twoDeltaLogL_terms-redbox_threshold,0,None)) < 1e-6:
-                        print("No need to add budget!")
-                        Wvec = _np.zeros(nPrimOps)
+                        printer.log("No need to add budget!")
+                        Wvec = _np.zeros( len(mdl.get_primitive_op_labels()), 'd')
                     else:
-                        mdl.bulk_fill_probs(probs, evTree, advancedOptions.get('probClipInterval',(-1e6,1e6)), False, comm)
-                        orig_probs = probs.copy()
-
                         pci = advancedOptions.get('probClipInterval',(-1e6,1e6))
                         min_p = advancedOptions.get('minProbClip',1e-4)
                         a = advancedOptions.get('radius',1e-4)
-
-                        minusCntVecMx = -1.0 * cntVecMx
-                        freqs = cntVecMx / totalCntVec
-                        freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
-                        freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 ) # poisson picture
-                        # freqTerm = cntVecMx * _np.log(freqs_nozeros) # non-poisson pitcure
-                        freqTerm[ cntVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
-
-                        #print("DB2: ",min_p,a)    
-                        #def _two_delta_logl_terms():
-                        #    pos_probs = _np.where(probs < min_p, min_p, probs)
-                        #    S = minusCntVecMx / min_p + totalCntVec
-                        #    S2 = -0.5 * minusCntVecMx / (min_p**2)
-                        #    v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec*pos_probs # dims K x M (K = nSpamLabels, M = nCircuits)
-                        #    v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
-                        #    v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-                        #    v = _np.where( minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
-                        #            #special handling for f == 0 terms using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
-                        #    #assert( _np.all(v >= 0) ), "LogL term is < 0! (This is usually caused by using a large #samples without reducing minProbClip)"
-                        #    assert(v.ndim == 1)#v.shape = [KM] #reshape ensuring no copy is needed
-                        #    return 2*v #Note: no test for whether probs is in [0,1] so no guarantee that
                         
                         def _wildcard_objective_firstTerms(Wv):
-                            # _alg.core.update_probs_with_wildcard_budget(orig_probs, probs, freqs, circuitsToUse, lookup, Wv, _compute_circuit_wildcard_budget)
-                            #twoDLogL_terms = _two_delta_logl_terms()
                             budget.from_vector(Wv)
                             twoDLogL_terms = _tools.two_delta_logl_terms(mdl, ds, circuitsToUse, min_p, pci, a,
                                                                          poissonPicture=True, evaltree_cache=evaltree_cache,
@@ -1483,13 +1446,24 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                 
                         def _wildcard_objective(Wv):
                             return _wildcard_objective_firstTerms(Wv) + eta*_np.linalg.norm(Wv,ord=1)
-                
-                        
-                        #Wvec = _np.array([0.01]*nPrimOps) + 0.001 *_np.arange(nPrimOps) # 2nd term to slightly offset initial values
-                        Wvec = budget.to_vector()
+
                         nIters = 0; eta_lower_bound = eta_upper_bound = None
+                        Wvec_init = budget.to_vector()
+
+                        # Stage 1: make eta large enough that we get a *large* nonzero objective; keep starting with same Wvec_init
                         while nIters < 100:
-                            soln = _spo.minimize(_wildcard_objective,Wvec,method='L-BFGS-B',callback=None, tol=1e-6)
+                            printer.log("  Finding initial eta: %g" % eta)
+                            soln = _spo.minimize(_wildcard_objective,Wvec_init,method='L-BFGS-B',callback=None, tol=1e-6)
+                            if _wildcard_objective_firstTerms(soln.x) >= 100.0: # some "high value" here
+                                eta_upper_bound = eta; eta /= 2
+                                break
+                            eta *= 10
+                            nIters += 1
+
+                        # Stage 2: hone in on good eta value, restarting from points where
+                        # we've seen a nonzero objective (we don't trust Wvecs when the objective is 0)
+                        while nIters < 100:
+                            soln = _spo.minimize(_wildcard_objective,Wvec_init,method='L-BFGS-B',callback=None, tol=1e-6)
                             Wvec = soln.x
                             orig_eta = eta
                             firstTerms = _wildcard_objective_firstTerms(Wvec)
@@ -1500,22 +1474,26 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
                                 if eta_upper_bound is not None:
                                     eta = (eta_upper_bound + eta_lower_bound)/2
                                 else: eta *= 2
-                            else: # try smaller eta
+                            else: # nonzero objective => take Wvec as new starting point; try smaller eta
+                                Wvec_init = Wvec
                                 eta_upper_bound = eta
                                 if eta_lower_bound is not None:
                                     eta = (eta_upper_bound + eta_lower_bound)/2
                                 else: eta /= 2
-                
-                            print("Interval [%s,%s]: eta = %g -> %g  Wvec=%s firstTs=%g" % (str(eta_upper_bound),str(eta_lower_bound),orig_eta,eta,str(Wvec),firstTerms))
+
+                            printer.log("  Interval: eta in [%s,%s]" % (str(eta_upper_bound),str(eta_lower_bound)))
+                            #print("Interval [%s,%s]: eta = %g -> %g  Wvec=%s firstTs=%g" % (
+                            #    str(eta_upper_bound),str(eta_lower_bound),orig_eta,eta,str(Wvec),firstTerms))
+                            
                             if eta_upper_bound is not None and eta_lower_bound is not None and \
                                (eta_upper_bound - eta_lower_bound)/eta_upper_bound < 1e-3:
-                                print("Converged after %d iters!" % nIters)
+                                printer.log("Converged after %d iters!" % nIters)
                                 break
                             nIters += 1
                 
                     #print("Wildcard budget found for Wvec = ",Wvec)
                     budget.from_vector(Wvec)
-                    print("Wildcard budget = ",budget)
+                    printer.log(str(budget))
                     wildcardBudget = budget
                     gsWeights = None
                     reopt = False

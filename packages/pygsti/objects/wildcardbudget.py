@@ -174,7 +174,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         return abs(self.wildcard_vector[ self.primOpLookup[op_label] ])
 
     def __str__(self):
-        wildcardDict = { lbl: self.wildcard_vector[index] for lbl,index in self.primOpLookup.items() }
+        wildcardDict = { lbl: abs(self.wildcard_vector[index]) for lbl,index in self.primOpLookup.items() }
         return "Wildcard budget: " + str(wildcardDict)
 
 
