@@ -1329,7 +1329,7 @@ def _post_opt_processing(callerName, ds, target_model, mdl_start, lsgstLists,
     objective = advancedOptions.get('objective', 'logl')
     badFitThreshold = advancedOptions.get('badFitThreshold',DEFAULT_BAD_FIT_THRESHOLD)
     if ret.estimates[estlbl].misfit_sigma(evaltree_cache=evaltree_cache, comm=comm) > badFitThreshold:
-        onBadFit = advancedOptions.get('onBadFit',["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
+        onBadFit = advancedOptions.get('onBadFit',[]) #["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
         
         if len(onBadFit) > 0 and parameters.get('weights',None) is None:
 
