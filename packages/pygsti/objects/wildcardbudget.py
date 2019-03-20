@@ -61,9 +61,11 @@ class WildcardBudget(object):
             return p
     
         def alpha_fn(beta,A,B,C,f):
+            if len(A) == 0: return _np.nan # this can be ok, but mark it
             return (1.0 - beta*sum(f[B]) - sum(f[C])) / sum(f[A])
     
         def beta_fn(alpha,A,B,C,f):
+            if len(B) == 0: return _np.nan # this can be ok, but mark it
             return (1.0 - alpha*sum(f[A]) - sum(f[C])) / sum(f[B])
         
         #Special case where f_k=0 - then don't bother wasting any TVD on
