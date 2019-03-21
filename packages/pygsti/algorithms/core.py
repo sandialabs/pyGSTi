@@ -2429,9 +2429,9 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             mdl.from_vector(vectorGS)
             mdl.bulk_fill_probs(probs, evTree, probClipInterval,
                                 check, comm)
-            return _objective_func_probs(tm)
-                        
-        def _objective_func_probs(tm):
+            return _objective_func_probs(vectorGS, tm)
+
+        def _objective_func_probs(vectorGS, tm):
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p + totalCntVec
             S2 = -0.5 * minusCntVecMx / (min_p**2)
@@ -2531,9 +2531,9 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             tm = _time.time()
             mdl.from_vector(vectorGS)
             mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
-            return _objective_func_probs(tm)
+            return _objective_func_probs(vectorGS, tm)
 
-        def _objective_func_probs(tm):
+        def _objective_func_probs(vectorGS, tm):
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p
             S2 = -0.5 * minusCntVecMx / (min_p**2)
