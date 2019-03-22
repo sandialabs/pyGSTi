@@ -445,7 +445,8 @@ class OpModel(Model):
         self._sim_args = list(simtype_and_args[1:])
 
         if sim_type == "termorder":
-            cache = calc_cache if (calc_cache is not None) else {} # make a temp cache if none is given
+            #cache = calc_cache if (calc_cache is not None) else {} # make a temp cache if none is given
+            cache = calc_cache # allow None cache to indicate *direct* computation of terms (no polys)
             self._sim_args.append(cache) # add calculation cache as another argument
         elif sim_type == "map":
             self._sim_args.append(max_cache_size) # add cache size as another argument

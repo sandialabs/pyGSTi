@@ -1206,6 +1206,9 @@ class SBTermRep(object):
         self.pre_ops = pre_ops
         self.post_ops = post_ops
 
+# No need to create separate classes for floating-pt (vs. polynomial) coeff in Python (no types!)
+SVTermDirectRep = SVTermRep
+SBTermDirectRep = SBTermRep
 
 ## END CLASSES -- BEGIN CALC METHODS
 
@@ -1516,6 +1519,195 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
 
     #print("DONE -> FCOUNT=",DEBUG_FCOUNT)
     return prps # can be a list of polys
+
+
+def SV_prs_directly(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
+    return _prs_directly(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
+
+def SB_prs_directly(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
+    return _prs_directly(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
+
+#Base case which works for both SV and SB evolution types thanks to Python's duck typing
+def _prs_directly(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
+    """
+    Computes probabilities for multiple spam-tuples of `circuit`
+    
+    Parameters
+    ----------
+    calc : TermForwardSimulator
+        The calculator object holding vital information for the computation.
+
+    rholabel : Label
+        Prep label for *all* the probabilities to compute.
+
+    elabels : list
+        List of effect labels, one per probability to compute.  The ordering
+        of `elabels` determines the ordering of the returned probability 
+        polynomials.
+
+    circuit : Circuit
+        The gate sequence to sandwich between the prep and effect labels.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int, optional
+        A rough memory limit in bytes.
+
+    fastmode : bool, optional
+        A switch between a faster, slighty more memory hungry mode of
+        computation (`fastmode=True`)and a simpler slower one (`=False`).
+
+    Returns
+    -------
+    numpy.ndarray
+        one per element of `elabels`.
+    """
+    # Construct dict of gate term reps
+    order_base = 0.1 # default for now - TODO: make this a calc param like max_order?
+    mpo = mpv = None # these shouldn't matter for direct terms
+    distinct_gateLabels = sorted(set(circuit))
+    op_term_reps = { glbl: [ [t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_direct_order_terms(order, order_base)]
+                                      for order in range(calc.max_order+1) ]
+                       for glbl in distinct_gateLabels }
+
+    #Similar with rho_terms and E_terms, but lists
+    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_direct_order_terms(order, order_base)]
+                      for order in range(calc.max_order+1) ]
+
+    E_term_reps = []
+    E_indices = []
+    for order in range(calc.max_order+1):
+        cur_term_reps = [] # the term reps for *all* the effect vectors
+        cur_indices = [] # the Evec-index corresponding to each term rep
+        for i,elbl in enumerate(elabels):
+            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.sos.get_effect(elbl).get_direct_order_terms(order, order_base) ]
+            cur_term_reps.extend( term_reps )
+            cur_indices.extend( [i]*len(term_reps) )
+        E_term_reps.append( cur_term_reps )
+        E_indices.append( cur_indices )
+
+
+    #HERE DEBUG!!!
+    global DEBUG_FCOUNT
+    db_part_cnt = 0
+    db_factor_cnt = 0
+    #print("DB: pr_as_poly for ",str(tuple(map(str,circuit))), " max_order=",calc.max_order)
+
+    prs = _np.zeros(len(elabels),complex)  # an array in "bulk" mode
+    for order in range(calc.max_order+1):
+        #print("DB: pr_as_poly order=",order)
+        db_npartitions = 0
+        for p in _lt.partition_into(order, len(circuit)+2): # +2 for SPAM bookends
+            #factor_lists = [ calc.sos.get_operation(glbl).get_order_terms(pi) for glbl,pi in zip(circuit,p) ]
+            factor_lists = [ rho_term_reps[p[0]]] + \
+                           [ op_term_reps[glbl][pi] for glbl,pi in zip(circuit,p[1:-1]) ] + \
+                           [ E_term_reps[p[-1]] ]
+            factor_list_lens = list(map(len,factor_lists))
+            Einds = E_indices[p[-1]] # specifies which E-vec index each of E_term_reps[p[-1]] corresponds to
+
+            if any([len(fl)==0 for fl in factor_lists]): continue
+
+            #print("DB partition = ",p, "listlens = ",[len(fl) for fl in factor_lists])
+            if fastmode: # filter factor_lists to matrix-compose all length-1 lists
+                leftSaved = [None]*(len(factor_lists)-1)  # saved[i] is state after i-th
+                rightSaved = [None]*(len(factor_lists)-1) # factor has been applied
+                coeffSaved = [None]*(len(factor_lists)-1)
+                last_index = len(factor_lists)-1
+
+                for incd,fi in _lt.incd_product(*[range(l) for l in factor_list_lens]):
+                    factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
+
+                    if incd == 0: # need to re-evaluate rho vector
+                        rhoVecL = factors[0].pre_state # Note: `factor` is a rep & so are it's ops
+                        for f in factors[0].pre_ops:
+                            rhoVecL = f.acton(rhoVecL)
+                        leftSaved[0] = rhoVecL
+
+                        rhoVecR = factors[0].post_state
+                        for f in factors[0].post_ops:
+                            rhoVecR = f.acton(rhoVecR)
+                        rightSaved[0] = rhoVecR
+
+                        coeff = factors[0].coeff
+                        coeffSaved[0] = coeff
+                        incd += 1
+                    else:
+                        rhoVecL = leftSaved[incd-1]
+                        rhoVecR = rightSaved[incd-1]
+                        coeff = coeffSaved[incd-1]
+
+                    # propagate left and right states, saving as we go
+                    for i in range(incd,last_index):
+                        for f in factors[i].pre_ops:
+                            rhoVecL = f.acton(rhoVecL)
+                        leftSaved[i] = rhoVecL
+
+                        for f in factors[i].post_ops:
+                            rhoVecR = f.acton(rhoVecR)
+                        rightSaved[i] = rhoVecR
+
+                        coeff = coeff.mult(factors[i].coeff)
+                        coeffSaved[i] = coeff
+
+                    # for the last index, no need to save, and need to construct
+                    # and apply effect vector
+                    
+                    #HERE - add something like:
+                    #  if factors[-1].opname == cur_effect_opname: (or opint in C-case)
+                    #      <skip application of post_ops & preops - just load from (new) saved slot get pLeft & pRight>
+
+                    for f in factors[-1].post_ops:
+                        rhoVecL = f.acton(rhoVecL)
+                    E = factors[-1].post_effect # effect representation
+                    pLeft = E.amplitude(rhoVecL)
+
+                    #Same for pre_ops and rhoVecR
+                    for f in factors[-1].pre_ops:
+                        rhoVecR = f.acton(rhoVecR)
+                    E = factors[-1].pre_effect
+                    pRight = _np.conjugate(E.amplitude(rhoVecR))
+
+                    #print("DB PYTHON: final block: pLeft=",pLeft," pRight=",pRight)
+                    res = coeff.mult(factors[-1].coeff)
+                    res.scale( (pLeft * pRight) )
+                    #print("DB PYTHON: result = ",res)
+                    final_factor_indx = fi[-1]
+                    Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
+                    if prps[Ei] is None: prps[Ei]  = res
+                    else:                prps[Ei] += res # could add_inplace?
+                    #print("DB PYHON: prps[%d] = " % Ei, prps[Ei])
+
+            else: # non-fast mode
+                last_index = len(factor_lists)-1
+                for fi in _itertools.product(*[range(l) for l in factor_list_lens]):
+                    factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
+                    #res    = _functools.reduce(lambda x,y: x.mult(y), [f.coeff for f in factors])
+                    res = _np.product([f.coeff for f in factors])
+                    pLeft  = _unitary_sim_pre(factors, comm, memLimit)
+                    pRight = _unitary_sim_post(factors, comm, memLimit)
+                             # if not self.unitary_evolution else 1.0
+                    #res.scale( (pLeft * pRight) )
+                    res *= (pLeft * pRight)
+                    final_factor_indx = fi[-1]
+                    Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
+                    #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
+                    if prs[Ei] is None:  prs[Ei]  = res
+                    else:                prs[Ei] += res # add_inplace?
+                    #print("DB running prps[",Ei,"] =",prps[Ei])
+
+            #DEBUG!!!
+            db_nfactors = [len(l) for l in factor_lists]
+            db_totfactors = _np.product(db_nfactors)
+            db_factor_cnt += db_totfactors
+            DEBUG_FCOUNT += db_totfactors
+            db_part_cnt += 1
+            #print("DB: pr_as_poly   partition=",p,"(cnt ",db_part_cnt," with ",db_nfactors," factors (cnt=",db_factor_cnt,")")
+
+    #print("DONE -> FCOUNT=",DEBUG_FCOUNT)
+    assert(_np.linalg.norm(_np.imag(prs)) < 1e-6)
+    return _np.real(prs)
 
 
 

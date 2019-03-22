@@ -41,7 +41,7 @@ def compose_terms(terms):
         ret.compose(t)
     return ret
 
-def exp_terms(terms, orders, postterm=None):
+def exp_terms(terms, orders, postterm=None, order_base=None):
     """
     Exponentiate a list of terms, collecting those terms of the orders given
     in `orders`. Optionally post-multiplies the single term `postterm` (so this
@@ -60,6 +60,10 @@ def exp_terms(terms, orders, postterm=None):
     postterm : RankOneTerm, optional
         A term that is composed *first* (so "post" in the sense of matrix
         multiplication, not composition).
+
+    order_base : float
+        What constitutes 1 order of magnitude.  If None, then
+        polynomial coefficients are used.
 
     Returns
     -------
@@ -80,12 +84,19 @@ def exp_terms(terms, orders, postterm=None):
     for order in orders: # expand exp(L) = I + L + 1/2! L^2 + ... (n-th term 1/n! L^n)
         if order == 0:
             final_terms[order] = [ Uterm_tup[0] ]; continue
+        if order_base is not None:
+            coeff_threshold = order_base**order
             
         # expand 1/n! L^n into a list of rank-1 terms
         termLists = [terms]*order
         final_terms[order] = []
         for factors in _itertools.product(*termLists):
-            final_terms[order].append( 1/_np.math.factorial(order) * compose_terms(Uterm_tup + factors) ) # apply Uterm first
+            factors_to_compose = Uterm_tup + factors # apply Uterm first
+            if order_base is not None:
+                coeff = _np.product([t.coeff for t in factors_to_compose])
+                #LATER (will cause J=0 if we're not careful): if abs(coeff) < coeff_threshold: continue # don't include small terms
+                # TODO: create new function that looks at all/many taylor orders and bins into order_base orders?
+            final_terms[order].append( 1/_np.math.factorial(order) * compose_terms(factors_to_compose) ) 
             
     return final_terms
 
@@ -379,9 +390,14 @@ class RankOneTerm(object):
         """
         #Note: typ == "prep" / "effect" / "gate"
         # whereas self.typ == "dense" / "clifford" (~evotype)
-        coeffrep = self.coeff.torep(max_poly_order, max_poly_vars)
-        RepTermType = replib.SVTermRep if (self.typ == "dense") \
-                      else replib.SBTermRep
+        if isinstance(self.coeff, _numbers.Number):
+            coeffrep = self.coeff
+            RepTermType = replib.SVTermDirectRep if (self.typ == "dense") \
+                else replib.SBTermDirectRep
+        else:
+            coeffrep = self.coeff.torep(max_poly_order, max_poly_vars)
+            RepTermType = replib.SVTermRep if (self.typ == "dense") \
+                else replib.SBTermRep
         
         if typ == "prep": # first el of pre_ops & post_ops is a state vec
             return RepTermType(coeffrep, self.pre_ops[0].torep("prep"),
@@ -400,3 +416,23 @@ class RankOneTerm(object):
                                [ op.torep() for op in self.post_ops ])
         
     
+    def evaluate_coeff(self, variable_values):
+        """ 
+        Evaluate this polynomial for a given set of variable values.
+
+        Parameters
+        ----------
+        variable_values : array-like
+            An object that can be indexed so that `variable_values[i]` gives the
+            numerical value for i-th variable (x_i) in this term's coefficient.
+
+        Returns
+        -------
+        RankOneTerm
+            A shallow copy of this object with floating-point coefficient
+        """
+        coeff = self.coeff.evaluate(variable_values)
+        copy_of_me = RankOneTerm(coeff, None, None, self.typ)
+        copy_of_me.pre_ops = self.pre_ops[:]
+        copy_of_me.post_ops = self.post_ops[:]
+        return copy_of_me

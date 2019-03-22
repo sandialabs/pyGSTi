@@ -162,6 +162,20 @@ class TermForwardSimulator(ForwardSimulator):
                 rho = f.acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
         return rho
 
+    def prs_directly(self, rholabel, elabels, circuit_list, comm=None, memLimit=None):
+
+        #Like get_p_polys but no caching, and this is very slow...
+        prs = _np.empty( (len(elabels), len(circuit_list)), 'd') # [ list() for i in range(len(elabels)) ]
+        print("Computing prs directly for %d circuits" % len(circuit_list))
+        for i,circuit in enumerate(circuit_list):
+            #print("Computing prs directly: circuit %d of %d" % (i,len(circuit_list)))
+            assert(self.evotype == "svterm") # for now, just do SV case        
+            fastmode = False # start with slow mode
+            prs[:,i] = replib.SV_prs_directly(self, rholabel, elabels, circuit, comm, memLimit, fastmode)
+        #print("PRS = ",prs)
+        return prs
+    
+    
     def prs_as_polys(self, rholabel, elabels, circuit, comm=None, memLimit=None):
         """
         Computes polynomials of the probabilities for multiple spam-tuples of
@@ -571,14 +585,21 @@ class TermForwardSimulator(ForwardSimulator):
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             nStrs = evalSubTree.num_final_strings()
+            if self.cache is None: circuit_list = evalSubTree.generate_circuit_list(permute=False) # TODO: check that permute is correct here...
 
             def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
-                polys = evalSubTree.get_p_polys(self, rholabel, elabels, mySubComm) # computes polys if necessary
+                if self.cache is None:
+                    probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None)
+                else:
+                    polys = evalSubTree.get_p_polys(self, rholabel, elabels, mySubComm) # computes polys if necessary
 
                 for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
                     #use cached data to final values
-                    prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nCircuits,)
+                    if self.cache is None:
+                        prCache = probs[i]
+                    else:
+                        prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nCircuits,)
                     ps = evalSubTree.final_view( prCache, axis=0) # ( nCircuits,)
                     _fas(mxToFill, [fInds], ps[gInds], add=sumInto)
 
@@ -668,6 +689,7 @@ class TermForwardSimulator(ForwardSimulator):
         None
         """
 
+        print("DB: bulk_fill_dprobs called!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         tStart = _time.time()
         if profiler is None: profiler = _dummy_profiler
 
@@ -689,6 +711,7 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
             nStrs = evalSubTree.num_final_strings()
+            if self.cache is None: circuit_list = evalSubTree.generate_circuit_list(permute=False) # TODO: check that permute is correct here...
 
             #Free memory from previous subtree iteration before computing caches
             paramSlice = slice(None)
@@ -697,19 +720,45 @@ class TermForwardSimulator(ForwardSimulator):
             def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
                 tm = _time.time()
+
+                if self.cache is None:
+                    probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None)
                 
                 if prMxToFill is not None:
-                    polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
+                    if self.cache is not None: polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
                     for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
-                        prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nCircuits,)
+                        if self.cache is None:
+                            prCache = probs[i]
+                        else:
+                            prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nCircuits,)
                         ps = evalSubTree.final_view( prCache, axis=0) # ( nCircuits,)
                         _fas(prMxToFill, [fInds], ps[gInds], add=sumInto)
 
                 #Fill cache info
-                dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
+                if self.cache is None:
+                    #Finite difference derivatives (SLOW!)
+                    eps = 1e-6
+                    dprobs = _np.empty( (len(elabels), len(circuit_list), self.Np), 'd')
+                    orig_vec = self.to_vector().copy()
+                    for i in range(self.Np):
+                        print("direct dprobs cache %d of %d" % (i,self.Np))
+                        #if i in iParamToFinal: #LATER: add MPI support?
+                        #    iFinal = iParamToFinal[i]
+                        if True:
+                            iFinal = i
+                            vec = orig_vec.copy(); vec[i] += eps
+                            self.from_vector(vec)
+                            dprobs[:,:,iFinal] = ( self.prs_directly(rholabel, elabels, circuit_list,
+                                                                     comm=None, memLimit=None) - probs)/eps
+                    self.from_vector(orig_vec)
+                else:
+                    dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
                 nP = self.Np if (paramSlice is None or paramSlice.start is None) else _slct.length(paramSlice)
                 for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
-                    dprCache = _bulk_eval_compact_polys(dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs,nP) )
+                    if self.cache is None:
+                        dprCache = dprobs[i] # shape (nAllEvalTreeCircuits, nDerivCols)
+                    else:
+                        dprCache = _bulk_eval_compact_polys(dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs,nP) )
                     dps = evalSubTree.final_view( dprCache, axis=0) # ( nCircuits, nDerivCols)
                     _fas(mxToFill, [fInds, pslc1], dps[gInds], add=sumInto)
                 profiler.add_time("bulk_fill_dprobs: calc_and_fill", tm)

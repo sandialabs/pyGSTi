@@ -2072,6 +2072,36 @@ class PureStateSPAMVec(SPAMVec):
             terms = []
         return terms
 
+    def get_direct_order_terms(self, order, base_order):
+        """ 
+        TODO: docstring
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        Returns
+        -------
+        list
+            A list of :class:`RankOneTerm` objects.
+        """
+        if self.num_params() > 0:
+            raise ValueError(("PureStateSPAMVec.get_order_terms(...) is only "
+                              "implemented for the case when its underlying "
+                              "pure state vector has 0 parameters (is static)"))
+        
+        if order == 0: # only 0-th order term exists (assumes static pure_state_vec)
+            if self._evotype == "svterm":  tt = "dense"
+            elif self._evotype == "cterm": tt = "clifford"
+            else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
+
+            purevec = self.pure_state_vec
+            terms = [ _term.RankOneTerm(1.0, purevec, purevec, tt) ]
+        else:
+            terms = []
+        return terms
+
         
     def num_params(self):
         """
@@ -2663,6 +2693,57 @@ class LindbladSPAMVec(SPAMVec):
             self.terms[order] = terms
 
         return self.terms[order]
+
+
+    def get_direct_order_terms(self, order, base_order):
+        """ 
+        Get the `order`-th order Taylor-expansion terms of this SPAM vector.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that it is a state
+        preparation followed by or POVM effect preceded by actions on a
+        density matrix `rho` of the form:
+
+        `rho -> A rho B`
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        order_base : float
+            What constitutes 1 order of magnitude.
+
+        Returns
+        -------
+        list
+            A list of :class:`RankOneTerm` objects.
+        """
+        if True: #order not in self.terms: # always do this now, since we always need to re-create "direct" terms
+            if self._evotype == "svterm": tt = "dense"
+            elif self._evotype == "cterm": tt = "clifford"
+            else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
+            assert(self.gpindices is not None),"LindbladSPAMVec must be added to a Model before use!"
+
+            state_terms = self.state_vec.get_direct_order_terms(0, base_order); assert(len(state_terms) == 1)
+            stateTerm = state_terms[0]
+            err_terms = self.error_map.get_direct_order_terms(order, base_order)
+            if self.typ == "prep":
+                terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
+            else: # "effect"
+                #Effect terms are special in that all their pre/post ops act in order on the *state* before
+                # the final effect is used to compute a probability.  Thus, constructing the same "terms"
+                # as above works here too - the difference comes when this SPAMVec is used as an effect rather than a prep.
+                terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
+
+            #OLD: now this is done within calculator when possible b/c not all terms can be collapsed
+            #terms = [ t.collapse() for t in terms ] # collapse terms for speed
+            # - resulting in terms with just a single pre/post op, each == a pure state
+            return terms
+        
+            #self.terms[order] = terms
+        #return self.terms[order]
+
 
     def deriv_wrt_params(self, wrtFilter=None):
         """

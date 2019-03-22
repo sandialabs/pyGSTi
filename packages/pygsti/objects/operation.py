@@ -2464,7 +2464,7 @@ class LindbladOp(LinearOperator):
             assert(self.gpindices is not None),"LindbladOp must be added to a Model before use!"
             assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
               # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
-            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.unitary_postfactor,
+            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}) , self.unitary_postfactor,
                                          self.unitary_postfactor, tt) 
             #Note: for now, *all* of an error generator's terms are considered 0-th order,
             # so the below call to get_order_terms just gets all of them.  In the FUTURE
@@ -2474,6 +2474,55 @@ class LindbladOp(LinearOperator):
             #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
             self.terms[order] = _compose_poly_indices(loc_terms)
         return self.terms[order]
+
+
+    def get_direct_order_terms(self, order, order_base=None):
+        """ 
+        TODO: docstring
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        order_base : float
+            What constitutes 1 order of magnitude.  If None, then
+            polynomial coefficients are used.
+
+        Returns
+        -------
+        list
+            A list of :class:`RankOneTerm` objects.
+        """
+        
+        if True: # order not in self.terms: # always do this now, since we always need to re-create "direct" terms
+            if self._evotype == "svterm": tt = "dense"
+            elif self._evotype == "cterm": tt = "clifford"
+            else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
+
+            assert(self.gpindices is not None),"LindbladOp must be added to a Model before use!"
+            assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
+              # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
+
+            postTerm = _term.RankOneTerm(1.0, self.unitary_postfactor,
+                                         self.unitary_postfactor, tt) 
+            #Note: for now, *all* of an error generator's terms are considered 0-th order,
+            # so the below call to get_order_terms just gets all of them.  In the FUTURE
+            # we might want to allow a distinction among the error generator terms, in which
+            # case this term-exponentiation step will need to become more complicated...
+            loc_terms = _term.exp_terms(self.errorgen.get_direct_order_terms(0), [order], postTerm, order_base)[order]
+            #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
+            #self.terms[order] = _compose_poly_indices(loc_terms)
+            return loc_terms
+        #return self.terms[order]
+
+    def get_total_term_weight(self):
+        """
+        TODO: docstring
+        """
+        # return exp( weight of errorgen ) = exp( sum of absvals of errgen term coeffs )
+        # (unitary postfactor has weight == 1.0 so doesn't enter)
+        return _np.exp( self.errorgen.get_total_term_weight() )
 
 
     def num_params(self):
@@ -5670,6 +5719,22 @@ class LindbladErrorgen(LinearOperator):
         """
         assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
         return self.Lterms
+
+    def get_direct_order_terms(self, order): # , order_base=None - unused currently b/c order is always 0...
+        """ 
+        TODO: docstring
+        """
+        v = self.to_vector()
+        poly_terms = self.get_order_terms(order)
+        return [ term.evaluate_coeff(v) for term in poly_terms ]
+
+    def get_total_term_weight(self):
+        """
+        TODO: docstring
+        """
+        # return (sum of absvals of term coeffs)
+        direct_terms = self.get_direct_order_terms(0)
+        return sum([ abs(term.coeff) for term in direct_terms])
 
 
     def num_params(self):
