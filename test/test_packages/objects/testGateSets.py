@@ -18,6 +18,8 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 from pygsti.objects import Label as L
 
 from pygsti.construction import std1Q_XYI
+from pygsti.io import enable_old_object_unpickling
+from pygsti.tools.compattools import patched_UUID
 
 def Ls(*args):
     """ Convert args to a tuple to Labels """
@@ -1217,7 +1219,7 @@ class TestGateSetMethods(GateSetTestCase):
     def test_load_old_gateset(self):
         vs = "v2" if self.versionsuffix == "" else "v3"
         #pygsti.obj.results.enable_old_python_results_unpickling()
-        with pygsti.io.enable_old_object_unpickling():
+        with enable_old_object_unpickling(), patched_UUID():
             with open(compare_files + "/pygsti0.9.6.gateset.pkl.%s" % vs,'rb') as f:
                 mdl = pickle.load(f)
         #pygsti.obj.results.disable_old_python_results_unpickling()
@@ -1225,7 +1227,7 @@ class TestGateSetMethods(GateSetTestCase):
         with open(temp_files + "/repickle_old_gateset.pkl.%s" % vs,'wb') as f:
             pickle.dump(mdl, f)
 
-        with pygsti.io.enable_old_object_unpickling("0.9.7"):
+        with enable_old_object_unpickling("0.9.7"), patched_UUID():
             with open(compare_files + "/pygsti0.9.7.gateset.pkl.%s" % vs,'rb') as f:
                 mdl = pickle.load(f)
         with open(temp_files + "/repickle_old_gateset.pkl.%s" % vs,'wb') as f:
