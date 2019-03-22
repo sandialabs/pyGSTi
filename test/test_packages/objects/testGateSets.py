@@ -186,7 +186,7 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertAlmostEqual( self.model.jtracedist(cp), 0 )
         try:
             self.assertAlmostEqual( self.model.diamonddist(cp), 0 )
-        except ImportError,AttributeError:
+        except (ImportError, AttributeError):
             pass # CVXPY not installed
 
 
@@ -212,7 +212,7 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertAlmostEqual( self.model.jtracedist(cp, T), 0 )
         try:
             self.assertAlmostEqual( self.model.diamonddist(cp, T), 0 )
-        except ImportError,AttributeError:
+        except (ImportError, AttributeError):
             pass # CVXPY not installed            
 
         for opLabel in cp.operations:

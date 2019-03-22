@@ -231,7 +231,7 @@ class GateTestCase(BaseTestCase):
             self.assertAlmostEqual( gate.jtracedist(gate), 0.0 )
             try:
                 self.assertAlmostEqual( gate.diamonddist(gate), 0.0 )
-            except ImportError,AttributeError:
+            except (ImportError, AttributeError):
                 pass # CVXPY not installed
 
             nP = gate.num_params()
