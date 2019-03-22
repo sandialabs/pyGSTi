@@ -1771,18 +1771,18 @@ class DataSet(object):
         else:
             f = fileOrFilename
 
-        try:
+        if 'SafeUUID' in dir(_uuid):
             state_dict = _pickle.load(f)
-        except AttributeError:
+        else:
             # HACK TO ALLOW UUIDs saved on python3.7 work with earlier python versions that don't have uuid.SafeUUID
             # HACK - maybe move this to leagacyio to deal with Python 3 versions < 3.7 not having SafeUUID?
-            class dummy_SafeUUID(object): 
-                def __new__(self,*args):  
+            class dummy_SafeUUID(object):
+                def __new__(self,*args):
                     return _uuid.UUID.__new__(_uuid.UUID,*args)
             _sys.modules['uuid'].SafeUUID = dummy_SafeUUID
             state_dict = _pickle.load(f)
             del _sys.modules['uuid'].SafeUUID
-            
+
 
         if "gsIndexKeys" in state_dict:
             _warnings.warn("Loading a deprecated-format DataSet.  Please re-save asap.")
