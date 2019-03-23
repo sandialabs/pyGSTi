@@ -110,7 +110,7 @@ class GateTestCase(BaseTestCase):
 #        gatemap = MapOperator(dim=4)
 #        self.assertEqual(gatemap.size,4**2)
 
-        
+    # XXX This really needs to be broken up
     def test_gate_methods(self):
         dummyGS = pygsti.objects.ExplicitOpModel(['Q0'])
         mx = np.identity(4,'d')

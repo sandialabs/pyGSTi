@@ -1,5 +1,6 @@
 from ..testutils import BaseTestCase, compare_files, temp_files
 
+import os
 import pygsti
 import pygsti.tools.optools as optools
 
@@ -8,6 +9,8 @@ from pygsti.construction import std1Q_XYI
 
 import numpy as np
 import unittest
+
+SKIP_CVXPY = os.getenv('SKIP_CVXPY')
 
 A = np.array( [[0.9, 0, 0.1j, 0],
                [ 0,  0, 0,    0],
@@ -21,6 +24,7 @@ B = np.array( [[0.5, 0, 0, -0.2j],
 
 class GateBaseTestCase(BaseTestCase):
 
+    @unittest.skipIf(SKIP_CVXPY, "skipping cvxpy tests")
     def test_gate_tools(self):
         oneRealPair = np.array( [[1+1j, 0, 0, 0],
                              [ 0, 1-1j,0, 0],

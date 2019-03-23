@@ -28,6 +28,8 @@ def Ls(*args):
 FD_JAC_PLACES = 5 # loose checking when computing finite difference derivatives (currently in map calcs)
 FD_HESS_PLACES = 1 # looser checking when computing finite difference hessians (currently in map calcs)
 
+SKIP_CVXPY = os.getenv('SKIP_CVXPY')
+
 # This class is for unifying some models that get used in this file and in testGateSets2.py
 class GateSetTestCase(BaseTestCase):
 
@@ -179,15 +181,12 @@ class TestGateSetMethods(GateSetTestCase):
         deriv = mdl.deriv_wrt_params()
 
 
-
+    @unittest.skipIf(SKIP_CVXPY, "skipping cvxpy tests")
     def test_copy(self):
         cp = self.model.copy()
         self.assertAlmostEqual( self.model.frobeniusdist(cp), 0 )
         self.assertAlmostEqual( self.model.jtracedist(cp), 0 )
-        try:
-            self.assertAlmostEqual( self.model.diamonddist(cp), 0 )
-        except (ImportError, AttributeError):
-            pass # CVXPY not installed
+        self.assertAlmostEqual( self.model.diamonddist(cp), 0 )
 
 
     def test_vectorize(self):
@@ -197,6 +196,7 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertAlmostEqual( self.model.frobeniusdist(cp), 0 )
 
 
+    @unittest.skipIf(SKIP_CVXPY, "skipping cvxpy tests")
     def test_transform(self):
         T = np.array([[ 0.36862036,  0.49241519,  0.35903944,  0.90069522],
                       [ 0.12347698,  0.45060548,  0.61671491,  0.64854769],
@@ -210,10 +210,7 @@ class TestGateSetMethods(GateSetTestCase):
 
         self.assertAlmostEqual( self.model.frobeniusdist(cp, T, normalize=False), 0 ) #test out normalize=False
         self.assertAlmostEqual( self.model.jtracedist(cp, T), 0 )
-        try:
-            self.assertAlmostEqual( self.model.diamonddist(cp, T), 0 )
-        except (ImportError, AttributeError):
-            pass # CVXPY not installed            
+        self.assertAlmostEqual( self.model.diamonddist(cp, T), 0 )
 
         for opLabel in cp.operations:
             self.assertArraysAlmostEqual(cp[opLabel], np.dot(Tinv, np.dot(self.model[opLabel], T)))
