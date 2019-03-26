@@ -91,7 +91,7 @@ setup(name='pyGSTi',
                                       'templates/offline/fonts/*',
                                       'templates/offline/images/*']},
       requires=['numpy','scipy','plotly','ply'],
-      install_requires=['numpy','scipy','plotly','ply'],
+      install_requires=['numpy>=1.15.0','scipy','plotly','ply'],
       extras_require = {
            'diamond norm computation':  ['cvxpy', 'cvxopt'],
            'nose testing' : ['nose'],
