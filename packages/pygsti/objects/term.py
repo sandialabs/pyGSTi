@@ -418,7 +418,7 @@ class RankOneTerm(object):
     
     def evaluate_coeff(self, variable_values):
         """ 
-        Evaluate this polynomial for a given set of variable values.
+        Evaluate this term's polynomial coefficient for a given set of variable values.
 
         Parameters
         ----------

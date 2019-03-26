@@ -167,11 +167,12 @@ class TermForwardSimulator(ForwardSimulator):
         #Like get_p_polys but no caching, and this is very slow...
         prs = _np.empty( (len(elabels), len(circuit_list)), 'd') # [ list() for i in range(len(elabels)) ]
         print("Computing prs directly for %d circuits" % len(circuit_list))
+        repcache = {} #new repcache...
         for i,circuit in enumerate(circuit_list):
             #print("Computing prs directly: circuit %d of %d" % (i,len(circuit_list)))
             assert(self.evotype == "svterm") # for now, just do SV case        
-            fastmode = False # start with slow mode
-            prs[:,i] = replib.SV_prs_directly(self, rholabel, elabels, circuit, comm, memLimit, fastmode)
+            fastmode = True # start with slow mode
+            prs[:,i] = replib.SV_prs_directly(self, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode)
         #print("PRS = ",prs)
         return prs
     

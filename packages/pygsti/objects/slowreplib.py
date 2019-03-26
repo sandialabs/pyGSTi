@@ -1648,7 +1648,7 @@ def _prs_directly(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
                             rhoVecR = f.acton(rhoVecR)
                         rightSaved[i] = rhoVecR
 
-                        coeff = coeff.mult(factors[i].coeff)
+                        coeff *= factors[i].coeff
                         coeffSaved[i] = coeff
 
                     # for the last index, no need to save, and need to construct
@@ -1670,8 +1670,8 @@ def _prs_directly(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
                     pRight = _np.conjugate(E.amplitude(rhoVecR))
 
                     #print("DB PYTHON: final block: pLeft=",pLeft," pRight=",pRight)
-                    res = coeff.mult(factors[-1].coeff)
-                    res.scale( (pLeft * pRight) )
+                    res = coeff * factors[-1].coeff
+                    res *= (pLeft * pRight)
                     #print("DB PYTHON: result = ",res)
                     final_factor_indx = fi[-1]
                     Ei = Einds[final_factor_indx] #final "factor" index == E-vector index

@@ -37,6 +37,19 @@ from . import term as _term
 from .polynomial import Polynomial as _Polynomial
 from . import replib
 
+
+#Repeated in spamvec.py - TODO: consolidate
+try:
+    from . import fastopcalc as _fastopcalc
+    def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
+        return _fastopcalc.fast_bulk_eval_compact_polys_complex(
+            vtape, ctape, paramvec, dest_shape)
+except ImportError:
+    from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
+    def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
+        return poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
+
+
 TOL = 1e-12
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
@@ -2248,6 +2261,9 @@ class LindbladOp(LinearOperator):
             self._prepare_for_torep() #sets one of the above two members
                                       # depending on self.errorgen.sparse
             self.terms = None # Unused
+            self.direct_terms = None
+            self.direct_term_poly_coeffs = None
+        
             
         else: # Term-based evolution
             
@@ -2267,6 +2283,9 @@ class LindbladOp(LinearOperator):
                 self.unitary_postfactor = None
             
             self.terms = {}
+            self.direct_terms = {}
+            self.direct_term_poly_coeffs = {}
+
             
             # Unused
             self.err_gen_prep = self.exp_err_gen = None
@@ -2350,6 +2369,8 @@ class LindbladOp(LinearOperator):
         None
         """
         self.terms = {} # clear terms cache since param indices have changed now
+        self.direct_terms = {}
+        self.direct_term_poly_coeffs = {}
         _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
 
 
@@ -2494,8 +2515,9 @@ class LindbladOp(LinearOperator):
         list
             A list of :class:`RankOneTerm` objects.
         """
-        
-        if True: # order not in self.terms: # always do this now, since we always need to re-create "direct" terms
+
+        #Approach 1: always create terms
+        if False: # order not in self.terms: # always do this now, since we always need to re-create "direct" terms
             if self._evotype == "svterm": tt = "dense"
             elif self._evotype == "cterm": tt = "clifford"
             else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
@@ -2514,8 +2536,52 @@ class LindbladOp(LinearOperator):
             #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
             #self.terms[order] = _compose_poly_indices(loc_terms)
             return loc_terms
-        #return self.terms[order]
 
+        #Approach 2: get poly terms and evaluate them
+        if True:
+
+            if order not in self.direct_terms:
+                if self._evotype == "svterm": tt = "dense"
+                elif self._evotype == "cterm": tt = "clifford"
+                else: raise ValueError("Invalid evolution type %s for calling `get_direct_order_terms`" % self._evotype)
+    
+                assert(self.gpindices is not None),"LindbladOp must be added to a Model before use!"
+                assert(not _sps.issparse(self.unitary_postfactor)), "Unitary post-factor needs to be dense for term-based evotypes"
+                  # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
+                postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}) , self.unitary_postfactor,
+                                             self.unitary_postfactor, tt) 
+                #Note: for now, *all* of an error generator's terms are considered 0-th order,
+                # so the below call to get_order_terms just gets all of them.  In the FUTURE
+                # we might want to allow a distinction among the error generator terms, in which
+                # case this term-exponentiation step will need to become more complicated...
+                loc_terms = _term.exp_terms(self.errorgen.get_order_terms(0), [order], postTerm)[order]
+                poly_coeffs = [ t.coeff for t in loc_terms ]
+                tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
+                vtape = _np.concatenate( [ t[0] for t in tapes ] )
+                ctape = _np.concatenate( [ t[1] for t in tapes ] )
+                coeffs_as_compact_polys = (vtape, _np.asarray(ctape,complex))
+                self.direct_term_poly_coeffs[order] = coeffs_as_compact_polys
+                self.direct_terms[order] = loc_terms # have poly coeffs but not for long (below code overwrites)
+            
+            v = self.to_vector()
+            cpolys = self.direct_term_poly_coeffs[order]
+            terms = self.direct_terms[order]
+            coeffs = _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),)) # an array of coeffs
+            for coeff,t in zip(coeffs,terms):
+                t.coeff = coeff
+            return terms 
+
+
+    def get_direct_order_coeffs(self, order, order_base=None):
+        """ 
+        TODO: docstring
+        """
+        v = self.to_vector()
+        cpolys = self.direct_term_poly_coeffs[order]
+        terms = self.direct_terms[order]
+        return _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),))
+
+        
     def get_total_term_weight(self):
         """
         TODO: docstring

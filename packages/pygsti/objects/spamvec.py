@@ -36,6 +36,18 @@ from . import replib
 
 IMAG_TOL = 1e-8 #tolerance for imaginary part being considered zero
 
+#Repeated in spamvec.py - TODO: consolidate
+try:
+    from . import fastopcalc as _fastopcalc
+    def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
+        return _fastopcalc.fast_bulk_eval_compact_polys_complex(
+            vtape, ctape, paramvec, dest_shape)
+except ImportError:
+    from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
+    def _bulk_eval_complex_compact_polys(vtape, ctape, paramvec, dest_shape):
+        return poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
+
+
 def optimize_spamvec(vecToOptimize, targetVec):
     """
     Optimize the parameters of vecToOptimize so that the
@@ -2545,6 +2557,9 @@ class LindbladSPAMVec(SPAMVec):
         self.state_vec = pureVec
         self.error_map = errormap
         self.terms = {} if evotype in ("svterm","cterm") else None
+        self.direct_terms = {} if evotype in ("svterm","cterm") else None
+        self.direct_term_poly_coeffs = {} if evotype in ("svterm","cterm") else None
+        
         SPAMVec.__init__(self, d2, evotype) #sets self.dim
 
 
@@ -2593,6 +2608,8 @@ class LindbladSPAMVec(SPAMVec):
         None
         """
         self.terms = {} # clear terms cache since param indices have changed now
+        self.direct_terms = {}
+        self.direct_term_poly_coeffs = {}        
         _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
 
         
@@ -2719,7 +2736,8 @@ class LindbladSPAMVec(SPAMVec):
         list
             A list of :class:`RankOneTerm` objects.
         """
-        if True: #order not in self.terms: # always do this now, since we always need to re-create "direct" terms
+        #Approach 1
+        if False: #order not in self.terms: # always do this now, since we always need to re-create "direct" terms
             if self._evotype == "svterm": tt = "dense"
             elif self._evotype == "cterm": tt = "clifford"
             else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
@@ -2740,9 +2758,51 @@ class LindbladSPAMVec(SPAMVec):
             #terms = [ t.collapse() for t in terms ] # collapse terms for speed
             # - resulting in terms with just a single pre/post op, each == a pure state
             return terms
-        
-            #self.terms[order] = terms
-        #return self.terms[order]
+
+        #Approach 2: get poly terms and evaluate them
+        if True:
+            if order not in self.direct_terms:
+                if self._evotype == "svterm": tt = "dense"
+                elif self._evotype == "cterm": tt = "clifford"
+                else: raise ValueError("Invalid evolution type %s for calling `get_direct_order_terms`" % self._evotype)
+                assert(self.gpindices is not None),"LindbladSPAMVec must be added to a Model before use!"
+
+                state_terms = self.state_vec.get_order_terms(0); assert(len(state_terms) == 1)
+                stateTerm = state_terms[0]
+                err_terms = self.error_map.get_order_terms(order)
+                if self.typ == "prep":
+                    terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
+                else: # "effect"
+                    #Effect terms are special in that all their pre/post ops act in order on the *state* before
+                    # the final effect is used to compute a probability.  Thus, constructing the same "terms"
+                    # as above works here too - the difference comes when this SPAMVec is used as an effect rather than a prep.
+                    terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
+    
+                poly_coeffs = [ t.coeff for t in terms ]
+                tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
+                vtape = _np.concatenate( [ t[0] for t in tapes ] )
+                ctape = _np.concatenate( [ t[1] for t in tapes ] )
+                coeffs_as_compact_polys = (vtape, _np.asarray(ctape,complex))
+                self.direct_term_poly_coeffs[order] = coeffs_as_compact_polys
+                self.direct_terms[order] = terms # have poly coeffs but not for long (below code overwrites)
+            
+            v = self.to_vector()
+            cpolys = self.direct_term_poly_coeffs[order]
+            terms = self.direct_terms[order]
+            coeffs = _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),)) # an array of coeffs
+            for coeff,t in zip(coeffs,terms):
+                t.coeff = coeff
+            return terms
+
+    def get_direct_order_coeffs(self, order, order_base=None):
+        """ 
+        TODO: docstring
+        """
+        v = self.to_vector()
+        cpolys = self.direct_term_poly_coeffs[order]
+        terms = self.direct_terms[order]
+        return _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),))
+
 
 
     def deriv_wrt_params(self, wrtFilter=None):

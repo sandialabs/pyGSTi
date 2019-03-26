@@ -2750,6 +2750,43 @@ namespace CReps {
   }
 
   /****************************************************************************\
+  |* SVTermDirectCRep                                                         *|
+  \****************************************************************************/
+    
+  SVTermDirectCRep::SVTermDirectCRep(dcomplex coeff, SVStateCRep* pre_state, SVStateCRep* post_state,
+				     std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
+    _coeff = coeff;
+    _pre_state = pre_state;
+    _post_state = post_state;
+    _pre_effect = NULL;
+    _post_effect = NULL;
+    _pre_ops = pre_ops;
+    _post_ops = post_ops;
+  }
+  
+  SVTermDirectCRep::SVTermDirectCRep(dcomplex coeff, SVEffectCRep* pre_effect, SVEffectCRep* post_effect,
+				     std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
+    _coeff = coeff;
+    _pre_state = NULL;
+    _post_state = NULL;
+    _pre_effect = pre_effect;
+    _post_effect = post_effect;
+    _pre_ops = pre_ops;
+    _post_ops = post_ops;
+  }
+  
+  SVTermDirectCRep::SVTermDirectCRep(dcomplex coeff, std::vector<SVOpCRep*> pre_ops,
+				     std::vector<SVOpCRep*> post_ops) {
+    _coeff = coeff;
+    _pre_state = NULL;
+    _post_state = NULL;
+    _pre_effect = NULL;
+    _post_effect = NULL;
+    _pre_ops = pre_ops;
+    _post_ops = post_ops;
+  }
+
+  /****************************************************************************\
   |* SBTermCRep                                                               *|
   \****************************************************************************/
     
