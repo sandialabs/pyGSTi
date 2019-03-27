@@ -482,6 +482,7 @@ namespace CReps {
   class SVTermDirectCRep {
     public:
     dcomplex _coeff;
+    double _weight;
     SVStateCRep* _pre_state;
     SVEffectCRep* _pre_effect;
     std::vector<SVOpCRep*> _pre_ops;

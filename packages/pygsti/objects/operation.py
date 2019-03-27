@@ -2444,7 +2444,7 @@ class LindbladOp(LinearOperator):
                              (self._evotype, self.__class__.__name__))
         
         
-    def get_order_terms(self, order):
+    def get_order_terms(self, order, terms_with_global_indices=True):
         """ 
         Get the `order`-th order Taylor-expansion terms of this operation.
 
@@ -2493,7 +2493,10 @@ class LindbladOp(LinearOperator):
             # case this term-exponentiation step will need to become more complicated...
             loc_terms = _term.exp_terms(self.errorgen.get_order_terms(0), [order], postTerm)[order]
             #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
-            self.terms[order] = _compose_poly_indices(loc_terms)
+            if terms_with_global_indices:
+                self.terms[order] = _compose_poly_indices(loc_terms)
+            else:
+                self.terms[order] = loc_terms # leave as having local indices (HACK for spamvec's get_direct_terms)
         return self.terms[order]
 
 

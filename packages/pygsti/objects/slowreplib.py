@@ -1521,10 +1521,10 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
     return prps # can be a list of polys
 
 
-def SV_prs_directly(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
+def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, wtTol=0.0, resetTermWeights=True, debug=None):
     return _prs_directly(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
 
-def SB_prs_directly(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
+def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, wtTol=0.0, resetTermWeights=True, debug=None):
     return _prs_directly(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
@@ -1570,7 +1570,7 @@ def _prs_directly(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
     distinct_gateLabels = sorted(set(circuit))
     op_term_reps = { glbl: [ [t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_direct_order_terms(order, order_base)]
                                       for order in range(calc.max_order+1) ]
-                       for glbl in distinct_gateLabels }
+                      for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms, but lists
     rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_direct_order_terms(order, order_base)]

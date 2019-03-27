@@ -2756,6 +2756,7 @@ namespace CReps {
   SVTermDirectCRep::SVTermDirectCRep(dcomplex coeff, SVStateCRep* pre_state, SVStateCRep* post_state,
 				     std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
+    _weight = abs(coeff);
     _pre_state = pre_state;
     _post_state = post_state;
     _pre_effect = NULL;
@@ -2767,6 +2768,7 @@ namespace CReps {
   SVTermDirectCRep::SVTermDirectCRep(dcomplex coeff, SVEffectCRep* pre_effect, SVEffectCRep* post_effect,
 				     std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
+    _weight = abs(coeff);
     _pre_state = NULL;
     _post_state = NULL;
     _pre_effect = pre_effect;
@@ -2778,6 +2780,7 @@ namespace CReps {
   SVTermDirectCRep::SVTermDirectCRep(dcomplex coeff, std::vector<SVOpCRep*> pre_ops,
 				     std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
+    _weight = abs(coeff);
     _pre_state = NULL;
     _post_state = NULL;
     _pre_effect = NULL;

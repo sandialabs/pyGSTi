@@ -2769,7 +2769,7 @@ class LindbladSPAMVec(SPAMVec):
 
                 state_terms = self.state_vec.get_order_terms(0); assert(len(state_terms) == 1)
                 stateTerm = state_terms[0]
-                err_terms = self.error_map.get_order_terms(order)
+                err_terms = self.error_map.get_order_terms(order, terms_with_global_indices=False)
                 if self.typ == "prep":
                     terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
                 else: # "effect"
@@ -2803,6 +2803,12 @@ class LindbladSPAMVec(SPAMVec):
         terms = self.direct_terms[order]
         return _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),))
 
+    def get_total_term_weight(self):
+        """
+        TODO: docstring
+        """
+        # return (sum of absvals of *all* term coeffs)
+        return self.error_map.get_total_term_weight() # error map is only part with terms
 
 
     def deriv_wrt_params(self, wrtFilter=None):

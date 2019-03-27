@@ -108,6 +108,10 @@ class TermForwardSimulator(ForwardSimulator):
         if self.evotype not in ("svterm","cterm"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "term-based calculations" % self.evotype))
+
+        self.times_debug = { 'tstartup': 0.0, 'total': 0.0,
+                             't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
+                             'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0 }
         
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
@@ -162,17 +166,18 @@ class TermForwardSimulator(ForwardSimulator):
                 rho = f.acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
         return rho
 
-    def prs_directly(self, rholabel, elabels, circuit_list, comm=None, memLimit=None):
+    def prs_directly(self, rholabel, elabels, circuit_list, comm=None, memLimit=None, resetWts=True, repcache=None):
 
         #Like get_p_polys but no caching, and this is very slow...
         prs = _np.empty( (len(elabels), len(circuit_list)), 'd') # [ list() for i in range(len(elabels)) ]
-        print("Computing prs directly for %d circuits" % len(circuit_list))
-        repcache = {} #new repcache...
+        #print("Computing prs directly for %d circuits" % len(circuit_list))
+        if repcache is None: repcache = {} #new repcache...
         for i,circuit in enumerate(circuit_list):
             #print("Computing prs directly: circuit %d of %d" % (i,len(circuit_list)))
             assert(self.evotype == "svterm") # for now, just do SV case        
-            fastmode = True # start with slow mode
-            prs[:,i] = replib.SV_prs_directly(self, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode)
+            fastmode = False # start with slow mode
+            wtTol = 0.1
+            prs[:,i] = replib.SV_prs_directly(self, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode, wtTol, resetWts, self.times_debug)
         #print("PRS = ",prs)
         return prs
     
@@ -723,7 +728,8 @@ class TermForwardSimulator(ForwardSimulator):
                 tm = _time.time()
 
                 if self.cache is None:
-                    probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None)
+                    repcache = {} #new repcache for storing term reps that don't change (just their coeffs do)
+                    probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None, resetWts=True, repcache=repcache)
                 
                 if prMxToFill is not None:
                     if self.cache is not None: polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
@@ -742,7 +748,7 @@ class TermForwardSimulator(ForwardSimulator):
                     dprobs = _np.empty( (len(elabels), len(circuit_list), self.Np), 'd')
                     orig_vec = self.to_vector().copy()
                     for i in range(self.Np):
-                        print("direct dprobs cache %d of %d" % (i,self.Np))
+                        #print("direct dprobs cache %d of %d" % (i,self.Np))
                         #if i in iParamToFinal: #LATER: add MPI support?
                         #    iFinal = iParamToFinal[i]
                         if True:
@@ -750,7 +756,7 @@ class TermForwardSimulator(ForwardSimulator):
                             vec = orig_vec.copy(); vec[i] += eps
                             self.from_vector(vec)
                             dprobs[:,:,iFinal] = ( self.prs_directly(rholabel, elabels, circuit_list,
-                                                                     comm=None, memLimit=None) - probs)/eps
+                                                                     comm=None, memLimit=None, resetWts=False, repcache=repcache) - probs)/eps
                     self.from_vector(orig_vec)
                 else:
                     dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
@@ -840,7 +846,11 @@ class TermForwardSimulator(ForwardSimulator):
         profiler.add_time("bulk_fill_dprobs: total", tStart)
         profiler.add_count("bulk_fill_dprobs count")
         profiler.mem_check("bulk_fill_dprobs: end")
-
+        print("DB: time debug after bulk_fill_dprobs: ", self.times_debug)
+        self.times_debug = { 'tstartup': 0.0, 'total': 0.0,
+                             't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
+                             'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0 }
+        
 
 
     def bulk_fill_hprobs(self, mxToFill, evalTree,

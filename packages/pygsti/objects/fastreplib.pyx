@@ -3,9 +3,11 @@
 # cython: linetrace=False
 # filename: fastactonlib.pyx
 
-import sys, time
+import sys
+import time as pytime
 import numpy as np
 from libc.stdlib cimport malloc, free
+from libc cimport time
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.unordered_map cimport unordered_map
@@ -275,6 +277,7 @@ cdef extern from "fastreps.h" namespace "CReps":
         SVTermDirectCRep(double complex, SVEffectCRep*, SVEffectCRep*, vector[SVOpCRep*], vector[SVOpCRep*]) except +
         SVTermDirectCRep(double complex, vector[SVOpCRep*], vector[SVOpCRep*]) except +
         double complex _coeff
+        double _weight
         SVStateCRep* _pre_state
         SVEffectCRep* _pre_effect
         vector[SVOpCRep*] _pre_ops
@@ -317,8 +320,8 @@ ctypedef vector[SVTermDirectCRep_ptr]* vector_SVTermDirectCRep_ptr_ptr
 #Create a function pointer type for term-based calc inner loop
 ctypedef void (*sv_innerloopfn_ptr)(vector[vector_SVTermCRep_ptr_ptr],
                                     vector[INT]*, vector[PolyCRep*]*, INT)
-ctypedef void (*sv_innerloopfn_direct_ptr)(vector[vector_SVTermDirectCRep_ptr_ptr],
-                                           vector[INT]*, vector[DCOMPLEX]*, INT)
+ctypedef INT (*sv_innerloopfn_direct_ptr)(vector[vector_SVTermDirectCRep_ptr_ptr],
+                                           vector[INT]*, vector[DCOMPLEX]*, INT, vector[double]*, double)
 ctypedef void (*sb_innerloopfn_ptr)(vector[vector_SBTermCRep_ptr_ptr],
                                     vector[INT]*, vector[PolyCRep*]*, INT)
 
@@ -1303,7 +1306,7 @@ cdef dm_compute_pr_cache(double[:,:] ret,
     # - upon loop entry, prop2 is allocated and prop1 is not (it doesn't "own" any memory)
     # - all rho_cache entries have been allocated via "new"
     for k in range(<INT>c_evalTree.size()):
-        #t0 = time.time() # DEBUG
+        #t0 = pytime.time() # DEBUG
         intarray = c_evalTree[k]
         i = intarray[0]
         istart = intarray[1]
@@ -1321,10 +1324,10 @@ cdef dm_compute_pr_cache(double[:,:] ret,
         prop1 = shelved if icache == -1 else deref(prho_cache)[icache]
         prop1.copy_from(init_state) # copy init_state -> prop1 
         #print " prop1:";  print [ prop1._dataptr[t] for t in range(4) ]
-        #t1 = time.time() # DEBUG
+        #t1 = pytime.time() # DEBUG
         for l in range(3,<INT>intarray.size()): #during loop, both prop1 & prop2 are alloc'd        
-            #print "begin acton %d: %.2fs since last, %.2fs elapsed" % (l-2,time.time()-t1,time.time()-t0) # DEBUG
-            #t1 = time.time() #DEBUG
+            #print "begin acton %d: %.2fs since last, %.2fs elapsed" % (l-2,pytime.time()-t1,pytime.time()-t0) # DEBUG
+            #t1 = pytime.time() #DEBUG
             c_gatereps[intarray[l]].acton(prop1,prop2)
             #print " post-act prop2:"; print [ prop2._dataptr[t] for t in range(4) ]
             tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
@@ -1332,7 +1335,7 @@ cdef dm_compute_pr_cache(double[:,:] ret,
         # Note: prop2 is the other alloc'd state and this maintains invariant
         #print " final:"; print [ final_state._dataptr[t] for t in range(4) ]
         
-        #print "begin prob comps: %.2fs since last, %.2fs elapsed" % (time.time()-t1, time.time()-t0) # DEBUG
+        #print "begin prob comps: %.2fs since last, %.2fs elapsed" % (pytime.time()-t1, pytime.time()-t0) # DEBUG
         for j in range(<INT>c_ereps.size()):
             p = c_ereps[j].probability(final_state) #outcome probability
             #print("processing ",i,j,p)
@@ -1344,7 +1347,7 @@ cdef dm_compute_pr_cache(double[:,:] ret,
             shelved = final_state
             final_state = NULL
         #print "%d of %d (i=%d,istart=%d,remlen=%d): %.1fs" % (k, c_evalTree.size(), i, istart,
-        #                                                      intarray.size()-3, time.time()-t0)
+        #                                                      intarray.size()-3, pytime.time()-t0)
 
     #delete our temp states
     del prop2
@@ -1397,7 +1400,7 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
     # final index within dpr_cache
     iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
 
-    #tStart = time.time(); #REMOVE
+    #tStart = pytime.time(); #REMOVE
     #t_pr = 0; t_reps = 0; t_conv=0; t_copy=0; t_fromvec=0; t_gather=0;   #REMOVE
     #time_dict = {'expon':0.0, 'composed': 0.0, 'dense':0.0, 'lind': 0.0} #REMOVE
     orig_vec = calc.to_vector().copy()
@@ -1405,11 +1408,11 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
-            # t1 = time.time() # REMOVE
+            # t1 = pytime.time() # REMOVE
             vec = orig_vec.copy(); vec[i] += eps
-            #t_copy += time.time()-t1; t1 = time.time() # REMOVE
+            #t_copy += pytime.time()-t1; t1 = pytime.time() # REMOVE
             calc.from_vector(vec)
-            #t_fromvec += time.time()-t1; t1 = time.time() # REMOVE
+            #t_fromvec += pytime.time()-t1; t1 = pytime.time() # REMOVE
 
             #rebuild reps (not evaltree or operation_lookup)
             rhorep = calc.sos.get_prep(rholabel).torep('prep')
@@ -1417,31 +1420,31 @@ def DM_compute_dpr_cache(calc, rholabel, elabels, evalTree, wrtSlice, comm, scra
             operationreps = { i:op.torep() for i,op in operations.items() } 
             #REMOVE: note - used torep(time_dict) in profiling, when torep calls could all their timing info
             #OLD: operationreps = { i:calc.sos.get_operation(lbl).torep() for lbl,i in operation_lookup.items() }
-            #t_reps += time.time()-t1; t1 = time.time() #REMOVE
+            #t_reps += pytime.time()-t1; t1 = pytime.time() #REMOVE
             c_rho = convert_rhorep(rhorep)
             c_ereps = convert_ereps(ereps)
             c_gatereps = convert_gatereps(operationreps)
-            #t_conv += time.time()-t1; t1 = time.time() #REMOVE
+            #t_conv += pytime.time()-t1; t1 = pytime.time() #REMOVE
 
             dm_compute_pr_cache(pCache_delta, c_evalTree, c_gatereps, c_rho, c_ereps, &rho_cache, comm)
             dpr_cache[:,:,iFinal] = (pCache_delta - pCache)/eps
-            #t_pr += time.time()-t1 #REMOVE
+            #t_pr += pytime.time()-t1 #REMOVE
 
     calc.from_vector(orig_vec)
     free_rhocache(rho_cache)
     
     #Now each processor has filled the relavant parts of dpr_cache,
     # so gather together:
-    #t3 = time.time() #REMOVE
+    #t3 = pytime.time() #REMOVE
     _mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=2, comm=comm)
-    #t_gather = time.time()-t3 #REMOVE
+    #t_gather = pytime.time()-t3 #REMOVE
     
     # DEBUG LINE USED FOR MONITORING N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" % 
-    #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), time.time()-tStart)) #DEBUG
+    #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), pytime.time()-tStart)) #DEBUG
 
     # DEBUG FOR PROFILING THIS FUNCTION
-    #print("dpr_cache tot=%.3fs, reps=%.3fs, conv=%.3fs, pr_cache=%.3fs, copy=%.3fs, fromvec=%.3fs, gather=%.3fs, rep_expon=%.3fs rep_comp=%.3fs rep_dense=%.3fs rep_lind=%.3fs" % (time.time()-tStart, t_reps, t_conv, t_pr, t_copy, t_fromvec, t_gather, time_dict['expon'], time_dict['composed'],time_dict['dense'],time_dict['lind']))
+    #print("dpr_cache tot=%.3fs, reps=%.3fs, conv=%.3fs, pr_cache=%.3fs, copy=%.3fs, fromvec=%.3fs, gather=%.3fs, rep_expon=%.3fs rep_comp=%.3fs rep_dense=%.3fs rep_lind=%.3fs" % (pytime.time()-tStart, t_reps, t_conv, t_pr, t_copy, t_fromvec, t_gather, time_dict['expon'], time_dict['composed'],time_dict['dense'],time_dict['lind']))
 
     return dpr_cache
 
@@ -1936,17 +1939,41 @@ cdef vector[vector[SVTermDirectCRep_ptr]] sv_extract_cterms_direct(python_termre
     return ret
 
 
-def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True):
+def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, wtTol=0.0, resetTermWeights=True, debug=None):
 
     # Create gatelable -> int mapping to be used throughout
     distinct_gateLabels = sorted(set(circuit))
     glmap = { gl: i for i,gl in enumerate(distinct_gateLabels) }
+    t0 = pytime.time()
 
     # Convert circuit to a vector of ints
     cdef INT i, j
     cdef vector[INT] cgatestring
     for gl in circuit:
         cgatestring.push_back(<INT>glmap[gl])
+        
+    #TODO: maybe compute these weights elsewhere and pass in?
+    cdef double circuitWeight
+    cdef double remaingingWeightTol = <double?>wtTol
+    cdef vector[double] remainingWeight = vector[double](<INT>len(elabels))
+    if 'circuitWeights' not in repcache:
+        repcache['circuitWeights'] = {}
+    if resetTermWeights or circuit not in repcache['circuitWeights']:
+        circuitWeight = calc.sos.get_prep(rholabel).get_total_term_weight()
+        for gl in circuit:
+            circuitWeight *= calc.sos.get_operation(gl).get_total_term_weight()
+        for i,elbl in enumerate(elabels):
+            remainingWeight[i] = circuitWeight * calc.sos.get_effect(elbl).get_total_term_weight()
+        repcache['circuitWeights'][circuit] = [ remainingWeight[i] for i in range(remainingWeight.size()) ]
+    else:
+        for i,wt in enumerate(repcache['circuitWeights'][circuit]):
+            assert(wt > 1.0)
+            remainingWeight[i] = wt
+
+    #if resetTermWeights:
+    #    print "Remaining weights: "
+    #    for i in range(remainingWeight.size()):
+    #        print remainingWeight[i]
 
     cdef double order_base = 0.1 # default for now - TODO: make this a calc param like max_order?
     cdef INT order
@@ -1972,6 +1999,7 @@ def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
                 coeffs = <DCOMPLEX*?>(coeffs_array.data)
                 for i in range(treps.size()):
                     treps[i]._coeff = coeffs[i]
+                    if resetTermWeights: treps[i]._weight = abs(coeffs[i])
             #for order,treps in enumerate(op_term_reps[ glmap[glbl] ]):
             #    for coeff,trep in zip(calc.sos.get_operation(glbl).get_direct_order_coeffs(order,order_base), treps):
             #        trep.set_coeff(coeff)
@@ -2006,6 +2034,7 @@ def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
             coeffs = <DCOMPLEX*?>(coeffs_array.data)
             for i in range(treps.size()):
                 treps[i]._coeff = coeffs[i]
+                if resetTermWeights: treps[i]._weight = abs(coeffs[i])
 
         #for order,treps in enumerate(rho_term_reps):
         #    for coeff,trep in zip(calc.sos.get_prep(rholabel).get_direct_order_coeffs(order,order_base), treps):
@@ -2044,6 +2073,7 @@ def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
                 coeffs = <DCOMPLEX*?>(coeffs_array.data)
                 for i in range(treps.size()):
                     treps[i]._coeff = coeffs[i]
+                    if resetTermWeights: treps[i]._weight = abs(coeffs[i])
                     reps_at_order.push_back(treps[i])
                 cur_indices.extend( [j]*reps_at_order.size() )
 
@@ -2100,14 +2130,30 @@ def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
 
     #Note: term calculator "dim" is the full density matrix dim
     stateDim = int(round(np.sqrt(calc.dim)))
+    if debug is not None:
+        debug['tstartup'] += pytime.time()-t0
+        t0 = pytime.time()
             
     #Call C-only function (which operates with C-representations only)
+    cdef vector[float] debugvec = vector[float](10)
+    debugvec[0] = 0.0
     cdef vector[DCOMPLEX] prs = sv_prs_directly(
         cgatestring, rho_term_reps, op_term_reps, E_term_reps,
         #cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
-        E_cindices, numEs, calc.max_order, stateDim, <bool>fastmode)
+        E_cindices, numEs, calc.max_order, stateDim, <bool>fastmode, &remainingWeight, remaingingWeightTol, debugvec)
 
-    assert(all([ abs(prs[i].imag) < 1e-8 for i in range(<INT>prs.size()) ]))
+    debug['total'] += debugvec[0]
+    debug['t1'] += debugvec[1]
+    debug['t2'] += debugvec[2]
+    debug['t3'] += debugvec[3]
+    debug['n1'] += debugvec[4]
+    debug['n2'] += debugvec[5]
+    debug['n3'] += debugvec[6]
+    debug['t4'] += debugvec[7]
+    debug['n4'] += debugvec[8]
+    #if not all([ abs(prs[i].imag) < 1e-4 for i in range(<INT>prs.size()) ]):
+    #    print("ERROR: prs = ",[ prs[i] for i in range(<INT>prs.size()) ])
+    #assert(all([ abs(prs[i].imag) < 1e-6 for i in range(<INT>prs.size()) ]))
     return [ prs[i].real for i in range(<INT>prs.size()) ] # TODO: make this into a numpy array? - maybe pass array to fill to sv_prs_directy above?
 
 
@@ -2115,7 +2161,7 @@ cdef vector[DCOMPLEX] sv_prs_directly(
     vector[INT]& circuit, vector[vector[SVTermDirectCRep_ptr]] rho_term_reps,
     unordered_map[INT, vector[vector[SVTermDirectCRep_ptr]]] op_term_reps,
     vector[vector[SVTermDirectCRep_ptr]] E_term_reps, vector[vector[INT]] E_term_indices,
-    INT numEs, INT max_order, INT dim, bool fastmode):
+    INT numEs, INT max_order, INT dim, bool fastmode, vector[double]* remainingWeight, double remTol, vector[float]& debugvec):
 
     #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
     # lookups and avoid weird string conversion stuff with Cython
@@ -2124,6 +2170,9 @@ cdef vector[DCOMPLEX] sv_prs_directly(
     cdef INT* p = <INT*>malloc((N+2) * sizeof(INT))
     cdef INT i,j,k,order,nTerms
     cdef INT gn
+
+    cdef INT t0 = time.clock()
+    cdef INT t, n, nPaths; #for below
 
     cdef sv_innerloopfn_direct_ptr innerloop_fn;
     if fastmode:
@@ -2155,6 +2204,7 @@ cdef vector[DCOMPLEX] sv_prs_directly(
         if order == 0:
             #inner loop(p)
             #factor_lists = [ gate_terms[glbl][pi] for glbl,pi in zip(circuit,p) ]
+            t = time.clock()
             factor_lists[0] = &rho_term_reps[p[0]]
             for k in range(N):
                 gn = circuit[k]
@@ -2164,10 +2214,12 @@ cdef vector[DCOMPLEX] sv_prs_directly(
             Einds = &E_term_indices[p[N+1]]
         
             #print("Part0 ",p)
-            innerloop_fn(factor_lists,Einds,&prs,dim)
-
+            nPaths = innerloop_fn(factor_lists,Einds,&prs,dim,remainingWeight,0.0) #remTol) # force 0-order
+            debugvec[1] += float(time.clock() - t)/time.CLOCKS_PER_SEC
+            debugvec[4] += nPaths
 
         elif order == 1:
+            t = time.clock(); n=0
             for i in range(N+2):
                 p[i] = 1
                 #inner loop(p)
@@ -2180,10 +2232,14 @@ cdef vector[DCOMPLEX] sv_prs_directly(
                 Einds = &E_term_indices[p[N+1]]
 
                 #print "DB: Order1 "
-                innerloop_fn(factor_lists,Einds,&prs,dim)
+                nPaths = innerloop_fn(factor_lists,Einds,&prs,dim,remainingWeight,0.0) #remTol) # force 1st-order
                 p[i] = 0
+                n += nPaths
+            debugvec[2] += float(time.clock() - t)/time.CLOCKS_PER_SEC
+            debugvec[5] += n
             
         elif order == 2:
+            t = time.clock(); n=0
             for i in range(N+2):
                 p[i] = 2
                 #inner loop(p)
@@ -2195,8 +2251,13 @@ cdef vector[DCOMPLEX] sv_prs_directly(
                 factor_lists[N+1] = &E_term_reps[p[N+1]]
                 Einds = &E_term_indices[p[N+1]]
 
-                innerloop_fn(factor_lists,Einds,&prs,dim)
+                nPaths = innerloop_fn(factor_lists,Einds,&prs,dim,remainingWeight,remTol)
                 p[i] = 0
+                n += nPaths
+
+            debugvec[3] += float(time.clock() - t)/time.CLOCKS_PER_SEC
+            debugvec[6] += n
+            t = time.clock(); n=0
 
             for i in range(N+2):
                 p[i] = 1
@@ -2211,23 +2272,31 @@ cdef vector[DCOMPLEX] sv_prs_directly(
                     factor_lists[N+1] = &E_term_reps[p[N+1]]
                     Einds = &E_term_indices[p[N+1]]
 
-                    innerloop_fn(factor_lists,Einds,&prs,dim)
+                    nPaths = innerloop_fn(factor_lists,Einds,&prs,dim,remainingWeight,remTol)
                     p[j] = 0
+                    n += nPaths
                 p[i] = 0
+            debugvec[7] += float(time.clock() - t)/time.CLOCKS_PER_SEC
+            debugvec[8] += n
+            
         else:
             assert(False) # order > 2 not implemented yet...
 
     free(p)
+
+    debugvec[0] += float(time.clock() - t0)/time.CLOCKS_PER_SEC
     return prs
 
                 
 
-cdef void sv_pr_directly_innerloop(vector[vector_SVTermDirectCRep_ptr_ptr] factor_lists, vector[INT]* Einds,
-                                  vector[DCOMPLEX]* prs, INT dim):
+cdef INT sv_pr_directly_innerloop(vector[vector_SVTermDirectCRep_ptr_ptr] factor_lists, vector[INT]* Einds,
+                                   vector[DCOMPLEX]* prs, INT dim, vector[double]* remainingWeight, double remainingWeightTol):
     #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
 
     cdef INT i,j,Ei
     cdef double complex scale, val, newval, pLeft, pRight, p
+    cdef double wt, cwt
+    cdef int nPaths = 0
 
     cdef SVTermDirectCRep* factor
 
@@ -2239,7 +2308,7 @@ cdef void sv_pr_directly_innerloop(vector[vector_SVTermDirectCRep_ptr_ptr] facto
         factorListLens[i] = factor_lists[i].size()
         if factorListLens[i] == 0:
             free(factorListLens)
-            return # nothing to loop over! - (exit before we allocate more)
+            return 0 # nothing to loop over! - (exit before we allocate more)
 
     cdef double complex coeff   # THESE are only real changes from "as_poly"
     cdef double complex result  # version of this function (where they are PolyCRep type)
@@ -2256,57 +2325,63 @@ cdef void sv_pr_directly_innerloop(vector[vector_SVTermDirectCRep_ptr_ptr] facto
     
     #for factors in _itertools.product(*factor_lists):
     while(True):
-        # In this loop, b holds "current" indices into factor_lists
-        factor = deref(factor_lists[0])[b[0]] # the last factor (an Evec)
-        coeff = factor._coeff # an unordered_map (copies to new "coeff" variable)
-            
-        for i in range(1,nFactorLists):
-            coeff *= deref(factor_lists[i])[b[i]]._coeff
-            
-        #pLeft / "pre" sim
-        factor = deref(factor_lists[0])[b[0]] # 0th-factor = rhoVec
-        prop1.copy_from(factor._pre_state)
-        for j in range(<INT>factor._pre_ops.size()):
-            factor._pre_ops[j].acton(prop1,prop2)
-            tprop = prop1; prop1 = prop2; prop2 = tprop
-        for i in range(1,last_index):
-            factor = deref(factor_lists[i])[b[i]]
+        final_factor_indx = b[last_index]
+        Ei = deref(Einds)[final_factor_indx] #final "factor" index == E-vector index
+        wt = deref(remainingWeight)[Ei]
+        if remainingWeightTol == 0.0 or wt > remainingWeightTol: #if we need this "path"
+            # In this loop, b holds "current" indices into factor_lists
+            factor = deref(factor_lists[0])[b[0]] # the last factor (an Evec)
+            coeff = factor._coeff
+            cwt = factor._weight
+                
+            for i in range(1,nFactorLists):
+                coeff *= deref(factor_lists[i])[b[i]]._coeff
+                cwt *= deref(factor_lists[i])[b[i]]._weight
+                
+            #pLeft / "pre" sim
+            factor = deref(factor_lists[0])[b[0]] # 0th-factor = rhoVec
+            prop1.copy_from(factor._pre_state)
             for j in range(<INT>factor._pre_ops.size()):
                 factor._pre_ops[j].acton(prop1,prop2)
+                tprop = prop1; prop1 = prop2; prop2 = tprop
+            for i in range(1,last_index):
+                factor = deref(factor_lists[i])[b[i]]
+                for j in range(<INT>factor._pre_ops.size()):
+                    factor._pre_ops[j].acton(prop1,prop2)
+                    tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+            factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
+        
+        	# can't propagate effects, so effect's post_ops are constructed to act on *state*
+            EVec = factor._post_effect
+            for j in range(<INT>factor._post_ops.size()):
+                rhoVec = factor._post_ops[j].acton(prop1,prop2)
                 tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
-        factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
-
-	# can't propagate effects, so effect's post_ops are constructed to act on *state*
-        EVec = factor._post_effect
-        for j in range(<INT>factor._post_ops.size()):
-            rhoVec = factor._post_ops[j].acton(prop1,prop2)
-            tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
-        pLeft = EVec.amplitude(prop1)
-                        
-        #pRight / "post" sim
-        factor = deref(factor_lists[0])[b[0]] # 0th-factor = rhoVec
-        prop1.copy_from(factor._post_state)
-        for j in range(<INT>factor._post_ops.size()):
-            factor._post_ops[j].acton(prop1,prop2)
-            tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
-        for i in range(1,last_index):
-            factor = deref(factor_lists[i])[b[i]]
+            pLeft = EVec.amplitude(prop1)
+                            
+            #pRight / "post" sim
+            factor = deref(factor_lists[0])[b[0]] # 0th-factor = rhoVec
+            prop1.copy_from(factor._post_state)
             for j in range(<INT>factor._post_ops.size()):
                 factor._post_ops[j].acton(prop1,prop2)
                 tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
-        factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
+            for i in range(1,last_index):
+                factor = deref(factor_lists[i])[b[i]]
+                for j in range(<INT>factor._post_ops.size()):
+                    factor._post_ops[j].acton(prop1,prop2)
+                    tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+            factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
+            
+            EVec = factor._pre_effect
+            for j in range(<INT>factor._pre_ops.size()):
+                factor._pre_ops[j].acton(prop1,prop2)
+                tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
+            pRight = EVec.amplitude(prop1).conjugate()
         
-        EVec = factor._pre_effect
-        for j in range(<INT>factor._pre_ops.size()):
-            factor._pre_ops[j].acton(prop1,prop2)
-            tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
-        pRight = EVec.amplitude(prop1).conjugate()
-
-        #Add result to appropriate poly
-        result = coeff * pLeft * pRight
-        final_factor_indx = b[last_index]
-        Ei = deref(Einds)[final_factor_indx] #final "factor" index == E-vector index
-        deref(prs)[Ei] += result
+            #Add result to appropriate poly
+            result = coeff * pLeft * pRight
+            deref(prs)[Ei] = deref(prs)[Ei] + result #TODO - see why += doesn't work here
+            deref(remainingWeight)[Ei] = wt - cwt # "weight" of this path
+            nPaths += 1 # just for debuggins
         
         #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
         for i in range(nFactorLists-1,-1,-1):
@@ -2323,11 +2398,12 @@ cdef void sv_pr_directly_innerloop(vector[vector_SVTermDirectCRep_ptr_ptr] facto
     del prop2
     free(factorListLens)
     free(b)
-    return
+    return nPaths
 
 
-cdef void sv_pr_directly_innerloop_savepartials(vector[vector_SVTermDirectCRep_ptr_ptr] factor_lists,
-                                                vector[INT]* Einds, vector[DCOMPLEX]* prs, INT dim):
+cdef INT sv_pr_directly_innerloop_savepartials(vector[vector_SVTermDirectCRep_ptr_ptr] factor_lists,
+                                                vector[INT]* Einds, vector[DCOMPLEX]* prs, INT dim,
+                                                vector[double]* remainingWeight, double remainingWeightTol):
     #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
 
     cdef INT i,j,Ei
@@ -2344,7 +2420,7 @@ cdef void sv_pr_directly_innerloop_savepartials(vector[vector_SVTermDirectCRep_p
         factorListLens[i] = factor_lists[i].size()
         if factorListLens[i] == 0:
             free(factorListLens)
-            return # nothing to loop over! (exit before we allocate anything else)
+            return 0 # nothing to loop over! (exit before we allocate anything else)
         
     cdef double complex coeff
     cdef double complex result    
@@ -2496,7 +2572,7 @@ cdef void sv_pr_directly_innerloop_savepartials(vector[vector_SVTermDirectCRep_p
     del shelved
     free(factorListLens)
     free(b)
-    return
+    return 0 #TODO: fix nPaths
 
 
 # Stabilizer-evolution version of poly term calcs -----------------------
