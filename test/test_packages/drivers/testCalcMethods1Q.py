@@ -151,7 +151,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         mdl = results.estimates['default'].models['go0']
         mdl_copy = mdl.copy()
         print(mdl.strdiff(mdl_copy))
-        self.assertAlmostEqual( mdl.frobeniusdist(mdl_copy), 0, places=3)        
+        self.assertAlmostEqual( mdl.frobeniusdist(mdl_copy), 0, places=2)
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate) (SAVE)
         if os.environ.get('PYGSTI_REGEN_REF_FILES','no').lower() in ("yes","1","true"):
@@ -167,7 +167,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         gsEstimate.set_all_parameterizations("full")
         gsEstimate = pygsti.algorithms.gaugeopt_to_target(gsEstimate, mdl_compare)
         print(gsEstimate.strdiff(mdl_compare))
-        self.assertAlmostEqual( gsEstimate.frobeniusdist(mdl_compare), 0, places=3)
+        self.assertAlmostEqual( gsEstimate.frobeniusdist(mdl_compare), 0, places=2)
 
 
     def test_stdgst_map(self):
