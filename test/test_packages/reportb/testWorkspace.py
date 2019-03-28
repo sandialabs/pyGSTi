@@ -21,6 +21,8 @@ try:
 except ImportError:
     bPandas = False
 
+HEADLESS = os.getenv('DISPLAY') is None
+    
 #HACK for tracking open files
 # try:
 #     import __builtin__ as builtins # Python2.7
@@ -63,6 +65,7 @@ class TestWorkspace(ReportBaseCase):
         self.mdl = self.results.estimates['default'].models['go0']
         self.gss = self.results.circuit_structs['final']
 
+    @unittest.skipIf(HEADLESS, "skipping while IPython display is not available")
     def test_notebook_mode(self):
         wnb = pygsti.report.Workspace()
         wnb.init_notebook_mode(connected=True, autodisplay=True)

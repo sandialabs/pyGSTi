@@ -37,6 +37,9 @@
 	#iftoggle(ShowScaling)
 	<a href="#" class="tablink" onclick="openTab(event, 'Goodness_scaling')">Robust data scaling</a>
 	#endtoggle
+	#iftoggle(ShowUnmodeledError)
+	<a href="#" class="tablink" onclick="openTab(event, 'Goodness_unmodeled')">Unmodeled error</a>
+	#endtoggle
 	#endtoggle
       </div>
 
@@ -99,6 +102,11 @@
       </div>
       #iftoggle(ShowScaling)
       <div id="Goodness_scaling" class="tabcontent">
+      </div>
+      #endtoggle
+
+      #iftoggle(ShowUnmodeledError)
+      <div id="Goodness_unmodeled" class="tabcontent">
       </div>
       #endtoggle
 

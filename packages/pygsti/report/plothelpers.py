@@ -428,7 +428,8 @@ def _compute_num_boxes_dof(subMxs, sumUp, element_dof):
 
 
 def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6,1e6), 
-                          check=False, comm=None, smartc=None):
+                          check=False, opLabelAliases=None,
+                          comm=None, smartc=None, wildcard=None):
     """
     Returns a dictionary of probabilities for each gate sequence in
     CircuitStructure `gss`.
@@ -444,12 +445,23 @@ def _computeProbabilities(gss, model, dataset, probClipInterval=(-1e6,1e6),
 
     #compute probabilities
     #OLD: evt,lookup,_ = smart(model.bulk_evaltree, circuitList, dataset=dataset)
-    evt,_,_,lookup,_ = smart(model.bulk_evaltree_from_resources,
-                             circuitList, comm, dataset=dataset)
+    evt,_,_,lookup,outcomes_lookup = smart(model.bulk_evaltree_from_resources,
+                                          circuitList, comm, dataset=dataset)
 
     bulk_probs = _np.zeros(evt.num_final_elements(), 'd') # _np.empty(evt.num_final_elements(), 'd') - .zeros b/c of caching
     smart(model.bulk_fill_probs, bulk_probs, evt, probClipInterval, check, comm, _filledarrays=(0,))
       # bulk_probs indexed by [element_index]
+
+    if wildcard:
+        freqs = _np.empty(evt.num_final_elements(), 'd' )
+        ds_circuit_list = _tools.find_replace_tuple_list(
+            circuitList, opLabelAliases)
+        for (i,opStr) in enumerate(ds_circuit_list):
+            cnts = dataset[opStr].counts; total = sum(cnts.values())
+            freqs[ lookup[i] ] = [ cnts.get(x,0)/total for x in outcomes_lookup[i] ]
+
+        probs_in = bulk_probs.copy()
+        wildcard.update_probs(probs_in, bulk_probs, freqs, circuitList, lookup)
 
     probs_dict = \
         { circuitList[i]: bulk_probs.take(_tools.as_array(lookup[i]))
@@ -704,7 +716,7 @@ def drift_maxpower_matrices(gsplaq, driftresults):
             pass
     return ret
 
-def ratedNsigma(dataset, model, gss, objective, Np=None, returnAll=False,
+def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAll=False,
                 comm=None, smartc=None):  #TODO: pipe down minprobclip, radius, probclipinterval?
     """
     Computes the number of standard deviations of model violation, comparing
@@ -731,6 +743,8 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, returnAll=False,
     Np : int, optional
         The number of free parameters in the model.  If None, then
         `model.num_nongauge_params()` is used.
+
+    wildcard : TODO: docstring
 
     returnAll : bool, optional
         Returns additional information such as the raw and expected model
@@ -769,6 +783,7 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, returnAll=False,
     """
     gstrs = gss.allstrs
     if objective == "chi2":
+        assert(wildcard is None), "Can only use wildcard budget with 'logl' objective!"
         fitQty = _tools.chi2( model, dataset, gstrs,
                               minProbClipForWeighting=1e-4,
                               opLabelAliases=gss.aliases,
@@ -777,7 +792,7 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, returnAll=False,
         logL_upperbound = _tools.logl_max(model, dataset, gstrs, opLabelAliases=gss.aliases,
                                           smartc=smartc)
         logl = _tools.logl( model, dataset, gstrs, opLabelAliases=gss.aliases,
-                            comm=comm, smartc=smartc)
+                            comm=comm, smartc=smartc, wildcard=wildcard)
         fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
         if(logL_upperbound < logl):
             if _np.isclose(logL_upperbound,logl):
