@@ -1182,9 +1182,11 @@ class PolyRep(dict):
 
 class SVTermRep(object):
     # just a container for other reps (polys, states, effects, and gates)
-    def __init__(self, coeff, pre_state, post_state,
+    def __init__(self, coeff, mag, logmag, pre_state, post_state,
                  pre_effect, post_effect, pre_ops, post_ops):
         self.coeff = coeff
+        self.magnitude = mag
+        self.logmagnitude = logmag
         self.pre_state = pre_state
         self.post_state = post_state
         self.pre_effect = pre_effect
@@ -1196,9 +1198,11 @@ class SVTermRep(object):
 class SBTermRep(object):
     # exactly the same as SVTermRep
     # just a container for other reps (polys, states, effects, and gates)
-    def __init__(self, coeff, pre_state, post_state,
+    def __init__(self, coeff, mag, logmag, pre_state, post_state,
                  pre_effect, post_effect, pre_ops, post_ops):
         self.coeff = coeff
+        self.magnitude = mag
+        self.logmagnitude = logmag
         self.pre_state = pre_state
         self.post_state = post_state
         self.pre_effect = pre_effect
@@ -1366,17 +1370,26 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
     #print("PRS_AS_POLY circuit = ",circuit)
     #print("DB: prs_as_polys(",spamTuple,circuit,calc.max_order,")")
 
+    #NOTE for FUTURE: to adapt this to work with numerical rather than polynomial coeffs:
+    # mpo = mpv = None # (these shouldn't matter)
+    # use get_direct_order_terms(order, order_base) w/order_base=0.1(?) instead of get_taylor_order_terms??
+    # below: replace prps with: prs = _np.zeros(len(elabels),complex)  # an array in "bulk" mode
+    #  use *= or * instead of .mult( and .scale(
+    #  e.g. res = _np.product([f.coeff for f in factors])
+    #       res *= (pLeft * pRight)
+    # - add assert(_np.linalg.norm(_np.imag(prs)) < 1e-6) at end and return _np.real(prs)
+    
     mpv = calc.Np # max_poly_vars
     mpo = calc.max_order*2 #max_poly_order
 
     # Construct dict of gate term reps
     distinct_gateLabels = sorted(set(circuit))
-    op_term_reps = { glbl: [ [t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_order_terms(order)]
+    op_term_reps = { glbl: [ [t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_taylor_order_terms(order)]
                                       for order in range(calc.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms, but lists
-    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_order_terms(order)]
+    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_taylor_order_terms(order)]
                       for order in range(calc.max_order+1) ]
 
     E_term_reps = []
@@ -1385,7 +1398,7 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.sos.get_effect(elbl).get_order_terms(order) ]
+            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.sos.get_effect(elbl).get_taylor_order_terms(order) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )
@@ -1522,13 +1535,22 @@ def _prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
 
 
 def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, wtTol=0.0, resetTermWeights=True, debug=None):
-    return _prs_directly(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
+    #return _prs_directly(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
+    raise NotImplementedError("No direct mode yet")
 
 def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, wtTol=0.0, resetTermWeights=True, debug=None):
-    return _prs_directly(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
+    #return _prs_directly(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
+    raise NotImplementedError("No direct mode yet")
+
+def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01):
+    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag)
+
+def SB_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01):
+    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag)
+
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
-def _prs_directly(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True):
+def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
     
@@ -1558,157 +1580,254 @@ def _prs_directly(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fa
     fastmode : bool, optional
         A switch between a faster, slighty more memory hungry mode of
         computation (`fastmode=True`)and a simpler slower one (`=False`).
+    
+    TODO: docstring - additional args and now return polys again
 
     Returns
     -------
     numpy.ndarray
         one per element of `elabels`.
     """
+
     # Construct dict of gate term reps
-    order_base = 0.1 # default for now - TODO: make this a calc param like max_order?
-    mpo = mpv = None # these shouldn't matter for direct terms
+    mpv = calc.Np # max_poly_vars
+    mpo = 2*2 #calc.max_order*2 #max_poly_order  HACK - TODO: compute actual max poly order
     distinct_gateLabels = sorted(set(circuit))
-    op_term_reps = { glbl: [ [t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_direct_order_terms(order, order_base)]
-                                      for order in range(calc.max_order+1) ]
-                      for glbl in distinct_gateLabels }
+    #print("DB: _prs_as_pruned_polys: ", circuit, "Distinct = ",distinct_gateLabels)
+    op_term_reps = { glbl: [ t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_highmagnitude_terms(min_term_mag)]
+                     for glbl in distinct_gateLabels }
+    op_num_foat = { glbl: calc.sos.get_operation(glbl).get_num_firstorder_terms() for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms, but lists
-    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_direct_order_terms(order, order_base)]
-                      for order in range(calc.max_order+1) ]
+    rho_term_reps = [ t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_highmagnitude_terms(min_term_mag) ]
+    rho_num_foat = calc.sos.get_prep(rholabel).get_num_firstorder_terms()
 
-    E_term_reps = []
-    E_indices = []
-    for order in range(calc.max_order+1):
-        cur_term_reps = [] # the term reps for *all* the effect vectors
-        cur_indices = [] # the Evec-index corresponding to each term rep
-        for i,elbl in enumerate(elabels):
-            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.sos.get_effect(elbl).get_direct_order_terms(order, order_base) ]
-            cur_term_reps.extend( term_reps )
-            cur_indices.extend( [i]*len(term_reps) )
-        E_term_reps.append( cur_term_reps )
-        E_indices.append( cur_indices )
+    E_term_indices_and_reps = []
+    for i,elbl in enumerate(elabels):
+        E_term_indices_and_reps.extend( [ (i,t.torep(mpo,mpv,"effect"),t.magnitude)
+                                          for t in calc.sos.get_effect(elbl).get_highmagnitude_terms(min_term_mag) ] )
+    E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True) # sort effects by term magnitude
+    E_term_reps = [ x[1] for x in E_term_indices_and_reps ]
+    E_indices = [ x[0] for x in E_term_indices_and_reps ]
+    E_num_foat = sum([calc.sos.get_effect(elbl).get_num_firstorder_terms() for elbl in elabels])
+       #TODO: better zipping/sorting of different elabels -- we get already sorted lists and we need to keep some num_firstorder for *each* elabel
 
-
-    #HERE DEBUG!!!
-    global DEBUG_FCOUNT
-    db_part_cnt = 0
-    db_factor_cnt = 0
     #print("DB: pr_as_poly for ",str(tuple(map(str,circuit))), " max_order=",calc.max_order)
 
-    prs = _np.zeros(len(elabels),complex)  # an array in "bulk" mode
-    for order in range(calc.max_order+1):
-        #print("DB: pr_as_poly order=",order)
-        db_npartitions = 0
-        for p in _lt.partition_into(order, len(circuit)+2): # +2 for SPAM bookends
-            #factor_lists = [ calc.sos.get_operation(glbl).get_order_terms(pi) for glbl,pi in zip(circuit,p) ]
-            factor_lists = [ rho_term_reps[p[0]]] + \
-                           [ op_term_reps[glbl][pi] for glbl,pi in zip(circuit,p[1:-1]) ] + \
-                           [ E_term_reps[p[-1]] ]
-            factor_list_lens = list(map(len,factor_lists))
-            Einds = E_indices[p[-1]] # specifies which E-vec index each of E_term_reps[p[-1]] corresponds to
+    prps = [None]*len(elabels)
 
-            if any([len(fl)==0 for fl in factor_lists]): continue
+    factor_lists = [ rho_term_reps ] + \
+        [ op_term_reps[glbl] for glbl in circuit ] + \
+        [ E_term_reps ]
+    factor_list_lens = list(map(len,factor_lists))
+    last_index = len(factor_lists)-1
 
-            #print("DB partition = ",p, "listlens = ",[len(fl) for fl in factor_lists])
-            if fastmode: # filter factor_lists to matrix-compose all length-1 lists
-                leftSaved = [None]*(len(factor_lists)-1)  # saved[i] is state after i-th
-                rightSaved = [None]*(len(factor_lists)-1) # factor has been applied
-                coeffSaved = [None]*(len(factor_lists)-1)
-                last_index = len(factor_lists)-1
+    num_foat_per_op = [ rho_num_foat ] + [ op_num_foat[glbl] for glbl in circuit ] + [ E_num_foat ]
 
-                for incd,fi in _lt.incd_product(*[range(l) for l in factor_list_lens]):
-                    factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
+    gap = 0.01 # (?)
+    ops = [calc.sos.get_prep(rholabel)] + [ calc.sos.get_operation(glbl) for glbl in circuit ]
+    max_sum_of_pathmags = _np.product( [ op.get_total_term_magnitude() for op in ops ] )
+    max_sum_of_pathmags = _np.array( [ calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels ], 'd')
+    target_sum_of_pathmags = max_sum_of_pathmags - gap
+    threshold = pathmagnitude_threshold(factor_lists, E_indices, len(elabels), target_sum_of_pathmags, num_foat_per_op)
+      # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
 
-                    if incd == 0: # need to re-evaluate rho vector
-                        rhoVecL = factors[0].pre_state # Note: `factor` is a rep & so are it's ops
-                        for f in factors[0].pre_ops:
-                            rhoVecL = f.acton(rhoVecL)
-                        leftSaved[0] = rhoVecL
+    if fastmode:
+        leftSaved = [None]*(len(factor_lists)-1)  # saved[i] is state after i-th
+        rightSaved = [None]*(len(factor_lists)-1) # factor has been applied
+        coeffSaved = [None]*(len(factor_lists)-1)
 
-                        rhoVecR = factors[0].post_state
-                        for f in factors[0].post_ops:
-                            rhoVecR = f.acton(rhoVecR)
-                        rightSaved[0] = rhoVecR
+        def add_path(b, mag, incd):
+            """ Relies on the fact that paths are iterated over in lexographic order, and `incd`
+                tells us which index was just incremented (all indices less than this one are
+                the *same* as the last call). """
+            # "non-fast" mode is the only way we know to do this, since we don't know what path will come next (no ability to cache?)
+            factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(b)]
 
-                        coeff = factors[0].coeff
-                        coeffSaved[0] = coeff
-                        incd += 1
-                    else:
-                        rhoVecL = leftSaved[incd-1]
-                        rhoVecR = rightSaved[incd-1]
-                        coeff = coeffSaved[incd-1]
+            if incd == 0: # need to re-evaluate rho vector
+                rhoVecL = factors[0].pre_state # Note: `factor` is a rep & so are it's ops
+                for f in factors[0].pre_ops:
+                    rhoVecL = f.acton(rhoVecL)
+                leftSaved[0] = rhoVecL
 
-                    # propagate left and right states, saving as we go
-                    for i in range(incd,last_index):
-                        for f in factors[i].pre_ops:
-                            rhoVecL = f.acton(rhoVecL)
-                        leftSaved[i] = rhoVecL
+                rhoVecR = factors[0].post_state
+                for f in factors[0].post_ops:
+                    rhoVecR = f.acton(rhoVecR)
+                rightSaved[0] = rhoVecR
 
-                        for f in factors[i].post_ops:
-                            rhoVecR = f.acton(rhoVecR)
-                        rightSaved[i] = rhoVecR
+                coeff = factors[0].coeff
+                coeffSaved[0] = coeff
+                incd += 1
+            else:
+                rhoVecL = leftSaved[incd-1]
+                rhoVecR = rightSaved[incd-1]
+                coeff = coeffSaved[incd-1]
 
-                        coeff *= factors[i].coeff
-                        coeffSaved[i] = coeff
 
-                    # for the last index, no need to save, and need to construct
-                    # and apply effect vector
-                    
-                    #HERE - add something like:
-                    #  if factors[-1].opname == cur_effect_opname: (or opint in C-case)
-                    #      <skip application of post_ops & preops - just load from (new) saved slot get pLeft & pRight>
+            # propagate left and right states, saving as we go
+            for i in range(incd,last_index):
+                for f in factors[i].pre_ops:
+                    rhoVecL = f.acton(rhoVecL)
+                leftSaved[i] = rhoVecL
 
-                    for f in factors[-1].post_ops:
-                        rhoVecL = f.acton(rhoVecL)
-                    E = factors[-1].post_effect # effect representation
-                    pLeft = E.amplitude(rhoVecL)
+                for f in factors[i].post_ops:
+                    rhoVecR = f.acton(rhoVecR)
+                rightSaved[i] = rhoVecR
 
-                    #Same for pre_ops and rhoVecR
-                    for f in factors[-1].pre_ops:
-                        rhoVecR = f.acton(rhoVecR)
-                    E = factors[-1].pre_effect
-                    pRight = _np.conjugate(E.amplitude(rhoVecR))
+                coeff = coeff.mult(factors[i].coeff)
+                coeffSaved[i] = coeff
 
-                    #print("DB PYTHON: final block: pLeft=",pLeft," pRight=",pRight)
-                    res = coeff * factors[-1].coeff
-                    res *= (pLeft * pRight)
-                    #print("DB PYTHON: result = ",res)
-                    final_factor_indx = fi[-1]
-                    Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
-                    if prps[Ei] is None: prps[Ei]  = res
-                    else:                prps[Ei] += res # could add_inplace?
-                    #print("DB PYHON: prps[%d] = " % Ei, prps[Ei])
+            # for the last index, no need to save, and need to construct
+            # and apply effect vector
+            for f in factors[-1].post_ops:
+                rhoVecL = f.acton(rhoVecL)
+            E = factors[-1].post_effect # effect representation
+            pLeft = E.amplitude(rhoVecL)
 
-            else: # non-fast mode
-                last_index = len(factor_lists)-1
-                for fi in _itertools.product(*[range(l) for l in factor_list_lens]):
-                    factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
-                    #res    = _functools.reduce(lambda x,y: x.mult(y), [f.coeff for f in factors])
-                    res = _np.product([f.coeff for f in factors])
-                    pLeft  = _unitary_sim_pre(factors, comm, memLimit)
-                    pRight = _unitary_sim_post(factors, comm, memLimit)
-                             # if not self.unitary_evolution else 1.0
-                    #res.scale( (pLeft * pRight) )
-                    res *= (pLeft * pRight)
-                    final_factor_indx = fi[-1]
-                    Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
-                    #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
-                    if prs[Ei] is None:  prs[Ei]  = res
-                    else:                prs[Ei] += res # add_inplace?
-                    #print("DB running prps[",Ei,"] =",prps[Ei])
+            #Same for pre_ops and rhoVecR
+            for f in factors[-1].pre_ops:
+                rhoVecR = f.acton(rhoVecR)
+            E = factors[-1].pre_effect
+            pRight = _np.conjugate(E.amplitude(rhoVecR))
 
-            #DEBUG!!!
-            db_nfactors = [len(l) for l in factor_lists]
-            db_totfactors = _np.product(db_nfactors)
-            db_factor_cnt += db_totfactors
-            DEBUG_FCOUNT += db_totfactors
-            db_part_cnt += 1
-            #print("DB: pr_as_poly   partition=",p,"(cnt ",db_part_cnt," with ",db_nfactors," factors (cnt=",db_factor_cnt,")")
+            res = coeff.mult(factors[-1].coeff)
+            res.scale( (pLeft * pRight) )
+            final_factor_indx = b[-1]
+            Ei = E_indices[final_factor_indx] #final "factor" index == E-vector index
+            
+            if prps[Ei] is None: prps[Ei]  = res
+            else:                prps[Ei] += res # could add_inplace?
 
-    #print("DONE -> FCOUNT=",DEBUG_FCOUNT)
-    assert(_np.linalg.norm(_np.imag(prs)) < 1e-6)
-    return _np.real(prs)
+    else:
+        def add_path(b, mag, incd):
+            # "non-fast" mode is the only way we know to do this, since we don't know what path will come next (no ability to cache?)
+            factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(b)]
+            res    = _functools.reduce(lambda x,y: x.mult(y), [f.coeff for f in factors])
+            pLeft  = _unitary_sim_pre(factors, comm, memLimit)
+            pRight = _unitary_sim_post(factors, comm, memLimit)
+            res.scale( (pLeft * pRight) )
+    
+            final_factor_indx = b[-1]
+            Ei = E_indices[final_factor_indx] #final "factor" index == E-vector index
+            #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
+            if prps[Ei] is None: prps[Ei]  = res
+            else:                prps[Ei] += res # add_inplace?
+            #print("DB running prps[",Ei,"] =",prps[Ei])
 
+    traverse_paths_upto_threshold(factor_lists, threshold, num_foat_per_op, add_path) # sets mag and nPaths
+
+    #TODO: REMOVE - most of this is solved, but keep it around for another few commits in case we want to refer back to it.
+    # - need to fill in some more details, namely how/where we hold weights and log-weights: in reps? in Term objs?  maybe consider Cython version?
+    # need to consider how to perform "fastmode" in this... maybe need to traverse tree in some standard order?
+    # what about having multiple thresholds for the different elabels... it seems good to try to run these calcs in parallel.
+    # Note: may only need recusive tree traversal to consider incrementing positions *greater* than or equal to the one that was just incremented?
+    #  (this may enforce some iteration ordering amenable to a fastmode calc)
+    # Note2: when all effects have *same* op-part of terms, just different effect vector, then maybe we could split the effect into an op + effect
+    #  to better use fastmode calc?  Or maybe if ordering is right this isn't necessary?
+    #Add repcache as in cython version -- saves having to *construct* rep objects all the time... just update coefficients when needed instead?
+        
+    #... and we're done!
+    return prps
+
+
+def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_foat_per_op, fn_visitpath): # foat = first-order always-traversed
+    """ TODO: docstring """
+    n = len(oprep_lists)
+    nops = [ len(oprep_list) for oprep_list in oprep_lists ]
+    b = [0]*n # root
+    log_thres = _np.log10(pathmag_threshold)
+    #print("BEGIN: ",root)
+
+    current_mag = 1.0; current_logmag = 0.0
+    fn_visitpath(b, current_mag, 0) # visit root (all 0s) path
+
+    def traverse_tree(root, incd, log_thres, current_mag, current_logmag):
+        b = root
+        #print("BEGIN: ",root)
+        for i in reversed(range(incd, n)):
+            if b[i]+1 == nops[i]: continue
+            b[i] += 1
+            logmag = current_logmag + (oprep_lists[i][b[i]].logmagnitude - oprep_lists[i][b[i]-1].logmagnitude)
+            #print("Trying: ",b)
+            if logmag >= log_thres:
+                mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i]-1].magnitude)
+                fn_visitpath(b, mag, i)
+                traverse_tree(b, i, log_thres, mag, logmag) #add any allowed paths beneath this one
+            b[i] -= 1 # so we don't have to copy b or root
+        #print("END: ",root)
+    
+    
+    ##Step1: traverse first-order-always-traversed paths
+    #for i in range(n):
+    #    bi0 = b[i]
+    #    base_wt = current_wt / oprep_lists[i][b[i]].weight
+    #    while b[i]+1 < nAlwaysOn[i]:
+    #        b[i] += 1
+    #        wt = base_wt * oprep_lists[i][b[i]].weight
+    #        fn_visitpath(b,wt)
+    #        #print("Adding always-on path: ",b,' = ','*'.join(['%f' % term_weights[j][b[j]] for j in range(n)]),' = ',wt)
+    #    b[i] = bi0
+
+    #Step2: add additional paths
+    for i in reversed(range(n)):
+        if b[i]+1 == nops[i]: continue
+        b[i] += 1
+        logmag = current_logmag + (oprep_lists[i][b[i]].logmagnitude - oprep_lists[i][b[i]-1].logmagnitude)
+
+        #print("Trying: ",b)
+        if logmag >= log_thres or b[i] <= num_foat_per_op[i]:
+            mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i]-1].magnitude)
+            fn_visitpath(b, mag, i)
+            traverse_tree(b, i, log_thres, mag, logmag) #add any allowed paths beneath this one
+        b[i] -= 1 # so we don't have to copy b or root
+    #print("END: ",root)
+    return
+
+
+def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_pathmags, num_foat_per_op=None, initial_threshold=0.1):
+    """
+    TODO: docstring - note: target_sum_of_pathmags is a *vector* that holds a separate value for each E-index
+    """
+    nIters = 0
+    threshold = initial_threshold
+    target_mag = target_sum_of_pathmags
+    #print("Target magnitude: ",target_mag)
+    threshold_upper_bound = 1.0
+    threshold_lower_bound = None
+    npaths_upper_bound = npaths_lower_bound = None
+    mag = 0; nPaths = 0
+
+    if num_foat_per_op is None:
+        num_foat_per_op = [0]*len(oprep_lists)
+
+    def count_path(b,mg,incd):
+        mag[E_indices[b[-1]]] += mg; nPaths[E_indices[b[-1]]] += 1
+        
+    while nIters < 100: # TODO: allow setting max_nIters as an arg?
+        mag = _np.zeros(nEffects,'d')
+        nPaths = _np.zeros(nEffects,int)
+        traverse_paths_upto_threshold(oprep_lists, threshold, num_foat_per_op, count_path) # sets mag and nPaths
+        
+        if _np.all(mag >= target_mag): # try larger threshold                                                                                                   
+            threshold_lower_bound = threshold
+            npaths_lower_bound = nPaths
+            if threshold_upper_bound is not None:
+                threshold = (threshold_upper_bound + threshold_lower_bound)/2
+            else: threshold *= 2
+        else: # try smaller threshold
+            threshold_upper_bound = threshold
+            npaths_upper_bound = nPaths
+            if threshold_lower_bound is not None:
+                threshold = (threshold_upper_bound + threshold_lower_bound)/2
+            else: threshold /= 2
+
+        #print("  Interval: threshold in [%s,%s]: %s %s" % (str(threshold_upper_bound),str(threshold_lower_bound),mag,nPaths))
+        if threshold_upper_bound is not None and threshold_lower_bound is not None and \
+           (threshold_upper_bound - threshold_lower_bound)/threshold_upper_bound < 1e-3:
+            #print("Converged after %d iters!" % nIters)
+            break
+        nIters += 1
+    return threshold_lower_bound
 
 
 def _unitary_sim_pre(complete_factors, comm, memLimit):

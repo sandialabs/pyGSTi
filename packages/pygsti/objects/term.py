@@ -200,6 +200,13 @@ class RankOneTerm(object):
         from . import operation as _op
         from . import spamvec as _spamvec
         self.coeff = coeff # potentially a Polynomial
+        if isinstance(self.coeff, _numbers.Number):
+            self.magnitude = abs(coeff)
+            self.logmagnitude = _np.log(self.magnitude)
+        else:
+            self.magnitude = 1.0
+            self.logmagnitude = 0.0
+            
         self.pre_ops = [] # list of ops to perform - in order of operation to a ket
         self.post_ops = [] # list of ops to perform - in order of operation to a bra
         self.typ = typ
@@ -244,6 +251,24 @@ class RankOneTerm(object):
     
     def __rmul__(self, x):
         return self.__mul__(x)
+
+    def set_magnitude(self, mag):
+        """
+        Sets the "magnitude" of this term used in path-pruning.  Sets
+        both .magnitude and .logmagnitude attributes of this object.
+
+        Parameters
+        ----------
+        mag : float
+            The magnitude to set.
+
+        Returns
+        -------
+        None
+        """
+        self.magnitude = mag
+        self.logmagnitude = _np.log(mag)
+        
         
     def compose(self, term):
         """ 
@@ -400,18 +425,21 @@ class RankOneTerm(object):
                 else replib.SBTermRep
         
         if typ == "prep": # first el of pre_ops & post_ops is a state vec
-            return RepTermType(coeffrep, self.pre_ops[0].torep("prep"),
+            return RepTermType(coeffrep, self.magnitude, self.logmagnitude,
+                               self.pre_ops[0].torep("prep"),
                                self.post_ops[0].torep("prep"), None, None,
                                [ op.torep() for op in self.pre_ops[1:] ],
                                [ op.torep() for op in self.post_ops[1:] ])
         elif typ == "effect": # first el of pre_ops & post_ops is an effect vec
-            return RepTermType(coeffrep, None, None, self.pre_ops[0].torep("effect"),
+            return RepTermType(coeffrep, self.magnitude, self.logmagnitude,
+                               None, None, self.pre_ops[0].torep("effect"),
                                self.post_ops[0].torep("effect"),
                                [ op.torep() for op in self.pre_ops[1:] ],
                                [ op.torep() for op in self.post_ops[1:] ])
         else:
             assert(typ == "gate"), "Invalid typ argument to torep: %s" % typ
-            return RepTermType(coeffrep, None, None, None, None,
+            return RepTermType(coeffrep, self.magnitude, self.logmagnitude,
+                               None, None, None, None,
                                [ op.torep() for op in self.pre_ops ],
                                [ op.torep() for op in self.post_ops ])
         

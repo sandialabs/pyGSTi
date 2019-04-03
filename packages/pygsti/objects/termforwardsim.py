@@ -28,10 +28,10 @@ from . import replib
 # For debug: sometimes helpful as it prints (python-only) tracebacks from segfaults
 #import faulthandler
 #faulthandler.enable()
-    
 
 try:
     from . import fastopcalc as _fastopcalc
+    from .fastopcalc import fast_compact_deriv as _compact_deriv
     def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
         if _np.iscomplexobj(ctape):
             ret = _fastopcalc.fast_bulk_eval_compact_polys_complex(
@@ -44,6 +44,7 @@ try:
                 vtape, ctape, paramvec, dest_shape) )
 except ImportError:
     from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
+    from .polynomial import compact_deriv as _compact_deriv
     def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
         ret = poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
         if _np.iscomplexobj(ret):
@@ -62,7 +63,7 @@ class TermForwardSimulator(ForwardSimulator):
     that can be expanded into terms of different orders and PureStateSPAMVecs.
     """
 
-    def __init__(self, dim, simplified_op_server, paramvec, max_order, cache=None):
+    def __init__(self, dim, simplified_op_server, paramvec, mode, max_order=None, pathmag_gap=None, min_term_mag=None, cache=None):
         """
         Construct a new TermForwardSimulator object.
 
@@ -101,7 +102,11 @@ class TermForwardSimulator(ForwardSimulator):
         #    allow unitary-evolution calcs to be term-based, which essentially
         #    eliminates the "pRight" portion of all the propagation calcs, and
         #    would require pLeft*pRight => |pLeft|^2
-        self.max_order = max_order
+        assert(mode in ("taylor-order", "pruned", "direct")), "Invalid term-fwdsim mode: %s" % mode
+        self.mode = mode
+        self.max_order = max_order             #only used in "taylor-order" mode
+        self.pathmagnitude_gap = pathmag_gap   #only used in "pruned" mode
+        self.min_term_mag = min_term_mag       #only used in "pruned" mode
         self.cache = cache
         super(TermForwardSimulator, self).__init__(
             dim, simplified_op_server, paramvec)
@@ -180,9 +185,63 @@ class TermForwardSimulator(ForwardSimulator):
             prs[:,i] = replib.SV_prs_directly(self, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode, wtTol, resetWts, self.times_debug)
         #print("PRS = ",prs)
         return prs
+
+
+    def prs_as_pruned_polys(self, rholabel, elabels, circuit, comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01):
+        """
+        TODO: docstring
+        """
+        #Cache hold *compact* polys now: see prs_as_compact_polys
+        #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
+        #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
+        #    return [ self.cache[ck] for ck in cache_keys ]
+        
+        fastmode = False
+        if self.evotype == "svterm":
+            poly_reps = replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag)
+        else: # "cterm" (stabilizer-based term evolution)
+            poly_reps = replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag)
+        prps = [ _Polynomial.fromrep(rep) for rep in poly_reps ]
+
+        #Cache hold *compact* polys now: see prs_as_compact_polys
+        #if self.cache is not None:
+        #    for ck,poly in zip(cache_keys,prps):
+        #        self.cache[ck] = poly
+        return prps
+
+    def prs_as_concat_compact_pruned_polys(self, rholabel, elabels, circuit_list, comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01):
+        """
+        TODO: docstring
+          compute compact polys to be like termevaltree.get_p_polys(...)
+        """
+        #TODO: decide when we cache pruned polys
+        #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
+        #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
+        #    return [ self.cache[ck] for ck in cache_keys ]
+
+        print("DB: prs_concat: %d circuits" % len(circuit_list))
+        polys = [ [ poly.compact(force_complex=True) for poly in
+                    self.prs_as_pruned_polys(rholabel,elabels, opstr, comm, memLimit, pathmagnitude_gap, min_term_mag) ]
+                  for opstr in circuit_list ]
+          # create compact polys w/*complex* coeffs always since we're likely
+          # going to concatenate a bunch of them.
+
+        #if self.cache is not None:
+        #    for ck,poly in zip(cache_keys,prps):
+        #        self.cache[ck] = poly
+
+        ret = []
+        for i,elabel in enumerate(elabels):
+            tapes = [ p[i] for p in polys ]
+            vtape = _np.concatenate( [ t[0] for t in tapes ] )
+            ctape = _np.concatenate( [ t[1] for t in tapes ] )
+            ret.append( (vtape, ctape) ) # Note: ctape should always be complex here
+        
+        return ret
+
+
     
-    
-    def prs_as_polys(self, rholabel, elabels, circuit, comm=None, memLimit=None):
+    def prs_as_polys(self, rholabel, elabels, circuit, comm=None, memLimit=None): #LATER? , resetWts=True, repcache=None):
         """
         Computes polynomials of the probabilities for multiple spam-tuples of
         `circuit`, sharing the same state preparation (so with different
@@ -206,6 +265,8 @@ class TermForwardSimulator(ForwardSimulator):
 
         memLimit : int, optional
             A memory limit in bytes to impose on the computation.
+
+        TODO: resetWts & repcache?
         
         Returns
         -------
@@ -595,14 +656,16 @@ class TermForwardSimulator(ForwardSimulator):
 
             def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
-                if self.cache is None:
+                if self.mode == "direct":
                     probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None)
-                else:
+                elif self.mode == "pruned":
+                    polys = self.prs_as_concat_compact_pruned_polys(rholabel, elabels, circuit_list, mySubComm, self.pathmagnitude_gap, self.min_term_mag)
+                else: # self.mode == "taylor-order"
                     polys = evalSubTree.get_p_polys(self, rholabel, elabels, mySubComm) # computes polys if necessary
 
                 for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
                     #use cached data to final values
-                    if self.cache is None:
+                    if self.mode == "direct":
                         prCache = probs[i]
                     else:
                         prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nCircuits,)
@@ -727,14 +790,18 @@ class TermForwardSimulator(ForwardSimulator):
                 """ Compute and fill result quantities for given arguments """
                 tm = _time.time()
 
-                if self.cache is None:
+                if self.mode == "direct":
                     repcache = {} #new repcache for storing term reps that don't change (just their coeffs do)
                     probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None, resetWts=True, repcache=repcache)
                 
                 if prMxToFill is not None:
-                    if self.cache is not None: polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
+                    if self.mode == "taylor-order":
+                        polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
+                    elif self.mode == "pruned":
+                        polys = self.prs_as_concat_compact_pruned_polys(rholabel, elabels, circuit_list, fillComm, self.pathmagnitude_gap, self.min_term_mag)
+                        
                     for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
-                        if self.cache is None:
+                        if self.mode == "direct":
                             prCache = probs[i]
                         else:
                             prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nCircuits,)
@@ -742,7 +809,7 @@ class TermForwardSimulator(ForwardSimulator):
                         _fas(prMxToFill, [fInds], ps[gInds], add=sumInto)
 
                 #Fill cache info
-                if self.cache is None:
+                if self.mode == "direct":
                     #Finite difference derivatives (SLOW!)
                     eps = 1e-6
                     dprobs = _np.empty( (len(elabels), len(circuit_list), self.Np), 'd')
@@ -758,13 +825,18 @@ class TermForwardSimulator(ForwardSimulator):
                             dprobs[:,:,iFinal] = ( self.prs_directly(rholabel, elabels, circuit_list,
                                                                      comm=None, memLimit=None, resetWts=False, repcache=repcache) - probs)/eps
                     self.from_vector(orig_vec)
-                else:
+                elif self.mode == "pruned":
+                    #Take derivative here
+                    slcInds = _slct.indices(paramSlice if (paramSlice is not None) else slice(0,self.Np))
+                    slcInds = _np.ascontiguousarray(slcInds, _np.int64) # for Cython arg mapping
+                    dpolys = [ _compact_deriv(polys[i][0], polys[i][1], slcInds) for i in range(len(elabels)) ]
+                else: # self.mode == "taylor-order"
                     dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
                 nP = self.Np if (paramSlice is None or paramSlice.start is None) else _slct.length(paramSlice)
                 for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
-                    if self.cache is None:
+                    if self.mode == 'direct':
                         dprCache = dprobs[i] # shape (nAllEvalTreeCircuits, nDerivCols)
-                    else:
+                    else: # TODO: maybe for "pruned" case we can just eval derivs of `polys` instead of computing derivative polynomials...
                         dprCache = _bulk_eval_compact_polys(dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs,nP) )
                     dps = evalSubTree.final_view( dprCache, axis=0) # ( nCircuits, nDerivCols)
                     _fas(mxToFill, [fInds, pslc1], dps[gInds], add=sumInto)

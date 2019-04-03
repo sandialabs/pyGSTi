@@ -402,7 +402,7 @@ class SPAMVec(_modelmember.ModelMember):
             raise ValueError("Invalid `typ` argument for torep(): %s" % typ)
 
             
-    def get_order_terms(self, order):
+    def get_taylor_order_terms(self, order):
         """ 
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -430,7 +430,7 @@ class SPAMVec(_modelmember.ModelMember):
         list
             A list of :class:`RankOneTerm` objects.
         """
-        raise NotImplementedError("get_order_terms(...) not implemented for %s objects!" % self.__class__.__name__)
+        raise NotImplementedError("get_taylor_order_terms(...) not implemented for %s objects!" % self.__class__.__name__)
 
     
     def frobeniusdist2(self, otherSpamVec, typ, transform=None,
@@ -1738,7 +1738,7 @@ class TensorProdSPAMVec(SPAMVec):
             raise NotImplementedError("torep() not implemented for %s evolution type" % self._evotype)
         
 
-    def get_order_terms(self, order):
+    def get_taylor_order_terms(self, order):
         """ 
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -1768,7 +1768,7 @@ class TensorProdSPAMVec(SPAMVec):
         """
         if self._evotype == "svterm": tt = "dense"
         elif self._evotype == "cterm": tt = "clifford"
-        else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
+        else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
         
         from .operation import EmbeddedOp as _EmbeddedGateMap
         terms = []
@@ -1778,10 +1778,10 @@ class TensorProdSPAMVec(SPAMVec):
         
         for p in _lt.partition_into(order, len(self.factors)):
             if self.typ == "prep":
-                factor_lists = [self.factors[i].get_order_terms(pi) for i,pi in enumerate(p)]
+                factor_lists = [self.factors[i].get_taylor_order_terms(pi) for i,pi in enumerate(p)]
             else:
                 factorPOVMs = self.factors
-                factor_lists = [ factorPOVMs[i][Elbl].get_order_terms(pi)
+                factor_lists = [ factorPOVMs[i][Elbl].get_taylor_order_terms(pi)
                                  for i,(pi,Elbl) in enumerate(zip(p,self.effectLbls)) ]
 
             # When possible, create COLLAPSED factor_lists so each factor has just a single
@@ -2040,7 +2040,7 @@ class PureStateSPAMVec(SPAMVec):
         return _bt.change_basis(dmVec_std, 'std', self.basis)
 
 
-    def get_order_terms(self, order):
+    def get_taylor_order_terms(self, order):
         """ 
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -2069,14 +2069,14 @@ class PureStateSPAMVec(SPAMVec):
             A list of :class:`RankOneTerm` objects.
         """
         if self.num_params() > 0:
-            raise ValueError(("PureStateSPAMVec.get_order_terms(...) is only "
+            raise ValueError(("PureStateSPAMVec.get_taylor_order_terms(...) is only "
                               "implemented for the case when its underlying "
                               "pure state vector has 0 parameters (is static)"))
         
         if order == 0: # only 0-th order term exists (assumes static pure_state_vec)
             if self._evotype == "svterm":  tt = "dense"
             elif self._evotype == "cterm": tt = "clifford"
-            else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
+            else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
 
             purevec = self.pure_state_vec
             terms = [ _term.RankOneTerm(_Polynomial({(): 1.0}), purevec, purevec, tt) ]
@@ -2099,14 +2099,14 @@ class PureStateSPAMVec(SPAMVec):
             A list of :class:`RankOneTerm` objects.
         """
         if self.num_params() > 0:
-            raise ValueError(("PureStateSPAMVec.get_order_terms(...) is only "
+            raise ValueError(("PureStateSPAMVec.get_taylor_order_terms(...) is only "
                               "implemented for the case when its underlying "
                               "pure state vector has 0 parameters (is static)"))
         
         if order == 0: # only 0-th order term exists (assumes static pure_state_vec)
             if self._evotype == "svterm":  tt = "dense"
             elif self._evotype == "cterm": tt = "clifford"
-            else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
+            else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
 
             purevec = self.pure_state_vec
             terms = [ _term.RankOneTerm(1.0, purevec, purevec, tt) ]
@@ -2557,8 +2557,9 @@ class LindbladSPAMVec(SPAMVec):
         self.state_vec = pureVec
         self.error_map = errormap
         self.terms = {} if evotype in ("svterm","cterm") else None
-        self.direct_terms = {} if evotype in ("svterm","cterm") else None
-        self.direct_term_poly_coeffs = {} if evotype in ("svterm","cterm") else None
+        self.local_term_poly_coeffs = {} if evotype in ("svterm","cterm") else None
+        # TODO REMOVE self.direct_terms = {} if evotype in ("svterm","cterm") else None
+        # TODO REMOVE self.direct_term_poly_coeffs = {} if evotype in ("svterm","cterm") else None
         
         SPAMVec.__init__(self, d2, evotype) #sets self.dim
 
@@ -2608,8 +2609,9 @@ class LindbladSPAMVec(SPAMVec):
         None
         """
         self.terms = {} # clear terms cache since param indices have changed now
-        self.direct_terms = {}
-        self.direct_term_poly_coeffs = {}        
+        self.local_term_poly_coeffs = {}
+        # TODO REMOVE self.direct_terms = {}
+        # TODO REMOVE self.direct_term_poly_coeffs = {}        
         _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
 
         
@@ -2654,12 +2656,12 @@ class LindbladSPAMVec(SPAMVec):
 
         else:
             #framework should not be calling "torep" on states w/a term-based evotype...
-            # they should call torep on the *terms* given by get_order_terms(...)
+            # they should call torep on the *terms* given by get_taylor_order_terms(...)
             raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
                              (self._evotype, self.__class__.__name__))
 
     
-    def get_order_terms(self, order):
+    def get_taylor_order_terms(self, order):
         """ 
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -2690,12 +2692,12 @@ class LindbladSPAMVec(SPAMVec):
         if order not in self.terms:
             if self._evotype == "svterm": tt = "dense"
             elif self._evotype == "cterm": tt = "clifford"
-            else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
+            else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
             assert(self.gpindices is not None),"LindbladSPAMVec must be added to a Model before use!"
 
-            state_terms = self.state_vec.get_order_terms(0); assert(len(state_terms) == 1)
+            state_terms = self.state_vec.get_taylor_order_terms(0); assert(len(state_terms) == 1)
             stateTerm = state_terms[0]
-            err_terms = self.error_map.get_order_terms(order)
+            err_terms = self.error_map.get_taylor_order_terms(order)
             if self.typ == "prep":
                 terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
             else: # "effect"
@@ -2707,11 +2709,46 @@ class LindbladSPAMVec(SPAMVec):
             #OLD: now this is done within calculator when possible b/c not all terms can be collapsed
             #terms = [ t.collapse() for t in terms ] # collapse terms for speed
             # - resulting in terms with just a single pre/post op, each == a pure state
+
+            #assert(stateTerm.coeff == Polynomial_1.0) # TODO... so can assume local polys are same as for errorgen
+            self.local_term_poly_coeffs[order] = self.error_map.local_term_poly_coeffs[order]
+            
             self.terms[order] = terms
 
         return self.terms[order]
 
 
+    def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True):
+        #Same as for LindbladOp so far...
+        #print("DB: SPAM get_high_magnitude_terms")
+        v = self.to_vector()
+        taylor_order = 0
+        terms = []; last_len = -1
+        while len(terms) > last_len: # while we keep adding something
+            terms_at_order = self.get_taylor_order_terms(taylor_order) #?? , map_to_global_indices=False)
+            #print("order ",taylor_order," : ",len(terms), "existing terms, ", len(terms_at_order), " at this order")
+
+            cpolys = self.local_term_poly_coeffs[taylor_order]
+            coeffs = _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms_at_order),)) # an array of coeffs
+            for coeff,t in zip(coeffs,terms_at_order):
+                t.set_magnitude( abs(coeff) )
+
+            last_len = len(terms)
+            for t in terms_at_order:
+                if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
+                    terms.append(t)
+                    
+            taylor_order += 1
+
+        #Sort terms based on magnitude
+        sorted_terms = sorted(terms, key=lambda t: t.magnitude, reverse=True)
+        return sorted_terms
+
+    def get_num_firstorder_terms(self):
+        """ TODO: docstring """
+        return len(self.get_taylor_order_terms(1))
+
+    
     def get_direct_order_terms(self, order, base_order):
         """ 
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
@@ -2740,7 +2777,7 @@ class LindbladSPAMVec(SPAMVec):
         if False: #order not in self.terms: # always do this now, since we always need to re-create "direct" terms
             if self._evotype == "svterm": tt = "dense"
             elif self._evotype == "cterm": tt = "clifford"
-            else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
+            else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
             assert(self.gpindices is not None),"LindbladSPAMVec must be added to a Model before use!"
 
             state_terms = self.state_vec.get_direct_order_terms(0, base_order); assert(len(state_terms) == 1)
@@ -2767,9 +2804,9 @@ class LindbladSPAMVec(SPAMVec):
                 else: raise ValueError("Invalid evolution type %s for calling `get_direct_order_terms`" % self._evotype)
                 assert(self.gpindices is not None),"LindbladSPAMVec must be added to a Model before use!"
 
-                state_terms = self.state_vec.get_order_terms(0); assert(len(state_terms) == 1)
+                state_terms = self.state_vec.get_taylor_order_terms(0); assert(len(state_terms) == 1)
                 stateTerm = state_terms[0]
-                err_terms = self.error_map.get_order_terms(order, terms_with_global_indices=False)
+                err_terms = self.error_map.get_taylor_order_terms(order, terms_with_global_indices=False)
                 if self.typ == "prep":
                     terms = [ _term.compose_terms((stateTerm,t)) for t in err_terms] # t ops occur *after* stateTerm's
                 else: # "effect"
@@ -2803,12 +2840,12 @@ class LindbladSPAMVec(SPAMVec):
         terms = self.direct_terms[order]
         return _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms),))
 
-    def get_total_term_weight(self):
+    def get_total_term_magnitude(self):
         """
         TODO: docstring
         """
         # return (sum of absvals of *all* term coeffs)
-        return self.error_map.get_total_term_weight() # error map is only part with terms
+        return self.error_map.get_total_term_magnitude() # error map is only part with terms
 
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -3256,7 +3293,7 @@ class ComputationalSPAMVec(SPAMVec):
             raise ValueError("Invalid `typ` argument for torep(): %s" % typ)
 
 
-    def get_order_terms(self, order):
+    def get_taylor_order_terms(self, order):
         """ 
         Get the `order`-th order Taylor-expansion terms of this SPAM vector.
 
@@ -3291,7 +3328,7 @@ class ComputationalSPAMVec(SPAMVec):
             elif self._evotype == "cterm":
                 tt = "clifford"
                 purevec = ComputationalSPAMVec(self._zvals, "stabilizer")
-            else: raise ValueError("Invalid evolution type %s for calling `get_order_terms`" % self._evotype)
+            else: raise ValueError("Invalid evolution type %s for calling `get_taylor_order_terms`" % self._evotype)
 
             terms = [ _term.RankOneTerm(_Polynomial({(): 1.0}), purevec, purevec, tt) ]
         else:

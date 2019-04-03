@@ -437,14 +437,14 @@ class OpModel(Model):
         sim_type = simtype_and_args[0]
         if sim_type == "matrix":      c = _matrixfwdsim.MatrixForwardSimulator
         elif sim_type == "map":       c = _mapfwdsim.MapForwardSimulator
-        elif sim_type == "termorder": c = _termfwdsim.TermForwardSimulator
+        elif sim_type in ("termorder","termgap","termdirect"): c = _termfwdsim.TermForwardSimulator
         else: raise ValueError("Invalid `sim_type` (%s)" % sim_type)
 
         self._calcClass = c
         self._sim_type = sim_type
         self._sim_args = list(simtype_and_args[1:])
 
-        if sim_type == "termorder":
+        if sim_type.startswith("term"):
             #cache = calc_cache if (calc_cache is not None) else {} # make a temp cache if none is given
             cache = calc_cache # allow None cache to indicate *direct* computation of terms (no polys)
             self._sim_args.append(cache) # add calculation cache as another argument
@@ -788,8 +788,16 @@ class OpModel(Model):
         
         kwargs = {}
         if self._sim_type == "termorder":
+            assert(len(self._sim_args) == 1+1), "termorder must have <order> arg, e.g. 'termorder:1'"
+            kwargs['mode'] = "taylor-order"
             kwargs['max_order'] = int(self._sim_args[0])
-            kwargs['cache'] = self._sim_args[-1] # always the list argument
+            kwargs['cache'] = self._sim_args[-1] # always the last argument
+        if self._sim_type in ("termgap","termdirect"):
+            assert(len(self._sim_args) == 2+1), "%s must have <gap> and <min> args, e.g. '%s:0.1:0.01'" % (self._sim_type,self._sim_type)
+            kwargs['mode'] = "pruned" if (self._sim_type == "termgap") else "direct"
+            kwargs['pathmag_gap'] = float(self._sim_args[0])
+            kwargs['min_term_mag'] = float(self._sim_args[1])
+            kwargs['cache'] = self._sim_args[-1] # always the last argument
         if self._sim_type == "map":
             kwargs['max_cache_size'] = self._sim_args[0] if len(self._sim_args) > 0 else None # backward compat
 
