@@ -299,7 +299,8 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, f
             if verbosity > 0: print(lind+1,end=',')
 
             # Add the number of success counts to the list
-            scounts.append(outcome.get(idealout,0))
+#            scounts.append(outcome.get(idealout,0))
+            scounts.append(outcome.get(''.join(str(idealbit) for idealbit in idealout),0))
             cdepths.append(c.depth())
             c2Qgcounts.append(c.twoQgate_count())
 
