@@ -2718,10 +2718,11 @@ class LindbladSPAMVec(SPAMVec):
         return self.terms[order]
 
 
-    def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True):
+    def get_highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3):
         #Same as for LindbladOp so far...
         #print("DB: SPAM get_high_magnitude_terms")
         v = self.to_vector()
+        #print("DB: vector = ",v)
         taylor_order = 0
         terms = []; last_len = -1
         while len(terms) > last_len: # while we keep adding something
@@ -2730,6 +2731,7 @@ class LindbladSPAMVec(SPAMVec):
 
             cpolys = self.local_term_poly_coeffs[taylor_order]
             coeffs = _bulk_eval_complex_compact_polys(cpolys[0], cpolys[1], v, (len(terms_at_order),)) # an array of coeffs
+            #if taylor_order <= 1: print("%dth order mags = " % taylor_order, [abs(x) for x in coeffs]) # DEBUG!!!
             for coeff,t in zip(coeffs,terms_at_order):
                 t.set_magnitude( abs(coeff) )
 
@@ -2739,7 +2741,19 @@ class LindbladSPAMVec(SPAMVec):
                     terms.append(t)
                     
             taylor_order += 1
+            if taylor_order > max_taylor_order: break
 
+        #DEBUG - total magnitude
+        totmag = self.error_map.get_total_term_magnitude() # error map is only part with terms
+        #errgen_terms = self.error_map.errorgen.get_taylor_order_terms(0)
+        errgen_terms = self.get_taylor_order_terms(1)
+        mag_sum = sum([t.magnitude for t in errgen_terms])
+        if( abs(totmag - _np.exp(mag_sum)) >= 1e-6 ):
+            print("%d errgen_terms w/mags: " % len(errgen_terms), [t.magnitude for t in errgen_terms])
+            print("computed exp(mag_sum) = ",_np.exp(mag_sum))
+            print("from get_total_term_magnitude = ",totmag)
+            assert(False),"STOP"
+            
         #Sort terms based on magnitude
         sorted_terms = sorted(terms, key=lambda t: t.magnitude, reverse=True)
         return sorted_terms

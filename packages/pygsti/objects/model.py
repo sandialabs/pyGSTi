@@ -793,10 +793,11 @@ class OpModel(Model):
             kwargs['max_order'] = int(self._sim_args[0])
             kwargs['cache'] = self._sim_args[-1] # always the last argument
         if self._sim_type in ("termgap","termdirect"):
-            assert(len(self._sim_args) == 2+1), "%s must have <gap> and <min> args, e.g. '%s:0.1:0.01'" % (self._sim_type,self._sim_type)
+            assert(len(self._sim_args) == 3+1), "%s must have <max-order>, <gap> and <min> args, e.g. '%s:3:0.1:0.01'" % (self._sim_type,self._sim_type)
             kwargs['mode'] = "pruned" if (self._sim_type == "termgap") else "direct"
-            kwargs['pathmag_gap'] = float(self._sim_args[0])
-            kwargs['min_term_mag'] = float(self._sim_args[1])
+            kwargs['max_order'] = int(self._sim_args[0])
+            kwargs['pathmag_gap'] = float(self._sim_args[1])
+            kwargs['min_term_mag'] = float(self._sim_args[2])
             kwargs['cache'] = self._sim_args[-1] # always the last argument
         if self._sim_type == "map":
             kwargs['max_cache_size'] = self._sim_args[0] if len(self._sim_args) > 0 else None # backward compat

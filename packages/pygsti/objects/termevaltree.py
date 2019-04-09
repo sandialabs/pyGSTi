@@ -410,6 +410,37 @@ class TermEvalTree(EvalTree):
         cpy = self._copyBase( TermEvalTree(self[:]) )
         return cpy
 
+    def get_p_pruned_polys(self, calc, rholabel, elabels, comm, memLimit, pathmagnitude_gap, min_term_mag):
+        print("DB: EVTREE get_p_pruned_polys")
+
+        elabels = tuple(elabels) #make sure this is hashable
+        circuit_list = self.generate_circuit_list(permute=False)
+        
+        polys = []
+        tot_npaths = 0
+        repcache = {}
+        for opstr in circuit_list:
+            if (rholabel,elabels,opstr) in self.p_polys:
+                current_polys, current_paths, current_threshold = self.p_polys[(rholabel,elabels,opstr)]
+            else:
+                current_threshold = current_paths = current_polys= None
+            raw_polys, npaths, threshold = calc.prs_as_pruned_polys(rholabel,elabels, opstr, repcache, comm, memLimit, pathmagnitude_gap, min_term_mag,
+                                                                    current_threshold, (current_polys, current_paths))
+            self.p_polys[(rholabel, elabels, opstr)] = raw_polys, npaths, threshold
+            polys.append( [poly.compact(force_complex=True) for poly in raw_polys] )
+            tot_npaths += npaths
+
+        ret = []
+        for i,elabel in enumerate(elabels):
+            tapes = [ p[i] for p in polys ]
+            vtape = _np.concatenate( [ t[0] for t in tapes ] )
+            ctape = _np.concatenate( [ t[1] for t in tapes ] )
+            ret.append( (vtape, ctape) ) # Note: ctape should always be complex here
+
+        print("DB: EVTREE done: tot_npaths = %d" % tot_npaths)
+        return ret
+
+
 
     def get_p_polys(self, calc, rholabel, elabels, comm):
         """

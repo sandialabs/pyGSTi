@@ -12,6 +12,9 @@ import numbers as _numbers
 from .polynomial import Polynomial as _Polynomial
 from . import replib
 
+LARGE = 1000000000 # a large number such that LARGE is
+ # a very high term weight which won't help (at all) a
+ # path get included in the selected set of paths.
 
 def compose_terms(terms):
     """
@@ -96,8 +99,8 @@ def exp_terms(terms, orders, postterm=None, order_base=None):
                 coeff = _np.product([t.coeff for t in factors_to_compose])
                 #LATER (will cause J=0 if we're not careful): if abs(coeff) < coeff_threshold: continue # don't include small terms
                 # TODO: create new function that looks at all/many taylor orders and bins into order_base orders?
-            final_terms[order].append( 1/_np.math.factorial(order) * compose_terms(factors_to_compose) ) 
-            
+            final_terms[order].append( 1/_np.math.factorial(order) * compose_terms(factors_to_compose) )
+        
     return final_terms
 
 def embed_term(term, stateSpaceLabels, targetLabels):
@@ -202,7 +205,7 @@ class RankOneTerm(object):
         self.coeff = coeff # potentially a Polynomial
         if isinstance(self.coeff, _numbers.Number):
             self.magnitude = abs(coeff)
-            self.logmagnitude = _np.log(self.magnitude)
+            self.logmagnitude = _np.log10(self.magnitude) if self.magnitude > 0 else -LARGE
         else:
             self.magnitude = 1.0
             self.logmagnitude = 0.0
@@ -246,7 +249,7 @@ class RankOneTerm(object):
     def __mul__(self,x):
         """ Multiply by scalar """
         ret = self.copy()
-        self.coeff *= x
+        ret.coeff *= x
         return ret
     
     def __rmul__(self, x):
@@ -267,7 +270,7 @@ class RankOneTerm(object):
         None
         """
         self.magnitude = mag
-        self.logmagnitude = _np.log(mag)
+        self.logmagnitude = _np.log10(mag) if mag > 0 else -LARGE
         
         
     def compose(self, term):

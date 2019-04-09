@@ -7,9 +7,12 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import sys
+import time as _time
 import numpy as _np
 import scipy.sparse as _sps
 import itertools as _itertools
+import functools as _functools
+import platform as _platform
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
@@ -17,6 +20,9 @@ from ..tools import matrixtools as _mt
 from ..tools import listtools as _lt
 
 from scipy.sparse.linalg import LinearOperator
+
+assert(_platform.architecture()[0].endswith("bit")) # e.g. "64bit"
+PLATFORM_BITS = int(_platform.architecture()[0].strip("bit"))
 
 # DEBUG!!!
 DEBUG_FCOUNT = 0
@@ -889,6 +895,10 @@ class PolyRep(dict):
         self.max_order = max_order
         self.max_num_vars = max_num_vars
 
+        # (max_num_vars+1) ** vindices_per_int <= 2**PLATFORM_BITS, so:
+        # vindices_per_int * log2(max_num_vars+1) <= PLATFORM_BITS
+        self.vindices_per_int = int(_np.floor(PLATFORM_BITS / _np.log2(self.max_num_vars+1)))
+
         super(PolyRep,self).__init__()
         if int_coeffs is not None:
             self.update(int_coeffs)
@@ -925,22 +935,32 @@ class PolyRep(dict):
 
     def _vinds_to_int(self, vinds):
         """ Maps tuple of variable indices to encoded int """
-        assert(len(vinds) <= self.max_order), "max_order is too low!"
-        ret = 0; m = 1
-        for i in vinds: # last tuple index is most significant
-            assert(i < self.max_num_vars), "Variable index exceed maximum!"
-            ret += (i+1)*m
-            m *= self.max_num_vars+1
-        return ret
+        ints_in_key = int(_np.ceil(len(vinds) / self.vindices_per_int))
+        #OLD (before multi-int keys): assert(len(vinds) <= self.max_order), "max_order (%d) is too low!" % self.max_order
 
-    def _int_to_vinds(self, indx):
-        """ Maps encoded int to tuple of variable indices """
+        ret_tup = []
+        for k in range(ints_in_key):
+            ret = 0; m = 1
+            for i in vinds[k*self.vindices_per_int:(k+1)*self.vindices_per_int]: # last tuple index is most significant
+                assert(i < self.max_num_vars), "Variable index exceed maximum!"
+                ret += (i+1)*m
+                m *= self.max_num_vars+1
+            assert(ret >= 0), "vinds = %s -> %d!!" % (str(vinds), ret)
+            ret_tup.append(ret)
+        return tuple(ret_tup)
+
+    def _int_to_vinds(self, indx_tup):
+        """ Maps encoded "int" to tuple of variable indices """
         ret = []
-        while indx != 0:
-            nxt = indx // (self.max_num_vars+1)
-            i = indx - nxt*(self.max_num_vars+1)
-            ret.append(i-1)
-            indx = nxt
+        #DB: cnt = 0; orig = indx
+        for indx in indx_tup:
+            while indx != 0:
+                nxt = indx // (self.max_num_vars+1)
+                i = indx - nxt*(self.max_num_vars+1)
+                ret.append(i-1)
+                indx = nxt
+                #DB: cnt += 1
+                #DB: if cnt > 50: print("VINDS iter %d - indx=%d (orig=%d, nv=%d)" % (cnt,indx,orig,self.max_num_vars))
         return tuple(sorted(ret))
 
     def deriv(self, wrtParam):
@@ -1074,9 +1094,11 @@ class PolyRep(dict):
         newpoly = PolyRep(None, self.max_order, self.max_num_vars) # assume same *fixed* max_order, even during mult
         for k1,v1 in self.items():
             for k2,v2 in x.items():
-                k = newpoly._vinds_to_int(sorted(self._int_to_vinds(k1)+x._int_to_vinds(k2)))
+                inds = sorted(self._int_to_vinds(k1)+x._int_to_vinds(k2))
+                k = newpoly._vinds_to_int(inds)
                 if k in newpoly: newpoly[k] += v1*v2
                 else: newpoly[k] = v1*v2
+        assert(newpoly.degree() <= self.degree() + x.degree())
         return newpoly
 
     def scale(self, x):
@@ -1177,6 +1199,14 @@ class PolyRep(dict):
 
     def __copy__(self):
         return self.copy()
+
+    def debug_report(self):
+        actual_max_order = max( [len(self._int_to_vinds(k)) for k in self.keys()] )
+        return "PolyRep w/max_vars=%d and max_order=%d: nterms=%d, actual max-order=%d" % \
+            (self.max_num_vars,self.max_order,len(self),actual_max_order)
+
+    def degree(self):
+        return max( [len(self._int_to_vinds(k)) for k in self.keys()] )
 
 
 
@@ -1542,15 +1572,18 @@ def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
     #return _prs_directly(calc, rholabel, elabels, circuit, comm, memLimit, fastmode)
     raise NotImplementedError("No direct mode yet")
 
-def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01):
-    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag)
+def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01,
+                           current_threshold=None, current_polys_and_paths=None, db_paramvec=None):
+    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag,
+                                current_threshold, current_polys_and_paths, db_paramvec)
 
 def SB_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01):
-    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag)
+    return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag)
 
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
-def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01):
+def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01,
+                         current_threshold=None, current_polys_and_paths=None, db_paramvec=None):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
     
@@ -1588,31 +1621,56 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=N
     numpy.ndarray
         one per element of `elabels`.
     """
-
+    #t0 = _time.time()
+    
     # Construct dict of gate term reps
     mpv = calc.Np # max_poly_vars
-    mpo = 2*2 #calc.max_order*2 #max_poly_order  HACK - TODO: compute actual max poly order
+    mpo = 1000 ## PLATFORM_BITS / _np.log2(mpv) #max_poly_order allowed for our integer storage
     distinct_gateLabels = sorted(set(circuit))
     #print("DB: _prs_as_pruned_polys: ", circuit, "Distinct = ",distinct_gateLabels)
-    op_term_reps = { glbl: [ t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_highmagnitude_terms(min_term_mag)]
-                     for glbl in distinct_gateLabels }
-    op_num_foat = { glbl: calc.sos.get_operation(glbl).get_num_firstorder_terms() for glbl in distinct_gateLabels }
+    #op_term_reps = { glbl: [ t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_highmagnitude_terms(min_term_mag, max_taylor_order=calc.max_order)]
+    #                 for glbl in distinct_gateLabels }
+    #op_num_foat = { glbl: calc.sos.get_operation(glbl).get_num_firstorder_terms() for glbl in distinct_gateLabels }
 
+    op_term_reps = {}
+    op_num_foat = {}
+    for glbl in distinct_gateLabels:
+        if glbl not in repcache:
+            repcache[glbl] = ([ t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_highmagnitude_terms(
+                                min_term_mag, max_taylor_order=calc.max_order)],
+                              calc.sos.get_operation(glbl).get_num_firstorder_terms())
+        op_term_reps[glbl], op_num_foat[glbl] = repcache[glbl]
+        
+            
     #Similar with rho_terms and E_terms, but lists
-    rho_term_reps = [ t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_highmagnitude_terms(min_term_mag) ]
-    rho_num_foat = calc.sos.get_prep(rholabel).get_num_firstorder_terms()
+    #rho_term_reps = [ t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_highmagnitude_terms(min_term_mag, max_taylor_order=calc.max_order) ]
+    #rho_num_foat = calc.sos.get_prep(rholabel).get_num_firstorder_terms()
+    if rholabel not in repcache:
+        repcache[rholabel] = ([ t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_highmagnitude_terms(
+                                min_term_mag, max_taylor_order=calc.max_order) ],
+                              calc.sos.get_prep(rholabel).get_num_firstorder_terms())
+    rho_term_reps, rho_num_foat = repcache[rholabel]
 
-    E_term_indices_and_reps = []
-    for i,elbl in enumerate(elabels):
-        E_term_indices_and_reps.extend( [ (i,t.torep(mpo,mpv,"effect"),t.magnitude)
-                                          for t in calc.sos.get_effect(elbl).get_highmagnitude_terms(min_term_mag) ] )
-    E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True) # sort effects by term magnitude
-    E_term_reps = [ x[1] for x in E_term_indices_and_reps ]
-    E_indices = [ x[0] for x in E_term_indices_and_reps ]
-    E_num_foat = sum([calc.sos.get_effect(elbl).get_num_firstorder_terms() for elbl in elabels])
-       #TODO: better zipping/sorting of different elabels -- we get already sorted lists and we need to keep some num_firstorder for *each* elabel
+    elabels = tuple(elabels) # so hashable
+    if elabels not in repcache:
+        E_term_indices_and_reps = [ [], [], [] ] # 0th-order terms, 1st-order terms, others
+        for i,elbl in enumerate(elabels):
+            effect = calc.sos.get_effect(elbl)
+            reps = [ (i,t.torep(mpo,mpv,"effect"),t.magnitude)
+                     for t in effect.get_highmagnitude_terms(min_term_mag, max_taylor_order=calc.max_order) ]
+            firstOrderBrk = effect.get_num_firstorder_terms()+1
+            E_term_indices_and_reps[0].append(reps[0]) # always a single 0th order term
+            E_term_indices_and_reps[1].extend(reps[1:firstOrderBrk])
+            E_term_indices_and_reps[2].extend(reps[firstOrderBrk:])
 
-    #print("DB: pr_as_poly for ",str(tuple(map(str,circuit))), " max_order=",calc.max_order)
+        E_term_indices_and_reps[1].sort(key=lambda x: x[2], reverse=True)
+        E_term_indices_and_reps[2].sort(key=lambda x: x[2], reverse=True)
+        E_term_reps = [ x[1] for x in E_term_indices_and_reps[0] + E_term_indices_and_reps[1] + E_term_indices_and_reps[2] ]
+        E_indices = [ x[0] for x in E_term_indices_and_reps[0] + E_term_indices_and_reps[1] + E_term_indices_and_reps[2] ]
+        E_num_zoat, E_num_foat = len(E_term_indices_and_reps[0]), len(E_term_indices_and_reps[1])
+        repcache[elabels] = (E_term_reps, E_indices, E_num_zoat, E_num_foat)
+        
+    E_term_reps, E_indices, E_num_zoat, E_num_foat = repcache[elabels]
 
     prps = [None]*len(elabels)
 
@@ -1622,16 +1680,24 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=N
     factor_list_lens = list(map(len,factor_lists))
     last_index = len(factor_lists)-1
 
+    num_zoat_per_op = [ 1 ] + [ 1 for glbl in circuit ] + [ E_num_zoat ]
     num_foat_per_op = [ rho_num_foat ] + [ op_num_foat[glbl] for glbl in circuit ] + [ E_num_foat ]
 
-    gap = 0.01 # (?)
     ops = [calc.sos.get_prep(rholabel)] + [ calc.sos.get_operation(glbl) for glbl in circuit ]
     max_sum_of_pathmags = _np.product( [ op.get_total_term_magnitude() for op in ops ] )
-    max_sum_of_pathmags = _np.array( [ calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels ], 'd')
-    target_sum_of_pathmags = max_sum_of_pathmags - gap
-    threshold = pathmagnitude_threshold(factor_lists, E_indices, len(elabels), target_sum_of_pathmags, num_foat_per_op)
+    max_sum_of_pathmags = _np.array( [ max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels ], 'd')
+    target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap
+    threshold, npaths = pathmagnitude_threshold(factor_lists, E_indices, len(elabels), target_sum_of_pathmags, num_zoat_per_op, num_foat_per_op,
+                                                initial_threshold=current_threshold, min_threshold=pathmagnitude_gap/100.0,
+                                                db_ops=ops + [calc.sos.get_effect(elabels[0])] )
       # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
+      
+    if current_threshold is not None and threshold >= current_threshold: # then just keep existing (cached) polys
+        return current_polys_and_paths + (current_threshold,)
 
+    #print("T1 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
+
+    assert(fastmode == False)
     if fastmode:
         leftSaved = [None]*(len(factor_lists)-1)  # saved[i] is state after i-th
         rightSaved = [None]*(len(factor_lists)-1) # factor has been applied
@@ -1714,7 +1780,26 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=N
             else:                prps[Ei] += res # add_inplace?
             #print("DB running prps[",Ei,"] =",prps[Ei])
 
-    traverse_paths_upto_threshold(factor_lists, threshold, num_foat_per_op, add_path) # sets mag and nPaths
+    traverse_paths_upto_threshold(factor_lists, threshold, num_zoat_per_op, num_foat_per_op, add_path) # sets mag and nPaths
+    #print("T2 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
+
+    #DEBUG
+    print("---------------------------")
+    print("Path threshold = ",threshold, max_sum_of_pathmags, target_sum_of_pathmags)
+    print("nPaths = ",npaths)
+    print("Num high-magnitude (|coeff|>%g, taylor<=%d) terms: %s" % (min_term_mag, calc.max_order, str([len(factors) for factors in factor_lists])))
+    print("Num FOAT: ",num_foat_per_op)
+    print("---------------------------")
+
+    #max_degrees = []
+    #for i,factors in enumerate(factor_lists):
+    #    max_degrees.append(max([f.coeff.degree() for f in factors]))
+    #print("Max degrees = ",max_degrees)
+    #for Ei,prp in enumerate(prps):
+    #    print(Ei,":", prp.debug_report())
+    #if db_paramvec is not None:
+    #    for Ei,prp in enumerate(prps):
+    #        print(Ei," => ", prp.evaluate(db_paramvec))    
 
     #TODO: REMOVE - most of this is solved, but keep it around for another few commits in case we want to refer back to it.
     # - need to fill in some more details, namely how/where we hold weights and log-weights: in reps? in Term objs?  maybe consider Cython version?
@@ -1727,35 +1812,58 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=N
     #Add repcache as in cython version -- saves having to *construct* rep objects all the time... just update coefficients when needed instead?
         
     #... and we're done!
-    return prps
+    return prps, sum(npaths), threshold
 
 
-def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_foat_per_op, fn_visitpath): # foat = first-order always-traversed
-    """ TODO: docstring """
+def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_zoat_per_op, num_foat_per_op, fn_visitpath, debug=False): # foat = first-order always-traversed
+    """ TODO: docstring """ # zot = zero-order-terms
     n = len(oprep_lists)
     nops = [ len(oprep_list) for oprep_list in oprep_lists ]
     b = [0]*n # root
     log_thres = _np.log10(pathmag_threshold)
-    #print("BEGIN: ",root)
+    if debug:
+        if debug > 1: print("BEGIN TRAVERSAL")
+        accepted_bs_and_mags = {}
 
-    current_mag = 1.0; current_logmag = 0.0
-    fn_visitpath(b, current_mag, 0) # visit root (all 0s) path
-
-    def traverse_tree(root, incd, log_thres, current_mag, current_logmag):
+    def traverse_tree(root, incd, log_thres, current_mag, current_logmag, order):
+        """ first_order means only one b[i] is incremented, e.g. b == [0 1 0] or [4 0 0] """
         b = root
         #print("BEGIN: ",root)
         for i in reversed(range(incd, n)):
             if b[i]+1 == nops[i]: continue
             b[i] += 1
+
+            sub_order = order
+            if b[i] == num_zoat_per_op[i]: sub_order += 1
+            if b[i] == num_zoat_per_op[i]+num_foat_per_op[i]: sub_order += 1
+
             logmag = current_logmag + (oprep_lists[i][b[i]].logmagnitude - oprep_lists[i][b[i]-1].logmagnitude)
             #print("Trying: ",b)
-            if logmag >= log_thres:
-                mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i]-1].magnitude)
+            if logmag >= log_thres or sub_order <= 1:
+                if oprep_lists[i][b[i]-1].magnitude == 0:
+                    mag = 0
+                else:
+                    mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i]-1].magnitude)
+                if debug:
+                    dbmags = [oprep_lists[k][b[k]].magnitude for k in range(n)]
+                    if debug>1: print("Accepting path: ",b, "(order",sub_order,"):", mag, '*'.join(map(str,dbmags))) #, logmag, " vs ", log_thres)
+                    assert(abs(_np.product(dbmags)-mag) < 1e-6)
+                    assert(tuple(b) not in accepted_bs_and_mags)
+                    accepted_bs_and_mags[tuple(b)] = mag
                 fn_visitpath(b, mag, i)
-                traverse_tree(b, i, log_thres, mag, logmag) #add any allowed paths beneath this one
+                traverse_tree(b, i, log_thres, mag, logmag, sub_order) #add any allowed paths beneath this one
+            elif debug and debug>1:
+                dbmags = [oprep_lists[k][b[k]].magnitude for k in range(n)]
+                mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i]-1].magnitude)
+                print("Rejected path: ",b, "(order",sub_order,"):", mag, '*'.join(map(str,dbmags))) #, logmag, " vs ", log_thres)
+                print(" --> logmag = ",logmag," thres=",log_thres)
             b[i] -= 1 # so we don't have to copy b or root
         #print("END: ",root)
-    
+
+    current_mag = 1.0; current_logmag = 0.0
+    fn_visitpath(b, current_mag, 0) # visit root (all 0s) path
+    if debug: accepted_bs_and_mags[tuple(b)] = current_mag
+    traverse_tree(b, 0, log_thres, current_mag, current_logmag, 0)
     
     ##Step1: traverse first-order-always-traversed paths
     #for i in range(n):
@@ -1769,33 +1877,37 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_foat_per_o
     #    b[i] = bi0
 
     #Step2: add additional paths
-    for i in reversed(range(n)):
-        if b[i]+1 == nops[i]: continue
-        b[i] += 1
-        logmag = current_logmag + (oprep_lists[i][b[i]].logmagnitude - oprep_lists[i][b[i]-1].logmagnitude)
-
-        #print("Trying: ",b)
-        if logmag >= log_thres or b[i] <= num_foat_per_op[i]:
-            mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i]-1].magnitude)
-            fn_visitpath(b, mag, i)
-            traverse_tree(b, i, log_thres, mag, logmag) #add any allowed paths beneath this one
-        b[i] -= 1 # so we don't have to copy b or root
+    #for i in reversed(range(n)):
+    #    if b[i]+1 == nops[i]: continue
+    #    b[i] += 1
+    #    logmag = current_logmag + (oprep_lists[i][b[i]].logmagnitude - oprep_lists[i][b[i]-1].logmagnitude)
+    #
+    #    if logmag >= log_thres or b[i] <= num_foat_per_op[i]:
+    #        if oprep_lists[i][b[i]-1].magnitude == 0:
+    #            mag = 0
+    #        else:
+    #            mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i]-1].magnitude)
+    #        fn_visitpath(b, mag, i)
+    #        traverse_tree(b, i, log_thres, mag, logmag, True) #add any allowed paths beneath this one
+    #    b[i] -= 1 # so we don't have to copy b or root
     #print("END: ",root)
-    return
+    return accepted_bs_and_mags if debug else None
 
 
-def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_pathmags, num_foat_per_op=None, initial_threshold=0.1):
+def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_pathmags, num_zoat_per_op=None, num_foat_per_op=None,
+                            initial_threshold=0.1, min_threshold=1e-10, db_ops=None):
     """
     TODO: docstring - note: target_sum_of_pathmags is a *vector* that holds a separate value for each E-index
     """
     nIters = 0
-    threshold = initial_threshold
+    threshold = initial_threshold if (initial_threshold is not None) else 0.1 # default value
     target_mag = target_sum_of_pathmags
-    #print("Target magnitude: ",target_mag)
+    print("Target magnitude: ",target_mag)
     threshold_upper_bound = 1.0
     threshold_lower_bound = None
     npaths_upper_bound = npaths_lower_bound = None
-    mag = 0; nPaths = 0
+    db_last_threshold = None #DEBUG
+    #mag = 0; nPaths = 0
 
     if num_foat_per_op is None:
         num_foat_per_op = [0]*len(oprep_lists)
@@ -1806,7 +1918,72 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
     while nIters < 100: # TODO: allow setting max_nIters as an arg?
         mag = _np.zeros(nEffects,'d')
         nPaths = _np.zeros(nEffects,int)
-        traverse_paths_upto_threshold(oprep_lists, threshold, num_foat_per_op, count_path) # sets mag and nPaths
+        accepted_bs_and_mags = traverse_paths_upto_threshold(oprep_lists, threshold, num_zoat_per_op, num_foat_per_op, count_path, debug=1) # sets mag and nPaths
+        if db_last_threshold is not None:
+            if db_last_mag + db_last_threshold * (nPaths[0] - db_last_nPaths) < mag[0]:
+                print("Problem!")
+                print(db_last_mag, db_last_threshold, nPaths[0], db_last_nPaths, mag[0])
+                new_bs_and_mags = {}
+                for x in accepted_bs_and_mags:
+                    if x not in db_last_accepted:
+                        new_bs_and_mags[x] = accepted_bs_and_mags[x]
+                missing = set()
+                for x in db_last_accepted:
+                    if x not in accepted_bs_and_mags:
+                        missing.add(x)
+                print("New bs and mags (%d):" % len(new_bs_and_mags))
+                print(new_bs_and_mags)
+                print("Missing (%d):" % len(missing))
+                print(missing)
+                print("Sum current: ", sum(accepted_bs_and_mags.values()))
+                print("Sum last: ", sum(db_last_accepted.values()))
+
+                mag = _np.zeros(nEffects,'d')
+                nPaths = _np.zeros(nEffects,int)
+                accepted_bs_and_mags = traverse_paths_upto_threshold(oprep_lists, db_last_threshold, num_zoat_per_op, num_foat_per_op, count_path, debug=2)
+                print(mag,nPaths)
+                assert(False), "PROBLEM!"
+        db_last_mag = mag[0]
+        db_last_nPaths = nPaths[0]
+        db_last_threshold = threshold
+        db_last_accepted = accepted_bs_and_mags
+        
+        #if _np.any(mag > target_mag + 0.0001):
+        #    print("MAG SEEMS TOO HIGH!! - printing debug:",mag)
+        #    max_check = 1.0
+        #    for i,oprep_list in enumerate(oprep_lists[0:-1]):
+        #        tmags = [t.magnitude for t in oprep_list[num_zoat_per_op[i]:num_zoat_per_op[i]+num_foat_per_op[i]]]
+        #        sum_mags = sum(tmags)
+        #        print("mags(%d):" % len(tmags), tmags, " -> sum_mags = ",sum_mags," -> expd -> ", _np.exp(sum_mags))
+        #        max_check *= _np.exp(sum_mags)
+        #    oprep_list = [ op for i,op in enumerate(oprep_lists[-1]) if E_indices[i] == 0 ]
+        #    tmags = [t.magnitude for t in oprep_list[num_zoat_per_op[i]:num_zoat_per_op[i]+num_foat_per_op[i]]]
+        #    sum_mags = sum(tmags)
+        #    print("last mags(%d):" % len(tmags), tmags, " -> sum_mags = ",sum_mags," -> expd -> ", _np.exp(sum_mags))
+        #    max_check *= _np.exp(sum_mags)
+        #    print("max check = ",max_check)
+        #    
+        #    max_check2 = 1.0
+        #    for op in db_ops:
+        #        tmags = [t.magnitude for t in op.get_taylor_order_terms(1)]
+        #        print("Op first order mags (%d) = " % len(tmags), tmags, " -> sum_mags = ",sum(tmags)," -> expd -> ", _np.exp(sum(tmags)))
+        #        print("Op mag = ",op.get_total_term_magnitude())
+        #        max_check2 *= op.get_total_term_magnitude()
+        #    print("max check 2 = ",max_check2)
+        #
+        #    for op in db_ops:
+        #        print("OP")
+        #        print("First order polys:")
+        #        for t in op.get_taylor_order_terms(1):
+        #            print(t.coeff)
+        #        print("Second order polys:")
+        #        for t in op.get_taylor_order_terms(2):
+        #            print(t.coeff)
+        #
+        #    mag = _np.zeros(nEffects,'d')
+        #    nPaths = _np.zeros(nEffects,int)
+        #    traverse_paths_upto_threshold(oprep_lists, threshold, num_zoat_per_op, num_foat_per_op, count_path, debug=True) # sets mag and nPaths
+        #    assert(False),"STOP"
         
         if _np.all(mag >= target_mag): # try larger threshold                                                                                                   
             threshold_lower_bound = threshold
@@ -1821,13 +1998,23 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
                 threshold = (threshold_upper_bound + threshold_lower_bound)/2
             else: threshold /= 2
 
-        #print("  Interval: threshold in [%s,%s]: %s %s" % (str(threshold_upper_bound),str(threshold_lower_bound),mag,nPaths))
+        print("  Interval: threshold in [%s,%s]: %s %s" % (str(threshold_upper_bound),str(threshold_lower_bound),mag,nPaths))
         if threshold_upper_bound is not None and threshold_lower_bound is not None and \
            (threshold_upper_bound - threshold_lower_bound)/threshold_upper_bound < 1e-3:
             #print("Converged after %d iters!" % nIters)
             break
+        if threshold_upper_bound < min_threshold: # could also just set min_threshold to be the lower bound initially?
+            threshold_upper_bound = threshold_lower_bound = min_threshold
+            break
+        
         nIters += 1
-    return threshold_lower_bound
+    
+    #Run path traversal once more to count final number of paths
+    mag = _np.zeros(nEffects,'d')
+    nPaths = _np.zeros(nEffects,int)
+    traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_zoat_per_op, num_foat_per_op, count_path, debug=False) # sets mag and nPaths
+    
+    return threshold_lower_bound, nPaths
 
 
 def _unitary_sim_pre(complete_factors, comm, memLimit):
