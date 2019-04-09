@@ -418,17 +418,24 @@ class TermEvalTree(EvalTree):
         
         polys = []
         tot_npaths = 0
+        tot_target_sopm = 0; tot_achieved_sopm = 0 # "sum of path magnitudes"
         repcache = {}
         for opstr in circuit_list:
             if (rholabel,elabels,opstr) in self.p_polys:
-                current_polys, current_paths, current_threshold = self.p_polys[(rholabel,elabels,opstr)]
+                current_threshold, current_polys = self.p_polys[(rholabel,elabels,opstr)]
             else:
-                current_threshold = current_paths = current_polys= None
-            raw_polys, npaths, threshold = calc.prs_as_pruned_polys(rholabel,elabels, opstr, repcache, comm, memLimit, pathmagnitude_gap, min_term_mag,
-                                                                    current_threshold, (current_polys, current_paths))
-            self.p_polys[(rholabel, elabels, opstr)] = raw_polys, npaths, threshold
+                current_threshold, current_polys = None, None
+            raw_polys, npaths, threshold, target_sopm, achieved_sopm = \
+                calc.prs_as_pruned_polys(rholabel,elabels, opstr, repcache, comm, memLimit, pathmagnitude_gap,
+                                         min_term_mag, current_threshold)
+            if raw_polys is None: # signal to use existing current_cache
+                raw_polys = current_polys
+            else:
+                self.p_polys[(rholabel, elabels, opstr)] = (threshold, raw_polys)
             polys.append( [poly.compact(force_complex=True) for poly in raw_polys] )
             tot_npaths += npaths
+            tot_target_sopm += target_sopm
+            tot_achieved_sopm += achieved_sopm
 
         ret = []
         for i,elabel in enumerate(elabels):
@@ -437,7 +444,7 @@ class TermEvalTree(EvalTree):
             ctape = _np.concatenate( [ t[1] for t in tapes ] )
             ret.append( (vtape, ctape) ) # Note: ctape should always be complex here
 
-        print("DB: EVTREE done: tot_npaths = %d" % tot_npaths)
+        print("DB: EVTREE done: tot_npaths = %d, target_sopm=%g, achieved_sopm=%g" % (tot_npaths,target_sopm,achieved_sopm))
         return ret
 
 

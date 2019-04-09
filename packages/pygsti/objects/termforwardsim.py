@@ -191,7 +191,7 @@ class TermForwardSimulator(ForwardSimulator):
 
 
     def prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
-                            current_threshold=None, current_polys_and_paths=None, db_paramvec=None):
+                            current_threshold=None):
         """
         TODO: docstring
         """
@@ -203,13 +203,17 @@ class TermForwardSimulator(ForwardSimulator):
         fastmode = False
         if repcache is None: repcache = {} 
         if self.evotype == "svterm":
-            poly_reps, npaths, threshold = replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm, memLimit,
-                                                              fastmode, pathmagnitude_gap, min_term_mag,
-                                                              current_threshold, current_polys_and_paths, db_paramvec)
+            poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
+                replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm, memLimit,
+                                              fastmode, pathmagnitude_gap, min_term_mag,
+                                              current_threshold)
+                # sopm = "sum of path magnitudes"
         else: # "cterm" (stabilizer-based term evolution)
-            poly_reps, npaths, threshold = replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag, db_paramvec)
+            poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
+                replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm, memLimit,
+                                              fastmode, pathmagnitude_gap, min_term_mag)
 
-        if len(poly_reps) > 0 and not isinstance(poly_reps[0], _Polynomial): #HACK
+        if poly_reps is not None: # HACK - can be None when there's a cache hit
             prps = [ _Polynomial.fromrep(rep) for rep in poly_reps ]
         else: prps = poly_reps
 
@@ -217,12 +221,12 @@ class TermForwardSimulator(ForwardSimulator):
         #if self.cache is not None:
         #    for ck,poly in zip(cache_keys,prps):
         #        self.cache[ck] = poly
-        return prps, npaths, threshold
+        return prps, npaths, threshold, target_sopm, achieved_sopm
 
     def prs_as_concat_compact_pruned_polys(self, rholabel, elabels, circuit_list, comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
                                            evTree=None, db_paramvec=None): #maybe make this an evaltree method in FUTURE?
         """
-        TODO: docstring
+        TODO: docstring DEPRECATED - probably REMOVE this function
           compute compact polys to be like termevaltree.get_p_polys(...)
         """
         #TODO: decide when we cache pruned polys
@@ -241,7 +245,7 @@ class TermForwardSimulator(ForwardSimulator):
             if evTree is not None:
                 evTree.get_p_polys(self, rholabel, elabels)
             raw_polys, npaths = self.prs_as_pruned_polys(rholabel,elabels, opstr, repcache, comm, memLimit, pathmagnitude_gap, min_term_mag,
-                                                         current_threshold, current_polys_and_paths, db_paramvec)
+                                                         current_threshold, current_polys_and_paths)
             polys.append( [poly.compact(force_complex=True) for poly in raw_polys] )
             tot_npaths += npaths
             
@@ -671,7 +675,7 @@ class TermForwardSimulator(ForwardSimulator):
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
         print("DB: bulk_fill_probs called!!!!!!!!!")
-        print("Paramvec = ",self.paramvec)
+        #print("Paramvec = ",self.paramvec)
 
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:

@@ -1573,9 +1573,9 @@ def SB_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
     raise NotImplementedError("No direct mode yet")
 
 def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01,
-                           current_threshold=None, current_polys_and_paths=None, db_paramvec=None):
+                           current_threshold=None):
     return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag,
-                                current_threshold, current_polys_and_paths, db_paramvec)
+                                current_threshold)
 
 def SB_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01):
     return _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode, pathmagnitude_gap, min_term_mag)
@@ -1583,7 +1583,7 @@ def SB_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
 def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01,
-                         current_threshold=None, current_polys_and_paths=None, db_paramvec=None):
+                         current_threshold=None):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
     
@@ -1682,12 +1682,13 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     max_sum_of_pathmags = _np.product( [ op.get_total_term_magnitude() for op in ops ] )
     max_sum_of_pathmags = _np.array( [ max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels ], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap
-    threshold, npaths = pathmagnitude_threshold(factor_lists, E_indices, len(elabels), target_sum_of_pathmags, len(elabels), foat_indices_per_op,
-                                                initial_threshold=current_threshold, min_threshold=pathmagnitude_gap/100.0)
+    threshold, npaths, achieved_sum_of_pathmags = pathmagnitude_threshold(
+        factor_lists, E_indices, len(elabels), target_sum_of_pathmags, len(elabels), foat_indices_per_op,
+        initial_threshold=current_threshold, min_threshold=pathmagnitude_gap/100.0)
       # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
       
     if current_threshold is not None and threshold >= current_threshold: # then just keep existing (cached) polys
-        return current_polys_and_paths + (current_threshold,)
+        return None, sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)        
 
     #print("T1 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
 
@@ -1778,12 +1779,12 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     #print("T2 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
 
     #DEBUG
-    print("---------------------------")
-    print("Path threshold = ",threshold, max_sum_of_pathmags, target_sum_of_pathmags)
-    print("nPaths = ",npaths)
-    print("Num high-magnitude (|coeff|>%g, taylor<=%d) terms: %s" % (min_term_mag, calc.max_order, str([len(factors) for factors in factor_lists])))
-    print("Num FOAT: ",[len(inds) for inds in foat_indices_per_op])
-    print("---------------------------")
+    #print("---------------------------")
+    #print("Path threshold = ",threshold, " max=",max_sum_of_pathmags, " target=",target_sum_of_pathmags, " achieved=",achieved_sum_of_pathmags)
+    #print("nPaths = ",npaths)
+    #print("Num high-magnitude (|coeff|>%g, taylor<=%d) terms: %s" % (min_term_mag, calc.max_order, str([len(factors) for factors in factor_lists])))
+    #print("Num FOAT: ",[len(inds) for inds in foat_indices_per_op])
+    #print("---------------------------")
 
     #max_degrees = []
     #for i,factors in enumerate(factor_lists):
@@ -1806,7 +1807,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     #Add repcache as in cython version -- saves having to *construct* rep objects all the time... just update coefficients when needed instead?
         
     #... and we're done!
-    return prps, sum(npaths), threshold
+    return prps, sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
 
 def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, foat_indices_per_op, fn_visitpath, debug=False): # foat = first-order always-traversed
@@ -1815,9 +1816,11 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
     nops = [ len(oprep_list) for oprep_list in oprep_lists ]
     b = [0]*n # root
     log_thres = _np.log10(pathmag_threshold)
-    if debug:
-        if debug > 1: print("BEGIN TRAVERSAL")
-        accepted_bs_and_mags = {}
+
+    ##TODO REMOVE
+    #if debug:
+    #    if debug > 1: print("BEGIN TRAVERSAL")
+    #    accepted_bs_and_mags = {}
 
     def traverse_tree(root, incd, log_thres, current_mag, current_logmag, order):
         """ first_order means only one b[i] is incremented, e.g. b == [0 1 0] or [4 0 0] """
@@ -1843,12 +1846,14 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                     mag = 0
                 else:
                     mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i]-1].magnitude)
-                if debug:
-                    dbmags = [oprep_lists[k][b[k]].magnitude for k in range(n)]
-                    if debug>1: print("Accepting path: ",b, "(order",sub_order,"):", mag, '*'.join(map(str,dbmags))) #, logmag, " vs ", log_thres)
-                    assert(abs(_np.product(dbmags)-mag) < 1e-6)
-                    assert(tuple(b) not in accepted_bs_and_mags)
-                    accepted_bs_and_mags[tuple(b)] = mag
+
+                #TODO REMOVE
+                #if debug:
+                #    dbmags = [oprep_lists[k][b[k]].magnitude for k in range(n)]
+                #    if debug>1: print("Accepting path: ",b, "(order",sub_order,"):", mag, '*'.join(map(str,dbmags))) #, logmag, " vs ", log_thres)
+                #    assert(abs(_np.product(dbmags)-mag) < 1e-6)
+                #    assert(tuple(b) not in accepted_bs_and_mags)
+                #    accepted_bs_and_mags[tuple(b)] = mag
                 fn_visitpath(b, mag, i)
                 traverse_tree(b, i, log_thres, mag, logmag, sub_order) #add any allowed paths beneath this one
             elif sub_order <= 1:
@@ -1866,13 +1871,14 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
 
                         fn_visitpath(b, mag, i)
 
-                        if debug:
-                            sub_order = 1
-                            dbmags = [oprep_lists[k][b[k]].magnitude for k in range(n)]
-                            if debug>1: print("FOAT Accepting path: ",b, "(order",sub_order,"):", mag, '*'.join(map(str,dbmags))) #, logmag, " vs ", log_thres)
-                            assert(abs(_np.product(dbmags)-mag) < 1e-6)
-                            assert(tuple(b) not in accepted_bs_and_mags)
-                            accepted_bs_and_mags[tuple(b)] = mag
+                        #TODO REMOVE
+                        #if debug:
+                        #    sub_order = 1
+                        #    dbmags = [oprep_lists[k][b[k]].magnitude for k in range(n)]
+                        #    if debug>1: print("FOAT Accepting path: ",b, "(order",sub_order,"):", mag, '*'.join(map(str,dbmags))) #, logmag, " vs ", log_thres)
+                        #    assert(abs(_np.product(dbmags)-mag) < 1e-6)
+                        #    assert(tuple(b) not in accepted_bs_and_mags)
+                        #    accepted_bs_and_mags[tuple(b)] = mag
 
                         if i != n-1:
                             # if we're not incrementing (from a zero-order term) the final index, then we
@@ -1883,13 +1889,14 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                                 mag2 = mag * (oprep_lists[n-1][b[n-1]].magnitude / oprep_lists[i][orig_bn].magnitude)
                                 fn_visitpath(b, mag2, n-1)
 
-                                if debug:
-                                    sub_order = 1
-                                    dbmags = [oprep_lists[k][b[k]].magnitude for k in range(n)]
-                                    if debug>1: print("FOAT Accepting path: ",b, "(order",sub_order,"):", mag2, '*'.join(map(str,dbmags))) #, logmag, " vs ", log_thres)
-                                    assert(abs(_np.product(dbmags)-mag2) < 1e-6)
-                                    assert(tuple(b) not in accepted_bs_and_mags)
-                                    accepted_bs_and_mags[tuple(b)] = mag2
+                                #TODO REMOVE
+                                #if debug:
+                                #    sub_order = 1
+                                #    dbmags = [oprep_lists[k][b[k]].magnitude for k in range(n)]
+                                #    if debug>1: print("FOAT Accepting path: ",b, "(order",sub_order,"):", mag2, '*'.join(map(str,dbmags))) #, logmag, " vs ", log_thres)
+                                #    assert(abs(_np.product(dbmags)-mag2) < 1e-6)
+                                #    assert(tuple(b) not in accepted_bs_and_mags)
+                                #    accepted_bs_and_mags[tuple(b)] = mag2
 
                             b[n-1] = orig_bn
                                 
@@ -1908,7 +1915,7 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
 
     current_mag = 1.0; current_logmag = 0.0
     fn_visitpath(b, current_mag, 0) # visit root (all 0s) path
-    if debug: accepted_bs_and_mags[tuple(b)] = current_mag
+    #if debug: accepted_bs_and_mags[tuple(b)] = current_mag TODO REMOVE
     traverse_tree(b, 0, log_thres, current_mag, current_logmag, 0)
     
     ##Step1: traverse first-order-always-traversed paths
@@ -1937,22 +1944,24 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
     #        traverse_tree(b, i, log_thres, mag, logmag, True) #add any allowed paths beneath this one
     #    b[i] -= 1 # so we don't have to copy b or root
     #print("END: ",root)
-    return accepted_bs_and_mags if debug else None
+    return
+    #TODO REMOVE
+    #return accepted_bs_and_mags if debug else None
 
 
 def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_pathmags, num_elabels=None, foat_indices_per_op=None,
-                            initial_threshold=0.1, min_threshold=1e-10, db_ops=None):
+                            initial_threshold=0.1, min_threshold=1e-10):
     """
     TODO: docstring - note: target_sum_of_pathmags is a *vector* that holds a separate value for each E-index
     """
     nIters = 0
     threshold = initial_threshold if (initial_threshold is not None) else 0.1 # default value
     target_mag = target_sum_of_pathmags
-    print("Target magnitude: ",target_mag)
+    #print("Target magnitude: ",target_mag)
     threshold_upper_bound = 1.0
     threshold_lower_bound = None
     npaths_upper_bound = npaths_lower_bound = None
-    db_last_threshold = None #DEBUG
+    #db_last_threshold = None #DEBUG TODO REMOVE
     #mag = 0; nPaths = 0
 
     if foat_indices_per_op is None:
@@ -1964,36 +1973,37 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
     while nIters < 100: # TODO: allow setting max_nIters as an arg?
         mag = _np.zeros(nEffects,'d')
         nPaths = _np.zeros(nEffects,int)
-        accepted_bs_and_mags = traverse_paths_upto_threshold(oprep_lists, threshold, num_elabels, foat_indices_per_op, count_path, debug=1) # sets mag and nPaths
-        if db_last_threshold is not None:
-            if db_last_mag + db_last_threshold * (nPaths[0] - db_last_nPaths) < mag[0]:
-                print("Problem!")
-                print(db_last_mag, db_last_threshold, db_last_nPaths, mag[0], threshold, nPaths[0])
-                new_bs_and_mags = {}
-                for x in accepted_bs_and_mags:
-                    if x not in db_last_accepted:
-                        new_bs_and_mags[x] = accepted_bs_and_mags[x]
-                missing = set()
-                for x in db_last_accepted:
-                    if x not in accepted_bs_and_mags:
-                        missing.add(x)
-                print("New bs and mags (%d):" % len(new_bs_and_mags))
-                print(new_bs_and_mags)
-                print("Missing (%d):" % len(missing))
-                print(missing)
-                print("Sum current: ", sum(accepted_bs_and_mags.values()))
-                print("Sum last: ", sum(db_last_accepted.values()))
+        accepted_bs_and_mags = traverse_paths_upto_threshold(oprep_lists, threshold, num_elabels, foat_indices_per_op, count_path) # sets mag and nPaths
 
-                mag = _np.zeros(nEffects,'d')
-                nPaths = _np.zeros(nEffects,int) # db_last_threshold
-                accepted_bs_and_mags = traverse_paths_upto_threshold(oprep_lists, threshold, num_elabels, foat_indices_per_op, count_path, debug=2)
-                print(mag,nPaths)
-                assert(False), "PROBLEM!"
-                
-        db_last_mag = mag[0]
-        db_last_nPaths = nPaths[0]
-        db_last_threshold = threshold
-        db_last_accepted = accepted_bs_and_mags
+        ##TODO REMOVE
+        #if db_last_threshold is not None:
+        #    if db_last_mag + db_last_threshold * (nPaths[0] - db_last_nPaths) < mag[0]:
+        #        print("Problem!")
+        #        print(db_last_mag, db_last_threshold, db_last_nPaths, mag[0], threshold, nPaths[0])
+        #        new_bs_and_mags = {}
+        #        for x in accepted_bs_and_mags:
+        #            if x not in db_last_accepted:
+        #                new_bs_and_mags[x] = accepted_bs_and_mags[x]
+        #        missing = set()
+        #        for x in db_last_accepted:
+        #            if x not in accepted_bs_and_mags:
+        #                missing.add(x)
+        #        print("New bs and mags (%d):" % len(new_bs_and_mags))
+        #        print(new_bs_and_mags)
+        #        print("Missing (%d):" % len(missing))
+        #        print(missing)
+        #        print("Sum current: ", sum(accepted_bs_and_mags.values()))
+        #        print("Sum last: ", sum(db_last_accepted.values()))
+        #
+        #        mag = _np.zeros(nEffects,'d')
+        #        nPaths = _np.zeros(nEffects,int) # db_last_threshold
+        #        accepted_bs_and_mags = traverse_paths_upto_threshold(oprep_lists, threshold, num_elabels, foat_indices_per_op, count_path, debug=2)
+        #        print(mag,nPaths)
+        #        assert(False), "PROBLEM!"
+        #db_last_mag = mag[0]
+        #db_last_nPaths = nPaths[0]
+        #db_last_threshold = threshold
+        #db_last_accepted = accepted_bs_and_mags
 
         #TODO REMOVE
         #if _np.any(mag > target_mag + 0.0001):
@@ -2046,7 +2056,7 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
                 threshold = (threshold_upper_bound + threshold_lower_bound)/2
             else: threshold /= 2
 
-        print("  Interval: threshold in [%s,%s]: %s %s" % (str(threshold_upper_bound),str(threshold_lower_bound),mag,nPaths))
+        #print("  Interval: threshold in [%s,%s]: %s %s" % (str(threshold_upper_bound),str(threshold_lower_bound),mag,nPaths))
         if threshold_upper_bound is not None and threshold_lower_bound is not None and \
            (threshold_upper_bound - threshold_lower_bound)/threshold_upper_bound < 1e-3:
             #print("Converged after %d iters!" % nIters)
@@ -2060,9 +2070,9 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
     #Run path traversal once more to count final number of paths
     mag = _np.zeros(nEffects,'d')
     nPaths = _np.zeros(nEffects,int)
-    traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels, foat_indices_per_op, count_path, debug=False) # sets mag and nPaths
+    traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels, foat_indices_per_op, count_path) # sets mag and nPaths
     
-    return threshold_lower_bound, nPaths
+    return threshold_lower_bound, nPaths, mag
 
 
 def _unitary_sim_pre(complete_factors, comm, memLimit):
