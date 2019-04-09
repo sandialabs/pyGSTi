@@ -2535,13 +2535,13 @@ class LindbladOp(LinearOperator):
             last_len = len(terms)
             for t in terms_at_order:
                 if t.magnitude >= min_term_mag or (taylor_order == 1 and force_firstorder):
-                    terms.append(t)
+                    terms.append( (taylor_order,t) )
                     
             taylor_order += 1
             if taylor_order > max_taylor_order: break
 
 
-        #DEBUG - total magnitude
+        #DEBUG - total magnitude TODO REMOVE
         totmag = self.get_total_term_magnitude() # error map is only part with terms
         #errgen_terms = self.errorgen.get_taylor_order_terms(0)
         errgen_terms = self.get_taylor_order_terms(1)
@@ -2552,9 +2552,10 @@ class LindbladOp(LinearOperator):
             print("from get_total_term_magnitude = ",totmag)
             assert(False),"STOP2"
 
-        #Sort terms based on weight
-        sorted_terms = sorted(terms, key=lambda t: t.magnitude, reverse=True)
-        return sorted_terms
+        #Sort terms based on magnitude
+        sorted_terms = sorted(terms, key=lambda t: t[1].magnitude, reverse=True)
+        first_order_indices = [i for i,t in enumerate(sorted_terms) if t[0] == 1]
+        return [t[1] for t in sorted_terms], first_order_indices
 
     def get_num_firstorder_terms(self):
         """ TODO: docstring """

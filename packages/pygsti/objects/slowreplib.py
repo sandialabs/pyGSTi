@@ -1633,44 +1633,40 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     #op_num_foat = { glbl: calc.sos.get_operation(glbl).get_num_firstorder_terms() for glbl in distinct_gateLabels }
 
     op_term_reps = {}
-    op_num_foat = {}
+    op_foat_indices = {}
     for glbl in distinct_gateLabels:
         if glbl not in repcache:
-            repcache[glbl] = ([ t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_highmagnitude_terms(
-                                min_term_mag, max_taylor_order=calc.max_order)],
-                              calc.sos.get_operation(glbl).get_num_firstorder_terms())
-        op_term_reps[glbl], op_num_foat[glbl] = repcache[glbl]
-        
+            hmterms, foat_indices = calc.sos.get_operation(glbl).get_highmagnitude_terms(
+                min_term_mag, max_taylor_order=calc.max_order)
+            repcache[glbl] = ([ t.torep(mpo,mpv,"gate") for t in hmterms], foat_indices)
+        op_term_reps[glbl], op_foat_indices[glbl] = repcache[glbl]
             
     #Similar with rho_terms and E_terms, but lists
     #rho_term_reps = [ t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_highmagnitude_terms(min_term_mag, max_taylor_order=calc.max_order) ]
     #rho_num_foat = calc.sos.get_prep(rholabel).get_num_firstorder_terms()
     if rholabel not in repcache:
-        repcache[rholabel] = ([ t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_highmagnitude_terms(
-                                min_term_mag, max_taylor_order=calc.max_order) ],
-                              calc.sos.get_prep(rholabel).get_num_firstorder_terms())
-    rho_term_reps, rho_num_foat = repcache[rholabel]
+        hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
+            min_term_mag, max_taylor_order=calc.max_order)
+        repcache[rholabel] = ([ t.torep(mpo,mpv,"prep") for t in hmterms ], foat_indices)
+    rho_term_reps, rho_foat_indices = repcache[rholabel]
 
     elabels = tuple(elabels) # so hashable
     if elabels not in repcache:
-        E_term_indices_and_reps = [ [], [], [] ] # 0th-order terms, 1st-order terms, others
+        E_term_indices_and_reps = []
         for i,elbl in enumerate(elabels):
-            effect = calc.sos.get_effect(elbl)
-            reps = [ (i,t.torep(mpo,mpv,"effect"),t.magnitude)
-                     for t in effect.get_highmagnitude_terms(min_term_mag, max_taylor_order=calc.max_order) ]
-            firstOrderBrk = effect.get_num_firstorder_terms()+1
-            E_term_indices_and_reps[0].append(reps[0]) # always a single 0th order term
-            E_term_indices_and_reps[1].extend(reps[1:firstOrderBrk])
-            E_term_indices_and_reps[2].extend(reps[firstOrderBrk:])
+            hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
+                min_term_mag, max_taylor_order=calc.max_order)
+            E_term_indices_and_reps.extend(
+                [ (i,t.torep(mpo,mpv,"effect"),t.magnitude,bool(j in foat_indices)) for j,t in enumerate(hmterms) ] )
 
-        E_term_indices_and_reps[1].sort(key=lambda x: x[2], reverse=True)
-        E_term_indices_and_reps[2].sort(key=lambda x: x[2], reverse=True)
-        E_term_reps = [ x[1] for x in E_term_indices_and_reps[0] + E_term_indices_and_reps[1] + E_term_indices_and_reps[2] ]
-        E_indices = [ x[0] for x in E_term_indices_and_reps[0] + E_term_indices_and_reps[1] + E_term_indices_and_reps[2] ]
-        E_num_zoat, E_num_foat = len(E_term_indices_and_reps[0]), len(E_term_indices_and_reps[1])
-        repcache[elabels] = (E_term_reps, E_indices, E_num_zoat, E_num_foat)
+        #Sort all terms by magnitude
+        E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
+        E_term_reps = [ x[1] for x in E_term_indices_and_reps ]
+        E_indices = [ x[0] for x in E_term_indices_and_reps ]
+        E_foat_indices = [ j for j,x in enumerate(E_term_indices_and_reps) if x[3] == True ]
+        repcache[elabels] = (E_term_reps, E_indices, E_foat_indices)
         
-    E_term_reps, E_indices, E_num_zoat, E_num_foat = repcache[elabels]
+    E_term_reps, E_indices, E_foat_indices= repcache[elabels]
 
     prps = [None]*len(elabels)
 
@@ -1680,16 +1676,14 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     factor_list_lens = list(map(len,factor_lists))
     last_index = len(factor_lists)-1
 
-    num_zoat_per_op = [ 1 ] + [ 1 for glbl in circuit ] + [ E_num_zoat ]
-    num_foat_per_op = [ rho_num_foat ] + [ op_num_foat[glbl] for glbl in circuit ] + [ E_num_foat ]
+    foat_indices_per_op = [ rho_foat_indices ] + [ op_foat_indices[glbl] for glbl in circuit ] + [ E_foat_indices ]
 
     ops = [calc.sos.get_prep(rholabel)] + [ calc.sos.get_operation(glbl) for glbl in circuit ]
     max_sum_of_pathmags = _np.product( [ op.get_total_term_magnitude() for op in ops ] )
     max_sum_of_pathmags = _np.array( [ max_sum_of_pathmags * calc.sos.get_effect(elbl).get_total_term_magnitude() for elbl in elabels ], 'd')
     target_sum_of_pathmags = max_sum_of_pathmags - pathmagnitude_gap
-    threshold, npaths = pathmagnitude_threshold(factor_lists, E_indices, len(elabels), target_sum_of_pathmags, num_zoat_per_op, num_foat_per_op,
-                                                initial_threshold=current_threshold, min_threshold=pathmagnitude_gap/100.0,
-                                                db_ops=ops + [calc.sos.get_effect(elabels[0])] )
+    threshold, npaths = pathmagnitude_threshold(factor_lists, E_indices, len(elabels), target_sum_of_pathmags, len(elabels), foat_indices_per_op,
+                                                initial_threshold=current_threshold, min_threshold=pathmagnitude_gap/100.0)
       # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
       
     if current_threshold is not None and threshold >= current_threshold: # then just keep existing (cached) polys
@@ -1780,7 +1774,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
             else:                prps[Ei] += res # add_inplace?
             #print("DB running prps[",Ei,"] =",prps[Ei])
 
-    traverse_paths_upto_threshold(factor_lists, threshold, num_zoat_per_op, num_foat_per_op, add_path) # sets mag and nPaths
+    traverse_paths_upto_threshold(factor_lists, threshold, len(elabels), foat_indices_per_op, add_path) # sets mag and nPaths
     #print("T2 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
 
     #DEBUG
@@ -1788,7 +1782,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     print("Path threshold = ",threshold, max_sum_of_pathmags, target_sum_of_pathmags)
     print("nPaths = ",npaths)
     print("Num high-magnitude (|coeff|>%g, taylor<=%d) terms: %s" % (min_term_mag, calc.max_order, str([len(factors) for factors in factor_lists])))
-    print("Num FOAT: ",num_foat_per_op)
+    print("Num FOAT: ",[len(inds) for inds in foat_indices_per_op])
     print("---------------------------")
 
     #max_degrees = []
@@ -1815,7 +1809,7 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
     return prps, sum(npaths), threshold
 
 
-def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_zoat_per_op, num_foat_per_op, fn_visitpath, debug=False): # foat = first-order always-traversed
+def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, foat_indices_per_op, fn_visitpath, debug=False): # foat = first-order always-traversed
     """ TODO: docstring """ # zot = zero-order-terms
     n = len(oprep_lists)
     nops = [ len(oprep_list) for oprep_list in oprep_lists ]
@@ -1833,13 +1827,18 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_zoat_per_o
             if b[i]+1 == nops[i]: continue
             b[i] += 1
 
-            sub_order = order
-            if b[i] == num_zoat_per_op[i]: sub_order += 1
-            if b[i] == num_zoat_per_op[i]+num_foat_per_op[i]: sub_order += 1
-
+            if order == 0: # then incd doesn't matter b/c can inc anything to become 1st order
+                sub_order = 1 if (i != n-1 or b[i] >= num_elabels) else 0
+            elif order == 1:
+                # we started with a first order term where incd was incremented, and now
+                # we're incrementing something else
+                sub_order = 1 if i == incd else 2 # signifies anything over 1st order where >1 column has be inc'd
+            else:
+                sub_order = order
+                
             logmag = current_logmag + (oprep_lists[i][b[i]].logmagnitude - oprep_lists[i][b[i]-1].logmagnitude)
             #print("Trying: ",b)
-            if logmag >= log_thres or sub_order <= 1:
+            if logmag >= log_thres: # or sub_order == 0:
                 if oprep_lists[i][b[i]-1].magnitude == 0:
                     mag = 0
                 else:
@@ -1852,12 +1851,59 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_zoat_per_o
                     accepted_bs_and_mags[tuple(b)] = mag
                 fn_visitpath(b, mag, i)
                 traverse_tree(b, i, log_thres, mag, logmag, sub_order) #add any allowed paths beneath this one
-            elif debug and debug>1:
-                dbmags = [oprep_lists[k][b[k]].magnitude for k in range(n)]
-                mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i]-1].magnitude)
-                print("Rejected path: ",b, "(order",sub_order,"):", mag, '*'.join(map(str,dbmags))) #, logmag, " vs ", log_thres)
-                print(" --> logmag = ",logmag," thres=",log_thres)
-            b[i] -= 1 # so we don't have to copy b or root
+            elif sub_order <= 1:
+                #We've rejected term-index b[i] (in column i) because it's too small - the only reason
+                # to accept b[i] or term indices higher than it is to include "foat" terms, so we now
+                # iterate through any remaining foat indices for this column (we've accepted all lower
+                # values of b[i], or we wouldn't be here).  Note that we just need to visit the path,
+                # we don't need to traverse down, since we know the path magnitude is already too low.
+                orig_bi = b[i]
+                for j in foat_indices_per_op[i]:
+                    if j >= orig_bi:
+                        b[i] = j
+                        mag = 0 if oprep_lists[i][orig_bi-1].magnitude == 0 else \
+                            current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][orig_bi-1].magnitude)
+
+                        fn_visitpath(b, mag, i)
+
+                        if debug:
+                            sub_order = 1
+                            dbmags = [oprep_lists[k][b[k]].magnitude for k in range(n)]
+                            if debug>1: print("FOAT Accepting path: ",b, "(order",sub_order,"):", mag, '*'.join(map(str,dbmags))) #, logmag, " vs ", log_thres)
+                            assert(abs(_np.product(dbmags)-mag) < 1e-6)
+                            assert(tuple(b) not in accepted_bs_and_mags)
+                            accepted_bs_and_mags[tuple(b)] = mag
+
+                        if i != n-1:
+                            # if we're not incrementing (from a zero-order term) the final index, then we
+                            # need to to increment it until we hit num_elabels (*all* zero-th order paths)
+                            orig_bn = b[n-1]
+                            for k in range(1,num_elabels):
+                                b[n-1] = k
+                                mag2 = mag * (oprep_lists[n-1][b[n-1]].magnitude / oprep_lists[i][orig_bn].magnitude)
+                                fn_visitpath(b, mag2, n-1)
+
+                                if debug:
+                                    sub_order = 1
+                                    dbmags = [oprep_lists[k][b[k]].magnitude for k in range(n)]
+                                    if debug>1: print("FOAT Accepting path: ",b, "(order",sub_order,"):", mag2, '*'.join(map(str,dbmags))) #, logmag, " vs ", log_thres)
+                                    assert(abs(_np.product(dbmags)-mag2) < 1e-6)
+                                    assert(tuple(b) not in accepted_bs_and_mags)
+                                    accepted_bs_and_mags[tuple(b)] = mag2
+
+                            b[n-1] = orig_bn
+                                
+
+                b[i] = orig_bi
+
+                #TODO REMOVE
+                #if debug and debug>1:
+                #dbmags = [oprep_lists[k][b[k]].magnitude for k in range(n)]
+                #mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i]-1].magnitude)
+                #print("Rejected path: ",b, "(order",sub_order,"):", mag, '*'.join(map(str,dbmags))) #, logmag, " vs ", log_thres)
+                #print(" --> logmag = ",logmag," thres=",log_thres)
+                
+            b[i] -= 1 # so we don't have to copy b
         #print("END: ",root)
 
     current_mag = 1.0; current_logmag = 0.0
@@ -1894,7 +1940,7 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_zoat_per_o
     return accepted_bs_and_mags if debug else None
 
 
-def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_pathmags, num_zoat_per_op=None, num_foat_per_op=None,
+def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_pathmags, num_elabels=None, foat_indices_per_op=None,
                             initial_threshold=0.1, min_threshold=1e-10, db_ops=None):
     """
     TODO: docstring - note: target_sum_of_pathmags is a *vector* that holds a separate value for each E-index
@@ -1909,8 +1955,8 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
     db_last_threshold = None #DEBUG
     #mag = 0; nPaths = 0
 
-    if num_foat_per_op is None:
-        num_foat_per_op = [0]*len(oprep_lists)
+    if foat_indices_per_op is None:
+        foat_indices_per_op = [()]*len(oprep_lists)
 
     def count_path(b,mg,incd):
         mag[E_indices[b[-1]]] += mg; nPaths[E_indices[b[-1]]] += 1
@@ -1918,11 +1964,11 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
     while nIters < 100: # TODO: allow setting max_nIters as an arg?
         mag = _np.zeros(nEffects,'d')
         nPaths = _np.zeros(nEffects,int)
-        accepted_bs_and_mags = traverse_paths_upto_threshold(oprep_lists, threshold, num_zoat_per_op, num_foat_per_op, count_path, debug=1) # sets mag and nPaths
+        accepted_bs_and_mags = traverse_paths_upto_threshold(oprep_lists, threshold, num_elabels, foat_indices_per_op, count_path, debug=1) # sets mag and nPaths
         if db_last_threshold is not None:
             if db_last_mag + db_last_threshold * (nPaths[0] - db_last_nPaths) < mag[0]:
                 print("Problem!")
-                print(db_last_mag, db_last_threshold, nPaths[0], db_last_nPaths, mag[0])
+                print(db_last_mag, db_last_threshold, db_last_nPaths, mag[0], threshold, nPaths[0])
                 new_bs_and_mags = {}
                 for x in accepted_bs_and_mags:
                     if x not in db_last_accepted:
@@ -1939,15 +1985,17 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
                 print("Sum last: ", sum(db_last_accepted.values()))
 
                 mag = _np.zeros(nEffects,'d')
-                nPaths = _np.zeros(nEffects,int)
-                accepted_bs_and_mags = traverse_paths_upto_threshold(oprep_lists, db_last_threshold, num_zoat_per_op, num_foat_per_op, count_path, debug=2)
+                nPaths = _np.zeros(nEffects,int) # db_last_threshold
+                accepted_bs_and_mags = traverse_paths_upto_threshold(oprep_lists, threshold, num_elabels, foat_indices_per_op, count_path, debug=2)
                 print(mag,nPaths)
                 assert(False), "PROBLEM!"
+                
         db_last_mag = mag[0]
         db_last_nPaths = nPaths[0]
         db_last_threshold = threshold
         db_last_accepted = accepted_bs_and_mags
-        
+
+        #TODO REMOVE
         #if _np.any(mag > target_mag + 0.0001):
         #    print("MAG SEEMS TOO HIGH!! - printing debug:",mag)
         #    max_check = 1.0
@@ -2012,7 +2060,7 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
     #Run path traversal once more to count final number of paths
     mag = _np.zeros(nEffects,'d')
     nPaths = _np.zeros(nEffects,int)
-    traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_zoat_per_op, num_foat_per_op, count_path, debug=False) # sets mag and nPaths
+    traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels, foat_indices_per_op, count_path, debug=False) # sets mag and nPaths
     
     return threshold_lower_bound, nPaths
 
