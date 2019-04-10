@@ -249,13 +249,21 @@ cdef extern from "fastreps.h" namespace "CReps":
 
 
     #Other classes
+    cdef cppclass PolyVarsIndex:
+        PolyVarsIndex() except +
+        PolyVarsIndex(INT) except +
+        vector[INT] _parts
+        
+    cdef cppclass PolyVarsIndexHasher:
+        pass
+    
     cdef cppclass PolyCRep:
         PolyCRep() except +        
-        PolyCRep(unordered_map[INT, complex], INT, INT) except +
+        PolyCRep(unordered_map[PolyVarsIndex, complex], INT, INT, INT) except +
         PolyCRep mult(PolyCRep&)
         void add_inplace(PolyCRep&)
         void scale(double complex scale)
-        unordered_map[INT, complex] _coeffs
+        unordered_map[PolyVarsIndex, complex] _coeffs
         INT _max_order
         INT _max_num_vars
     
@@ -1015,11 +1023,15 @@ cdef class PolyRep:
     cdef PolyCRep* c_poly
     
     #Use normal init here so can bypass to create from an already alloc'd c_poly
-    def __init__(self, coeff_dict, INT max_order, INT max_num_vars):
-        cdef unordered_map[INT, complex] coeffs
-        for i,c in coeff_dict.items():
-            coeffs[<INT>i] = <double complex>c
-        self.c_poly = new PolyCRep(coeffs, max_order, max_num_vars)
+    def __init__(self, coeff_dict, INT max_order, INT max_num_vars, INT vindices_per_int):
+        cdef unordered_map[PolyVarsIndex, complex] coeffs
+        cdef PolyVarsIndex indx
+        for i_tup,c in coeff_dict.items():
+            indx = PolyVarsIndex(len(i_tup))
+            for ii,i in enumerate(i_tup):
+                indx._parts[ii] = i
+            coeffs[indx] = <double complex>c
+        self.c_poly = new PolyCRep(coeffs, max_order, max_num_vars, vindices_per_int)
     
     def __dealloc__(self):
         del self.c_poly
@@ -1034,9 +1046,21 @@ cdef class PolyRep:
 
     @property
     def coeffs(self): # so we can convert back to python Polys
-        return self.c_poly._coeffs
-
-
+        # need to convert _coeffs keys (PolyVarsIndex objs) to tuples of Python ints
+        cdef INT i;
+        ret = {}
+        cdef vector[INT].iterator vit
+        cdef unordered_map[PolyVarsIndex, complex].iterator it = self.c_poly._coeffs.begin()
+        while(it != self.c_poly._coeffs.end()):
+            i_tup = []
+            i_vec = deref(it).first._parts
+            vit = i_vec.begin()
+            while(vit != i_vec.end()):
+                i_tup.append( deref(vit) )
+                inc(vit)
+            ret[tuple(i_tup)] = deref(it).second
+            inc(it)
+        return ret
     
 cdef class SVTermRep:
     cdef SVTermCRep* c_term
@@ -1480,6 +1504,7 @@ def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, 
 
     cdef INT mpv = calc.Np # max_poly_vars
     cdef INT mpo = calc.max_order*2 #max_poly_order
+    cdef INT vpi = calc.vindices_per_int # ??
     cdef INT order;
     cdef INT numEs = len(elabels)
 
@@ -1526,7 +1551,7 @@ def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, 
     #Call C-only function (which operates with C-representations only)
     cdef vector[PolyCRep*] polys = sv_prs_as_polys(
         cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
-        E_cindices, numEs, calc.max_order, mpo, mpv, stateDim, <bool>fastmode)
+        E_cindices, numEs, calc.max_order, mpo, mpv, vpi, stateDim, <bool>fastmode)
 
     return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
 
@@ -1535,7 +1560,7 @@ cdef vector[PolyCRep*] sv_prs_as_polys(
     vector[INT]& circuit, vector[vector[SVTermCRep_ptr]] rho_term_reps,
     unordered_map[INT, vector[vector[SVTermCRep_ptr]]] op_term_reps,
     vector[vector[SVTermCRep_ptr]] E_term_reps, vector[vector[INT]] E_term_indices,
-    INT numEs, INT max_order, INT max_poly_order, INT max_poly_vars, INT dim, bool fastmode):
+    INT numEs, INT max_order, INT max_poly_order, INT max_poly_vars, INT vindices_per_int, INT dim, bool fastmode):
 
     #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
     # lookups and avoid weird string conversion stuff with Cython
@@ -1565,7 +1590,7 @@ cdef vector[PolyCRep*] sv_prs_as_polys(
 
     cdef vector[PolyCRep_ptr] prps = vector[PolyCRep_ptr](numEs)
     for i in range(numEs):
-        prps[i] = new PolyCRep(unordered_map[INT,complex](),max_poly_order, max_poly_vars)
+        prps[i] = new PolyCRep(unordered_map[PolyVarsIndex,complex](),max_poly_order, max_poly_vars, vindices_per_int)
         # create empty polys - maybe overload constructor for this?
         # these PolyCReps are alloc'd here and returned - it is the job of the caller to
         #  free them (or assign them to new PolyRep wrapper objs)
@@ -2602,6 +2627,7 @@ def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, 
 
     cdef INT mpv = calc.Np # max_poly_vars
     cdef INT mpo = calc.max_order*2 #max_poly_order
+    cdef INT vpi = calc.vindices_per_int # ??
     cdef INT order;
     cdef INT numEs = len(elabels)
     
@@ -2649,7 +2675,7 @@ def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, 
     #Call C-only function (which operates with C-representations only)
     cdef vector[PolyCRep*] polys = sb_prs_as_polys(
         cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
-        E_cindices, numEs, calc.max_order, mpo, mpv, nqubits, <bool>fastmode)
+        E_cindices, numEs, calc.max_order, mpo, mpv, vpi, nqubits, <bool>fastmode)
 
     return [ PolyRep_from_allocd_PolyCRep(polys[i]) for i in range(<INT>polys.size()) ]
 
@@ -2658,7 +2684,7 @@ cdef vector[PolyCRep*] sb_prs_as_polys(
     vector[INT]& circuit, vector[vector[SBTermCRep_ptr]] rho_term_reps,
     unordered_map[INT, vector[vector[SBTermCRep_ptr]]] op_term_reps,
     vector[vector[SBTermCRep_ptr]] E_term_reps, vector[vector[INT]] E_term_indices,
-    INT numEs, INT max_order, INT max_poly_order, INT max_poly_vars, INT nqubits, bool fastmode):
+    INT numEs, INT max_order, INT max_poly_order, INT max_poly_vars, INT vindices_per_int, INT nqubits, bool fastmode):
 
     #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
     # lookups and avoid weird string conversion stuff with Cython
@@ -2688,7 +2714,7 @@ cdef vector[PolyCRep*] sb_prs_as_polys(
 
     cdef vector[PolyCRep_ptr] prps = vector[PolyCRep_ptr](numEs)
     for i in range(numEs):
-        prps[i] = new PolyCRep(unordered_map[INT,complex](),max_poly_order, max_poly_vars)
+        prps[i] = new PolyCRep(unordered_map[PolyVarsIndex,complex](),max_poly_order, max_poly_vars, vindices_per_int)
         # create empty polys - maybe overload constructor for this?
         # these PolyCReps are alloc'd here and returned - it is the job of the caller to
         #  free them (or assign them to new PolyRep wrapper objs)

@@ -6,6 +6,53 @@
 typedef std::complex<double> dcomplex;
 typedef long long INT;
 
+
+namespace CReps {
+  
+  //Polynomial key class - essentially a huge INT for holding many variable indices compactly
+  class PolyVarsIndex {
+    public:
+    std::vector<INT> _parts;
+    PolyVarsIndex() {}
+    PolyVarsIndex(INT size) :_parts(size) {}
+
+    bool operator==(PolyVarsIndex i) const {
+      std::vector<INT>::const_iterator it, it2;
+      if( i._parts.size() != this->_parts.size() ) return false;
+      for(it=i._parts.begin(), it2=this->_parts.begin();
+	  it != i._parts.end() && it2 != this->_parts.end();
+	  ++it, ++it2) { //zip
+	if(*it != *it2) return false;
+      }
+      return true;
+    }
+  };
+}
+
+namespace std {
+
+  //struct PolyVarsIndexHasher
+  template <>
+  struct hash<CReps::PolyVarsIndex>
+  {
+    std::size_t operator()(const CReps::PolyVarsIndex& k) const
+    {
+      using std::size_t;
+      using std::hash;
+      using std::string;
+
+      std::size_t ret = 0;
+      std::vector<INT>::const_iterator it;
+      
+      if(k._parts.size() == 0) return 0;
+      for(it=k._parts.begin(); it != k._parts.end(); ++it) {
+	ret = ret ^ hash<INT>()(*it); //TODO: rotate/shift bits to make a better hash here
+      }
+      return ret;
+    }
+  };
+}
+
 namespace CReps {
 
   //Forward declarations (as necessary)
@@ -443,23 +490,25 @@ namespace CReps {
     virtual SBStateCRep* adjoint_acton(SBStateCRep* state, SBStateCRep* out_state);
   };
 
+  
   //Polynomial class
   class PolyCRep {
     public:
-    std::unordered_map<INT, dcomplex> _coeffs;
+    std::unordered_map<PolyVarsIndex, dcomplex> _coeffs;
     INT _max_order;
     INT _max_num_vars;
+    INT _vindices_per_int;
     PolyCRep();
-    PolyCRep(std::unordered_map<INT, dcomplex> coeffs, INT max_order, INT max_num_vars);
+    PolyCRep(std::unordered_map<PolyVarsIndex, dcomplex> coeffs, INT max_order, INT max_num_vars, INT vindices_per_int);
     PolyCRep(const PolyCRep& other);
     ~PolyCRep();
     PolyCRep mult(const PolyCRep& other);
     void add_inplace(const PolyCRep& other);
     void scale(dcomplex scale);
     private:
-    INT vinds_to_int(std::vector<INT> vinds);
-    std::vector<INT> int_to_vinds(INT indx);
-    INT mult_vinds_ints(INT i1, INT i2); // multiply vinds corresponding to i1 & i2 and return resulting integer
+    PolyVarsIndex vinds_to_int(std::vector<INT> vinds);
+    std::vector<INT> int_to_vinds(PolyVarsIndex indx);
+    PolyVarsIndex mult_vinds_ints(PolyVarsIndex i1, PolyVarsIndex i2); // multiply vinds corresponding to i1 & i2 and return resulting integer
   };
   
   //TERMS

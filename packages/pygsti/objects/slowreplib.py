@@ -12,7 +12,6 @@ import numpy as _np
 import scipy.sparse as _sps
 import itertools as _itertools
 import functools as _functools
-import platform as _platform
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
@@ -20,9 +19,6 @@ from ..tools import matrixtools as _mt
 from ..tools import listtools as _lt
 
 from scipy.sparse.linalg import LinearOperator
-
-assert(_platform.architecture()[0].endswith("bit")) # e.g. "64bit"
-PLATFORM_BITS = int(_platform.architecture()[0].strip("bit"))
 
 # DEBUG!!!
 DEBUG_FCOUNT = 0
@@ -871,7 +867,7 @@ class PolyRep(dict):
     variables.
     """
 
-    def __init__(self, int_coeffs, max_order, max_num_vars):
+    def __init__(self, int_coeffs, max_order, max_num_vars, vindices_per_int):
         """
         Create a new PolyRep object.
 
@@ -894,10 +890,7 @@ class PolyRep(dict):
 
         self.max_order = max_order
         self.max_num_vars = max_num_vars
-
-        # (max_num_vars+1) ** vindices_per_int <= 2**PLATFORM_BITS, so:
-        # vindices_per_int * log2(max_num_vars+1) <= PLATFORM_BITS
-        self.vindices_per_int = int(_np.floor(PLATFORM_BITS / _np.log2(self.max_num_vars+1)))
+        self.vindices_per_int = vindices_per_int
 
         super(PolyRep,self).__init__()
         if int_coeffs is not None:

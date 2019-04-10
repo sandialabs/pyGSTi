@@ -9,9 +9,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import platform as _platform
 import collections as _collections
-from . import replib    
+from . import replib
 
+assert(_platform.architecture()[0].endswith("bit")) # e.g. "64bit"
 PLATFORM_BITS = int(_platform.architecture()[0].strip("bit"))
+
 
 class Polynomial(dict):
     """ 
@@ -414,7 +416,12 @@ class Polynomial(dict):
             return tuple(ret_tup)
 
         int_coeffs = { vinds_to_int(k): v for k,v in self.items() }
-        return replib.PolyRep(int_coeffs, max_order, max_num_vars)
+
+        # (max_num_vars+1) ** vindices_per_int <= 2**PLATFORM_BITS, so:
+        # vindices_per_int * log2(max_num_vars+1) <= PLATFORM_BITS
+        vindices_per_int = int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars+1)))
+
+        return replib.PolyRep(int_coeffs, max_order, max_num_vars, vindices_per_int)
     
 
 def bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
