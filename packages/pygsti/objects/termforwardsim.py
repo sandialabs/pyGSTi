@@ -203,22 +203,25 @@ class TermForwardSimulator(ForwardSimulator):
         #    return [ self.cache[ck] for ck in cache_keys ]
         
         fastmode = False
-        if repcache is None: repcache = {} 
+        if repcache is None: repcache = {}
+        if current_threshold is None: current_threshold = -1.0 # use negatives to signify "None" in C
+        
         if self.evotype == "svterm":
             poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
                 replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm, memLimit,
-                                              fastmode, pathmagnitude_gap, min_term_mag,
-                                              current_threshold)
+                                          fastmode, pathmagnitude_gap, min_term_mag,
+                                          current_threshold)
                 # sopm = "sum of path magnitudes"
         else: # "cterm" (stabilizer-based term evolution)
             poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
                 replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm, memLimit,
                                               fastmode, pathmagnitude_gap, min_term_mag)
 
-        if poly_reps is not None: # HACK - can be None when there's a cache hit
+        if poly_reps is None or len(poly_reps) == 0: # HACK - can be None when there's a cache hit
+            prps = None
+        else:
             prps = [ _Polynomial.fromrep(rep) for rep in poly_reps ]
-        else: prps = poly_reps
-
+        
         #Cache hold *compact* polys now: see prs_as_compact_polys
         #if self.cache is not None:
         #    for ck,poly in zip(cache_keys,prps):
