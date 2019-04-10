@@ -111,8 +111,10 @@ class TermForwardSimulator(ForwardSimulator):
         self.pathmagnitude_gap = pathmag_gap   #only used in "pruned" mode
         self.min_term_mag = min_term_mag       #only used in "pruned" mode
         self.cache = cache
+        self.poly_vindices_per_int = _Polynomial.get_vindices_per_int(len(paramvec))
         super(TermForwardSimulator, self).__init__(
             dim, simplified_op_server, paramvec)
+                                                                       
         if self.evotype not in ("svterm","cterm"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "term-based calculations" % self.evotype))

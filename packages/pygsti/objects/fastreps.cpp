@@ -2734,9 +2734,12 @@ namespace CReps {
   |* SVTermCRep                                                               *|
   \****************************************************************************/
     
-  SVTermCRep::SVTermCRep(PolyCRep* coeff, SVStateCRep* pre_state, SVStateCRep* post_state,
+  SVTermCRep::SVTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+			 SVStateCRep* pre_state, SVStateCRep* post_state,
 			 std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
+    _magnitude = magnitude;
+    _logmagnitude = logmagnitude;
     _pre_state = pre_state;
     _post_state = post_state;
     _pre_effect = NULL;
@@ -2745,9 +2748,12 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  SVTermCRep::SVTermCRep(PolyCRep* coeff, SVEffectCRep* pre_effect, SVEffectCRep* post_effect,
+  SVTermCRep::SVTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+			 SVEffectCRep* pre_effect, SVEffectCRep* post_effect,
 			 std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
+    _magnitude = magnitude;
+    _logmagnitude = logmagnitude;
     _pre_state = NULL;
     _post_state = NULL;
     _pre_effect = pre_effect;
@@ -2756,9 +2762,11 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  SVTermCRep::SVTermCRep(PolyCRep* coeff, std::vector<SVOpCRep*> pre_ops,
-			 std::vector<SVOpCRep*> post_ops) {
+  SVTermCRep::SVTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+			 std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
+    _magnitude = magnitude;
+    _logmagnitude = logmagnitude;
     _pre_state = NULL;
     _post_state = NULL;
     _pre_effect = NULL;
@@ -2771,10 +2779,12 @@ namespace CReps {
   |* SVTermDirectCRep                                                         *|
   \****************************************************************************/
     
-  SVTermDirectCRep::SVTermDirectCRep(dcomplex coeff, SVStateCRep* pre_state, SVStateCRep* post_state,
+  SVTermDirectCRep::SVTermDirectCRep(dcomplex coeff, double magnitude, double logmagnitude,
+				     SVStateCRep* pre_state, SVStateCRep* post_state,
 				     std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
-    _weight = abs(coeff);
+    _magnitude = magnitude;
+    _logmagnitude = logmagnitude;
     _pre_state = pre_state;
     _post_state = post_state;
     _pre_effect = NULL;
@@ -2783,10 +2793,12 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  SVTermDirectCRep::SVTermDirectCRep(dcomplex coeff, SVEffectCRep* pre_effect, SVEffectCRep* post_effect,
+  SVTermDirectCRep::SVTermDirectCRep(dcomplex coeff, double magnitude, double logmagnitude,
+				     SVEffectCRep* pre_effect, SVEffectCRep* post_effect,
 				     std::vector<SVOpCRep*> pre_ops, std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
-    _weight = abs(coeff);
+    _magnitude = magnitude;
+    _logmagnitude = logmagnitude;
     _pre_state = NULL;
     _post_state = NULL;
     _pre_effect = pre_effect;
@@ -2795,10 +2807,12 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  SVTermDirectCRep::SVTermDirectCRep(dcomplex coeff, std::vector<SVOpCRep*> pre_ops,
+  SVTermDirectCRep::SVTermDirectCRep(dcomplex coeff, double magnitude, double logmagnitude,
+				     std::vector<SVOpCRep*> pre_ops,
 				     std::vector<SVOpCRep*> post_ops) {
     _coeff = coeff;
-    _weight = abs(coeff);
+    _magnitude = magnitude;
+    _logmagnitude = logmagnitude;
     _pre_state = NULL;
     _post_state = NULL;
     _pre_effect = NULL;
@@ -2811,9 +2825,12 @@ namespace CReps {
   |* SBTermCRep                                                               *|
   \****************************************************************************/
     
-  SBTermCRep::SBTermCRep(PolyCRep* coeff, SBStateCRep* pre_state, SBStateCRep* post_state,
+  SBTermCRep::SBTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+			 SBStateCRep* pre_state, SBStateCRep* post_state,
 			 std::vector<SBOpCRep*> pre_ops, std::vector<SBOpCRep*> post_ops) {
     _coeff = coeff;
+    _magnitude = magnitude;
+    _logmagnitude = logmagnitude;
     _pre_state = pre_state;
     _post_state = post_state;
     _pre_effect = NULL;
@@ -2822,9 +2839,12 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  SBTermCRep::SBTermCRep(PolyCRep* coeff, SBEffectCRep* pre_effect, SBEffectCRep* post_effect,
+  SBTermCRep::SBTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+			 SBEffectCRep* pre_effect, SBEffectCRep* post_effect,
 			 std::vector<SBOpCRep*> pre_ops, std::vector<SBOpCRep*> post_ops) {
     _coeff = coeff;
+    _magnitude = magnitude;
+    _logmagnitude = logmagnitude;
     _pre_state = NULL;
     _post_state = NULL;
     _pre_effect = pre_effect;
@@ -2833,9 +2853,12 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  SBTermCRep::SBTermCRep(PolyCRep* coeff, std::vector<SBOpCRep*> pre_ops,
+  SBTermCRep::SBTermCRep(PolyCRep* coeff, double magnitude, double logmagnitude,
+			 std::vector<SBOpCRep*> pre_ops,
 			 std::vector<SBOpCRep*> post_ops) {
     _coeff = coeff;
+    _magnitude = magnitude;
+    _logmagnitude = logmagnitude;
     _pre_state = NULL;
     _post_state = NULL;
     _pre_effect = NULL;

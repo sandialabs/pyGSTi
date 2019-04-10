@@ -28,6 +28,17 @@ class Polynomial(dict):
     """
 
     @classmethod
+    def get_vindices_per_int(cls, max_num_vars):
+        """
+        Returns the number of variable indices that can be compactly fit
+        into a single int when there are at most `max_num_vars` variables.
+        
+        This quantity is needed to directly construct Polynomial representations
+        and is thus useful internally for forward simulators.
+        """
+        return int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars+1)))        
+
+    @classmethod
     def fromrep(cls, rep):
         """
         Creates a Polynomial from a "representation" (essentially a
@@ -398,7 +409,7 @@ class Polynomial(dict):
 
         #new.max_order = max_order            
         #new.max_num_vars = max_num_vars
-        vindices_per_int = int(_np.floor(PLATFORM_BITS / _np.log2(max_num_vars+1)))
+        vindices_per_int = Polynomial.get_vindices_per_int(max_num_vars)
         
         def vinds_to_int(vinds):
             """ Convert tuple index of ints to single int given max_order,max_numvars """

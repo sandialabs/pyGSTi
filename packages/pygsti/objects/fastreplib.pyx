@@ -269,10 +269,12 @@ cdef extern from "fastreps.h" namespace "CReps":
     
 
     cdef cppclass SVTermCRep:    
-        SVTermCRep(PolyCRep*, SVStateCRep*, SVStateCRep*, vector[SVOpCRep*], vector[SVOpCRep*]) except +
-        SVTermCRep(PolyCRep*, SVEffectCRep*, SVEffectCRep*, vector[SVOpCRep*], vector[SVOpCRep*]) except +
-        SVTermCRep(PolyCRep*, vector[SVOpCRep*], vector[SVOpCRep*]) except +
+        SVTermCRep(PolyCRep*, double, double, SVStateCRep*, SVStateCRep*, vector[SVOpCRep*], vector[SVOpCRep*]) except +
+        SVTermCRep(PolyCRep*, double, double, SVEffectCRep*, SVEffectCRep*, vector[SVOpCRep*], vector[SVOpCRep*]) except +
+        SVTermCRep(PolyCRep*, double, double, vector[SVOpCRep*], vector[SVOpCRep*]) except +
         PolyCRep* _coeff
+        double _magnitude
+        double _logmagnitude
         SVStateCRep* _pre_state
         SVEffectCRep* _pre_effect
         vector[SVOpCRep*] _pre_ops
@@ -281,11 +283,12 @@ cdef extern from "fastreps.h" namespace "CReps":
         vector[SVOpCRep*] _post_ops
 
     cdef cppclass SVTermDirectCRep:
-        SVTermDirectCRep(double complex, SVStateCRep*, SVStateCRep*, vector[SVOpCRep*], vector[SVOpCRep*]) except +
-        SVTermDirectCRep(double complex, SVEffectCRep*, SVEffectCRep*, vector[SVOpCRep*], vector[SVOpCRep*]) except +
-        SVTermDirectCRep(double complex, vector[SVOpCRep*], vector[SVOpCRep*]) except +
+        SVTermDirectCRep(double complex, double, double, SVStateCRep*, SVStateCRep*, vector[SVOpCRep*], vector[SVOpCRep*]) except +
+        SVTermDirectCRep(double complex, double, double, SVEffectCRep*, SVEffectCRep*, vector[SVOpCRep*], vector[SVOpCRep*]) except +
+        SVTermDirectCRep(double complex, double, double, vector[SVOpCRep*], vector[SVOpCRep*]) except +
         double complex _coeff
-        double _weight
+        double _magnitude
+        double _logmagnitude
         SVStateCRep* _pre_state
         SVEffectCRep* _pre_effect
         vector[SVOpCRep*] _pre_ops
@@ -294,10 +297,12 @@ cdef extern from "fastreps.h" namespace "CReps":
         vector[SVOpCRep*] _post_ops
 
     cdef cppclass SBTermCRep:    
-        SBTermCRep(PolyCRep*, SBStateCRep*, SBStateCRep*, vector[SBOpCRep*], vector[SBOpCRep*]) except +
-        SBTermCRep(PolyCRep*, SBEffectCRep*, SBEffectCRep*, vector[SBOpCRep*], vector[SBOpCRep*]) except +
-        SBTermCRep(PolyCRep*, vector[SBOpCRep*], vector[SBOpCRep*]) except +
+        SBTermCRep(PolyCRep*, double, double, SBStateCRep*, SBStateCRep*, vector[SBOpCRep*], vector[SBOpCRep*]) except +
+        SBTermCRep(PolyCRep*, double, double, SBEffectCRep*, SBEffectCRep*, vector[SBOpCRep*], vector[SBOpCRep*]) except +
+        SBTermCRep(PolyCRep*, double, double, vector[SBOpCRep*], vector[SBOpCRep*]) except +
         PolyCRep* _coeff
+        double _magnitude
+        double _logmagnitude
         SBStateCRep* _pre_state
         SBEffectCRep* _pre_effect
         vector[SBOpCRep*] _pre_ops
@@ -1074,7 +1079,8 @@ cdef class SVTermRep:
     cdef object list_of_preops_ref
     cdef object list_of_postops_ref
 
-    def __cinit__(self, PolyRep coeff, SVStateRep pre_state, SVStateRep post_state,
+    def __cinit__(self, PolyRep coeff, double mag, double logmag,
+                  SVStateRep pre_state, SVStateRep post_state,
                   SVEffectRep pre_effect, SVEffectRep post_effect, pre_ops, post_ops):
         self.coeff_ref = coeff
         self.list_of_preops_ref = pre_ops
@@ -1094,16 +1100,16 @@ cdef class SVTermRep:
             assert(pre_state is not None and post_state is not None)
             self.state_ref1 = pre_state
             self.state_ref2 = post_state
-            self.c_term = new SVTermCRep(coeff.c_poly, pre_state.c_state, post_state.c_state,
+            self.c_term = new SVTermCRep(coeff.c_poly, mag, logmag, pre_state.c_state, post_state.c_state,
                                          c_pre_ops, c_post_ops);
         elif pre_effect is not None or post_effect is not None:
             assert(pre_effect is not None and post_effect is not None)
             self.effect_ref1 = pre_effect
             self.effect_ref2 = post_effect
-            self.c_term = new SVTermCRep(coeff.c_poly, pre_effect.c_effect, post_effect.c_effect,
+            self.c_term = new SVTermCRep(coeff.c_poly, mag, logmag, pre_effect.c_effect, post_effect.c_effect,
                                          c_pre_ops, c_post_ops);
         else:
-            self.c_term = new SVTermCRep(coeff.c_poly, c_pre_ops, c_post_ops);
+            self.c_term = new SVTermCRep(coeff.c_poly, mag, logmag, c_pre_ops, c_post_ops);
 
     def __dealloc__(self):
         del self.c_term
@@ -1120,7 +1126,8 @@ cdef class SVTermDirectRep:
     cdef object list_of_preops_ref
     cdef object list_of_postops_ref
 
-    def __cinit__(self, double complex coeff, SVStateRep pre_state, SVStateRep post_state,
+    def __cinit__(self, double complex coeff, double mag, double logmag,
+                  SVStateRep pre_state, SVStateRep post_state,
                   SVEffectRep pre_effect, SVEffectRep post_effect, pre_ops, post_ops):
         self.list_of_preops_ref = pre_ops
         self.list_of_postops_ref = post_ops
@@ -1139,16 +1146,16 @@ cdef class SVTermDirectRep:
             assert(pre_state is not None and post_state is not None)
             self.state_ref1 = pre_state
             self.state_ref2 = post_state
-            self.c_term = new SVTermDirectCRep(coeff, pre_state.c_state, post_state.c_state,
+            self.c_term = new SVTermDirectCRep(coeff, mag, logmag, pre_state.c_state, post_state.c_state,
                                                c_pre_ops, c_post_ops);
         elif pre_effect is not None or post_effect is not None:
             assert(pre_effect is not None and post_effect is not None)
             self.effect_ref1 = pre_effect
             self.effect_ref2 = post_effect
-            self.c_term = new SVTermDirectCRep(coeff, pre_effect.c_effect, post_effect.c_effect,
+            self.c_term = new SVTermDirectCRep(coeff, mag, logmag, pre_effect.c_effect, post_effect.c_effect,
                                                c_pre_ops, c_post_ops);
         else:
-            self.c_term = new SVTermDirectCRep(coeff, c_pre_ops, c_post_ops);
+            self.c_term = new SVTermDirectCRep(coeff, mag, logmag, c_pre_ops, c_post_ops);
 
     def set_coeff(self, coeff):
         self.c_term._coeff = coeff
@@ -1169,7 +1176,8 @@ cdef class SBTermRep:
     cdef object list_of_preops_ref
     cdef object list_of_postops_ref
 
-    def __cinit__(self, PolyRep coeff, SBStateRep pre_state, SBStateRep post_state,
+    def __cinit__(self, PolyRep coeff, double mag, double logmag,
+                  SBStateRep pre_state, SBStateRep post_state,
                   SBEffectRep pre_effect, SBEffectRep post_effect, pre_ops, post_ops):
         self.coeff_ref = coeff
         self.list_of_preops_ref = pre_ops
@@ -1189,16 +1197,18 @@ cdef class SBTermRep:
             assert(pre_state is not None and post_state is not None)
             self.state_ref1 = pre_state
             self.state_ref2 = post_state
-            self.c_term = new SBTermCRep(coeff.c_poly, pre_state.c_state, post_state.c_state,
+            self.c_term = new SBTermCRep(coeff.c_poly, mag, logmag,
+                                         pre_state.c_state, post_state.c_state,
                                          c_pre_ops, c_post_ops);
         elif pre_effect is not None or post_effect is not None:
             assert(pre_effect is not None and post_effect is not None)
             self.effect_ref1 = pre_effect
             self.effect_ref2 = post_effect
-            self.c_term = new SBTermCRep(coeff.c_poly, pre_effect.c_effect, post_effect.c_effect,
+            self.c_term = new SBTermCRep(coeff.c_poly, mag, logmag,
+                                         pre_effect.c_effect, post_effect.c_effect,
                                          c_pre_ops, c_post_ops);
         else:
-            self.c_term = new SBTermCRep(coeff.c_poly, c_pre_ops, c_post_ops);
+            self.c_term = new SBTermCRep(coeff.c_poly, mag, logmag, c_pre_ops, c_post_ops);
 
     def __dealloc__(self):
         del self.c_term
@@ -1504,18 +1514,18 @@ def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, 
 
     cdef INT mpv = calc.Np # max_poly_vars
     cdef INT mpo = calc.max_order*2 #max_poly_order
-    cdef INT vpi = calc.vindices_per_int # ??
+    cdef INT vpi = calc.poly_vindices_per_int
     cdef INT order;
     cdef INT numEs = len(elabels)
 
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    op_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_order_terms(order)]
+    op_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_taylor_order_terms(order)]
                                       for order in range(calc.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
-    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_order_terms(order)]
+    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_taylor_order_terms(order)]
                       for order in range(calc.max_order+1) ]
 
     E_term_reps = []
@@ -1524,7 +1534,7 @@ def SV_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, 
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.sos.get_effect(elbl).get_order_terms(order) ]
+            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.sos.get_effect(elbl).get_taylor_order_terms(order) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )
@@ -2024,7 +2034,7 @@ def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
                 coeffs = <DCOMPLEX*?>(coeffs_array.data)
                 for i in range(treps.size()):
                     treps[i]._coeff = coeffs[i]
-                    if resetTermWeights: treps[i]._weight = abs(coeffs[i])
+                    if resetTermWeights: treps[i]._magnitude = abs(coeffs[i])
             #for order,treps in enumerate(op_term_reps[ glmap[glbl] ]):
             #    for coeff,trep in zip(calc.sos.get_operation(glbl).get_direct_order_coeffs(order,order_base), treps):
             #        trep.set_coeff(coeff)
@@ -2059,7 +2069,7 @@ def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
             coeffs = <DCOMPLEX*?>(coeffs_array.data)
             for i in range(treps.size()):
                 treps[i]._coeff = coeffs[i]
-                if resetTermWeights: treps[i]._weight = abs(coeffs[i])
+                if resetTermWeights: treps[i]._magnitude = abs(coeffs[i])
 
         #for order,treps in enumerate(rho_term_reps):
         #    for coeff,trep in zip(calc.sos.get_prep(rholabel).get_direct_order_coeffs(order,order_base), treps):
@@ -2098,7 +2108,7 @@ def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, memLi
                 coeffs = <DCOMPLEX*?>(coeffs_array.data)
                 for i in range(treps.size()):
                     treps[i]._coeff = coeffs[i]
-                    if resetTermWeights: treps[i]._weight = abs(coeffs[i])
+                    if resetTermWeights: treps[i]._magnitude = abs(coeffs[i])
                     reps_at_order.push_back(treps[i])
                 cur_indices.extend( [j]*reps_at_order.size() )
 
@@ -2357,11 +2367,11 @@ cdef INT sv_pr_directly_innerloop(vector[vector_SVTermDirectCRep_ptr_ptr] factor
             # In this loop, b holds "current" indices into factor_lists
             factor = deref(factor_lists[0])[b[0]] # the last factor (an Evec)
             coeff = factor._coeff
-            cwt = factor._weight
+            cwt = factor._magnitude
                 
             for i in range(1,nFactorLists):
                 coeff *= deref(factor_lists[i])[b[i]]._coeff
-                cwt *= deref(factor_lists[i])[b[i]]._weight
+                cwt *= deref(factor_lists[i])[b[i]]._magnitude
                 
             #pLeft / "pre" sim
             factor = deref(factor_lists[0])[b[0]] # 0th-factor = rhoVec
@@ -2627,18 +2637,18 @@ def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, 
 
     cdef INT mpv = calc.Np # max_poly_vars
     cdef INT mpo = calc.max_order*2 #max_poly_order
-    cdef INT vpi = calc.vindices_per_int # ??
+    cdef INT vpi = calc.poly_vindices_per_int
     cdef INT order;
     cdef INT numEs = len(elabels)
     
     # Construct dict of gate term reps, then *convert* to c-reps, as this
     #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-    op_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_order_terms(order)]
+    op_term_reps = { glmap[glbl]: [ [t.torep(mpo,mpv,"gate") for t in calc.sos.get_operation(glbl).get_taylor_order_terms(order)]
                                       for order in range(calc.max_order+1) ]
                        for glbl in distinct_gateLabels }
 
     #Similar with rho_terms and E_terms
-    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_order_terms(order)]
+    rho_term_reps = [ [t.torep(mpo,mpv,"prep") for t in calc.sos.get_prep(rholabel).get_taylor_order_terms(order)]
                       for order in range(calc.max_order+1) ]
 
     E_term_reps = []
@@ -2647,7 +2657,7 @@ def SB_prs_as_polys(calc, rholabel, elabels, circuit, comm=None, memLimit=None, 
         cur_term_reps = [] # the term reps for *all* the effect vectors
         cur_indices = [] # the Evec-index corresponding to each term rep
         for i,elbl in enumerate(elabels):
-            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.sos.get_effect(elbl).get_order_terms(order) ]
+            term_reps = [t.torep(mpo,mpv,"effect") for t in calc.sos.get_effect(elbl).get_taylor_order_terms(order) ]
             cur_term_reps.extend( term_reps )
             cur_indices.extend( [i]*len(term_reps) )
         E_term_reps.append( cur_term_reps )
