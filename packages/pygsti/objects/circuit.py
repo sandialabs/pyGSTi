@@ -296,6 +296,20 @@ class Circuit(object):
     def line_labels(self):
         return self._line_labels
 
+    @line_labels.setter
+    def line_labels(self, value):
+        if value == self._line_labels: return
+        #added_line_labels = set(value) - set(self._line_labels) # it's always OK to add lines
+        removed_line_labels = set(self._line_labels) - set(value)
+        if removed_line_labels:
+            idling_line_labels = set(self.get_idling_lines())
+            removed_not_idling = removed_line_labels - idling_line_labels
+            if removed_not_idling and self._static:
+                raise ValueError("Cannot remove non-idling lines %s from a read-only circuit!" % str(removed_not_idling))
+            else:
+                self.delete_lines(tuple(removed_not_idling))
+        self._line_labels = value
+
     @property
     def name(self):
         return self._name
@@ -853,7 +867,8 @@ class Circuit(object):
         -------
         None
         """
-        assert(not self._static),"Cannot edit a read-only circuit!"
+        #assert(not self._static),"Cannot edit a read-only circuit!"
+        # Actually, this is OK even for static circuits because it won't affect the hashed value (labels only)
         if insertBefore is None:
             i = len(self.line_labels)
         else:
@@ -1562,6 +1577,33 @@ class Circuit(object):
             return Circuit([lbl.replacename(old_gatename, new_gatename)
                             for lbl in self._labels], self.line_labels)
 
+
+    def replace_layer(self, old_layer, new_layer):
+        """
+        Returns a copy of this Circuit except that `old_layer` is
+        changed to `new_layer`.
+
+        Parameters
+        ----------
+        old_layer, new_layer : string or Label
+            The layer to find and the to replace.
+
+        Returns
+        -------
+        Circuit
+        """
+        old_layer = toLabel(old_layer)
+        new_layer = toLabel(new_layer)
+        if not self._static:
+            #Could to this in both cases, but is slow for large static circuits
+            cpy = self.copy(editable=False) #convert our layers to Labels
+            return Circuit([ new_layer if lbl == old_layer else lbl
+                           for lbl in cpy._labels], self.line_labels)
+        else: # static case: so self._labels is a tuple of Labels
+            return Circuit([ new_layer if lbl == old_layer else lbl
+                           for lbl in self._labels], self.line_labels)
+
+
     #def replace_identity(self, identity, convert_identity_gates = True): # THIS module only
     #    """
     #    Changes the *name* of the idle/identity gate in the circuit. This replaces
@@ -1784,8 +1826,30 @@ class Circuit(object):
         -------
         None
         """
+        # OK even for static circuits because it won't affect the hashed value (labels only)
         assert(set(order) == set(self.line_labels)), "The line labels must be the same!"
         self._line_labels = tuple(order)
+
+
+    def get_idling_lines(self):
+        """
+        Returns the line labels corresponding to idling lines.
+
+        Returns
+        -------
+        tuple
+        """
+        if self._static:
+            all_sslbls = None if any([layer.sslbls is None for layer in self._labels]) \
+                else set(_itertools.chain(*[layer.sslbls for layer in self._labels]))
+        else:
+            all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels) # None or a set
+
+        if all_sslbls is None:
+            return ()
+        else:
+            return tuple([x for x in self.line_labels
+                          if x not in all_sslbls]) # preserve order
 
     def delete_idling_lines(self):
         """
@@ -1795,7 +1859,8 @@ class Circuit(object):
         -------
         None
         """
-        assert(not self._static),"Cannot edit a read-only circuit!"
+        #assert(not self._static),"Cannot edit a read-only circuit!"
+        # Actually, this is OK even for static circuits because it won't affect the hashed value (labels only)
         if self._static:
             all_sslbls = None if any([layer.sslbls is None for layer in self._labels]) \
                 else set(_itertools.chain(*[layer.sslbls for layer in self._labels]))

@@ -95,7 +95,7 @@ class CircuitPlaquette(object):
                 if new_fidpairs: new_fidpairs.append((prep2, effect2))
 
         ret = CircuitPlaquette(self.base, self.rows, self.cols,
-                                   new_elements, None, new_fidpairs)
+                               new_elements, None, new_fidpairs)
         if circuit_simplifier is not None:
             ret.simplify_circuits(circuit_simplifier, dsFilter)
         return ret
@@ -140,6 +140,32 @@ class CircuitPlaquette(object):
 
     def __len__(self):
         return len(self.elements)
+
+    def process_circuits(self, processor_fn, updated_aliases=None):
+        """
+        Manipulate this object's circuits according to `processor_fn`.
+
+        Parameters
+        ----------
+        processor_fn : function
+            A function which takes a single Circuit argument and returns
+            another (or the same) Circuit.
+
+        updated_aliases : dict, optional
+            Because the Label keys of an alias dictionary (maps
+            Label -> Circuit) cannot be processed as a Circuit, one must
+            supply a manualy processed alias dictionary.  If you don't use
+            alias dictionaries just leave this set to None.
+            
+        Returns
+        -------
+        None
+        """
+        P = processor_fn
+        updated_elements = [(i,j,P(s)) for i,j,s in self.elements]
+        updated_fidpairs = [(P(prep), P(meas)) for prep,meas in self.fidpairs]
+        return CircuitPlaquette(P(self.base), self.rows, self.cols,
+                                updated_elements, updated_aliases, updated_fidpairs)
 
     def copy(self):
         """
@@ -570,6 +596,40 @@ class LsGermsStructure(CircuitStructure):
         """
         return len(self.effectStrs), len(self.prepStrs)
 
+
+    def process_circuits(self, processor_fn, updated_aliases=None):
+        """
+        Manipulate this object's circuits according to `processor_fn`.
+
+        Parameters
+        ----------
+        processor_fn : function
+            A function which takes a single Circuit argument and returns
+            another (or the same) Circuit.
+
+        updated_aliases : dict, optional
+            Because the Label keys of an alias dictionary (maps
+            Label -> Circuit) cannot be processed as a Circuit, one must
+            supply a manualy processed alias dictionary.  If you don't use
+            alias dictionaries just leave this set to None.
+            
+        Returns
+        -------
+        None
+        """
+        P = processor_fn # shorhand
+        cpy = LsGermsSerialStructure(self.Ls, list(map(P,self.germs)),
+                                     list(map(P,self.prepStrs)), list(map(P,self.effectStrs)),
+                                     updated_aliases, self.sequenceRules)
+        cpy.allstrs = list(map(P,self.allstrs))
+        cpy.allstrs_set = set(cpy.allstrs)
+        cpy.unindexed = list(map(P,self.unindexed))
+        cpy._plaquettes = { k: v.process_circuits(P,updated_aliases) for k,v in self._plaquettes.items() }
+        cpy._firsts = [ (L,P(germ)) for (L,germ) in self._firsts]
+        cpy._baseStrToLGerm = { P(base) : (L,P(germ)) for base,(L,germ) in self._baseStrToLGerm.items() }
+        return cpy
+
+
     def copy(self):
         """
         Returns a copy of this `LsGermsStructure`.
@@ -581,7 +641,7 @@ class LsGermsStructure(CircuitStructure):
         cpy.unindexed = self.unindexed[:]
         cpy._plaquettes = { k: v.copy() for k,v in self._plaquettes.items() }
         cpy._firsts = self._firsts[:]
-        cpy._baseStrToGerm = _copy.deepcopy(self._baseStrToLGerm.copy())
+        cpy._baseStrToLGerm = _copy.deepcopy(self._baseStrToLGerm.copy())
         return cpy
 
 
@@ -907,6 +967,40 @@ class LsGermsSerialStructure(CircuitStructure):
         """
         return self.nMinorRows, self.nMinorCols
 
+
+    def process_circuits(self, processor_fn, updated_aliases=None):
+        """
+        Manipulate this object's circuits according to `processor_fn`.
+
+        Parameters
+        ----------
+        processor_fn : function
+            A function which takes a single Circuit argument and returns
+            another (or the same) Circuit.
+
+        updated_aliases : dict, optional
+            Because the Label keys of an alias dictionary (maps
+            Label -> Circuit) cannot be processed as a Circuit, one must
+            supply a manualy processed alias dictionary.  If you don't use
+            alias dictionaries just leave this set to None.
+            
+        Returns
+        -------
+        None
+        """
+        P = processor_fn # shorthand
+        cpy = LsGermsSerialStructure(self.Ls, list(map(P,self.germs)),
+                                     self.nMinorRows, self.nMinorCols, 
+                                     updated_aliases, self.sequenceRules)
+        cpy.allstrs = list(map(P,self.allstrs))
+        cpy.allstrs_set = set(cpy.allstrs)
+        cpy.unindexed = list(map(P,self.unindexed))
+        cpy._plaquettes = { k: v.process_circuits(P,updated_aliases) for k,v in self._plaquettes.items() }
+        cpy._firsts = [ (L,P(germ)) for (L,germ) in self._firsts]
+        cpy._baseStrToLGerm = { P(base) : (L,P(germ)) for base,(L,germ) in self._baseStrToLGerm.items() }
+        return cpy
+
+
     def copy(self):
         """
         Returns a copy of this `LsGermsSerialStructure`.
@@ -918,5 +1012,5 @@ class LsGermsSerialStructure(CircuitStructure):
         cpy.unindexed = self.unindexed[:]
         cpy._plaquettes = { k: v.copy() for k,v in self._plaquettes.items() }
         cpy._firsts = self._firsts[:]
-        cpy._baseStrToGerm = _copy.deepcopy(self._baseStrToLGerm.copy())
+        cpy._baseStrToLGerm = _copy.deepcopy(self._baseStrToLGerm.copy())
         return cpy
