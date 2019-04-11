@@ -20,6 +20,7 @@ from ..tools import optools as _gt
 from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
 from ..tools import internalgates as _itgs
+from ..tools import mpitools as _mpit
 from ..objects import model as _mdl
 from ..objects import operation as _op
 from ..objects.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
@@ -356,7 +357,7 @@ def _onqubit(s,iQubit):
 def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfiducials=None,
                                        prepLbl=None, effectLbls=None, initJ=None, initJrank=None,
                                        wrtParams=None, algorithm="greedy", require_all_amped=True,
-                                       idtPauliDicts=None, verbosity=0):
+                                       idtPauliDicts=None, comm=None, verbosity=0):
     """
     Find fiducial pairs which amplify the parameters of a synthetic idle gate.
 
@@ -476,7 +477,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
     assert(model._sim_type == "termorder" and model._sim_args[0] == '1'), \
         '`model` must use "termorder:1" simulation type!'
     
-    printer = _VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity, comm)
     
     if prepLbl is None:
         prepLbl = model._shlp.get_default_prep_lbl()
@@ -511,6 +512,7 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
 
         if algorithm == "sequential":
             printer.log("Sequential find_amped_polys_for_syntheticidle started. Target rank=%d" % Np)
+            assert(comm is None), "No MPI support for algorithm='sequential' case!"
             
         elif algorithm == "greedy":
             maxRankInc = 0
@@ -519,12 +521,23 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
             
         else: raise ValueError("Invalid `algorithm` argument: %s" % algorithm)
         
-        
+
         # loop over all possible (remaining) fiducial pairs
         nQubits = len(qubit_filter); nIters = len(singleQfiducials)**nQubits
+        loc_Indices, _, _ = _mpit.distribute_indices(
+            list(range(len(singleQfiducials)**nQubits)), comm, False)
+        loc_itr = 0; nLocIters = len(loc_Indices)
+        #print("DB: Rank %d indices = " % comm.Get_rank(), loc_Indices)
+
         with printer.progress_logging(2):
             for itr,prep in enumerate(_itertools.product(*([singleQfiducials]*nQubits) )):
-                printer.show_progress(itr, nIters, prefix='--- Finding amped-polys for idle: ') # TODO: speed up / parallelize this loop
+                if loc_itr < len(loc_Indices) and itr == loc_Indices[loc_itr]:  #There's probably a cleaner way to do this,
+                    loc_itr += 1                                            # but this limits us to this processor's local indices
+                else: 
+                    continue
+                #print("DB: Rank %d: running itr=%d" % (comm.Get_rank(), itr))
+
+                printer.show_progress(loc_itr, nLocIters, prefix='--- Finding amped-polys for idle: ')
                 prepFid = _objs.Circuit(())
                 for i,el in enumerate(prep):
                     prepFid = prepFid + _onqubit(el,qubit_filter[i])
@@ -588,6 +601,18 @@ def find_amped_polys_for_syntheticidle(qubit_filter, idleStr, model, singleQfidu
                             if testRank == Np: break # this is the largest rank we can get!
                         
         if algorithm == "greedy":
+            # get the best of the bestJrows, bestFidpair, and maxRankInc
+            if comm is not None:
+                maxRankIncs_per_rank = comm.allgather(maxRankInc)
+                iWinningRank = maxRankIncs_per_rank.index( max(maxRankIncs_per_rank) )
+                maxRankInc = maxRankIncs_per_rank[iWinningRank]
+                if comm.Get_rank() == iWinningRank:
+                    comm.bcast(bestJrows, root=iWinningRank)
+                    comm.bcast(bestFidpair, root=iWinningRank)
+                else:
+                    bestJrows = comm.bcast(None, root=iWinningRank)
+                    bestFidpair = comm.bcast(None, root=iWinningRank)
+
             if require_all_amped:
                 assert(maxRankInc > 0), "No fiducial pair increased the Jacobian rank!"
             Jrank += maxRankInc
@@ -1182,7 +1207,7 @@ def get_fidpairs_needed_to_access_amped_polys(qubit_filter, core_filter, germPow
     #return gatename_fidpair_lists # (i.e. the rows of `amped_polyJ`)
     
     
-def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
+def tile_idle_fidpairs(qubit_labels, idle_gatename_fidpair_lists, maxIdleWeight):
     """
     "Tile" a set of fiducial pairs sufficient for amplifying all the true-idle
     errors on `maxIdleWeight` qubits (so with weight up to `maxIdleWeight` 
@@ -1194,8 +1219,9 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
 
     Parameters
     ----------
-    nQubits : int
-        The number of final qubits.
+    qubit_labels : int
+        The labels of the final qubits.  These are the line labels of the
+        returned circuits.
 
     idle_gatename_fidpair_lists : list
         A list of the fiducial pairs which amplify the errors on 
@@ -1230,6 +1256,7 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
     # XX idle_fidpairs elements are (prepStr, measStr) on qubits 0->(k-1); to convert each
     # XX element to a list of k (prep-gate-name-str, meas-gate-name-str) tuples one per *qubit*.
     
+    nQubits = len(qubit_labels)
     tmpl = get_kcoverage_template(nQubits, maxIdleWeight)
     final_fidpairs = []
 
@@ -1258,13 +1285,13 @@ def tile_idle_fidpairs(nQubits, idle_gatename_fidpair_lists, maxIdleWeight):
                 merge_into_1Q(prep_gates, prep_gatenames, iQubit)
                 merge_into_1Q(meas_gates, meas_gatenames, iQubit)
 
-            final_fidpairs.append( (_objs.Circuit(prep_gates),
-                                    _objs.Circuit(meas_gates)) )
+            final_fidpairs.append( (_objs.Circuit(prep_gates, line_labels=qubit_labels),
+                                    _objs.Circuit(meas_gates, line_labels=qubit_labels)) )
             
     _lt.remove_duplicates_in_place(final_fidpairs)    
     return final_fidpairs
     
-def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, template_germ, clouds):
+def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, template_germ, clouds, qubit_labels):
     """
     Take a "cloud template", giving the fiducial pairs for a germ power acting
     on qubits labeled 0 to `cloudsize-1`, and map those fiducial pairs into
@@ -1298,6 +1325,10 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
     clouds : list
         A list of `(cloud_dict, template_to_cloud_map)` tuples specifying the
         set of equivalent clouds corresponding to the template.
+
+    qubit_labels : list
+        A list of the final qubit labels, which are the line labels of
+        the returned circuits.
 
     Returns
     -------
@@ -1381,9 +1412,10 @@ def tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germPower, L, 
                 merge_into(germStr, germStr_qubits, germ)
                 merge_into(germPowerStr, germPowerStr_qubits, germPower)
                 
-            germs.append( _objs.Circuit(germStr) )
-            sequences.append( (_objs.Circuit(prepStr + germPowerStr + measStr), L, germs[-1],
-                               _objs.Circuit(prepStr), _objs.Circuit(measStr) ) ) # was XX
+            germs.append( _objs.Circuit(germStr, line_labels=qubit_labels) )
+            sequences.append( (_objs.Circuit(prepStr + germPowerStr + measStr, line_labels=qubit_labels), L, germs[-1],
+                               _objs.Circuit(prepStr, line_labels=qubit_labels),
+                               _objs.Circuit(measStr, line_labels=qubit_labels) ) )
               # circuit, L, germ, prepFidIndex, measFidIndex??
         
     # return a list of operation sequences (duplicates removed)
@@ -1534,7 +1566,7 @@ def get_candidates_for_core(model, core_qubits, candidate_counts, seedStart):
 def create_XYCNOT_cloudnoise_sequences(nQubits, maxLengths, geometry, cnot_edges, maxIdleWeight=1, maxhops=0,
                                        extraWeight1Hops=0, extraGateWeight=0, paramroot="H+S",
                                        sparse=False, verbosity=0, cache=None, idleOnly=False, 
-                                       idtPauliDicts=None, algorithm="greedy"):
+                                       idtPauliDicts=None, algorithm="greedy", comm=None):
 
     from pygsti.construction import std1Q_XY # the base model for 1Q gates
     from pygsti.construction import std2Q_XYICNOT # the base model for 2Q (CNOT) gate
@@ -1558,7 +1590,7 @@ def create_XYCNOT_cloudnoise_sequences(nQubits, maxLengths, geometry, cnot_edges
                                        gatedict, availability, geometry, maxIdleWeight, maxhops,
                                        extraWeight1Hops, extraGateWeight, paramroot,
                                        sparse, verbosity, cache, idleOnly, 
-                                       idtPauliDicts, algorithm)
+                                       idtPauliDicts, algorithm, comm=comm)
 
 
 def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
@@ -1566,7 +1598,7 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                          availability=None, geometry="line",
                                          maxIdleWeight=1, maxhops=0, extraWeight1Hops=0, extraGateWeight=0,
                                          paramroot="H+S", sparse=False, verbosity=0, cache=None, idleOnly=False, 
-                                         idtPauliDicts=None, algorithm="greedy", idleOpStr=((),)):
+                                         idtPauliDicts=None, algorithm="greedy", idleOpStr=((),), comm=None):
     """
     TODO: docstring - add idleOpStr
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
@@ -1663,14 +1695,14 @@ def create_standard_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                        gatedict, availability, geometry, maxIdleWeight, maxhops,
                                        extraWeight1Hops, extraGateWeight, paramroot,
                                        sparse, verbosity, cache, idleOnly, 
-                                       idtPauliDicts, algorithm, idleOpStr)
+                                       idtPauliDicts, algorithm, idleOpStr, comm)
     
 
 def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                 gatedict, availability, geometry, maxIdleWeight=1, maxhops=0,
                                 extraWeight1Hops=0, extraGateWeight=0, paramroot="H+S",
                                 sparse=False, verbosity=0, cache=None, idleOnly=False, 
-                                idtPauliDicts=None, algorithm="greedy", idleOpStr=((),)):
+                                idtPauliDicts=None, algorithm="greedy", idleOpStr=((),), comm=None):
     """ 
     TODO: docstring - add idleOpStr
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
@@ -1779,7 +1811,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
       #the parameterization type used for constructing Models
       # that will be used to construct 1st order prob polynomials.
     
-    printer = _VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity, comm)
     printer.log("Creating full model")
 
     if isinstance(geometry, _objs.QubitGraph):
@@ -1787,6 +1819,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     else:
         qubitGraph = _objs.QubitGraph.common_graph(nQubits, geometry, directed=False)
         printer.log("Created qubit graph:\n"+str(qubitGraph))
+    all_qubit_labels = qubitGraph.get_node_names()
 
     model = _CloudNoiseModel(nQubits, gatedict, availability, None, qubitGraph,
                              maxIdleWeight, 0, maxhops, extraWeight1Hops,
@@ -1817,8 +1850,9 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     # create a model with maxIdleWeight qubits that includes all
     # the errors of the actual n-qubit model...
     #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line'; no CNOTs)
+    # - actually better to pass qubitGraph here so we get the correct qubit labels (node labels of graphO
     printer.log("Creating \"idle error\" model on %d qubits" % maxIdleWeight)
-    idle_model = _CloudNoiseModel(maxIdleWeight, gatedict, {}, None, 'line',
+    idle_model = _CloudNoiseModel(maxIdleWeight, gatedict, {}, None, qubitGraph,
                                   maxIdleWeight, 0, maxhops, extraWeight1Hops,
                                   extraGateWeight, sparse, verbosity=printer-5,
                                   sim_type="termorder:1", parameterization=ptermstype)
@@ -1836,7 +1870,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                                                idleOpStr, idle_model, singleQfiducials,
                                                prepLbl, None, wrtParams=idle_params, 
                                                algorithm=algorithm, idtPauliDicts=idtPauliDicts,
-                                               verbosity=printer-1)
+                                               comm=comm, verbosity=printer-1)
         #ampedJ, ampedJ_rank, idle_maxwt_gatename_fidpair_lists = None,0,[] # DEBUG GRAPH ISO
         cache['Idle gatename fidpair lists'][maxIdleWeight] = idle_maxwt_gatename_fidpair_lists
 
@@ -1845,7 +1879,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
     # to the n-qubits
     printer.log("%d \"idle template pairs\".  Tiling these to all %d qubits" % 
                 (len(idle_maxwt_gatename_fidpair_lists), nQubits),2)
-    idle_fidpairs = tile_idle_fidpairs(nQubits, idle_maxwt_gatename_fidpair_lists, maxIdleWeight)
+    idle_fidpairs = tile_idle_fidpairs(all_qubit_labels, idle_maxwt_gatename_fidpair_lists, maxIdleWeight)
     printer.log("%d idle pairs found" % len(idle_fidpairs),2)
     
                 
@@ -1906,7 +1940,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
             _, _, idle_gatename_fidpair_lists = find_amped_polys_for_syntheticidle(
                 list(range(maxSyntheticIdleWt)), idleOpStr, sidle_model,
                 singleQfiducials, prepLbl, None, wrtParams=idle_params,
-                algorithm=algorithm, verbosity=printer-1) 
+                algorithm=algorithm, comm=comm, verbosity=printer-1) 
             #idle_gatename_fidpair_lists = [] # DEBUG GRAPH ISO
             cache['Idle gatename fidpair lists'][maxSyntheticIdleWt] = idle_gatename_fidpair_lists        
         
@@ -2228,7 +2262,7 @@ def create_cloudnoise_sequences(nQubits, maxLengths, singleQfiducials,
                 template_germPower = template_germ * reps # germ^reps
                 addl_seqs, addl_germs = tile_cloud_fidpairs(template_gatename_fidpair_lists,
                                                             template_germPower, L, template_germ,
-                                                            cloudbank['clouds'])
+                                                            cloudbank['clouds'], all_qubit_labels)
                 
                 sequences.extend(addl_seqs)
                 if add_germs: # addl_germs is independent of L - so just add once
