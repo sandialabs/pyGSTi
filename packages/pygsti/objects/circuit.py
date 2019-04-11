@@ -1896,7 +1896,7 @@ class Circuit(object):
             return tuple([x for x in self.line_labels
                           if x not in all_sslbls]) # preserve order
 
-    def delete_idling_lines(self, idle_layer_labels):
+    def delete_idling_lines(self, idle_layer_labels=None):
         """
         Removes from this circuit all lines that are idling at every layer.
 
