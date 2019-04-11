@@ -142,7 +142,7 @@ def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, psp
     
     for l in range(depth):
         
-        layer = circuit.get_layer_with_idles(l,idleGateName=idle1Q_placeholder)
+        layer = circuit.get_layer_with_idles(l, idleGateName=idle1Q_placeholder)
         s, p = _symp.symplectic_rep_of_clifford_layer(layer,n,Qlabels=circuit.line_labels,srep_dict=srep)        
         # Apply the perfect layer to the current state.
         sout, pout = _symp.apply_clifford_to_stabilizer_state(s, p, sout, pout)
@@ -183,7 +183,7 @@ def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, psp
     return outputasstring
 
 def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, filename=None, rbtype='DRB', 
-                         rbspec =[], returndata=True, appenddata=False, verbosity=0):
+                         rbspec =[], returndata=True, appenddata=False, verbosity=0, idle1Q_placeholder='I'):
     """
     Simulates RB with Pauli errors. Can be used to simulated Clifford RB, direct RB and mirror RB. This
     function:
@@ -293,13 +293,14 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, subsetQs=None, f
             #    print(" - Simulating circuit...",end='')
 
             outcome = circuit_simulator_for_tensored_independent_pauli_errors(
-                c, pspec, errormodel, counts, alloutcomes=False,idle1Q_placeholder='I')
+                c, pspec, errormodel, counts, alloutcomes=False, idle1Q_placeholder=idle1Q_placeholder)
               #EGN: Hardcoded 'I' here. Could make this into an arg, but there's really
               #  no need for the user to modify this unless they use 'I' as a gate label.
             if verbosity > 0: print(lind+1,end=',')
 
             # Add the number of success counts to the list
-            scounts.append(outcome.get(idealout,0))
+#            scounts.append(outcome.get(idealout,0))
+            scounts.append(outcome.get(''.join(str(idealbit) for idealbit in idealout),0))
             cdepths.append(c.depth())
             c2Qgcounts.append(c.twoQgate_count())
 
@@ -498,7 +499,9 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
 
     return errormodel
 
-
+#
+# TODO : DOES THIS NEED AND IDLE PLACEHOLDER?
+#
 def create_local_pauli_error_model(pspec, oneQgate_errorrate_dict, twoQgate_errorrate_dict,
                                   measurement_errorrate_dict={}, ptype='uniform'):
     """

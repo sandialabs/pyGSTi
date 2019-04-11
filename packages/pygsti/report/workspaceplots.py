@@ -1003,10 +1003,10 @@ def opmatrix_color_boxplot(opMatrix, m, M, mxBasis=None, mxBasisY=None,
     else:
         if mxBasisY is None and opMatrix.shape[0] == opMatrix.shape[1]:
             mxBasisY = mxBasis #can use mxBasis, whatever it is
-
+    
     if _tools.isstr(mxBasisY):
         mxBasisY = _objs.BuiltinBasis(mxBasisY, opMatrix.shape[0])
-                
+    
     if mxBasis is not None:
         xlabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasis.labels]
     else:
@@ -1198,7 +1198,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
 
     #Set plot size and margins
     lmargin = rmargin = tmargin = bmargin = 20
-    if title: tmargin += 25
+    if title: tmargin += 30
     if xlabel: tmargin += 30
     if ylabel: lmargin += 30
     max_xl = max([len(xl) for xl in xlabels])
@@ -1430,7 +1430,8 @@ class ColorBoxPlot(WorkspacePlot):
                  sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
                  directGSTmodels=None, dscomparator=None, driftresults=None,
-                 submatrices=None, typ="boxes", scale=1.0, comm=None):
+                 submatrices=None, typ="boxes", scale=1.0, comm=None,
+                 wildcard=None):
         """
         Create a plot displaying the value of per-circuit quantities.
 
@@ -1518,19 +1519,21 @@ class ColorBoxPlot(WorkspacePlot):
         comm : mpi4py.MPI.Comm, optional
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
+
+        wildcard : TODO: docstring
         """
         # separate in rendering/saving: save_to=None, ticSize=20, scale=1.0 (?)
         super(ColorBoxPlot,self).__init__(ws, self._create, plottype, gss, dataset, model,
                                           prec, sumUp, boxLabels, hoverInfo,
                                           invert, linlg_pcntle, minProbClipForWeighting,
                                           directGSTmodels, dscomparator, driftresults, 
-                                          submatrices, typ, scale, comm)
+                                          submatrices, typ, scale, comm, wildcard)
 
     def _create(self, plottypes, gss, dataset, model,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
                 directGSTmodels, dscomparator, driftresults, submatrices,
-                typ, scale, comm):
+                typ, scale, comm, wildcard):
 
         probs_precomp_dict = None
         fig = None
@@ -1563,7 +1566,8 @@ class ColorBoxPlot(WorkspacePlot):
         if any([ (t in plottypes) for t in plottypes_that_need_precomp]): #bulk-compute probabilities for performance
             probs_precomp_dict = self._ccompute( _ph._computeProbabilities,
                                                  gss, model, dataset,
-                                                 comm=comm, smartc=self.ws.smartCache)
+                                                 comm=comm, smartc=self.ws.smartCache,
+                                                 wildcard=wildcard)
 
         for ptyp in plottypes:
             if ptyp == "chi2":
@@ -1623,14 +1627,14 @@ class ColorBoxPlot(WorkspacePlot):
                 linlog_color = "yellow"
                 ytitle="chi<sup>2</sup>"
                 mx_fn = _mx_fn_directchi2 # use a *global* function so cache can tell it's the same
-                extra_arg = (dataset, directGSTmodels, minProbClipForWeighting)
+                extra_arg = (dataset, directGSTmodels, minProbClipForWeighting, gss)
 
             elif ptyp == "directlogl":
                 colormapType = "linlog"
                 linlog_color = "yellow"
                 ytitle="Direct 2 log(L ratio)"
                 mx_fn = _mx_fn_directlogl # use a *global* function so cache can tell it's the same
-                extra_arg = (dataset, directGSTmodels, minProbClipForWeighting)
+                extra_arg = (dataset, directGSTmodels, minProbClipForWeighting, gss)
 
             elif ptyp == "dscmp":
                 assert(dscomparator is not None), \
@@ -1818,13 +1822,13 @@ def _mx_fn_errorrate(plaq,x,y,directGSTmodels): #error rate as 1x1 matrix which 
     return _np.array( [[ _ph.small_eigval_err_rate(plaq.base, directGSTmodels) ]] )
 
 def _mx_fn_directchi2(plaq,x,y,extra):
-    dataset, directGSTmodels, minProbClipForWeighting = extra
+    dataset, directGSTmodels, minProbClipForWeighting, gss = extra
     return _ph.direct_chi2_matrix(
         plaq, gss, dataset, directGSTmodels.get(plaq.base,None),
         minProbClipForWeighting)
 
 def _mx_fn_directlogl(plaq,x,y,extra):
-    dataset, directGSTmodels, minProbClipForWeighting = extra
+    dataset, directGSTmodels, minProbClipForWeighting, gss = extra
     return _ph.direct_logl_matrix(
         plaq, gss, dataset, directGSTmodels.get(plaq.base,None),
         minProbClipForWeighting)
@@ -2276,7 +2280,11 @@ class ProjectionsBoxPlot(WorkspacePlot):
         yd = projections.shape[0] #y-basis-dim
 
         if isinstance(projection_basis, _objs.Basis):
-            if xd == projection_basis.dim and yd == 1:
+            if isinstance(projection_basis, _objs.TensorProdBasis) and len(projection_basis.component_bases) == 2 \
+               and xd == projection_basis.component_bases[0].dim and yd == projection_basis.component_bases[1].dim:
+                basis_for_xlabels = projection_basis.component_bases[0]
+                basis_for_ylabels = projection_basis.component_bases[1]
+            elif xd == projection_basis.dim and yd == 1:
                 basis_for_xlabels = projection_basis
                 basis_for_ylabels = None
             elif xd == yd == projection_basis.dim:
@@ -2488,7 +2496,7 @@ class FitComparisonBarPlot(WorkspacePlot):
     """ Bar plot showing the overall (aggregate) goodness of fit
         (along one dimension)"""
     def __init__(self, ws, Xs, gssByX, modelByX, datasetByX,
-                 objective="logl", Xlabel='L', NpByX=None, scale=1.0, comm=None):
+                 objective="logl", Xlabel='L', NpByX=None, scale=1.0, comm=None, wildcard=None):
         """
         Creates a bar plot showing the overall (aggregate) goodness of fit
         for one or more model estimates to corresponding data sets.
@@ -2527,13 +2535,16 @@ class FitComparisonBarPlot(WorkspacePlot):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
+        wildcard : TODO: docstring
+
         """
         super(FitComparisonBarPlot,self).__init__(ws, self._create,
                                                   Xs, gssByX, modelByX, datasetByX,
-                                                  objective, Xlabel, NpByX, scale, comm)
+                                                  objective, Xlabel, NpByX, scale,
+                                                  comm, wildcard)
         
     def _create(self, Xs, gssByX, modelByX, datasetByX, objective, Xlabel,
-                NpByX, scale, comm):
+                NpByX, scale, comm, wildcard):
 
         xs = list(range(len(Xs)))
         xtics = []; ys = []; colors = []; texts=[]
@@ -2557,7 +2568,8 @@ class FitComparisonBarPlot(WorkspacePlot):
             else:
                 Nsig, rating, _,_,_,_ = self._ccompute( _ph.ratedNsigma, dataset, mdl,
                                                         gss, objective, Np, returnAll=True,
-                                                        comm=comm, smartc=self.ws.smartCache)
+                                                        comm=comm, smartc=self.ws.smartCache,
+                                                        wildcard=wildcard)
                   #Note: don't really need returnAll=True, but helps w/caching b/c other fns use it.
                 
             if   rating==5: color="darkgreen"
@@ -2633,7 +2645,8 @@ class FitComparisonBoxPlot(WorkspacePlot):
     """ Box plot showing the overall (aggregate) goodness of fit
         (along 2 dimensions)"""
     def __init__(self, ws, Xs, Ys, gssByYthenX, modelByYthenX, datasetByYthenX,
-                 objective="logl", Xlabel=None, Ylabel=None, scale=1.0, comm=None):
+                 objective="logl", Xlabel=None, Ylabel=None, scale=1.0, comm=None,
+                 wildcard=None):
         """
         Creates a box plot showing the overall (aggregate) goodness of fit
         for one or more model estimates to their respective  data sets.
@@ -2668,13 +2681,15 @@ class FitComparisonBoxPlot(WorkspacePlot):
         comm : mpi4py.MPI.Comm, optional
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
+
+        wildcard : TODO: docstring
         """
         super(FitComparisonBoxPlot,self).__init__(
             ws, self._create, Xs, Ys, gssByYthenX, modelByYthenX,
-            datasetByYthenX, objective, Xlabel, Ylabel, scale, comm)
+            datasetByYthenX, objective, Xlabel, Ylabel, scale, comm, wildcard)
         
     def _create(self, Xs, Ys, gssByYX, modelByYX, datasetByYX, objective,
-                    Xlabel, Ylabel, scale, comm):
+                    Xlabel, Ylabel, scale, comm, wildcard):
 
         xs = list(range(len(Xs)))
         ys = list(range(len(Ys)))
@@ -2701,7 +2716,8 @@ class FitComparisonBoxPlot(WorkspacePlot):
 
                 Nsig, rating, _,_,_,_ = self._ccompute(
                     _ph.ratedNsigma, dataset, mdl, gss, objective,
-                    returnAll=True, comm=comm, smartc=self.ws.smartCache)
+                    returnAll=True, comm=comm, smartc=self.ws.smartCache,
+                    wildcard=wildcard)
                 NsigMx[iY][iX] = Nsig
 
         return matrix_color_boxplot(

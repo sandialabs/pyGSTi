@@ -14,6 +14,7 @@ from . import statistics as _stats
 
 from ... import objects as _obj
 from ...tools import hypothesis as _hyp
+from ...tools import compattools as _compat
 
 import numpy as _np
 import warnings as _warnings
@@ -68,7 +69,7 @@ def do_drift_characterization(ds, significance=0.05, marginalize='auto', transfo
                             spectrafrequencies='auto', testFreqInds=None,
                             groupoutcomes=None, enforceConstNumTimes='auto',
                             whichTests=(('avg','avg','avg'), ('per','avg','avg'), ('per','per','avg')), 
-                            betweenClassCorrection=True, inClassCorrection=('FWER','FWER','FDR','FDR'), 
+                            betweenClassCorrection=True, inClassCorrection=('FWER','FWER','FWER','FWER'), 
                             modelSelectionMethod=(('per','per','avg'),'detection'), estimator='FF-UAR', 
                             verbosity=1, name=None):
     """
@@ -256,7 +257,7 @@ def format_data(ds, marginalize='auto', groupoutcomes=None, enforceConstNumTimes
         # We do this, because this gets recorded in the results as whether we *have* enforced this.
         enforceConstNumTimes = False
     
-    if isinstance(marginalize,str):
+    if _compat.isstr(marginalize):
         assert(marginalize == 'auto')
         if len(list(ds.get_outcome_labels())) > 4:
             marginalize = True

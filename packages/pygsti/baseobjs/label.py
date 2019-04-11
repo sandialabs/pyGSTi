@@ -639,7 +639,8 @@ class CircuitLabel(Label,tuple):
             The item data - a tuple of (string, state-space-labels) tuples
             which labels a parallel layer/level of a circuit.
         """
-        assert(isinstance(reps, _numbers.Integral) and isstr(name))
+        #if name is None: name = '' # backward compatibility (temporary - TODO REMOVE)
+        assert(isinstance(reps, _numbers.Integral) and isstr(name)), "Invalid name or reps: %s %s" % (str(name),str(reps))
         tupOfLabels = tuple((Label(tup) for tup in tupOfTups)) # Note: tup can also be a Label obj
         return tuple.__new__(cls, (name,stateSpaceLabels,reps) + tupOfLabels) # creates a CircuitLabel object using tuple's __new__
 

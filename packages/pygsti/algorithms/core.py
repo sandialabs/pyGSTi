@@ -2384,7 +2384,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     freqs = cntVecMx / totalCntVec
     freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
-    
+
     if poissonPicture:
         freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 )
     else:
@@ -2428,7 +2428,8 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             tm = _time.time()
             mdl.from_vector(vectorGS)
             mdl.bulk_fill_probs(probs, evTree, probClipInterval,
-                               check, comm)
+                                check, comm)
+            
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p + totalCntVec
             S2 = -0.5 * minusCntVecMx / (min_p**2)
@@ -2528,6 +2529,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
             tm = _time.time()
             mdl.from_vector(vectorGS)
             mdl.bulk_fill_probs(probs, evTree, probClipInterval, check, comm)
+            
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p
             S2 = -0.5 * minusCntVecMx / (min_p**2)
@@ -2634,7 +2636,7 @@ def _do_mlgst_base(dataset, startModel, circuitsToUse,
 
     full_minErrVec = _objective_func(opt_x)  #note: calls mdl.from_vector(opt_x,...) so don't need to call this again
     minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  #don't include "extra" regularization terms
-    deltaLogL = sum([x**2 for x in minErrVec]) # upperBoundLogL - logl (a positive number)
+    deltaLogL = sum(minErrVec**2) # upperBoundLogL - logl (a positive number)
 
     #if constrainType == 'projection':
     #    if cpPenalty != 0: d,mdl = _contractToCP_direct(mdl,verbosity=0,TPalso=not opt_G0,maxiter=100)

@@ -1771,7 +1771,8 @@ class DataSet(object):
         else:
             f = fileOrFilename
 
-        state_dict = _pickle.load(f)
+        with _compat.patched_UUID():
+            state_dict = _pickle.load(f)
 
         if "gsIndexKeys" in state_dict:
             _warnings.warn("Loading a deprecated-format DataSet.  Please re-save asap.")

@@ -1,59 +1,119 @@
-dist: trusty
+dist: xenial
 language: python
 
-python:
-  - "2.7"
-  - "3.5"
+python: 3.7
 
 branches:
   only:
     - master
     - beta
     - develop
+    - ci-fixes
+
+# Hold off testing feature & bugfix branches in case this competes w/other testing.
+#    - /^feature-.*$/
+#    - /^bugfix-.*$/
 
 env:
-    - Drivers=True    # First in build mx because long duration
-    - Algorithms=True 
-    - AlgorithmsB=True
-    - Default=True    # construction, io, objects, tools, optimize
-    - Report=True      
-    - ReportB=True
-    - MPI=True        
+  global:
+    - NOSEOPTS_DEFAULT="-v --with-timer --with-id --rednose"
+    - NOSEOPTS_PARALLEL="--processes=-1 --process-timeout=2400" # timeout after 40 minutes (travis job timeout is 50 minutes)
+    - NOSEOPTS_ALL="$NOSEOPTS_DEFAULT $NOSEOPTS_PARALLEL"
+  matrix:
+    - NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL # first in build mx because long duration
+    - NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
+    - NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
+    - NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
+    - NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
+    - NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
+    - NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_DEFAULT # cannot be run in parallel
 
+# Install native package dependencies & initialize build environment
 before_install:
-  - sudo apt-get -qq update
-  - sudo apt-get -qq install gfortran libblas-dev liblapack-dev
-  - sudo apt-get -qq install openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.6 libopenmpi1.6-dbg libopenmpi-dev > /dev/null
-  - sudo bash CI/install.sh # travis_wait 30 "sudo bash CI/install.sh" # > /dev/null 2>&1"
-  - "export DISPLAY=:99.0"
-  - "sh -e /etc/init.d/xvfb start" #some tests require a display
-  - sleep 3 # give xvfb some time to start
+  - >
+    sudo apt-get update -qq -y &&
+    sudo apt-get install -qq -y
+    gfortran libblas-dev liblapack-dev openmpi-bin openmpi-common openssh-client
+    openssh-server libopenmpi1.10 libopenmpi-dev libsuitesparse-dev
+  - cmake --version
+  - gcc --version
 
+# Install python package dependencies
 install:
-  - pip install zmq coverage >/dev/null
   - pip install -e .[travisci]
-  
+
+# Default `test' stage script
+script:
+  - cd test/test_packages
+  - nosetests $NOSEOPTS $NOSETESTS
+
+# Cache pip packages
 cache:
   pip: true
   timeout: 1000
 
-#Script For default "test" stage
-script:
-  - cd test
-  - python travisTests.py # just produce test_packages/runTravisTests.sh
-  - cd test_packages
-  - source runTravisTests.sh # no need for travis_wait (always outputs every 9m)
-  - cd ../..
+stages:
+  - test
+  # Run tests on python 2.7 & 3.5, but only on master/beta
+  - name: test-extra
+    if: branch IN (master, beta)
+  - name: deploy # only run deployment for master & develop branches
+    if: branch IN (master, develop)
 
 jobs:
   include:
-    - stage: deploy
+    # Can't use matrix expansion for included jobs or custom stages, so we'll manually list extra jobs
+    - stage: test-extra
       python: 3.5
-      env: Drivers=False Algorithms=False AlgorithmsB=False Default=False Report=False ReportB=False MPI=False
+      env: NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.5
+      env: NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.5
+      env: NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.5
+      env: NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.5
+      env: NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.5
+      env: NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 3.5
+      env: NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_ALL
+
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="drivers objects" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="algorithms" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="algorithmsb" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="tools iotest optimize construction extras" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="report" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="reportb" NOSEOPTS=$NOSEOPTS_ALL
+    - stage: test-extra
+      python: 2.7
+      env: NOSETESTS="mpi" NOSEOPTS=$NOSEOPTS_ALL
+
+    - stage: deploy
+      python: 3.7
+      env: NOSETESTS=none NOSEOPTS=$NOSEOPTS_DEFAULT
+      install: skip
       script: python CI/deploy
 
 notifications:
-    email:
-        on_success: change
-        on_failure: always
-
+  email:
+    on_success: change
+    on_failure: always

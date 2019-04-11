@@ -1372,9 +1372,9 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
       Only returned when `return_scale_fctr == True`.  A mulitplicative
       scaling constant that *has already been applied* to `projections`.
     """
-
+      
     if isinstance(mxBasis,_Basis):
-        errgen_std = _bt.change_basis(errgen, mxBasis, "std")
+        errgen_std = _bt.change_basis(errgen, mxBasis, mxBasis.equivalent('std'))
 
         #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
         errgen_std = _bt.resize_std_mx(errgen_std, 'expand', mxBasis.equivalent('std'),

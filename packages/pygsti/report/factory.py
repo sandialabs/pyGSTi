@@ -32,7 +32,7 @@ from .notebook import Notebook as _Notebook
 from ..baseobjs.label import Label as _Lbl
 
 #maybe import these from drivers.longsequence so they stay synced?
-ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
+ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+", ".wildcard"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
 def _errgen_formula(errgen_type, typ):
@@ -186,11 +186,14 @@ def _set_toggles(results_dict, brevity, combine_robust):
     toggles = { }
 
     toggles["ShowScaling"] = False
+    toggles["ShowUnmodeledError"] = False
     for res in results_dict.values():
         for est in res.estimates.values():
             weights = est.parameters.get("weights",None)
-            if weights is not None and len(weights) > 0:
+            if (weights is not None and len(weights) > 0):
                 toggles["ShowScaling"] = True
+            if est.parameters.get("unmodeled_error",None):
+                toggles["ShowUnmodeledError"] = True
 
     toggles['BrevityLT1'] = bool(brevity < 1)
     toggles['BrevityLT2'] = bool(brevity < 2)
@@ -251,6 +254,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
     switchBd.add("eff_ds",(0,1))
     switchBd.add("modvi_ds",(0,1))
+    switchBd.add("wildcardBudget",(0,1))
     switchBd.add("scaledSubMxsDict",(0,1))
     switchBd.add("gsTarget",(0,1))
     switchBd.add("params",(0,1))
@@ -353,8 +357,9 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             # if combine_robust is False, modvi_ds is the effective dataset
             #     for the estimate (potentially just the unscaled one)
 
+            #if this estimate uses robust scaling or wildcard budget
             NA = ws.NotApplicable()
-            if est.parameters.get("weights",None): #if this estimate uses robust scaling
+            if est.parameters.get("weights",None):
                 effds, scale_subMxs = est.get_effective_dataset(True)
                 switchBd.eff_ds[d,i] = effds
                 switchBd.scaledSubMxsDict[d,i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
@@ -363,6 +368,11 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 switchBd.modvi_ds[d,i] = results.dataset
                 switchBd.eff_ds[d,i] = NA
                 switchBd.scaledSubMxsDict[d,i] = NA
+
+            if est.parameters.get("unmodeled_error",None):
+                switchBd.wildcardBudget[d,i] = est.parameters['unmodeled_error']
+            else:
+                switchBd.wildcardBudget[d,i] = NA
 
             switchBd.gsTarget[d,i] = est.models['target']
             switchBd.gsGIRep[d,i] = est.models[GIRepLbl]
@@ -888,8 +898,13 @@ def create_standard_report(results, filename, title="auto",
                                         display=('evinf','evagi','evnuinf','evnuagi','evdiamond','evnudiamond'))
     addqty(3,'bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, criGIRep(0),
                                         display=('evdiamond','evnudiamond'), virtual_ops=germs)
+
+    summary_display = ('inf','trace','diamond','evinf','evdiamond'); wildcardBudget = None
+    if toggles["ShowUnmodeledError"]:
+        summary_display += ('unmodeled',)
+        wildcardBudget = switchBd.wildcardBudget
     addqty(A,'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
-                                         display=('inf','trace','diamond','evinf','evdiamond'))
+           display=summary_display, wildcard=wildcardBudget)
 
     addqty(4,'bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri(1), ("errgen","H","S","A"),
                                                            "boxes", errgen_type)
@@ -1009,6 +1024,9 @@ def create_standard_report(results, filename, title="auto",
 
 
     if combine_robust:
+        
+        # plots for robust data-scaling tab
+        
         # model-violation (using _modvi variables) plots show pre-scaling
         # violation, so we create# additional _scl plots to separately show
         # post-scaling violation (using eff_ds and non-_modvi variables).
@@ -1019,7 +1037,7 @@ def create_standard_report(results, filename, title="auto",
                Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L', comm=comm)
 
         addqty(4,'progressBarPlot_scl', ws.FitComparisonBarPlot,
-               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L', comm=comm) # robust-scaled version
+               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L', comm=comm)
 
         #Not pagniated currently... just set to same full plot
         addqty(1,'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
@@ -1039,12 +1057,48 @@ def create_standard_report(results, filename, title="auto",
                linlg_pcntle=float(linlogPercentile) / 100,
                minProbClipForWeighting=switchBd.mpc, typ="histogram", comm=comm)
 
+        #Plots for unmodeled error tab
+        addqty(4,'progressTable_ume', ws.FitComparisonTable,
+               Ls, gssAllL, switchBd.gsAllL, modvi_ds, switchBd.objective, 'L', comm=comm,
+               wildcard=switchBd.wildcardBudget)
+
+        addqty(4,'progressBarPlot_ume', ws.FitComparisonBarPlot,
+               Ls, gssAllL, switchBd.gsAllL, modvi_ds, switchBd.objective, 'L', comm=comm, # robust-scaled version
+               wildcard=switchBd.wildcardBudget)
+
+        #Not pagniated currently... just set to same full plot
+        addqty(1,'bestEstimateColorBoxPlot_ume', ws.ColorBoxPlot,
+            switchBd.objective, gss, modvi_ds, gsL,
+            linlg_pcntle=float(linlogPercentile) / 100,
+            minProbClipForWeighting=switchBd.mpc, comm=comm,
+            wildcard=switchBd.wildcardBudget)
+        if brevity < 1: qtys['bestEstimateColorBoxPlot_ume'].set_render_options(
+                click_to_display=False, valign='bottom')
+
+        addqty(1,'bestEstimateColorScatterPlot_ume', ws.ColorBoxPlot,
+               switchBd.objective, gss, modvi_ds, gsL,
+               linlg_pcntle=float(linlogPercentile) / 100,
+               minProbClipForWeighting=switchBd.mpc, typ="scatter", comm=comm,
+               wildcard=switchBd.wildcardBudget)
+
+        addqty(A,'bestEstimateColorHistogram_ume', ws.ColorBoxPlot,
+               switchBd.objective, gss, modvi_ds, gsL,
+               linlg_pcntle=float(linlogPercentile) / 100,
+               minProbClipForWeighting=switchBd.mpc, typ="histogram", comm=comm,
+               wildcard=switchBd.wildcardBudget)
+
+
 
     #Note: this is the only plot that uses eff_ds (and is on robust-scaling
     #  page) that is created when combine_robust == False
     addqty(1,'dataScalingColorBoxPlot', ws.ColorBoxPlot,
            "scaling", switchBd.gssFinal, eff_ds, None,
            submatrices=switchBd.scaledSubMxsDict, comm=comm)
+
+    addqty(1,'unmodeledErrorBudgetTable', ws.GatesVsTargetTable, gsFinal, gsTgt, None,
+           display=('unmodeled',), wildcard=switchBd.wildcardBudget)
+
+
 
 
     if multidataset:
