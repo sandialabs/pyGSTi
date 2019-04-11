@@ -5484,8 +5484,8 @@ class LindbladErrorgen(LinearOperator):
               #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitaryPostfactor
             termtype = "dense" if evotype == "svterm" else "clifford"
             
-            self.Lterms = self._init_terms(Ltermdict, basisdict, hamBInds,
-                                           otherBInds, termtype)
+            self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basisdict, hamBInds,
+                                                              otherBInds, termtype)
             # Unused
             self.hamGens = self.other = self.Lmx = None
             self.err_gen_mx = None
@@ -5700,7 +5700,15 @@ class LindbladErrorgen(LinearOperator):
         #    print("  pre:\n", lt.pre_ops[0] if len(lt.pre_ops) else "IDENT")
         #    print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
 
-        return Lterms
+        #Make compact polys that are ready to (repeatedly) evaluate (useful
+        # for term-based calcs which call get_total_term_magnitude() a lot)
+        poly_coeffs = [ t.coeff for t in Lterms ]
+        tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
+        vtape = _np.concatenate( [ t[0] for t in tapes ] )
+        ctape = _np.concatenate( [ t[1] for t in tapes ] )
+        coeffs_as_compact_polys = (vtape, ctape)
+
+        return Lterms, coeffs_as_compact_polys
 
     
     def _set_params_from_matrix(self, errgen, truncate):
@@ -5848,7 +5856,7 @@ class LindbladErrorgen(LinearOperator):
             A list of :class:`RankOneTerm` objects.
         """
         assert(order == 0), "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
-        return self.Lterms
+        return self.Lterms #terms with local-index polynomial coefficients
 
     def get_direct_order_terms(self, order): # , order_base=None - unused currently b/c order is always 0...
         """ 
@@ -5863,8 +5871,9 @@ class LindbladErrorgen(LinearOperator):
         TODO: docstring
         """
         # return (sum of absvals of term coeffs)
-        direct_terms = self.get_direct_order_terms(0)
-        return sum([ abs(term.coeff) for term in direct_terms])
+        vtape, ctape = self.Lterm_coeffs
+        coeffs = _bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), (len(self.Lterms),))
+        return sum([ abs(coeff) for coeff in coeffs])
 
 
     def num_params(self):

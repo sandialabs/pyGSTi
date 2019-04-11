@@ -2028,7 +2028,7 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None
     if rholabel in repcache:
         repcel = repcache[rholabel]
         rho_term_reps = repcel.reps
-        rho_foat_indicies = repcel.foat_indices
+        rho_foat_indices = repcel.foat_indices
     else:
         repcel = RepCacheEl()
         hmterms, foat_indices = calc.sos.get_prep(rholabel).get_highmagnitude_terms(
@@ -2057,7 +2057,7 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None
         repcel = <RepCacheEl?>repcache[elabels]
         E_term_reps = repcel.reps
         E_indices = repcel.E_indices
-        E_foat_indicies = repcel.foat_indices
+        E_foat_indices = repcel.foat_indices
     else:
         repcel = RepCacheEl()
         E_term_indices_and_reps = []
@@ -2065,20 +2065,20 @@ def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None
             hmterms, foat_indices = calc.sos.get_effect(elbl).get_highmagnitude_terms(
                 min_term_mag, max_taylor_order=calc.max_order)
             E_term_indices_and_reps.extend(
-                [ (i,t,t.magnitude,(j in foat_indices)) for j,t in enumerate(hmterms) ] )
+                [ (i,t,t.magnitude,1 if (j in foat_indices) else 0) for j,t in enumerate(hmterms) ] )
 
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
-        for i,t,_,is_foat in E_term_indices_and_reps:
+        for j,(i,t,_,is_foat) in enumerate(E_term_indices_and_reps):
             rep = (<SVTermRep?>t.torep(mpo,mpv,"effect"))
             repcel.pyterm_references.append(rep)
             repcel.reps.push_back( rep.c_term )
             repcel.E_indices.push_back(<INT?>i)
-            if(is_foat): repcel.foat_indices.push_back(<INT>i)
+            if(is_foat): repcel.foat_indices.push_back(<INT>j)
 
         E_term_reps = repcel.reps
         E_indices = repcel.E_indices
-        E_foat_indicies = repcel.foat_indices
+        E_foat_indices = repcel.foat_indices
         repcache[elabels] = repcel
 
     cdef double max_partial_sopm = calc.sos.get_prep(rholabel).get_total_term_magnitude()
@@ -2147,6 +2147,11 @@ cdef vector[PolyCRep*] sv_prs_pruned(
 
     threshold = pathmagnitude_threshold(factor_lists, E_indices, numEs, target_sum_of_pathmags, foat_indices_per_op,
                                         current_threshold, pathmagnitude_gap/100.0, achieved_sum_of_pathmags, npaths)
+    #DEBUG
+    #print("FOAT: ")
+    #for i in range(N+2):
+    #    print(deref(foat_indices_per_op[i]))
+    #print("Threshold = ",threshold," Paths=",npaths)
 
     #Construct all our return values (HACK - return these as a vector of floats)
     returnvec[0] = 0.0
@@ -2359,7 +2364,7 @@ cdef void count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr] oprep_li
             sub_order = 1 if i == incd else 2 # signifies anything over 1st order where >1 column has be inc'd
         else:
             sub_order = order
-            
+
         logmag = current_logmag + (deref(oprep_lists[i])[b[i]]._logmagnitude - deref(oprep_lists[i])[b[i]-1]._logmagnitude)
         if logmag >= log_thres: 
             if deref(oprep_lists[i])[b[i]-1]._magnitude == 0:
@@ -2370,6 +2375,7 @@ cdef void count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr] oprep_li
             ## fn_visitpath(b, mag, i) ##
             pathmags[E_indices[b[n-1]]] += mag
             nPaths[E_indices[b[n-1]]] += 1
+            #print("Adding ",b)
             ## --------------------------
             
             count_paths(b, oprep_lists, foat_indices_per_op, num_elabels, nops,
@@ -2391,6 +2397,7 @@ cdef void count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr] oprep_li
                     ## fn_visitpath(b, mag, i) ##
                     pathmags[E_indices[b[n-1]]] += mag
                     nPaths[E_indices[b[n-1]]] += 1
+                    #print("FOAT Adding ",b)
                     ## --------------------------
 
                     if i != n-1:
@@ -2404,6 +2411,7 @@ cdef void count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr] oprep_li
                             ## fn_visitpath(b, mag2, n-1) ##
                             pathmags[E_indices[b[n-1]]] += mag2
                             nPaths[E_indices[b[n-1]]] += 1
+                            #print("FOAT Adding ",b)
                             ## --------------------------
                         b[n-1] = orig_bn
             b[i] = orig_bi
@@ -2424,10 +2432,11 @@ cdef void count_paths_upto_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_lis
     for i in range(n):
         nops[i] = oprep_lists[i].size()
         b[i] = 0
-    
+        
     ## fn_visitpath(b, current_mag, 0) # visit root (all 0s) path
     pathmags[E_indices[0]] += current_mag
     nPaths[E_indices[0]] += 1
+    #print("Adding ",b)
     ## -------------------------------
     count_paths(b, oprep_lists, foat_indices_per_op, num_elabels, nops, E_indices, pathmags, nPaths, 0, log_thres, current_mag, current_logmag, 0)
     return
@@ -2440,7 +2449,7 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
     TODO: docstring - note: target_sum_of_pathmags is a *vector* that holds a separate value for each E-index
     """
     cdef INT nIters = 0
-    cdef double threshold = initial_threshold if (initial_threshold is not None) else 0.1 # default value
+    cdef double threshold = initial_threshold if (initial_threshold >= 0) else 0.1 # default value
     #target_mag = target_sum_of_pathmags
     cdef double threshold_upper_bound = 1.0
     cdef double threshold_lower_bound = -1.0
@@ -2486,7 +2495,7 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
         mags[i] = 0.0; nPaths[i] = 0
     count_paths_upto_threshold(oprep_lists, threshold_lower_bound, nEffects, 
                                foat_indices_per_op, E_indices, mags, nPaths) # sets mags and nPaths
-    
+
     return threshold_lower_bound
 
 

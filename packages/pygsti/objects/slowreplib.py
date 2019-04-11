@@ -980,7 +980,7 @@ class PolyRep(dict):
                 del l[ivar.index(wrtParam)]
                 dcoeffs[ tuple(l) ] = cnt * coeff
         int_dcoeffs = { self._vinds_to_int(k): v for k,v in dcoeffs.items() }
-        return PolyRep(int_dcoeffs, self.max_order, self.max_num_vars)
+        return PolyRep(int_dcoeffs, self.max_order, self.max_num_vars, self.vindices_per_int)
 
     def evaluate(self, variable_values):
         """
@@ -1046,7 +1046,7 @@ class PolyRep(dict):
         -------
         PolyRep
         """
-        cpy = PolyRep(None, self.max_order, self.max_num_vars)
+        cpy = PolyRep(None, self.max_order, self.max_num_vars, self.vindices_per_int)
         cpy.update(self) # constructor expects dict w/var-index keys, not ints like self has
         return cpy
 
@@ -1084,7 +1084,7 @@ class PolyRep(dict):
         PolyRep
         """
         assert(self.max_order == x.max_order and self.max_num_vars == x.max_num_vars)
-        newpoly = PolyRep(None, self.max_order, self.max_num_vars) # assume same *fixed* max_order, even during mult
+        newpoly = PolyRep(None, self.max_order, self.max_num_vars, self.vindices_per_int) # assume same *fixed* max_order, even during mult
         for k1,v1 in self.items():
             for k2,v2 in x.items():
                 inds = sorted(self._int_to_vinds(k1)+x._int_to_vinds(k2))
@@ -1181,7 +1181,7 @@ class PolyRep(dict):
         return self.__mul__(x)
 
     def __pow__(self,n):
-        ret = PolyRep({0: 1.0}, self.max_order, self.max_num_vars)
+        ret = PolyRep({0: 1.0}, self.max_order, self.max_num_vars, self.vindices_per_int)
         cur = self
         for i in range(int(np.floor(np.log2(n)))+1):
             rem = n % 2 #gets least significant bit (i-th) of n
@@ -1679,9 +1679,9 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
         factor_lists, E_indices, len(elabels), target_sum_of_pathmags, len(elabels), foat_indices_per_op,
         initial_threshold=current_threshold, min_threshold=pathmagnitude_gap/100.0)
       # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
-      
-    if current_threshold is not None and threshold >= current_threshold: # then just keep existing (cached) polys
-        return None, sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)        
+
+    if current_threshold >= 0 and threshold >= current_threshold: # then just keep existing (cached) polys
+        return None, sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
     #print("T1 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
 
@@ -1948,7 +1948,7 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
     TODO: docstring - note: target_sum_of_pathmags is a *vector* that holds a separate value for each E-index
     """
     nIters = 0
-    threshold = initial_threshold if (initial_threshold is not None) else 0.1 # default value
+    threshold = initial_threshold if (initial_threshold >= 0) else 0.1 # default value
     target_mag = target_sum_of_pathmags
     #print("Target magnitude: ",target_mag)
     threshold_upper_bound = 1.0
@@ -2049,7 +2049,7 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
                 threshold = (threshold_upper_bound + threshold_lower_bound)/2
             else: threshold /= 2
 
-        #print("  Interval: threshold in [%s,%s]: %s %s" % (str(threshold_upper_bound),str(threshold_lower_bound),mag,nPaths))
+        print("  Interval: threshold in [%s,%s]: %s %s" % (str(threshold_upper_bound),str(threshold_lower_bound),mag,nPaths))
         if threshold_upper_bound is not None and threshold_lower_bound is not None and \
            (threshold_upper_bound - threshold_lower_bound)/threshold_upper_bound < 1e-3:
             #print("Converged after %d iters!" % nIters)
@@ -2064,6 +2064,8 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
     mag = _np.zeros(nEffects,'d')
     nPaths = _np.zeros(nEffects,int)
     traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels, foat_indices_per_op, count_path) # sets mag and nPaths
+    print("Threshold = ",threshold_lower_bound, nPaths, mag)
+    assert(False),"STOP"
     
     return threshold_lower_bound, nPaths, mag
 

@@ -428,7 +428,7 @@ class TermEvalTree(EvalTree):
             raw_polys, npaths, threshold, target_sopm, achieved_sopm = \
                 calc.prs_as_pruned_polys(rholabel,elabels, opstr, repcache, comm, memLimit, pathmagnitude_gap,
                                          min_term_mag, current_threshold)
-            if raw_polys is None: # signal to use existing current_cache
+            if raw_polys is None or len(raw_polys)==0: # signal to use existing current_cache
                 raw_polys = current_polys
             else:
                 self.p_polys[(rholabel, elabels, opstr)] = (threshold, raw_polys)
@@ -444,7 +444,9 @@ class TermEvalTree(EvalTree):
             ctape = _np.concatenate( [ t[1] for t in tapes ] )
             ret.append( (vtape, ctape) ) # Note: ctape should always be complex here
 
-        print("DB: EVTREE done: tot_npaths = %d, target_sopm=%g, achieved_sopm=%g" % (tot_npaths,target_sopm,achieved_sopm))
+        nC = len(circuit_list)
+        print("DB: EVTREE done: tot_npaths = %d, target_sopm=%g, achieved_sopm=%g nCircuits=%d (per-circuit=%g,%g,%g)" %
+              (tot_npaths,tot_target_sopm,tot_achieved_sopm,nC,tot_npaths/nC,tot_target_sopm/nC,tot_achieved_sopm/nC))
         return ret
 
 
