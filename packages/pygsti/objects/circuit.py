@@ -53,12 +53,14 @@ def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_ret
     return [ _label_to_nested_lists_of_simple_labels(l, default_sslbls, False)
              for l in lbl.components ] # a *list*     
 
-def _sslbls_of_nested_lists_of_simple_labels(obj):
+def _sslbls_of_nested_lists_of_simple_labels(obj, labels_to_ignore=None):
     """ Get state space labels from a nested lists of simple (not compound) Labels. """
     if isinstance(obj,_Label):
+        if labels_to_ignore and (obj in labels_to_ignore): 
+            return ()
         return obj.sslbls
     else:
-        sub_sslbls = [_sslbls_of_nested_lists_of_simple_labels(sub) for sub in obj]
+        sub_sslbls = [_sslbls_of_nested_lists_of_simple_labels(sub,labels_to_ignore) for sub in obj]
         return None if (None in sub_sslbls) else set(_itertools.chain(*sub_sslbls))
 
 def _accumulate_explicit_sslbls(obj):
@@ -295,6 +297,20 @@ class Circuit(object):
     @property
     def line_labels(self):
         return self._line_labels
+
+    @line_labels.setter
+    def line_labels(self, value):
+        if value == self._line_labels: return
+        #added_line_labels = set(value) - set(self._line_labels) # it's always OK to add lines
+        removed_line_labels = set(self._line_labels) - set(value)
+        if removed_line_labels:
+            idling_line_labels = set(self.get_idling_lines())
+            removed_not_idling = removed_line_labels - idling_line_labels
+            if removed_not_idling and self._static:
+                raise ValueError("Cannot remove non-idling lines %s from a read-only circuit!" % str(removed_not_idling))
+            else:
+                self.delete_lines(tuple(removed_not_idling))
+        self._line_labels = value
 
     @property
     def name(self):
@@ -853,7 +869,8 @@ class Circuit(object):
         -------
         None
         """
-        assert(not self._static),"Cannot edit a read-only circuit!"
+        #assert(not self._static),"Cannot edit a read-only circuit!"
+        # Actually, this is OK even for static circuits because it won't affect the hashed value (labels only)
         if insertBefore is None:
             i = len(self.line_labels)
         else:
@@ -1562,6 +1579,33 @@ class Circuit(object):
             return Circuit([lbl.replacename(old_gatename, new_gatename)
                             for lbl in self._labels], self.line_labels)
 
+
+    def replace_layer(self, old_layer, new_layer):
+        """
+        Returns a copy of this Circuit except that `old_layer` is
+        changed to `new_layer`.
+
+        Parameters
+        ----------
+        old_layer, new_layer : string or Label
+            The layer to find and the to replace.
+
+        Returns
+        -------
+        Circuit
+        """
+        old_layer = toLabel(old_layer)
+        new_layer = toLabel(new_layer)
+        if not self._static:
+            #Could to this in both cases, but is slow for large static circuits
+            cpy = self.copy(editable=False) #convert our layers to Labels
+            return Circuit([ new_layer if lbl == old_layer else lbl
+                           for lbl in cpy._labels], self.line_labels)
+        else: # static case: so self._labels is a tuple of Labels
+            return Circuit([ new_layer if lbl == old_layer else lbl
+                           for lbl in self._labels], self.line_labels)
+
+
     #def replace_identity(self, identity, convert_identity_gates = True): # THIS module only
     #    """
     #    Changes the *name* of the idle/identity gate in the circuit. This replaces
@@ -1784,23 +1828,103 @@ class Circuit(object):
         -------
         None
         """
+        # OK even for static circuits because it won't affect the hashed value (labels only)
         assert(set(order) == set(self.line_labels)), "The line labels must be the same!"
         self._line_labels = tuple(order)
 
-    def delete_idling_lines(self):
+
+    def is_line_idling(self, line_label, idle_layer_labels=None):
+        """
+        Whether the line in question is idling in *every* circuit layer.
+        
+        Parameters
+        ----------
+        line_label : str or int
+            The label of the line (i.e., "wire" or qubit).
+
+        idle_layer_labels : iterable, optional
+            A list or tuple of layer-labels that should be treated 
+            as idle operations, so their presence will not disqualify
+            a line from being "idle".  E.g. `["Gi"]` will cause `"Gi"`
+            layers to be considered idle layers.
+
+        Returns
+        -------
+        bool
+            True if the line is idling. False otherwise.
+        """
+        if self._static:
+            layers = list(filter(lambda x: x not in idle_layer_labels, self._labels)) \
+                         if idle_layer_labels else self._labels
+            all_sslbls = None if any([layer.sslbls is None for layer in layers]) \
+                else set(_itertools.chain(*[layer.sslbls for layer in layers]))
+        else:
+            all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels) # None or a set
+
+        if all_sslbls is None:
+            return False # no lines are idling
+        return bool(line_label not in all_sslbls)
+
+
+    def get_idling_lines(self, idle_layer_labels=None):
+        """
+        Returns the line labels corresponding to idling lines.
+
+        Parameters
+        ----------
+        idle_layer_labels : iterable, optional
+            A list or tuple of layer-labels that should be treated 
+            as idle operations, so their presence will not disqualify
+            a line from being "idle".  E.g. `["Gi"]` will cause `"Gi"`
+            layers to be considered idle layers.
+
+        Returns
+        -------
+        tuple
+        """
+        if self._static:
+            layers = list(filter(lambda x: x not in idle_layer_labels, self._labels)) \
+                         if idle_layer_labels else self._labels
+            all_sslbls = None if any([layer.sslbls is None for layer in layers]) \
+                else set(_itertools.chain(*[layer.sslbls for layer in layers]))
+        else:
+            all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels) # None or a set
+
+        if all_sslbls is None:
+            return ()
+        else:
+            return tuple([x for x in self.line_labels
+                          if x not in all_sslbls]) # preserve order
+
+    def delete_idling_lines(self, idle_layer_labels=None):
         """
         Removes from this circuit all lines that are idling at every layer.
+
+        Parameters
+        ----------
+        idle_layer_labels : iterable, optional
+            A list or tuple of layer-labels that should be treated 
+            as idle operations, so their presence will not disqualify
+            a line from being "idle".  E.g. `["Gi"]` will cause `"Gi"`
+            layers to be considered idle layers.
 
         Returns
         -------
         None
         """
-        assert(not self._static),"Cannot edit a read-only circuit!"
+        #assert(not self._static),"Cannot edit a read-only circuit!"
+        # Actually, this is OK even for static circuits because it won't affect the hashed value (labels only)
+
+        if idle_layer_labels:
+            assert(all([toLabel(x).sslbls is None for x in idle_layer_labels])), "Idle layer labels must be *global*"
+
         if self._static:
-            all_sslbls = None if any([layer.sslbls is None for layer in self._labels]) \
-                else set(_itertools.chain(*[layer.sslbls for layer in self._labels]))
+            layers = list(filter(lambda x: x not in idle_layer_labels, self._labels)) \
+                         if idle_layer_labels else self._labels
+            all_sslbls = None if any([layer.sslbls is None for layer in layers]) \
+                else set(_itertools.chain(*[layer.sslbls for layer in layers]))
         else:
-            all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels) # None or a set
+            all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels) # None or a set
 
         if all_sslbls is None:
             return # no lines are idling
@@ -2156,32 +2280,7 @@ class Circuit(object):
                 components.append( _Label(idleGateName,line_lbl) )
         return _Label(components)
 
-    
-    def is_line_idling(self,line_label):
-        """
-        Whether the line in question is idling in *every* circuit layer.
         
-        Parameters
-        ----------
-        line_label : list
-            The label of the line (i.e., "wire" or qubit).
-
-        Returns
-        -------
-        bool
-            True if the line is idling. False otherwise.
-        """
-        if self._static:
-            all_sslbls = None if any([layer.sslbls is None for layer in self._labels]) \
-                else set(_itertools.chain(*[layer.sslbls for layer in self._labels]))
-        else:
-            all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels) # None or a set
-
-        if all_sslbls is None:
-            return False # no lines are idling
-        return bool(line_label not in all_sslbls)
-
-    
     def num_layers(self):
         """
         The number of circuit layers. In simple circuits, this is also the
