@@ -1685,7 +1685,6 @@ def _prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, 
 
     #print("T1 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
 
-    assert(fastmode == False)
     if fastmode:
         leftSaved = [None]*(len(factor_lists)-1)  # saved[i] is state after i-th
         rightSaved = [None]*(len(factor_lists)-1) # factor has been applied
@@ -2049,7 +2048,7 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
                 threshold = (threshold_upper_bound + threshold_lower_bound)/2
             else: threshold /= 2
 
-        print("  Interval: threshold in [%s,%s]: %s %s" % (str(threshold_upper_bound),str(threshold_lower_bound),mag,nPaths))
+        #print("  Interval: threshold in [%s,%s]: %s %s" % (str(threshold_upper_bound),str(threshold_lower_bound),mag,nPaths))
         if threshold_upper_bound is not None and threshold_lower_bound is not None and \
            (threshold_upper_bound - threshold_lower_bound)/threshold_upper_bound < 1e-3:
             #print("Converged after %d iters!" % nIters)
@@ -2064,8 +2063,6 @@ def pathmagnitude_threshold(oprep_lists, E_indices, nEffects, target_sum_of_path
     mag = _np.zeros(nEffects,'d')
     nPaths = _np.zeros(nEffects,int)
     traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels, foat_indices_per_op, count_path) # sets mag and nPaths
-    print("Threshold = ",threshold_lower_bound, nPaths, mag)
-    assert(False),"STOP"
     
     return threshold_lower_bound, nPaths, mag
 

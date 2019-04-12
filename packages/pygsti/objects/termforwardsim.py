@@ -202,7 +202,7 @@ class TermForwardSimulator(ForwardSimulator):
         #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
         #    return [ self.cache[ck] for ck in cache_keys ]
         
-        fastmode = False
+        fastmode = True
         if repcache is None: repcache = {}
         if current_threshold is None: current_threshold = -1.0 # use negatives to signify "None" in C
         
@@ -681,6 +681,12 @@ class TermForwardSimulator(ForwardSimulator):
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
         print("DB: bulk_fill_probs called!!!!!!!!!")
         #print("Paramvec = ",self.paramvec)
+        print("Paramvec max = ",max(_np.abs(self.paramvec)))
+        #for lbl in ("Gii","Gix","Gxi","Giy","Gyi"): #model.get_primitive_op_labels()
+        #for lbl in ("Gi","Gx","Gy"):
+        #    coeffs = self.sos.get_operation(lbl).get_errgen_coeffs()[0] # e.g. key ('H', 0), val=-0.1
+        #    top_coeffs = sorted(list(coeffs.items()), key=lambda x: x[1], reverse=True)[0:10]
+        #    print("%s coeffs = \n" % lbl,"\n".join(["%s: %.5f" % (k,v) for k,v in top_coeffs]))
 
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
@@ -694,7 +700,7 @@ class TermForwardSimulator(ForwardSimulator):
                     probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None)
                 elif self.mode == "pruned":
                     #polys = self.prs_as_concat_compact_pruned_polys(rholabel, elabels, circuit_list, mySubComm, None, self.pathmagnitude_gap, self.min_term_mag, self.paramvec)
-                    polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, mySubComm, None, self.pathmagnitude_gap, self.min_term_mag)
+                    polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, mySubComm, None, self.pathmagnitude_gap, self.min_term_mag, recalc_threshold=False)
                 else: # self.mode == "taylor-order"
                     polys = evalSubTree.get_p_polys(self, rholabel, elabels, mySubComm) # computes polys if necessary
 
@@ -834,7 +840,7 @@ class TermForwardSimulator(ForwardSimulator):
                         polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
                     elif self.mode == "pruned":
                         #polys = self.prs_as_concat_compact_pruned_polys(rholabel, elabels, circuit_list, fillComm, None, self.pathmagnitude_gap, self.min_term_mag)
-                        polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, fillComm, None, self.pathmagnitude_gap, self.min_term_mag)
+                        polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, fillComm, None, self.pathmagnitude_gap, self.min_term_mag, recalc_threshold=True)
                         
                     for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
                         if self.mode == "direct":

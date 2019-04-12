@@ -110,6 +110,7 @@ class TermEvalTree(EvalTree):
         self.p_polys = {}
         self.dp_polys = {}
         self.hp_polys = {}
+        self.repcache = {}
 
         self.myFinalToParentFinalMap = None #this tree has no "children",
         self.myFinalElsToParentFinalElsMap = None # i.e. has not been created by a 'split'
@@ -410,7 +411,7 @@ class TermEvalTree(EvalTree):
         cpy = self._copyBase( TermEvalTree(self[:]) )
         return cpy
 
-    def get_p_pruned_polys(self, calc, rholabel, elabels, comm, memLimit, pathmagnitude_gap, min_term_mag):
+    def get_p_pruned_polys(self, calc, rholabel, elabels, comm, memLimit, pathmagnitude_gap, min_term_mag, recalc_threshold=True):
         print("DB: EVTREE get_p_pruned_polys")
 
         elabels = tuple(elabels) #make sure this is hashable
@@ -419,15 +420,24 @@ class TermEvalTree(EvalTree):
         polys = []
         tot_npaths = 0
         tot_target_sopm = 0; tot_achieved_sopm = 0 # "sum of path magnitudes"
-        repcache = {}
+        #repcache = {}
         for opstr in circuit_list:
             if (rholabel,elabels,opstr) in self.p_polys:
                 current_threshold, current_polys = self.p_polys[(rholabel,elabels,opstr)]
             else:
                 current_threshold, current_polys = None, None
-            raw_polys, npaths, threshold, target_sopm, achieved_sopm = \
-                calc.prs_as_pruned_polys(rholabel,elabels, opstr, repcache, comm, memLimit, pathmagnitude_gap,
-                                         min_term_mag, current_threshold)
+
+            if current_threshold is None or recalc_threshold:
+                raw_polys, npaths, threshold, target_sopm, achieved_sopm = \
+                    calc.prs_as_pruned_polys(rholabel,elabels, opstr, self.repcache, comm, memLimit, pathmagnitude_gap,
+                                             min_term_mag, current_threshold)
+            else:
+                #Could just recompute sopm and npaths?
+                raw_polys = None
+                npaths = 0 # punt for now...
+                target_sopm = 0
+                achieved_sopm = 0
+                
             if raw_polys is None or len(raw_polys)==0: # signal to use existing current_cache
                 raw_polys = current_polys
             else:

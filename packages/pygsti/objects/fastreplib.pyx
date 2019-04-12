@@ -339,6 +339,9 @@ ctypedef INT (*sv_innerloopfn_direct_ptr)(vector[vector_SVTermDirectCRep_ptr_ptr
                                            vector[INT]*, vector[DCOMPLEX]*, INT, vector[double]*, double)
 ctypedef void (*sb_innerloopfn_ptr)(vector[vector_SBTermCRep_ptr_ptr],
                                     vector[INT]*, vector[PolyCRep*]*, INT)
+ctypedef void (*sv_addpathfn_ptr)(vector[PolyCRep*]*, vector[INT]&, INT, vector[vector_SVTermCRep_ptr_ptr]&,
+                                  SVStateCRep**, SVStateCRep**, vector[INT]*,
+                                  vector[SVStateCRep*]*, vector[SVStateCRep*]*, vector[PolyCRep]*)
 
         
 #cdef class StateRep:
@@ -1972,6 +1975,11 @@ cdef void sv_pr_as_poly_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr]
 def SV_prs_as_pruned_polys(calc, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, fastmode=True, pathmagnitude_gap=0.0, min_term_mag=0.01,
                            current_threshold=None):
 
+    #t0 = pytime.time()
+    #if debug is not None:
+    #    debug['tstartup'] += pytime.time()-t0
+    #    t0 = pytime.time()
+
     # Create gatelable -> int mapping to be used throughout
     distinct_gateLabels = sorted(set(circuit))
     glmap = { gl: i for i,gl in enumerate(distinct_gateLabels) }
@@ -2112,7 +2120,8 @@ cdef vector[PolyCRep*] sv_prs_pruned(
     #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
     # lookups and avoid weird string conversion stuff with Cython
     
-    cdef INT N = len(circuit)
+    cdef INT N = circuit.size()
+    cdef INT nFactorLists = N+2
     #cdef INT n = N+2 # number of factor lists
     #cdef INT* p = <INT*>malloc((N+2) * sizeof(INT))
     cdef INT i #,j,k #,order,nTerms
@@ -2121,16 +2130,10 @@ cdef vector[PolyCRep*] sv_prs_pruned(
     cdef INT t0 = time.clock()
     #cdef INT t, nPaths; #for below
     
-    #cdef sv_innerloopfn_pruned_ptr innerloop_fn;
-    #if fastmode:
-    #    innerloop_fn = sv_pr_pruned_innerloop #_savepartials
-    #else:
-    #    innerloop_fn = sv_pr_pruned_innerloop
-
-    cdef vector[vector_SVTermCRep_ptr_ptr] factor_lists = vector[vector_SVTermCRep_ptr_ptr](N+2)
-    cdef vector[vector_INT_ptr] foat_indices_per_op = vector[vector_INT_ptr](N+2)
-    cdef vector[INT] nops = vector[INT](N+2)
-    cdef vector[INT] b = vector[INT](N+2)
+    cdef vector[vector_SVTermCRep_ptr_ptr] factor_lists = vector[vector_SVTermCRep_ptr_ptr](nFactorLists)
+    cdef vector[vector_INT_ptr] foat_indices_per_op = vector[vector_INT_ptr](nFactorLists)
+    cdef vector[INT] nops = vector[INT](nFactorLists)
+    cdef vector[INT] b = vector[INT](nFactorLists)
 
     factor_lists[0] = &rho_term_reps
     foat_indices_per_op[0] = &rho_foat_indices
@@ -2149,7 +2152,7 @@ cdef vector[PolyCRep*] sv_prs_pruned(
                                         current_threshold, pathmagnitude_gap/100.0, achieved_sum_of_pathmags, npaths)
     #DEBUG
     #print("FOAT: ")
-    #for i in range(N+2):
+    #for i in range(nFactorLists):
     #    print(deref(foat_indices_per_op[i]))
     #print("Threshold = ",threshold," Paths=",npaths)
 
@@ -2178,36 +2181,59 @@ cdef vector[PolyCRep*] sv_prs_pruned(
     cdef double log_thres = log10(threshold)
     cdef double current_mag = 1.0
     cdef double current_logmag = 0.0
-    for i in range(N+2):
+    for i in range(nFactorLists):
         nops[i] = factor_lists[i].size()
         b[i] = 0
 
     ## fn_visitpath(b, current_mag, 0) # visit root (all 0s) path
+    cdef sv_addpathfn_ptr addpath_fn;
+    cdef vector[SVStateCRep*] leftSaved = vector[SVStateCRep_ptr](nFactorLists-1)  # saved[i] is state after i-th
+    cdef vector[SVStateCRep*] rightSaved = vector[SVStateCRep_ptr](nFactorLists-1) # factor has been applied
+    cdef vector[PolyCRep] coeffSaved = vector[PolyCRep](nFactorLists-1)
+        
+    #Fill saved arrays with allocated states
+    if fastmode:
+        #fast mode
+        addpath_fn = add_path_savepartials
+        for i in range(nFactorLists-1):
+            leftSaved[i] = new SVStateCRep(dim)
+            rightSaved[i] = new SVStateCRep(dim)
+    else:
+        addpath_fn = add_path
+        for i in range(nFactorLists-1):
+            leftSaved[i] = NULL
+            rightSaved[i] = NULL
+        
     cdef SVStateCRep *prop1 = new SVStateCRep(dim)
     cdef SVStateCRep *prop2 = new SVStateCRep(dim)
-    add_path(&prps, b, factor_lists, prop1, prop2, &E_indices)
+    addpath_fn(&prps, b, 0, factor_lists, &prop1, &prop2, &E_indices, &leftSaved, &rightSaved, &coeffSaved)
     ## -------------------------------
-    add_paths(b, factor_lists, foat_indices_per_op, numEs, nops, E_indices, 0, log_thres, current_mag, current_logmag, 0,
-              &prps, prop1, prop2)
+    add_paths(addpath_fn, b, factor_lists, foat_indices_per_op, numEs, nops, E_indices, 0, log_thres, current_mag, current_logmag, 0,
+              &prps, &prop1, &prop2, &leftSaved, &rightSaved, &coeffSaved)
 
     del prop1
     del prop2
     return prps
 
 
-cdef void add_path(vector[PolyCRep*]* prps, vector[INT] b, vector[vector_SVTermCRep_ptr_ptr] factor_lists,
-                   SVStateCRep *prop1, SVStateCRep *prop2, vector[INT]* Einds):
+cdef void add_path(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vector_SVTermCRep_ptr_ptr]& factor_lists,
+                   SVStateCRep **pprop1, SVStateCRep **pprop2, vector[INT]* Einds,
+                   vector[SVStateCRep*]* pleftSaved, vector[SVStateCRep*]* prightSaved, vector[PolyCRep]* pcoeffSaved):
 
     cdef PolyCRep coeff
-    cdef PolyCRep result    
+    cdef PolyCRep result
+    cdef double complex pLeft, pRight
 
     cdef INT i,j, Ei
     cdef SVTermCRep* factor
+    cdef SVStateCRep *prop1 = deref(pprop1)
+    cdef SVStateCRep *prop2 = deref(pprop2)
     cdef SVStateCRep *tprop
     cdef SVEffectCRep* EVec
     cdef SVStateCRep *rhoVec
     cdef INT nFactorLists = b.size()
     cdef INT last_index = nFactorLists-1
+    # ** Assume prop1 and prop2 begin as allocated **
 
     # In this loop, b holds "current" indices into factor_lists
     factor = deref(factor_lists[0])[b[0]]
@@ -2269,17 +2295,145 @@ cdef void add_path(vector[PolyCRep*]* prps, vector[INT] b, vector[vector_SVTermC
     #    print x.first._parts, x.second
     deref(prps)[Ei].add_inplace(result)
 
+    #Update the slots held by prop1 and prop2, which still have allocated states (though really no need?)
+    pprop1[0] = prop1 
+    pprop2[0] = prop2
 
-cdef void add_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr] oprep_lists,
+    
+cdef void add_path_savepartials(vector[PolyCRep*]* prps, vector[INT]& b, INT incd, vector[vector_SVTermCRep_ptr_ptr]& factor_lists,
+                                SVStateCRep** pprop1, SVStateCRep** pprop2, vector[INT]* Einds,
+                                vector[SVStateCRep*]* pleftSaved, vector[SVStateCRep*]* prightSaved, vector[PolyCRep]* pcoeffSaved):
+
+    cdef PolyCRep coeff
+    cdef PolyCRep result
+    cdef double complex pLeft, pRight
+
+    cdef INT i,j, Ei
+    cdef SVTermCRep* factor
+    cdef SVStateCRep *prop1 = deref(pprop1)
+    cdef SVStateCRep *prop2 = deref(pprop2)
+    cdef SVStateCRep *tprop
+    cdef SVStateCRep *shelved = prop1
+    cdef SVEffectCRep* EVec
+    cdef SVStateCRep *rhoVec
+    cdef INT nFactorLists = b.size()
+    cdef INT last_index = nFactorLists-1
+    # ** Assume shelved and prop2 begin as allocated **
+
+    if incd == 0: # need to re-evaluate rho vector
+        #print "DB: re-eval at incd=0"
+        factor = deref(factor_lists[0])[b[0]]
+
+        #print "DB: re-eval left"
+        prop1 = deref(pleftSaved)[0] # the final destination (prop2 is already alloc'd)
+        prop1.copy_from(factor._pre_state)
+        for j in range(<INT>factor._pre_ops.size()):
+            #print "DB: re-eval left item"
+            factor._pre_ops[j].acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
+        rhoVecL = prop1
+        deref(pleftSaved)[0] = prop1 # final state -> saved
+        # (prop2 == the other allocated state)
+
+        #print "DB: re-eval right"
+        prop1 = deref(prightSaved)[0] # the final destination (prop2 is already alloc'd)
+        prop1.copy_from(factor._post_state)
+        for j in range(<INT>factor._post_ops.size()):
+            #print "DB: re-eval right item"
+            factor._post_ops[j].acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
+        rhoVecR = prop1
+        deref(prightSaved)[0] = prop1 # final state -> saved
+        # (prop2 == the other allocated state)
+
+        #print "DB: re-eval coeff"
+        coeff = deref(factor._coeff)
+        deref(pcoeffSaved)[0] = coeff
+        incd += 1
+    else:
+        #print "DB: init from incd"
+        rhoVecL = deref(pleftSaved)[incd-1]
+        rhoVecR = deref(prightSaved)[incd-1]
+        coeff = deref(pcoeffSaved)[incd-1]
+
+    # propagate left and right states, saving as we go
+    for i in range(incd,last_index):
+        #print "DB: propagate left begin"
+        factor = deref(factor_lists[i])[b[i]]
+        prop1 = deref(pleftSaved)[i] # destination
+        prop1.copy_from(rhoVecL) #starting state
+        for j in range(<INT>factor._pre_ops.size()):
+            #print "DB: propagate left item"
+            factor._pre_ops[j].acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop
+        rhoVecL = prop1
+        deref(pleftSaved)[i] = prop1
+        # (prop2 == the other allocated state)
+
+        #print "DB: propagate right begin"
+        prop1 = deref(prightSaved)[i] # destination
+        prop1.copy_from(rhoVecR) #starting state
+        for j in range(<INT>factor._post_ops.size()):
+            #print "DB: propagate right item"
+            factor._post_ops[j].acton(prop1,prop2)
+            tprop = prop1; prop1 = prop2; prop2 = tprop
+        rhoVecR = prop1
+        deref(prightSaved)[i] = prop1
+        # (prop2 == the other allocated state)
+
+        #print "DB: propagate coeff mult"
+        coeff = coeff.mult(deref(factor._coeff)) # copy a PolyCRep
+        deref(pcoeffSaved)[i] = coeff
+
+    # for the last index, no need to save, and need to construct
+    # and apply effect vector
+    prop1 = shelved # so now prop1 (and prop2) are alloc'd states
+
+    #print "DB: left ampl"
+    factor = deref(factor_lists[last_index])[b[last_index]] # the last factor (an Evec)
+    EVec = factor._post_effect
+    prop1.copy_from(rhoVecL) # initial state (prop2 already alloc'd)
+    for j in range(<INT>factor._post_ops.size()):
+        factor._post_ops[j].acton(prop1,prop2)
+        tprop = prop1; prop1 = prop2; prop2 = tprop
+    pLeft = EVec.amplitude(prop1) # output in prop1, so this is final amplitude
+
+    #print "DB: right ampl"
+    EVec = factor._pre_effect
+    prop1.copy_from(rhoVecR)
+    for j in range(<INT>factor._pre_ops.size()):
+        factor._pre_ops[j].acton(prop1,prop2)
+        tprop = prop1; prop1 = prop2; prop2 = tprop
+    pRight = EVec.amplitude(prop1).conjugate()
+
+    shelved = prop1 # return prop1 to the "shelf" since we'll use prop1 for other things next
+
+    #print "DB: final block"
+    #print "DB running coeff = ",dict(coeff._coeffs)
+    #print "DB factor coeff = ",dict(factor._coeff._coeffs)
+    result = coeff.mult(deref(factor._coeff))
+    #print "DB result = ",dict(result._coeffs)
+    result.scale(pLeft * pRight)
+    Ei = deref(Einds)[b[last_index]] #final "factor" index == E-vector index
+    deref(prps)[Ei].add_inplace(result)
+
+    #Update the slots held by prop1 and prop2, which still have allocated states
+    pprop1[0] = prop1 # b/c can't deref(pprop1) = prop1 isn't allowed (?)
+    pprop2[0] = prop2 # b/c can't deref(pprop2) = prop1 isn't allowed (?)
+    #print "DB prps[",INT(Ei),"] = ",dict(deref(prps)[Ei]._coeffs)
+    
+
+cdef void add_paths(sv_addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr] oprep_lists,
                     vector[vector_INT_ptr] foat_indices_per_op, INT num_elabels,
                     vector[INT]& nops, vector[INT]& E_indices, INT incd, double log_thres,
                     double current_mag, double current_logmag, INT order,
-                    vector[PolyCRep*]* prps, SVStateCRep *prop1, SVStateCRep *prop2):
+                    vector[PolyCRep*]* prps, SVStateCRep **pprop1, SVStateCRep **pprop2,
+                    vector[SVStateCRep*]* pleftSaved, vector[SVStateCRep*]* prightSaved, vector[PolyCRep]* pcoeffSaved):
     """ first_order means only one b[i] is incremented, e.g. b == [0 1 0] or [4 0 0] """
-    cdef INT i
+    cdef INT i, j, k, orig_bi, orig_bn
     cdef INT n = b.size()
     cdef INT sub_order
-    cdef double mag
+    cdef double mag, mag2
     
     for i in range(n-1, incd-1, -1):
         if b[i]+1 == nops[i]: continue
@@ -2302,11 +2456,12 @@ cdef void add_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr] oprep_list
                 mag = current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[b[i]-1]._magnitude)
 
             ## fn_visitpath(b, mag, i) ##
-            add_path(prps, b, oprep_lists, prop1, prop2, &E_indices)
+            addpath_fn(prps, b, i, oprep_lists, pprop1, pprop2, &E_indices, pleftSaved, prightSaved, pcoeffSaved)
             ## --------------------------
             
-            add_paths(b, oprep_lists, foat_indices_per_op, num_elabels, nops, E_indices,
-                      i, log_thres, mag, logmag, sub_order, prps, prop1, prop2) #add any allowed paths beneath this one
+            add_paths(addpath_fn, b, oprep_lists, foat_indices_per_op, num_elabels, nops, E_indices,
+                      i, log_thres, mag, logmag, sub_order, prps, pprop1, pprop2, pleftSaved, prightSaved, pcoeffSaved)
+                #add any allowed paths beneath this one
             
         elif sub_order <= 1:
             #We've rejected term-index b[i] (in column i) because it's too small - the only reason
@@ -2322,7 +2477,7 @@ cdef void add_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr] oprep_list
                         current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[orig_bi-1]._magnitude)
 
                     ## fn_visitpath(b, mag, i) ##
-                    add_path(prps, b, oprep_lists, prop1, prop2, &E_indices)
+                    addpath_fn(prps, b, i, oprep_lists, pprop1, pprop2, &E_indices, pleftSaved, prightSaved, pcoeffSaved)
                     ## --------------------------
 
                     if i != n-1:
@@ -2334,7 +2489,7 @@ cdef void add_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr] oprep_list
                             mag2 = mag * (deref(oprep_lists[n-1])[b[n-1]]._magnitude / deref(oprep_lists[i])[orig_bn]._magnitude)
                             
                             ## fn_visitpath(b, mag2, n-1) ##
-                            add_path(prps, b, oprep_lists, prop1, prop2, &E_indices)
+                            addpath_fn(prps, b, n-1, oprep_lists, pprop1, pprop2, &E_indices, pleftSaved, prightSaved, pcoeffSaved)
                             ## --------------------------
                         b[n-1] = orig_bn
             b[i] = orig_bi
@@ -2342,15 +2497,15 @@ cdef void add_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr] oprep_list
 
                 
 
-cdef void count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr] oprep_lists,
-                      vector[vector_INT_ptr] foat_indices_per_op, INT num_elabels,
+cdef void count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_lists,
+                      vector[vector_INT_ptr]& foat_indices_per_op, INT num_elabels,
                       vector[INT]& nops, vector[INT]& E_indices, vector[double]& pathmags, vector[INT]& nPaths,
                       INT incd, double log_thres, double current_mag, double current_logmag, INT order):
     """ first_order means only one b[i] is incremented, e.g. b == [0 1 0] or [4 0 0] """
-    cdef INT i
+    cdef INT i, j, k, orig_bi, orig_bn
     cdef INT n = b.size()
     cdef INT sub_order
-    cdef double mag
+    cdef double mag, mag2
     
     for i in range(n-1, incd-1, -1):
         if b[i]+1 == nops[i]: continue
@@ -2486,6 +2641,7 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
             break
         if threshold_upper_bound < min_threshold: # could also just set min_threshold to be the lower bound initially?
             threshold_upper_bound = threshold_lower_bound = min_threshold
+            #print("Hit min threshold after %d iters!" % nIters)
             break
         
         nIters += 1
