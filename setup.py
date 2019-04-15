@@ -105,9 +105,9 @@ setup(name='pyGSTi',
            'extension modules': ['cython'],
            'complete': ['nose','nose-timer','cython','cvxpy','cvxopt','psutil',
                         'mpi4py','pandas','matplotlib','ipython','notebook',
-                        'msgpack','coverage','zmq','rednose'],
+                        'msgpack','coverage','zmq','rednose','flake8'],
            'travisci': ['nose','nose-timer','cython','cvxpy','cvxopt','psutil',
-                        'mpi4py','pandas','msgpack','coverage','zmq','rednose']
+                        'mpi4py','pandas','msgpack','coverage','zmq','rednose','flake8']
       },
       platforms = ["any"],
       url = 'http://www.pygsti.info',
