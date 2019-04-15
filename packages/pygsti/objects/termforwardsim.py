@@ -66,7 +66,8 @@ class TermForwardSimulator(ForwardSimulator):
     that can be expanded into terms of different orders and PureStateSPAMVecs.
     """
 
-    def __init__(self, dim, simplified_op_server, paramvec, mode, max_order=None, pathmag_gap=None, min_term_mag=None, cache=None):
+    def __init__(self, dim, simplified_op_server, paramvec, mode, max_order=None, pathmag_gap=None,
+                 min_term_mag=None, opt_mode=False, cache=None):
         """
         Construct a new TermForwardSimulator object.
 
@@ -110,6 +111,7 @@ class TermForwardSimulator(ForwardSimulator):
         self.max_order = max_order             #only used in "taylor-order" mode
         self.pathmagnitude_gap = pathmag_gap   #only used in "pruned" mode
         self.min_term_mag = min_term_mag       #only used in "pruned" mode
+        self.opt_mode = opt_mode
         self.cache = cache
         self.poly_vindices_per_int = _Polynomial.get_vindices_per_int(len(paramvec))
         super(TermForwardSimulator, self).__init__(
@@ -119,6 +121,7 @@ class TermForwardSimulator(ForwardSimulator):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "term-based calculations" % self.evotype))
 
+        #DEBUG - for profiling cython routines TODO REMOVE (& references)
         self.times_debug = { 'tstartup': 0.0, 'total': 0.0,
                              't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
                              'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0 }
@@ -651,7 +654,8 @@ class TermForwardSimulator(ForwardSimulator):
                 if self.mode == "direct":
                     probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None)
                 elif self.mode == "pruned":
-                    polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, mySubComm, None, self.pathmagnitude_gap, self.min_term_mag, recalc_threshold=False)
+                    polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, mySubComm, None, self.pathmagnitude_gap, self.min_term_mag,
+                                                           recalc_threshold=not self.opt_mode)
                 else: # self.mode == "taylor-order"
                     polys = evalSubTree.get_p_polys(self, rholabel, elabels, mySubComm) # computes polys if necessary
 
@@ -790,7 +794,8 @@ class TermForwardSimulator(ForwardSimulator):
                     if self.mode == "taylor-order":
                         polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
                     elif self.mode == "pruned":
-                        polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, fillComm, None, self.pathmagnitude_gap, self.min_term_mag, recalc_threshold=True)
+                        polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, fillComm, None, self.pathmagnitude_gap,
+                                                               self.min_term_mag, recalc_threshold=True)
                         
                     for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
                         if self.mode == "direct":
@@ -910,10 +915,10 @@ class TermForwardSimulator(ForwardSimulator):
         profiler.add_time("bulk_fill_dprobs: total", tStart)
         profiler.add_count("bulk_fill_dprobs count")
         profiler.mem_check("bulk_fill_dprobs: end")
-        print("DB: time debug after bulk_fill_dprobs: ", self.times_debug)
-        self.times_debug = { 'tstartup': 0.0, 'total': 0.0,
-                             't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
-                             'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0 }
+        #print("DB: time debug after bulk_fill_dprobs: ", self.times_debug)
+        #self.times_debug = { 'tstartup': 0.0, 'total': 0.0,
+        #                     't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
+        #                     'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0 }
         
 
 

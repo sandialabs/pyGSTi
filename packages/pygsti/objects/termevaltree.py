@@ -454,11 +454,16 @@ class TermEvalTree(EvalTree):
             ctape = _np.concatenate( [ t[1] for t in tapes ] )
             ret.append( (vtape, ctape) ) # Note: ctape should always be complex here
 
-        nC = len(circuit_list)
-        print("DB: get_p_pruned_polys: tot_npaths = %d, target_sopm=%g, achieved_sopm=%g nCircuits=%d (per-circuit=%g,%g,%g)" %
-              (tot_npaths,tot_target_sopm,tot_achieved_sopm,nC,tot_npaths/nC,tot_target_sopm/nC,tot_achieved_sopm/nC))
-        return ret
 
+        if tot_npaths > 0:
+            #if comm is None or comm.Get_rank() == 0:
+            rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
+            nC = len(circuit_list)
+            print("%sPruned path-integral: kept %d paths w/magnitude %.2g (target=%.2g, #circuits=%d)" %
+                  (rankStr,tot_npaths,tot_achieved_sopm,tot_target_sopm,nC))
+            print("%s  (avg per circuit paths=%d, magnitude=%.3g, target=%.3g)" %
+                  (rankStr,tot_npaths//nC,tot_target_sopm/nC,tot_achieved_sopm/nC))
+        return ret
 
 
     def get_p_polys(self, calc, rholabel, elabels, comm):
