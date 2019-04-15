@@ -110,6 +110,7 @@ class TermEvalTree(EvalTree):
         self.p_polys = {}
         self.dp_polys = {}
         self.hp_polys = {}
+        self.repcache = {}
 
         self.myFinalToParentFinalMap = None #this tree has no "children",
         self.myFinalElsToParentFinalElsMap = None # i.e. has not been created by a 'split'
@@ -409,6 +410,60 @@ class TermEvalTree(EvalTree):
         """ Create a copy of this evaluation tree. """
         cpy = self._copyBase( TermEvalTree(self[:]) )
         return cpy
+
+    def get_p_pruned_polys(self, calc, rholabel, elabels, comm, memLimit, pathmagnitude_gap, min_term_mag, recalc_threshold=True):
+
+        elabels = tuple(elabels) #make sure this is hashable
+        circuit_list = self.generate_circuit_list(permute=False)
+        
+        polys = []
+        tot_npaths = 0
+        tot_target_sopm = 0; tot_achieved_sopm = 0 # "sum of path magnitudes"
+        #repcache = {}
+        for opstr in circuit_list:
+            if (rholabel,elabels,opstr) in self.p_polys:
+                current_threshold, current_polys = self.p_polys[(rholabel,elabels,opstr)]
+            else:
+                current_threshold, current_polys = None, None
+
+            if current_threshold is None or recalc_threshold:
+                raw_polyreps, npaths, threshold, target_sopm, achieved_sopm = \
+                    calc.prs_as_pruned_polyreps(rholabel,elabels, opstr, self.repcache, comm, memLimit, pathmagnitude_gap,
+                                                min_term_mag, current_threshold)
+            else:
+                #Could just recompute sopm and npaths?
+                raw_polyreps = None
+                npaths = 0 # punt for now...
+                target_sopm = 0
+                achieved_sopm = 0
+                
+            if raw_polyreps is None: # signal to use existing current_cache
+                compact_polys = current_polys
+            else:
+                compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
+                self.p_polys[(rholabel, elabels, opstr)] = (threshold, compact_polys)
+            polys.append(compact_polys)
+            tot_npaths += npaths
+            tot_target_sopm += target_sopm
+            tot_achieved_sopm += achieved_sopm
+
+        ret = []
+        for i,elabel in enumerate(elabels):
+            tapes = [ p[i] for p in polys ]
+            vtape = _np.concatenate( [ t[0] for t in tapes ] )
+            ctape = _np.concatenate( [ t[1] for t in tapes ] )
+            ret.append( (vtape, ctape) ) # Note: ctape should always be complex here
+
+
+        if tot_npaths > 0:
+            #if comm is None or comm.Get_rank() == 0:
+            rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
+            nC = len(circuit_list)
+            print("%sPruned path-integral: kept %d paths w/magnitude %.2g (target=%.2g, #circuits=%d)" %
+                  (rankStr,tot_npaths,tot_achieved_sopm,tot_target_sopm,nC))
+            print("%s  (avg per circuit paths=%d, magnitude=%.3g, target=%.3g)" %
+                  (rankStr,tot_npaths//nC,tot_target_sopm/nC,tot_achieved_sopm/nC))
+        return ret
 
 
     def get_p_polys(self, calc, rholabel, elabels, comm):

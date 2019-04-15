@@ -28,10 +28,10 @@ from . import replib
 # For debug: sometimes helpful as it prints (python-only) tracebacks from segfaults
 #import faulthandler
 #faulthandler.enable()
-    
 
 try:
     from . import fastopcalc as _fastopcalc
+    from .fastopcalc import fast_compact_deriv as _compact_deriv
     def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
         if _np.iscomplexobj(ctape):
             ret = _fastopcalc.fast_bulk_eval_compact_polys_complex(
@@ -44,11 +44,15 @@ try:
                 vtape, ctape, paramvec, dest_shape) )
 except ImportError:
     from .polynomial import bulk_eval_compact_polys as poly_bulk_eval_compact_polys
+    from .polynomial import compact_deriv as _compact_deriv
     def _bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape):
         ret = poly_bulk_eval_compact_polys(vtape, ctape, paramvec, dest_shape)
         if _np.iscomplexobj(ret):
-            assert(_np.linalg.norm(_np.imag(ret)) < 1e-6 ), \
-                "norm(Im part) = %g" % _np.linalg.norm(_np.imag(ret)) # DEBUG CHECK
+            #assert(_np.linalg.norm(_np.imag(ret)) < 1e-6 ), \
+            #    "norm(Im part) = %g" % _np.linalg.norm(_np.imag(ret)) # DEBUG CHECK
+            if _np.linalg.norm(_np.imag(ret)) > 1e-6:
+                print("WARNING: norm(Im part) = %g" % _np.linalg.norm(_np.imag(ret)))
+            
             ret = _np.real( ret )
         return ret # always return a *real* vector
     
@@ -62,7 +66,8 @@ class TermForwardSimulator(ForwardSimulator):
     that can be expanded into terms of different orders and PureStateSPAMVecs.
     """
 
-    def __init__(self, dim, simplified_op_server, paramvec, max_order, cache=None):
+    def __init__(self, dim, simplified_op_server, paramvec, mode, max_order=None, pathmag_gap=None,
+                 min_term_mag=None, opt_mode=False, cache=None):
         """
         Construct a new TermForwardSimulator object.
 
@@ -101,13 +106,25 @@ class TermForwardSimulator(ForwardSimulator):
         #    allow unitary-evolution calcs to be term-based, which essentially
         #    eliminates the "pRight" portion of all the propagation calcs, and
         #    would require pLeft*pRight => |pLeft|^2
-        self.max_order = max_order
+        assert(mode in ("taylor-order", "pruned", "direct")), "Invalid term-fwdsim mode: %s" % mode
+        self.mode = mode
+        self.max_order = max_order             #only used in "taylor-order" mode
+        self.pathmagnitude_gap = pathmag_gap   #only used in "pruned" mode
+        self.min_term_mag = min_term_mag       #only used in "pruned" mode
+        self.opt_mode = opt_mode
         self.cache = cache
+        self.poly_vindices_per_int = _Polynomial.get_vindices_per_int(len(paramvec))
         super(TermForwardSimulator, self).__init__(
             dim, simplified_op_server, paramvec)
+                                                                       
         if self.evotype not in ("svterm","cterm"):
             raise ValueError(("Evolution type %s is incompatbile with "
                               "term-based calculations" % self.evotype))
+
+        #DEBUG - for profiling cython routines TODO REMOVE (& references)
+        self.times_debug = { 'tstartup': 0.0, 'total': 0.0,
+                             't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
+                             'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0 }
         
     def copy(self):
         """ Return a shallow copy of this MatrixForwardSimulator """
@@ -162,7 +179,56 @@ class TermForwardSimulator(ForwardSimulator):
                 rho = f.acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
         return rho
 
-    def prs_as_polys(self, rholabel, elabels, circuit, comm=None, memLimit=None):
+    def prs_directly(self, rholabel, elabels, circuit_list, comm=None, memLimit=None, resetWts=True, repcache=None):
+
+        #Like get_p_polys but no caching, and this is very slow...
+        prs = _np.empty( (len(elabels), len(circuit_list)), 'd') # [ list() for i in range(len(elabels)) ]
+        #print("Computing prs directly for %d circuits" % len(circuit_list))
+        if repcache is None: repcache = {} #new repcache...
+        for i,circuit in enumerate(circuit_list):
+            #print("Computing prs directly: circuit %d of %d" % (i,len(circuit_list)))
+            assert(self.evotype == "svterm") # for now, just do SV case        
+            fastmode = False # start with slow mode
+            wtTol = 0.1
+            prs[:,i] = replib.SV_prs_directly(self, rholabel, elabels, circuit, repcache, comm, memLimit, fastmode, wtTol, resetWts, self.times_debug)
+        #print("PRS = ",prs)
+        return prs
+
+
+    def prs_as_pruned_polyreps(self, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
+                               current_threshold=None):
+        """
+        TODO: docstring
+        """
+        #Cache hold *compact* polys now: see prs_as_compact_polys
+        #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
+        #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
+        #    return [ self.cache[ck] for ck in cache_keys ]
+        
+        fastmode = True
+        if repcache is None: repcache = {}
+        if current_threshold is None: current_threshold = -1.0 # use negatives to signify "None" in C
+        
+        if self.evotype == "svterm":
+            poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
+                replib.SV_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm, memLimit,
+                                          fastmode, pathmagnitude_gap, min_term_mag,
+                                          current_threshold)
+                # sopm = "sum of path magnitudes"
+        else: # "cterm" (stabilizer-based term evolution)
+            poly_reps, npaths, threshold, target_sopm, achieved_sopm = \
+                replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm, memLimit,
+                                              fastmode, pathmagnitude_gap, min_term_mag)
+
+        if len(poly_reps) == 0: # HACK - length=0 => there's a cache hit, which we signify by None here
+            prps = None
+        else:
+            prps = poly_reps
+
+        return prps, npaths, threshold, target_sopm, achieved_sopm
+
+    
+    def prs_as_polys(self, rholabel, elabels, circuit, comm=None, memLimit=None): #LATER? , resetWts=True, repcache=None):
         """
         Computes polynomials of the probabilities for multiple spam-tuples of
         `circuit`, sharing the same state preparation (so with different
@@ -186,6 +252,8 @@ class TermForwardSimulator(ForwardSimulator):
 
         memLimit : int, optional
             A memory limit in bytes to impose on the computation.
+
+        TODO: resetWts & repcache?
         
         Returns
         -------
@@ -566,19 +634,37 @@ class TermForwardSimulator(ForwardSimulator):
         #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        #print("DB: bulk_fill_probs called!!!!!!!!!")
+        #print("Paramvec = ",self.paramvec)
+        #print("Paramvec max = ",max(_np.abs(self.paramvec)))
+        #for lbl in ("Gii","Gix","Gxi","Giy","Gyi"): #model.get_primitive_op_labels()
+        #for lbl in ("Gi","Gx","Gy"):
+        #    coeffs = self.sos.get_operation(lbl).get_errgen_coeffs()[0] # e.g. key ('H', 0), val=-0.1
+        #    top_coeffs = sorted(list(coeffs.items()), key=lambda x: x[1], reverse=True)[0:10]
+        #    print("%s coeffs = \n" % lbl,"\n".join(["%s: %.5f" % (k,v) for k,v in top_coeffs]))
 
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             nStrs = evalSubTree.num_final_strings()
+            if self.cache is None: circuit_list = evalSubTree.generate_circuit_list(permute=False) # TODO: check that permute is correct here...
 
             def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
-                polys = evalSubTree.get_p_polys(self, rholabel, elabels, mySubComm) # computes polys if necessary
+                if self.mode == "direct":
+                    probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None)
+                elif self.mode == "pruned":
+                    polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, mySubComm, None, self.pathmagnitude_gap, self.min_term_mag,
+                                                           recalc_threshold=not self.opt_mode)
+                else: # self.mode == "taylor-order"
+                    polys = evalSubTree.get_p_polys(self, rholabel, elabels, mySubComm) # computes polys if necessary
 
                 for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
                     #use cached data to final values
-                    prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nCircuits,)
+                    if self.mode == "direct":
+                        prCache = probs[i]
+                    else:
+                        prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nCircuits,)
                     ps = evalSubTree.final_view( prCache, axis=0) # ( nCircuits,)
                     _fas(mxToFill, [fInds], ps[gInds], add=sumInto)
 
@@ -668,6 +754,7 @@ class TermForwardSimulator(ForwardSimulator):
         None
         """
 
+        #print("DB: bulk_fill_dprobs called!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         tStart = _time.time()
         if profiler is None: profiler = _dummy_profiler
 
@@ -689,6 +776,7 @@ class TermForwardSimulator(ForwardSimulator):
             evalSubTree = subtrees[iSubTree]
             felInds = evalSubTree.final_element_indices(evalTree)
             nStrs = evalSubTree.num_final_strings()
+            if self.cache is None: circuit_list = evalSubTree.generate_circuit_list(permute=False) # TODO: check that permute is correct here...
 
             #Free memory from previous subtree iteration before computing caches
             paramSlice = slice(None)
@@ -697,19 +785,56 @@ class TermForwardSimulator(ForwardSimulator):
             def calc_and_fill(rholabel, elabels, fIndsList, gIndsList, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
                 tm = _time.time()
+
+                if self.mode == "direct":
+                    repcache = {} #new repcache for storing term reps that don't change (just their coeffs do)
+                    probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None, resetWts=True, repcache=repcache)
                 
                 if prMxToFill is not None:
-                    polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
+                    if self.mode == "taylor-order":
+                        polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
+                    elif self.mode == "pruned":
+                        polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, fillComm, None, self.pathmagnitude_gap,
+                                                               self.min_term_mag, recalc_threshold=True)
+                        
                     for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
-                        prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nCircuits,)
+                        if self.mode == "direct":
+                            prCache = probs[i]
+                        else:
+                            prCache = _bulk_eval_compact_polys(polys[i][0], polys[i][1], self.paramvec, (nStrs,) ) # ( nCircuits,)
                         ps = evalSubTree.final_view( prCache, axis=0) # ( nCircuits,)
                         _fas(prMxToFill, [fInds], ps[gInds], add=sumInto)
 
                 #Fill cache info
-                dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
+                if self.mode == "direct":
+                    #Finite difference derivatives (SLOW!)
+                    eps = 1e-6
+                    dprobs = _np.empty( (len(elabels), len(circuit_list), self.Np), 'd')
+                    orig_vec = self.to_vector().copy()
+                    for i in range(self.Np):
+                        #print("direct dprobs cache %d of %d" % (i,self.Np))
+                        #if i in iParamToFinal: #LATER: add MPI support?
+                        #    iFinal = iParamToFinal[i]
+                        if True:
+                            iFinal = i
+                            vec = orig_vec.copy(); vec[i] += eps
+                            self.from_vector(vec)
+                            dprobs[:,:,iFinal] = ( self.prs_directly(rholabel, elabels, circuit_list,
+                                                                     comm=None, memLimit=None, resetWts=False, repcache=repcache) - probs)/eps
+                    self.from_vector(orig_vec)
+                elif self.mode == "pruned":
+                    #Take derivative here
+                    slcInds = _slct.indices(paramSlice if (paramSlice is not None) else slice(0,self.Np))
+                    slcInds = _np.ascontiguousarray(slcInds, _np.int64) # for Cython arg mapping
+                    dpolys = [ _compact_deriv(polys[i][0], polys[i][1], slcInds) for i in range(len(elabels)) ]
+                else: # self.mode == "taylor-order"
+                    dpolys = evalSubTree.get_dp_polys(self, rholabel, elabels, paramSlice, fillComm)
                 nP = self.Np if (paramSlice is None or paramSlice.start is None) else _slct.length(paramSlice)
                 for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):
-                    dprCache = _bulk_eval_compact_polys(dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs,nP) )
+                    if self.mode == 'direct':
+                        dprCache = dprobs[i] # shape (nAllEvalTreeCircuits, nDerivCols)
+                    else: # TODO: maybe for "pruned" case we can just eval derivs of `polys` instead of computing derivative polynomials...
+                        dprCache = _bulk_eval_compact_polys(dpolys[i][0], dpolys[i][1], self.paramvec, (nStrs,nP) )
                     dps = evalSubTree.final_view( dprCache, axis=0) # ( nCircuits, nDerivCols)
                     _fas(mxToFill, [fInds, pslc1], dps[gInds], add=sumInto)
                 profiler.add_time("bulk_fill_dprobs: calc_and_fill", tm)
@@ -790,7 +915,11 @@ class TermForwardSimulator(ForwardSimulator):
         profiler.add_time("bulk_fill_dprobs: total", tStart)
         profiler.add_count("bulk_fill_dprobs count")
         profiler.mem_check("bulk_fill_dprobs: end")
-
+        #print("DB: time debug after bulk_fill_dprobs: ", self.times_debug)
+        #self.times_debug = { 'tstartup': 0.0, 'total': 0.0,
+        #                     't1': 0.0, 't2': 0.0, 't3': 0.0, 't4': 0.0,
+        #                     'n1': 0, 'n2': 0, 'n3': 0, 'n4': 0 }
+        
 
 
     def bulk_fill_hprobs(self, mxToFill, evalTree,
