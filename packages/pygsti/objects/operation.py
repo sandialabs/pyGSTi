@@ -2540,18 +2540,6 @@ class LindbladOp(LinearOperator):
             taylor_order += 1
             if taylor_order > max_taylor_order: break
 
-
-        #DEBUG - total magnitude TODO REMOVE
-        totmag = self.get_total_term_magnitude() # error map is only part with terms
-        #errgen_terms = self.errorgen.get_taylor_order_terms(0)
-        errgen_terms = self.get_taylor_order_terms(1)
-        mag_sum = sum([t.magnitude for t in errgen_terms])
-        if( abs(totmag - _np.exp(mag_sum)) >= 1e-6 ):
-            print("%d errgen_terms w/mags: " % len(errgen_terms), [t.magnitude for t in errgen_terms])
-            print("computed exp(mag_sum) = ",_np.exp(mag_sum))
-            print("from get_total_term_magnitude = ",totmag)
-            assert(False),"STOP2"
-
         #Sort terms based on magnitude
         sorted_terms = sorted(terms, key=lambda t: t[1].magnitude, reverse=True)
         first_order_indices = [i for i,t in enumerate(sorted_terms) if t[0] == 1]
@@ -5873,7 +5861,7 @@ class LindbladErrorgen(LinearOperator):
         # return (sum of absvals of term coeffs)
         vtape, ctape = self.Lterm_coeffs
         coeffs = _bulk_eval_complex_compact_polys(vtape, ctape, self.to_vector(), (len(self.Lterms),))
-        return sum([ abs(coeff) for coeff in coeffs])
+        return _np.sum(_np.abs(coeffs)) #sum([ abs(coeff) for coeff in coeffs])
 
 
     def num_params(self):

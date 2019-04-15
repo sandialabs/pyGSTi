@@ -2742,17 +2742,6 @@ class LindbladSPAMVec(SPAMVec):
                     
             taylor_order += 1
             if taylor_order > max_taylor_order: break
-
-        #DEBUG - total magnitude TODO REMOVE
-        totmag = self.error_map.get_total_term_magnitude() # error map is only part with terms
-        #errgen_terms = self.error_map.errorgen.get_taylor_order_terms(0)
-        errgen_terms = self.get_taylor_order_terms(1)
-        mag_sum = sum([t.magnitude for t in errgen_terms])
-        if( abs(totmag - _np.exp(mag_sum)) >= 1e-6 ):
-            print("%d errgen_terms w/mags: " % len(errgen_terms), [t.magnitude for t in errgen_terms])
-            print("computed exp(mag_sum) = ",_np.exp(mag_sum))
-            print("from get_total_term_magnitude = ",totmag)
-            assert(False),"STOP"
             
         #Sort terms based on magnitude
         sorted_terms = sorted(terms, key=lambda t: t[1].magnitude, reverse=True)

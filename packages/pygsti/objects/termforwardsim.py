@@ -192,8 +192,8 @@ class TermForwardSimulator(ForwardSimulator):
         return prs
 
 
-    def prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
-                            current_threshold=None):
+    def prs_as_pruned_polyreps(self, rholabel, elabels, circuit, repcache, comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
+                               current_threshold=None):
         """
         TODO: docstring
         """
@@ -217,60 +217,12 @@ class TermForwardSimulator(ForwardSimulator):
                 replib.SB_prs_as_pruned_polys(self, rholabel, elabels, circuit, repcache, comm, memLimit,
                                               fastmode, pathmagnitude_gap, min_term_mag)
 
-        if poly_reps is None or len(poly_reps) == 0: # HACK - can be None when there's a cache hit
+        if len(poly_reps) == 0: # HACK - length=0 => there's a cache hit, which we signify by None here
             prps = None
         else:
-            prps = [ _Polynomial.fromrep(rep) for rep in poly_reps ]
-        
-        #Cache hold *compact* polys now: see prs_as_compact_polys
-        #if self.cache is not None:
-        #    for ck,poly in zip(cache_keys,prps):
-        #        self.cache[ck] = poly
+            prps = poly_reps
+
         return prps, npaths, threshold, target_sopm, achieved_sopm
-
-    def prs_as_concat_compact_pruned_polys(self, rholabel, elabels, circuit_list, comm=None, memLimit=None, pathmagnitude_gap=0.0, min_term_mag=0.01,
-                                           evTree=None, db_paramvec=None): #maybe make this an evaltree method in FUTURE?
-        """
-        TODO: docstring DEPRECATED - probably REMOVE this function
-          compute compact polys to be like termevaltree.get_p_polys(...)
-        """
-        #TODO: decide when we cache pruned polys
-        #cache_keys = [(self.max_order, rholabel, elabel, circuit) for elabel in tuple(elabels)]
-        #if self.cache is not None and all([(ck in self.cache) for ck in cache_keys]):
-        #    return [ self.cache[ck] for ck in cache_keys ]
-
-        print("DB: prs_concat: %d circuits" % len(circuit_list))
-        #polys = [ [ poly.compact(force_complex=True) for poly in
-        #            self.prs_as_pruned_polys(rholabel,elabels, opstr, comm, memLimit, pathmagnitude_gap, min_term_mag, db_paramvec) ]
-        #          for opstr in circuit_list ]
-        polys = []
-        tot_npaths = 0
-        repcache = {}
-        for opstr in circuit_list:
-            if evTree is not None:
-                evTree.get_p_polys(self, rholabel, elabels)
-            raw_polys, npaths = self.prs_as_pruned_polys(rholabel,elabels, opstr, repcache, comm, memLimit, pathmagnitude_gap, min_term_mag,
-                                                         current_threshold, current_polys_and_paths)
-            polys.append( [poly.compact(force_complex=True) for poly in raw_polys] )
-            tot_npaths += npaths
-            
-          # create compact polys w/*complex* coeffs always since we're likely
-          # going to concatenate a bunch of them.
-
-        #if self.cache is not None:
-        #    for ck,poly in zip(cache_keys,prps):
-        #        self.cache[ck] = poly
-
-        ret = []
-        for i,elabel in enumerate(elabels):
-            tapes = [ p[i] for p in polys ]
-            vtape = _np.concatenate( [ t[0] for t in tapes ] )
-            ctape = _np.concatenate( [ t[1] for t in tapes ] )
-            ret.append( (vtape, ctape) ) # Note: ctape should always be complex here
-
-        print("DB: concat done: tot_npaths = %d" % tot_npaths)
-        return ret
-
 
     
     def prs_as_polys(self, rholabel, elabels, circuit, comm=None, memLimit=None): #LATER? , resetWts=True, repcache=None):
@@ -679,9 +631,9 @@ class TermForwardSimulator(ForwardSimulator):
         #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
-        print("DB: bulk_fill_probs called!!!!!!!!!")
+        #print("DB: bulk_fill_probs called!!!!!!!!!")
         #print("Paramvec = ",self.paramvec)
-        print("Paramvec max = ",max(_np.abs(self.paramvec)))
+        #print("Paramvec max = ",max(_np.abs(self.paramvec)))
         #for lbl in ("Gii","Gix","Gxi","Giy","Gyi"): #model.get_primitive_op_labels()
         #for lbl in ("Gi","Gx","Gy"):
         #    coeffs = self.sos.get_operation(lbl).get_errgen_coeffs()[0] # e.g. key ('H', 0), val=-0.1
@@ -699,7 +651,6 @@ class TermForwardSimulator(ForwardSimulator):
                 if self.mode == "direct":
                     probs = self.prs_directly(rholabel, elabels, circuit_list, comm=None, memLimit=None)
                 elif self.mode == "pruned":
-                    #polys = self.prs_as_concat_compact_pruned_polys(rholabel, elabels, circuit_list, mySubComm, None, self.pathmagnitude_gap, self.min_term_mag, self.paramvec)
                     polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, mySubComm, None, self.pathmagnitude_gap, self.min_term_mag, recalc_threshold=False)
                 else: # self.mode == "taylor-order"
                     polys = evalSubTree.get_p_polys(self, rholabel, elabels, mySubComm) # computes polys if necessary
@@ -799,7 +750,7 @@ class TermForwardSimulator(ForwardSimulator):
         None
         """
 
-        print("DB: bulk_fill_dprobs called!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        #print("DB: bulk_fill_dprobs called!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         tStart = _time.time()
         if profiler is None: profiler = _dummy_profiler
 
@@ -839,7 +790,6 @@ class TermForwardSimulator(ForwardSimulator):
                     if self.mode == "taylor-order":
                         polys = evalSubTree.get_p_polys(self, rholabel, elabels, fillComm)
                     elif self.mode == "pruned":
-                        #polys = self.prs_as_concat_compact_pruned_polys(rholabel, elabels, circuit_list, fillComm, None, self.pathmagnitude_gap, self.min_term_mag)
                         polys = evalSubTree.get_p_pruned_polys(self, rholabel, elabels, fillComm, None, self.pathmagnitude_gap, self.min_term_mag, recalc_threshold=True)
                         
                     for i,(fInds,gInds) in enumerate(zip(fIndsList,gIndsList)):

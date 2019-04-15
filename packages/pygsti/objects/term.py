@@ -38,7 +38,8 @@ def compose_terms(terms):
     -------
     RankOneTerm
     """
-    if len(terms) == 0: return RankOneTerm(1.0,None,None)
+    if len(terms) == 0:
+        return RankOneTerm(1.0,None,None)
     ret = terms[0].copy()
     for t in terms[1:]:
         ret.compose(t)
@@ -87,19 +88,33 @@ def exp_terms(terms, orders, postterm=None, order_base=None):
     for order in orders: # expand exp(L) = I + L + 1/2! L^2 + ... (n-th term 1/n! L^n)
         if order == 0:
             final_terms[order] = [ Uterm_tup[0] ]; continue
-        if order_base is not None:
-            coeff_threshold = order_base**order
+        #TODO REMOVE
+        #if order_base is not None:
+        #    coeff_threshold = order_base**order
+        one_over_factorial = 1/_np.math.factorial(order)
             
         # expand 1/n! L^n into a list of rank-1 terms
-        termLists = [terms]*order
+        #termLists = [terms]*order
         final_terms[order] = []
-        for factors in _itertools.product(*termLists):
-            factors_to_compose = Uterm_tup + factors # apply Uterm first
-            if order_base is not None:
-                coeff = _np.product([t.coeff for t in factors_to_compose])
-                #LATER (will cause J=0 if we're not careful): if abs(coeff) < coeff_threshold: continue # don't include small terms
-                # TODO: create new function that looks at all/many taylor orders and bins into order_base orders?
-            final_terms[order].append( 1/_np.math.factorial(order) * compose_terms(factors_to_compose) )
+        #for factors in _itertools.product(*termLists):
+        #    factors_to_compose = Uterm_tup + factors # apply Uterm first
+        #    #TODO REMOVE
+        #    #if order_base is not None:
+        #    #    coeff = _np.product([t.coeff for t in factors_to_compose])
+        #        #LATER (will cause J=0 if we're not careful): if abs(coeff) < coeff_threshold: continue # don't include small terms
+        #        # TODO: create new function that looks at all/many taylor orders and bins into order_base orders?
+        #    final_terms[order].append( one_over_factorial * compose_terms(factors_to_compose) )
+
+        #Alternate method
+        test_terms = []
+        def add_terms(term_list_index, composed_factors_so_far):
+            if term_list_index == order:
+                final_terms[order].append( composed_factors_so_far )
+                return
+            for factor in terms: #termLists[term_list_index]:
+                add_terms(term_list_index+1, compose_terms((composed_factors_so_far,factor)))
+
+        add_terms(0, one_over_factorial * Uterm_tup[0])
         
     return final_terms
 
@@ -165,6 +180,7 @@ class RankOneTerm(object):
     representing the prefactor for this term as a part of a larger density
     matrix evolution.    
     """
+    import_cache = None # to avoid slow re-importing withing RankOneTerm.__init__
 
     # For example, a term for the action:
     #
@@ -199,9 +215,15 @@ class RankOneTerm(object):
             propagation or stabilizer state propagation
 
         """
-        from . import modelmember as _mm
-        from . import operation as _op
-        from . import spamvec as _spamvec
+        if self.__class__.import_cache is None:
+            # slows function down significantly if don't put these in an if-block (surprisingly)
+            from . import modelmember as _mm
+            from . import operation as _op
+            from . import spamvec as _spamvec
+            self.__class__.import_cache = (_mm,_op,_spamvec)
+        else:
+            _mm,_op,_spamvec = self.__class__.import_cache
+
         self.coeff = coeff # potentially a Polynomial
         if isinstance(self.coeff, _numbers.Number):
             self.magnitude = abs(coeff)
@@ -360,7 +382,7 @@ class RankOneTerm(object):
         RankOneTerm
         """
         coeff = self.coeff if isinstance(self.coeff, _numbers.Number) \
-                else self.coeff.copy()
+            else self.coeff.copy()
         copy_of_me = RankOneTerm(coeff, None, None, self.typ)
         copy_of_me.pre_ops = self.pre_ops[:]
         copy_of_me.post_ops = self.post_ops[:]
