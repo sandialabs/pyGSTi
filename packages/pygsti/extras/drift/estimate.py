@@ -263,13 +263,13 @@ def uniform_amplitude_compression(model, times, epsilon=0.001, stepsize=0.005, v
 
     return newmodel, modelchanged
 
-def likelihood_of_general_model(probTrajectoriesFunction, parameters, times, data): 
+def likelihood_of_general_model(probTrajectoriesFunction, parameters, times, data, min_p=1e-4, max_p=1 - 1e-6): 
     """
     Todo.
     """      
     negll = 0.
     for opstr in data.keys():
-        p = probTrajectoriesFunction(parameters, opstr, times[mdl])
+        p = probTrajectoriesFunction(parameters, opstr, times[opstr])
         negll += trajectoryNegLogLikelihood(p, data[opstr], min_p, max_p)
     
     return negll
