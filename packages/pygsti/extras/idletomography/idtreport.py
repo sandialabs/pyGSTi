@@ -941,9 +941,9 @@ def create_idletomography_report(results, filename, title="auto",
             #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
             addqty(4,'dsComparisonHistogram', ws.ColorBoxPlot,
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
-                   dscomparator=dscmp_switchBd.dscmp, typ="histogram", comm=comm)
+                   dscomparator=dscmp_switchBd.dscmp, typ="histogram")
             addqty(1,'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
-                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp, comm=comm)
+                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp)
             toggles['CompareDatasets'] = True
         else:
             toggles['CompareDatasets'] = False # not comparable!
