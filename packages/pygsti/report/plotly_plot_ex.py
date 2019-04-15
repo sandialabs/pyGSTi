@@ -9,7 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import os as _os
 from plotly import __version__ as _plotly_version
 from plotly import tools as _plotlytools
-from plotly.offline.offline import _plot_html
 #from plotly.offline.offline import get_plotlyjs
 #from plotly.offline.offline import __PLOTLY_OFFLINE_INITIALIZED
 #from pkg_resources import resource_string
@@ -101,16 +100,32 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     config['linkText'] = link_text
 
     #Add version-dependent kwargs to _plot_html call below
-    kwargs = {}
-    if tuple(map(int,_plotly_version.split('.'))) >= (3,7,0): # then auto_play arg exists
-        kwargs['auto_play'] = False
-    
-    #Note: removing width and height from layout above causes default values to
-    # be used (the '100%'s hardcoded below) which subsequently trigger adding a resize script.        
-    plot_html, plotdivid, _, _ = _plot_html(
-        fig, config, validate, '100%', '100%',
-        global_requirejs=False, #no need for global_requirejs here 
-        **kwargs)               #since we now extract js and remake full script.
+    plotly_version = tuple(map(int,_plotly_version.split('.')))
+    if plotly_version < (3,8,0): # "old" plotly with _plot_html function
+        from plotly.offline.offline import _plot_html
+
+        kwargs = {}
+        if plotly_version >= (3,7,0): # then auto_play arg exists
+            kwargs['auto_play'] = False
+        
+        #Note: removing width and height from layout above causes default values to
+        # be used (the '100%'s hardcoded below) which subsequently trigger adding a resize script.        
+        plot_html, plotdivid, _, _ = _plot_html(
+            fig, config, validate, '100%', '100%',
+            global_requirejs=False, #no need for global_requirejs here 
+            **kwargs)               #since we now extract js and remake full script.
+    else:
+        from plotly.io import to_html as _to_html
+        import uuid as _uuid
+        plot_html = _to_html(fig, config, auto_play=False, include_plotlyjs=False,
+                            include_mathjax=False, post_script=None, full_html=False,
+                            animation_opts=None, validate=validate)
+        assert(plot_html.startswith("<div>") and plot_html.endswith("</div>"))
+        plot_html = plot_html[len("<div>"):-len("</div>")].strip()
+        assert(plot_html.endswith("</script>"))
+        id_index = plot_html.find('id="')
+        id_index_end = plot_html.find('"',id_index+len('id="'))
+        plotdivid = _uuid.UUID(plot_html[id_index+len('id="'):id_index_end])
 
     if orig_width: fig['layout']['width'] = orig_width
     if orig_height: fig['layout']['height'] = orig_height
@@ -120,8 +135,8 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     # on Plotly output (_plot_html) being HTML followed by JS
     tag = '<script type="text/javascript">'; end_tag = '</script>'
     iTag = plot_html.index(tag)
-    plot_js = plot_html[iTag+len(tag):-len(end_tag)]
-    plot_html = plot_html[0:iTag]
+    plot_js = plot_html[iTag+len(tag):-len(end_tag)].strip()
+    plot_html = plot_html[0:iTag].strip()
 
     full_script = ''
 
