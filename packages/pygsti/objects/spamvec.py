@@ -3267,7 +3267,7 @@ class ComputationalSPAMVec(SPAMVec):
         elif self._evotype in ("svterm","cterm"):
             raise NotImplementedError("todense() is not implemented for evotype %s!" %
                                       self._evotype)
-        else: raise ValueError("Invalid `evotype`: %s" % evotype)
+        else: raise ValueError("Invalid `evotype`: %s" % self._evotype)
 
         v = (v0,v1)
         return _functools.reduce(_np.kron, [v[i] for i in self._zvals])

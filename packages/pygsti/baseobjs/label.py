@@ -6,6 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
+from past.builtins import unicode, basestring
+
 import numbers as _numbers
 import sys as _sys
 import itertools as _itertools
@@ -985,7 +987,7 @@ class TimestampedLabelTup(Label,tuple):
 
     def replacename(self,oldname,newname):
         """ Returns a label with `oldname` replaced by `newname`."""
-        return TimestampledLabelTup(newname,self.sslbls,self[0]) if (self.name == oldname) else self
+        return TimestampedLabelTup(newname,self.sslbls,self[0]) if (self.name == oldname) else self
 
     def issimple(self):
         """ Whether this is a "simple" (opaque w/a true name, from a

@@ -3439,7 +3439,7 @@ class ComposedOp(LinearOperator):
         """
         return self.factorops
 
-    def append(*factorops_to_add):
+    def append(self, *factorops_to_add):
         """
         Add one or more factors to this operator.
 
@@ -3455,9 +3455,9 @@ class ComposedOp(LinearOperator):
         """
         self.factorops.extend(factorops_to_add)
         if self.parent: #need to alert parent that *number* (not just value)
-            parent._mark_for_rebuild(self) #  of our params may have changed
+            self.parent._mark_for_rebuild(self) #  of our params may have changed
 
-    def remove(*factorop_indices):
+    def remove(self, *factorop_indices):
         """
         Remove one or more factors from this operator.
 
@@ -3473,7 +3473,7 @@ class ComposedOp(LinearOperator):
         for i in sorted(factorop_indices, reverse=True):
             del self.factorops[i]
         if self.parent: #need to alert parent that *number* (not just value)
-            parent._mark_for_rebuild(self) #  of our params may have changed
+            self.parent._mark_for_rebuild(self) #  of our params may have changed
 
     def copy(self, parent=None):
         """
@@ -4702,10 +4702,9 @@ class ComposedErrorgen(LinearOperator):
             # and avoid duplicating basis elements
             final_basisLbls = {}
             for lbl,basisEl in bdict.items():
-                lblsEqual = bool(lbl == existingLbl)
                 for existing_lbl,existing_basisEl in basisdict.values():
                     if _mt.safenorm(basisEl-existing_basisEl) < 1e-6:
-                        final_basisLbls[lbl] = existingLbl
+                        final_basisLbls[lbl] = existing_lbl
                         break
                 else: # no existing basis element found - need a new element
                     if lbl in basisdict: # then can't keep current label
@@ -4819,7 +4818,7 @@ class ComposedErrorgen(LinearOperator):
         """
         return self.factors
 
-    def append(*factors_to_add):
+    def append(self, *factors_to_add):
         """
         Add one or more factors to this operator.
 
@@ -4835,9 +4834,9 @@ class ComposedErrorgen(LinearOperator):
         """
         self.factors.extend(factors_to_add)
         if self.parent: #need to alert parent that *number* (not just value)
-            parent._mark_for_rebuild(self) #  of our params may have changed
+            self.parent._mark_for_rebuild(self) #  of our params may have changed
 
-    def remove(*factor_indices):
+    def remove(self, *factor_indices):
         """
         Remove one or more factors from this operator.
 
@@ -4853,7 +4852,7 @@ class ComposedErrorgen(LinearOperator):
         for i in sorted(factor_indices, reverse=True):
             del self.factors[i]
         if self.parent: #need to alert parent that *number* (not just value)
-            parent._mark_for_rebuild(self) #  of our params may have changed
+            self.parent._mark_for_rebuild(self) #  of our params may have changed
 
     def copy(self, parent=None):
         """
@@ -6164,9 +6163,9 @@ class LindbladErrorgen(LinearOperator):
             elif self.param_mode == "cptp":
                 assert(nP == 2*(bsO-1)); hnP = bsO-1 # half nP
                 d2Odp2  = _np.empty((d2,d2,nP,nP),'complex')
-                #d2Odp2[:,:,0:hnP,0:hnp] = _np.einsum('alj,aq->ljaq', self.otherGens[0], 2*_np.identity(nP,'d'))
-                d2Odp2[:,:,0:hnP,0:hnp] = _np.transpose(self.otherGens[0],(1,2,0))[:,:,:,None] * 2*_np.identity(nP,'d')
-                d2Odp2[:,:,hnP:,hnp:]   = 0 # 2nd deriv wrt. all affine params == 0
+                #d2Odp2[:,:,0:hnP,0:hnP] = _np.einsum('alj,aq->ljaq', self.otherGens[0], 2*_np.identity(nP,'d'))
+                d2Odp2[:,:,0:hnP,0:hnP] = _np.transpose(self.otherGens[0],(1,2,0))[:,:,:,None] * 2*_np.identity(nP,'d')
+                d2Odp2[:,:,hnP:,hnP:]   = 0 # 2nd deriv wrt. all affine params == 0
             else: # param_mode == "unconstrained" or "reldepol"
                 assert(nP == 2*(bsO-1))
                 d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')

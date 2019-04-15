@@ -6,6 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
+from past.builtins import xrange, unicode
+
 import sys as _sys
 import types as _types
 import importlib as _importlib

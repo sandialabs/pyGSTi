@@ -1218,7 +1218,7 @@ def two_delta_logl(model, dataset, circuit_list=None,
 
     if circuit_list is not None:
         if opLabelAliases is not None:
-            ds_strs = _tools.find_replace_tuple_list(
+            ds_strs = _lt.find_replace_tuple_list(
                 circuit_list, opLabelAliases)
         else:
             ds_strs = circuit_list
@@ -1265,7 +1265,7 @@ def two_delta_logl_terms(model, dataset, circuit_list=None,
 
     if circuit_list is not None:
         if opLabelAliases is not None:
-            ds_strs = _tools.find_replace_tuple_list(
+            ds_strs = _lt.find_replace_tuple_list(
                 circuit_list, opLabelAliases)
         else:
             ds_strs = circuit_list
@@ -1277,7 +1277,7 @@ def two_delta_logl_terms(model, dataset, circuit_list=None,
 
     Nsigma = (twoDeltaLogL_terms-k)/_np.sqrt(2*k)
     pvalue = _np.array([1.0 - _stats.chi2.cdf(x,k) for x in twoDeltaLogL_terms],'d')
-    return twoDeltaLogL, Nsigma, pvalue
+    return twoDeltaLogL_terms, Nsigma, pvalue
 
 
 

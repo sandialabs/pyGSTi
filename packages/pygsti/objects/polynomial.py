@@ -372,7 +372,7 @@ class Polynomial(dict):
     def __pow__(self, n):
         ret = Polynomial({(): 1.0}) # max_order updated by mults below
         cur = self
-        for i in range(int(np.floor(np.log2(n)))+1):
+        for i in range(int(_np.floor(_np.log2(n)))+1):
             rem = n % 2 #gets least significant bit (i-th) of n
             if rem == 1: ret *= cur # add current power of x (2^i) if needed  
             cur = cur*cur # current power *= 2

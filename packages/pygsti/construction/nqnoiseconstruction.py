@@ -2656,8 +2656,8 @@ def gatename_fidpair_list_to_fidpairs(gatename_fidpair_list):
             prepnames, measnames = gatenames
             prepStr.extend( [_Lbl(name,iQubit) for name in prepnames] )
             measStr.extend( [_Lbl(name,iQubit) for name in measnames] )
-        fidpair = (pygsti.obj.Circuit(prepStr, num_lines=nQubits),
-                   pygsti.obj.Circuit(measStr, num_lines=nQubits)) 
+        fidpair = (_objs.Circuit(prepStr, num_lines=nQubits),
+                   _objs.Circuit(measStr, num_lines=nQubits))
         fidpairs.append(fidpair)
     return fidpairs
 

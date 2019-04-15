@@ -343,7 +343,7 @@ class NQPauliOp(object):
         bool
         """
         assert(len(self) == len(other)), "Length mismatch!"
-        return bool(_np.prod([_commute_parity(P1,P2) for P1,P2 in zip(s1,s2)])==1)
+        return bool(_np.prod([_commute_parity(P1,P2) for P1,P2 in zip(self.rep,other.rep)])==1)
 
     def icommutatorOver2(self, other):
         """

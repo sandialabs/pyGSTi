@@ -201,7 +201,7 @@ def enable_old_object_unpickling(old_version="0.9.6"):
 
         def Hack_CompressedCircuit_expand(self):
             """ Hacked version to rely on string rep & re-parse if it's there """
-            tup = None if self._str else CompressedCircuit.expand_op_label_tuple(self._tup)
+            tup = None if self._str else _circuit.CompressedCircuit.expand_op_label_tuple(self._tup)
             return _objs.Circuit(None, self._line_labels, editable=False, stringrep=self._str)
 
 

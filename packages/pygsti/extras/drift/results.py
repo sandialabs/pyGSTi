@@ -231,7 +231,7 @@ class DriftResults(object):
 
         if store:
             assert(freqInds is None), "Only allowed to store the full spectra set!"
-            self.spectra[tup] = specta 
+            self.spectra[tup] = spectra
 
         return _copy.deepcopy(spectra)
 
@@ -484,7 +484,7 @@ class DriftResults(object):
         """
         This function hasn't been written yet!.
         """
-        return p
+        raise NotImplementedError("TODO")
 
          # Todo : currently the AuxDict is not stored.
         

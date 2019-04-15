@@ -796,7 +796,7 @@ def ratedNsigma(dataset, model, gss, objective, Np=None, wildcard=None, returnAl
         fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
         if(logL_upperbound < logl):
             if _np.isclose(logL_upperbound,logl):
-                logl = logl_upperbound; fitQty = 0.0
+                logl = logL_upperbound; fitQty = 0.0
             else:
                 raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
 

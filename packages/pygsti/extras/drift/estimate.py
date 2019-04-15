@@ -11,6 +11,7 @@ from . import signal as _sig
 import numpy as _np
 import time as _tm
 from scipy.optimize import minimize as _minimize
+import warnings as _warnings
 
 from scipy.fftpack import dct as _dct
 from scipy.fftpack import idct as _idct
