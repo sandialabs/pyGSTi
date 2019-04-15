@@ -1895,6 +1895,7 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
             lsgstModel.basis = startModel.basis
             num_fd = fditer if (i==0) else 0
 
+            evt_cache = {} # get the eval tree that's created so we can reuse it
             minErr, lsgstModel = \
                 do_mc2gst( dataset, lsgstModel, stringsToEstimate,
                            maxiter, maxfev, num_fd, tol,
@@ -1903,10 +1904,13 @@ def do_iterative_mc2gst(dataset, startModel, circuitSetsToUseInEstimation,
                            useFreqWeightedChiSq, regularizeFactor,
                            printer-1, check, check_jacobian,
                            circuitWeights, opLabelAliases, memLimit, comm,
-                           distributeMethod, profiler)
+                           distributeMethod, profiler, evt_cache)
             if returnAll:
                 lsgstModels.append(lsgstModel)
                 minErrs.append(minErr)
+
+            if evaltree_cache is not None:
+                evaltree_cache.update(evt_cache) # final evaltree cache
 
             tNxt = _time.time();
             profiler.add_time('do_iterative_mc2gst: iter %d chi2-opt'%(i+1),tRef)

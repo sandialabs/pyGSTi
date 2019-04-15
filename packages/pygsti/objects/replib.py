@@ -56,25 +56,27 @@ except ImportError:
         def decorate(fn):
             @_functools.wraps(fn)
             def new_fn(*args, **kwargs):
-                _warnings.warn(
-                    ("\nUsing slower pure-python routines because Cython extensions are unavailable.\n"
-                     "This is OK, but your code will take longer to run.  If you want the faster\n"
-                     "version, try (re-)installing via pip after you have Cython:\n"
-                     "\n"
-                     "    pip install cython    # get Cython\n" 
-                     "    pip install pygsti    # if you use pygsti as an installed library OR \n"
-                     "    pip install -e .      # if you use a local cloned tree (from the root pyGSTi/ dir)\n"
-                     "\n"
-                     "Instead of the final line above, you can also run:\n"
-                     "\n"
-                     "python setup.py build_ext --inplace\n"
-                     "\n"
-                     "from your local pyGSTi root directory to build the Cython extensions in your\n"
-                     "local tree.  Finally, if you don't care about pyGSTi being slower and just\n"
-                     "want to be rid of this message, you can set the environment variable:\n"
-                     "\"PYGSTI_SLOW_WARNING=0\" to disable this message, OR\n"
-                     "\"PYGSTI_SLOW_WARNING=1\" to enable a much shorter message that is always\n"
-                     "  displayed (to remind you to build the extensions sometime later)"))
+                if fn.__dict__.get('warn',True):
+                    fn.warn = False # supress future warnings from this function
+                    _warnings.warn(
+                        ("\nUsing slower pure-python routines because Cython extensions are unavailable.\n"
+                         "This is OK, but your code will take longer to run.  If you want the faster\n"
+                         "version, try (re-)installing via pip after you have Cython:\n"
+                         "\n"
+                         "    pip install cython    # get Cython\n" 
+                         "    pip install pygsti    # if you use pygsti as an installed library OR \n"
+                         "    pip install -e .      # if you use a local cloned tree (from the root pyGSTi/ dir)\n"
+                         "\n"
+                         "Instead of the final line above, you can also run:\n"
+                         "\n"
+                         "python setup.py build_ext --inplace\n"
+                         "\n"
+                         "from your local pyGSTi root directory to build the Cython extensions in your\n"
+                         "local tree.  Finally, if you don't care about pyGSTi being slower and just\n"
+                         "want to be rid of this message, you can set the environment variable:\n"
+                         "\"PYGSTI_SLOW_WARNING=0\" to disable this message, OR\n"
+                         "\"PYGSTI_SLOW_WARNING=1\" to enable a much shorter message that is always\n"
+                         "  displayed (to remind you to build the extensions sometime later)"))
                 return fn(*args, **kwargs)
             return new_fn
         

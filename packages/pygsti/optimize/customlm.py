@@ -122,6 +122,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     # DB: from ..tools import matrixtools as _mt
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
     # num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
+    # print("DEBUG: setting num_fd_iters == 0!");  num_fd_iters = 0 # DEBUG
     try:
     
         for k in range(max_iter): #outer loop

@@ -677,6 +677,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
 
     #Run Long-sequence GST on data
     objective = advancedOptions.get('objective', 'logl')
+    default_fditer = 0 if mdl_start.simtype in ("termorder","termgap") else 1
 
     args = dict(
         dataset=ds,
@@ -686,7 +687,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetModelFilenameOrObj,
         cptp_penalty_factor = advancedOptions.get('cptpPenaltyFactor',0),
         spam_penalty_factor = advancedOptions.get('spamPenaltyFactor',0),
         maxiter = advancedOptions.get('maxIterations',100000),
-        fditer = advancedOptions.get('fdIterations', 1),
+        fditer = advancedOptions.get('fdIterations', default_fditer),
         probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
         returnAll=True,
         circuitWeightsDict=advancedOptions.get('gsWeights',None),
