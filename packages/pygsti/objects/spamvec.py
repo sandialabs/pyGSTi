@@ -2711,7 +2711,8 @@ class LindbladSPAMVec(SPAMVec):
             # - resulting in terms with just a single pre/post op, each == a pure state
 
             #assert(stateTerm.coeff == Polynomial_1.0) # TODO... so can assume local polys are same as for errorgen
-            self.local_term_poly_coeffs[order] = self.error_map.local_term_poly_coeffs[order]
+            if hasattr(self.error_map,'local_term_poly_coeffs'): #TEMPORARY HACK - remove/fix once we get n-qubit high-magnitude terms calc
+                self.local_term_poly_coeffs[order] = self.error_map.local_term_poly_coeffs[order]
             
             self.terms[order] = terms
 

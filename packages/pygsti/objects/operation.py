@@ -2505,9 +2505,13 @@ class LindbladOp(LinearOperator):
 
             poly_coeffs = [ t.coeff for t in loc_terms ]
             tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
-            vtape = _np.concatenate( [ t[0] for t in tapes ] )
-            ctape = _np.concatenate( [ t[1] for t in tapes ] )
-            coeffs_as_compact_polys = (vtape, _np.asarray(ctape,complex))
+            if len(tapes) > 0:
+                vtape = _np.concatenate( [ t[0] for t in tapes ] )
+                ctape = _np.concatenate( [ t[1] for t in tapes ] )
+            else:
+                vtape = _np.empty(0,_np.int64)
+                ctape = _np.empty(0,complex)
+            coeffs_as_compact_polys = (vtape, ctape)
             self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
 
             if not map_to_global_indices:
@@ -5692,8 +5696,12 @@ class LindbladErrorgen(LinearOperator):
         # for term-based calcs which call get_total_term_magnitude() a lot)
         poly_coeffs = [ t.coeff for t in Lterms ]
         tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
-        vtape = _np.concatenate( [ t[0] for t in tapes ] )
-        ctape = _np.concatenate( [ t[1] for t in tapes ] )
+        if len(tapes) > 0:
+            vtape = _np.concatenate( [ t[0] for t in tapes ] )
+            ctape = _np.concatenate( [ t[1] for t in tapes ] )
+        else:
+            vtape = _np.empty(0,_np.int64)
+            ctape = _np.empty(0,complex)
         coeffs_as_compact_polys = (vtape, ctape)
 
         return Lterms, coeffs_as_compact_polys
