@@ -11,6 +11,8 @@ from libc.math cimport log10
 from libc cimport time
 from libcpp cimport bool
 from libcpp.vector cimport vector
+from libcpp.pair cimport pair
+from libcpp.algorithm cimport sort as stdsort
 from libcpp.unordered_map cimport unordered_map
 from cython.operator cimport dereference as deref, preincrement as inc
 cimport numpy as np
@@ -253,17 +255,16 @@ cdef extern from "fastreps.h" namespace "CReps":
     cdef cppclass PolyVarsIndex:
         PolyVarsIndex() except +
         PolyVarsIndex(INT) except +
+        bool operator<(PolyVarsIndex i)
         vector[INT] _parts
         
-    cdef cppclass PolyVarsIndexHasher:
-        pass
-    
     cdef cppclass PolyCRep:
         PolyCRep() except +        
         PolyCRep(unordered_map[PolyVarsIndex, complex], INT, INT, INT) except +
         PolyCRep mult(PolyCRep&)
         void add_inplace(PolyCRep&)
         void scale(double complex scale)
+        vector[INT] int_to_vinds(PolyVarsIndex indx_tup)
         unordered_map[PolyVarsIndex, complex] _coeffs
         INT _max_order
         INT _max_num_vars
@@ -1071,6 +1072,40 @@ cdef class PolyRep:
             ret[tuple(i_tup)] = deref(it).second
             inc(it)
         return ret
+
+    def compact_complex(self):
+        cdef INT i,l, iTerm, nVarIndices=0;
+        cdef PolyVarsIndex k;
+        cdef vector[INT] v;
+        cdef vector[INT].iterator vit
+        cdef unordered_map[PolyVarsIndex, complex].iterator it = self.c_poly._coeffs.begin()
+        cdef vector[ pair[PolyVarsIndex, vector[INT]] ] vinds;
+        cdef INT nTerms = self.c_poly._coeffs.size()
+        
+        while(it != self.c_poly._coeffs.end()):
+            vs = self.c_poly.int_to_vinds( deref(it).first )
+            nVarIndices += vs.size()
+            vinds.push_back( pair[PolyVarsIndex, vector[INT]](deref(it).first, vs) )
+            inc(it)
+            
+        vtape = np.empty(1 + nTerms + nVarIndices, np.int64) # "variable" tape
+        ctape = np.empty(nTerms, np.complex128) # "coefficient tape"
+
+        i = 0
+        vtape[i] = nTerms; i+=1
+        stdsort(vinds.begin(), vinds.end(), &compare_pair) # sorts in place
+        for iTerm in range(vinds.size()):
+            k = vinds[iTerm].first
+            v = vinds[iTerm].second
+            l = v.size()
+            ctape[iTerm] = self.c_poly._coeffs[k]
+            vtape[i] = l; i += 1
+            vtape[i:i+l] = v; i += l
+
+        return vtape, ctape
+
+cdef bool compare_pair(pair[PolyVarsIndex, vector[INT]]& a, pair[PolyVarsIndex, vector[INT]]& b):
+    return a.first < b.first
     
 cdef class SVTermRep:
     cdef SVTermCRep* c_term

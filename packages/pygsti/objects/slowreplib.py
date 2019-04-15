@@ -1004,10 +1004,12 @@ class PolyRep(dict):
             ret += coeff * _np.product( [variable_values[i] for i in ivar] )
         return ret
 
-    def compact(self):
+    def compact_complex(self):
         """
         Returns a compact representation of this polynomial as a 
         `(variable_tape, coefficient_tape)` 2-tuple of 1D nupy arrays.
+        The coefficient tape is *always* a complex array, even if 
+        none of the polynomial's coefficients are complex.
 
         Such compact representations are useful for storage and later 
         evaluation, but not suited to polynomial manipulation.
@@ -1020,19 +1022,18 @@ class PolyRep(dict):
             A 1D array of coefficients; can have either real
             or complex data type.
         """
-        iscomplex = any([ abs(_np.imag(x)) > 1e-12 for x in self.values() ])
         nTerms = len(self)
-        vinds = [ self._int_to_vinds(i) for i in self.keys() ]
-        nVarIndices = sum(map(len,vinds))
+        vinds = { i: self._int_to_vinds(i) for i in self.keys() }
+        nVarIndices = sum(map(len,vinds.values()))
         vtape = _np.empty(1 + nTerms + nVarIndices, _np.int64) # "variable" tape
-        ctape = _np.empty(nTerms, complex if iscomplex else 'd') # "coefficient tape"
+        ctape = _np.empty(nTerms, complex) # "coefficient tape"
 
         i = 0
         vtape[i] = nTerms; i+=1
         for iTerm,k in enumerate(sorted(self.keys())):
-            v = self._int_to_vinds(k)
+            v = vinds[k] # so don't need to compute self._int_to_vinds(k)
             l = len(v)
-            ctape[iTerm] = self[k] if iscomplex else _np.real(self[k])
+            ctape[iTerm] = self[k]
             vtape[i] = l; i += 1
             vtape[i:i+l] = v; i += l
         assert(i == len(vtape)), "Logic Error!"

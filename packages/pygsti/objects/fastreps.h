@@ -26,6 +26,19 @@ namespace CReps {
       }
       return true;
     }
+
+    bool operator<(PolyVarsIndex i) const {
+      std::vector<INT>::const_iterator it, it2;
+      if( i._parts.size() != this->_parts.size() )
+	return this->_parts.size() < i._parts.size();
+				     
+      for(it=i._parts.begin(), it2=this->_parts.begin();
+	  it != i._parts.end() && it2 != this->_parts.end();
+	  ++it, ++it2) { //zip
+	if(*it != *it2) return (*it2) < (*it);
+      }
+      return false; //equal, so not "<"
+    }
   };
 }
 
@@ -505,9 +518,9 @@ namespace CReps {
     PolyCRep mult(const PolyCRep& other);
     void add_inplace(const PolyCRep& other);
     void scale(dcomplex scale);
-    private:
     PolyVarsIndex vinds_to_int(std::vector<INT> vinds);
     std::vector<INT> int_to_vinds(PolyVarsIndex indx);
+    private:
     PolyVarsIndex mult_vinds_ints(PolyVarsIndex i1, PolyVarsIndex i2); // multiply vinds corresponding to i1 & i2 and return resulting integer
   };
   

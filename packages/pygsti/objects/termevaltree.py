@@ -412,7 +412,6 @@ class TermEvalTree(EvalTree):
         return cpy
 
     def get_p_pruned_polys(self, calc, rholabel, elabels, comm, memLimit, pathmagnitude_gap, min_term_mag, recalc_threshold=True):
-        print("DB: EVTREE get_p_pruned_polys")
 
         elabels = tuple(elabels) #make sure this is hashable
         circuit_list = self.generate_circuit_list(permute=False)
@@ -428,21 +427,22 @@ class TermEvalTree(EvalTree):
                 current_threshold, current_polys = None, None
 
             if current_threshold is None or recalc_threshold:
-                raw_polys, npaths, threshold, target_sopm, achieved_sopm = \
-                    calc.prs_as_pruned_polys(rholabel,elabels, opstr, self.repcache, comm, memLimit, pathmagnitude_gap,
-                                             min_term_mag, current_threshold)
+                raw_polyreps, npaths, threshold, target_sopm, achieved_sopm = \
+                    calc.prs_as_pruned_polyreps(rholabel,elabels, opstr, self.repcache, comm, memLimit, pathmagnitude_gap,
+                                                min_term_mag, current_threshold)
             else:
                 #Could just recompute sopm and npaths?
-                raw_polys = None
+                raw_polyreps = None
                 npaths = 0 # punt for now...
                 target_sopm = 0
                 achieved_sopm = 0
                 
-            if raw_polys is None or len(raw_polys)==0: # signal to use existing current_cache
-                raw_polys = current_polys
+            if raw_polyreps is None: # signal to use existing current_cache
+                compact_polys = current_polys
             else:
-                self.p_polys[(rholabel, elabels, opstr)] = (threshold, raw_polys)
-            polys.append( [poly.compact(force_complex=True) for poly in raw_polys] )
+                compact_polys = [polyrep.compact_complex() for polyrep in raw_polyreps]
+                self.p_polys[(rholabel, elabels, opstr)] = (threshold, compact_polys)
+            polys.append(compact_polys)
             tot_npaths += npaths
             tot_target_sopm += target_sopm
             tot_achieved_sopm += achieved_sopm
@@ -455,7 +455,7 @@ class TermEvalTree(EvalTree):
             ret.append( (vtape, ctape) ) # Note: ctape should always be complex here
 
         nC = len(circuit_list)
-        print("DB: EVTREE done: tot_npaths = %d, target_sopm=%g, achieved_sopm=%g nCircuits=%d (per-circuit=%g,%g,%g)" %
+        print("DB: get_p_pruned_polys: tot_npaths = %d, target_sopm=%g, achieved_sopm=%g nCircuits=%d (per-circuit=%g,%g,%g)" %
               (tot_npaths,tot_target_sopm,tot_achieved_sopm,nC,tot_npaths/nC,tot_target_sopm/nC,tot_achieved_sopm/nC))
         return ret
 
