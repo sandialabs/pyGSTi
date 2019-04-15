@@ -68,7 +68,7 @@ jobs:
         - pip install -e .[linting]
       python: 3.7
       script:
-        - python -m flake8 --statistics
+        - python -m flake8 --statistics packages/pygsti
     
     # Can't use matrix expansion for included jobs or custom stages, so we'll manually list extra jobs
     - stage: test-extra
