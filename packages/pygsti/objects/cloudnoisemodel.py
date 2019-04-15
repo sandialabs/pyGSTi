@@ -18,7 +18,6 @@ from . import spamvec as _sv
 from . import povm as _povm
 from . import qubitgraph as _qgraph
 from . import labeldicts as _ld
-from .. import construction as _construction
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
@@ -560,9 +559,11 @@ class CloudNoiseModel(_ImplicitOpModel):
             _warnings.warn("`spamtype == 'tensorproduct'` is deprecated!")
             basis1Q = _BuiltinBasis("pp",4)
             prep_factors = []; povm_factors = []
-    
-            v0 = _construction.basis_build_vector("0", basis1Q)
-            v1 = _construction.basis_build_vector("1", basis1Q)
+            
+            from ..construction import basis_build_vector
+
+            v0 = basis_build_vector("0", basis1Q)
+            v1 = basis_build_vector("1", basis1Q)
     
             # Historical use of TP for non-term-based cases?
             #  - seems we could remove this. FUTURE REMOVE?
