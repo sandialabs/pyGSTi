@@ -68,8 +68,9 @@ jobs:
   include:
     - &lint-job
       python: 3.7
+      before_install: skip
       install:
-        - pip install -e .[linting]
+        - pip install flake8
       script:
         - python -m flake8 --statistics $LINTOPTS packages/pygsti
     - <<: *lint-job
