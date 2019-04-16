@@ -1874,7 +1874,7 @@ class TensorProdSPAMVec(SPAMVec):
                 return tuple(_modelmember._decompose_gpindices(
                     self.gpindices, _np.array(x,_np.int64)))
                              
-            poly_coeffs = [t.coeff.map_indices(mapper) for t in terms] #with *local* indices
+            poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms] #with *local* indices
             tapes = [ poly.compact(force_complex=True) for poly in poly_coeffs ]
             if len(tapes) > 0:
                 vtape = _np.concatenate( [ t[0] for t in tapes ] )
